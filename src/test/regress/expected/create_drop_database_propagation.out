@@ -896,12 +896,20 @@ SELECT result from run_command_on_all_nodes(
 
 grant connect,temp,temporary,create  on database db_role_grants_test to public;
 DROP DATABASE db_role_grants_test;
+SELECT result from run_command_on_all_nodes(
+  $$
+  drop database db_role_grants_test_non_distributed
+  $$
+) ORDER BY result;
+    result
+---------------------------------------------------------------------
+ DROP DATABASE
+ DROP DATABASE
+ DROP DATABASE
+(3 rows)
+
 DROP ROLE db_role_grants_test_role_exists_on_node_2;
-ERROR:  role "db_role_grants_test_role_exists_on_node_2" cannot be dropped because some objects depend on it
-DETAIL:  privileges for database db_role_grants_test_non_distributed
 DROP ROLE db_role_grants_test_role_missing_on_node_2;
-ERROR:  role "db_role_grants_test_role_missing_on_node_2" cannot be dropped because some objects depend on it
-DETAIL:  privileges for database db_role_grants_test_non_distributed
 --clean up resources created by this test
 -- DROP TABLESPACE is not supported, so we need to drop it manually.
 SELECT result FROM run_command_on_all_nodes(
@@ -917,3 +925,4 @@ SELECT result FROM run_command_on_all_nodes(
 (3 rows)
 
 drop user create_drop_db_test_user;
+
