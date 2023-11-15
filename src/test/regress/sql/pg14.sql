@@ -24,6 +24,7 @@ VACUUM (FULL, FREEZE false, VERBOSE false, ANALYZE false, SKIP_LOCKED false, IND
 
 -- vacuum (process_toast true) should be vacuuming toast tables (default is true)
 CREATE TABLE local_vacuum_table(name text);
+ALTER TABLE local_vacuum_table SET (autovacuum_enabled = false);
 INSERT INTO local_vacuum_table VALUES ('peter');
 select reltoastrelid from pg_class where relname='local_vacuum_table'
 \gset
