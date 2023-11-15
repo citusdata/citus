@@ -300,7 +300,17 @@ drop database non_distributed_db;
 
 -- test role grants on DATABASE in metadata sync
 
+SELECT result from run_command_on_all_nodes(
+  $$
+  create database db_role_grants_test_non_distributed
+  $$
+) ORDER BY result;
 
+SELECT result from run_command_on_all_nodes(
+  $$
+  revoke connect,temp,temporary,create  on database db_role_grants_test_non_distributed from public
+  $$
+) ORDER BY result;
 
 SET citus.enable_create_database_propagation TO on;
 
@@ -322,7 +332,20 @@ CREATE ROLE db_role_grants_test_role_missing_on_node_2;
 RESET citus.log_remote_commands ;
 RESET citus.grep_remote_commands;
 
--- check the privileges before grant
+
+
+SET citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%GRANT%';
+grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants_test_role_exists_on_node_2;
+grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
+
+
+
+grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_exists_on_node_2;
+grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_missing_on_node_2;
+
+-- check the privileges before add_node for database db_role_grants_test,
+--  role db_role_grants_test_role_exists_on_node_2
 
 SELECT result from run_command_on_all_nodes(
   $$
@@ -341,6 +364,9 @@ SELECT result from run_command_on_all_nodes(
   select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test', 'CONNECT')
   $$
 ) ORDER BY result;
+
+-- check the privileges before add_node for database db_role_grants_test,
+--  role db_role_grants_test_role_missing_on_node_2
 
 SELECT result from run_command_on_all_nodes(
   $$
@@ -361,10 +387,47 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%GRANT%';
-grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants_test_role_exists_on_node_2;
-grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
+-- check the privileges before add_node  for database db_role_grants_test_non_distributed,
+--  role db_role_grants_test_role_exists_on_node_2
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test_non_distributed', 'CREATE')
+  $$
+) ORDER BY result;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test_non_distributed', 'TEMPORARY')
+  $$
+) ORDER BY result;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test_non_distributed', 'CONNECT')
+  $$
+) ORDER BY result;
+
+-- check the privileges before add_node for database db_role_grants_test_non_distributed,
+--  role db_role_grants_test_role_missing_on_node_2
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'CREATE')
+  $$
+) ORDER BY result;
+
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'TEMPORARY')
+  $$
+) ORDER BY result;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'CONNECT')
+  $$
+) ORDER BY result;
 
 
 RESET citus.log_remote_commands;
@@ -373,6 +436,8 @@ RESET citus.grep_remote_commands;
 select 1 from citus_add_node('localhost', :worker_2_port);
 
 
+-- check the privileges after add_node for database db_role_grants_test,
+--  role db_role_grants_test_role_exists_on_node_2
 
 SELECT result from run_command_on_all_nodes(
   $$
@@ -391,6 +456,9 @@ SELECT result from run_command_on_all_nodes(
   select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test', 'CONNECT')
   $$
 ) ORDER BY result;
+
+-- check the privileges after add_node for database db_role_grants_test,
+--  role db_role_grants_test_role_missing_on_node_2
 
 SELECT result from run_command_on_all_nodes(
   $$
@@ -411,9 +479,57 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
+-- check the privileges after add_node for database db_role_grants_test_non_distributed,
+--  role db_role_grants_test_role_exists_on_node_2
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test_non_distributed', 'CREATE')
+  $$
+) ORDER BY result;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test_non_distributed', 'TEMPORARY')
+  $$
+) ORDER BY result;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_exists_on_node_2','db_role_grants_test_non_distributed', 'CONNECT')
+  $$
+) ORDER BY result;
+
+-- check the privileges after add_node for database db_role_grants_test_non_distributed,
+--  role db_role_grants_test_role_missing_on_node_2
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'CREATE')
+  $$
+) ORDER BY result;
+
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'TEMPORARY')
+  $$
+) ORDER BY result;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'CONNECT')
+  $$
+) ORDER BY result;
+
 grant connect,temp,temporary,create  on database db_role_grants_test to public;
 
 DROP DATABASE db_role_grants_test;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  drop database db_role_grants_test_non_distributed
+  $$
+) ORDER BY result;
 DROP ROLE db_role_grants_test_role_exists_on_node_2;
 DROP ROLE db_role_grants_test_role_missing_on_node_2;
 
