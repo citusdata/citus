@@ -24,13 +24,12 @@ VACUUM (FULL, FREEZE false, VERBOSE false, ANALYZE false, SKIP_LOCKED false, IND
 
 -- vacuum (process_toast true) should be vacuuming toast tables (default is true)
 CREATE TABLE local_vacuum_table(name text);
+INSERT INTO local_vacuum_table VALUES ('peter');
 select reltoastrelid from pg_class where relname='local_vacuum_table'
 \gset
 
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
 \gset
-VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
-VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
 VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
@@ -38,8 +37,6 @@ WHERE oid=:reltoastrelid::regclass;
 -- vacuum (process_toast false) should not be vacuuming toast tables (default is true)
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
 \gset
-VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
-VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
 VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
 SELECT relfrozenxid::text::integer = :frozenxid AS frozen_not_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
