@@ -925,4 +925,3 @@ SELECT result FROM run_command_on_all_nodes(
 (3 rows)
 
 drop user create_drop_db_test_user;
-
