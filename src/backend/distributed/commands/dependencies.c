@@ -468,11 +468,17 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 			/*TODO: To reviewer: Having a code block for dependency makes sense */
 			/* However dependency tree is based on pg metadata; which does not reflect */
-			/* actual database dependencies. I added this block just to point out the issue. */
-			/* if(EnableCreateDatabasePropagation){ */
-			/* 	List *dbGrants =  GrantOnDatabaseDDLCommands(dependency->objectId); */
-			/* 	databaseDDLCommands = list_concat(databaseDDLCommands, dbGrants); */
-			/* } */
+
+			/* actual database dependencies. I added this block just to point out the issue.
+			 */
+
+			/*
+			 * if(EnableCreateDatabasePropagation){
+			 *  List *dbGrants =  GrantOnDatabaseDDLCommands(dependency->objectId);
+			 *  databaseDDLCommands = list_concat(databaseDDLCommands, dbGrants);
+			 *
+			 * }
+			 */
 
 			return databaseDDLCommands;
 		}
