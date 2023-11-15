@@ -631,13 +631,9 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
 NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test TO db_role_grants_test_role_missing_on_node_2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
 select 1 from citus_add_node('localhost', :worker_2_port);
-NOTICE:  issuing CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner;SET ROLE pg_database_owner;GRANT USAGE ON SCHEMA public TO pg_database_owner;;GRANT CREATE ON SCHEMA public TO pg_database_owner;;RESET ROLE;SET ROLE pg_database_owner;GRANT USAGE ON SCHEMA public TO PUBLIC;;RESET ROLE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE SCHEMA IF NOT EXISTS information_schema AUTHORIZATION postgres;SET ROLE postgres;GRANT USAGE ON SCHEMA information_schema TO postgres;;GRANT CREATE ON SCHEMA information_schema TO postgres;;RESET ROLE;SET ROLE postgres;GRANT USAGE ON SCHEMA information_schema TO PUBLIC;;RESET ROLE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';SET ROLE postgres;GRANT CONNECT ON DATABASE db_role_grants_test TO postgres;;GRANT CREATE ON DATABASE db_role_grants_test TO postgres;;GRANT TEMPORARY ON DATABASE db_role_grants_test TO postgres;;RESET ROLE;SET ROLE postgres;GRANT CONNECT ON DATABASE db_role_grants_test TO db_role_grants_test_role_exists_on_node_2;;GRANT CREATE ON DATABASE db_role_grants_test TO db_role_grants_test_role_exists_on_node_2;;GRANT TEMPORARY ON DATABASE db_role_grants_test TO db_role_grants_test_role_exists_on_node_2;;RESET ROLE;SET ROLE postgres;GRANT CONNECT ON DATABASE db_role_grants_test TO db_role_grants_test_role_missing_on_node_2;;GRANT CREATE ON DATABASE db_role_grants_test TO db_role_grants_test_role_missing_on_node_2;;GRANT TEMPORARY ON DATABASE db_role_grants_test TO db_role_grants_test_role_missing_on_node_2;;RESET ROLE;SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------
         1

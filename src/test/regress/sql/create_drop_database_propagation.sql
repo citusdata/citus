@@ -366,7 +366,12 @@ set citus.grep_remote_commands = '%GRANT%';
 grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants_test_role_exists_on_node_2;
 grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
 
+
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
+
 select 1 from citus_add_node('localhost', :worker_2_port);
+
 
 
 SELECT result from run_command_on_all_nodes(
