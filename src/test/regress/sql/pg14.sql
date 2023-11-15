@@ -30,12 +30,16 @@ select reltoastrelid from pg_class where relname='local_vacuum_table'
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
 \gset
 VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
+VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
+VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
 
 -- vacuum (process_toast false) should not be vacuuming toast tables (default is true)
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
 \gset
+VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
+VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
 VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
 SELECT relfrozenxid::text::integer = :frozenxid AS frozen_not_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
