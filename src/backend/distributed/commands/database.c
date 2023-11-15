@@ -688,7 +688,6 @@ GenerateGrantDatabaseCommandList(void)
 		{
 			continue;
 		}
-		elog(NOTICE, "Granting on database %s", NameStr(databaseForm->datname));
 
 		List *dbGrants = GrantOnDatabaseDDLCommands(databaseForm->oid);
 
