@@ -658,6 +658,50 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	return str.data;
 }
 
+/*
+ * GrantOnDatabaseDDLCommands returns a list of sql statements to idempotently apply a
+ * GRANT on distributed databases.
+ */
+
+List * GenerateGrantDatabaseCommandList(void){
+	List *grantCommands = NIL;
+
+	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
+	TableScanDesc scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
+
+	HeapTuple tuple = NULL;
+	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	{
+		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
+
+		ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(
+			NameStr(databaseForm->datname), false);
+
+		/* skip databases that are not distributed */
+		if (!IsAnyObjectDistributed(list_make1(dbAddress)))
+		{
+			continue;
+		}
+
+		List *dbGrants =  GrantOnDatabaseDDLCommands(databaseForm->oid);
+
+		/* append dbGrants into grantCommands*/
+		grantCommands = list_concat(grantCommands, dbGrants);
+	}
+
+	char *grantCommand = NULL;
+
+	foreach_ptr(grantCommand, grantCommands)
+	{
+		elog(DEBUG1, "grantCommand: %s", grantCommand);
+	}
+
+	heap_endscan(scan);
+	table_close(pgDatabaseRel, AccessShareLock);
+
+	return grantCommands;
+}
+
 
 /*
  * GenerateCreateDatabaseCommandList returns a list of CREATE DATABASE statements
@@ -666,8 +710,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
  * Commands in the list are wrapped by citus_internal_database_command() UDF
  * to avoid from transaction block restrictions that apply to database commands
  */
-List *
-GenerateCreateDatabaseCommandList(void)
+List * GenerateCreateDatabaseCommandList(void)
 {
 	List *commands = NIL;
 

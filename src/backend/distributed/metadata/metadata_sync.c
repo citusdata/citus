@@ -123,6 +123,7 @@ static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
+static List * GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem);
 static List * GenerateGrantOnFunctionQueriesFromAclItem(Oid schemaOid,
 														AclItem *aclItem);
 static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
@@ -154,6 +155,7 @@ static char * RemoteSchemaIdExpressionByName(char *schemaName);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 static char * RemoteTableIdExpression(Oid relationId);
+static void SendDatabaseGrantSyncCommands(MetadataSyncContext *context);
 
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
@@ -2046,6 +2048,80 @@ GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
 	return queries;
 }
 
+List *
+GrantOnDatabaseDDLCommands(Oid databaseOid)
+{
+	HeapTuple databaseTuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(databaseOid));
+	bool isNull = true;
+	Datum aclDatum = SysCacheGetAttr(DATABASEOID, databaseTuple, Anum_pg_database_datacl,
+									 &isNull);
+	if (isNull)
+	{
+		ReleaseSysCache(databaseTuple);
+		return NIL;
+	}
+	Acl *acl = DatumGetAclPCopy(aclDatum);
+	AclItem *aclDat = ACL_DAT(acl);
+	int aclNum = ACL_NUM(acl);
+	List *commands = NIL;
+
+	ReleaseSysCache(databaseTuple);
+
+	for (int i = 0; i < aclNum; i++)
+	{
+		commands = list_concat(commands,
+							   GenerateGrantOnDatabaseFromAclItem(
+								   databaseOid,&aclDat[i]));
+	}
+
+	return commands;
+}
+
+
+List *
+GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
+{
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_DATABASE;
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_DATABASE;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_CONNECT) || (permissions & ACL_CONNECT));
+	Assert(!(grants & ACL_CREATE) || (permissions & ACL_CREATE));
+	Assert(!(grants & ACL_CREATE_TEMP) || (permissions & ACL_CREATE_TEMP));
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	if (permissions & ACL_CONNECT)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE ,granteeOid, databaseOid, "CONNECT",
+										  grants & ACL_CONNECT));
+		queries = lappend(queries, query);
+	}
+	if (permissions & ACL_CREATE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid, "CREATE",
+										  grants & ACL_CREATE));
+		queries = lappend(queries, query);
+	}
+	if (permissions & ACL_CREATE_TEMP)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid, "TEMPORARY",
+										  grants & ACL_CREATE_TEMP));
+		queries = lappend(queries, query);
+	}
+
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
+}
+
 
 /*
  * GenerateGrantStmtForRights is the function for creating GrantStmt's for all
@@ -2118,6 +2194,11 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 			RangeVar *sequence = makeRangeVar(get_namespace_name(namespaceOid),
 											  get_rel_name(objectId), -1);
 			return list_make1(sequence);
+		}
+
+		case OBJECT_DATABASE:
+		{
+			return list_make1(makeString(get_database_name(objectId)));
 		}
 
 		default:
@@ -4563,13 +4644,6 @@ PropagateNodeWideObjectsCommandList(void)
 	/* collect all commands */
 	List *ddlCommands = NIL;
 
-	if (EnableCreateDatabasePropagation)
-	{
-		/* get commands for database creation */
-		List *createDatabaseCommands = GenerateCreateDatabaseCommandList();
-		ddlCommands = list_concat(ddlCommands, createDatabaseCommands);
-	}
-
 	if (EnableAlterRoleSetPropagation)
 	{
 		/*
@@ -4578,6 +4652,13 @@ PropagateNodeWideObjectsCommandList(void)
 		 */
 		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
 		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
+	}
+
+	if (EnableCreateDatabasePropagation)
+	{
+		/* get commands for database creation */
+		List *createDatabaseCommands = GenerateCreateDatabaseCommandList();
+		ddlCommands = list_concat(ddlCommands, createDatabaseCommands);
 	}
 
 	return ddlCommands;
@@ -4611,7 +4692,7 @@ SyncDistributedObjects(MetadataSyncContext *context)
 
 	Assert(ShouldPropagate());
 
-	/* Send systemwide objects, only roles for now */
+	/* send systemwide objects; i.e. roles and databases for now */
 	SendNodeWideObjectsSyncCommands(context);
 
 	/*
@@ -4651,6 +4732,12 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * those tables.
 	 */
 	SendInterTableRelationshipCommands(context);
+
+	/*
+	 * After creation of databases and roles, send the grant database commands
+	 * to the workers.
+	*/
+	SendDatabaseGrantSyncCommands(context);
 }
 
 
@@ -4664,6 +4751,29 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 {
 	/* propagate node wide objects. It includes only roles for now. */
 	List *commandList = PropagateNodeWideObjectsCommandList();
+
+	if (commandList == NIL)
+	{
+		return;
+	}
+
+	commandList = lcons(DISABLE_DDL_PROPAGATION, commandList);
+	commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
+	SendOrCollectCommandListToActivatedNodes(context, commandList);
+}
+
+/*
+ * SendDatabaseGrantSyncCommands sends database grants to roles to workers with
+ * transactional or nontransactional mode according to transactionMode inside
+ * metadataSyncContext.
+ * This function is called after SendNodeWideObjectsSyncCommands and SendDependencyCreationCommands
+ * because we need both databases and roles to be created on the worker.
+ */
+static void
+SendDatabaseGrantSyncCommands(MetadataSyncContext *context)
+{
+	/* propagate node wide objects. It includes only roles for now. */
+	List *commandList = GenerateGrantDatabaseCommandList();
 
 	if (commandList == NIL)
 	{

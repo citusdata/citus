@@ -244,6 +244,7 @@ extern List * DropDatabaseStmtObjectAddress(Node *node, bool missingOk,
 extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											  bool isPostprocess);
 extern List * GenerateCreateDatabaseCommandList(void);
+extern List * GenerateGrantDatabaseCommandList(void);
 
 
 /* domain.c - forward declarations */
