@@ -12,19 +12,9 @@
 \set bob_worker_1_pw   triplex-royalty-warranty-stand-cheek
 \set bob_worker_2_pw   omnibus-plectrum-comet-sneezy-ensile
 \set bob_fallback_pw   :bob_worker_1_pw
-SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port;
- worker_1_id
----------------------------------------------------------------------
-          17
-(1 row)
-
+SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port
 \gset
-SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port;
- worker_2_id
----------------------------------------------------------------------
-          35
-(1 row)
-
+SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port
 \gset
 -- alice is a superuser so she can update own password
 CREATE USER alice PASSWORD :'alice_master_pw' SUPERUSER;

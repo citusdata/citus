@@ -299,6 +299,7 @@ test: multi_foreign_key_relation_graph
 # Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
 # and rerun some of the tests.
 # --------
+test: remove_coordinator_from_metadata
 test: add_coordinator
 test: replicate_reference_tables_to_coordinator
 test: citus_local_tables
