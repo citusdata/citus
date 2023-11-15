@@ -695,13 +695,6 @@ GenerateGrantDatabaseCommandList(void)
 		grantCommands = list_concat(grantCommands, dbGrants);
 	}
 
-	char *grantCommand = NULL;
-
-	foreach_ptr(grantCommand, grantCommands)
-	{
-		elog(DEBUG1, "grantCommand: %s", grantCommand);
-	}
-
 	heap_endscan(scan);
 	table_close(pgDatabaseRel, AccessShareLock);
 
