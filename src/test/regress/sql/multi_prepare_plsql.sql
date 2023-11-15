@@ -624,7 +624,7 @@ CREATE TYPE prepare_ddl_type AS (x int, y int);
 SELECT type_ddl_plpgsql();
 
 -- find all renamed types to verify the schema name didn't leak, nor a crash happened
-SELECT nspname, typname FROM pg_type JOIN pg_namespace ON pg_namespace.oid = pg_type.typnamespace WHERE typname = 'prepare_ddl_type_backup';
+SELECT nspname, typname FROM pg_type JOIN pg_namespace ON pg_namespace.oid = pg_type.typnamespace WHERE typname = 'prepare_ddl_type_backup' ORDER BY 1;
 
 DROP TYPE prepare_ddl_type_backup;
 RESET search_path;
@@ -635,6 +635,7 @@ DROP FUNCTION ddl_in_plpgsql();
 DROP FUNCTION copy_in_plpgsql();
 DROP TABLE prepare_ddl;
 DROP TABLE local_ddl;
+DROP TABLE plpgsql_table;
 DROP SCHEMA otherschema;
 
 -- clean-up functions

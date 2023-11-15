@@ -198,6 +198,7 @@ DEPS = {
         ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
         repeatable=False,
     ),
+    "multi_prepare_plsql": TestDeps("base_schedule"),
 }
 
 
