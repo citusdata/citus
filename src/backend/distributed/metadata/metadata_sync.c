@@ -4771,24 +4771,27 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 /*
  * SendDatabaseGrantSyncCommands sends database grants to roles to workers with
  * transactional or nontransactional mode according to transactionMode inside
- * metadataSyncContext.
+ * metadataSyncContext in case of EnableCreateDatabasePropagation GUC set.
  * This function is called after SendNodeWideObjectsSyncCommands and SendDependencyCreationCommands
  * because we need both databases and roles to be created on the worker.
+ *
  */
 static void
 SendDatabaseGrantSyncCommands(MetadataSyncContext *context)
 {
-	/* propagate node wide objects. It includes only roles for now. */
-	List *commandList = GenerateGrantDatabaseCommandList();
+	if(EnableCreateDatabasePropagation){
+		/* propagate node wide objects. It includes only roles for now. */
+		List *commandList = GenerateGrantDatabaseCommandList();
 
-	if (commandList == NIL)
-	{
-		return;
+		if (commandList == NIL)
+		{
+			return;
+		}
+
+		commandList = lcons(DISABLE_DDL_PROPAGATION, commandList);
+		commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
 	}
-
-	commandList = lcons(DISABLE_DDL_PROPAGATION, commandList);
-	commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
-	SendOrCollectCommandListToActivatedNodes(context, commandList);
 }
 
 
