@@ -63,14 +63,16 @@ typedef struct DatabaseCollationInfo
 } DatabaseCollationInfo;
 
 static void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
-static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm);
+static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database
+															databaseForm);
 static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 #if PG_VERSION_NUM >= PG_VERSION_15
 static char * GetLocaleProviderString(char datlocprovider);
 #endif
 static char * GetTablespaceName(Oid tablespaceOid);
-static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,bool missingOk);
+static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName, bool
+														  missingOk);
 
 static Oid get_database_owner(Oid db_oid);
 
@@ -660,12 +662,14 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	return str.data;
 }
 
+
 /*
  * GrantOnDatabaseDDLCommands returns a list of sql statements to idempotently apply a
  * GRANT on distributed databases.
  */
-
-List * GenerateGrantDatabaseCommandList(void){
+List *
+GenerateGrantDatabaseCommandList(void)
+{
 	List *grantCommands = NIL;
 
 	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
@@ -685,7 +689,7 @@ List * GenerateGrantDatabaseCommandList(void){
 			continue;
 		}
 
-		List *dbGrants =  GrantOnDatabaseDDLCommands(databaseForm->oid);
+		List *dbGrants = GrantOnDatabaseDDLCommands(databaseForm->oid);
 
 		/* append dbGrants into grantCommands*/
 		grantCommands = list_concat(grantCommands, dbGrants);
@@ -712,7 +716,8 @@ List * GenerateGrantDatabaseCommandList(void){
  * Commands in the list are wrapped by citus_internal_database_command() UDF
  * to avoid from transaction block restrictions that apply to database commands
  */
-List * GenerateCreateDatabaseCommandList(void)
+List *
+GenerateCreateDatabaseCommandList(void)
 {
 	List *commands = NIL;
 

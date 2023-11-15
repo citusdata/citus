@@ -513,7 +513,7 @@ GenerateRoleOptionsList(HeapTuple tuple)
 List *
 GenerateCreateOrAlterRoleCommand(Oid roleOid)
 {
-	elog(LOG,"GenerateCreateOrAlterRoleCommand execution");
+	elog(LOG, "GenerateCreateOrAlterRoleCommand execution");
 
 	HeapTuple roleTuple = SearchSysCache1(AUTHOID, ObjectIdGetDatum(roleOid));
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(roleTuple));

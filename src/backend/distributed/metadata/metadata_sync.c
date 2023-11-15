@@ -2048,6 +2048,7 @@ GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
 	return queries;
 }
 
+
 List *
 GrantOnDatabaseDDLCommands(Oid databaseOid)
 {
@@ -2071,7 +2072,7 @@ GrantOnDatabaseDDLCommands(Oid databaseOid)
 	{
 		commands = list_concat(commands,
 							   GenerateGrantOnDatabaseFromAclItem(
-								   databaseOid,&aclDat[i]));
+								   databaseOid, &aclDat[i]));
 	}
 
 	return commands;
@@ -2098,21 +2099,24 @@ GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
 	if (permissions & ACL_CONNECT)
 	{
 		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
-										  OBJECT_DATABASE ,granteeOid, databaseOid, "CONNECT",
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "CONNECT",
 										  grants & ACL_CONNECT));
 		queries = lappend(queries, query);
 	}
 	if (permissions & ACL_CREATE)
 	{
 		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
-										  OBJECT_DATABASE, granteeOid, databaseOid, "CREATE",
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "CREATE",
 										  grants & ACL_CREATE));
 		queries = lappend(queries, query);
 	}
 	if (permissions & ACL_CREATE_TEMP)
 	{
 		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
-										  OBJECT_DATABASE, granteeOid, databaseOid, "TEMPORARY",
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "TEMPORARY",
 										  grants & ACL_CREATE_TEMP));
 		queries = lappend(queries, query);
 	}
@@ -4736,7 +4740,7 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	/*
 	 * After creation of databases and roles, send the grant database commands
 	 * to the workers.
-	*/
+	 */
 	SendDatabaseGrantSyncCommands(context);
 }
 
@@ -4761,6 +4765,7 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 	commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
 	SendOrCollectCommandListToActivatedNodes(context, commandList);
 }
+
 
 /*
  * SendDatabaseGrantSyncCommands sends database grants to roles to workers with
