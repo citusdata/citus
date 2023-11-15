@@ -777,4 +777,5 @@ DROP TABLE compression_and_defaults, compression_and_generated_col;
 set client_min_messages to error;
 drop extension postgres_fdw cascade;
 drop schema pg14 cascade;
+DROP ROLE role_1, r1;
 reset client_min_messages;
