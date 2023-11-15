@@ -546,3 +546,4 @@ SELECT result FROM run_command_on_all_nodes(
 );
 
 drop user create_drop_db_test_user;
+reset enable_create_database_propagation;
