@@ -24,8 +24,6 @@
  *-------------------------------------------------------------------------
  */
 
-#warning "This is a compilation warning for testing purposes"
-
 #include "postgres.h"
 
 #include "fmgr.h"
