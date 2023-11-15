@@ -4741,7 +4741,9 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * After creation of databases and roles, send the grant database commands
 	 * to the workers.
 	 */
-	SendDatabaseGrantSyncCommands(context);
+	if (EnableCreateDatabasePropagation){
+		SendDatabaseGrantSyncCommands(context);
+	}
 }
 
 
