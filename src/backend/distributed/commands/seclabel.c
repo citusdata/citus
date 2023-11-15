@@ -112,8 +112,9 @@ void
 citus_test_object_relabel(const ObjectAddress *object, const char *seclabel)
 {
 	if (seclabel == NULL ||
-		strcmp(seclabel, "citus unclassified") == 0 ||
-		strcmp(seclabel, "citus classified") == 0)
+		strcmp(seclabel, "citus_unclassified") == 0 ||
+		strcmp(seclabel, "citus_classified") == 0 ||
+		strcmp(seclabel, "citus '!unclassified") == 0)
 	{
 		return;
 	}

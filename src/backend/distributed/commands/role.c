@@ -947,11 +947,8 @@ GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename)
 
 		secLabelStmt->provider = TextDatumGetCString(
 			datumArray[Anum_pg_shseclabel_provider - 1]);
-		if (!isNullArray[Anum_pg_shseclabel_label - 1])
-		{
-			secLabelStmt->label = TextDatumGetCString(
-				datumArray[Anum_pg_shseclabel_label - 1]);
-		}
+		secLabelStmt->label = TextDatumGetCString(
+			datumArray[Anum_pg_shseclabel_label - 1]);
 
 		secLabelStmts = lappend(secLabelStmts, secLabelStmt);
 	}
