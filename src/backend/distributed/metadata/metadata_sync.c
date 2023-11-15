@@ -4779,7 +4779,8 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 static void
 SendDatabaseGrantSyncCommands(MetadataSyncContext *context)
 {
-	if(EnableCreateDatabasePropagation){
+	if (EnableCreateDatabasePropagation)
+	{
 		/* propagate node wide objects. It includes only roles for now. */
 		List *commandList = GenerateGrantDatabaseCommandList();
 
