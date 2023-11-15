@@ -66,7 +66,9 @@ static void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm);
 static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
+#if PG_VERSION_NUM >= PG_VERSION_15
 static char * GetLocaleProviderString(char datlocprovider);
+#endif
 static char * GetTablespaceName(Oid tablespaceOid);
 static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,bool missingOk);
 
