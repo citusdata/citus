@@ -4743,7 +4743,6 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 */
 
 	SendDatabaseGrantSyncCommands(context);
-
 }
 
 
