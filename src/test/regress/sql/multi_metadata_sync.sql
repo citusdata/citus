@@ -47,7 +47,14 @@ ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
 
 -- Show that, with no MX tables, activate node snapshot contains only the delete commands,
 -- pg_dist_node entries, pg_dist_object entries and roles.
+
+select pdo.*, pd.datname
+from pg_dist_object pdo
+         left outer join pg_database pd on pdo.objid = pd.oid;
+         
 SELECT unnest(activate_node_snapshot()) order by 1;
+
+
 
 -- Create a test table with constraints and SERIAL and default from user defined sequence
 CREATE SEQUENCE user_defined_seq;
