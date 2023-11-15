@@ -313,7 +313,7 @@ select 1 from citus_remove_node('localhost', :worker_2_port);
 
 CREATE DATABASE db_role_grants_test;
 
-revoke connect,temp,temporary  on database db_role_grants_test from public;
+revoke connect,temp,temporary,create  on database db_role_grants_test from public;
 
 SET citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%CREATE ROLE%';
@@ -411,10 +411,13 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
+grant connect,temp,temporary,create  on database db_role_grants_test to public;
 
 DROP DATABASE db_role_grants_test;
 DROP ROLE db_role_grants_test_role_exists_on_node_2;
 DROP ROLE db_role_grants_test_role_missing_on_node_2;
+
+
 
 
 --clean up resources created by this test
