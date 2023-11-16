@@ -614,47 +614,47 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	appendStringInfo(&str, " CONNECTION LIMIT %d", databaseForm->datconnlimit);
 
 	appendStringInfo(&str, " ALLOW_CONNECTIONS = %s",
-					 quote_literal_cstr(databaseForm->datallowconn ? "true" : "false"));
+					 quote_identifier(databaseForm->datallowconn ? "true" : "false"));
 
 	appendStringInfo(&str, " IS_TEMPLATE = %s",
-					 quote_literal_cstr(databaseForm->datistemplate ? "true" : "false"));
+					 quote_identifier(databaseForm->datistemplate ? "true" : "false"));
 
 	appendStringInfo(&str, " LC_COLLATE = %s",
-					 quote_literal_cstr(collInfo.datcollate));
+					 quote_identifier(collInfo.datcollate));
 
-	appendStringInfo(&str, " LC_CTYPE = %s", quote_literal_cstr(collInfo.datctype));
+	appendStringInfo(&str, " LC_CTYPE = %s", quote_identifier(collInfo.datctype));
 
 	appendStringInfo(&str, " OWNER = %s",
-					 quote_literal_cstr(GetUserNameFromId(databaseForm->datdba, false)));
+					 quote_identifier(GetUserNameFromId(databaseForm->datdba, false)));
 
 	appendStringInfo(&str, " TABLESPACE = %s",
 					 quote_identifier(GetTablespaceName(databaseForm->dattablespace)));
 
 	appendStringInfo(&str, " ENCODING = %s",
-					 quote_literal_cstr(pg_encoding_to_char(databaseForm->encoding)));
+					 quote_identifier(pg_encoding_to_char(databaseForm->encoding)));
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 	if (collInfo.datcollversion != NULL)
 	{
 		appendStringInfo(&str, " COLLATION_VERSION = %s",
-						 quote_literal_cstr(collInfo.datcollversion));
+						 quote_identifier(collInfo.datcollversion));
 	}
 
 	if (collInfo.daticulocale != NULL)
 	{
-		appendStringInfo(&str, " ICU_LOCALE = %s", quote_literal_cstr(
+		appendStringInfo(&str, " ICU_LOCALE = %s", quote_identifier(
 							 collInfo.daticulocale));
 	}
 
 	appendStringInfo(&str, " LOCALE_PROVIDER = %s",
-					 quote_literal_cstr(GetLocaleProviderString(
+					 quote_identifier(GetLocaleProviderString(
 											databaseForm->datlocprovider)));
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 	if (collInfo.daticurules != NULL)
 	{
-		appendStringInfo(&str, " ICU_RULES = %s", quote_literal_cstr(
+		appendStringInfo(&str, " ICU_RULES = %s", quote_identifier(
 							 collInfo.daticurules));
 	}
 #endif
