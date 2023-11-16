@@ -7,7 +7,7 @@ $ git ls-files \
   | grep 'citus-style: set' \
   | awk '{print $1}' \
   | cut -d':' -f1 \
-  | xargs -n1 ./ci/include-grouping.py
+  | xargs -n1 ./ci/include_grouping.py
 """
 
 import collections
@@ -17,17 +17,15 @@ import sys
 
 def main(args):
     if len(args) < 2:
-        print("Usage: include-grouping.py <file>")
+        print("Usage: include_grouping.py <file>")
         return
 
     file = args[1]
     if not os.path.isfile(file):
-        print("File does not exist", file=sys.stderr)
-        return sys.exit(1)
+        sys.exit(f"File '{file}' does not exist")
 
-    with open(file, "r") as f:
+    with open(file, "r") as in_file:
         with open(file + ".tmp", "w") as out_file:
-            lines = f.readlines()
             includes = []
             skipped_lines = []
 
@@ -35,7 +33,7 @@ def main(args):
             # This implicitly keeps separation of any #include lines that are contained in
             # an #ifdef, because it will order the #include lines inside and after the
             # #ifdef completely separately.
-            for line in lines:
+            for line in in_file:
                 # if a line starts with #include we don't want to print it yet, instead we
                 # want to collect all consecutive #include lines
                 if line.startswith("#include"):
@@ -58,16 +56,14 @@ def main(args):
                     print_sorted_includes(includes, file=out_file)
                     includes = []
 
-                # print any skipped lines
-                print("".join(skipped_lines), end="", file=out_file)
-                skipped_lines = []
+                    # print any skipped lines
+                    print("".join(skipped_lines), end="", file=out_file)
+                    skipped_lines = []
 
                 print(line, end="", file=out_file)
 
     # move out_file to file
     os.rename(file + ".tmp", file)
-
-    pass
 
 
 def print_sorted_includes(includes, file=sys.stdout):
