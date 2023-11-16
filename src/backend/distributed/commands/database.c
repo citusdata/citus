@@ -648,7 +648,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 
 	appendStringInfo(&str, " LOCALE_PROVIDER = %s",
 					 quote_identifier(GetLocaleProviderString(
-											databaseForm->datlocprovider)));
+										  databaseForm->datlocprovider)));
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
