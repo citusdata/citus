@@ -582,8 +582,6 @@ _PG_init(void)
 	 */
 	if (RunningUnderCitusTestSuite)
 	{
-		register_label_provider("citus_tests_label_provider",
-								citus_test_object_relabel);
 		register_label_provider("citus '!tests_label_provider",
 								citus_test_object_relabel);
 	}
