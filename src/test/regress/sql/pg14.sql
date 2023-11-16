@@ -35,6 +35,8 @@ SELECT relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky F
 \gset
 
 VACUUM (FREEZE) local_vacuum_table;
+SELECT :frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE oid=:reltoastrelid::regclass;
+SELECT relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE oid=:reltoastrelid::regclass;
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
 
