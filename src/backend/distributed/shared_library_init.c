@@ -29,6 +29,7 @@
 #include "citus_version.h"
 #include "commands/explain.h"
 #include "commands/extension.h"
+#include "commands/seclabel.h"
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
@@ -574,6 +575,16 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+
+	/*
+	 * This part is only for SECURITY LABEL tests
+	 * mimicking what an actual security label provider would do
+	 */
+	if (RunningUnderCitusTestSuite)
+	{
+		register_label_provider("citus '!tests_label_provider",
+								citus_test_object_relabel);
+	}
 }
 
 
@@ -2305,13 +2316,14 @@ RegisterCitusConfigVariables(void)
 		WarnIfReplicationModelIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.running_under_isolation_test",
+		"citus.running_under_citus_test_suite",
 		gettext_noop(
 			"Only useful for testing purposes, when set to true, Citus does some "
-			"tricks to implement useful isolation tests with rebalancing. Should "
+			"tricks to implement useful isolation tests with rebalancing. It also "
+			"registers a dummy label provider for SECURITY LABEL tests. Should "
 			"never be set to true on production systems "),
 		gettext_noop("for details of the tricks implemented, refer to the source code"),
-		&RunningUnderIsolationTest,
+		&RunningUnderCitusTestSuite,
 		false,
 		PGC_SUSET,
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
