@@ -27,14 +27,15 @@ CREATE TABLE local_vacuum_table(name text);
 VACUUM (FULL) local_vacuum_table;
 VACUUM ANALYZE local_vacuum_table;
 ALTER TABLE local_vacuum_table SET (autovacuum_enabled = false);
-INSERT INTO local_vacuum_table VALUES ('peter');
+INSERT INTO local_vacuum_table VALUES ('onur'), ('aykut'), ('emel');
 
 SELECT reltoastrelid FROM pg_class WHERE relname='local_vacuum_table'
 \gset
-SELECT relfrozenxid::text::integer AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
+SELECT relfrozenxid::text::integer AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass;
 \gset
 
 VACUUM (FREEZE) local_vacuum_table;
+SELECT relfrozenxid::text::integer AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass;
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
 
