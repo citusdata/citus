@@ -614,15 +614,15 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	appendStringInfo(&str, " CONNECTION LIMIT %d", databaseForm->datconnlimit);
 
 	appendStringInfo(&str, " ALLOW_CONNECTIONS = %s",
-					 quote_identifier(databaseForm->datallowconn ? "true" : "false"));
+					 quote_literal_cstr(databaseForm->datallowconn ? "true" : "false"));
 
 	appendStringInfo(&str, " IS_TEMPLATE = %s",
-					 quote_identifier(databaseForm->datistemplate ? "true" : "false"));
+					 quote_literal_cstr(databaseForm->datistemplate ? "true" : "false"));
 
 	appendStringInfo(&str, " LC_COLLATE = %s",
-					 quote_identifier(collInfo.datcollate));
+					 quote_literal_cstr(collInfo.datcollate));
 
-	appendStringInfo(&str, " LC_CTYPE = %s", quote_identifier(collInfo.datctype));
+	appendStringInfo(&str, " LC_CTYPE = %s", quote_literal_cstr(collInfo.datctype));
 
 	appendStringInfo(&str, " OWNER = %s",
 					 quote_identifier(GetUserNameFromId(databaseForm->datdba, false)));
@@ -631,7 +631,7 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 					 quote_identifier(GetTablespaceName(databaseForm->dattablespace)));
 
 	appendStringInfo(&str, " ENCODING = %s",
-					 quote_identifier(pg_encoding_to_char(databaseForm->encoding)));
+					 quote_literal_cstr(pg_encoding_to_char(databaseForm->encoding)));
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 	if (collInfo.datcollversion != NULL)
