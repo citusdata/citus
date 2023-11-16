@@ -364,6 +364,15 @@ static DistributeObjectOps Any_Rename = {
 	.address = NULL,
 	.markDistributed = false,
 };
+static DistributeObjectOps Any_SecLabel = {
+	.deparse = DeparseSecLabelStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessSecLabelStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = SecLabelStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Attribute_Rename = {
 	.deparse = DeparseRenameAttributeStmt,
 	.qualify = QualifyRenameAttributeStmt,
@@ -1989,6 +1998,11 @@ GetDistributeObjectOps(Node *node)
 		case T_VacuumStmt:
 		{
 			return &Vacuum_Analyze;
+		}
+
+		case T_SecLabelStmt:
+		{
+			return &Any_SecLabel;
 		}
 
 		case T_RenameStmt:

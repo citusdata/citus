@@ -191,7 +191,7 @@ typedef struct RebalancePlanFunctions
 extern char *VariablesToBePassedToNewConnections;
 extern int MaxRebalancerLoggedIgnoredMoves;
 extern int RebalancerByDiskSizeBaseCost;
-extern bool RunningUnderIsolationTest;
+extern bool RunningUnderCitusTestSuite;
 extern bool PropagateSessionSettingsForLoopbackConnection;
 extern int MaxBackgroundTaskExecutorsPerNode;
 
