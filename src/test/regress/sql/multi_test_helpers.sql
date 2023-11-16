@@ -581,3 +581,58 @@ BEGIN
     ORDER BY node_type;
 END;
 $func$ LANGUAGE plpgsql;
+
+-- For all nodes, returns database properties of given database, except
+-- oid, datfrozenxid and datminmxid.
+--
+-- Also returns whether the node has a pg_dist_object record for the database
+-- and whether there are any stale pg_dist_object records for a database.
+CREATE OR REPLACE FUNCTION check_database_on_all_nodes(p_database_name text)
+RETURNS TABLE (node_type text, result text)
+AS $func$
+BEGIN
+  RETURN QUERY
+    SELECT
+      CASE WHEN (groupid = 0 AND groupid = (SELECT groupid FROM pg_dist_local_group)) THEN 'coordinator (local)'
+           WHEN (groupid = 0) THEN 'coordinator (remote)'
+           WHEN (groupid = (SELECT groupid FROM pg_dist_local_group)) THEN 'worker node (local)'
+           ELSE 'worker node (remote)'
+      END AS node_type,
+      q2.result
+    FROM run_command_on_all_nodes(
+        format(
+            $$
+            SELECT to_jsonb(q.*)
+            FROM (
+                SELECT
+                (
+                    SELECT to_jsonb(database_properties.*)
+                    FROM (
+                        SELECT datname, pa.rolname as database_owner,
+                            pg_encoding_to_char(pd.encoding) as encoding, datlocprovider,
+                            datistemplate, datallowconn, datconnlimit,
+                            pt.spcname AS tablespace, datcollate, datctype, daticulocale,
+                            datcollversion, datacl
+                        FROM pg_database pd
+                        JOIN pg_authid pa ON pd.datdba = pa.oid
+                        JOIN pg_tablespace pt ON pd.dattablespace = pt.oid
+                        WHERE datname = '%s'
+                    ) database_properties
+                ) AS database_properties,
+                (
+                    SELECT COUNT(*)=1
+                    FROM pg_dist_object WHERE objid = (SELECT oid FROM pg_database WHERE datname = '%s')
+                ) AS pg_dist_object_record_for_db_exists,
+                (
+                    SELECT COUNT(*) > 0
+                    FROM pg_dist_object
+                    WHERE classid = 1262 AND objid NOT IN (SELECT oid FROM pg_database)
+                ) AS stale_pg_dist_object_record_for_a_db_exists
+            ) q
+            $$,
+            p_database_name, p_database_name
+        )
+    ) q2
+    JOIN pg_dist_node USING (nodeid);
+END;
+$func$ LANGUAGE plpgsql;
