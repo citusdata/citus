@@ -556,7 +556,6 @@ BEGIN
     ORDER BY node_type;
 END;
 $func$ LANGUAGE plpgsql;
-$func$ LANGUAGE plpgsql;
 -- For all nodes, returns database properties of given database, except
 -- oid, datfrozenxid and datminmxid.
 --
