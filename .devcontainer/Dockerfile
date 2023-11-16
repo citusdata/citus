@@ -178,7 +178,7 @@ RUN sudo install -d -o citus -g citus /commandhistory \
 
 # install citus-dev
 RUN git clone --branch citus_load https://github.com/citusdata/tools.git citus-tools \
- && echo "cache buster 1" \
+ && echo "cache buster 2" \
  && ( cd citus-tools/citus_dev && pipenv install ) \
 <<<<<<< HEAD
  && mkdir -p ~/.local/bin \
