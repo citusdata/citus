@@ -10,9 +10,10 @@
 
 #include "postgres.h"
 
-#include "distributed/deparser.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
+
+#include "distributed/deparser.h"
 
 static void AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt);
 
