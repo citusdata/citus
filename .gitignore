@@ -55,3 +55,6 @@ lib*.pc
 # style related temporary outputs
 *.uncrustify
 .venv
+
+# added output when modifying check_gucs_are_alphabetically_sorted.sh
+guc.out
