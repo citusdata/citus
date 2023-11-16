@@ -521,6 +521,11 @@ extern List * AlterSchemaOwnerStmtObjectAddress(Node *node, bool missing_ok,
 extern List * AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok, bool
 												 isPostprocess);
 
+/* seclabel.c - forward declarations*/
+extern List * PostprocessSecLabelStmt(Node *node, const char *queryString);
+extern List * SecLabelStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
+extern void citus_test_object_relabel(const ObjectAddress *object, const char *seclabel);
+
 /* sequence.c - forward declarations */
 extern List * PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);

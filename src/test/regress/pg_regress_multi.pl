@@ -510,6 +510,12 @@ if($vanillatest)
     # we disable some restrictions for local objects like local views to not break postgres vanilla test behaviour.
     push(@pgOptions, "citus.enforce_object_restrictions_for_local_objects=false");
 }
+else
+{
+	# We currently need this config for isolation tests and security label tests
+	# this option loads a security label provider, which we don't want in vanilla tests
+	push(@pgOptions, "citus.running_under_citus_test_suite=true");
+}
 
 if ($useMitmproxy)
 {
@@ -560,7 +566,6 @@ if($isolationtester)
    push(@pgOptions, "citus.metadata_sync_interval=1000");
    push(@pgOptions, "citus.metadata_sync_retry_interval=100");
    push(@pgOptions, "client_min_messages='warning'"); # pg12 introduced notice showing during isolation tests
-   push(@pgOptions, "citus.running_under_isolation_test=true");
 
    # Disable all features of the maintenance daemon. Otherwise queries might
    # randomly show temporarily as "waiting..." because they are waiting for the
