@@ -34,8 +34,13 @@ SELECT reltoastrelid FROM pg_class WHERE relname='local_vacuum_table'
 SELECT relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE oid=:reltoastrelid::regclass;
 \gset
 
+SELECT relfrozenxid::text::integer AS table_frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE relname='local_vacuum_table';
+\gset
+
 VACUUM (FREEZE) local_vacuum_table;
-SELECT :frozenxid, relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE oid=:reltoastrelid::regclass;
+SELECT relname, :frozenxid AS old_toast, :table_frozenxid AS old_table,
+relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky
+FROM pg_class WHERE oid=:reltoastrelid::regclass OR relname = 'local_vacuum_table';
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
 
