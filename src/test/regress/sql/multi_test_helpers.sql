@@ -590,7 +590,22 @@ $func$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION check_database_on_all_nodes(p_database_name text)
 RETURNS TABLE (node_type text, result text)
 AS $func$
+DECLARE
+  pg_ge_15_options text := '';
+  pg_ge_16_options text := '';
 BEGIN
+  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'datlocprovider') THEN
+    pg_ge_15_options := ', daticulocale, datcollversion, datlocprovider';
+  ELSE
+    pg_ge_15_options := $$, null as daticulocale, null as datcollversion, 'c' as datlocprovider$$;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'daticurules') THEN
+    pg_ge_16_options := ', daticurules';
+  ELSE
+    pg_ge_16_options := ', null as daticurules';
+  END IF;
+
   RETURN QUERY
     SELECT
       CASE WHEN (groupid = 0 AND groupid = (SELECT groupid FROM pg_dist_local_group)) THEN 'coordinator (local)'
@@ -609,19 +624,20 @@ BEGIN
                     SELECT to_jsonb(database_properties.*)
                     FROM (
                         SELECT datname, pa.rolname as database_owner,
-                            pg_encoding_to_char(pd.encoding) as encoding, datlocprovider,
-                            datistemplate, datallowconn, datconnlimit,
-                            pt.spcname AS tablespace, datcollate, datctype, daticulocale,
-                            datcollversion, datacl
+                            pg_encoding_to_char(pd.encoding) as encoding,
+                            datistemplate, datallowconn, datconnlimit, datacl,
+                            pt.spcname AS tablespace, datcollate, datctype
+                            %2$s -- >= pg15 options
+                            %3$s -- >= pg16 options
                         FROM pg_database pd
                         JOIN pg_authid pa ON pd.datdba = pa.oid
                         JOIN pg_tablespace pt ON pd.dattablespace = pt.oid
-                        WHERE datname = '%s'
+                        WHERE datname = '%1$s'
                     ) database_properties
                 ) AS database_properties,
                 (
                     SELECT COUNT(*)=1
-                    FROM pg_dist_object WHERE objid = (SELECT oid FROM pg_database WHERE datname = '%s')
+                    FROM pg_dist_object WHERE objid = (SELECT oid FROM pg_database WHERE datname = '%1$s')
                 ) AS pg_dist_object_record_for_db_exists,
                 (
                     SELECT COUNT(*) > 0
@@ -630,7 +646,7 @@ BEGIN
                 ) AS stale_pg_dist_object_record_for_a_db_exists
             ) q
             $$,
-            p_database_name, p_database_name
+            p_database_name, pg_ge_15_options, pg_ge_16_options
         )
     ) q2
     JOIN pg_dist_node USING (nodeid);
