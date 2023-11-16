@@ -135,4 +135,10 @@ NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table citus_split_shard_by_split_points_negative.range_paritioned_table_to_split
 drop cascades to table citus_split_shard_by_split_points_negative.table_to_split
 drop cascades to table citus_split_shard_by_split_points_negative.table_to_split_replication_factor_2
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 --END : Cleanup
