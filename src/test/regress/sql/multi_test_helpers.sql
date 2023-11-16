@@ -551,74 +551,33 @@ BEGIN
 END;
 $func$ LANGUAGE plpgsql;
 
-
--- For all nodes, returns database properties of given database, except
--- oid, datfrozenxid and datminmxid.
---
--- Also returns whether the node has a pg_dist_object record for the database
--- and whether there are any stale pg_dist_object records for a database.
-CREATE OR REPLACE FUNCTION check_database_on_all_nodes(p_database_name text)
-RETURNS TABLE (node_type text, result text)
+-- Returns pg_seclabels entries from all nodes in the cluster for which
+-- the object name is the input.
+CREATE OR REPLACE FUNCTION get_citus_tests_label_provider_labels(object_name text,
+                                                                 master_port INTEGER DEFAULT 57636,
+                                                                 worker_1_port INTEGER DEFAULT 57637,
+                                                                 worker_2_port INTEGER DEFAULT 57638)
+RETURNS TABLE (
+    node_type text,
+    result text
+)
 AS $func$
 DECLARE
-  pg_ge_15_options text := '';
-  pg_ge_16_options text := '';
+    pg_seclabels_cmd TEXT := 'SELECT to_jsonb(q.*) FROM (' ||
+                             'SELECT provider, objtype, label FROM pg_seclabels ' ||
+                             'WHERE objname = ''' || object_name || ''') q';
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'datlocprovider') THEN
-    pg_ge_15_options := ', daticulocale, datcollversion, datlocprovider';
-  ELSE
-    pg_ge_15_options := $$, null as daticulocale, null as datcollversion, 'c' as datlocprovider$$;
-  END IF;
-
-  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'daticurules') THEN
-    pg_ge_16_options := ', daticurules';
-  ELSE
-    pg_ge_16_options := ', null as daticurules';
-  END IF;
-
-  RETURN QUERY
+    RETURN QUERY
     SELECT
-      CASE WHEN (groupid = 0 AND groupid = (SELECT groupid FROM pg_dist_local_group)) THEN 'coordinator (local)'
-           WHEN (groupid = 0) THEN 'coordinator (remote)'
-           WHEN (groupid = (SELECT groupid FROM pg_dist_local_group)) THEN 'worker node (local)'
-           ELSE 'worker node (remote)'
-      END AS node_type,
-      q2.result
-    FROM run_command_on_all_nodes(
-        format(
-            $$
-            SELECT to_jsonb(q.*)
-            FROM (
-                SELECT
-                (
-                    SELECT to_jsonb(database_properties.*)
-                    FROM (
-                        SELECT datname, pa.rolname as database_owner,
-                            pg_encoding_to_char(pd.encoding) as encoding,
-                            datistemplate, datallowconn, datconnlimit, datacl,
-                            pt.spcname AS tablespace, datcollate, datctype
-                            %2$s -- >= pg15 options
-                            %3$s -- >= pg16 options
-                        FROM pg_database pd
-                        JOIN pg_authid pa ON pd.datdba = pa.oid
-                        JOIN pg_tablespace pt ON pd.dattablespace = pt.oid
-                        WHERE datname = '%1$s'
-                    ) database_properties
-                ) AS database_properties,
-                (
-                    SELECT COUNT(*)=1
-                    FROM pg_dist_object WHERE objid = (SELECT oid FROM pg_database WHERE datname = '%1$s')
-                ) AS pg_dist_object_record_for_db_exists,
-                (
-                    SELECT COUNT(*) > 0
-                    FROM pg_dist_object
-                    WHERE classid = 1262 AND objid NOT IN (SELECT oid FROM pg_database)
-                ) AS stale_pg_dist_object_record_for_a_db_exists
-            ) q
-            $$,
-            p_database_name, pg_ge_15_options, pg_ge_16_options
-        )
-    ) q2
-    JOIN pg_dist_node USING (nodeid);
+        CASE
+            WHEN nodeport = master_port THEN 'coordinator'
+            WHEN nodeport = worker_1_port THEN 'worker_1'
+            WHEN nodeport = worker_2_port THEN 'worker_2'
+            ELSE 'unexpected_node'
+        END AS node_type,
+        a.result
+    FROM run_command_on_all_nodes(pg_seclabels_cmd) a
+    JOIN pg_dist_node USING (nodeid)
+    ORDER BY node_type;
 END;
 $func$ LANGUAGE plpgsql;

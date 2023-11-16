@@ -317,7 +317,7 @@ PG_FUNCTION_INFO_V1(citus_rebalance_start);
 PG_FUNCTION_INFO_V1(citus_rebalance_stop);
 PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 
-bool RunningUnderIsolationTest = false;
+bool RunningUnderCitusTestSuite = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
 int RebalancerByDiskSizeBaseCost = 100 * 1024 * 1024;
 bool PropagateSessionSettingsForLoopbackConnection = false;
