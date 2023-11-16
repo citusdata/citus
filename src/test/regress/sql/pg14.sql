@@ -31,7 +31,7 @@ INSERT INTO local_vacuum_table VALUES ('onur'), ('aykut'), ('emel');
 
 SELECT reltoastrelid FROM pg_class WHERE relname='local_vacuum_table'
 \gset
-SELECT relfrozenxid::text::integer AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass;
+SELECT relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE oid=:reltoastrelid::regclass;
 \gset
 
 VACUUM (FREEZE) local_vacuum_table;

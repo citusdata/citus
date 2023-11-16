@@ -79,10 +79,10 @@ ALTER TABLE local_vacuum_table SET (autovacuum_enabled = false);
 INSERT INTO local_vacuum_table VALUES ('onur'), ('aykut'), ('emel');
 SELECT reltoastrelid FROM pg_class WHERE relname='local_vacuum_table'
 \gset
-SELECT relfrozenxid::text::integer AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass;
- frozenxid
+SELECT relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE oid=:reltoastrelid::regclass;
+ frozenxid |   fix_flaky
 ---------------------------------------------------------------------
-       824
+
 (1 row)
 
 \gset
