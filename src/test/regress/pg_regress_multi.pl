@@ -90,7 +90,6 @@ my $workerCount = 2;
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
 my $mitmPid = 0;
-my $workerCount = 2;
 
 if ($Config{osname} eq "MSWin32")
 {
