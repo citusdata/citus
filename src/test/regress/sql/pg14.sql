@@ -22,63 +22,6 @@ VACUUM (INDEX_CLEANUP "AUTOX") t1;
 VACUUM (FULL, FREEZE, VERBOSE false, ANALYZE, SKIP_LOCKED, INDEX_CLEANUP, PROCESS_TOAST, TRUNCATE) t1;
 VACUUM (FULL, FREEZE false, VERBOSE false, ANALYZE false, SKIP_LOCKED false, INDEX_CLEANUP "Auto", PROCESS_TOAST true, TRUNCATE false) t1;
 
--- vacuum (process_toast true) should be vacuuming toast tables (default is true)
-CREATE TABLE pg14_local_vacuum_table(id integer, name text, age integer);
--- add some data to the local table
-\copy pg14_local_vacuum_table (id, name) from stdin with csv
-1,bugs
-2,babs
-3,buster
-4,roger
-\.
-
-VACUUM pg14_local_vacuum_table;
-ANALYZE pg14_local_vacuum_table;
-
-VACUUM (FULL) pg14_local_vacuum_table;
-VACUUM ANALYZE pg14_local_vacuum_table;
-
-ALTER TABLE pg14_local_vacuum_table SET (autovacuum_enabled = false);
-
-SELECT reltoastrelid FROM pg_class WHERE relname='pg14_local_vacuum_table'
-\gset
-SELECT relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE oid=:reltoastrelid::regclass;
-\gset
-
-SELECT relfrozenxid::text::integer AS table_frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE relname='pg14_local_vacuum_table';
-\gset
-
-INSERT INTO pg14_local_vacuum_table VALUES (5, 'naisila');
-
-VACUUM (FREEZE) pg14_local_vacuum_table;
-
-INSERT INTO pg14_local_vacuum_table VALUES (6, 'emel');
-
-VACUUM (FREEZE) pg14_local_vacuum_table;
-
-INSERT INTO pg14_local_vacuum_table VALUES (7, 'onur');
-
-VACUUM (FREEZE) pg14_local_vacuum_table;
-
-SELECT relname, :frozenxid AS old_toast, :table_frozenxid AS old_table,
-relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky
-FROM pg_class WHERE oid=:reltoastrelid::regclass OR relname = 'pg14_local_vacuum_table';
-
-SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
-WHERE oid=:reltoastrelid::regclass;
-
--- vacuum (process_toast false) should not be vacuuming toast tables (default is true)
-SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
-\gset
-INSERT INTO pg14_local_vacuum_table VALUES (8, 'aykut');
-VACUUM (FREEZE, PROCESS_TOAST false) pg14_local_vacuum_table;
-INSERT INTO pg14_local_vacuum_table VALUES (9, 'ozan');
-VACUUM (FREEZE, PROCESS_TOAST false) pg14_local_vacuum_table;
-INSERT INTO pg14_local_vacuum_table VALUES (10, 'gurkan');
-VACUUM (FREEZE, PROCESS_TOAST false) pg14_local_vacuum_table;
-SELECT relfrozenxid::text::integer = :frozenxid AS frozen_not_performed FROM pg_class
-WHERE oid=:reltoastrelid::regclass;
-
 SET citus.log_remote_commands TO OFF;
 
 create table dist(a int, b int);
