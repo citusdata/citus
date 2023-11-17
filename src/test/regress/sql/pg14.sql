@@ -23,11 +23,22 @@ VACUUM (FULL, FREEZE, VERBOSE false, ANALYZE, SKIP_LOCKED, INDEX_CLEANUP, PROCES
 VACUUM (FULL, FREEZE false, VERBOSE false, ANALYZE false, SKIP_LOCKED false, INDEX_CLEANUP "Auto", PROCESS_TOAST true, TRUNCATE false) t1;
 
 -- vacuum (process_toast true) should be vacuuming toast tables (default is true)
-CREATE TABLE local_vacuum_table(name text);
+CREATE TABLE local_vacuum_table(id integer, name text, age integer);
+-- add some data to the local table
+\copy local_vacuum_table (id, name) from stdin with csv
+1,bugs
+2,babs
+3,buster
+4,roger
+\.
+
+VACUUM local_vacuum_table;
+ANALYZE local_vacuum_table;
+
 VACUUM (FULL) local_vacuum_table;
 VACUUM ANALYZE local_vacuum_table;
+
 ALTER TABLE local_vacuum_table SET (autovacuum_enabled = false);
-INSERT INTO local_vacuum_table VALUES ('onur'), ('aykut'), ('emel');
 
 SELECT reltoastrelid FROM pg_class WHERE relname='local_vacuum_table'
 \gset
@@ -37,10 +48,14 @@ SELECT relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky F
 SELECT relfrozenxid::text::integer AS table_frozenxid, 'text to ignore' AS fix_flaky FROM pg_class WHERE relname='local_vacuum_table';
 \gset
 
+INSERT INTO local_vacuum_table VALUES (5, 'peter');
+
 VACUUM (FREEZE) local_vacuum_table;
+
 SELECT relname, :frozenxid AS old_toast, :table_frozenxid AS old_table,
 relfrozenxid::text::integer AS frozenxid, 'text to ignore' AS fix_flaky
 FROM pg_class WHERE oid=:reltoastrelid::regclass OR relname = 'local_vacuum_table';
+
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid=:reltoastrelid::regclass;
 
