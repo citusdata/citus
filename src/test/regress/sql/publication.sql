@@ -195,6 +195,7 @@ SET client_min_messages TO ERROR;
 DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
 DROP SCHEMA citus_schema_1 CASCADE;
+SELECT public.wait_for_resource_cleanup();
 \q
 \endif
 
@@ -391,3 +392,5 @@ DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
 DROP SCHEMA citus_schema_1 CASCADE;
 DROP SCHEMA publication2 CASCADE;
+
+SELECT public.wait_for_resource_cleanup();
