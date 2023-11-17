@@ -86,3 +86,28 @@ RESET ROLE;
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_ent CASCADE;
 NOTICE:  drop cascades to 2 other objects
+DROP USER user_can_select_a_1;
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+

@@ -72,3 +72,8 @@ RESET ROLE;
 
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_ent CASCADE;
+DROP USER user_can_select_a_1;
+
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
