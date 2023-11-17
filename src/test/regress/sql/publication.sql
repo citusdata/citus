@@ -392,7 +392,6 @@ DROP SCHEMA "publication-1" CASCADE;
 DROP SCHEMA citus_schema_1 CASCADE;
 DROP SCHEMA publication2 CASCADE;
 
-SELECT public.wait_for_resource_cleanup();
 SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
 SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
 SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
