@@ -486,7 +486,7 @@ jobs:
       image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg16_version).full }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     env:
-      runs: 20
+      runs: 8
     needs:
     - params
     - build

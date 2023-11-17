@@ -199,9 +199,6 @@ DEPS = {
         repeatable=False,
     ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
-    "multi_tenant_isolation": TestDeps(
-        "minimal_schedule", ["multi_data_types"]
-    ),
 }
 
 

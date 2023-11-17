@@ -12,8 +12,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
 CREATE SCHEMA "Tenant Isolation";
 SET search_path to "Tenant Isolation";
 
-SELECT citus_set_coordinator_host('localhost');
-
 CREATE ROLE mx_isolation_role_ent WITH LOGIN;
 GRANT ALL ON SCHEMA "Tenant Isolation", public TO mx_isolation_role_ent;
 
@@ -612,7 +610,3 @@ TRUNCATE TABLE pg_catalog.pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
 
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);

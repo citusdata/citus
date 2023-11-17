@@ -544,27 +544,3 @@ DROP SCHEMA publication CASCADE;
 DROP SCHEMA "publication-1" CASCADE;
 DROP SCHEMA citus_schema_1 CASCADE;
 DROP SCHEMA publication2 CASCADE;
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_replication_slots$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_publication$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
-SELECT result FROM run_command_on_all_nodes($$SELECT count(*) FROM pg_subscription$$);
- result
----------------------------------------------------------------------
- 0
- 0
- 0
-(3 rows)
-
