@@ -212,5 +212,7 @@ RUN sudo chown --from=root:root citus:citus -R ~
 # sets default pg version
 RUN pgenv switch 16.1
 
+RUN --mount=type=bind,source=requirements.txt,target=requirements.txt pip install -r requirements.txt
+
 # make connecting to the coordinator easy
 ENV PGPORT=9700
