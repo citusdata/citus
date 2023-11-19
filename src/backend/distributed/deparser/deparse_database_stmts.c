@@ -285,6 +285,7 @@ DeparseAlterDatabaseSetStmt(Node *node)
 	return str.data;
 }
 
+
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
