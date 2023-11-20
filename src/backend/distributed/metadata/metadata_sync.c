@@ -4017,7 +4017,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 					  GUC_ACTION_LOCAL, true, 0, false);
 
 	/*
-	 * createdb()  uses ParseState to report the error position for the
+	 * createdb() uses ParseState to report the error position for the
 	 * input command and the position is reported to be 0 when it's provided as NULL.
 	 * We're okay with that because we don't expect this UDF to be called with an incorrect
 	 * DDL command.
@@ -4696,7 +4696,7 @@ SyncDistributedObjects(MetadataSyncContext *context)
 
 	Assert(ShouldPropagate());
 
-	/* send systemwide objects; i.e. roles and databases for now */
+	/* Send systemwide objects, only roles for now */
 	SendNodeWideObjectsSyncCommands(context);
 
 	/*
