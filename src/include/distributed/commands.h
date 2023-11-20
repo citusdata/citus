@@ -251,6 +251,9 @@ extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryStr
 												ProcessUtilityContext
 												processUtilityContext);
 
+extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
+extern char * CreateDatabaseDDLCommand(Oid dbId);
+
 
 /* domain.c - forward declarations */
 extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool
