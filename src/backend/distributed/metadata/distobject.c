@@ -22,11 +22,13 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_extension_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "citus_version.h"
+#include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "distributed/listutils.h"
 #include "distributed/colocation_utils.h"
@@ -48,9 +50,6 @@
 #include "utils/lsyscache.h"
 #include "utils/regproc.h"
 #include "utils/rel.h"
-#include "catalog/pg_database.h"
-#include "commands/dbcommands.h"
-
 
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
@@ -360,8 +359,10 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 
 
 /*
- * Deletes all pg_dist_object records for distributed roles in `DROP ROLE` statement a
- * and for all databases in `DROP DATABASE` statement
+ * UnmarkNodeWideObjectsDistributed deletes pg_dist_object records
+ * for all distributed objects in given Drop stmt node.
+ *
+ * Today we only expect DropRoleStmt and DropdbStmt to get here.
  */
 void
 UnmarkNodeWideObjectsDistributed(Node *node)
@@ -385,7 +386,10 @@ UnmarkNodeWideObjectsDistributed(Node *node)
 		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
 		ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, dbOid);
-		UnmarkObjectDistributed(dbObjectAddress);
+		if (IsAnyObjectDistributed(list_make1(dbObjectAddress)))
+		{
+			UnmarkObjectDistributed(dbObjectAddress);
+		}
 	}
 }
 

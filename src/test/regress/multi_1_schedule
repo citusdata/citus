@@ -32,10 +32,12 @@ test: propagate_extension_commands
 test: escape_extension_name
 test: ref_citus_local_fkeys
 test: alter_database_owner
+test: seclabel
 test: distributed_triggers
 test: create_single_shard_table
 test: create_drop_database_propagation
 test: create_drop_database_propagation_pg15
+test: create_drop_database_propagation_pg16
 
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
@@ -298,6 +300,7 @@ test: multi_foreign_key_relation_graph
 # Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
 # and rerun some of the tests.
 # --------
+test: remove_coordinator_from_metadata
 test: add_coordinator
 test: replicate_reference_tables_to_coordinator
 test: citus_local_tables

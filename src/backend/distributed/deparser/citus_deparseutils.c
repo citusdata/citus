@@ -1,16 +1,21 @@
-/*
+/*-------------------------------------------------------------------------
+ *
  * citus_deparseutils.c
- * ---------------------
  *
- * This file contains common functions used for deparsing PostgreSQL statements
- * to their equivalent SQL representation.
+ *   This file contains common functions used for deparsing PostgreSQL
+ *   statements to their equivalent SQL representation.
  *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
  */
+
+#include "pg_version_constants.h"
+
 #include "postgres.h"
 
 #include "commands/defrem.h"
 #include "distributed/deparser.h"
-#include "distributed/pg_version_constants.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/rel.h"
@@ -29,9 +34,9 @@
  * @param optionFormatsLen The number of option formats in the opt_formats array.
  */
 void
-DefElemOptionToStatement(StringInfo buf, DefElem *option, const
-						 DefElemOptionFormat *optionFormats, int
-						 optionFormatsLen)
+DefElemOptionToStatement(StringInfo buf, DefElem *option,
+						 const DefElemOptionFormat *optionFormats,
+						 int optionFormatsLen)
 {
 	const char *name = option->defname;
 	int i;

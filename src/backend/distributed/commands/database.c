@@ -21,6 +21,7 @@
 #include "catalog/pg_database_d.h"
 #include "catalog/pg_tablespace.h"
 #include "commands/dbcommands.h"
+#include "commands/defrem.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -48,18 +49,33 @@
  */
 typedef struct DatabaseCollationInfo
 {
-	char *collation;
-	char *ctype;
-	#if PG_VERSION_NUM >= PG_VERSION_15
-	char *icu_locale;
-	char *collversion;
-	#endif
+	char *datcollate;
+	char *datctype;
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+	char *daticulocale;
+	char *datcollversion;
+#endif
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	char *daticurules;
+#endif
 } DatabaseCollationInfo;
 
+static void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
+static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database
+															databaseForm);
+static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
+#if PG_VERSION_NUM >= PG_VERSION_15
+static char * GetLocaleProviderString(char datlocprovider);
+#endif
+static char * GetTablespaceName(Oid tablespaceOid);
+static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName, bool
+														  missingOk);
+
 static Oid get_database_owner(Oid db_oid);
-List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
-									 ProcessUtilityContext processUtilityContext);
+
 
 /* controlled via GUC */
 bool EnableCreateDatabasePropagation = false;
@@ -327,11 +343,60 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 
 
 /*
+ * This function validates the options provided for the CREATE DATABASE command.
+ * It iterates over each option in the stmt->options list and checks if it's supported.
+ * If an unsupported option is found, or if a supported option has an invalid value,
+ * it raises an error.
+ *
+ * Parameters:
+ * stmt: A CreatedbStmt struct representing a CREATE DATABASE command.
+ *       The options field is a list of DefElem structs, each representing an option.
+ *
+ * Currently, this function checks for the following:
+ * - The "oid" option is not supported.
+ * - The "template" option is only supported with the value "template1".
+ * - The "strategy" option is only supported with the value "wal_log".
+ *
+ * If any of these checks fail, the function calls ereport to raise an error.
+ */
+static void
+EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt)
+{
+	DefElem *option = NULL;
+	foreach_ptr(option, stmt->options)
+	{
+		if (strcmp(option->defname, "oid") == 0)
+		{
+			ereport(ERROR,
+					errmsg("CREATE DATABASE option \"%s\" is not supported",
+						   option->defname));
+		}
+
+		char *optionValue = defGetString(option);
+
+		if (strcmp(option->defname, "template") == 0 && strcmp(optionValue,
+															   "template1") != 0)
+		{
+			ereport(ERROR, errmsg("Only template1 is supported as template "
+								  "parameter for CREATE DATABASE"));
+		}
+
+		if (strcmp(option->defname, "strategy") == 0 && strcmp(optionValue, "wal_log") !=
+			0)
+		{
+			ereport(ERROR, errmsg("Only wal_log is supported as strategy "
+								  "parameter for CREATE DATABASE"));
+		}
+	}
+}
+
+
+/*
  * PostprocessAlterDatabaseStmt is executed before the statement is applied to the local
  * postgres instance.
  *
  * In this stage, we can perform validations and prepare the commands that need to
- * be run on all workers to grant.
+ * be run on all workers to create the database.
  */
 List *
 PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
@@ -344,17 +409,20 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	/*Validate the statement */
-	DeparseTreeNode(node);
+	/*validate the statement*/
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	EnsureSupportedCreateDatabaseCommand(stmt);
 
 	return NIL;
 }
 
 
 /*
- * PostprocessCreatedbStmt is executed after the statement is applied to the local
+ * PostprocessCreateDatabaseStmt is executed after the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
- * all workers to create the database.
+ * all workers to create the database. Since the CREATE DATABASE statement gives error
+ * in a transaction block, we need to use NontransactionalNodeDDLTaskList to send the
+ * CREATE DATABASE statement to the workers.
  *
  */
 List *
@@ -378,7 +446,7 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 
 
 /*
- * PostprocessAlterDatabaseStmt is executed after the statement is applied to the local
+ * PreprocessDropDatabaseStmt is executed after the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
  * all workers to drop the database. Since the DROP DATABASE statement gives error in
  * transaction context, we need to use NontransactionalNodeDDLTaskList to send the
@@ -442,11 +510,11 @@ GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
  * object of the DropdbStmt.
  */
 List *
-DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+DropDatabaseStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 {
 	DropdbStmt *stmt = castNode(DropdbStmt, node);
 	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
-																  missing_ok);
+																  missingOk);
 	return list_make1(dbAddress);
 }
 
@@ -456,11 +524,11 @@ DropDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
  * object of the CreatedbStmt.
  */
 List *
-CreateDatabaseStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+CreateDatabaseStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 {
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
-																  missing_ok);
+																  missingOk);
 	return list_make1(dbAddress);
 }
 
@@ -478,7 +546,7 @@ GetTablespaceName(Oid tablespaceOid)
 	}
 
 	Form_pg_tablespace tablespaceForm = (Form_pg_tablespace) GETSTRUCT(tuple);
-	char *tablespaceName = NameStr(tablespaceForm->spcname);
+	char *tablespaceName = pstrdup(NameStr(tablespaceForm->spcname));
 
 	ReleaseSysCache(tuple);
 
@@ -488,97 +556,62 @@ GetTablespaceName(Oid tablespaceOid)
 
 /*
  * GetDatabaseCollation gets oid of a database and returns all the collation related information
- * We need this method since collation related info in Form_pg_database is not accessible
+ * We need this method since collation related info in Form_pg_database is not accessible.
  */
 static DatabaseCollationInfo
-GetDatabaseCollation(Oid db_oid)
+GetDatabaseCollation(Oid dbOid)
 {
 	DatabaseCollationInfo info;
-	bool isNull;
+	memset(&info, 0, sizeof(DatabaseCollationInfo));
 
-	Snapshot snapshot = RegisterSnapshot(GetLatestSnapshot());
 	Relation rel = table_open(DatabaseRelationId, AccessShareLock);
-	HeapTuple tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, db_oid);
+	HeapTuple tup = get_catalog_object_by_oid(rel, Anum_pg_database_oid, dbOid);
 	if (!HeapTupleIsValid(tup))
 	{
-		elog(ERROR, "cache lookup failed for database %u", db_oid);
+		elog(ERROR, "cache lookup failed for database %u", dbOid);
 	}
+
+	bool isNull = false;
 
 	TupleDesc tupdesc = RelationGetDescr(rel);
+
 	Datum collationDatum = heap_getattr(tup, Anum_pg_database_datcollate, tupdesc,
 										&isNull);
-	if (isNull)
-	{
-		info.collation = NULL;
-	}
-	else
-	{
-		info.collation = TextDatumGetCString(collationDatum);
-	}
+	info.datcollate = TextDatumGetCString(collationDatum);
 
 	Datum ctypeDatum = heap_getattr(tup, Anum_pg_database_datctype, tupdesc, &isNull);
-	if (isNull)
-	{
-		info.ctype = NULL;
-	}
-	else
-	{
-		info.ctype = TextDatumGetCString(ctypeDatum);
-	}
+	info.datctype = TextDatumGetCString(ctypeDatum);
 
-	#if PG_VERSION_NUM >= PG_VERSION_15
+#if PG_VERSION_NUM >= PG_VERSION_15
 
 	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc,
 										&isNull);
-	if (isNull)
+	if (!isNull)
 	{
-		info.icu_locale = NULL;
-	}
-	else
-	{
-		info.icu_locale = TextDatumGetCString(icuLocaleDatum);
+		info.daticulocale = TextDatumGetCString(icuLocaleDatum);
 	}
 
 	Datum collverDatum = heap_getattr(tup, Anum_pg_database_datcollversion, tupdesc,
 									  &isNull);
-	if (isNull)
+	if (!isNull)
 	{
-		info.collversion = NULL;
+		info.datcollversion = TextDatumGetCString(collverDatum);
 	}
-	else
+#endif
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	Datum icurulesDatum = heap_getattr(tup, Anum_pg_database_daticurules, tupdesc,
+									   &isNull);
+	if (!isNull)
 	{
-		info.collversion = TextDatumGetCString(collverDatum);
+		info.daticurules = TextDatumGetCString(icurulesDatum);
 	}
-	#endif
+#endif
 
 	table_close(rel, AccessShareLock);
-	UnregisterSnapshot(snapshot);
 	heap_freetuple(tup);
 
 	return info;
-}
-
-
-/*
- * FreeDatabaseCollationInfo frees the memory allocated for DatabaseCollationInfo
- */
-static void
-FreeDatabaseCollationInfo(DatabaseCollationInfo collInfo)
-{
-	if (collInfo.collation != NULL)
-	{
-		pfree(collInfo.collation);
-	}
-	if (collInfo.ctype != NULL)
-	{
-		pfree(collInfo.ctype);
-	}
-	#if PG_VERSION_NUM >= PG_VERSION_15
-	if (collInfo.icu_locale != NULL)
-	{
-		pfree(collInfo.icu_locale);
-	}
-	#endif
 }
 
 
@@ -603,13 +636,11 @@ GetLocaleProviderString(char datlocprovider)
 			return "icu";
 		}
 
-		case 'l':
-		{
-			return "locale";
-		}
-
 		default:
-			return "";
+		{
+			ereport(ERROR, (errmsg("unexpected datlocprovider value: %c",
+								   datlocprovider)));
+		}
 	}
 }
 
@@ -620,6 +651,10 @@ GetLocaleProviderString(char datlocprovider)
 /*
  * GenerateCreateDatabaseStatementFromPgDatabase gets the pg_database tuple and returns the
  * CREATE DATABASE statement that can be used to create given database.
+ *
+ * Note that this doesn't deparse OID of the database and this is not a
+ * problem as we anyway don't allow specifying custom OIDs for databases
+ * when creating them.
  */
 static char *
 GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
@@ -632,78 +667,100 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	appendStringInfo(&str, "CREATE DATABASE %s",
 					 quote_identifier(NameStr(databaseForm->datname)));
 
-	if (databaseForm->datdba != InvalidOid)
-	{
-		appendStringInfo(&str, " OWNER = %s",
-						 quote_literal_cstr(GetUserNameFromId(databaseForm->datdba,
-															  false)));
-	}
-
-	if (databaseForm->encoding != -1)
-	{
-		appendStringInfo(&str, " ENCODING = %s",
-						 quote_literal_cstr(pg_encoding_to_char(databaseForm->encoding)));
-	}
-
-	if (collInfo.collation != NULL)
-	{
-		appendStringInfo(&str, " LC_COLLATE = %s", quote_literal_cstr(
-							 collInfo.collation));
-	}
-	if (collInfo.ctype != NULL)
-	{
-		appendStringInfo(&str, " LC_CTYPE = %s", quote_literal_cstr(collInfo.ctype));
-	}
-
-	#if PG_VERSION_NUM >= PG_VERSION_15
-	if (collInfo.icu_locale != NULL)
-	{
-		appendStringInfo(&str, " ICU_LOCALE = %s", quote_literal_cstr(
-							 collInfo.icu_locale));
-	}
-
-	if (databaseForm->datlocprovider != 0)
-	{
-		appendStringInfo(&str, " LOCALE_PROVIDER = %s",
-						 quote_literal_cstr(GetLocaleProviderString(
-												databaseForm->datlocprovider)));
-	}
-
-	if (collInfo.collversion != NULL)
-	{
-		appendStringInfo(&str, " COLLATION_VERSION = %s", quote_literal_cstr(
-							 collInfo.collversion));
-	}
-	#endif
-
-	if (databaseForm->dattablespace != InvalidOid)
-	{
-		appendStringInfo(&str, " TABLESPACE = %s",
-						 quote_identifier(GetTablespaceName(
-											  databaseForm->dattablespace)));
-	}
+	appendStringInfo(&str, " CONNECTION LIMIT %d", databaseForm->datconnlimit);
 
 	appendStringInfo(&str, " ALLOW_CONNECTIONS = %s",
 					 quote_literal_cstr(databaseForm->datallowconn ? "true" : "false"));
 
-	if (databaseForm->datconnlimit >= 0)
-	{
-		appendStringInfo(&str, " CONNECTION LIMIT %d", databaseForm->datconnlimit);
-	}
-
 	appendStringInfo(&str, " IS_TEMPLATE = %s",
 					 quote_literal_cstr(databaseForm->datistemplate ? "true" : "false"));
 
-	FreeDatabaseCollationInfo(collInfo);
+	appendStringInfo(&str, " LC_COLLATE = %s",
+					 quote_literal_cstr(collInfo.datcollate));
 
+	appendStringInfo(&str, " LC_CTYPE = %s", quote_literal_cstr(collInfo.datctype));
+
+	appendStringInfo(&str, " OWNER = %s",
+					 quote_identifier(GetUserNameFromId(databaseForm->datdba, false)));
+
+	appendStringInfo(&str, " TABLESPACE = %s",
+					 quote_identifier(GetTablespaceName(databaseForm->dattablespace)));
+
+	appendStringInfo(&str, " ENCODING = %s",
+					 quote_literal_cstr(pg_encoding_to_char(databaseForm->encoding)));
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (collInfo.datcollversion != NULL)
+	{
+		appendStringInfo(&str, " COLLATION_VERSION = %s",
+						 quote_identifier(collInfo.datcollversion));
+	}
+
+	if (collInfo.daticulocale != NULL)
+	{
+		appendStringInfo(&str, " ICU_LOCALE = %s", quote_identifier(
+							 collInfo.daticulocale));
+	}
+
+	appendStringInfo(&str, " LOCALE_PROVIDER = %s",
+					 quote_identifier(GetLocaleProviderString(
+										  databaseForm->datlocprovider)));
+#endif
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (collInfo.daticurules != NULL)
+	{
+		appendStringInfo(&str, " ICU_RULES = %s", quote_identifier(
+							 collInfo.daticurules));
+	}
+#endif
 
 	return str.data;
 }
 
 
 /*
- * GenerateCreateDatabaseCommandList gets a list of pg_database tuples and returns
- * a list of CREATE DATABASE statements for all the databases.
+ * GrantOnDatabaseDDLCommands returns a list of sql statements to idempotently apply a
+ * GRANT on distributed databases.
+ */
+List *
+GenerateGrantDatabaseCommandList(void)
+{
+	List *grantCommands = NIL;
+
+	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
+	TableScanDesc scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
+
+	HeapTuple tuple = NULL;
+	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	{
+		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
+
+		ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(
+			NameStr(databaseForm->datname), false);
+
+		/* skip databases that are not distributed */
+		if (!IsAnyObjectDistributed(list_make1(dbAddress)))
+		{
+			continue;
+		}
+
+		List *dbGrants = GrantOnDatabaseDDLCommands(databaseForm->oid);
+
+		/* append dbGrants into grantCommands*/
+		grantCommands = list_concat(grantCommands, dbGrants);
+	}
+
+	heap_endscan(scan);
+	table_close(pgDatabaseRel, AccessShareLock);
+
+	return grantCommands;
+}
+
+
+/*
+ * GenerateCreateDatabaseCommandList returns a list of CREATE DATABASE statements
+ * for all the databases.
  *
  * Commands in the list are wrapped by citus_internal_database_command() UDF
  * to avoid from transaction block restrictions that apply to database commands
@@ -721,8 +778,16 @@ GenerateCreateDatabaseCommandList(void)
 	{
 		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
 
-		char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
+		ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(
+			NameStr(databaseForm->datname), false);
 
+		/* skip databases that are not distributed */
+		if (!IsAnyObjectDistributed(list_make1(dbAddress)))
+		{
+			continue;
+		}
+
+		char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
 
 		StringInfo outerDbStmt = makeStringInfo();
 
@@ -731,8 +796,6 @@ GenerateCreateDatabaseCommandList(void)
 						 "SELECT pg_catalog.citus_internal_database_command(%s)",
 						 quote_literal_cstr(
 							 createStmt));
-
-		elog(LOG, "outerDbStmt: %s", outerDbStmt->data);
 
 		/* Add the statement to the list of commands */
 		commands = lappend(commands, outerDbStmt->data);

@@ -107,6 +107,7 @@ extern char * ColocationIdUpdateCommand(Oid relationId, uint32 colocationId);
 extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern List * GrantOnFunctionDDLCommands(Oid functionOid);
+extern List * GrantOnDatabaseDDLCommands(Oid databaseOid);
 extern List * GrantOnForeignServerDDLCommands(Oid serverId);
 extern List * GenerateGrantOnForeignServerQueriesFromAclItem(Oid serverId,
 															 AclItem *aclItem);

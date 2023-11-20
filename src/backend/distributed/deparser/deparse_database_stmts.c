@@ -27,7 +27,12 @@
 
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
+static void AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt);
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
+static void AppendDefElemConnLimit(StringInfo buf, DefElem *def);
+static void AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt);
+static void AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt);
+static void AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt);
 
 const DefElemOptionFormat create_database_option_formats[] = {
 	{ "owner", " OWNER %s", OPTION_FORMAT_STRING },
@@ -281,34 +286,6 @@ DeparseAlterDatabaseSetStmt(Node *node)
 	return str.data;
 }
 
-
-/*
- * Validates for if option is template, lc_type, locale or lc_collate, propagation will
- * not be supported since template and strategy options are not stored in the catalog
- * and lc_type, locale and lc_collate options depends on template parameter.
- */
-static void
-ValidateCreateDatabaseOptions(DefElem *option)
-{
-	if (strcmp(option->defname, "strategy") == 0)
-	{
-		ereport(ERROR,
-				errmsg("CREATE DATABASE option \"%s\" is not supported",
-					   option->defname));
-	}
-
-	char *optionValue = defGetString(option);
-	if (strcmp(option->defname, "template") == 0 && strcmp(optionValue, "template1") != 0)
-	{
-		ereport(ERROR, errmsg(
-					"Only template1 is supported as template parameter for CREATE DATABASE"));
-	}
-}
-
-
-/*
- * Prepares a CREATE DATABASE statement with given empty StringInfo buffer and CreatedbStmt node.
- */
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
@@ -320,7 +297,7 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 	foreach_ptr(option, stmt->options)
 	{
-		ValidateCreateDatabaseOptions(option);
+		/*ValidateCreateDatabaseOptions(option); */
 
 		DefElemOptionToStatement(buf, option, create_database_option_formats,
 								 lengthof(create_database_option_formats));
@@ -345,9 +322,6 @@ DeparseCreateDatabaseStmt(Node *node)
 }
 
 
-/*
- * Prepares a DROP  DATABASE statement with given empty StringInfo buffer and DropdbStmt node.
- */
 static void
 AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 {
@@ -359,17 +333,34 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 
 	DefElem *option = NULL;
 
+
 	foreach_ptr(option, stmt->options)
 	{
+		/* if it is the first option then append with "WITH" else append with "," */
+		if (option == linitial(stmt->options))
+		{
+			appendStringInfo(buf, " WITH ( ");
+		}
+		else
+		{
+			appendStringInfo(buf, ", ");
+		}
+
 		if (strcmp(option->defname, "force") == 0)
 		{
-			appendStringInfo(buf, " FORCE");
+			appendStringInfo(buf, "FORCE");
 		}
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 							errmsg("unrecognized DROP DATABASE option \"%s\"",
 								   option->defname)));
+		}
+
+		/* if it is the last  option then append with ")" */
+		if (option == llast(stmt->options))
+		{
+			appendStringInfo(buf, " )");
 		}
 	}
 }

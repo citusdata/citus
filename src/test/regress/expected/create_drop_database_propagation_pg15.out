@@ -8,298 +8,75 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \else
 \q
 \endif
--- create/drop database for pg > 15
-\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts3'
-CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
-\c - - - :worker_1_port
-\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts4'
-CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
-\c - - - :worker_2_port
-\set create_drop_db_tablespace :abs_srcdir '/tmp_check/ts5'
-CREATE TABLESPACE create_drop_db_tablespace LOCATION :'create_drop_db_tablespace';
-\c - - - :master_port
-create user create_drop_db_test_user;
+-- create/drop database for pg >= 15
 set citus.enable_create_database_propagation=on;
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
 CREATE DATABASE mydatabase
-    WITH
-            OWNER = create_drop_db_test_user
-            CONNECTION LIMIT = 10
-            ENCODING = 'UTF8'
-            TABLESPACE = create_drop_db_tablespace
-            ALLOW_CONNECTIONS = true
-            IS_TEMPLATE = false
-            OID = 966345;
-NOTICE:  issuing CREATE DATABASE mydatabase OWNER create_drop_db_test_user CONNECTION LIMIT 10 ENCODING 'UTF8' TABLESPACE create_drop_db_tablespace ALLOW_CONNECTIONS true IS_TEMPLATE false OID 966345
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE DATABASE mydatabase OWNER create_drop_db_test_user CONNECTION LIMIT 10 ENCODING 'UTF8' TABLESPACE create_drop_db_tablespace ALLOW_CONNECTIONS true IS_TEMPLATE false OID 966345
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                             result
+    WITH OID = 966345;
+ERROR:  CREATE DATABASE option "oid" is not supported
+CREATE DATABASE mydatabase
+    WITH strategy file_copy;
+ERROR:  Only wal_log is supported as strategy parameter for CREATE DATABASE
+CREATE DATABASE st_wal_log
+    WITH strategy WaL_LoG;
+SELECT * FROM public.check_database_on_all_nodes('st_wal_log') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                       result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": 10, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "st_wal_log", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "st_wal_log", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "st_wal_log", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database mydatabase;
-NOTICE:  issuing DROP DATABASE  mydatabase
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP DATABASE  mydatabase
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
- result
+drop database st_wal_log;
+select 1 from citus_remove_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-
-
-
-(3 rows)
-
-select citus_remove_node('localhost', :worker_2_port);
- citus_remove_node
----------------------------------------------------------------------
-
+        1
 (1 row)
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
-CREATE DATABASE mydatabase2
-    WITH OWNER = create_drop_db_test_user
-            ENCODING = 'UTF8'
-            TABLESPACE = create_drop_db_tablespace
-            ALLOW_CONNECTIONS = true
-            IS_TEMPLATE = false
-            OID = 966345;
-NOTICE:  issuing CREATE DATABASE mydatabase2 OWNER create_drop_db_test_user ENCODING 'UTF8' TABLESPACE create_drop_db_tablespace ALLOW_CONNECTIONS true IS_TEMPLATE false OID 966345
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase2'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                             result
----------------------------------------------------------------------
- [{"datacl": null, "datname": "mydatabase2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": -1, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": -1, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
-(2 rows)
-
+-- test COLLATION_VERSION
+CREATE DATABASE test_collation_version
+    WITH ENCODING = 'UTF8'
+            COLLATION_VERSION = '1.0'
+            ALLOW_CONNECTIONS = false;
 select 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase2'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                             result
+SELECT * FROM public.check_database_on_all_nodes('test_collation_version') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                              result
 ---------------------------------------------------------------------
- [{"datacl": null, "datname": "mydatabase2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": -1, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": -1, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "mydatabase2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": true, "datconnlimit": -1, "datistemplate": false, "database_owner": "create_drop_db_test_user"}]
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "test_collation_version", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": false, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": "1.0", "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_collation_version", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": false, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": "1.0", "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_collation_version", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": false, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": "1.0", "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database mydatabase2;
-NOTICE:  issuing DROP DATABASE  mydatabase2
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP DATABASE  mydatabase2
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'mydatabase'
-  ) q2
-  $$
-) ORDER BY result;
- result
+drop database test_collation_version;
+SET client_min_messages TO WARNING;
+-- test LOCALE_PROVIDER & ICU_LOCALE
+CREATE DATABASE test_locale_provider
+    WITH ENCODING = 'UTF8'
+         LOCALE_PROVIDER = 'icu'
+         ICU_LOCALE = 'en_US';
+ERROR:  new locale provider (icu) does not match locale provider of the template database (libc)
+HINT:  Use the same locale provider as in the template database, or use template0 as template.
+RESET client_min_messages;
+CREATE DATABASE test_locale_provider
+    WITH ENCODING = 'UTF8'
+         LOCALE_PROVIDER = 'libc'
+         ICU_LOCALE = 'en_US';
+ERROR:  ICU locale cannot be specified unless locale provider is ICU
+CREATE DATABASE test_locale_provider
+    WITH ENCODING = 'UTF8'
+         LOCALE_PROVIDER = 'libc';
+SELECT * FROM public.check_database_on_all_nodes('test_locale_provider') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                            result
 ---------------------------------------------------------------------
-
-
-
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "test_locale_provider", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_locale_provider", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_locale_provider", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
--- create a template database with all options set and allow connections false
-CREATE DATABASE my_template_database
-    WITH OWNER = create_drop_db_test_user
-            ENCODING = 'UTF8'
-            COLLATION_VERSION = '1.0'
-            TABLESPACE = create_drop_db_tablespace
-            ALLOW_CONNECTIONS = false
-            IS_TEMPLATE = true;
-NOTICE:  issuing CREATE DATABASE my_template_database OWNER create_drop_db_test_user ENCODING 'UTF8' COLLATION_VERSION '1.0' TABLESPACE create_drop_db_tablespace ALLOW_CONNECTIONS false IS_TEMPLATE true
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE DATABASE my_template_database OWNER create_drop_db_test_user ENCODING 'UTF8' COLLATION_VERSION '1.0' TABLESPACE create_drop_db_tablespace ALLOW_CONNECTIONS false IS_TEMPLATE true
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                                  result
----------------------------------------------------------------------
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
-(3 rows)
-
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
-                                                                                                                                  result
----------------------------------------------------------------------
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
- [{"datacl": null, "datname": "my_template_database", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "create_drop_db_tablespace", "datallowconn": false, "datconnlimit": -1, "datistemplate": true, "database_owner": "create_drop_db_test_user"}]
-(3 rows)
-
-SET citus.log_remote_commands = true;
---template databases could not be dropped so we need to change the template flag
-SELECT result from run_command_on_all_nodes(
-  $$
-  UPDATE pg_database SET datistemplate = false WHERE datname = 'my_template_database'
-  $$
-) ORDER BY result;
-  result
----------------------------------------------------------------------
- UPDATE 1
- UPDATE 1
- UPDATE 1
-(3 rows)
-
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database my_template_database;
-NOTICE:  issuing DROP DATABASE  my_template_database
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP DATABASE  my_template_database
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SET citus.log_remote_commands = false;
-SELECT result from run_command_on_all_nodes(
-  $$
-  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
-    SELECT pd.datname, pg_encoding_to_char(pd.encoding) as encoding,
-    pd.datistemplate, pd.datallowconn, pd.datconnlimit,
-    pd.datcollate , pd. datctype  ,  pd.datacl,
-    pa.rolname AS database_owner, pt.spcname AS tablespace
-    FROM pg_database pd
-    JOIN pg_authid pa ON pd.datdba = pa.oid
-    join pg_tablespace pt on pd.dattablespace = pt.oid
-    WHERE datname = 'my_template_database'
-  ) q2
-  $$
-) ORDER BY result;
- result
----------------------------------------------------------------------
-
-
-
-(3 rows)
-
---tests for special characters in database name
-set citus.enable_create_database_propagation=on;
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
-create database "mydatabase#1'2";
-NOTICE:  issuing CREATE DATABASE "mydatabase#1'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE DATABASE "mydatabase#1'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-set citus.grep_remote_commands = '%DROP DATABASE%';
-drop database if exists "mydatabase#1'2";
-NOTICE:  issuing DROP DATABASE IF EXISTS "mydatabase#1'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP DATABASE IF EXISTS "mydatabase#1'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+drop database test_locale_provider;
 \c - - - :master_port
-drop tablespace create_drop_db_tablespace;
-\c - - - :worker_1_port
-drop tablespace create_drop_db_tablespace;
-\c - - - :worker_2_port
-drop tablespace create_drop_db_tablespace;
-\c - - - :master_port
-drop user create_drop_db_test_user;

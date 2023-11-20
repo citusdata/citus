@@ -140,9 +140,9 @@ typedef enum OptionFormatType
 } OptionFormatType;
 
 
-extern void DefElemOptionToStatement(StringInfo buf, DefElem *option, const
-									 DefElemOptionFormat *opt_formats, int
-									 opt_formats_len);
+extern void DefElemOptionToStatement(StringInfo buf, DefElem *option,
+									 const DefElemOptionFormat *opt_formats,
+									 int opt_formats_len);
 
 
 /* forward declarations for deparse_statistics_stmts.c */
@@ -285,6 +285,9 @@ extern void QualifyRenameTextSearchConfigurationStmt(Node *node);
 extern void QualifyRenameTextSearchDictionaryStmt(Node *node);
 extern void QualifyTextSearchConfigurationCommentStmt(Node *node);
 extern void QualifyTextSearchDictionaryCommentStmt(Node *node);
+
+/* forward declarations for deparse_seclabel_stmts.c */
+extern char * DeparseSecLabelStmt(Node *node);
 
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *node);

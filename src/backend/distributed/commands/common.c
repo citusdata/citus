@@ -14,10 +14,8 @@
 #include "postgres.h"
 
 #include "catalog/objectaddress.h"
-#include "catalog/pg_database.h"
 #include "catalog/pg_ts_config.h"
 #include "catalog/pg_ts_dict.h"
-#include "commands/dbcommands.h"
 #include "nodes/parsenodes.h"
 #include "tcop/utility.h"
 

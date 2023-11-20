@@ -25,7 +25,6 @@
  *-------------------------------------------------------------------------
  */
 
-
 #include "pg_version_constants.h"
 
 #include "postgres.h"
@@ -64,7 +63,6 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/pg_version_constants.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/string_utils.h"
