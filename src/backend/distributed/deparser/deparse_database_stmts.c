@@ -13,17 +13,18 @@
 
 #include "pg_version_compat.h"
 #include "catalog/namespace.h"
+#include "commands/defrem.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_type.h"
 #include "utils/builtins.h"
 
-#include "commands/defrem.h"
 #include "distributed/deparser.h"
+#include "distributed/commands.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
-#include "parser/parse_type.h"
 
 
 static void AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
@@ -49,26 +50,9 @@ const DefElemOptionFormat create_database_option_formats[] = {
 	{ "tablespace", " TABLESPACE %s", OPTION_FORMAT_STRING },
 	{ "allow_connections", " ALLOW_CONNECTIONS %s", OPTION_FORMAT_BOOLEAN },
 	{ "connection_limit", " CONNECTION LIMIT %d", OPTION_FORMAT_INTEGER },
-	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN },
-	{ "oid", " OID %d", OPTION_FORMAT_OBJECT_ID }
+	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN }
 };
 
-/*
- * DeparseAlterDatabaseOwnerStmt
- *      Deparse an AlterDatabaseOwnerStmt node
- *
- * This function is responsible for producing a string representation of an
- * AlterDatabaseOwnerStmt node, which represents an ALTER DATABASE statement
- * that changes the owner of a database. The output string includes the ALTER
- * DATABASE keyword, the name of the database being altered, and the new owner
- * of the database.
- *
- * Parameters:
- *  - node: a pointer to the AlterDatabaseOwnerStmt node to be deparsed
- *
- * Returns:
- *  - a string representation of the ALTER DATABASE statement
- */
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
@@ -84,15 +68,6 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 }
 
 
-/*
- *
- * AppendAlterDatabaseOwnerStmt
- * Append an ALTER DATABASE statement for changing the owner of a database to the given StringInfo buffer.
- *
- * Parameters:
- *  - buf: The StringInfo buffer to append the statement to.
- *  - stmt: The AlterOwnerStmt representing the ALTER DATABASE statement to append.
- */
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
@@ -258,26 +233,25 @@ DeparseAlterDatabaseSetStmt(Node *node)
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
+	/*
+	 * Make sure that we don't try to deparse something that this
+	 * function doesn't expect.
+	 */
+	EnsureSupportedCreateDatabaseCommand(stmt);
+
 	appendStringInfo(buf,
 					 "CREATE DATABASE %s",
 					 quote_identifier(stmt->dbname));
 
 	DefElem *option = NULL;
-
 	foreach_ptr(option, stmt->options)
 	{
-		/*ValidateCreateDatabaseOptions(option); */
-
 		DefElemOptionToStatement(buf, option, create_database_option_formats,
 								 lengthof(create_database_option_formats));
 	}
 }
 
 
-/*
- * Converts a CreatedbStmt structure into a SQL command string.
- * Used in the deparsing of Create database statement.
- */
 char *
 DeparseCreateDatabaseStmt(Node *node)
 {
@@ -300,20 +274,15 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 					 ifExistsStatement,
 					 quote_identifier(stmt->dbname));
 
-	DefElem *option = NULL;
-
-
-	foreach_ptr(option, stmt->options)
+	if (list_length(stmt->options) > 1)
 	{
-		/* if it is the first option then append with "WITH" else append with "," */
-		if (option == linitial(stmt->options))
-		{
-			appendStringInfo(buf, " WITH ( ");
-		}
-		else
-		{
-			appendStringInfo(buf, ", ");
-		}
+		/* FORCE is the only option that can be provided for this command */
+		elog(ERROR, "got unexpected number of options for DROP DATABASE");
+	}
+	else if (list_length(stmt->options) == 1)
+	{
+		DefElem *option = linitial(stmt->options);
+		appendStringInfo(buf, " WITH ( ");
 
 		if (strcmp(option->defname, "force") == 0)
 		{
@@ -321,24 +290,17 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 		}
 		else
 		{
+			/* FORCE is the only option that can be provided for this command */
 			ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 							errmsg("unrecognized DROP DATABASE option \"%s\"",
 								   option->defname)));
 		}
 
-		/* if it is the last  option then append with ")" */
-		if (option == llast(stmt->options))
-		{
-			appendStringInfo(buf, " )");
-		}
+		appendStringInfo(buf, " )");
 	}
 }
 
 
-/*
- * Converts a DropdbStmt structure into a SQL command string.
- * Used in the deparsing of drop database statement.
- */
 char *
 DeparseDropDatabaseStmt(Node *node)
 {

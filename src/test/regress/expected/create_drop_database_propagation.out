@@ -553,7 +553,7 @@ SELECT result from run_command_on_all_nodes(
 
 SELECT result from run_command_on_all_nodes(
   $$
-  revoke connect,temp,temporary,create  on database db_role_grants_test_non_distributed from public
+  revoke connect,temp,temporary,create on database db_role_grants_test_non_distributed from public
   $$
 ) ORDER BY result;
                     result
@@ -572,7 +572,7 @@ select 1 from citus_remove_node('localhost', :worker_2_port);
 (1 row)
 
 CREATE DATABASE db_role_grants_test;
-revoke connect,temp,temporary,create  on database db_role_grants_test from public;
+revoke connect,temp,temporary,create on database db_role_grants_test from public;
 SET citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%CREATE ROLE%';
 CREATE ROLE db_role_grants_test_role_missing_on_node_2;
@@ -585,13 +585,13 @@ set citus.grep_remote_commands = '%GRANT%';
 grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants_test_role_exists_on_node_2;
 NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test TO db_role_grants_test_role_exists_on_node_2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
+grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
 NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test TO db_role_grants_test_role_missing_on_node_2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_exists_on_node_2;
 NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test_non_distributed TO db_role_grants_test_role_exists_on_node_2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_missing_on_node_2;
+grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_missing_on_node_2;
 NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test_non_distributed TO db_role_grants_test_role_missing_on_node_2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- check the privileges before add_node for database db_role_grants_test,
@@ -894,7 +894,7 @@ SELECT result from run_command_on_all_nodes(
  t
 (3 rows)
 
-grant connect,temp,temporary,create  on database db_role_grants_test to public;
+grant connect,temp,temporary,create on database db_role_grants_test to public;
 DROP DATABASE db_role_grants_test;
 SELECT result from run_command_on_all_nodes(
   $$
@@ -910,6 +910,40 @@ SELECT result from run_command_on_all_nodes(
 
 DROP ROLE db_role_grants_test_role_exists_on_node_2;
 DROP ROLE db_role_grants_test_role_missing_on_node_2;
+select 1 from citus_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+set citus.enable_create_role_propagation TO off;
+create role non_propagated_role;
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
+set citus.enable_create_role_propagation TO on;
+set citus.enable_create_database_propagation TO on;
+-- Make sure that we propagate non_propagated_role because it's a dependency of test_db.
+-- And hence it becomes a distributed object.
+create database test_db OWNER non_propagated_role;
+create role propagated_role;
+grant connect on database test_db to propagated_role;
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT * FROM public.check_database_on_all_nodes('test_db') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                                                                   result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": ["=Tc/non_propagated_role", "non_propagated_role=CTc/non_propagated_role", "propagated_role=c/non_propagated_role"], "datname": "test_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "non_propagated_role", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": ["=Tc/non_propagated_role", "non_propagated_role=CTc/non_propagated_role", "propagated_role=c/non_propagated_role"], "datname": "test_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "non_propagated_role", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": ["=Tc/non_propagated_role", "non_propagated_role=CTc/non_propagated_role", "propagated_role=c/non_propagated_role"], "datname": "test_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "non_propagated_role", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
+DROP DATABASE test_db;
+DROP ROLE propagated_role, non_propagated_role;
 --clean up resources created by this test
 -- DROP TABLESPACE is not supported, so we need to drop it manually.
 SELECT result FROM run_command_on_all_nodes(

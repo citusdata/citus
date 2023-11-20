@@ -296,8 +296,6 @@ drop database distributed_db;
 set citus.enable_create_database_propagation TO off;
 drop database non_distributed_db;
 
-
-
 -- test role grants on DATABASE in metadata sync
 
 SELECT result from run_command_on_all_nodes(
@@ -308,22 +306,19 @@ SELECT result from run_command_on_all_nodes(
 
 SELECT result from run_command_on_all_nodes(
   $$
-  revoke connect,temp,temporary,create  on database db_role_grants_test_non_distributed from public
+  revoke connect,temp,temporary,create on database db_role_grants_test_non_distributed from public
   $$
 ) ORDER BY result;
 
 SET citus.enable_create_database_propagation TO on;
 
-
-
 CREATE ROLE db_role_grants_test_role_exists_on_node_2;
-
 
 select 1 from citus_remove_node('localhost', :worker_2_port);
 
 CREATE DATABASE db_role_grants_test;
 
-revoke connect,temp,temporary,create  on database db_role_grants_test from public;
+revoke connect,temp,temporary,create on database db_role_grants_test from public;
 
 SET citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%CREATE ROLE%';
@@ -332,17 +327,13 @@ CREATE ROLE db_role_grants_test_role_missing_on_node_2;
 RESET citus.log_remote_commands ;
 RESET citus.grep_remote_commands;
 
-
-
 SET citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%GRANT%';
 grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants_test_role_exists_on_node_2;
-grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
-
-
+grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants_test_role_missing_on_node_2;
 
 grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_exists_on_node_2;
-grant CONNECT,TEMPORARY,CREATE  on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_missing_on_node_2;
+grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_missing_on_node_2;
 
 -- check the privileges before add_node for database db_role_grants_test,
 --  role db_role_grants_test_role_exists_on_node_2
@@ -373,7 +364,6 @@ SELECT result from run_command_on_all_nodes(
   select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test', 'CREATE')
   $$
 ) ORDER BY result;
-
 
 SELECT result from run_command_on_all_nodes(
   $$
@@ -416,7 +406,6 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-
 SELECT result from run_command_on_all_nodes(
   $$
   select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'TEMPORARY')
@@ -429,12 +418,10 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-
 RESET citus.log_remote_commands;
 RESET citus.grep_remote_commands;
 
 select 1 from citus_add_node('localhost', :worker_2_port);
-
 
 -- check the privileges after add_node for database db_role_grants_test,
 --  role db_role_grants_test_role_exists_on_node_2
@@ -465,7 +452,6 @@ SELECT result from run_command_on_all_nodes(
   select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test', 'CREATE')
   $$
 ) ORDER BY result;
-
 
 SELECT result from run_command_on_all_nodes(
   $$
@@ -508,7 +494,6 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-
 SELECT result from run_command_on_all_nodes(
   $$
   select has_database_privilege('db_role_grants_test_role_missing_on_node_2','db_role_grants_test_non_distributed', 'TEMPORARY')
@@ -521,7 +506,7 @@ SELECT result from run_command_on_all_nodes(
   $$
 ) ORDER BY result;
 
-grant connect,temp,temporary,create  on database db_role_grants_test to public;
+grant connect,temp,temporary,create on database db_role_grants_test to public;
 
 DROP DATABASE db_role_grants_test;
 
@@ -533,8 +518,28 @@ SELECT result from run_command_on_all_nodes(
 DROP ROLE db_role_grants_test_role_exists_on_node_2;
 DROP ROLE db_role_grants_test_role_missing_on_node_2;
 
+select 1 from citus_remove_node('localhost', :worker_2_port);
 
+set citus.enable_create_role_propagation TO off;
+create role non_propagated_role;
+set citus.enable_create_role_propagation TO on;
 
+set citus.enable_create_database_propagation TO on;
+
+-- Make sure that we propagate non_propagated_role because it's a dependency of test_db.
+-- And hence it becomes a distributed object.
+create database test_db OWNER non_propagated_role;
+
+create role propagated_role;
+grant connect on database test_db to propagated_role;
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+SELECT * FROM public.check_database_on_all_nodes('test_db') ORDER BY node_type;
+
+REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
+DROP DATABASE test_db;
+DROP ROLE propagated_role, non_propagated_role;
 
 --clean up resources created by this test
 

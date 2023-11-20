@@ -45,7 +45,7 @@
 
 
 /*
- * DatabaseCollationInfo is used to store collation related information of a database
+ * DatabaseCollationInfo is used to store collation related information of a database.
  */
 typedef struct DatabaseCollationInfo
 {
@@ -62,7 +62,6 @@ typedef struct DatabaseCollationInfo
 #endif
 } DatabaseCollationInfo;
 
-static void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database
 															databaseForm);
 static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
@@ -71,10 +70,10 @@ static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static char * GetLocaleProviderString(char datlocprovider);
 #endif
 static char * GetTablespaceName(Oid tablespaceOid);
-static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName, bool
-														  missingOk);
+static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
+														  bool missingOk);
 
-static Oid get_database_owner(Oid db_oid);
+static Oid get_database_owner(Oid dbId);
 
 
 /* controlled via GUC */
@@ -137,13 +136,13 @@ RecreateAlterDatabaseOwnerStmt(Oid databaseOid)
  * get_database_owner returns the Oid of the role owning the database
  */
 static Oid
-get_database_owner(Oid db_oid)
+get_database_owner(Oid dbId)
 {
-	HeapTuple tuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(db_oid));
+	HeapTuple tuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(dbId));
 	if (!HeapTupleIsValid(tuple))
 	{
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_DATABASE),
-						errmsg("database with OID %u does not exist", db_oid)));
+						errmsg("database with OID %u does not exist", dbId)));
 	}
 
 	Oid dba = ((Form_pg_database) GETSTRUCT(tuple))->datdba;
@@ -287,60 +286,12 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 
 
 /*
- * This function validates the options provided for the CREATE DATABASE command.
- * It iterates over each option in the stmt->options list and checks if it's supported.
- * If an unsupported option is found, or if a supported option has an invalid value,
- * it raises an error.
- *
- * Parameters:
- * stmt: A CreatedbStmt struct representing a CREATE DATABASE command.
- *       The options field is a list of DefElem structs, each representing an option.
- *
- * Currently, this function checks for the following:
- * - The "oid" option is not supported.
- * - The "template" option is only supported with the value "template1".
- * - The "strategy" option is only supported with the value "wal_log".
- *
- * If any of these checks fail, the function calls ereport to raise an error.
- */
-static void
-EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt)
-{
-	DefElem *option = NULL;
-	foreach_ptr(option, stmt->options)
-	{
-		if (strcmp(option->defname, "oid") == 0)
-		{
-			ereport(ERROR,
-					errmsg("CREATE DATABASE option \"%s\" is not supported",
-						   option->defname));
-		}
-
-		char *optionValue = defGetString(option);
-
-		if (strcmp(option->defname, "template") == 0 && strcmp(optionValue,
-															   "template1") != 0)
-		{
-			ereport(ERROR, errmsg("Only template1 is supported as template "
-								  "parameter for CREATE DATABASE"));
-		}
-
-		if (strcmp(option->defname, "strategy") == 0 && strcmp(optionValue, "wal_log") !=
-			0)
-		{
-			ereport(ERROR, errmsg("Only wal_log is supported as strategy "
-								  "parameter for CREATE DATABASE"));
-		}
-	}
-}
-
-
-/*
  * PostprocessAlterDatabaseStmt is executed before the statement is applied to the local
- * postgres instance.
+ * Postgres instance.
  *
- * In this stage, we can perform validations and prepare the commands that need to
- * be run on all workers to create the database.
+ * In this stage, we perform validations that we want to ensure before delegating to
+ * previous utility hooks because it might not be convenient to throw an error in an
+ * implicit transaction that creates a database.
  */
 List *
 PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
@@ -353,7 +304,6 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	/*validate the statement*/
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	EnsureSupportedCreateDatabaseCommand(stmt);
 
@@ -363,7 +313,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 /*
  * PostprocessCreateDatabaseStmt is executed after the statement is applied to the local
- * postgres instance. In this stage we can prepare the commands that need to be run on
+ * postgres instance. In this stage we prepare the commands that need to be run on
  * all workers to create the database. Since the CREATE DATABASE statement gives error
  * in a transaction block, we need to use NontransactionalNodeDDLTaskList to send the
  * CREATE DATABASE statement to the workers.
@@ -378,6 +328,16 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 	}
 
 	EnsureCoordinator();
+
+	/*
+	 * Given that CREATE DATABASE doesn't support "IF NOT EXISTS" and we're
+	 * in the post-process, database must exist, hence missingOk = false.
+	 */
+	bool missingOk = false;
+	bool isPostProcess = true;
+	List *addresses = GetObjectAddressListFromParseTree(node, missingOk,
+														isPostProcess);
+	EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
 	char *createDatabaseCommand = DeparseTreeNode(node);
 
@@ -436,20 +396,6 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 
 /*
- * GetDatabaseAddressFromDatabaseName gets the database name and returns the ObjectAddress
- * of the database.
- */
-static ObjectAddress *
-GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
-{
-	Oid databaseOid = get_database_oid(databaseName, missingOk);
-	ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, databaseOid);
-	return dbObjectAddress;
-}
-
-
-/*
  * DropDatabaseStmtObjectAddress gets the ObjectAddress of the database that is the
  * object of the DropdbStmt.
  */
@@ -474,6 +420,65 @@ CreateDatabaseStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
 																  missingOk);
 	return list_make1(dbAddress);
+}
+
+
+/*
+ * EnsureSupportedCreateDatabaseCommand validates the options provided for the CREATE
+ * DATABASE command.
+ *
+ * Parameters:
+ * stmt: A CreatedbStmt struct representing a CREATE DATABASE command.
+ *       The options field is a list of DefElem structs, each representing an option.
+ *
+ * Currently, this function checks for the following:
+ * - The "oid" option is not supported.
+ * - The "template" option is only supported with the value "template1".
+ * - The "strategy" option is only supported with the value "wal_log".
+ */
+void
+EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt)
+{
+	DefElem *option = NULL;
+	foreach_ptr(option, stmt->options)
+	{
+		if (strcmp(option->defname, "oid") == 0)
+		{
+			ereport(ERROR,
+					errmsg("CREATE DATABASE option \"%s\" is not supported",
+						   option->defname));
+		}
+
+		char *optionValue = defGetString(option);
+
+		if (strcmp(option->defname, "template") == 0 &&
+			strcmp(optionValue, "template1") != 0)
+		{
+			ereport(ERROR, errmsg("Only template1 is supported as template "
+								  "parameter for CREATE DATABASE"));
+		}
+
+		if (strcmp(option->defname, "strategy") == 0 &&
+			strcmp(optionValue, "wal_log") != 0)
+		{
+			ereport(ERROR, errmsg("Only wal_log is supported as strategy "
+								  "parameter for CREATE DATABASE"));
+		}
+	}
+}
+
+
+/*
+ * GetDatabaseAddressFromDatabaseName gets the database name and returns the ObjectAddress
+ * of the database.
+ */
+static ObjectAddress *
+GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
+{
+	Oid databaseOid = get_database_oid(databaseName, missingOk);
+	ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, databaseOid);
+	return dbObjectAddress;
 }
 
 
@@ -664,89 +669,34 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 
 
 /*
- * GrantOnDatabaseDDLCommands returns a list of sql statements to idempotently apply a
- * GRANT on distributed databases.
- */
-List *
-GenerateGrantDatabaseCommandList(void)
-{
-	List *grantCommands = NIL;
-
-	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
-	TableScanDesc scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
-
-	HeapTuple tuple = NULL;
-	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
-	{
-		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
-
-		ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(
-			NameStr(databaseForm->datname), false);
-
-		/* skip databases that are not distributed */
-		if (!IsAnyObjectDistributed(list_make1(dbAddress)))
-		{
-			continue;
-		}
-
-		List *dbGrants = GrantOnDatabaseDDLCommands(databaseForm->oid);
-
-		/* append dbGrants into grantCommands*/
-		grantCommands = list_concat(grantCommands, dbGrants);
-	}
-
-	heap_endscan(scan);
-	table_close(pgDatabaseRel, AccessShareLock);
-
-	return grantCommands;
-}
-
-
-/*
- * GenerateCreateDatabaseCommandList returns a list of CREATE DATABASE statements
- * for all the databases.
+ * CreateDatabaseDDLCommand returns a CREATE DATABASE command to create given
+ * database
  *
- * Commands in the list are wrapped by citus_internal_database_command() UDF
- * to avoid from transaction block restrictions that apply to database commands
+ * Command is wrapped by citus_internal_database_command() UDF
+ * to avoid from transaction block restrictions that apply to database commands.
  */
-List *
-GenerateCreateDatabaseCommandList(void)
+char *
+CreateDatabaseDDLCommand(Oid dbId)
 {
-	List *commands = NIL;
-
-	Relation pgDatabaseRel = table_open(DatabaseRelationId, AccessShareLock);
-	TableScanDesc scan = table_beginscan_catalog(pgDatabaseRel, 0, NULL);
-
-	HeapTuple tuple = NULL;
-	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	HeapTuple tuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(dbId));
+	if (!HeapTupleIsValid(tuple))
 	{
-		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
-
-		ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(
-			NameStr(databaseForm->datname), false);
-
-		/* skip databases that are not distributed */
-		if (!IsAnyObjectDistributed(list_make1(dbAddress)))
-		{
-			continue;
-		}
-
-		char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
-
-		StringInfo outerDbStmt = makeStringInfo();
-
-		/* Generate the CREATE DATABASE statement */
-		appendStringInfo(outerDbStmt,
-						 "SELECT pg_catalog.citus_internal_database_command(%s)",
-						 quote_literal_cstr(
-							 createStmt));
-
-		/* Add the statement to the list of commands */
-		commands = lappend(commands, outerDbStmt->data);
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_DATABASE),
+						errmsg("database with OID %u does not exist", dbId)));
 	}
 
-	heap_endscan(scan);
-	table_close(pgDatabaseRel, AccessShareLock);
+	Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
 
-	return commands;
+	char *createStmt = GenerateCreateDatabaseStatementFromPgDatabase(databaseForm);
+
+	StringInfo outerDbStmt = makeStringInfo();
+
+	/* Generate the CREATE DATABASE statement */
+	appendStringInfo(outerDbStmt,
+					 "SELECT pg_catalog.citus_internal_database_command(%s)",
+					 quote_literal_cstr(createStmt));
+
+	ReleaseSysCache(tuple);
+
+	return outerDbStmt->data;
 }

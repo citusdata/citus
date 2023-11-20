@@ -155,7 +155,6 @@ static char * RemoteSchemaIdExpressionByName(char *schemaName);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 static char * RemoteTableIdExpression(Oid relationId);
-static void SendDatabaseGrantSyncCommands(MetadataSyncContext *context);
 
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
@@ -2049,6 +2048,10 @@ GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
 }
 
 
+/*
+ * GrantOnDatabaseDDLCommands creates a list of ddl command for replicating the permissions
+ * of roles on databases.
+ */
 List *
 GrantOnDatabaseDDLCommands(Oid databaseOid)
 {
@@ -2079,6 +2082,10 @@ GrantOnDatabaseDDLCommands(Oid databaseOid)
 }
 
 
+/*
+ * GenerateGrantOnDatabaseFromAclItem generates a query string for replicating a users permissions
+ * on a database.
+ */
 List *
 GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
 {
@@ -4658,13 +4665,6 @@ PropagateNodeWideObjectsCommandList(void)
 		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
 
-	if (EnableCreateDatabasePropagation)
-	{
-		/* get commands for database creation */
-		List *createDatabaseCommands = GenerateCreateDatabaseCommandList();
-		ddlCommands = list_concat(ddlCommands, createDatabaseCommands);
-	}
-
 	return ddlCommands;
 }
 
@@ -4736,13 +4736,6 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * those tables.
 	 */
 	SendInterTableRelationshipCommands(context);
-
-	/*
-	 * After creation of databases and roles, send the grant database commands
-	 * to the workers.
-	 */
-
-	SendDatabaseGrantSyncCommands(context);
 }
 
 
@@ -4765,34 +4758,6 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 	commandList = lcons(DISABLE_DDL_PROPAGATION, commandList);
 	commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
 	SendOrCollectCommandListToActivatedNodes(context, commandList);
-}
-
-
-/*
- * SendDatabaseGrantSyncCommands sends database grants to roles to workers with
- * transactional or nontransactional mode according to transactionMode inside
- * metadataSyncContext in case of EnableCreateDatabasePropagation GUC set.
- * This function is called after SendNodeWideObjectsSyncCommands and SendDependencyCreationCommands
- * because we need both databases and roles to be created on the worker.
- *
- */
-static void
-SendDatabaseGrantSyncCommands(MetadataSyncContext *context)
-{
-	if (EnableCreateDatabasePropagation)
-	{
-		/* propagate node wide objects. It includes only roles for now. */
-		List *commandList = GenerateGrantDatabaseCommandList();
-
-		if (commandList == NIL)
-		{
-			return;
-		}
-
-		commandList = lcons(DISABLE_DDL_PROPAGATION, commandList);
-		commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
-	}
 }
 
 
