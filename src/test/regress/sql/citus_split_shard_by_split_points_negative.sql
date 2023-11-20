@@ -113,4 +113,5 @@ SELECT citus_split_shard_by_split_points(
 --BEGIN : Cleanup
 \c - postgres - :master_port
 DROP SCHEMA "citus_split_shard_by_split_points_negative" CASCADE;
+SELECT public.wait_for_resource_cleanup();
 --END : Cleanup

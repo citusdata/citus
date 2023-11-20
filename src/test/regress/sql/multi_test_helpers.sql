@@ -550,3 +550,34 @@ BEGIN
     RETURN result;
 END;
 $func$ LANGUAGE plpgsql;
+
+-- Returns pg_seclabels entries from all nodes in the cluster for which
+-- the object name is the input.
+CREATE OR REPLACE FUNCTION get_citus_tests_label_provider_labels(object_name text,
+                                                                 master_port INTEGER DEFAULT 57636,
+                                                                 worker_1_port INTEGER DEFAULT 57637,
+                                                                 worker_2_port INTEGER DEFAULT 57638)
+RETURNS TABLE (
+    node_type text,
+    result text
+)
+AS $func$
+DECLARE
+    pg_seclabels_cmd TEXT := 'SELECT to_jsonb(q.*) FROM (' ||
+                             'SELECT provider, objtype, label FROM pg_seclabels ' ||
+                             'WHERE objname = ''' || object_name || ''') q';
+BEGIN
+    RETURN QUERY
+    SELECT
+        CASE
+            WHEN nodeport = master_port THEN 'coordinator'
+            WHEN nodeport = worker_1_port THEN 'worker_1'
+            WHEN nodeport = worker_2_port THEN 'worker_2'
+            ELSE 'unexpected_node'
+        END AS node_type,
+        a.result
+    FROM run_command_on_all_nodes(pg_seclabels_cmd) a
+    JOIN pg_dist_node USING (nodeid)
+    ORDER BY node_type;
+END;
+$func$ LANGUAGE plpgsql;
