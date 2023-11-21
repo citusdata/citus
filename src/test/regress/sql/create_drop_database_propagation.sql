@@ -129,7 +129,6 @@ CREATE USER "role-needs\!escape";
 CREATE DATABASE "db-needs\!escape" owner "role-needs\!escape" tablespace "ts-needs\!escape";
 
 -- Rename it to make check_database_on_all_nodes happy.
--- Today we don't support ALTER DATABASE .. RENAME TO .., so need to propagate it manually.
 
 ALTER DATABASE "db-needs\!escape" RENAME TO db_needs_escape;
 SELECT * FROM public.check_database_on_all_nodes('db_needs_escape') ORDER BY node_type;

@@ -1347,7 +1347,7 @@ CreateRoleStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
  * with the role the role needs to be visible on all connections used by the transaction,
  * meaning we can only use 1 connection per node.
  */
-void
+static void
 EnsureSequentialModeForRoleDDL(void)
 {
 	if (!IsTransactionBlock())

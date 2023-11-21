@@ -34,6 +34,10 @@ static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 static void AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt);
 static void AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt);
 static void AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt);
+static void AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool *
+											prefixAppendedForBasicOptions, char *dbname);
+static void AppendGrantDatabases(StringInfo buf, GrantStmt *stmt);
+static void AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname);
 
 const DefElemOptionFormat create_database_option_formats[] = {
 	{ "owner", " OWNER %s", OPTION_FORMAT_STRING },
@@ -114,6 +118,34 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 }
 
 
+char *
+DeparseGrantOnDatabaseStmt(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_DATABASE);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendGrantOnDatabaseStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+static void
+AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
+{
+	Assert(stmt->objtype == OBJECT_DATABASE);
+
+	AppendGrantSharedPrefix(buf, stmt);
+
+	AppendGrantDatabases(buf, stmt);
+
+	AppendGrantSharedSuffix(buf, stmt);
+}
+
+
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 {
@@ -132,40 +164,17 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 }
 
 
-static void
-AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
+char *
+DeparseAlterDatabaseStmt(Node *node)
 {
-	Assert(stmt->objtype == OBJECT_DATABASE);
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
-	AppendGrantSharedPrefix(buf, stmt);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
 
-	AppendGrantDatabases(buf, stmt);
+	AppendAlterDatabaseStmt(&str, stmt);
 
-	AppendGrantSharedSuffix(buf, stmt);
-}
-
-
-static bool
-AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
-								prefixAppendedForBasicOptions, char *dbname)
-{
-	if (!prefixAppendedForBasicOptions)
-	{
-		appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(dbname));
-		prefixAppendedForBasicOptions = true;
-	}
-	DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
-								 alterDatabaseOptionFormats));
-	return prefixAppendedForBasicOptions;
-}
-
-
-static void
-AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
-{
-	appendStringInfo(buf,
-					 "ALTER DATABASE %s SET TABLESPACE %s",
-					 quote_identifier(dbname), quote_identifier(defGetString(def)));
+	return str.data;
 }
 
 
@@ -186,11 +195,8 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 			}
 			else
 			{
-				prefixAppendedForBasicOptions = AppendBasicAlterDatabaseOptions(buf,
-																				def,
-																				prefixAppendedForBasicOptions,
-																				stmt->
-																				dbname);
+				AppendBasicAlterDatabaseOptions(buf, def, &prefixAppendedForBasicOptions,
+												stmt->dbname);
 			}
 		}
 	}
@@ -199,32 +205,40 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 }
 
 
-char *
-DeparseGrantOnDatabaseStmt(Node *node)
+static void
+AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
 {
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_DATABASE);
-
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendGrantOnDatabaseStmt(&str, stmt);
-
-	return str.data;
+	appendStringInfo(buf,
+					 "ALTER DATABASE %s SET TABLESPACE %s",
+					 quote_identifier(dbname), quote_identifier(defGetString(def)));
 }
 
 
-char *
-DeparseAlterDatabaseStmt(Node *node)
+/*
+ * Appends basic ALTER DATABASE options to a string buffer.
+ *
+ * This function takes a string buffer, a DefElem representing a database option,
+ * a boolean indicating whether the prefix "ALTER DATABASE <dbname> WITH" has
+ * already been appended, and a database name. It appends the SQL representation
+ * of the database option to the string buffer.
+ *
+ * Returns:
+ *   A boolean indicating whether the prefix "ALTER DATABASE <dbname> WITH" has
+ *   been appended to the buffer. This is the same as the input
+ *   prefixAppendedForBasicOptions if the prefix was already appended, or true
+ *   if this function appended the prefix.
+ */
+static void
+AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool *
+								prefixAppendedForBasicOptions, char *dbname)
 {
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
-
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendAlterDatabaseStmt(&str, stmt);
-
-	return str.data;
+	if (!(*prefixAppendedForBasicOptions))
+	{
+		appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(dbname));
+		*prefixAppendedForBasicOptions = true;
+	}
+	DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
+								 alterDatabaseOptionFormats));
 }
 
 
@@ -278,6 +292,20 @@ DeparseAlterDatabaseRenameStmt(Node *node)
 }
 
 
+char *
+DeparseAlterDatabaseSetStmt(Node *node)
+{
+	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterDatabaseSetStmt(&str, stmt);
+
+	return str.data;
+}
+
+
 static void
 AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 {
@@ -290,14 +318,13 @@ AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 
 
 char *
-DeparseAlterDatabaseSetStmt(Node *node)
+DeparseCreateDatabaseStmt(Node *node)
 {
-	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
-
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	AppendAlterDatabaseSetStmt(&str, stmt);
+	AppendCreateDatabaseStmt(&str, stmt);
 
 	return str.data;
 }
@@ -326,13 +353,13 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 
 char *
-DeparseCreateDatabaseStmt(Node *node)
+DeparseDropDatabaseStmt(Node *node)
 {
-	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	AppendCreateDatabaseStmt(&str, stmt);
+	AppendDropDatabaseStmt(&str, stmt);
 
 	return str.data;
 }
@@ -371,17 +398,4 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 
 		appendStringInfo(buf, " )");
 	}
-}
-
-
-char *
-DeparseDropDatabaseStmt(Node *node)
-{
-	DropdbStmt *stmt = castNode(DropdbStmt, node);
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendDropDatabaseStmt(&str, stmt);
-
-	return str.data;
 }
