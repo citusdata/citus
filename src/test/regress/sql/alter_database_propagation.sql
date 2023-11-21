@@ -78,19 +78,26 @@ alter database regression2 rename to regression3;
 
 drop database regression3;
 
+create database regression4;
+
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  ALTER TABLESPACE alter_db_tablespace RENAME TO "ts-needs\!escape"
+  $$
+);
+
+alter database regression4 set TABLESPACE "ts-needs\!escape";
+
+drop database regression4;
+
 set citus.log_remote_commands = false;
 set citus.enable_create_database_propagation=off;
 
-drop tablespace alter_db_tablespace;
-
-\c - - - :worker_1_port
-
-drop tablespace alter_db_tablespace;
-
-\c - - - :worker_2_port
-
-drop tablespace alter_db_tablespace;
-
-\c - - - :master_port
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  drop tablespace "ts-needs\!escape"
+  $$
+);
 
 
