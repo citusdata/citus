@@ -1,5 +1,5 @@
 {
-    "image": "ghcr.io/citusdata/citus-devcontainer:main",
+    "image": "ghcr.io/citusdata/citus-devcontainer:devcontainer-citus-load", // TODO revert back before merging
     "runArgs": [
         "--cap-add=SYS_PTRACE",
     ],
@@ -26,6 +26,7 @@
     "mounts": [
         "type=volume,target=/data",
         "source=citus-bashhistory,target=/commandhistory,type=volume",
+        "source=citus_load_cache,target=/home/citus/.local/share/citus_load/,type=volume",
     ],
     "updateContentCommand": "./configure",
     "postCreateCommand": "make -C .devcontainer/",
