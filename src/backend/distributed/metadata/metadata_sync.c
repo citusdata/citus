@@ -4736,8 +4736,6 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * those tables.
 	 */
 	SendInterTableRelationshipCommands(context);
-
-
 }
 
 
@@ -4761,6 +4759,7 @@ SendNodeWideObjectsSyncCommands(MetadataSyncContext *context)
 	commandList = lappend(commandList, ENABLE_DDL_PROPAGATION);
 	SendOrCollectCommandListToActivatedNodes(context, commandList);
 }
+
 
 /*
  * SendShellTableDeletionCommands sends sequence, and shell table deletion
