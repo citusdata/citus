@@ -77,7 +77,6 @@ typedef struct DatabaseCollationInfo
 #endif
 } DatabaseCollationInfo;
 
-static void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database
 															databaseForm);
 static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
