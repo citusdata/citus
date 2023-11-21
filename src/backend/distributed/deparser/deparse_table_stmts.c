@@ -312,7 +312,9 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 		char *relationName = get_rel_name(leftRelationId);
 		List *relationCtx = deparse_context_for(relationName, leftRelationId);
 
+		int saveNestLevel = PushEmptySearchPath();
 		char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
+		PopEmptySearchPath(saveNestLevel);
 
 		relation_close(relation, NoLock);
 
