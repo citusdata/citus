@@ -1,0 +1,9 @@
+--
+-- PG16
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
+\gset
+\if :server_version_ge_16
+\else
+\q

@@ -475,6 +475,28 @@ static DistributeObjectOps Database_Alter = {
 	.markDistributed = false,
 };
 
+static DistributeObjectOps Database_Create = {
+	.deparse = DeparseCreateDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessCreateDatabaseStmt,
+	.postprocess = PostprocessCreateDatabaseStmt,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_CREATE,
+	.address = CreateDatabaseStmtObjectAddress,
+	.markDistributed = true,
+};
+
+static DistributeObjectOps Database_Drop = {
+	.deparse = DeparseDropDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropDatabaseStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_DROP,
+	.address = DropDatabaseStmtObjectAddress,
+	.markDistributed = false,
+};
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 static DistributeObjectOps Database_RefreshColl = {
 	.deparse = DeparseAlterDatabaseRefreshCollStmt,
@@ -1341,6 +1363,16 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterDatabaseStmt:
 		{
 			return &Database_Alter;
+		}
+
+		case T_CreatedbStmt:
+		{
+			return &Database_Create;
+		}
+
+		case T_DropdbStmt:
+		{
+			return &Database_Drop;
 		}
 
 #if PG_VERSION_NUM >= PG_VERSION_15

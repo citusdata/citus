@@ -40,6 +40,7 @@ typedef enum
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
 extern int CreateObjectPropagationMode;
+extern bool EnableCreateDatabasePropagation;
 extern bool EnableCreateTypePropagation;
 extern bool EnableCreateRolePropagation;
 extern bool EnableAlterRolePropagation;
@@ -93,6 +94,7 @@ extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
+extern List * NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);

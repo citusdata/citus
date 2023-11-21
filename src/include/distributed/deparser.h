@@ -121,6 +121,28 @@ extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
 
+/* Common deparser utils */
+
+typedef struct DefElemOptionFormat
+{
+	char *name;
+	char *format;
+	int type;
+} DefElemOptionFormat;
+
+typedef enum OptionFormatType
+{
+	OPTION_FORMAT_STRING,
+	OPTION_FORMAT_LITERAL_CSTR,
+	OPTION_FORMAT_BOOLEAN,
+	OPTION_FORMAT_INTEGER
+} OptionFormatType;
+
+
+extern void DefElemOptionToStatement(StringInfo buf, DefElem *option,
+									 const DefElemOptionFormat *opt_formats,
+									 int opt_formats_len);
+
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
@@ -227,6 +249,8 @@ extern char * DeparseGrantOnDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
 extern char * DeparseAlterDatabaseSetStmt(Node *node);
+extern char * DeparseCreateDatabaseStmt(Node *node);
+extern char * DeparseDropDatabaseStmt(Node *node);
 
 
 /* forward declaration for deparse_publication_stmts.c */
