@@ -236,7 +236,8 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 
 	if (isSetTablespaceStatement(stmt))
 	{
-		/* Set tablespace does not work inside a transaction.Therefore, we need to use
+		/*
+		 * Set tablespace does not work inside a transaction.Therefore, we need to use
 		 * NontransactionalNodeDDLTask to run the command on the workers outside
 		 * the transaction block.
 		 */
