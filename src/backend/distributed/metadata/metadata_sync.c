@@ -4696,7 +4696,7 @@ SyncDistributedObjects(MetadataSyncContext *context)
 
 	Assert(ShouldPropagate());
 
-	/* send systemwide objects; i.e. roles and databases for now */
+	/* Send systemwide objects, only roles for now */
 	SendNodeWideObjectsSyncCommands(context);
 
 	/*
