@@ -55,7 +55,7 @@ const DefElemOptionFormat create_database_option_formats[] = {
 };
 
 
-const DefElemOptionFormat alter_database_option_formats[] = {
+const DefElemOptionFormat alterDatabaseOptionFormats[] = {
 	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN },
 	{ "allow_connections", " ALLOW_CONNECTIONS %s", OPTION_FORMAT_BOOLEAN },
 	{ "connection_limit", " CONNECTION LIMIT %d", OPTION_FORMAT_INTEGER },
@@ -147,16 +147,16 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 
 static bool
 AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool
-								prefix_appended_for_basic_options, char *dbname)
+								prefixAppendedForBasicOptions, char *dbname)
 {
-	if (!prefix_appended_for_basic_options)
+	if (!prefixAppendedForBasicOptions)
 	{
 		appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(dbname));
-		prefix_appended_for_basic_options = true;
+		prefixAppendedForBasicOptions = true;
 	}
-	DefElemOptionToStatement(buf, def, alter_database_option_formats, lengthof(
-								 alter_database_option_formats));
-	return prefix_appended_for_basic_options;
+	DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
+								 alterDatabaseOptionFormats));
+	return prefixAppendedForBasicOptions;
 }
 
 
@@ -175,7 +175,7 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 	if (stmt->options)
 	{
 		ListCell *cell = NULL;
-		bool prefix_appended_for_basic_options = false;
+		bool prefixAppendedForBasicOptions = false;
 		foreach(cell, stmt->options)
 		{
 			DefElem *def = castNode(DefElem, lfirst(cell));
@@ -186,11 +186,11 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 			}
 			else
 			{
-				prefix_appended_for_basic_options = AppendBasicAlterDatabaseOptions(buf,
-																					def,
-																					prefix_appended_for_basic_options,
-																					stmt->
-																					dbname);
+				prefixAppendedForBasicOptions = AppendBasicAlterDatabaseOptions(buf,
+																				def,
+																				prefixAppendedForBasicOptions,
+																				stmt->
+																				dbname);
 			}
 		}
 	}
@@ -247,6 +247,21 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 
 #endif
 
+/*
+ * Deparses an ALTER DATABASE RENAME statement.
+ *
+ * This function takes a Node pointer representing an ALTER DATABASE RENAME
+ * statement, and returns a string that is the SQL representation of that
+ * statement.
+ *
+ * Parameters:
+ *   node: A pointer to a Node representing an ALTER DATABASE RENAME statement.
+ *
+ * Returns:
+ *   A string representing the SQL command to rename a database. The string is
+ *   in the format "ALTER DATABASE <oldname> RENAME TO <newname>", where
+ *   <oldname> and <newname> are the old and new database names, respectively.
+ */
 char *
 DeparseAlterDatabaseRenameStmt(Node *node)
 {
