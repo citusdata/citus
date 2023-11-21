@@ -92,6 +92,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/task_execution_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/local_multi_copy.h"
@@ -3011,10 +3012,32 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag)
 		ShardInterval *shardInterval = lfirst(shardIntervalCell);
 		List *shardPlacementList = ActiveShardPlacementList(shardInterval->shardId);
 		ListCell *shardPlacementCell = NULL;
-		int placementIndex = 0;
+		int placementIndex = -1;
 
 		StringInfo copyCommand = ConstructCopyStatement(copyStatement,
 														shardInterval->shardId);
+
+		/*
+		 * When citus.distributed_data_dump is enabled, only emit from local shards.
+		 *
+		 * That way, users can run COPY table TO STDOUT on all nodes to get a full
+		 * copy of the data with much higher bandwidth than running it via the
+		 * coordinator. Moreover, each command can use a snapshot that aligns with
+		 * a specific replication slot.
+		 */
+		if (IsDistributedDataDump)
+		{
+			List *newPlacementList =
+				TaskPlacementListForDistributedDataDump(shardPlacementList);
+
+			if (newPlacementList == NIL)
+			{
+				/* shard does not have local placements */
+				continue;
+			}
+
+			shardPlacementList = newPlacementList;
+		}
 
 		foreach(shardPlacementCell, shardPlacementList)
 		{
@@ -3022,6 +3045,8 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag)
 			int connectionFlags = 0;
 			char *userName = NULL;
 			const bool raiseErrors = true;
+
+			placementIndex++;
 
 			MultiConnection *connection = GetPlacementConnection(connectionFlags,
 																 shardPlacement,

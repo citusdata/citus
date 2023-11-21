@@ -57,6 +57,9 @@ static Task * TaskHashEnter(HTAB *taskHash, Task *task);
 static Task * TaskHashLookup(HTAB *trackerHash, TaskType taskType, uint64 jobId,
 							 uint32 taskId);
 
+/* citus.distributed_data_dump GUC */
+bool IsDistributedDataDump;
+
 /*
  * CreateTaskListForJobTree visits all tasks in the job tree (by following dependentTaskList),
  * starting with the given job's task list. The function then returns the list.
@@ -193,4 +196,105 @@ TaskHashLookup(HTAB *taskHash, TaskType taskType, uint64 jobId, uint32 taskId)
 	}
 
 	return task;
+}
+
+
+/*
+ * TaskListForDistributedDataDump returns a task list that can be used
+ * in cases where citus.distributed_data_dump is true by only including
+ * local tasks.
+ */
+List *
+TaskListForDistributedDataDump(List *taskList)
+{
+	List *newTaskList = NIL;
+
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		List *newPlacementList =
+			TaskPlacementListForDistributedDataDump(task->taskPlacementList);
+
+		if (newPlacementList == NIL)
+		{
+			/* skip task if there are no placements */
+			continue;
+		}
+
+		task->taskPlacementList = newPlacementList;
+		newTaskList = lappend(newTaskList, task);
+	}
+
+	return newTaskList;
+}
+
+
+/*
+ * TaskPlacementListForDistributedDataDump implements the logic for find task
+ * placements to use when doing a distributed data dump.
+ *
+ * It returns a new task placement list that only includes a local
+ * placement (if any). In case of a replicated placement (e.g. reference
+ * table), it only returns the placement on the coordinator or the one with
+ * the lowest ID.
+ *
+ * This logic should align with how CDC handles replicated placements.
+ */
+List *
+TaskPlacementListForDistributedDataDump(List *taskPlacementList)
+{
+	List *newPlacementList = NIL;
+	ShardPlacement *minPlacement = NULL;
+	bool isCoordinator = IsCoordinator();
+	int localGroupId = GetLocalGroupId();
+
+	ShardPlacement *taskPlacement = NULL;
+	foreach_ptr(taskPlacement, taskPlacementList)
+	{
+		if (taskPlacement->groupId != localGroupId)
+		{
+			/* skip all non-local shard placements */
+			continue;
+		}
+
+		if (isCoordinator)
+		{
+			/*
+			 * If the coordinator has a placement, we prefer to emit from
+			 * the coordinator. This is mainly to align with
+			 * PublishDistributedTableChanges, which only emits changes
+			 * to reference tables from the coordinator.
+			 */
+			newPlacementList = lappend(newPlacementList, taskPlacement);
+			break;
+		}
+		else if (taskPlacement->groupId == COORDINATOR_GROUP_ID)
+		{
+			/*
+			 * We are not the coordinator, but there is a coordinator placement.
+			 * The coordinator should emit instead.
+			 */
+			minPlacement = NULL;
+		}
+		else if (minPlacement == NULL ||
+				 taskPlacement->placementId < minPlacement->placementId)
+		{
+			/*
+			 * For replicated shards that do not have a coordinator placement,
+			 * use the placement with the lowest ID.
+			 */
+			minPlacement = taskPlacement;
+		}
+	}
+
+	if (minPlacement != NULL)
+	{
+		/*
+		 * Emit the local placement if it is the one with the lowest
+		 * placement ID.
+		 */
+		newPlacementList = lappend(newPlacementList, minPlacement);
+	}
+
+	return newPlacementList;
 }

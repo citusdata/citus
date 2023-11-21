@@ -161,6 +161,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
+#include "distributed/task_execution_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/tuple_destination.h"
@@ -852,6 +853,47 @@ AdaptiveExecutor(CitusScanState *scanState)
 	{
 		paramListInfo = copyParamList(paramListInfo);
 		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
+	}
+
+	/*
+	 * When citus.distributed_data_dump is enabled, only emit from local shards.
+	 *
+	 * That way, users can run SELECT * FROM table on all nodes to get a full
+	 * copy of the data with much higher bandwidth than running it via the
+	 * coordinator. Moreover, each command can use a snapshot that aligns with
+	 * a specific replication slot.
+	 */
+	if (IsDistributedDataDump)
+	{
+		/*
+		 * Throw errors for writes and complex queries to not cause confusion /
+		 * data integrity issues.
+		 */
+		if (job->jobQuery->commandType != CMD_SELECT)
+		{
+			ereport(ERROR, (errmsg("can only use citus.distributed_data_dump for "
+								   "SELECT queries")));
+		}
+
+		if (distributedPlan->modLevel != ROW_MODIFY_READONLY)
+		{
+			ereport(ERROR, (errmsg("can only use citus.distributed_data_dump for "
+								   "read-only queries")));
+		}
+
+		if (list_length(distributedPlan->relationIdList) != 1)
+		{
+			ereport(ERROR, (errmsg("can only use citus.distributed_data_dump for "
+								   "single-table queries")));
+		}
+
+		if (hasDependentJobs)
+		{
+			ereport(ERROR, (errmsg("cannot use citus.distributed_data_dump for "
+								   "re-partition joins")));
+		}
+
+		taskList = TaskListForDistributedDataDump(taskList);
 	}
 
 	DistributedExecution *execution = CreateDistributedExecution(

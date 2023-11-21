@@ -315,6 +315,13 @@ PublishDistributedTableChanges(LogicalDecodingContext *ctx, ReorderBufferTXN *tx
 		return;
 	}
 
+	/*
+	 * TODO: consider replicated shards
+	 *
+	 * We should only emit from one of the replicas, and it should align with the
+	 * IsDistributedDataDump logic.
+	 */
+
 	/* translate and publish from shard relation to distributed table relation for CDC. */
 	TranslateAndPublishRelationForCDC(ctx, txn, relation, change, shardId,
 									  distRelationId);
