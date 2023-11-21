@@ -63,6 +63,7 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 		shardIdToSplit,
 		shardSplitPointsList,
 		nodeIdsForPlacementList,
+		NIL,
 		distributionColumnOverrides,
 		sourceColocatedShardIntervalList,
 		INVALID_COLOCATION_ID);

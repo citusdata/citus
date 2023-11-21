@@ -3458,7 +3458,7 @@ citus_internal_add_shardgroup_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	InsertShardgroupRow(shardgroupId, colocationId);
@@ -3479,7 +3479,7 @@ citus_internal_delete_shardgroup_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeleteShardgroupRow(shardgroupId);

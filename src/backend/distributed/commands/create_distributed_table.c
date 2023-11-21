@@ -135,6 +135,7 @@ static char DecideDistTableReplicationModel(char distributionMethod,
 static List * HashSplitPointsForShardList(List *shardList);
 static List * HashSplitPointsForShardCount(int shardCount);
 static List * WorkerNodesForShardList(List *shardList);
+static List * ShardgroupIdsForShardList(List *shardList);
 static List * RoundRobinWorkerNodeList(List *workerNodeList, int listLength);
 static CitusTableParams DecideCitusTableParams(CitusTableType tableType,
 											   DistributedTableParams *
@@ -581,8 +582,9 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 						errhint("Add more worker nodes.")));
 	}
 
-	List *workersForPlacementList;
-	List *shardSplitPointsList;
+	List *workersForPlacementList = NIL;
+	List *shardSplitPointsList = NIL;
+	List *shardgroupIdsList = NIL;
 
 	if (colocatedTableId != InvalidOid)
 	{
@@ -597,6 +599,11 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		 * Find the node IDs of the shard placements.
 		 */
 		workersForPlacementList = WorkerNodesForShardList(colocatedShardList);
+
+		/*
+		 * Find the shardgroupIds of the shard placements.
+		 */
+		shardgroupIdsList = ShardgroupIdsForShardList(colocatedShardList);
 	}
 	else
 	{
@@ -609,6 +616,13 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		 * Place shards in a round-robin fashion across all data nodes.
 		 */
 		workersForPlacementList = RoundRobinWorkerNodeList(workerNodeList, shardCount);
+
+
+		/*
+		 * We don't have any opnion on the shardgroupIds of the new shard placements, let
+		 * SplitShard create them for us.
+		 */
+		shardgroupIdsList = NIL;
 	}
 
 	/*
@@ -647,6 +661,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		shardToSplit->shardId,
 		shardSplitPointsList,
 		workersForPlacementList,
+		shardgroupIdsList,
 		distributionColumnOverrides,
 		sourceColocatedShardIntervalList,
 		colocationId
@@ -896,6 +911,20 @@ WorkerNodesForShardList(List *shardList)
 	}
 
 	return nodeIdList;
+}
+
+
+static List *
+ShardgroupIdsForShardList(List *shardList)
+{
+	List *shardgroupIdList = NIL;
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardList)
+	{
+		shardgroupIdList = lappend(shardgroupIdList, &(shardInterval->shardgroupId));
+	}
+	return shardgroupIdList;
 }
 
 

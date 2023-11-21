@@ -94,8 +94,9 @@ static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitInterval
 static void CreateReplicaIdentitiesForDummyShards(HTAB *mapOfPlacementToDummyShardList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
-static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
-												   List *splitPointsForShard);
+static List * CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
+												List *splitPointsForShard,
+												List *shardgroupIdsList);
 static void CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 										 List *splitPointsForShard,
 										 List **shardSplitChildrenIntervalList);
@@ -104,12 +105,14 @@ static void BlockingShardSplit(SplitOperation splitOperation,
 							   List *sourceColocatedShardIntervalList,
 							   List *shardSplitPointsList,
 							   List *workersForPlacementList,
+							   List *shardgroupIdsList,
 							   DistributionColumnMap *distributionColumnOverrides);
 static void NonBlockingShardSplit(SplitOperation splitOperation,
 								  uint64 splitWorkflowId,
 								  List *sourceColocatedShardIntervalList,
 								  List *shardSplitPointsList,
 								  List *workersForPlacementList,
+								  List *shardgroupIdsList,
 								  DistributionColumnMap *distributionColumnOverrides,
 								  uint32 targetColocationId);
 static void DoSplitCopy(WorkerNode *sourceShardNode,
@@ -129,7 +132,7 @@ static void UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 												   char distributionMethod,
 												   int shardCount,
 												   uint32 colocationId);
-static void PopulateShardgroupIds(List *shardGroupSplitIntervalListList);
+static void PopulateShardgroupIdsWithNewIds(List *shardGroupSplitIntervalListList);
 static void InsertSplitChildrenShardgroupMetadata(List *shardGroupSplitIntervalListList);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
@@ -430,6 +433,9 @@ GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList)
  * 'shardInterval'              : Source shard interval to be split.
  * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
  * 'nodeIdsForPlacementList'	: Placement list corresponding to split children.
+ * 'shardgroupIdsList'          : When colocating a table this list contains pointers to
+ *                                the shardgroupIds of the colocated shards in the same
+ *                                order as the nodes in nodeIdsForPlacementList.
  * 'distributionColumnOverrides': Maps relation IDs to distribution columns.
  *                                If not specified, the distribution column is read
  *                                from the metadata.
@@ -444,6 +450,7 @@ SplitShard(SplitMode splitMode,
 		   uint64 shardIdToSplit,
 		   List *shardSplitPointsList,
 		   List *nodeIdsForPlacementList,
+		   List *shardgroupIdsList,
 		   DistributionColumnMap *distributionColumnOverrides,
 		   List *colocatedShardIntervalList,
 		   uint32 targetColocationId)
@@ -517,6 +524,7 @@ SplitShard(SplitMode splitMode,
 			sourceColocatedShardIntervalList,
 			shardSplitPointsList,
 			workersForPlacementList,
+			shardgroupIdsList,
 			distributionColumnOverrides);
 	}
 	else
@@ -529,6 +537,7 @@ SplitShard(SplitMode splitMode,
 			sourceColocatedShardIntervalList,
 			shardSplitPointsList,
 			workersForPlacementList,
+			shardgroupIdsList,
 			distributionColumnOverrides,
 			targetColocationId);
 
@@ -550,6 +559,7 @@ SplitShard(SplitMode splitMode,
  * sourceColocatedShardIntervalList : Source shard group to be split.
  * shardSplitPointsList             : Split Points list for the source 'shardInterval'.
  * workersForPlacementList          : Placement list corresponding to split children.
+ * shardgroupIdsList                : TODO
  */
 static void
 BlockingShardSplit(SplitOperation splitOperation,
@@ -557,6 +567,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 				   List *sourceColocatedShardIntervalList,
 				   List *shardSplitPointsList,
 				   List *workersForPlacementList,
+				   List *shardgroupIdsList,
 				   DistributionColumnMap *distributionColumnOverrides)
 {
 	const char *operationName = SplitOperationAPIName[splitOperation];
@@ -566,7 +577,8 @@ BlockingShardSplit(SplitOperation splitOperation,
 	/* First create shard interval metadata for split children */
 	List *shardGroupSplitIntervalListList = CreateSplitIntervalsForShardGroup(
 		sourceColocatedShardIntervalList,
-		shardSplitPointsList);
+		shardSplitPointsList,
+		shardgroupIdsList);
 
 	/* Only single placement allowed (already validated RelationReplicationFactor = 1) */
 	ShardInterval *firstShard = linitial(sourceColocatedShardIntervalList);
@@ -621,7 +633,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 	DropShardListMetadata(sourceColocatedShardIntervalList);
 
 	/* allocate and assign new shardgroups to newly created shardIntervals */
-	PopulateShardgroupIds(shardGroupSplitIntervalListList);
+	PopulateShardgroupIdsWithNewIds(shardGroupSplitIntervalListList);
 
 	InsertSplitChildrenShardgroupMetadata(shardGroupSplitIntervalListList);
 
@@ -1031,10 +1043,12 @@ CreateObjectOnPlacement(List *objectCreationCommandList,
  *      [ S1_1(-2147483648, 0), S1_2(1, 2147483647) ], // Split Interval List for S1.
  *      [ S2_1(-2147483648, 0), S2_2(1, 2147483647) ]  // Split Interval List for S2.
  *  ]
+ * 'shardgroupIdsList': TODO
  */
 static List *
 CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
-								  List *splitPointsForShard)
+								  List *splitPointsForShard,
+								  List *shardgroupIdsList)
 {
 	List *shardGroupSplitIntervalListList = NIL;
 
@@ -1044,6 +1058,28 @@ CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
 		List *shardSplitIntervalList = NIL;
 		CreateSplitIntervalsForShard(shardToSplitInterval, splitPointsForShard,
 									 &shardSplitIntervalList);
+
+		int shardcount = list_length(shardSplitIntervalList);
+		if (list_length(shardgroupIdsList) > 0)
+		{
+			Assert(list_length(shardgroupIdsList) == shardcount);
+			for (int i = 0; i < shardcount; i++)
+			{
+				ShardInterval *shardInterval = list_nth(shardSplitIntervalList, i);
+				shardInterval->shardgroupId = *((ShardgroupID *) list_nth(
+													shardgroupIdsList, i));
+			}
+		}
+		else
+		{
+			for (int i = 0; i < shardcount; i++)
+			{
+				ShardInterval *shardInterval = list_nth(shardSplitIntervalList, i);
+				shardInterval->shardgroupId = GetNextColocationId();
+				shardgroupIdsList = lappend(shardgroupIdsList,
+											(void *) &shardInterval->shardgroupId);
+			}
+		}
 
 		shardGroupSplitIntervalListList = lappend(shardGroupSplitIntervalListList,
 												  shardSplitIntervalList);
@@ -1083,8 +1119,9 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 	for (int index = 0; index < shardIntervalCount; index++)
 	{
 		ShardInterval *splitChildShardInterval = CopyShardInterval(sourceShard);
-		/* 
-		 * This will get populated later when we have a list of all new colocated 
+
+		/*
+		 * This will get populated later when we have a list of all new colocated
 		 * shardIntervals as to make sure that all colocated shardIntervals get the same
 		 * shardgroupId.
 		 */
@@ -1166,7 +1203,7 @@ UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 
 
 static void
-PopulateShardgroupIds(List *shardGroupSplitIntervalListList)
+PopulateShardgroupIdsWithNewIds(List *shardGroupSplitIntervalListList)
 {
 	List *firstShardIntervals = NULL;
 	List *currentShardIntervals = NULL;
@@ -1188,7 +1225,8 @@ PopulateShardgroupIds(List *shardGroupSplitIntervalListList)
 			/* on subsequent loops we assign the same shardgroupId for colocation */
 			ShardInterval *firstShardInterval = NULL;
 			ShardInterval *currentShardInterval = NULL;
-			forboth_ptr(firstShardInterval, firstShardIntervals, currentShardInterval, currentShardIntervals)
+			forboth_ptr(firstShardInterval, firstShardIntervals, currentShardInterval,
+						currentShardIntervals)
 			{
 				currentShardInterval->shardgroupId = firstShardInterval->shardgroupId;
 			}
@@ -1221,10 +1259,11 @@ InsertSplitChildrenShardgroupMetadata(List *shardGroupSplitIntervalListList)
 	foreach_ptr(shardInterval, shardGroupSplitIntervalList)
 	{
 		InsertShardgroupRow(shardInterval->shardgroupId, colocationId);
-	}	
+	}
 
 	/* send commands to synced nodes one by one */
-	List *splitOffShardMetadataCommandList = ShardgroupListInsertCommand(colocationId, shardGroupSplitIntervalList);
+	List *splitOffShardMetadataCommandList = ShardgroupListInsertCommand(colocationId,
+																		 shardGroupSplitIntervalList);
 	char *command = NULL;
 	foreach_ptr(command, splitOffShardMetadataCommandList)
 	{
@@ -1387,9 +1426,21 @@ DropShardgroupListMetadata(List *shardIntervalList)
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
+		/*
+		 * When distributing a table concurrently we don't have its shards assigned a
+		 * shardgroup. These don't have to be deleted locally, nor remotely. The latter is
+		 * achieved because don't add the shardinterval to syncedShardIntervalList as we
+		 * preemptively end the current iteration of the loop.
+		 */
+		if (!IsShardgroupIDValid(shardInterval->shardgroupId))
+		{
+			continue;
+		}
+
 		DeleteShardgroupRow(shardInterval->shardgroupId);
 
 		Oid relationId = shardInterval->relationId;
+
 		/* delete metadata from synced nodes */
 		if (ShouldSyncTableMetadata(relationId))
 		{
@@ -1487,6 +1538,7 @@ AcquireNonblockingSplitLock(Oid relationId)
  * sourceColocatedShardIntervalList : Source shard group to be split.
  * shardSplitPointsList             : Split Points list for the source 'shardInterval'.
  * workersForPlacementList          : Placement list corresponding to split children.
+ * shardgroupIdsList                : TODO
  * distributionColumnList           : Maps relation IDs to distribution columns.
  *                                    If not specified, the distribution column is read
  *                                    from the metadata.
@@ -1499,6 +1551,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 					  List *sourceColocatedShardIntervalList,
 					  List *shardSplitPointsList,
 					  List *workersForPlacementList,
+					  List *shardgroupIdsList,
 					  DistributionColumnMap *distributionColumnOverrides,
 					  uint32 targetColocationId)
 {
@@ -1512,7 +1565,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	/* First create shard interval metadata for split children */
 	List *shardGroupSplitIntervalListList = CreateSplitIntervalsForShardGroup(
 		sourceColocatedShardIntervalList,
-		shardSplitPointsList);
+		shardSplitPointsList,
+		shardgroupIdsList);
 
 	ShardInterval *firstShard = linitial(sourceColocatedShardIntervalList);
 
@@ -1715,10 +1769,14 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 											   targetColocationId);
 	}
 
-	/* allocate and assign new shardgroups to newly created shardIntervals */
-	PopulateShardgroupIds(shardGroupSplitIntervalListList);
-
-	InsertSplitChildrenShardgroupMetadata(shardGroupSplitIntervalListList);
+	if (list_length(shardgroupIdsList) == 0)
+	{
+		/*
+		 * we have generated shardgroupIds during the shadinterval creation, add them to
+		 * metadata
+		 */
+		InsertSplitChildrenShardgroupMetadata(shardGroupSplitIntervalListList);
+	}
 
 	/* 12) Insert new shard and placement metdata */
 	InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,

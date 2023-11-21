@@ -176,6 +176,7 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 			   sourceShard->shardId,
 			   shardSplitPointsList,
 			   nodeIdsForPlacementList,
+			   NIL,
 			   distributionColumnOverrides,
 			   sourceColocatedShardIntervalList,
 			   INVALID_COLOCATION_ID);
