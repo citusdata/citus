@@ -70,15 +70,6 @@ DefElemOptionToStatement(StringInfo buf, DefElem *option,
 					break;
 				}
 
-			#if PG_VERSION_NUM >= PG_VERSION_15
-				case OPTION_FORMAT_OBJECT_ID:
-				{
-					Oid value = defGetObjectId(option);
-					appendStringInfo(buf, optionFormats[i].format, value);
-					break;
-				}
-
-			#endif
 				case OPTION_FORMAT_LITERAL_CSTR:
 				{
 					char *value = defGetString(option);

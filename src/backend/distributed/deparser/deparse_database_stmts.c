@@ -323,11 +323,6 @@ DeparseCreateDatabaseStmt(Node *node)
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
-	/*
-	 * Make sure that we don't try to deparse something that this
-	 * function doesn't expect.
-	 */
-	EnsureSupportedCreateDatabaseCommand(stmt);
 
 	appendStringInfo(buf,
 					 "CREATE DATABASE %s",
