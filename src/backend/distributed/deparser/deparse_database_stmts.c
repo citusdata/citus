@@ -323,7 +323,6 @@ DeparseCreateDatabaseStmt(Node *node)
 static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
-
 	appendStringInfo(buf,
 					 "CREATE DATABASE %s",
 					 quote_identifier(stmt->dbname));
