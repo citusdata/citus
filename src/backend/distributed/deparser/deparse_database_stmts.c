@@ -20,7 +20,6 @@
 #include "utils/builtins.h"
 
 #include "commands/defrem.h"
-#include "distributed/deparser.h"
 #include "distributed/commands.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
@@ -97,15 +96,6 @@ DeparseAlterDatabaseOwnerStmt(Node *node)
 }
 
 
-/*
- *
- * AppendAlterDatabaseOwnerStmt
- * Append an ALTER DATABASE statement for changing the owner of a database to the given StringInfo buffer.
- *
- * Parameters:
- *  - buf: The StringInfo buffer to append the statement to.
- *  - stmt: The AlterOwnerStmt representing the ALTER DATABASE statement to append.
- */
 static void
 AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {

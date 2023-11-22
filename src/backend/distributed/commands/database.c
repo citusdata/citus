@@ -73,7 +73,7 @@ static char * GetTablespaceName(Oid tablespaceOid);
 static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName, bool
 														  missingOk);
 
-static Oid get_database_owner(Oid db_oid);
+static Oid get_database_owner(Oid dbId);
 
 
 /* controlled via GUC */

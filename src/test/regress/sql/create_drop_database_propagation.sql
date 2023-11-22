@@ -536,6 +536,14 @@ REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
 DROP DATABASE test_db;
 DROP ROLE propagated_role, non_propagated_role;
 
+--test that create database with oid option failed when citus.enable_create_database_propagation is on
+set citus.enable_create_database_propagation TO on;
+CREATE DATABASE db_oid_test WITH OID 123;
+
+set citus.enable_create_database_propagation TO off;
+
+
+
 --clean up resources created by this test
 
 -- DROP TABLESPACE is not supported, so we need to drop it manually.
