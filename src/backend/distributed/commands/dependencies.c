@@ -47,7 +47,7 @@ static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
 
 /*
- * EnsureObjectExistOnAllNodes is a wrapper around
+ * EnsureObjectAndDependenciesExistOnAllNodes is a wrapper around
  * EnsureRequiredObjectExistOnAllNodes to ensure the "object itself" (together
  * with its dependencies) is available on all nodes.
  *
@@ -55,7 +55,7 @@ static char * DropTableIfExistsCommand(Oid relationId);
  * function deals with an object created within the same transaction.
  */
 void
-EnsureObjectExistOnAllNodes(const ObjectAddress *target)
+EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
 	EnsureRequiredObjectExistOnAllNodes(target, REQUIRE_OBJECT_AND_DEPENDENCIES);
 }

@@ -47,6 +47,9 @@
 #include "utils/varlena.h"
 #include "utils/syscache.h"
 
+
+static ObjectAddress * GetNewRoleAddress(ReassignOwnedStmt *stmt);
+
 /*
  * PreprocessDropOwnedStmt finds the distributed role out of the ones
  * being dropped and unmarks them distributed and creates the drop statements
@@ -131,9 +134,22 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 	char *sql = DeparseTreeNode((Node *) stmt);
 	stmt->roles = allReassignRoles;
 
+	ObjectAddress *newRoleAddress = GetNewRoleAddress(stmt);
+
+	EnsureObjectAndDependenciesExistOnAllNodes(newRoleAddress);
+
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+static ObjectAddress * GetNewRoleAddress(ReassignOwnedStmt *stmt)
+{
+	Oid roleOid = get_role_oid(stmt->newrole->rolename, false);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, AuthIdRelationId, roleOid);
+	return address;
 }

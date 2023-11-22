@@ -1,6 +1,8 @@
 CREATE ROLE role1;
 
 create ROLE role2;
+
+set citus.create_role
 CREATE ROLE role3;
 
 GRANT CREATE ON SCHEMA public TO role1,role2;
