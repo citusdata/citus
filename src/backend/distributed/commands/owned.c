@@ -146,7 +146,8 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 }
 
 
-static ObjectAddress * GetNewRoleAddress(ReassignOwnedStmt *stmt)
+static ObjectAddress *
+GetNewRoleAddress(ReassignOwnedStmt *stmt)
 {
 	Oid roleOid = get_role_oid(stmt->newrole->rolename, false);
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
