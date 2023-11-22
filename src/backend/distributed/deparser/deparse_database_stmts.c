@@ -206,6 +206,9 @@ AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
 
 /*
  * Appends basic ALTER DATABASE options to a string buffer.
+ * Basic options are those that can be appended to the ALTER DATABASE statement
+ * after the "WITH" keyword.(i.e. ALLOW_CONNECTIONS, CONNECTION LIMIT, IS_TEMPLATE)
+ * The tablespace option is not a basic option since it is defined with SET option.
  *
  * This function takes a string buffer, a DefElem representing a database option,
  * a boolean indicating whether the prefix "ALTER DATABASE <dbname> WITH" has
