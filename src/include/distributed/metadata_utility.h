@@ -385,6 +385,7 @@ extern void EnsureUndistributeTenantTableSafe(Oid relationId, const char *operat
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 extern void UndistributeTables(List *relationIdList);
 
+extern void EnsureObjectExistOnAllNodes(const ObjectAddress *target);
 extern void EnsureAllObjectDependenciesExistOnAllNodes(const List *targets);
 extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
 																   ObjectAddress *
