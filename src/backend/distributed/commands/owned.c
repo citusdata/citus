@@ -90,9 +90,25 @@ PreprocessDropOwnedStmt(Node *node, const char *queryString,
 }
 
 
+/*
+ * Post-processes a REASSIGN OWNED statement.
+ *
+ * This function takes a Node pointer representing a REASSIGN OWNED statement,
+ * and performs any necessary post-processing after the statement has been executed.
+ * In this method, we propagate all the roles that are being reassigned.
+ * Therefore, we don't filter the roles based on whether they are distributed or not.
+ * If roles are not distributed and those roles are not present in the nodes
+ * where the statement is being propagated, then the statement will fail.
+ *
+ * Parameters:
+ *   stmt: A pointer to a Node representing a REASSIGN OWNED statement.
+ *   queryString: The original SQL command string from the client.
+ *
+ * Returns:
+ *   List of SQL statements to be executed.
+ */
 List *
-PreprocessReassignOwnedStmt(Node *node, const char *queryString,
-							ProcessUtilityContext processUtilityContext)
+PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 {
 	ReassignOwnedStmt *stmt = castNode(ReassignOwnedStmt, node);
 	List *allReassignRoles = stmt->roles;
