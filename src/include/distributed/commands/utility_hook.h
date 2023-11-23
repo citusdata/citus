@@ -10,12 +10,12 @@
 #ifndef MULTI_UTILITY_H
 #define MULTI_UTILITY_H
 
-#include "pg_version_constants.h"
-
 #include "postgres.h"
 
-#include "utils/relcache.h"
 #include "tcop/utility.h"
+#include "utils/relcache.h"
+
+#include "pg_version_constants.h"
 
 #include "distributed/coordinator_protocol.h"
 #include "distributed/function_call_delegation.h"

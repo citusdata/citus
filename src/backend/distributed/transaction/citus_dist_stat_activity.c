@@ -10,8 +10,9 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
+
 #include "funcapi.h"
+#include "miscadmin.h"
 
 PG_FUNCTION_INFO_V1(citus_dist_stat_activity);
 PG_FUNCTION_INFO_V1(citus_worker_stat_activity);

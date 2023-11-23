@@ -12,15 +12,17 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 
-#include "distributed/citus_ruleutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
 #include "utils/elog.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 
 
 PG_FUNCTION_INFO_V1(worker_create_truncate_trigger);

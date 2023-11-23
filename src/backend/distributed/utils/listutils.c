@@ -10,15 +10,17 @@
  */
 
 #include "postgres.h"
+
 #include "c.h"
 #include "port.h"
 
-#include "utils/lsyscache.h"
 #include "lib/stringinfo.h"
+#include "nodes/pg_list.h"
+#include "utils/lsyscache.h"
+#include "utils/memutils.h"
+
 #include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
-#include "nodes/pg_list.h"
-#include "utils/memutils.h"
 
 
 /*

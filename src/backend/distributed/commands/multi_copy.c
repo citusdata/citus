@@ -43,19 +43,18 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "libpq-fe.h"
-#include "miscadmin.h"
-#include "pgstat.h"
-
 #include <arpa/inet.h> /* for htons */
 #include <netinet/in.h> /* for htons */
 #include <string.h>
 
-#include "pg_version_constants.h"
+#include "postgres.h"
 
-#include "access/htup_details.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
+#include "pgstat.h"
+
 #include "access/htup.h"
+#include "access/htup_details.h"
 #include "access/sdir.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
@@ -65,41 +64,8 @@
 #include "commands/copy.h"
 #include "commands/defrem.h"
 #include "commands/progress.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/commands/multi_copy.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/listutils.h"
-#include "distributed/local_executor.h"
-#include "distributed/log_utils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/multi_executor.h"
-#include "distributed/listutils.h"
-#include "distributed/locally_reserved_shared_connections.h"
-#include "distributed/placement_connection.h"
-#include "distributed/relation_access_tracking.h"
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "distributed/relation_utils.h"
-#endif
-#include "distributed/remote_commands.h"
-#include "distributed/remote_transaction.h"
-#include "distributed/replication_origin_session_utils.h"
-#include "distributed/resource_lock.h"
-#include "distributed/shard_pruning.h"
-#include "distributed/shared_connection_stats.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/local_multi_copy.h"
-#include "distributed/hash_helpers.h"
-#include "distributed/transmit.h"
 #include "executor/executor.h"
 #include "foreign/foreign.h"
-
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
@@ -110,9 +76,43 @@
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-#include "utils/memutils.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_safe_lib.h"
+#include "distributed/commands/multi_copy.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/hash_helpers.h"
+#include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/local_multi_copy.h"
+#include "distributed/locally_reserved_shared_connections.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
+#include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/remote_commands.h"
+#include "distributed/remote_transaction.h"
+#include "distributed/replication_origin_session_utils.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shard_pruning.h"
+#include "distributed/shared_connection_stats.h"
+#include "distributed/transmit.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "distributed/relation_utils.h"
+#endif
 
 
 /* constant used in binary protocol */

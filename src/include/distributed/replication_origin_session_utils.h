@@ -12,7 +12,9 @@
 #define REPLICATION_ORIGIN_SESSION_UTILS_H
 
 #include "postgres.h"
+
 #include "replication/origin.h"
+
 #include "distributed/connection_management.h"
 
 extern void InitializeReplicationOriginSessionUtils(void);

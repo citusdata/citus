@@ -11,11 +11,9 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include "pg_version_constants.h"
-
 #include <math.h>
+
+#include "postgres.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -27,6 +25,23 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "optimizer/clauses.h"
+#include "optimizer/optimizer.h"
+#include "optimizer/tlist.h"
+#include "parser/parse_agg.h"
+#include "parser/parse_coerce.h"
+#include "parser/parse_oper.h"
+#include "parser/parsetree.h"
+#include "rewrite/rewriteManip.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -42,22 +57,8 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/string_utils.h"
 #include "distributed/tdigest_extension.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
-#include "optimizer/clauses.h"
-#include "optimizer/tlist.h"
-#include "optimizer/optimizer.h"
-#include "parser/parse_agg.h"
-#include "parser/parse_coerce.h"
-#include "parser/parse_oper.h"
-#include "parser/parsetree.h"
-#include "rewrite/rewriteManip.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
+#include "distributed/worker_protocol.h"
 
 /* Config variable managed via guc.c */
 int LimitClauseRowFetchCount = -1; /* number of rows to fetch from each task */

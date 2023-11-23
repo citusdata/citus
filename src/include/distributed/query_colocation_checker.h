@@ -11,9 +11,10 @@
 #define QUERY_COLOCATION_CHECKER_H
 
 
-#include "distributed/distributed_planner.h"
 #include "nodes/parsenodes.h"
 #include "nodes/primnodes.h"
+
+#include "distributed/distributed_planner.h"
 
 
 /*

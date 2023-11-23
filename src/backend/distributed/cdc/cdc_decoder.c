@@ -8,8 +8,9 @@
  *-------------------------------------------------------------------------
  */
 
-#include "cdc_decoder_utils.h"
 #include "postgres.h"
+
+#include "cdc_decoder_utils.h"
 #include "fmgr.h"
 
 #include "access/genam.h"

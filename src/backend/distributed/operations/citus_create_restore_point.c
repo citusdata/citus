@@ -10,21 +10,23 @@
  */
 
 #include "postgres.h"
+
 #include "libpq-fe.h"
 
 #include "access/xlog.h"
 #include "access/xlog_internal.h"
 #include "catalog/pg_type.h"
-#include "distributed/connection_management.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/remote_commands.h"
 #include "nodes/pg_list.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
 #include "utils/pg_lsn.h"
+
+#include "distributed/connection_management.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/remote_commands.h"
 
 
 #define CREATE_RESTORE_POINT_COMMAND "SELECT pg_catalog.pg_create_restore_point($1::text)"

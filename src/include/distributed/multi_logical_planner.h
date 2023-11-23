@@ -14,15 +14,16 @@
 #ifndef MULTI_LOGICAL_PLANNER_H
 #define MULTI_LOGICAL_PLANNER_H
 
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
+
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/relation_restriction_equivalence.h"
-#include "nodes/nodes.h"
-#include "nodes/primnodes.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
 
 
 #define SUBQUERY_RANGE_TABLE_ID -1

@@ -12,6 +12,7 @@
 #define QUERY_UTILS_H
 
 #include "postgres.h"
+
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 

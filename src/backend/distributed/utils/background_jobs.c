@@ -27,17 +27,17 @@
 
 #include "postgres.h"
 
+#include "libpq-fe.h"
+#include "pgstat.h"
 #include "safe_mem_lib.h"
 
 #include "access/xact.h"
 #include "commands/dbcommands.h"
 #include "common/hashfn.h"
-#include "libpq-fe.h"
 #include "libpq/pqformat.h"
 #include "libpq/pqmq.h"
 #include "libpq/pqsignal.h"
 #include "parser/analyze.h"
-#include "pgstat.h"
 #include "storage/dsm.h"
 #include "storage/ipc.h"
 #include "storage/procarray.h"
@@ -62,9 +62,9 @@
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
-#include "distributed/resource_lock.h"
 
 /* Table-of-contents constants for our dynamic shared memory segment. */
 #define CITUS_BACKGROUND_TASK_MAGIC 0x51028081

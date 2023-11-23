@@ -11,9 +11,10 @@
 
 #include "postgres.h"
 
-#include "distributed/namespace_utils.h"
 #include "utils/guc.h"
 #include "utils/regproc.h"
+
+#include "distributed/namespace_utils.h"
 
 /*
  * We use the equivalent of a function SET option to allow the setting to

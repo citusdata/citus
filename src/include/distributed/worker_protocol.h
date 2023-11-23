@@ -17,11 +17,13 @@
 #include "postgres.h"
 
 #include "fmgr.h"
-#include "distributed/shardinterval_utils.h"
+
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "storage/fd.h"
 #include "utils/array.h"
+
+#include "distributed/shardinterval_utils.h"
 #include "distributed/version_compat.h"
 
 
