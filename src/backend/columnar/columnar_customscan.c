@@ -10,18 +10,17 @@
  *-------------------------------------------------------------------------
  */
 
-#include "citus_version.h"
+#include <math.h>
 
 #include "postgres.h"
 
-#include <math.h>
+#include "miscadmin.h"
 
 #include "access/amapi.h"
 #include "access/skey.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_statistic.h"
 #include "commands/defrem.h"
-#include "miscadmin.h"
 #include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -44,10 +43,13 @@
 #include "utils/selfuncs.h"
 #include "utils/spccache.h"
 
+#include "citus_version.h"
+
 #include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
 #include "columnar/columnar_metadata.h"
 #include "columnar/columnar_tableam.h"
+
 #include "distributed/listutils.h"
 
 /*

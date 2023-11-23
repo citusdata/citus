@@ -18,6 +18,7 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "access/genam.h"
@@ -25,29 +26,30 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_trigger.h"
-#include "distributed/coordinator_protocol.h"
+#include "foreign/foreign.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
+#include "utils/syscache.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata/dependency.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/ruleutils.h"
-#include "utils/syscache.h"
-#include "foreign/foreign.h"
 
 
 /*

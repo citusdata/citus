@@ -7,24 +7,26 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "miscadmin.h"
-#include "pgstat.h"
-
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "postgres.h"
+
+#include "miscadmin.h"
+#include "pgstat.h"
+
 #include "commands/defrem.h"
+#include "libpq/libpq.h"
+#include "libpq/pqformat.h"
+#include "storage/fd.h"
+
 #include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/transmit.h"
 #include "distributed/utils/directory.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
-#include "libpq/libpq.h"
-#include "libpq/pqformat.h"
-#include "storage/fd.h"
+#include "distributed/worker_protocol.h"
 
 
 /* Local functions forward declarations */

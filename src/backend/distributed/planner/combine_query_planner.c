@@ -11,20 +11,21 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "catalog/pg_type.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/insert_select_planner.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/combine_query_planner.h"
-#include "distributed/multi_physical_planner.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "rewrite/rewriteManip.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/combine_query_planner.h"
+#include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_physical_planner.h"
 
 static List * RemoteScanTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *combineQuery,

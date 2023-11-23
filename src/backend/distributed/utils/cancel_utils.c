@@ -8,7 +8,9 @@
 
 
 #include "postgres.h"
+
 #include "miscadmin.h"
+
 #include "distributed/cancel_utils.h"
 
 

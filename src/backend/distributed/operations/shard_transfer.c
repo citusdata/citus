@@ -9,27 +9,39 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "fmgr.h"
-#include "miscadmin.h"
-
 #include <string.h>
 #include <sys/statvfs.h>
+
+#include "postgres.h"
+
+#include "fmgr.h"
+#include "miscadmin.h"
 
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_enum.h"
+#include "lib/stringinfo.h"
+#include "nodes/pg_list.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "utils/builtins.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
+#include "utils/lsyscache.h"
+#include "utils/palloc.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
@@ -39,24 +51,13 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_split.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "lib/stringinfo.h"
-#include "nodes/pg_list.h"
-#include "storage/lmgr.h"
-#include "storage/lock.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/elog.h"
-#include "utils/errcodes.h"
-#include "utils/lsyscache.h"
-#include "utils/palloc.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
 
 /* local type declarations */
 

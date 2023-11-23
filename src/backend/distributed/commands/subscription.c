@@ -8,20 +8,22 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include "safe_lib.h"
-
 #include <string.h>
 
-#include "commands/defrem.h"
-#include "distributed/commands.h"
-#include "distributed/connection_management.h"
-#include "pg_version_constants.h"
-#include "distributed/version_compat.h"
+#include "postgres.h"
+
 #include "libpq-fe.h"
+#include "safe_lib.h"
+
+#include "commands/defrem.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/commands.h"
+#include "distributed/connection_management.h"
+#include "distributed/version_compat.h"
 
 
 static char * GenerateConninfoWithAuth(char *conninfo);

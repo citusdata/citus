@@ -10,23 +10,26 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
+
+#include "commands/dbcommands.h"
 #include "nodes/pg_list.h"
+#include "utils/builtins.h"
+
 #include "distributed/colocation_utils.h"
+#include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/priority.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/connection_management.h"
 #include "distributed/remote_commands.h"
-#include "distributed/shard_split.h"
-#include "distributed/shared_library_init.h"
-#include "distributed/listutils.h"
-#include "distributed/shardsplit_logical_replication.h"
 #include "distributed/resource_lock.h"
-#include "utils/builtins.h"
-#include "commands/dbcommands.h"
+#include "distributed/shard_split.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/shardsplit_logical_replication.h"
+#include "distributed/shared_library_init.h"
 
 
 static HTAB *ShardInfoHashMapForPublications = NULL;

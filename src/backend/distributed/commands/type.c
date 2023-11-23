@@ -43,7 +43,7 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/htup_details.h"
@@ -52,6 +52,18 @@
 #include "catalog/pg_enum.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "nodes/makefuncs.h"
+#include "parser/parse_type.h"
+#include "storage/lmgr.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/regproc.h"
+#include "utils/syscache.h"
+#include "utils/typcache.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -64,20 +76,10 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_management.h"
-#include "distributed/worker_create_or_replace.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
-#include "miscadmin.h"
-#include "nodes/makefuncs.h"
-#include "parser/parse_type.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/regproc.h"
-#include "utils/syscache.h"
-#include "utils/typcache.h"
 
 #define AlterEnumIsRename(stmt) (stmt->oldVal != NULL)
 #define AlterEnumIsAddValue(stmt) (stmt->oldVal == NULL)

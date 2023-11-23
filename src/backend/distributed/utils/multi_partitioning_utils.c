@@ -6,7 +6,7 @@
  */
 #include "postgres.h"
 
-#include "pg_version_constants.h"
+#include "pgstat.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -19,8 +19,21 @@
 #include "catalog/pg_inherits.h"
 #include "commands/tablecmds.h"
 #include "common/string.h"
-#include "distributed/citus_nodes.h"
+#include "lib/stringinfo.h"
+#include "nodes/makefuncs.h"
+#include "nodes/pg_list.h"
+#include "partitioning/partdesc.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+#include "utils/varlena.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/adaptive_executor.h"
+#include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -36,17 +49,6 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "lib/stringinfo.h"
-#include "nodes/makefuncs.h"
-#include "nodes/pg_list.h"
-#include "pgstat.h"
-#include "partitioning/partdesc.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
-#include "utils/varlena.h"
 
 static char * PartitionBound(Oid partitionId);
 static Relation try_relation_open_nolock(Oid relationId);

@@ -9,19 +9,21 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 #include "funcapi.h"
 
 #include "access/htup.h"
 #include "access/htup_details.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_utility.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 
 
 /* exports for SQL callable functions */

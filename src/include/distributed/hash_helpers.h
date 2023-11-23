@@ -11,9 +11,9 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "utils/hsearch.h"
+
+#include "pg_version_constants.h"
 
 /*
  * assert_valid_hash_key2 checks if a type that contains 2 fields contains no

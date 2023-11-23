@@ -12,18 +12,29 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
+#include "funcapi.h"
 #include "miscadmin.h"
+#include "safe_lib.h"
 #include "unistd.h"
 
-#include "safe_lib.h"
-
-#include "funcapi.h"
 #include "access/htup_details.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_type.h"
 #include "datatype/timestamp.h"
+#include "nodes/execnodes.h"
+#include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
+#include "replication/walsender.h"
+#include "storage/ipc.h"
+#include "storage/lmgr.h"
+#include "storage/lwlock.h"
+#include "storage/proc.h"
+#include "storage/procarray.h"
+#include "storage/s_lock.h"
+#include "storage/spin.h"
+#include "utils/timestamp.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
@@ -34,17 +45,6 @@
 #include "distributed/transaction_identifier.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
-#include "nodes/execnodes.h"
-#include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
-#include "replication/walsender.h"
-#include "storage/ipc.h"
-#include "storage/lmgr.h"
-#include "storage/lwlock.h"
-#include "storage/procarray.h"
-#include "storage/proc.h"
-#include "storage/spin.h"
-#include "storage/s_lock.h"
-#include "utils/timestamp.h"
 
 
 #define GET_ACTIVE_TRANSACTION_QUERY "SELECT * FROM get_all_active_transactions();"

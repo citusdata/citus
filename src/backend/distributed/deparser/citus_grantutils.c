@@ -1,8 +1,10 @@
 #include "postgres.h"
+
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
-#include "distributed/deparser.h"
+
 #include "distributed/citus_ruleutils.h"
+#include "distributed/deparser.h"
 
 /*
  * Append the 'WITH GRANT OPTION' clause to the given buffer if the given

@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 #include "postgres.h"
+
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
@@ -19,6 +20,8 @@
 #include "parser/parsetree.h"
 #include "tcop/tcopprot.h"
 #include "utils/lsyscache.h"
+
+#include "pg_version_constants.h"
 
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
@@ -29,12 +32,11 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node_metadata.h"
-#include "pg_version_constants.h"
-#include "distributed/query_pushdown_planning.h"
 #include "distributed/query_colocation_checker.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/repartition_executor.h"
-#include "distributed/shared_library_init.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/shared_library_init.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 

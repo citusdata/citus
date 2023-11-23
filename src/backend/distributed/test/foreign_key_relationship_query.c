@@ -11,18 +11,20 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 #include "funcapi.h"
 
 #include "catalog/dependency.h"
 #include "catalog/pg_constraint.h"
-#include "distributed/foreign_key_relationship.h"
+#include "utils/builtins.h"
+
 #include "distributed/coordinator_protocol.h"
+#include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/tuplestore.h"
 #include "distributed/version_compat.h"
-#include "utils/builtins.h"
 
 
 #define GET_FKEY_CONNECTED_RELATIONS_COLUMNS 1

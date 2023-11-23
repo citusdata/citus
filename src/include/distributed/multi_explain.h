@@ -10,8 +10,9 @@
 #ifndef MULTI_EXPLAIN_H
 #define MULTI_EXPLAIN_H
 
-#include "executor/executor.h"
 #include "tuple_destination.h"
+
+#include "executor/executor.h"
 
 typedef enum
 {

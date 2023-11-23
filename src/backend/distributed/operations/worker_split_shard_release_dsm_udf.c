@@ -9,6 +9,7 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 

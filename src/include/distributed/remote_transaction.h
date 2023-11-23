@@ -12,8 +12,9 @@
 
 
 #include "libpq-fe.h"
-#include "nodes/pg_list.h"
+
 #include "lib/ilist.h"
+#include "nodes/pg_list.h"
 
 
 /* forward declare, to avoid recursive includes */

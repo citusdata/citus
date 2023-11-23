@@ -11,8 +11,9 @@
 #ifndef SHARD_PRUNING_H_
 #define SHARD_PRUNING_H_
 
-#include "distributed/metadata_cache.h"
 #include "nodes/primnodes.h"
+
+#include "distributed/metadata_cache.h"
 
 #define INVALID_SHARD_INDEX -1
 

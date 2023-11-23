@@ -12,11 +12,12 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
 #include "nodes/nodes.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 static void QualifyViewRangeVar(RangeVar *view);
 

@@ -9,23 +9,12 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 
 #include "access/genam.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
-#include "distributed/commands.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/deparser.h"
-#include "distributed/errormessage.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/multi_executor.h"
-#include "distributed/namespace_utils.h"
-#include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
@@ -34,6 +23,19 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
+#include "distributed/errormessage.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/worker_transaction.h"
 
 /*
  * GUC controls some restrictions for local objects. For example,

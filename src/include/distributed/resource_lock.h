@@ -11,12 +11,14 @@
 #define RESOURCE_LOCK_H
 
 #include "postgres.h" /* IWYU pragma: keep */
+
 #include "c.h"
 
-#include "distributed/worker_transaction.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
 #include "tcop/utility.h"
+
+#include "distributed/worker_transaction.h"
 
 
 /*
