@@ -31,7 +31,7 @@ jobs:
       pgupgrade_image_name: "citus/pgupgradetester"
       style_checker_image_name: "citus/stylechecker"
       style_checker_tools_version: "0.8.18"
-      image_suffix: "-vbd8441d"
+      image_suffix: "-dev-7ee690b"
       pg14_version: '{ "major": "14", "full": "14.10" }'
       pg15_version: '{ "major": "15", "full": "15.5" }'
       pg16_version: '{ "major": "16", "full": "16.1" }'
