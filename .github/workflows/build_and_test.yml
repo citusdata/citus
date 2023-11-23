@@ -71,6 +71,8 @@ jobs:
       run: ci/editorconfig.sh && git diff --exit-code
     - name: Remove useless declarations
       run: ci/remove_useless_declarations.sh && git diff --cached --exit-code
+    - name: Sort and group includes
+      run: ci/sort_and_group_includes.sh && git diff --exit-code
     - name: Normalize test output
       run: ci/normalize_expected.sh && git diff --exit-code
     - name: Check for C-style comments in migration files
