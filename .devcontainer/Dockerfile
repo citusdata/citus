@@ -178,23 +178,18 @@ RUN sudo install -d -o citus -g citus /commandhistory \
 
 # install citus-dev
 RUN git clone --branch citus_load https://github.com/citusdata/tools.git citus-tools \
- && echo "cache buster 2" \
  && ( cd citus-tools/citus_dev && pipenv install ) \
-<<<<<<< HEAD
+ && ( cd citus-tools/citus_load && pipenv install ) \
  && mkdir -p ~/.local/bin \
  && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .local/bin/citus_dev \
-=======
- && ( cd citus-tools/citus_load && pipenv install ) \
- && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .bin/citus_dev \
- && ln -s /home/citus/citus-tools/citus_load/citus_load-pipenv .bin/citus_load \
->>>>>>> d2345921f (add citus_load to devcontainer)
+ && ln -s /home/citus/citus-tools/citus_load/citus_load-pipenv .local/bin/citus_load \
  && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/ \
  && mkdir -p ~/.local/share/bash-completion/completions/ \
  && ln -s ~/citus-tools/citus_dev/bash_completion ~/.local/share/bash-completion/completions/citus_dev \
  && ln -s ~/citus-tools/citus_load/bash_completion ~/.local/share/bash-completion/completions/citus_load
 
-# preload citus_load with standard repositories
-RUN citus_load repo add github.com/citusdata/public-schemas
+# .local/bin is only on the PATH when .profile is sourced, which is probably not the case here
+RUN .local/bin/citus_load add repo github.com/citusdata/public-schemas
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
