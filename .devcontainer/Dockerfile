@@ -165,10 +165,8 @@ RUN sudo apt update \
 RUN sudo curl -o /root/gdbpg.py https://raw.githubusercontent.com/tvesely/gdbpg/6065eee7872457785f830925eac665aa535caf62/gdbpg.py
 COPY --chown=root:root .gdbinit /root/
 
-# add some common tools to the final container
-# bin directory for user tools
-RUN mkdir .bin
-ENV PATH="/home/citus/.bin:${PATH}"
+# install developer dependencies in the global environment
+RUN --mount=type=bind,source=requirements.txt,target=requirements.txt pip install -r requirements.txt
 
 # for persistent bash history across devcontainers we need to have
 # a) a directory to store the history in
@@ -181,14 +179,16 @@ RUN sudo install -d -o citus -g citus /commandhistory \
 # install citus-dev
 RUN git clone --branch develop https://github.com/citusdata/tools.git citus-tools \
  && ( cd citus-tools/citus_dev && pipenv install ) \
- && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .bin/citus_dev \
+ && mkdir -p ~/.local/bin \
+ && ln -s /home/citus/citus-tools/citus_dev/citus_dev-pipenv .local/bin/citus_dev \
  && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/ \
  && mkdir -p ~/.local/share/bash-completion/completions/ \
  && ln -s ~/citus-tools/citus_dev/bash_completion ~/.local/share/bash-completion/completions/citus_dev
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
- && ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/
+ && mkdir -p ~/.local/bin \
+ && ln -s /home/citus/diff-so-fancy/diff-so-fancy .local/bin/
 
 COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 
