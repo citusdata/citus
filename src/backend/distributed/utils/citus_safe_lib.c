@@ -12,16 +12,17 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
+#include <limits.h>
 
-#include "pg_version_constants.h"
+#include "postgres.h"
 
 #include "safe_lib.h"
 
-#include <limits.h>
+#include "lib/stringinfo.h"
+
+#include "pg_version_constants.h"
 
 #include "distributed/citus_safe_lib.h"
-#include "lib/stringinfo.h"
 
 
 /*

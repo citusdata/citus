@@ -10,16 +10,17 @@
 
 #include "postgres.h"
 
+#include "catalog/pg_type.h"
+
 #include "pg_version_constants.h"
 
-#include "catalog/pg_type.h"
-#include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_nodes.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/distributed_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 

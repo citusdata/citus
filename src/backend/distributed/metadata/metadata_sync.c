@@ -11,12 +11,14 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "miscadmin.h"
-
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "postgres.h"
+
+#include "miscadmin.h"
+#include "pgstat.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -30,57 +32,22 @@
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_database.h"
+#include "catalog/pg_database_d.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
-#include "distributed/argutils.h"
-#include "distributed/backend_data.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/tenant_schema_metadata.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/distribution_column.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/maintenanced.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata/pg_dist_object.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/pg_dist_colocation.h"
-#include "distributed/pg_dist_node.h"
-#include "distributed/pg_dist_shard.h"
-#include "distributed/pg_dist_schema.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/remote_commands.h"
-#include "distributed/resource_lock.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/utils/function.h"
-#include "distributed/worker_manager.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/version_compat.h"
-#include "distributed/commands/utility_hook.h"
+#include "commands/dbcommands.h"
 #include "executor/spi.h"
 #include "foreign/foreign.h"
-#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
-#include "pgstat.h"
+#include "parser/parse_type.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/postmaster.h"
-#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -88,6 +55,42 @@
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+
+#include "distributed/argutils.h"
+#include "distributed/backend_data.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparser.h"
+#include "distributed/distribution_column.h"
+#include "distributed/listutils.h"
+#include "distributed/maintenanced.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/pg_dist_colocation.h"
+#include "distributed/pg_dist_node.h"
+#include "distributed/pg_dist_schema.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
+#include "distributed/tenant_schema_metadata.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/function.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
+#include "distributed/worker_transaction.h"
 
 
 /* managed via a GUC */
@@ -120,6 +123,7 @@ static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
+static List * GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem);
 static List * GenerateGrantOnFunctionQueriesFromAclItem(Oid schemaOid,
 														AclItem *aclItem);
 static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
@@ -179,6 +183,7 @@ PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_update_none_dist_table_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_database_command);
 
 
 static bool got_SIGTERM = false;
@@ -2044,6 +2049,92 @@ GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
 
 
 /*
+ * GrantOnDatabaseDDLCommands creates a list of ddl command for replicating the permissions
+ * of roles on databases.
+ */
+List *
+GrantOnDatabaseDDLCommands(Oid databaseOid)
+{
+	HeapTuple databaseTuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(databaseOid));
+	bool isNull = true;
+	Datum aclDatum = SysCacheGetAttr(DATABASEOID, databaseTuple, Anum_pg_database_datacl,
+									 &isNull);
+	if (isNull)
+	{
+		ReleaseSysCache(databaseTuple);
+		return NIL;
+	}
+	Acl *acl = DatumGetAclPCopy(aclDatum);
+	AclItem *aclDat = ACL_DAT(acl);
+	int aclNum = ACL_NUM(acl);
+	List *commands = NIL;
+
+	ReleaseSysCache(databaseTuple);
+
+	for (int i = 0; i < aclNum; i++)
+	{
+		commands = list_concat(commands,
+							   GenerateGrantOnDatabaseFromAclItem(
+								   databaseOid, &aclDat[i]));
+	}
+
+	return commands;
+}
+
+
+/*
+ * GenerateGrantOnDatabaseFromAclItem generates a query string for replicating a users permissions
+ * on a database.
+ */
+List *
+GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
+{
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_DATABASE;
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_DATABASE;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_CONNECT) || (permissions & ACL_CONNECT));
+	Assert(!(grants & ACL_CREATE) || (permissions & ACL_CREATE));
+	Assert(!(grants & ACL_CREATE_TEMP) || (permissions & ACL_CREATE_TEMP));
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	if (permissions & ACL_CONNECT)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "CONNECT",
+										  grants & ACL_CONNECT));
+		queries = lappend(queries, query);
+	}
+	if (permissions & ACL_CREATE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "CREATE",
+										  grants & ACL_CREATE));
+		queries = lappend(queries, query);
+	}
+	if (permissions & ACL_CREATE_TEMP)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "TEMPORARY",
+										  grants & ACL_CREATE_TEMP));
+		queries = lappend(queries, query);
+	}
+
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
+}
+
+
+/*
  * GenerateGrantStmtForRights is the function for creating GrantStmt's for all
  * types of objects that are supported. It takes parameters to fill a GrantStmt's
  * fields and returns the GrantStmt.
@@ -2114,6 +2205,11 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 			RangeVar *sequence = makeRangeVar(get_namespace_name(namespaceOid),
 											  get_rel_name(objectId), -1);
 			return list_make1(sequence);
+		}
+
+		case OBJECT_DATABASE:
+		{
+			return list_make1(makeString(get_database_name(objectId)));
 		}
 
 		default:
@@ -3884,6 +3980,70 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 	UpdateNoneDistTableMetadata(relationId, replicationModel,
 								colocationId, autoConverted);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_database_command is an internal UDF to
+ * create a database in an idempotent maner without
+ * transaction block restrictions.
+ */
+Datum
+citus_internal_database_command(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		EnsureCitusInitiatedOperation();
+	}
+
+	PG_ENSURE_ARGNOTNULL(0, "command");
+
+	text *commandText = PG_GETARG_TEXT_P(0);
+	char *command = text_to_cstring(commandText);
+	Node *parseTree = ParseTreeNode(command);
+
+	int saveNestLevel = NewGUCNestLevel();
+
+	set_config_option("citus.enable_ddl_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	set_config_option("citus.enable_create_database_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	/*
+	 * createdb() uses ParseState to report the error position for the
+	 * input command and the position is reported to be 0 when it's provided as NULL.
+	 * We're okay with that because we don't expect this UDF to be called with an incorrect
+	 * DDL command.
+	 */
+	ParseState *pstate = NULL;
+
+	if (IsA(parseTree, CreatedbStmt))
+	{
+		CreatedbStmt *stmt = castNode(CreatedbStmt, parseTree);
+
+		bool missingOk = true;
+		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
+
+		if (!OidIsValid(databaseOid))
+		{
+			createdb(pstate, (CreatedbStmt *) parseTree);
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("citus_internal_database_command() can only be used "
+							   "for CREATE DATABASE command by Citus.")));
+	}
+
+	/* rollback GUCs to the state before this session */
+	AtEOXact_GUC(true, saveNestLevel);
 
 	PG_RETURN_VOID();
 }

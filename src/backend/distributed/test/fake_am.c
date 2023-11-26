@@ -19,14 +19,10 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-#include "pg_version_compat.h"
-
-
 #include "access/amapi.h"
 #include "access/heapam.h"
-#include "access/tableam.h"
 #include "access/multixact.h"
+#include "access/tableam.h"
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/storage.h"
@@ -35,6 +31,9 @@
 #include "executor/tuptable.h"
 #include "storage/smgr.h"
 #include "utils/snapmgr.h"
+
+#include "pg_version_compat.h"
+#include "pg_version_constants.h"
 
 PG_FUNCTION_INFO_V1(fake_am_handler);
 

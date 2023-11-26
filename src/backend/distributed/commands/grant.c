@@ -10,15 +10,16 @@
 
 #include "postgres.h"
 
+#include "lib/stringinfo.h"
+#include "nodes/parsenodes.h"
+#include "utils/lsyscache.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
-#include "lib/stringinfo.h"
-#include "nodes/parsenodes.h"
-#include "utils/lsyscache.h"
 
 
 /* Local functions forward declarations for helper functions */

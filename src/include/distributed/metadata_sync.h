@@ -13,10 +13,11 @@
 #define METADATA_SYNC_H
 
 
+#include "nodes/pg_list.h"
+
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "nodes/pg_list.h"
 
 /* managed via guc.c */
 typedef enum
@@ -107,6 +108,7 @@ extern char * ColocationIdUpdateCommand(Oid relationId, uint32 colocationId);
 extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern List * GrantOnFunctionDDLCommands(Oid functionOid);
+extern List * GrantOnDatabaseDDLCommands(Oid databaseOid);
 extern List * GrantOnForeignServerDDLCommands(Oid serverId);
 extern List * GenerateGrantOnForeignServerQueriesFromAclItem(Oid serverId,
 															 AclItem *aclItem);

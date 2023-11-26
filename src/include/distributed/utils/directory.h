@@ -12,6 +12,7 @@
 #define CITUS_DIRECTORY_H
 
 #include "postgres.h"
+
 #include "lib/stringinfo.h"
 
 

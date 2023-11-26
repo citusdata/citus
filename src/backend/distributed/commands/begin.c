@@ -9,12 +9,14 @@
  */
 
 #include "postgres.h"
+
 #include "c.h"
+
+#include "nodes/parsenodes.h"
 
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/transaction_management.h"
-#include "nodes/parsenodes.h"
 
 
 /*

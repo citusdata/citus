@@ -9,23 +9,23 @@
  */
 
 #include "postgres.h"
-#include "pgstat.h"
 
 #include "libpq-fe.h"
+#include "miscadmin.h"
+#include "pgstat.h"
 
+#include "lib/stringinfo.h"
+#include "storage/latch.h"
+#include "utils/builtins.h"
+#include "utils/fmgrprotos.h"
+#include "utils/palloc.h"
+
+#include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
-#include "distributed/errormessage.h"
-#include "distributed/cancel_utils.h"
-#include "lib/stringinfo.h"
-#include "miscadmin.h"
-#include "storage/latch.h"
-#include "utils/builtins.h"
-#include "utils/fmgrprotos.h"
-#include "utils/palloc.h"
 
 
 /*

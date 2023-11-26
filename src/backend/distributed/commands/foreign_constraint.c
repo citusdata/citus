@@ -12,27 +12,15 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
+#include "miscadmin.h"
 
+#include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
-#include "access/genam.h"
 #include "catalog/pg_type.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/commands.h"
-#include "distributed/commands/sequence.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/namespace_utils.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/version_compat.h"
-#include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
@@ -41,6 +29,19 @@
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/sequence.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/version_compat.h"
 
 
 #define BehaviorIsRestrictOrNoAction(x) \

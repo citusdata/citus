@@ -8,18 +8,21 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "commands/extension.h"
+
+#include "cdc_decoder_utils.h"
 #include "fmgr.h"
 #include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "catalog/pg_namespace.h"
+#include "commands/extension.h"
 #include "common/hashfn.h"
 #include "common/string.h"
 #include "utils/fmgroids.h"
-#include "utils/typcache.h"
 #include "utils/lsyscache.h"
-#include "catalog/pg_namespace.h"
-#include "cdc_decoder_utils.h"
+#include "utils/typcache.h"
+
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/relay_utility.h"

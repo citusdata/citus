@@ -25,9 +25,8 @@
  *-------------------------------------------------------------------------
  */
 
-#include "pg_version_constants.h"
-
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "access/attnum.h"
@@ -35,11 +34,26 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
-#include "citus_version.h"
+#include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/tablecmds.h"
+#include "foreign/foreign.h"
+#include "lib/stringinfo.h"
+#include "nodes/makefuncs.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "tcop/utility.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+#include "citus_version.h"
+#include "pg_version_constants.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_depended_object.h"
@@ -48,19 +62,19 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
 #include "distributed/coordinator_protocol.h"
-#include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/deparser.h"
 #include "distributed/executor_util.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
-#include "distributed/multi_logical_replication.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
+#include "distributed/multi_logical_replication.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
@@ -69,17 +83,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
-#include "foreign/foreign.h"
-#include "lib/stringinfo.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
-#include "nodes/makefuncs.h"
-#include "tcop/utility.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/inval.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -694,7 +697,7 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/* inform the user about potential caveats */
-	if (IsA(parsetree, CreatedbStmt))
+	if (IsA(parsetree, CreatedbStmt) && !EnableCreateDatabasePropagation)
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
@@ -724,22 +727,13 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/*
-	 * Make sure that dropping the role deletes the pg_dist_object entries. There is a
-	 * separate logic for roles, since roles are not included as dropped objects in the
-	 * drop event trigger. To handle it both on worker and coordinator nodes, it is not
-	 * implemented as a part of process functions but here.
+	 * Make sure that dropping node-wide objects deletes the pg_dist_object
+	 * entries. There is a separate logic for node-wide objects (such as role
+	 * and databases), since they are not included as dropped objects in the
+	 * drop event trigger. To handle it both on worker and coordinator nodes,
+	 * it is not implemented as a part of process functions but here.
 	 */
-	if (IsA(parsetree, DropRoleStmt))
-	{
-		DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
-		List *allDropRoles = stmt->roles;
-
-		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
-		if (list_length(distributedDropRoles) > 0)
-		{
-			UnmarkRolesDistributed(distributedDropRoles);
-		}
-	}
+	UnmarkNodeWideObjectsDistributed(parsetree);
 
 	pstmt->utilityStmt = parsetree;
 
@@ -1275,9 +1269,12 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			{
 				ereport(WARNING,
 						(errmsg(
-							 "CONCURRENTLY-enabled index commands can fail partially, "
-							 "leaving behind an INVALID index.\n Use DROP INDEX "
-							 "CONCURRENTLY IF EXISTS to remove the invalid index.")));
+							 "Commands that are not transaction-safe may result in "
+							 "partial failure, potentially leading to an inconsistent "
+							 "state.\nIf the problematic command is a CREATE operation, "
+							 "consider using the 'IF EXISTS' syntax to drop the object,"
+							 "\nif applicable, and then re-attempt the original command.")));
+
 				PG_RE_THROW();
 			}
 		}
@@ -1488,6 +1485,28 @@ DDLTaskList(Oid relationId, const char *commandString)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * NontransactionalNodeDDLTaskList builds a list of tasks to execute a DDL command on a
+ * given target set of nodes with cannotBeExecutedInTransaction is set to make sure
+ * that task list is executed outside a transaction block.
+ */
+List *
+NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands)
+{
+	List *ddlJobs = NodeDDLTaskList(targets, commands);
+	DDLJob *ddlJob = NULL;
+	foreach_ptr(ddlJob, ddlJobs)
+	{
+		Task *task = NULL;
+		foreach_ptr(task, ddlJob->taskList)
+		{
+			task->cannotBeExecutedInTransaction = true;
+		}
+	}
+	return ddlJobs;
 }
 
 

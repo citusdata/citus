@@ -14,9 +14,8 @@
 
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
-#include "nodes/plannodes.h"
-
 #include "nodes/pathnodes.h"
+#include "nodes/plannodes.h"
 
 
 /* Function declarations for building local plans on the coordinator node */

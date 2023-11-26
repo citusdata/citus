@@ -10,13 +10,14 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 #include "libpq-fe.h"
 
 #include "catalog/pg_type.h"
+#include "libpq/pqformat.h"
 #include "nodes/pg_list.h"
 #include "utils/syscache.h"
-#include "libpq/pqformat.h"
 
 #include "distributed/causal_clock.h"
 

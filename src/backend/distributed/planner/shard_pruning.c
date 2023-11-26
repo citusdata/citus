@@ -66,28 +66,14 @@
  */
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "fmgr.h"
-
-#include "distributed/shard_pruning.h"
 
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/listutils.h"
-#include "distributed/log_utils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_protocol.h"
-#include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "parser/parse_coerce.h"
@@ -97,6 +83,20 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/ruleutils.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/pg_dist_partition.h"
+#include "distributed/shard_pruning.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 
 
 /*

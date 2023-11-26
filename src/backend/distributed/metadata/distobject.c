@@ -10,8 +10,6 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "miscadmin.h"
 
 #include "access/genam.h"
@@ -22,23 +20,13 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_extension_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
-#include "citus_version.h"
+#include "commands/dbcommands.h"
 #include "commands/extension.h"
-#include "distributed/listutils.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata/pg_dist_object.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
@@ -49,6 +37,20 @@
 #include "utils/regproc.h"
 #include "utils/rel.h"
 
+#include "citus_version.h"
+#include "pg_version_constants.h"
+
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_transaction.h"
 
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
@@ -354,6 +356,42 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 	}
 
 	return spiStatus;
+}
+
+
+/*
+ * UnmarkNodeWideObjectsDistributed deletes pg_dist_object records
+ * for all distributed objects in given Drop stmt node.
+ *
+ * Today we only expect DropRoleStmt and DropdbStmt to get here.
+ */
+void
+UnmarkNodeWideObjectsDistributed(Node *node)
+{
+	if (IsA(node, DropRoleStmt))
+	{
+		DropRoleStmt *stmt = castNode(DropRoleStmt, node);
+		List *allDropRoles = stmt->roles;
+
+		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
+		if (list_length(distributedDropRoles) > 0)
+		{
+			UnmarkRolesDistributed(distributedDropRoles);
+		}
+	}
+	else if (IsA(node, DropdbStmt))
+	{
+		DropdbStmt *stmt = castNode(DropdbStmt, node);
+		char *dbName = stmt->dbname;
+
+		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
+		ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, dbOid);
+		if (IsAnyObjectDistributed(list_make1(dbObjectAddress)))
+		{
+			UnmarkObjectDistributed(dbObjectAddress);
+		}
+	}
 }
 
 

@@ -10,8 +10,9 @@
 
 #include "postgres.h"
 
-#include "distributed/tuplestore.h"
 #include "miscadmin.h"
+
+#include "distributed/tuplestore.h"
 
 /*
  * CheckTuplestoreReturn checks if a tuplestore can be returned in the callsite

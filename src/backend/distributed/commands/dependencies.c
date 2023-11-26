@@ -10,9 +10,14 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
+#include "storage/lmgr.h"
+#include "utils/lsyscache.h"
+
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
@@ -25,9 +30,6 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
-#include "miscadmin.h"
-#include "storage/lmgr.h"
-#include "utils/lsyscache.h"
 
 typedef enum RequiredObjectSet
 {
@@ -537,16 +539,37 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 		case OCLASS_DATABASE:
 		{
-			List *databaseDDLCommands = NIL;
-
-			/* only propagate the ownership of the database when the feature is on */
-			if (EnableAlterDatabaseOwner)
+			/*
+			 * For the database where Citus is installed, only propagate the ownership of the
+			 * database, only when the feature is on.
+			 *
+			 * This is because this database must exist on all nodes already so we shouldn't
+			 * need to "CREATE" it on other nodes. However, we still need to correctly reflect
+			 * its owner on other nodes too.
+			 */
+			if (dependency->objectId == MyDatabaseId && EnableAlterDatabaseOwner)
 			{
-				List *ownerDDLCommands = DatabaseOwnerDDLCommands(dependency);
-				databaseDDLCommands = list_concat(databaseDDLCommands, ownerDDLCommands);
+				return DatabaseOwnerDDLCommands(dependency);
 			}
 
-			return databaseDDLCommands;
+			/*
+			 * For the other databases, create the database on all nodes, only when the feature
+			 * is on.
+			 */
+			if (dependency->objectId != MyDatabaseId && EnableCreateDatabasePropagation)
+			{
+				char *databaseDDLCommand = CreateDatabaseDDLCommand(dependency->objectId);
+
+				List *ddlCommands = list_make1(databaseDDLCommand);
+
+				List *grantDDLCommands = GrantOnDatabaseDDLCommands(dependency->objectId);
+
+				ddlCommands = list_concat(ddlCommands, grantDDLCommands);
+
+				return ddlCommands;
+			}
+
+			return NIL;
 		}
 
 		case OCLASS_PROC:

@@ -11,9 +11,10 @@
 #ifndef CITUS_NODEFUNCS_H
 #define CITUS_NODEFUNCS_H
 
-#include "distributed/multi_physical_planner.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
+
+#include "distributed/multi_physical_planner.h"
 
 /* citus_nodefuncs.c */
 extern void SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,

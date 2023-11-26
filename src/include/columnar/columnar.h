@@ -14,21 +14,24 @@
 #include "postgres.h"
 
 #include "fmgr.h"
+
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
-#include "pg_version_compat.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
+#include "utils/relcache.h"
+#include "utils/snapmgr.h"
+
+#include "pg_version_compat.h"
+
+#include "columnar/columnar_compression.h"
+#include "columnar/columnar_metadata.h"
+
 #if PG_VERSION_NUM >= PG_VERSION_16
 #include "storage/relfilelocator.h"
 #else
 #include "storage/relfilenode.h"
 #endif
-#include "utils/relcache.h"
-#include "utils/snapmgr.h"
-
-#include "columnar/columnar_compression.h"
-#include "columnar/columnar_metadata.h"
 
 #define COLUMNAR_AM_NAME "columnar"
 #define COLUMNAR_MODULE_NAME "citus_columnar"

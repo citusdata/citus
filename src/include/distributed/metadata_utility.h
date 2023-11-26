@@ -21,13 +21,14 @@
 #include "access/tupdesc.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaddress.h"
+#include "utils/acl.h"
+#include "utils/relcache.h"
+
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/relay_utility.h"
 #include "distributed/worker_manager.h"
-#include "utils/acl.h"
-#include "utils/relcache.h"
 
 
 /* total number of hash tokens (2^32) */

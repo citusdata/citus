@@ -10,7 +10,8 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
+#include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -18,32 +19,9 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "catalog/pg_namespace.h"
-#endif
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/deparser.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/listutils.h"
-#include "distributed/local_executor.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/namespace_utils.h"
-#include "distributed/resource_lock.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/relation_utils.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
-#include "miscadmin.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_utilcmd.h"
 #include "storage/lmgr.h"
@@ -52,6 +30,32 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/deparser.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/relation_utils.h"
+#include "distributed/resource_lock.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "catalog/pg_namespace.h"
+#endif
 
 
 /* Local functions forward declarations for helper functions */

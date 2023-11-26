@@ -19,27 +19,27 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/commands.h"
-#include <distributed/connection_management.h>
-#include "distributed/commands/utility_hook.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata_cache.h"
-#include <distributed/metadata_sync.h>
-#include "distributed/multi_executor.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/resource_lock.h"
-#include <distributed/remote_commands.h>
-#include <distributed/remote_commands.h>
-#include "distributed/tenant_schema_metadata.h"
-#include "distributed/version_compat.h"
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
+
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/connection_management.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
+#include "distributed/tenant_schema_metadata.h"
+#include "distributed/version_compat.h"
 
 
 static List * GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);

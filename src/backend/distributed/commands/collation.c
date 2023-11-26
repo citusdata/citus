@@ -10,30 +10,32 @@
  */
 #include "postgres.h"
 
-#include "pg_version_compat.h"
+#include "miscadmin.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_collation.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/multi_executor.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/worker_create_or_replace.h"
-#include "pg_version_constants.h"
-#include "distributed/worker_manager.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-#include "miscadmin.h"
+
+#include "pg_version_compat.h"
+#include "pg_version_constants.h"
+
+#include "distributed/citus_safe_lib.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/worker_create_or_replace.h"
+#include "distributed/worker_manager.h"
 
 
 static char * CreateCollationDDLInternal(Oid collationId, Oid *collowner,
