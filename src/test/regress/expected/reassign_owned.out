@@ -1,5 +1,5 @@
 CREATE ROLE distributed_source_role1;
-create ROLE distributed_source_role2;
+create ROLE "distributed_source_role-\!";
 CREATE ROLE distributed_target_role1;
 set citus.enable_create_role_propagation to off;
 create ROLE local_target_role1;
@@ -9,10 +9,10 @@ create role local_source_role1;
 NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
 HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 reset citus.enable_create_role_propagation;
-GRANT CREATE ON SCHEMA public TO distributed_source_role1,distributed_source_role2;
+GRANT CREATE ON SCHEMA public TO distributed_source_role1,"distributed_source_role-\!";
 SET ROLE distributed_source_role1;
 CREATE TABLE public.test_table (col1 int);
-set role distributed_source_role2;
+set role "distributed_source_role-\!";
 CREATE TABLE public.test_table2 (col2 int);
 RESET ROLE;
 select create_distributed_table('test_table', 'col1');
@@ -41,21 +41,21 @@ WHERE
   ) q2
   $$
 ) ORDER BY result;
-                                                                                             result
+                                                                                               result
 ---------------------------------------------------------------------
- [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_source_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_source_role2"}]
- [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_source_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_source_role2"}]
- [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_source_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_source_role2"}]
+ [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_source_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_source_role-\\!"}]
+ [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_source_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_source_role-\\!"}]
+ [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_source_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_source_role-\\!"}]
 (3 rows)
 
 --tests for reassing owned by with multiple distributed roles and a local role to a distributed role
 --local role should be ignored
 set citus.log_remote_commands to on;
 set citus.grep_remote_commands = '%REASSIGN OWNED BY%';
-REASSIGN OWNED BY distributed_source_role1,distributed_source_role2,local_source_role1  TO distributed_target_role1;
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, distributed_source_role2 TO distributed_target_role1
+REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1  TO distributed_target_role1;
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO distributed_target_role1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, distributed_source_role2 TO distributed_target_role1
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO distributed_target_role1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 reset citus.grep_remote_commands;
 reset citus.log_remote_commands;
@@ -86,7 +86,7 @@ WHERE
 --local role should be ignored
 SET ROLE distributed_source_role1;
 CREATE TABLE public.test_table3 (col1 int);
-set role distributed_source_role2;
+set role "distributed_source_role-\!";
 CREATE TABLE public.test_table4 (col2 int);
 RESET ROLE;
 select create_distributed_table('test_table3', 'col1');
@@ -104,10 +104,10 @@ select create_distributed_table('test_table4', 'col2');
 set citus.log_remote_commands to on;
 set citus.grep_remote_commands = '%REASSIGN OWNED BY%';
 set citus.enable_create_role_propagation to off;
-REASSIGN OWNED BY distributed_source_role1,distributed_source_role2,local_source_role1 TO local_target_role1;
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, distributed_source_role2 TO local_target_role1
+REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1 TO local_target_role1;
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO local_target_role1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, distributed_source_role2 TO local_target_role1
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO local_target_role1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 reset citus.grep_remote_commands;
 reset citus.log_remote_commands;
@@ -136,7 +136,7 @@ WHERE
 
 --clear resources
 SET citus.log_remote_commands = true;
-DROP OWNED BY distributed_source_role1, distributed_source_role2,distributed_target_role1,local_target_role1;
+DROP OWNED BY distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
@@ -317,9 +317,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP OWNED BY distributed_source_role1, distributed_source_role2, distributed_target_role1, local_target_role1 RESTRICT
+NOTICE:  issuing DROP OWNED BY distributed_source_role1, "distributed_source_role-\!", distributed_target_role1, local_target_role1 RESTRICT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP OWNED BY distributed_source_role1, distributed_source_role2, distributed_target_role1, local_target_role1 RESTRICT
+NOTICE:  issuing DROP OWNED BY distributed_source_role1, "distributed_source_role-\!", distributed_target_role1, local_target_role1 RESTRICT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -357,4 +357,4 @@ WHERE
 
 SET citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%DROP ROLE%';
-drop role distributed_source_role1, distributed_source_role2,distributed_target_role1,local_target_role1,local_source_role1;
+drop role distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1,local_source_role1;
