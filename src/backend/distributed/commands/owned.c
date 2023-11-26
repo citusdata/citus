@@ -137,7 +137,15 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 
 	ObjectAddress *newRoleAddress = GetNewRoleAddress(stmt);
 
+	int saveNestLevel = NewGUCNestLevel();
+	set_config_option("citus.enable_create_role_propagation", "on",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
 	EnsureObjectAndDependenciesExistOnAllNodes(newRoleAddress);
+
+	/* rollback GUCs to the state before this session */
+	AtEOXact_GUC(true, saveNestLevel);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								sql,
