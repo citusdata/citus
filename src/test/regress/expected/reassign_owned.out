@@ -34,10 +34,11 @@ SELECT result from run_command_on_all_nodes(
     schemaname,
     tablename,
     tableowner
-FROM
+   FROM
     pg_tables
-WHERE
+   WHERE
     tablename in ('test_table', 'test_table2')
+   ORDER BY tablename
   ) q2
   $$
 ) ORDER BY result;
