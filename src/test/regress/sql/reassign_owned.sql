@@ -53,10 +53,11 @@ SELECT result from run_command_on_all_nodes(
     schemaname,
     tablename,
     tableowner
-FROM
+   FROM
     pg_tables
-WHERE
+   WHERE
     tablename in ('test_table', 'test_table2')
+   ORDER BY tablename
   ) q2
   $$
 ) ORDER BY result;
@@ -88,18 +89,17 @@ SELECT result from run_command_on_all_nodes(
     schemaname,
     tablename,
     tableowner
-FROM
-    pg_tables
-WHERE
-    tablename in ('test_table3', 'test_table4')
+   FROM
+        pg_tables
+   WHERE
+        tablename in ('test_table3', 'test_table4')
+   ORDER BY tablename
   ) q2
   $$
 ) ORDER BY result;
 
 --clear resources
-SET citus.log_remote_commands = true;
 DROP OWNED BY distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1;
-reset citus.log_remote_commands;
 
 SELECT result from run_command_on_all_nodes(
   $$

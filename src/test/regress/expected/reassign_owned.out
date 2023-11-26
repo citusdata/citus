@@ -68,10 +68,11 @@ SELECT result from run_command_on_all_nodes(
     schemaname,
     tablename,
     tableowner
-FROM
+   FROM
     pg_tables
-WHERE
+   WHERE
     tablename in ('test_table', 'test_table2')
+   ORDER BY tablename
   ) q2
   $$
 ) ORDER BY result;
@@ -120,220 +121,23 @@ SELECT result from run_command_on_all_nodes(
     schemaname,
     tablename,
     tableowner
-FROM
-    pg_tables
-WHERE
-    tablename in ('test_table3', 'test_table4')
+   FROM
+        pg_tables
+   WHERE
+        tablename in ('test_table3', 'test_table4')
+   ORDER BY tablename
   ) q2
   $$
 ) ORDER BY result;
                                                                                         result
 ---------------------------------------------------------------------
  [{"tablename": "test_table3", "schemaname": "public", "tableowner": "local_target_role1"}, {"tablename": "test_table4", "schemaname": "public", "tableowner": "local_target_role1"}]
- [{"tablename": "test_table4", "schemaname": "public", "tableowner": "local_target_role1"}, {"tablename": "test_table3", "schemaname": "public", "tableowner": "local_target_role1"}]
- [{"tablename": "test_table4", "schemaname": "public", "tableowner": "local_target_role1"}, {"tablename": "test_table3", "schemaname": "public", "tableowner": "local_target_role1"}]
+ [{"tablename": "test_table3", "schemaname": "public", "tableowner": "local_target_role1"}, {"tablename": "test_table4", "schemaname": "public", "tableowner": "local_target_role1"}]
+ [{"tablename": "test_table3", "schemaname": "public", "tableowner": "local_target_role1"}, {"tablename": "test_table4", "schemaname": "public", "tableowner": "local_target_role1"}]
 (3 rows)
 
 --clear resources
-SET citus.log_remote_commands = true;
 DROP OWNED BY distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1;
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table2')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table2')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table2_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table3')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table3')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table3_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table4')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT worker_drop_distributed_table('public.test_table4')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing DROP TABLE IF EXISTS public.test_table4_xxxxx CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(1390004)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_partition_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(1390004)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT master_remove_partition_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP OWNED BY distributed_source_role1, "distributed_source_role-\!", distributed_target_role1, local_target_role1 RESTRICT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP OWNED BY distributed_source_role1, "distributed_source_role-\!", distributed_target_role1, local_target_role1 RESTRICT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-reset citus.log_remote_commands;
 SELECT result from run_command_on_all_nodes(
   $$
   SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
