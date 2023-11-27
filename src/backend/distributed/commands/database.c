@@ -70,8 +70,8 @@ static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static char * GetLocaleProviderString(char datlocprovider);
 #endif
 static char * GetTablespaceName(Oid tablespaceOid);
-static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName, bool
-														  missingOk);
+static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
+														  bool missingOk);
 
 static Oid get_database_owner(Oid dbId);
 
@@ -192,8 +192,17 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 
 
 /*
- * IsSetTablespaceStatement returns true if given AlterDatabaseStmt contains
- * a DefElem to alter tablespace of the target database.
+ * Checks if the provided ALTER DATABASE statement is a SET TABLESPACE statement.
+ *
+ * This function takes a Node pointer representing a AlterDatabaseStmt, and checks
+ * if it is a SET TABLESPACE statement, which is used to move a table to a new
+ * tablespace.
+ *
+ * Parameters:
+ *   stmt: A pointer to a Node representing AlterDatabaseStmt.
+ *
+ * Returns:
+ *   true if the statement is a SET TABLESPACE statement, false otherwise.
  */
 static bool
 IsSetTablespaceStatement(AlterDatabaseStmt *stmt)
