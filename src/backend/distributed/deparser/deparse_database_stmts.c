@@ -65,22 +65,6 @@ const DefElemOptionFormat alterDatabaseOptionFormats[] = {
 };
 
 
-/*
- * DeparseAlterDatabaseOwnerStmt
- *      Deparse an AlterDatabaseOwnerStmt node
- *
- * This function is responsible for producing a string representation of an
- * AlterDatabaseOwnerStmt node, which represents an ALTER DATABASE statement
- * that changes the owner of a database. The output string includes the ALTER
- * DATABASE keyword, the name of the database being altered, and the new owner
- * of the database.
- *
- * Parameters:
- *  - node: a pointer to the AlterDatabaseOwnerStmt node to be deparsed
- *
- * Returns:
- *  - a string representation of the ALTER DATABASE statement
- */
 char *
 DeparseAlterDatabaseOwnerStmt(Node *node)
 {
