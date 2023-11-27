@@ -23,9 +23,9 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/worker_transaction.h"
 

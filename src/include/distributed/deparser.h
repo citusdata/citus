@@ -15,10 +15,10 @@
 
 #include "postgres.h"
 
-#include "nodes/nodes.h"
-#include "nodes/parsenodes.h"
 #include "catalog/objectaddress.h"
 #include "lib/stringinfo.h"
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
 
 /* forward declarations for format_collate.c */
 /* Control flags for FormatCollateExtended, compatible with format_type_extended */

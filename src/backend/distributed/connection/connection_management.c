@@ -9,39 +9,39 @@
  */
 
 #include "postgres.h"
-#include "pgstat.h"
 
 #include "libpq-fe.h"
-
 #include "miscadmin.h"
-
+#include "pg_config.h"
+#include "pgstat.h"
 #include "safe_lib.h"
-#include "postmaster/postmaster.h"
+
 #include "access/hash.h"
 #include "commands/dbcommands.h"
+#include "mb/pg_wchar.h"
+#include "portability/instr_time.h"
+#include "postmaster/postmaster.h"
+#include "storage/ipc.h"
+#include "utils/hsearch.h"
+#include "utils/memutils.h"
+
 #include "distributed/backend_data.h"
+#include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
-#include "distributed/errormessage.h"
 #include "distributed/error_codes.h"
+#include "distributed/errormessage.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/memutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
+#include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shared_connection_stats.h"
-#include "distributed/cancel_utils.h"
-#include "distributed/remote_commands.h"
 #include "distributed/time_constants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
-#include "mb/pg_wchar.h"
-#include "pg_config.h"
-#include "portability/instr_time.h"
-#include "storage/ipc.h"
-#include "utils/hsearch.h"
-#include "utils/memutils.h"
 
 
 int NodeConnectionTimeout = 30000;

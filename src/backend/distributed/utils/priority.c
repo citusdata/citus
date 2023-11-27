@@ -7,13 +7,13 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include <unistd.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <unistd.h>
+
+#include "postgres.h"
 
 #include "distributed/priority.h"
 

@@ -10,18 +10,19 @@
  *-------------------------------------------------------------------------
  */
 
-#include "pg_version_constants.h"
-
 #include "postgres.h"
 
 #include "commands/defrem.h"
-#include "distributed/deparser.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/deparser.h"
 
 
 /**

@@ -19,48 +19,51 @@
  */
 
 
+#include <sys/stat.h>
+
 #include "postgres.h"
 
+#include "miscadmin.h"
+#include "port.h"
 #include "safe_lib.h"
 
-#include "citus_version.h"
-#include "columnar/columnar.h"
-#include "columnar/columnar_storage.h"
-#include "columnar/columnar_version_compat.h"
-#include "distributed/listutils.h"
-
-#include <sys/stat.h>
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/nbtree.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
-#include "catalog/pg_namespace.h"
-#include "catalog/pg_collation.h"
-#include "catalog/pg_type.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_collation.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
-#include "miscadmin.h"
-#include "nodes/execnodes.h"
 #include "lib/stringinfo.h"
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "parser/parse_relation.h"
-#endif
-#include "port.h"
+#include "nodes/execnodes.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
-#include "utils/memutils.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/rel.h"
+
+#include "citus_version.h"
+#include "pg_version_constants.h"
+
+#include "columnar/columnar.h"
+#include "columnar/columnar_storage.h"
+#include "columnar/columnar_version_compat.h"
+
+#include "distributed/listutils.h"
+
 #if PG_VERSION_NUM >= PG_VERSION_16
+#include "parser/parse_relation.h"
 #include "storage/relfilelocator.h"
 #include "utils/relfilenumbermap.h"
 #else

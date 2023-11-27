@@ -11,12 +11,23 @@
  */
 
 #include "postgres.h"
-#include "funcapi.h"
 
-#include "pg_version_constants.h"
+#include "funcapi.h"
+#include "miscadmin.h"
 
 #include "catalog/pg_proc.h"
 #include "commands/defrem.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/parsenodes.h"
+#include "nodes/primnodes.h"
+#include "optimizer/clauses.h"
+#include "tcop/dest.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -26,27 +37,17 @@
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/function_call_delegation.h"
-#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/adaptive_executor.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
-#include "distributed/reference_table_utils.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
-#include "distributed/worker_manager.h"
 #include "distributed/worker_log_messages.h"
-#include "optimizer/clauses.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/parsenodes.h"
-#include "nodes/primnodes.h"
-#include "miscadmin.h"
-#include "tcop/dest.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
+#include "distributed/worker_manager.h"
 
 
 /* global variable tracking whether we are in a delegated procedure call */

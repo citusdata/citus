@@ -14,52 +14,52 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include "pg_version_constants.h"
-
 #include <time.h>
+
+#include "postgres.h"
 
 #include "miscadmin.h"
 #include "pgstat.h"
 
 #include "access/xact.h"
 #include "access/xlog.h"
-#include "catalog/pg_extension.h"
-#include "citus_version.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
 #include "commands/async.h"
 #include "commands/extension.h"
+#include "common/hashfn.h"
 #include "libpq/pqsignal.h"
-#include "catalog/namespace.h"
-#include "distributed/background_jobs.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/distributed_deadlock_detection.h"
-#include "distributed/maintenanced.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/query_stats.h"
-#include "distributed/statistics_collection.h"
-#include "distributed/transaction_recovery.h"
-#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/postmaster.h"
-#include "nodes/makefuncs.h"
 #include "storage/ipc.h"
-#include "storage/proc.h"
 #include "storage/latch.h"
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
+#include "storage/proc.h"
 #include "tcop/tcopprot.h"
-#include "common/hashfn.h"
 #include "utils/builtins.h"
-#include "utils/memutils.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
+
+#include "citus_version.h"
+#include "pg_version_constants.h"
+
+#include "distributed/background_jobs.h"
+#include "distributed/citus_safe_lib.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/distributed_deadlock_detection.h"
+#include "distributed/maintenanced.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/query_stats.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
+#include "distributed/statistics_collection.h"
+#include "distributed/transaction_recovery.h"
+#include "distributed/version_compat.h"
 
 /*
  * Shared memory data for all maintenance workers.

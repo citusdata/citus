@@ -14,14 +14,15 @@
 #include "access/genam.h"
 #include "access/htup.h"
 #include "access/table.h"
+#include "storage/lockdefs.h"
+#include "utils/fmgroids.h"
+#include "utils/relcache.h"
+
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/pg_dist_schema.h"
 #include "distributed/tenant_schema_metadata.h"
-#include "storage/lockdefs.h"
-#include "utils/relcache.h"
-#include "utils/fmgroids.h"
 
 
 /*

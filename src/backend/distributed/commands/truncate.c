@@ -9,12 +9,19 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
+#include "storage/lmgr.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/regproc.h"
+#include "utils/rel.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
@@ -31,13 +38,8 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
-#include "distributed/worker_transaction.h"
 #include "distributed/worker_shard_visibility.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/regproc.h"
-#include "utils/rel.h"
+#include "distributed/worker_transaction.h"
 
 
 /* Local functions forward declarations for unsupported command checks */

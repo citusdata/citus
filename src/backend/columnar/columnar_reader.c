@@ -22,22 +22,23 @@
 #include "access/xact.h"
 #include "catalog/pg_am.h"
 #include "commands/defrem.h"
-#include "distributed/listutils.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "optimizer/optimizer.h"
 #include "optimizer/clauses.h"
+#include "optimizer/optimizer.h"
 #include "optimizer/restrictinfo.h"
 #include "storage/fd.h"
 #include "utils/guc.h"
-#include "utils/memutils.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/rel.h"
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
+
+#include "distributed/listutils.h"
 
 #define UNEXPECTED_STRIPE_READ_ERR_MSG \
 	"attempted to read an unexpected stripe while reading columnar " \

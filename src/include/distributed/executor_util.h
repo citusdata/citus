@@ -12,9 +12,10 @@
 #include "funcapi.h"
 
 #include "access/tupdesc.h"
-#include "distributed/multi_physical_planner.h"
 #include "nodes/params.h"
 #include "nodes/pg_list.h"
+
+#include "distributed/multi_physical_planner.h"
 
 
 /* utility functions for dealing with tasks in the executor */

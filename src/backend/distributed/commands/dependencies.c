@@ -10,9 +10,14 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
+#include "storage/lmgr.h"
+#include "utils/lsyscache.h"
+
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
@@ -25,9 +30,6 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
-#include "miscadmin.h"
-#include "storage/lmgr.h"
-#include "utils/lsyscache.h"
 
 
 static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddress);

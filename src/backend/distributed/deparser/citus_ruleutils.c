@@ -7,12 +7,11 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "miscadmin.h"
-
-#include "pg_version_constants.h"
-
 #include <stddef.h>
+
+#include "postgres.h"
+
+#include "miscadmin.h"
 
 #include "access/attnum.h"
 #include "access/genam.h"
@@ -39,21 +38,11 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands.h"
-#include "distributed/listutils.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/namespace_utils.h"
-#include "distributed/relay_utility.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_protocol.h"
+#include "commands/sequence.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
-#include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "parser/parse_utilcmd.h"
@@ -71,7 +60,20 @@
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
-#include "commands/sequence.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/relay_utility.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 
 
 static void deparse_index_columns(StringInfo buffer, List *indexParameterList,

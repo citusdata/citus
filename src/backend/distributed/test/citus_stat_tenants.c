@@ -10,10 +10,12 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 
-#include "distributed/utils/citus_stat_tenants.h"
 #include "sys/time.h"
+
+#include "distributed/utils/citus_stat_tenants.h"
 
 PG_FUNCTION_INFO_V1(sleep_until_next_period);
 

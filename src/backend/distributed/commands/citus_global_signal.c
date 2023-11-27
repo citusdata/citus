@@ -11,14 +11,16 @@
 
 #include "postgres.h"
 
+#include "signal.h"
+
+#include "lib/stringinfo.h"
+
 #include "pg_version_constants.h"
 
 #include "distributed/backend_data.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
-#include "lib/stringinfo.h"
-#include "signal.h"
 
 static bool CitusSignalBackend(uint64 globalPID, uint64 timeout, int sig);
 

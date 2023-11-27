@@ -8,25 +8,27 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
-#include "distributed/backend_data.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/listutils.h"
-#include "distributed/local_executor.h"
-#include "distributed/query_colocation_checker.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/worker_shard_visibility.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
+
+#include "distributed/backend_data.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/query_colocation_checker.h"
+#include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 
 
 /* HideShardsMode is used to determine whether to hide shards */

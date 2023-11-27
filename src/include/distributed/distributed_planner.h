@@ -12,11 +12,10 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
+#include "nodes/pathnodes.h"
 #include "nodes/plannodes.h"
 
-#include "nodes/pathnodes.h"
+#include "pg_version_constants.h"
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"

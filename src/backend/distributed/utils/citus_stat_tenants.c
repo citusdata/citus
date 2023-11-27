@@ -8,21 +8,13 @@
  *-------------------------------------------------------------------------
  */
 
+#include <time.h>
+
 #include "postgres.h"
+
 #include "unistd.h"
 
 #include "access/hash.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/jsonbutils.h"
-#include "distributed/log_utils.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/tenant_schema_metadata.h"
-#include "distributed/tuplestore.h"
-#include "distributed/utils/citus_stat_tenants.h"
 #include "executor/execdesc.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
@@ -34,7 +26,17 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-#include <time.h>
+#include "distributed/citus_safe_lib.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/jsonbutils.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
+#include "distributed/tenant_schema_metadata.h"
+#include "distributed/tuplestore.h"
+#include "distributed/utils/citus_stat_tenants.h"
 
 #if (PG_VERSION_NUM >= PG_VERSION_15)
 	#include "common/pg_prng.h"

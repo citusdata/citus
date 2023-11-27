@@ -12,12 +12,14 @@
  *-------------------------------------------------------------------------
  */
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
-#include <unistd.h>
-#include <sys/stat.h>
 
 #include "access/xact.h"
 #include "catalog/dependency.h"
@@ -27,6 +29,17 @@
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
+#include "executor/spi.h"
+#include "nodes/makefuncs.h"
+#include "parser/parse_relation.h"
+#include "storage/lmgr.h"
+#include "tcop/tcopprot.h"
+#include "tcop/utility.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/regproc.h"
+#include "utils/varlena.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -44,20 +57,9 @@
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
-
+#include "distributed/version_compat.h"
 #include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/version_compat.h"
-#include "executor/spi.h"
-#include "nodes/makefuncs.h"
-#include "parser/parse_relation.h"
-#include "storage/lmgr.h"
-#include "tcop/tcopprot.h"
-#include "tcop/utility.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/regproc.h"
-#include "utils/varlena.h"
 
 
 /* Local functions forward declarations */

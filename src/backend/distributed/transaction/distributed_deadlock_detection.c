@@ -15,8 +15,11 @@
 #include "pgstat.h"
 
 #include "access/hash.h"
+#include "nodes/pg_list.h"
+#include "utils/hsearch.h"
+#include "utils/timestamp.h"
+
 #include "distributed/backend_data.h"
-#include "distributed/errormessage.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/errormessage.h"
 #include "distributed/hash_helpers.h"
@@ -25,9 +28,6 @@
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/transaction_identifier.h"
-#include "nodes/pg_list.h"
-#include "utils/hsearch.h"
-#include "utils/timestamp.h"
 
 
 /* used only for finding the deadlock cycle path */

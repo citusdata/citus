@@ -12,28 +12,28 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/stratnum.h"
 #include "access/table.h"
 #include "catalog/pg_constraint.h"
-#include "distributed/commands.h"
-#include "distributed/hash_helpers.h"
-#include "distributed/foreign_key_relationship.h"
-#include "distributed/hash_helpers.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/version_compat.h"
+#include "common/hashfn.h"
 #include "nodes/pg_list.h"
 #include "storage/lockdefs.h"
 #include "utils/catcache.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
-#include "common/hashfn.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/commands.h"
+#include "distributed/foreign_key_relationship.h"
+#include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 
 
 /*

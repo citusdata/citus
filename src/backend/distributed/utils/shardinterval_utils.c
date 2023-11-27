@@ -8,23 +8,25 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "stdint.h"
 #include "postgres.h"
+
+#include "stdint.h"
 
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
+#include "utils/catcache.h"
+#include "utils/memutils.h"
+
+#include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
-#include "distributed/distributed_planner.h"
+#include "distributed/pg_dist_partition.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/shardinterval_utils.h"
-#include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
-#include "utils/catcache.h"
-#include "utils/memutils.h"
 
 
 /*

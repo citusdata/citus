@@ -118,32 +118,43 @@
  *-------------------------------------------------------------------------
  */
 
+#include <math.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 
-#include <math.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
+#include "access/htup_details.h"
 #include "access/transam.h"
 #include "access/xact.h"
-#include "access/htup_details.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
+#include "lib/ilist.h"
+#include "portability/instr_time.h"
+#include "storage/fd.h"
+#include "storage/latch.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/memutils.h"
+#include "utils/syscache.h"
+#include "utils/timestamp.h"
+
 #include "distributed/adaptive_executor.h"
+#include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_safe_lib.h"
-#include "distributed/connection_management.h"
 #include "distributed/commands/multi_copy.h"
+#include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
-#include "distributed/executor_util.h"
-#include "distributed/shared_connection_stats.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/executor_util.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -161,21 +172,11 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
-#include "distributed/transaction_management.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/transaction_management.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/backend_data.h"
-#include "lib/ilist.h"
-#include "portability/instr_time.h"
-#include "storage/fd.h"
-#include "storage/latch.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/memutils.h"
-#include "utils/syscache.h"
-#include "utils/timestamp.h"
 
 #define SLOW_START_DISABLED 0
 

@@ -34,22 +34,23 @@
  */
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
-#include "distributed/distributed_planner.h"
-#include "distributed/insert_select_planner.h"
-#include "distributed/multi_physical_planner.h" /* only to use some utility functions */
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shard_pruning.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "optimizer/optimizer.h"
 #include "tcop/pquery.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/distributed_planner.h"
+#include "distributed/insert_select_planner.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_physical_planner.h" /* only to use some utility functions */
+#include "distributed/multi_router_planner.h"
+#include "distributed/pg_dist_partition.h"
+#include "distributed/shard_pruning.h"
+#include "distributed/shardinterval_utils.h"
 
 bool EnableFastPathRouterPlanner = true;
 
