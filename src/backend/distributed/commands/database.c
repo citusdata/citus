@@ -45,7 +45,7 @@
 
 
 /*
- * DatabaseCollationInfo is used to store collation related information of a database
+ * DatabaseCollationInfo is used to store collation related information of a database.
  */
 typedef struct DatabaseCollationInfo
 {
@@ -205,7 +205,7 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
  *   true if the statement is a SET TABLESPACE statement, false otherwise.
  */
 static bool
-isSetTablespaceStatement(AlterDatabaseStmt *stmt)
+IsSetTablespaceStatement(AlterDatabaseStmt *stmt)
 {
 	DefElem *def = NULL;
 	foreach_ptr(def, stmt->options)
@@ -245,7 +245,7 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	if (isSetTablespaceStatement(stmt))
+	if (IsSetTablespaceStatement(stmt))
 	{
 		/*
 		 * Set tablespace does not work inside a transaction.Therefore, we need to use

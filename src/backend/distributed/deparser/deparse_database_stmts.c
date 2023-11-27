@@ -38,7 +38,7 @@ static void AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool *
 static void AppendGrantDatabases(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname);
 
-const DefElemOptionFormat create_database_option_formats[] = {
+const DefElemOptionFormat createDatabaseOptionFormats[] = {
 	{ "owner", " OWNER %s", OPTION_FORMAT_STRING },
 	{ "template", " TEMPLATE %s", OPTION_FORMAT_STRING },
 	{ "encoding", " ENCODING %s", OPTION_FORMAT_LITERAL_CSTR },
@@ -53,8 +53,7 @@ const DefElemOptionFormat create_database_option_formats[] = {
 	{ "tablespace", " TABLESPACE %s", OPTION_FORMAT_STRING },
 	{ "allow_connections", " ALLOW_CONNECTIONS %s", OPTION_FORMAT_BOOLEAN },
 	{ "connection_limit", " CONNECTION LIMIT %d", OPTION_FORMAT_INTEGER },
-	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN },
-	{ "oid", " OID %d", OPTION_FORMAT_OBJECT_ID }
+	{ "is_template", " IS_TEMPLATE %s", OPTION_FORMAT_BOOLEAN }
 };
 
 
@@ -333,8 +332,8 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 	DefElem *option = NULL;
 	foreach_ptr(option, stmt->options)
 	{
-		DefElemOptionToStatement(buf, option, create_database_option_formats,
-								 lengthof(create_database_option_formats));
+		DefElemOptionToStatement(buf, option, createDatabaseOptionFormats,
+								 lengthof(createDatabaseOptionFormats));
 	}
 }
 
