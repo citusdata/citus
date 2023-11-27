@@ -99,5 +99,3 @@ SELECT result FROM run_command_on_all_nodes(
   drop tablespace "ts-needs\!escape"
   $$
 );
-
-
