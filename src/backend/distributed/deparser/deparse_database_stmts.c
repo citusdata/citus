@@ -14,12 +14,12 @@
 #include "pg_version_compat.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
+#include "commands/defrem.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
 
-#include "commands/defrem.h"
 #include "distributed/commands.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
@@ -91,34 +91,6 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 }
 
 
-char *
-DeparseGrantOnDatabaseStmt(Node *node)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_DATABASE);
-
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendGrantOnDatabaseStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-static void
-AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
-{
-	Assert(stmt->objtype == OBJECT_DATABASE);
-
-	AppendGrantSharedPrefix(buf, stmt);
-
-	AppendGrantDatabases(buf, stmt);
-
-	AppendGrantSharedSuffix(buf, stmt);
-}
-
-
 static void
 AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 {
@@ -137,17 +109,16 @@ AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
 }
 
 
-char *
-DeparseAlterDatabaseStmt(Node *node)
+static void
+AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 {
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
+	AppendGrantSharedPrefix(buf, stmt);
 
-	AppendAlterDatabaseStmt(&str, stmt);
+	AppendGrantDatabases(buf, stmt);
 
-	return str.data;
+	AppendGrantSharedSuffix(buf, stmt);
 }
 
 
@@ -218,6 +189,35 @@ AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool *
 }
 
 
+char *
+DeparseGrantOnDatabaseStmt(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_DATABASE);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendGrantOnDatabaseStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterDatabaseStmt(Node *node)
+{
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterDatabaseStmt(&str, stmt);
+
+	return str.data;
+}
+
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
@@ -237,21 +237,17 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 
 #endif
 
-/*
- * Deparses an ALTER DATABASE RENAME statement.
- *
- * This function takes a Node pointer representing an ALTER DATABASE RENAME
- * statement, and returns a string that is the SQL representation of that
- * statement.
- *
- * Parameters:
- *   node: A pointer to a Node representing an ALTER DATABASE RENAME statement.
- *
- * Returns:
- *   A string representing the SQL command to rename a database. The string is
- *   in the format "ALTER DATABASE <oldname> RENAME TO <newname>", where
- *   <oldname> and <newname> are the old and new database names, respectively.
- */
+static void
+AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER DATABASE %s", quote_identifier(stmt->dbname));
+
+	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
+
+	AppendVariableSet(buf, varSetStmt);
+}
+
+
 char *
 DeparseAlterDatabaseRenameStmt(Node *node)
 {
@@ -283,32 +279,14 @@ DeparseAlterDatabaseSetStmt(Node *node)
 
 
 static void
-AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
-{
-	appendStringInfo(buf, "ALTER DATABASE %s", quote_identifier(stmt->dbname));
-
-	VariableSetStmt *varSetStmt = castNode(VariableSetStmt, stmt->setstmt);
-
-	AppendVariableSet(buf, varSetStmt);
-}
-
-
-char *
-DeparseCreateDatabaseStmt(Node *node)
-{
-	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendCreateDatabaseStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-static void
 AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 {
+	/*
+	 * Make sure that we don't try to deparse something that this
+	 * function doesn't expect.
+	 */
+	EnsureSupportedCreateDatabaseCommand(stmt);
+
 	appendStringInfo(buf,
 					 "CREATE DATABASE %s",
 					 quote_identifier(stmt->dbname));
@@ -323,13 +301,13 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 
 
 char *
-DeparseDropDatabaseStmt(Node *node)
+DeparseCreateDatabaseStmt(Node *node)
 {
-	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	AppendDropDatabaseStmt(&str, stmt);
+	AppendCreateDatabaseStmt(&str, stmt);
 
 	return str.data;
 }
@@ -368,4 +346,17 @@ AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt)
 
 		appendStringInfo(buf, " )");
 	}
+}
+
+
+char *
+DeparseDropDatabaseStmt(Node *node)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendDropDatabaseStmt(&str, stmt);
+
+	return str.data;
 }
