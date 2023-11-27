@@ -192,17 +192,8 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 
 
 /*
- * Checks if the provided ALTER DATABASE statement is a SET TABLESPACE statement.
- *
- * This function takes a Node pointer representing a AlterDatabaseStmt, and checks
- * if it is a SET TABLESPACE statement, which is used to move a table to a new
- * tablespace.
- *
- * Parameters:
- *   stmt: A pointer to a Node representing AlterDatabaseStmt.
- *
- * Returns:
- *   true if the statement is a SET TABLESPACE statement, false otherwise.
+ * IsSetTablespaceStatement returns true if given AlterDatabaseStmt contains
+ * a DefElem to alter tablespace of the target database.
  */
 static bool
 isSetTablespaceStatement(AlterDatabaseStmt *stmt)
