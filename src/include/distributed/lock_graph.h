@@ -14,11 +14,13 @@
 
 
 #include "postgres.h"
+
 #include "libpq-fe.h"
 
 #include "datatype/timestamp.h"
-#include "distributed/backend_data.h"
 #include "storage/lock.h"
+
+#include "distributed/backend_data.h"
 
 
 /*

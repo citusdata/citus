@@ -12,16 +12,16 @@
 
 #include "access/transam.h"
 #include "access/xact.h"
+#include "mb/pg_wchar.h"
+#include "postmaster/postmaster.h"
+#include "utils/builtins.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_manager.h"
-
-#include "postmaster/postmaster.h"
-#include "mb/pg_wchar.h"
-#include "utils/builtins.h"
 
 /* stores the string representation of our node connection GUC */
 #ifdef USE_SSL

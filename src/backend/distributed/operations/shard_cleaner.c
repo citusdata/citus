@@ -10,27 +10,29 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
 #include "commands/sequence.h"
-#include "postmaster/postmaster.h"
 #include "nodes/makefuncs.h"
+#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 
 #include "distributed/citus_safe_lib.h"
-#include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/shard_rebalancer.h"
+#include "distributed/pg_dist_cleanup.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/worker_transaction.h"
-#include "distributed/pg_dist_cleanup.h"
 
 #define REPLICATION_SLOT_CATALOG_TABLE_NAME "pg_replication_slots"
 #define STR_ERRCODE_OBJECT_IN_USE "55006"

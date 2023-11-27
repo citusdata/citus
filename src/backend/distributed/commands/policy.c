@@ -10,15 +10,10 @@
  */
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "catalog/namespace.h"
 #include "commands/policy.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_relation.h"
@@ -26,6 +21,13 @@
 #include "rewrite/rowsecurity.h"
 #include "utils/builtins.h"
 #include "utils/ruleutils.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
 
 
 static const char * unparse_policy_command(const char aclchar);

@@ -13,10 +13,11 @@
 #define METADATA_SYNC_H
 
 
+#include "nodes/pg_list.h"
+
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "nodes/pg_list.h"
 
 /* managed via guc.c */
 typedef enum

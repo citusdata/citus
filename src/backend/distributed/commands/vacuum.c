@@ -10,10 +10,16 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
+#include "access/xact.h"
 #include "commands/defrem.h"
 #include "commands/vacuum.h"
+#include "postmaster/bgworker_internals.h"
+#include "storage/lmgr.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -24,11 +30,6 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "postmaster/bgworker_internals.h"
-#include "access/xact.h"
 
 
 #define VACUUM_PARALLEL_NOTSET -2

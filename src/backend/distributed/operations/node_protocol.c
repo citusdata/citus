@@ -11,16 +11,14 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
+#include <string.h>
 
-#include "pg_version_constants.h"
+#include "postgres.h"
 
 #include "c.h"
 #include "fmgr.h"
 #include "funcapi.h"
 #include "miscadmin.h"
-
-#include <string.h>
 
 #include "access/attnum.h"
 #include "access/genam.h"
@@ -37,20 +35,9 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_index.h"
-#include "catalog/pg_type.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_type.h"
 #include "commands/sequence.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands.h"
-#include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/namespace_utils.h"
-#include "distributed/pg_dist_shard.h"
-#include "distributed/shared_library_init.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
@@ -64,6 +51,20 @@
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/varlena.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/shared_library_init.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
 
 /* Shard related configuration */
 int ShardCount = 32;

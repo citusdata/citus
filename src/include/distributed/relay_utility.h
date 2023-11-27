@@ -16,6 +16,7 @@
 #define RELAY_UTILITY_H
 
 #include "fmgr.h"
+
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 

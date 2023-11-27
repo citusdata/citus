@@ -34,9 +34,16 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_rewrite_d.h"
+#include "commands/defrem.h"
+#include "executor/spi.h"
+#include "nodes/pg_list.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
 #include "columnar/columnar.h"
 #include "columnar/columnar_tableam.h"
-#include "commands/defrem.h"
+
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -57,16 +64,11 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/replication_origin_session_utils.h"
-#include "distributed/shared_library_init.h"
 #include "distributed/shard_utils.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "executor/spi.h"
-#include "nodes/pg_list.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
 
 
 /* Table Conversion Types */

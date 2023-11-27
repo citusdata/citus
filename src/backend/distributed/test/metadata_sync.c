@@ -10,10 +10,17 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
 #include "c.h"
 #include "fmgr.h"
+#include "miscadmin.h"
 
 #include "catalog/pg_type.h"
+#include "postmaster/postmaster.h"
+#include "storage/latch.h"
+#include "utils/array.h"
+#include "utils/builtins.h"
+
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
@@ -22,11 +29,6 @@
 #include "distributed/remote_commands.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_manager.h"
-#include "postmaster/postmaster.h"
-#include "miscadmin.h"
-#include "storage/latch.h"
-#include "utils/array.h"
-#include "utils/builtins.h"
 
 
 /* declarations for dynamic loading */

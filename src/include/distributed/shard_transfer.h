@@ -9,8 +9,9 @@
 
 #include "postgres.h"
 
-#include "distributed/shard_rebalancer.h"
 #include "nodes/pg_list.h"
+
+#include "distributed/shard_rebalancer.h"
 
 extern Datum citus_move_shard_placement(PG_FUNCTION_ARGS);
 extern Datum citus_move_shard_placement_with_nodeid(PG_FUNCTION_ARGS);

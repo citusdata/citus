@@ -11,31 +11,31 @@
  *-------------------------------------------------------------------------
  */
 
+#include <limits.h>
+
 #include "postgres.h"
+
+#include "access/heapam.h"
+#include "access/htup_details.h"
+#include "access/nbtree.h"
+#include "catalog/pg_am.h"
+#include "lib/stringinfo.h"
+#include "nodes/nodeFuncs.h"
+#include "optimizer/optimizer.h"
+#include "utils/builtins.h"
+#include "utils/datum.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
 
 #include "pg_version_constants.h"
 
-#include <limits.h>
-
-#include "access/nbtree.h"
-#include "access/heapam.h"
-#include "access/htup_details.h"
-#include "catalog/pg_am.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
-#include "lib/stringinfo.h"
-#include "optimizer/optimizer.h"
-#include "utils/builtins.h"
-#include "nodes/nodeFuncs.h"
-#include "utils/builtins.h"
-#include "utils/datum.h"
-#include "utils/lsyscache.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
 
 
 /* Config variables managed via guc.c */

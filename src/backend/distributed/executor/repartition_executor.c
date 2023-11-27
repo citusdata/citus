@@ -10,6 +10,7 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "nodes/makefuncs.h"

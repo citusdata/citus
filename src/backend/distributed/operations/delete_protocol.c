@@ -13,9 +13,9 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
+#include <stddef.h>
 
-#include "pg_version_constants.h"
+#include "postgres.h"
 
 #include "c.h"
 #include "fmgr.h"
@@ -23,17 +23,37 @@
 #include "miscadmin.h"
 #include "port.h"
 
-#include <stddef.h>
-
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
+#include "lib/stringinfo.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pathnodes.h"
+#include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
+#include "optimizer/clauses.h"
+#include "optimizer/optimizer.h"
+#include "optimizer/restrictinfo.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "tcop/tcopprot.h"
+#include "utils/array.h"
+#include "utils/builtins.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
+#include "utils/lsyscache.h"
+#include "utils/varlena.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_planner.h"
@@ -47,25 +67,6 @@
 #include "distributed/shard_cleaner.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "lib/stringinfo.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/nodes.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
-#include "nodes/primnodes.h"
-#include "optimizer/clauses.h"
-#include "nodes/pathnodes.h"
-#include "optimizer/optimizer.h"
-#include "optimizer/restrictinfo.h"
-#include "storage/lock.h"
-#include "storage/lmgr.h"
-#include "tcop/tcopprot.h"
-#include "utils/array.h"
-#include "utils/builtins.h"
-#include "utils/elog.h"
-#include "utils/errcodes.h"
-#include "utils/lsyscache.h"
-#include "utils/varlena.h"
 
 
 /* Local functions forward declarations */

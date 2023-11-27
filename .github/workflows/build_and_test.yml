@@ -31,7 +31,7 @@ jobs:
       pgupgrade_image_name: "citus/pgupgradetester"
       style_checker_image_name: "citus/stylechecker"
       style_checker_tools_version: "0.8.18"
-      image_suffix: "-vbd8441d"
+      image_suffix: "-v19b671f"
       pg14_version: '{ "major": "14", "full": "14.10" }'
       pg15_version: '{ "major": "15", "full": "15.5" }'
       pg16_version: '{ "major": "16", "full": "16.1" }'
@@ -76,6 +76,8 @@ jobs:
       run: ci/editorconfig.sh && git diff --exit-code
     - name: Remove useless declarations
       run: ci/remove_useless_declarations.sh && git diff --cached --exit-code
+    - name: Sort and group includes
+      run: ci/sort_and_group_includes.sh && git diff --exit-code
     - name: Normalize test output
       run: ci/normalize_expected.sh && git diff --exit-code
     - name: Check for C-style comments in migration files

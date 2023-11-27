@@ -9,6 +9,12 @@
  */
 
 #include "postgres.h"
+
+#include "nodes/nodeFuncs.h"
+#include "nodes/pg_list.h"
+#include "optimizer/optimizer.h"
+#include "optimizer/restrictinfo.h"
+
 #include "pg_version_constants.h"
 
 #include "distributed/extended_op_node_utils.h"
@@ -16,10 +22,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
-#include "optimizer/optimizer.h"
-#include "optimizer/restrictinfo.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/pg_list.h"
 
 
 static bool GroupedByPartitionColumn(MultiNode *node, MultiExtendedOp *opNode);

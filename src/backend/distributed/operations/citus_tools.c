@@ -12,8 +12,15 @@
 
 #include "postgres.h"
 
+#include "funcapi.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
+
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
+#include "lib/stringinfo.h"
+#include "utils/builtins.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
@@ -23,11 +30,6 @@
 #include "distributed/utils/function.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "funcapi.h"
-#include "lib/stringinfo.h"
-#include "libpq-fe.h"
-#include "miscadmin.h"
-#include "utils/builtins.h"
 
 
 PG_FUNCTION_INFO_V1(master_run_on_worker);

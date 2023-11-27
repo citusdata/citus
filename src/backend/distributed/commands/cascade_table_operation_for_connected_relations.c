@@ -12,12 +12,19 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
+#include "miscadmin.h"
 
 #include "access/xact.h"
 #include "catalog/pg_constraint.h"
-#include "distributed/commands/utility_hook.h"
+#include "executor/spi.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -26,11 +33,6 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_protocol.h"
-#include "executor/spi.h"
-#include "miscadmin.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
 
 
 static void EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList);

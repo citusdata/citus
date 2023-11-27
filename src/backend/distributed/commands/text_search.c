@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
+
 #include "access/genam.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
@@ -22,7 +24,6 @@
 #include "commands/comment.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
-#include "fmgr.h"
 #include "nodes/makefuncs.h"
 #include "tsearch/ts_cache.h"
 #include "tsearch/ts_public.h"

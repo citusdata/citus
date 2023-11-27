@@ -16,8 +16,9 @@
 
 #include "catalog/objectaddress.h"
 #include "catalog/pg_depend.h"
-#include "distributed/errormessage.h"
 #include "nodes/pg_list.h"
+
+#include "distributed/errormessage.h"
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 

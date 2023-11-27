@@ -12,16 +12,13 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "commands/dbcommands.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/hash_helpers.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/worker_manager.h"
-#include "libpq/hba.h"
+#include "common/hashfn.h"
 #include "common/ip.h"
+#include "libpq/hba.h"
 #include "libpq/libpq-be.h"
 #include "postmaster/postmaster.h"
 #include "storage/fd.h"
@@ -31,7 +28,12 @@
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
-#include "common/hashfn.h"
+
+#include "distributed/coordinator_protocol.h"
+#include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/worker_manager.h"
 
 
 /* Config variables managed via guc.c */

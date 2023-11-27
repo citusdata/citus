@@ -12,15 +12,13 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include "pg_version_constants.h"
-
-#include "miscadmin.h"
-#include "libpq-fe.h"
-
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "postgres.h"
+
+#include "libpq-fe.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -28,6 +26,16 @@
 #include "access/relscan.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
+#include "lib/stringinfo.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/memutils.h"
+#include "utils/rel.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
@@ -36,15 +44,8 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_recovery.h"
-#include "distributed/worker_manager.h"
 #include "distributed/version_compat.h"
-#include "lib/stringinfo.h"
-#include "storage/lmgr.h"
-#include "storage/lock.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/memutils.h"
-#include "utils/rel.h"
+#include "distributed/worker_manager.h"
 
 
 /* exports for SQL callable functions */

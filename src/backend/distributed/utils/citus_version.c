@@ -11,8 +11,9 @@
 
 #include "postgres.h"
 
-#include "citus_version.h"
 #include "utils/builtins.h"
+
+#include "citus_version.h"
 
 
 /* exports for SQL callable functions */

@@ -9,19 +9,20 @@
  */
 #include "postgres.h"
 
+#include "optimizer/clauses.h"
+#include "optimizer/optimizer.h"
+
 #include "pg_version_constants.h"
 
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/local_plan_cache.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/version_compat.h"
-#include "optimizer/optimizer.h"
-#include "optimizer/clauses.h"
 
 
 static Query * GetLocalShardQueryForCache(Query *jobQuery, Task *task,

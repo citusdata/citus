@@ -11,12 +11,13 @@
 #ifndef CITUS_ATTRIBUTE_H
 #define CITUS_ATTRIBUTE_H
 
-#include "distributed/hash_helpers.h"
 #include "executor/execdesc.h"
 #include "executor/executor.h"
 #include "storage/lwlock.h"
 #include "utils/datetime.h"
 #include "utils/hsearch.h"
+
+#include "distributed/hash_helpers.h"
 
 #define MAX_TENANT_ATTRIBUTE_LENGTH 100
 

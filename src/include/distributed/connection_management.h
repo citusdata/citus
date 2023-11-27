@@ -13,15 +13,17 @@
 
 #include "postgres.h"
 
-#include "distributed/transaction_management.h"
-#include "distributed/remote_transaction.h"
-#include "lib/ilist.h"
 #include "pg_config.h"
+
+#include "lib/ilist.h"
 #include "portability/instr_time.h"
 #include "storage/latch.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
+
+#include "distributed/remote_transaction.h"
+#include "distributed/transaction_management.h"
 
 /* maximum (textual) lengths of hostname and port */
 #define MAX_NODE_LENGTH 255 /* includes 0 byte */

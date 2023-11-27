@@ -13,6 +13,7 @@
 #define CITUS_ENTERPRISE_H
 
 #include "postgres.h"
+
 #include "fmgr.h"
 
 

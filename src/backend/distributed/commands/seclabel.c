@@ -16,8 +16,8 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/log_utils.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 
 
 /*

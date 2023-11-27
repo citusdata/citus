@@ -1,21 +1,17 @@
 
-#include "citus_version.h"
-
-#include "postgres.h"
-#include "columnar/columnar.h"
-
-
 #include <math.h>
 
+#include "postgres.h"
+
 #include "miscadmin.h"
+#include "pgstat.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "access/heaptoast.h"
 #include "access/multixact.h"
 #include "access/rewriteheap.h"
 #include "access/tsmapi.h"
-#include "access/heaptoast.h"
-#include "common/hashfn.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
@@ -26,14 +22,12 @@
 #include "catalog/storage_xlog.h"
 #include "commands/progress.h"
 #include "commands/vacuum.h"
+#include "common/hashfn.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/plancat.h"
-#include "pg_version_compat.h"
-#include "pgstat.h"
 #include "storage/bufmgr.h"
 #include "storage/bufpage.h"
-#include "storage/bufmgr.h"
 #include "storage/lmgr.h"
 #include "storage/predicate.h"
 #include "storage/procarray.h"
@@ -44,6 +38,10 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
+#include "citus_version.h"
+#include "pg_version_compat.h"
+
+#include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"

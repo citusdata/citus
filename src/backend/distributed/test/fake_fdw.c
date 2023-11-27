@@ -10,26 +10,26 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
+#include <stddef.h>
 
-#include "pg_version_constants.h"
+#include "postgres.h"
 
 #include "c.h"
 #include "fmgr.h"
-
-#include <stddef.h>
 
 #include "executor/tuptable.h"
 #include "foreign/fdwapi.h"
 #include "nodes/execnodes.h"
 #include "nodes/nodes.h"
+#include "nodes/pathnodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
-#include "nodes/pathnodes.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/palloc.h"
+
+#include "pg_version_constants.h"
 
 /* local function forward declarations */
 static void FakeGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
