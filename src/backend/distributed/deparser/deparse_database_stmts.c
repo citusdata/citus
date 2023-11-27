@@ -13,7 +13,6 @@
 
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
-#include "commands/defrem.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_type.h"
