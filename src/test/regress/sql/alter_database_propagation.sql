@@ -76,6 +76,16 @@ alter database regression2 set TABLESPACE alter_db_tablespace;
 set citus.enable_create_database_propagation=on;
 alter database regression2 rename to regression3;
 
+-- check that the local database rename and alter comnmand is not propagated
+set citus.enable_create_database_propagation=off;
+CREATE database local_regression;
+
+alter DATABASE local_regression with CONNECTION LIMIT 100;
+alter DATABASE local_regression rename to local_regression2;
+drop database local_regression2;
+
+set citus.enable_create_database_propagation=on;
+
 drop database regression3;
 
 create database regression4;

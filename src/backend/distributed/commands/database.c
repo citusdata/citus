@@ -231,14 +231,17 @@ List *
 PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 							ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = false;
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
 
 	EnsureCoordinator();
-
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -305,14 +308,17 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 List *
 PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString)
 {
-	if (!ShouldPropagate())
+	bool missingOk = false;
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->newname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
 
 	EnsureCoordinator();
-
-	RenameStmt *stmt = castNode(RenameStmt, node);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 

@@ -178,6 +178,16 @@ NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- check that the local database rename and alter comnmand is not propagated
+set citus.enable_create_database_propagation=off;
+CREATE database local_regression;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+alter DATABASE local_regression with CONNECTION LIMIT 100;
+alter DATABASE local_regression rename to local_regression2;
+drop database local_regression2;
+set citus.enable_create_database_propagation=on;
 drop database regression3;
 create database regression4;
 SELECT result FROM run_command_on_all_nodes(
