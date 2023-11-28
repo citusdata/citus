@@ -5,6 +5,14 @@ CREATE ROLE distributed_target_role1;
 
 set citus.enable_create_role_propagation to off;
 create ROLE local_target_role1;
+alter role local_target_role1 SET work_mem = '64MB';
+
+\c - - - :worker_1_port
+
+CREATE ROLE local_target_role1;
+
+\c - - - :master_port
+
 create role local_source_role1;
 reset citus.enable_create_role_propagation;
 
@@ -39,7 +47,6 @@ SELECT result from run_command_on_all_nodes(
 --tests for reassing owned by with multiple distributed roles and a local role to a distributed role
 --local role should be ignored
 set citus.log_remote_commands to on;
-set citus.grep_remote_commands = '%REASSIGN OWNED BY%';
 REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1  TO distributed_target_role1;
 reset citus.grep_remote_commands;
 reset citus.log_remote_commands;
@@ -75,11 +82,21 @@ select create_distributed_table('test_table3', 'col1');
 select create_distributed_table('test_table4', 'col2');
 
 set citus.log_remote_commands to on;
-set citus.grep_remote_commands = '%REASSIGN OWNED BY%';
 set citus.enable_create_role_propagation to off;
+set citus.enable_alter_role_propagation to off;
+set citus.enable_alter_role_set_propagation to off;
 REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1 TO local_target_role1;
+
+show citus.enable_create_role_propagation;
+show citus.enable_alter_role_propagation;
+show citus.enable_alter_role_set_propagation;
+
 reset citus.grep_remote_commands;
 reset citus.log_remote_commands;
+reset citus.enable_create_role_propagation;
+reset citus.enable_alter_role_propagation;
+reset citus.enable_alter_role_set_propagation;
+
 
 --check if the owner changed to local_target_role1
 SET citus.log_remote_commands = false;

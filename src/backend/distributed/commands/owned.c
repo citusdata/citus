@@ -141,6 +141,13 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 	set_config_option("citus.enable_create_role_propagation", "on",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
+	set_config_option("citus.enable_alter_role_propagation", "on",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	set_config_option("citus.enable_alter_role_set_propagation", "on",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 
 	EnsureObjectAndDependenciesExistOnAllNodes(newRoleAddress);
 
