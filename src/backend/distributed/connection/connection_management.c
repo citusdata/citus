@@ -360,9 +360,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
-            if ((flags & REQUIRE_MAINTENANCE_CONNECTION) &&
-                IsMaintenanceDaemon &&
-                !IsMaintenanceManagementDatabase(MyDatabaseId))
+            if (flags & REQUIRE_MAINTENANCE_CONNECTION)
             {
                 // Maintenance database may have changed, so cached connection should be closed
                 connection->forceCloseAtTransactionEnd = true;
@@ -446,10 +444,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
     else if (flags & REQUIRE_MAINTENANCE_CONNECTION)
     {
         connection->useForMaintenanceOperations = true;
-        if (IsMaintenanceDaemon && !IsMaintenanceManagementDatabase(MyDatabaseId))
-        {
-            connection->forceCloseAtTransactionEnd = true;
-        }
+        connection->forceCloseAtTransactionEnd = true;
     }
 
 	/* fully initialized the connection, record it */

@@ -2705,17 +2705,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-    DefineCustomStringVariable(
-            "citus.maintenance_management_database",
-            gettext_noop("Database for cluster-wide maintenance operations across all databases"),
-            gettext_noop("It should be enabled when there are more than "
-                         "one database with Citus in a cluster."),
-            &MaintenanceManagementDatabase,
-            "",
-            PGC_SIGHUP,
-            GUC_STANDARD,
-            NULL, NULL, NULL);
-
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 

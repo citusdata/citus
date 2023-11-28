@@ -1,9 +1,5 @@
 -- This test verfies a behavioir of maintenance daemon in multi-database environment
--- It checks two things:
--- 1. Maintenance daemons should not cache connections, except the one for the citus.maintenance_management_database
--- 2. 2PC transaction recovery should respect the citus.shared_pool_size_maintenance_quota
--- 2. Distributed deadlock detection should run only on citus.maintenance_management_database.
---
+-- It checks that distributed deadlock detection and 2PC transaction recovery should respect the citus.shared_pool_size_maintenance_quota.
 -- To do that, it created 100 databases and syntactically generates distributed transactions in various states there.
 
 SELECT $definition$
@@ -16,7 +12,6 @@ SELECT $definition$
 SELECT $deinition$
 ALTER SYSTEM SET citus.recover_2pc_interval TO '5s';
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
-ALTER SYSTEM SET citus.maintenance_management_database = 'regression';
 SELECT pg_reload_conf();
 $deinition$ AS turn_on_maintenance
 \gset
@@ -245,7 +240,7 @@ FROM pg_database,
             $statement$) AS t(groupid integer, gid text)
 WHERE datname LIKE 'db%';
 
-SELECT count(*) BETWEEN 1 AND 3 AS cached_connections_after_recovery_coordinator_test
+SELECT count(*) = 0 AS cached_connections_after_recovery_coordinator_test
 FROM pg_stat_activity
 WHERE state = 'idle'
   AND now() - backend_start > '5 seconds'::interval;
@@ -257,7 +252,7 @@ FROM pg_prepared_xacts
 WHERE gid LIKE 'citus_0_1234_4_0_%'
    OR gid LIKE 'citus_0_should_be_forgotten_%';
 
-SELECT count(*) BETWEEN 1 AND 3 AS cached_connections_after_recovery_worker_1_test
+SELECT count(*) = 0 AS cached_connections_after_recovery_worker_1_test
 FROM pg_stat_activity
 WHERE state = 'idle'
   AND now() - backend_start > '5 seconds'::interval;
@@ -269,7 +264,7 @@ FROM pg_prepared_xacts
 WHERE gid LIKE 'citus_0_1234_4_0_%'
    OR gid LIKE 'citus_0_should_be_forgotten_%';
 
-SELECT count(*) BETWEEN 1 AND 3 AS cached_connections_after_recovery_worker_2_test
+SELECT count(*) = 0 AS cached_connections_after_recovery_worker_2_test
 FROM pg_stat_activity
 WHERE state = 'idle'
   AND now() - backend_start > '5 seconds'::interval;
@@ -282,7 +277,6 @@ WHERE state = 'idle'
 SELECT $definition$
        ALTER SYSTEM RESET citus.recover_2pc_interval;
        ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
-       ALTER SYSTEM RESET citus.maintenance_management_database;
        SELECT pg_reload_conf();
 
        DO
@@ -421,3 +415,7 @@ SELECT $definition$
 \c - - - :worker_2_port
 
 :cleanup
+
+\c - - - :master_port
+
+DROP EXTENSION IF EXISTS dblink;

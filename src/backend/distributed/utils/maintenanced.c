@@ -718,27 +718,24 @@ CitusMaintenanceDaemonMain(Datum main_arg)
             InvalidateMetadataSystemCache();
             StartTransactionCommand();
 
-
-            if ((strcmp(GetMaintenanceManagementDatabase(), "") == 0 || IsMaintenanceManagementDatabase(databaseOid)))
+            /*
+             * We skip the deadlock detection if citus extension
+             * is not accessible.
+             *
+             * Similarly, we skip to run the deadlock checks if
+             * there exists any version mismatch or the extension
+             * is not fully created yet.
+             */
+            if (!LockCitusExtension())
             {
-                /*
-                 * We skip the deadlock detection if citus extension
-                 * is not accessible.
-                 *
-                 * Similarly, we skip to run the deadlock checks if
-                 * there exists any version mismatch or the extension
-                 * is not fully created yet.
-                 */
-                if (!LockCitusExtension())
-                {
-                    ereport(DEBUG1, (errmsg("could not lock the citus extension, "
-                                            "skipping deadlock detection")));
-                }
-                else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
-                {
-                    foundDeadlock = CheckForDistributedDeadlocks();
-                }
+                ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+                                        "skipping deadlock detection")));
             }
+            else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+            {
+                foundDeadlock = CheckForDistributedDeadlocks();
+            }
+
 
 			CommitTransactionCommand();
 
@@ -1235,37 +1232,5 @@ MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData)
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 
 	return metadataSyncTriggered;
-}
-
-char
-*GetMaintenanceManagementDatabase(void)
-{
-    char *result = MaintenanceManagementDatabase;
-    /* If MaintenanceManagementDatabase is not set, all maintenance daemons are considered independent */
-    if (strcmp(MaintenanceManagementDatabase, "") != 0)
-    {
-        Oid maintenanceDatabaseOid = get_database_oid(MaintenanceManagementDatabase, true);
-        if (!maintenanceDatabaseOid)
-        {
-            ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("Database \"%s\" doesn't exists, please check the citus.maintenance_management_database parameter. "
-                           "Applying a default value instead.",
-                           MaintenanceManagementDatabase)));
-            result = "";
-        }
-    }
-    return result;
-}
-
-bool
-IsMaintenanceManagementDatabase(Oid databaseOid)
-{
-    if (strcmp(GetMaintenanceManagementDatabase(), "") == 0)
-    {
-        /* If MaintenanceManagementDatabase is not set, all maintenance daemons are considered independent */
-        return false;
-    }
-    Oid maintenanceDatabaseOid = get_database_oid(MaintenanceManagementDatabase, true);
-    return maintenanceDatabaseOid == databaseOid;
 }
 
