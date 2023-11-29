@@ -105,11 +105,11 @@ typedef struct SharedWorkerNodeDatabaseConnStatsHashEntry
 int MaxSharedPoolSize = 0;
 
 /*
- * Controlled via a GUC, never access directly, use GetSharedPoolSizeMaintenanceQuota().
- * Percent of MaxSharedPoolSize reserved for maintenance operations.
- * "0" effectively means that regular and maintenance connection will compete over the common pool
+ * Controlled via a GUC, never access directly, use GetMaxMaintenanceSharedPoolSize().
+ * Pool size for maintenance connections exclusively
+ * "0" or "-1" means do not apply connection throttling
  */
-double SharedPoolSizeMaintenanceQuota = 0.1;
+int MaxMaintenanceSharedPoolSize = 5;
 
 /*
  * Controlled via a GUC, never access directly, use GetLocalSharedPoolSize().
@@ -142,7 +142,7 @@ static uint32 SharedConnectionHashHash(const void *key, Size keysize);
 static int SharedConnectionHashCompare(const void *a, const void *b, Size keysize);
 static uint32 SharedWorkerNodeDatabaseHashHash(const void *key, Size keysize);
 static int SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size keysize);
-static bool isConnectionThrottlingDisabled();
+static bool isConnectionThrottlingDisabled(uint32 externalFlags);
 static bool
 IncrementSharedConnectionCounterInternal(uint32 externalFlags, bool checkLimits, const char *hostname, int port,
                                          Oid database);
@@ -257,10 +257,10 @@ GetMaxSharedPoolSize(void)
 	return MaxSharedPoolSize;
 }
 
-double
-GetSharedPoolSizeMaintenanceQuota(void)
+int
+GetMaxMaintenanceSharedPoolSize(void)
 {
-    return SharedPoolSizeMaintenanceQuota;
+    return MaxMaintenanceSharedPoolSize;
 }
 
 
@@ -315,7 +315,7 @@ WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port)
 bool
 TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port)
 {
-    if (isConnectionThrottlingDisabled())
+    if (isConnectionThrottlingDisabled(flags))
     {
         return true;
     }
@@ -347,7 +347,7 @@ TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int po
 void
 IncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port)
 {
-    if (isConnectionThrottlingDisabled())
+    if (isConnectionThrottlingDisabled(flags))
     {
         return;
     }
@@ -430,29 +430,22 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
     {
         WorkerNode *workerNode = FindWorkerNode(hostname, port);
         bool connectionToLocalNode = workerNode && (workerNode->groupId == GetLocalGroupId());
-        int currentConnectionsLimit = connectionToLocalNode
-                                      ? GetLocalSharedPoolSize()
-                                      : GetMaxSharedPoolSize();
+
+        int currentConnectionsLimit;
         int currentConnectionsCount;
-
-        if (GetSharedPoolSizeMaintenanceQuota() > 0)
+        if (maintenanceConnection)
         {
-            int maintenanceQuota = (int) ceil((double) currentConnectionsLimit * GetSharedPoolSizeMaintenanceQuota());
-            /* Connections limit should never go below 1 */
-            currentConnectionsLimit = Max(maintenanceConnection
-                                          ? maintenanceQuota
-                                          : currentConnectionsLimit - maintenanceQuota, 1);
-            currentConnectionsCount = maintenanceConnection
-                                      ? workerNodeConnectionEntry->maintenanceConnectionsCount
-                                      : workerNodeConnectionEntry->regularConnectionsCount;
-
+            currentConnectionsLimit = GetMaxMaintenanceSharedPoolSize();
+            currentConnectionsCount = workerNodeConnectionEntry->maintenanceConnectionsCount;
         }
         else
         {
-            /* When maintenance quota disabled, all connections treated equally*/
-            currentConnectionsCount = (workerNodeConnectionEntry->maintenanceConnectionsCount +
-                                       workerNodeConnectionEntry->regularConnectionsCount);
+            currentConnectionsLimit = connectionToLocalNode
+                                      ? GetLocalSharedPoolSize()
+                                      : GetMaxSharedPoolSize();
+            currentConnectionsCount = workerNodeConnectionEntry->regularConnectionsCount;
         }
+
         bool remoteNodeLimitExceeded = currentConnectionsCount + 1 > currentConnectionsLimit;
 
         /*
@@ -519,7 +512,8 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
 void
 DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname, int port)
 {
-    if (isConnectionThrottlingDisabled())
+    // TODO: possible bug, remove this check?
+    if (isConnectionThrottlingDisabled(externalFlags))
     {
         return;
     }
@@ -964,11 +958,14 @@ SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size keysize)
            ca->database != cb->database;
 }
 
-static bool isConnectionThrottlingDisabled()
+static bool isConnectionThrottlingDisabled(uint32 externalFlags)
 {
+    bool maintenanceConnection = externalFlags & MAINTENANCE_CONNECTION;
     /*
    * Do not call Get*PoolSize() functions here, since it may read from
    * the catalog and we may be in the process exit handler.
    */
-    return MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING;
+    return maintenanceConnection
+           ? MaxMaintenanceSharedPoolSize <= 0
+           : MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING;
 }

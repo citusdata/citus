@@ -1993,18 +1993,17 @@ RegisterCitusConfigVariables(void)
 		GUC_SUPERUSER_ONLY,
 		NULL, NULL, MaxSharedPoolSizeGucShowHook);
 
-    DefineCustomRealVariable(
-            "citus.shared_pool_size_maintenance_quota",
-            gettext_noop("Sets the fraction of citus.max_shared_pool_size reserved "
-                         "for maintenance operations only. "
-                         "Setting it to 0 disables the quota. "
-                         "This way the maintenance and regular connections will share the same pool"),
+    DefineCustomIntVariable(
+            "citus.max_maintenance_shared_pool_size",
+            gettext_noop("Similar to citus.max_shared_pool_size, but applies to connections "
+                         "for maintenance operations only."
+                         "Setting it to 0 or -1 disables maintenance connection throttling."),
             NULL,
-            &SharedPoolSizeMaintenanceQuota,
-            0.1, 0, 1,
+            &MaxMaintenanceSharedPoolSize,
+            5, -1, INT_MAX,
             PGC_SIGHUP,
             GUC_SUPERUSER_ONLY,
-            NULL, NULL, MaxSharedPoolSizeGucShowHook);
+            NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.max_worker_nodes_tracked",

@@ -25,7 +25,7 @@ enum SharedPoolCounterMode
 };
 
 extern int MaxSharedPoolSize;
-extern double SharedPoolSizeMaintenanceQuota;
+extern int MaxMaintenanceSharedPoolSize;
 extern int LocalSharedPoolSize;
 extern int MaxClientConnections;
 
@@ -37,7 +37,7 @@ extern size_t SharedConnectionStatsShmemSize(void);
 extern void SharedConnectionStatsShmemInit(void);
 extern int GetMaxClientConnections(void);
 extern int GetMaxSharedPoolSize(void);
-extern double GetSharedPoolSizeMaintenanceQuota(void);
+extern int GetMaxMaintenanceSharedPoolSize(void);
 extern int GetLocalSharedPoolSize(void);
 extern bool TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
 extern void WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port);

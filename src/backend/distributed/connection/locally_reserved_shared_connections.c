@@ -481,6 +481,7 @@ EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnectio
 bool
 IsReservationPossible(void)
 {
+    // TODO add check for maintenance connection
 	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
 	{
 		/* connection throttling disabled */

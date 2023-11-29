@@ -218,8 +218,6 @@ WHERE state = 'idle'
 
 :turn_on_maintenance
 
-
-
 \c - - - :master_port
 
 -- Let maintenance do it's work...
@@ -227,6 +225,10 @@ WHERE state = 'idle'
 SELECT pg_sleep_for('10 seconds'::interval);
 
 -- Verify maintenance result
+
+SELECT count(*) = 0 AS too_many_clients_test
+FROM regexp_split_to_table(pg_read_file('../log/postmaster.log'), E'\n') AS t(log_line)
+WHERE log_line LIKE '%sorry, too many clients already%';
 
 SELECT count(*) = 0 AS pg_dist_transaction_after_recovery_coordinator_test
 FROM pg_database,
@@ -247,6 +249,10 @@ WHERE state = 'idle'
 
 \c - - - :worker_1_port
 
+SELECT count(*) = 0 AS too_many_clients_test
+FROM regexp_split_to_table(pg_read_file('../log/postmaster.log'), E'\n') AS t(log_line)
+WHERE log_line LIKE '%sorry, too many clients already%';
+
 SELECT count(*) = 0 AS pg_prepared_xacts_after_recover_worker_1_test
 FROM pg_prepared_xacts
 WHERE gid LIKE 'citus_0_1234_4_0_%'
@@ -258,6 +264,10 @@ WHERE state = 'idle'
   AND now() - backend_start > '5 seconds'::interval;
 
 \c - - - :worker_2_port
+
+SELECT count(*) = 0 AS too_many_clients_test
+FROM regexp_split_to_table(pg_read_file('../log/postmaster.log'), E'\n') AS t(log_line)
+WHERE log_line LIKE '%sorry, too many clients already%';
 
 SELECT count(*) = 0 AS pg_prepared_xacts_after_recover_worker_2_test
 FROM pg_prepared_xacts
