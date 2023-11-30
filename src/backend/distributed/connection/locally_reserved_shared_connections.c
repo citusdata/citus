@@ -92,9 +92,10 @@ static ReservedConnectionHashEntry * AllocateOrGetReservedConnectionEntry(char *
 																		  userId, Oid
 																		  databaseOid,
 																		  bool *found);
-static void EnsureConnectionPossibilityForNodeList(List *nodeList);
+static void EnsureConnectionPossibilityForNodeList(List *nodeList, uint32 connectionFlags);
 static bool EnsureConnectionPossibilityForNode(WorkerNode *workerNode,
-											   bool waitForConnection);
+                                               bool waitForConnection,
+                                               uint32 connectionFlags);
 static uint32 LocalConnectionReserveHashHash(const void *key, Size keysize);
 static int LocalConnectionReserveHashCompare(const void *a, const void *b, Size keysize);
 
@@ -296,7 +297,7 @@ MarkReservedConnectionUsed(const char *hostName, int nodePort, Oid userId,
  * EnsureConnectionPossibilityForNodeList.
  */
 void
-EnsureConnectionPossibilityForRemotePrimaryNodes(void)
+EnsureConnectionPossibilityForRemotePrimaryNodes(uint32 connectionFlags)
 {
 	/*
 	 * By using NoLock there is a tiny risk of that we miss to reserve a
@@ -305,7 +306,7 @@ EnsureConnectionPossibilityForRemotePrimaryNodes(void)
 	 * going to access would be on the new node.
 	 */
 	List *remoteNodeList = ActivePrimaryRemoteNodeList(NoLock);
-	EnsureConnectionPossibilityForNodeList(remoteNodeList);
+	EnsureConnectionPossibilityForNodeList(remoteNodeList, connectionFlags);
 }
 
 
@@ -315,7 +316,7 @@ EnsureConnectionPossibilityForRemotePrimaryNodes(void)
  * If not, the function returns false.
  */
 bool
-TryConnectionPossibilityForLocalPrimaryNode(void)
+TryConnectionPossibilityForLocalPrimaryNode(uint32 connectionFlags)
 {
 	bool nodeIsInMetadata = false;
 	WorkerNode *localNode =
@@ -331,7 +332,7 @@ TryConnectionPossibilityForLocalPrimaryNode(void)
 	}
 
 	bool waitForConnection = false;
-	return EnsureConnectionPossibilityForNode(localNode, waitForConnection);
+	return EnsureConnectionPossibilityForNode(localNode, waitForConnection, connectionFlags);
 }
 
 
@@ -345,7 +346,7 @@ TryConnectionPossibilityForLocalPrimaryNode(void)
  *    single reservation per backend)
  */
 static void
-EnsureConnectionPossibilityForNodeList(List *nodeList)
+EnsureConnectionPossibilityForNodeList(List *nodeList, uint32 connectionFlags)
 {
 	/*
 	 * We sort the workerList because adaptive connection management
@@ -364,7 +365,7 @@ EnsureConnectionPossibilityForNodeList(List *nodeList)
 	foreach_ptr(workerNode, nodeList)
 	{
 		bool waitForConnection = true;
-		EnsureConnectionPossibilityForNode(workerNode, waitForConnection);
+		EnsureConnectionPossibilityForNode(workerNode, waitForConnection, connectionFlags);
 	}
 }
 
@@ -383,9 +384,9 @@ EnsureConnectionPossibilityForNodeList(List *nodeList)
  *   return false.
  */
 static bool
-EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnection)
+EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnection, uint32 connectionFlags)
 {
-	if (!IsReservationPossible())
+    if (!IsReservationPossible(connectionFlags))
 	{
 		return false;
 	}
@@ -479,10 +480,13 @@ EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnectio
  * session is eligible for shared connection reservation.
  */
 bool
-IsReservationPossible(void)
+IsReservationPossible(uint32 connectionFlags)
 {
-    // TODO add check for maintenance connection
-	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
+    bool connectionThrottlingDisabled =
+            connectionFlags & REQUIRE_MAINTENANCE_CONNECTION
+            ? GetMaxMaintenanceSharedPoolSize() <= 0
+            : GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING;
+    if (connectionThrottlingDisabled)
 	{
 		/* connection throttling disabled */
 		return false;
