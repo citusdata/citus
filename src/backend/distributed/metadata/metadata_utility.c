@@ -1804,7 +1804,9 @@ InsertShardgroupRow(ShardgroupID shardgroupId, uint32 colocationId)
 {
 	if (!IsShardgroupIDValid(shardgroupId))
 	{
-		elog(ERROR, "cannot insert invalid shardgroupid: " SHARDGROUPID_FORMAT, shardgroupId);
+		elog(ERROR,
+			 "cannot insert invalid shardgroupid: " SHARDGROUPID_FORMAT,
+			 shardgroupId);
 	}
 
 	Datum values[Natts_pg_dist_shardgroup];

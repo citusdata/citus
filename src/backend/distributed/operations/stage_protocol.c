@@ -193,7 +193,8 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue, InvalidShardgroupID);
+	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue,
+				   InvalidShardgroupID);
 
 	CreateAppendDistributedShardPlacements(relationId, shardId, candidateNodeList,
 										   ShardReplicationFactor);

@@ -1222,9 +1222,9 @@ ShardgroupListInsertCommand(uint32 colocationId, List *shardIntervals)
 
 
 List *
-ShardgroupListDeleteCommand(List *shardIntervalList)
+ShardgroupListDeleteCommand(List *shardgroupList)
 {
-	if (list_length(shardIntervalList) == 0)
+	if (list_length(shardgroupList) == 0)
 	{
 		return NIL;
 	}
@@ -1234,17 +1234,20 @@ ShardgroupListDeleteCommand(List *shardIntervalList)
 	appendStringInfo(deleteShardgroupsCommand,
 					 "WITH shardgroup_data(shardgroupid) AS (VALUES ");
 
-	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
-	{
-		appendStringInfo(deleteShardgroupsCommand,
-						 "(" SHARDGROUPID_FORMAT "::bigint)",
-						 shardInterval->shardgroupId);
+	ShardgroupID *shardgroupID = NULL;
 
-		if (llast(shardIntervalList) != shardInterval)
+	bool first = true;
+	foreach_ptr(shardgroupID, shardgroupList)
+	{
+		if (!first)
 		{
 			appendStringInfo(deleteShardgroupsCommand, ", ");
 		}
+		first = false;
+
+		appendStringInfo(deleteShardgroupsCommand,
+						 "(" SHARDGROUPID_SQL_FORMAT ")",
+						 *shardgroupID);
 	}
 
 	appendStringInfo(deleteShardgroupsCommand, ") ");
@@ -1255,6 +1258,7 @@ ShardgroupListDeleteCommand(List *shardIntervalList)
 
 	return list_make1(deleteShardgroupsCommand->data);
 }
+
 
 /*
  * ShardListInsertCommand generates a single command that can be
@@ -3437,7 +3441,8 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 								  shardMaxValue);
 	}
 
-	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue, shardgroupID);
+	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue,
+				   shardgroupID);
 
 	PG_RETURN_VOID();
 }
@@ -4228,12 +4233,13 @@ SyncNewShardgoupsToNodes(ShardgroupID *shardgroupIDs, int shardCount, uint32 col
 static char *
 ShardgroupsCreateCommand(ShardgroupID *shardgroupIDs, int shardCount, uint32 colocationId)
 {
-	StringInfoData buf = {0};
+	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
+
 	/* now add shards to insertShardCommand */
-	appendStringInfo(&buf, 
+	appendStringInfo(&buf,
 					 "WITH shardgroup_data(shardgroupid, colocationid)  AS (VALUES ");
-	for (int i=0; i<shardCount; i++)
+	for (int i = 0; i < shardCount; i++)
 	{
 		if (i > 0)
 		{

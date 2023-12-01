@@ -1951,7 +1951,7 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount, uint32 colocati
 		 */
 		CreateShardsWithRoundRobinPolicy(relationId,
 										 colocationId,
-										 shardCount, 
+										 shardCount,
 										 ShardReplicationFactor,
 										 useExclusiveConnection);
 	}

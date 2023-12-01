@@ -1071,7 +1071,7 @@ CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
 		ShardgroupID *shardgroupIDs = palloc0(sizeof(ShardgroupID) * shardcount);
 		for (int i = 0; i < shardcount; i++)
 		{
-			shardgroupIDs[i] = GetNextColocationId();
+			shardgroupIDs[i] = GetNextShardgroupId();
 			shardgroupIdsList = lappend(shardgroupIdsList, &shardgroupIDs[i]);
 		}
 	}
@@ -1438,7 +1438,8 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 static void
 DropShardgroupListMetadata(List *shardIntervalList)
 {
-	List *syncedShardIntervalList = NIL;
+	HTAB *uniqueShardgroups = CreateSimpleHashSet(ShardgroupID);
+	HTAB *uniqueSyncedShardgroups = CreateSimpleHashSet(ShardgroupID);
 
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
@@ -1454,19 +1455,43 @@ DropShardgroupListMetadata(List *shardIntervalList)
 			continue;
 		}
 
-		DeleteShardgroupRow(shardInterval->shardgroupId);
+		hash_search(uniqueShardgroups,
+					&shardInterval->shardgroupId,
+					HASH_ENTER,
+					NULL);
 
-		Oid relationId = shardInterval->relationId;
-
-		/* delete metadata from synced nodes */
-		if (ShouldSyncTableMetadata(relationId))
+		/* if the relation is synced we want to drop the shardgroup from the workers */
+		if (ShouldSyncTableMetadata(shardInterval->relationId))
 		{
-			syncedShardIntervalList = lappend(syncedShardIntervalList, shardInterval);
+			hash_search(uniqueSyncedShardgroups,
+						&shardInterval->shardgroupId,
+						HASH_ENTER,
+						NULL);
 		}
 	}
 
+	/* iterate over all entries in uniqueShardgroups to delete the shardgroup locally */
+	HASH_SEQ_STATUS hashSeqStatus = { 0 };
+	hash_seq_init(&hashSeqStatus, uniqueShardgroups);
+	ShardgroupID *shardgroupId = NULL;
+	while ((shardgroupId = hash_seq_search(&hashSeqStatus)) != NULL)
+	{
+		DeleteShardgroupRow(*shardgroupId);
+	}
+
+	/*
+	 * Iterate over all entries in uniqueSyncedShardgroups to turn into a list that can be
+	 * used to propagate the deletion of the shardgroups
+	 */
+	List *syncedShardgroupList = NIL;
+	hash_seq_init(&hashSeqStatus, uniqueSyncedShardgroups);
+	while ((shardgroupId = hash_seq_search(&hashSeqStatus)) != NULL)
+	{
+		syncedShardgroupList = lappend(syncedShardgroupList, shardgroupId);
+	}
+
 	/* delete metadata from all workers with metadata available */
-	List *commands = ShardgroupListDeleteCommand(syncedShardIntervalList);
+	List *commands = ShardgroupListDeleteCommand(syncedShardgroupList);
 	char *command = NULL;
 	foreach_ptr(command, commands)
 	{

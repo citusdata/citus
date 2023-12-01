@@ -201,7 +201,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, uint32 colocationId,
 								 replicationFactor);
 	}
 
-	// TODO guess we should check if metadatasync is on
+	/* TODO guess we should check if metadatasync is on */
 	SyncNewShardgoupsToNodes(shardgroupIDs, shardCount, colocationId);
 
 	/*
