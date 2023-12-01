@@ -132,7 +132,6 @@ static void UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 												   char distributionMethod,
 												   int shardCount,
 												   uint32 colocationId);
-static void PopulateShardgroupIdsWithNewIds(List *shardGroupSplitIntervalListList);
 static void InsertSplitChildrenShardgroupMetadata(List *shardGroupSplitIntervalListList);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
@@ -631,9 +630,6 @@ BlockingShardSplit(SplitOperation splitOperation,
 	DropShardgroupListMetadata(sourceColocatedShardIntervalList);
 
 	DropShardListMetadata(sourceColocatedShardIntervalList);
-
-	/* allocate and assign new shardgroups to newly created shardIntervals */
-	PopulateShardgroupIdsWithNewIds(shardGroupSplitIntervalListList);
 
 	InsertSplitChildrenShardgroupMetadata(shardGroupSplitIntervalListList);
 
@@ -1215,39 +1211,6 @@ UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 
 		UpdateDistributionColumnGlobally(relationId, distributionMethod,
 										 distributionColumn, colocationId);
-	}
-}
-
-
-static void
-PopulateShardgroupIdsWithNewIds(List *shardGroupSplitIntervalListList)
-{
-	List *firstShardIntervals = NULL;
-	List *currentShardIntervals = NULL;
-	foreach_ptr(currentShardIntervals, shardGroupSplitIntervalListList)
-	{
-		if (!firstShardIntervals)
-		{
-			/* on the first loop we assign new shardgroupId's */
-			firstShardIntervals = currentShardIntervals;
-			ShardInterval *shardInterval = NULL;
-			foreach_ptr(shardInterval, firstShardIntervals)
-			{
-				ShardgroupID newShardgroupId = GetNextShardgroupId();
-				shardInterval->shardgroupId = newShardgroupId;
-			}
-		}
-		else
-		{
-			/* on subsequent loops we assign the same shardgroupId for colocation */
-			ShardInterval *firstShardInterval = NULL;
-			ShardInterval *currentShardInterval = NULL;
-			forboth_ptr(firstShardInterval, firstShardIntervals, currentShardInterval,
-						currentShardIntervals)
-			{
-				currentShardInterval->shardgroupId = firstShardInterval->shardgroupId;
-			}
-		}
 	}
 }
 
