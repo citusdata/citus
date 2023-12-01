@@ -1050,8 +1050,33 @@ CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
 								  List *splitPointsForShard,
 								  List *shardgroupIdsList)
 {
-	List *shardGroupSplitIntervalListList = NIL;
+	if (list_length(sourceColocatedShardIntervalList) == 0)
+	{
+		/* should not happen, prevent consuming ShardgroupIDs if it does */
+		Assert(false);
+		return NIL;
+	}
 
+	if (list_length(shardgroupIdsList) <= 0)
+	{
+		/*
+		 * If an empty shardgroupIdsList is passed we populate it here with newly
+		 * generated shardgroupIds.
+		 *
+		 * Because Lists can not contain ShardgroupID as values we need them as
+		 * pointers. To reduce the overhead we allocate an array that we populate and
+		 * store pointers to the array elements in the list.
+		 */
+		int shardcount = list_length(splitPointsForShard) + 1;
+		ShardgroupID *shardgroupIDs = palloc0(sizeof(ShardgroupID) * shardcount);
+		for (int i = 0; i < shardcount; i++)
+		{
+			shardgroupIDs[i] = GetNextColocationId();
+			shardgroupIdsList = lappend(shardgroupIdsList, &shardgroupIDs[i]);
+		}
+	}
+
+	List *shardGroupSplitIntervalListList = NIL;
 	ShardInterval *shardToSplitInterval = NULL;
 	foreach_ptr(shardToSplitInterval, sourceColocatedShardIntervalList)
 	{
@@ -1059,26 +1084,18 @@ CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
 		CreateSplitIntervalsForShard(shardToSplitInterval, splitPointsForShard,
 									 &shardSplitIntervalList);
 
-		int shardcount = list_length(shardSplitIntervalList);
-		if (list_length(shardgroupIdsList) > 0)
+		if (list_length(shardgroupIdsList) != list_length(shardSplitIntervalList))
 		{
-			Assert(list_length(shardgroupIdsList) == shardcount);
-			for (int i = 0; i < shardcount; i++)
-			{
-				ShardInterval *shardInterval = list_nth(shardSplitIntervalList, i);
-				shardInterval->shardgroupId = *((ShardgroupID *) list_nth(
-													shardgroupIdsList, i));
-			}
+			/* developer error, but significant enough to stop code flow */
+			elog(ERROR, "length inconsisteny between shardgroup ids and shard intervals");
 		}
-		else
+
+		ShardgroupID *shardgroupID = NULL;
+		ShardInterval *shardInterval = NULL;
+		forboth_ptr(shardgroupID, shardgroupIdsList, shardInterval,
+					shardSplitIntervalList)
 		{
-			for (int i = 0; i < shardcount; i++)
-			{
-				ShardInterval *shardInterval = list_nth(shardSplitIntervalList, i);
-				shardInterval->shardgroupId = GetNextColocationId();
-				shardgroupIdsList = lappend(shardgroupIdsList,
-											(void *) &shardInterval->shardgroupId);
-			}
+			shardInterval->shardgroupId = *shardgroupID;
 		}
 
 		shardGroupSplitIntervalListList = lappend(shardGroupSplitIntervalListList,
