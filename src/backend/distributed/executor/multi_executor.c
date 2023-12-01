@@ -168,7 +168,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	executorBoundParams = queryDesc->params;
 
 	/*
-	 * We do some potentially time consuming operations our self now before we hand of
+	 * We do some potentially time consuming operations ourself now before we hand off
 	 * control to postgres' executor. To make sure that time spent is accurately measured
 	 * we remove the totaltime instrumentation from the queryDesc. Instead we will start
 	 * and stop the instrumentation of the total time and put it back on the queryDesc
