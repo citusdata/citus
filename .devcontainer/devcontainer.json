@@ -14,6 +14,7 @@
                 "github.vscode-pull-request-github",
                 "ms-vscode.cpptools-extension-pack",
                 "ms-vsliveshare.vsliveshare",
+                "mutantdino.resourcemonitor", // decide if we want to keep this
             ],
             "settings": {
                 "files.exclude": {
