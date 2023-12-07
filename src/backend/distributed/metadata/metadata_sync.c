@@ -4083,9 +4083,10 @@ Datum citus_internal_database_size(PG_FUNCTION_ARGS){
 	PG_ENSURE_ARGNOTNULL(0, "dbName");
 
 	Name dbName = PG_GETARG_NAME(0);
-	
 
-	PG_RETURN_DATUM(size);
+	int64 size = 0;
+
+	PG_RETURN_INT64(size);
 }
 
 
