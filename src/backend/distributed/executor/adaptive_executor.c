@@ -729,6 +729,11 @@ static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time end
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
+static ExecutionParams *
+GetExecutionParams(RowModifyLevel modLevel, List *taskList,
+                      TupleDestination *tupleDest,
+                      bool expectResults,
+                      ParamListInfo paramListInfo);
 
 
 /*
@@ -1014,31 +1019,46 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 }
 
 
+
+/*
+ * Prepare execution parameters for a task list.It is used by the
+ * functions that execute task lists.
+*/
+static ExecutionParams *
+GetExecutionParams(RowModifyLevel modLevel, List *taskList,
+                      TupleDestination *tupleDest,
+                      bool expectResults,
+                      ParamListInfo paramListInfo)
+{
+    int targetPoolSize = MaxAdaptiveExecutorPoolSize;
+    bool localExecutionSupported = true;
+    ExecutionParams *executionParams = CreateBasicExecutionParams(
+        modLevel, taskList, targetPoolSize, localExecutionSupported
+        );
+
+    executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+        modLevel, taskList, false);
+    executionParams->expectResults = expectResults;
+    executionParams->tupleDestination = tupleDest;
+    executionParams->paramListInfo = paramListInfo;
+
+    return executionParams;
+}
+
 /*
  * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
  * bind params from executor state, and with defaults for some of the arguments.
  */
 uint64
 ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
-									  TupleDestination *tupleDest,
-									  bool expectResults,
-									  ParamListInfo paramListInfo)
+                                      TupleDestination *tupleDest,
+                                      bool expectResults,
+                                      ParamListInfo paramListInfo)
 {
-	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	bool localExecutionSupported = true;
-	ExecutionParams *executionParams = CreateBasicExecutionParams(
-		modLevel, taskList, targetPoolSize, localExecutionSupported
-		);
-
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, false);
-	executionParams->expectResults = expectResults;
-	executionParams->tupleDestination = tupleDest;
-	executionParams->paramListInfo = paramListInfo;
-
-	return ExecuteTaskListExtended(executionParams);
+	ExecutionParams *executionParams = GetExecutionParams(modLevel, taskList, tupleDest,
+	                                                         expectResults, paramListInfo);
+    return ExecuteTaskListExtended(executionParams);
 }
-
 
 /*
  * ExecuteTaskListIntoTupleDest is a proxy to ExecuteTaskListExtended() with defaults
@@ -1046,21 +1066,12 @@ ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
  */
 uint64
 ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
-							 TupleDestination *tupleDest,
-							 bool expectResults)
+                             TupleDestination *tupleDest,
+                             bool expectResults)
 {
-	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	bool localExecutionSupported = true;
-	ExecutionParams *executionParams = CreateBasicExecutionParams(
-		modLevel, taskList, targetPoolSize, localExecutionSupported
-		);
-
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, false);
-	executionParams->expectResults = expectResults;
-	executionParams->tupleDestination = tupleDest;
-
-	return ExecuteTaskListExtended(executionParams);
+    ExecutionParams *executionParams = GetExecutionParams(modLevel, taskList, tupleDest,
+	                                                         expectResults, NULL);
+    return ExecuteTaskListExtended(executionParams);
 }
 
 
