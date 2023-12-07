@@ -17,6 +17,7 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 
@@ -184,6 +185,8 @@ PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_update_none_dist_table_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_database_command);
+PG_FUNCTION_INFO_V1(citus_pg_database_size_by_db_name);
+PG_FUNCTION_INFO_V1(citus_pg_database_size_by_db_oid);
 
 
 static bool got_SIGTERM = false;
@@ -4046,6 +4049,43 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	AtEOXact_GUC(true, saveNestLevel);
 
 	PG_RETURN_VOID();
+}
+
+Datum
+citus_pg_database_size_by_db_name(PG_FUNCTION_ARGS){
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "dbName");
+
+	Name dbName = PG_GETARG_NAME(0);
+	Datum size = DirectFunctionCall1(pg_database_size_name, NameGetDatum(dbName));
+
+	PG_RETURN_DATUM(size);
+
+}
+
+Datum
+citus_pg_database_size_by_db_oid(PG_FUNCTION_ARGS){
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "dbOid");
+
+	Oid	dbOid = PG_GETARG_OID(0);
+	Datum size = DirectFunctionCall1(pg_database_size_oid, ObjectIdGetDatum(dbOid));
+
+	PG_RETURN_DATUM(size);
+
+}
+
+Datum citus_internal_database_size(PG_FUNCTION_ARGS){
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "dbName");
+
+	Name dbName = PG_GETARG_NAME(0);
+	
+
+	PG_RETURN_DATUM(size);
 }
 
 
