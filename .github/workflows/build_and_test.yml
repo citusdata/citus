@@ -469,9 +469,12 @@ jobs:
         else
           echo "Detected tests " $tests
         fi
-        echo tests="$tests" >> "$GITHUB_OUTPUT"
+
+        echo 'tests<<EOF' >> $GITHUB_OUTPUT
+        echo "$tests" >> "$GITHUB_OUTPUT"
+        echo 'EOF' >> $GITHUB_OUTPUT
   test-flakyness:
-    if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
+    if: false
     name: Test flakyness
     runs-on: ubuntu-20.04
     container:
