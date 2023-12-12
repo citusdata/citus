@@ -21,6 +21,12 @@ PG_FUNCTION_INFO_V1(citus_internal_pg_database_size_by_db_name);
 PG_FUNCTION_INFO_V1(citus_internal_pg_database_size_by_db_oid);
 PG_FUNCTION_INFO_V1(citus_internal_database_size);
 
+/*
+ * This function obtains the size of a database given its name,
+ * similar to the function pg_database_size(name).
+ * However, since we need to override pg_database_size,
+ * we create this wrapper function to achieve the same functionality.
+ */
 Datum
 citus_internal_pg_database_size_by_db_name(PG_FUNCTION_ARGS)
 {
@@ -35,6 +41,12 @@ citus_internal_pg_database_size_by_db_name(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * This function obtains the size of a database given its oid,
+ * similar to the function pg_database_size(oid).
+ * However, since we need to override pg_database_size,
+ * we create this wrapper function to achieve the same functionality.
+ */
 Datum
 citus_internal_pg_database_size_by_db_oid(PG_FUNCTION_ARGS)
 {
@@ -46,46 +58,6 @@ citus_internal_pg_database_size_by_db_oid(PG_FUNCTION_ARGS)
 	Datum size = DirectFunctionCall1(pg_database_size_oid, ObjectIdGetDatum(dbOid));
 
 	PG_RETURN_DATUM(size);
-}
-
-
-static int
-GroupLookupFromDatabase(int64 databaseOid, bool missingOk)
-{
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	Form_pg_dist_database databaseForm = NULL;
-	Relation pgDistDatabase = table_open(PgDistDatabaseRelationId(), AccessShareLock);
-	int groupId = -1;
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_database_databaseid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(databaseOid));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistDatabase,
-													InvalidOid, true,
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple) && !missingOk)
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for database "
-							   UINT64_FORMAT, databaseOid)));
-	}
-
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		groupId = -2;
-	}
-	else
-	{
-		databaseForm = (Form_pg_dist_database) GETSTRUCT(heapTuple);
-		groupId = databaseForm->groupid;
-	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistDatabase, NoLock);
-
-	return groupId;
 }
 
 
@@ -143,6 +115,7 @@ citus_internal_database_size(PG_FUNCTION_ARGS)
 	else
 	{
 		elog(INFO, "remote database");
+
 		/*remote database */
 		MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
 														workerNodePort);
@@ -166,5 +139,48 @@ citus_internal_database_size(PG_FUNCTION_ARGS)
 		PQclear(result);
 		ClearResults(connection, failOnError);
 		PG_RETURN_INT64(size);
+	}
+
+	/*
+	 * Retrieves the groupId of a distributed database
+	 * using databaseOid from the pg_dist_database table.
+	 */
+	static int
+	GroupLookupFromDatabase(int64 databaseOid, bool missingOk)
+	{
+		ScanKeyData scanKey[1];
+		int scanKeyCount = 1;
+		Form_pg_dist_database databaseForm = NULL;
+		Relation pgDistDatabase = table_open(PgDistDatabaseRelationId(), AccessShareLock);
+		int groupId = -1;
+
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_database_databaseid,
+					BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(databaseOid));
+
+		SysScanDesc scanDescriptor = systable_beginscan(pgDistDatabase,
+														InvalidOid, true,
+														NULL, scanKeyCount, scanKey);
+
+		HeapTuple heapTuple = systable_getnext(scanDescriptor);
+		if (!HeapTupleIsValid(heapTuple) && !missingOk)
+		{
+			ereport(ERROR, (errmsg("could not find valid entry for database "
+								   UINT64_FORMAT, databaseOid)));
+		}
+
+		if (!HeapTupleIsValid(heapTuple))
+		{
+			groupId = -2;
+		}
+		else
+		{
+			databaseForm = (Form_pg_dist_database) GETSTRUCT(heapTuple);
+			groupId = databaseForm->groupid;
+		}
+
+		systable_endscan(scanDescriptor);
+		table_close(pgDistDatabase, NoLock);
+
+		return groupId;
 	}
 }

@@ -1,4 +1,4 @@
- CREATE OR REPLACE FUNCTION pg_catalog.pg_dist_database_size(db_name name)
+CREATE OR REPLACE FUNCTION pg_catalog.pg_dist_database_size(db_name name)
  RETURNS bigint
  LANGUAGE C
  VOLATILE

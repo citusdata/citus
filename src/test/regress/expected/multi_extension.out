@@ -1422,8 +1422,12 @@ ALTER EXTENSION citus UPDATE TO '12.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
+                 | function citus_internal.pg_database_size_local(name) bigint
+                 | function citus_internal.pg_database_size_local(oid) bigint
                  | function citus_internal_database_command(text) void
-(1 row)
+                 | function pg_dist_database_size(name) bigint
+                 | table pg_dist_database 
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
