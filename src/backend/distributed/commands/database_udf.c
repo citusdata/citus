@@ -1,13 +1,12 @@
 #include "postgres.h"
 
-
 #include "fmgr.h"
-#include "utils/fmgroids.h"
-#include "utils/fmgrprotos.h"
-
 
 #include "access/genam.h"
 #include "commands/dbcommands.h"
+#include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
+
 #include "distributed/argutils.h"
 #include "distributed/connection_management.h"
 #include "distributed/lock_graph.h"

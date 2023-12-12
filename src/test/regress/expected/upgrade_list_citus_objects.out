@@ -57,6 +57,8 @@ ORDER BY 1;
  function citus_get_node_clock()
  function citus_get_transaction_clock()
  function citus_internal.find_groupid_for_node(text,integer)
+ function citus_internal.pg_database_size_local(name)
+ function citus_internal.pg_database_size_local(oid)
  function citus_internal.pg_dist_node_trigger_func()
  function citus_internal.pg_dist_rebalance_strategy_trigger_func()
  function citus_internal.pg_dist_shard_placement_trigger_func()
@@ -225,6 +227,7 @@ ORDER BY 1;
  function master_update_table_statistics(regclass)
  function notify_constraint_dropped()
  function pg_cancel_backend(bigint)
+ function pg_dist_database_size(name)
  function pg_terminate_backend(bigint,bigint)
  function poolinfo_valid(text)
  function read_intermediate_result(text,citus_copy_format)
@@ -309,6 +312,7 @@ ORDER BY 1;
  table pg_dist_background_task_depend
  table pg_dist_cleanup
  table pg_dist_colocation
+ table pg_dist_database
  table pg_dist_local_group
  table pg_dist_node
  table pg_dist_node_metadata
