@@ -14,4 +14,4 @@ ALTER TABLE citus.pg_dist_database SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.pg_dist_database TO public;
 
 #include "udfs/citus_internal_pg_database_size_local/12.2-1.sql"
--- #include "udfs/citus_pg_dist_database/12.2-1.sql"
+#include "udfs/citus_pg_dist_database/12.2-1.sql"

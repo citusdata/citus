@@ -12,11 +12,10 @@
 #define CITUS_PG_DIST_DATABASE_H
 
 
-
 typedef struct FormData_pg_dist_database
 {
-    Oid databaseid;
-    int groupid;
+	Oid databaseid;
+	int groupid;
 } FormData_pg_dist_database;
 
 #define Anum_pg_dist_database_databaseid 1
@@ -30,4 +29,5 @@ typedef struct FormData_pg_dist_database
 typedef FormData_pg_dist_database *Form_pg_dist_database;
 #endif /* CITUS_PG_DIST_DATABASE_H */
 
-#define PgDistDatabaseRelationId() (get_relname_relid("pg_dist_database", PG_CATALOG_NAMESPACE))
+#define PgDistDatabaseRelationId() (get_relname_relid("pg_dist_database", \
+													  PG_CATALOG_NAMESPACE))

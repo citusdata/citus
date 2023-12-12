@@ -4055,8 +4055,10 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 Datum
-citus_internal_pg_database_size_by_db_name(PG_FUNCTION_ARGS){
+citus_internal_pg_database_size_by_db_name(PG_FUNCTION_ARGS)
+{
 	CheckCitusVersion(ERROR);
 
 	PG_ENSURE_ARGNOTNULL(0, "dbName");
@@ -4065,20 +4067,20 @@ citus_internal_pg_database_size_by_db_name(PG_FUNCTION_ARGS){
 	Datum size = DirectFunctionCall1(pg_database_size_name, NameGetDatum(dbName));
 
 	PG_RETURN_DATUM(size);
-
 }
 
+
 Datum
-citus_internal_pg_database_size_by_db_oid(PG_FUNCTION_ARGS){
+citus_internal_pg_database_size_by_db_oid(PG_FUNCTION_ARGS)
+{
 	CheckCitusVersion(ERROR);
 
 	PG_ENSURE_ARGNOTNULL(0, "dbOid");
 
-	Oid	dbOid = PG_GETARG_OID(0);
+	Oid dbOid = PG_GETARG_OID(0);
 	Datum size = DirectFunctionCall1(pg_database_size_oid, ObjectIdGetDatum(dbOid));
 
 	PG_RETURN_DATUM(size);
-
 }
 
 
@@ -4121,8 +4123,10 @@ GroupLookupFromDatabase(int64 databaseOid, bool missingOk)
 	return groupId;
 }
 
-Datum citus_internal_database_size(PG_FUNCTION_ARGS){
 
+Datum
+citus_internal_database_size(PG_FUNCTION_ARGS)
+{
 	uint32 connectionFlag = 0;
 
 
@@ -4141,18 +4145,20 @@ Datum citus_internal_database_size(PG_FUNCTION_ARGS){
 					 "SELECT citus_internal.pg_database_size_local('%s')",
 					 dbName->data);
 
-	//get database oid
+	/*get database oid */
 	bool missingOk = true;
 	Oid databaseOid = get_database_oid(dbName->data, missingOk);
 	elog(INFO, "citus_internal_database_oid: %d", databaseOid);
 
-	//get group id
+	/*get group id */
 	int groupId = GroupLookupFromDatabase(databaseOid, missingOk);
-	if (groupId < 0){
-		ereport(ERROR, (errmsg("could not find valid entry for database %d ", databaseOid)));
+	if (groupId < 0)
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for database %d ",
+							   databaseOid)));
 		PG_RETURN_INT64(-1);
 	}
-	elog(INFO, "group id: %d",groupId);
+	elog(INFO, "group id: %d", groupId);
 
 	WorkerNode *workerNode = LookupNodeForGroup(groupId);
 
@@ -4162,39 +4168,40 @@ Datum citus_internal_database_size(PG_FUNCTION_ARGS){
 	elog(INFO, "workerNodeName: %s", workerNodeName);
 	elog(INFO, "workerNodePort: %d", workerNodePort);
 
-	if (groupId == GetLocalGroupId()){
-		//local database
+	if (groupId == GetLocalGroupId())
+	{
+		/*local database */
 		elog(INFO, "local database");
-		PG_RETURN_INT64(DirectFunctionCall1(citus_internal_pg_database_size_by_db_name, NameGetDatum(dbName)));
+		PG_RETURN_INT64(DirectFunctionCall1(citus_internal_pg_database_size_by_db_name,
+											NameGetDatum(dbName)));
 	}
-	else{
+	else
+	{
 		elog(INFO, "remote database");
-		//remote database
+		/*remote database */
 		MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
-													workerNodePort);
-		int queryResult = ExecuteOptionalRemoteCommand(connection, databaseSizeQuery->data,
-													&result);
+														workerNodePort);
+		int queryResult = ExecuteOptionalRemoteCommand(connection,
+													   databaseSizeQuery->data,
+													   &result);
 		int64 size = 0;
 
 		if (queryResult != 0)
 		{
 			ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
-							errmsg("could not connect to %s:%d to get size of "
-									"database \"%s\"",
-									workerNodeName, workerNodePort,
-									dbName->data)));
+							  errmsg("could not connect to %s:%d to get size of "
+									 "database \"%s\"",
+									 workerNodeName, workerNodePort,
+									 dbName->data)));
 		}
-		else{
-
+		else
+		{
 			size = ParseIntField(result, 0, 0);
-
-
 		}
 		PQclear(result);
 		ClearResults(connection, failOnError);
 		PG_RETURN_INT64(size);
 	}
-
 }
 
 
