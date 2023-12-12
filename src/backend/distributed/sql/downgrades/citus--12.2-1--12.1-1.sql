@@ -10,3 +10,5 @@ DROP FUNCTION citus_internal.pg_database_size_local(name);
 DROP FUNCTION citus_internal.pg_database_size_local(oid);
 
 DROP FUNCTION pg_catalog.pg_dist_database_size(name);
+
+drop table pg_catalog.pg_dist_database;
