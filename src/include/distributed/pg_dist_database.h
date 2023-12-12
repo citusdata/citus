@@ -11,6 +11,8 @@
 #ifndef CITUS_PG_DIST_DATABASE_H
 #define CITUS_PG_DIST_DATABASE_H
 
+#include "catalog/pg_namespace_d.h"
+#include "utils/lsyscache.h"
 
 typedef struct FormData_pg_dist_database
 {
@@ -27,7 +29,8 @@ typedef struct FormData_pg_dist_database
  * ----------------
  */
 typedef FormData_pg_dist_database *Form_pg_dist_database;
-#endif /* CITUS_PG_DIST_DATABASE_H */
+
 
 #define PgDistDatabaseRelationId() (get_relname_relid("pg_dist_database", \
 													  PG_CATALOG_NAMESPACE))
+#endif /* CITUS_PG_DIST_DATABASE_H */
