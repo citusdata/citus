@@ -667,5 +667,33 @@ ALTER TABLE table_without_sequence ADD COLUMN x BIGINT DEFAULT nextval('test_sch
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation.seq_10'::regclass);
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation'::regnamespace);
 
+-- Bug: https://github.com/citusdata/citus/issues/7378
+
+-- Create a reference table
+CREATE TABLE tbl_ref_mats(row_id integer primary key);
+INSERT INTO tbl_ref_mats VALUES (1), (2);
+SELECT create_reference_table('tbl_ref_mats');
+
+-- Create a distributed table
+CREATE TABLE tbl_dist_mats(series_id integer);
+INSERT INTO tbl_dist_mats VALUES (1), (1), (2), (2);
+SELECT create_distributed_table('tbl_dist_mats', 'series_id');
+
+-- Create a view that joins the distributed table with the reference table on the distribution key.
+CREATE VIEW vw_citus_views as
+SELECT d.series_id FROM tbl_dist_mats d JOIN tbl_ref_mats r ON d.series_id = r.row_id;
+
+-- The view initially works fine
+SELECT * FROM vw_citus_views ORDER BY 1;
+-- Now, alter the table
+ALTER TABLE tbl_ref_mats ADD COLUMN category1 varchar(50);
+SELECT * FROM vw_citus_views ORDER BY 1;
+ALTER TABLE tbl_ref_mats ADD COLUMN category2 varchar(50);
+SELECT * FROM vw_citus_views ORDER BY 1;
+ALTER TABLE tbl_ref_mats DROP COLUMN category1;
+SELECT * FROM vw_citus_views ORDER BY 1;
+
 DROP SCHEMA test_schema_for_sequence_propagation CASCADE;
 DROP TABLE table_without_sequence;
+DROP TABLE tbl_ref_mats CASCADE;
+DROP TABLE tbl_dist_mats CASCADE;
