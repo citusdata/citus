@@ -1526,8 +1526,15 @@ set_join_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 
 	/* Assert we processed the right number of columns */
 #ifdef USE_ASSERT_CHECKING
-	while (i < colinfo->num_cols && colinfo->colnames[i] == NULL)
-		i++;
+	for (int col_index = 0; col_index < colinfo->num_cols; col_index++)
+	{
+		/*
+		 * In the above processing-loops, "i" advances only if
+		 * the column is not new, check if this is a new column.
+		 */
+		if (colinfo->is_new_col[col_index])
+			i++;
+	}
 	Assert(i == colinfo->num_cols);
 	Assert(j == nnewcolumns);
 #endif
