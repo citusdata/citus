@@ -140,47 +140,48 @@ citus_internal_database_size(PG_FUNCTION_ARGS)
 		ClearResults(connection, failOnError);
 		PG_RETURN_INT64(size);
 	}
+}
 
-	/*
-	 * Retrieves the groupId of a distributed database
-	 * using databaseOid from the pg_dist_database table.
-	 */
-	static int
-	GroupLookupFromDatabase(int64 databaseOid, bool missingOk)
+
+/*
+ * Retrieves the groupId of a distributed database
+ * using databaseOid from the pg_dist_database table.
+ */
+static int
+GroupLookupFromDatabase(int64 databaseOid, bool missingOk)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Form_pg_dist_database databaseForm = NULL;
+	Relation pgDistDatabase = table_open(PgDistDatabaseRelationId(), AccessShareLock);
+	int groupId = -1;
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_database_databaseid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(databaseOid));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistDatabase,
+													InvalidOid, true,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple) && !missingOk)
 	{
-		ScanKeyData scanKey[1];
-		int scanKeyCount = 1;
-		Form_pg_dist_database databaseForm = NULL;
-		Relation pgDistDatabase = table_open(PgDistDatabaseRelationId(), AccessShareLock);
-		int groupId = -1;
-
-		ScanKeyInit(&scanKey[0], Anum_pg_dist_database_databaseid,
-					BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(databaseOid));
-
-		SysScanDesc scanDescriptor = systable_beginscan(pgDistDatabase,
-														InvalidOid, true,
-														NULL, scanKeyCount, scanKey);
-
-		HeapTuple heapTuple = systable_getnext(scanDescriptor);
-		if (!HeapTupleIsValid(heapTuple) && !missingOk)
-		{
-			ereport(ERROR, (errmsg("could not find valid entry for database "
-								   UINT64_FORMAT, databaseOid)));
-		}
-
-		if (!HeapTupleIsValid(heapTuple))
-		{
-			groupId = -2;
-		}
-		else
-		{
-			databaseForm = (Form_pg_dist_database) GETSTRUCT(heapTuple);
-			groupId = databaseForm->groupid;
-		}
-
-		systable_endscan(scanDescriptor);
-		table_close(pgDistDatabase, NoLock);
-
-		return groupId;
+		ereport(ERROR, (errmsg("could not find valid entry for database "
+							   UINT64_FORMAT, databaseOid)));
 	}
+
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		groupId = -2;
+	}
+	else
+	{
+		databaseForm = (Form_pg_dist_database) GETSTRUCT(heapTuple);
+		groupId = databaseForm->groupid;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistDatabase, NoLock);
+
+	return groupId;
 }
