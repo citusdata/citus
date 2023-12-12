@@ -45,7 +45,7 @@ jobs:
           - oraclelinux-7
           - oraclelinux-8
           - centos-7
-          - centos-8
+          - almalinux-8
           - almalinux-9
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
@@ -111,7 +111,6 @@ jobs:
           - debian-buster-all
           - debian-bookworm-all
           - debian-bullseye-all
-          - ubuntu-bionic-all
           - ubuntu-focal-all
           - ubuntu-jammy-all
           - ubuntu-kinetic-all
