@@ -74,7 +74,6 @@ citus_internal_database_size(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "dbName");
 
 	Name dbName = PG_GETARG_NAME(0);
-	elog(INFO, "citus_internal_database_name: %s", dbName->data);
 
 	StringInfo databaseSizeQuery = makeStringInfo();
 	appendStringInfo(databaseSizeQuery,
@@ -84,7 +83,6 @@ citus_internal_database_size(PG_FUNCTION_ARGS)
 	/*get database oid */
 	bool missingOk = true;
 	Oid databaseOid = get_database_oid(dbName->data, missingOk);
-	elog(INFO, "citus_internal_database_oid: %d", databaseOid);
 
 	/*get group id */
 	int groupId = GroupLookupFromDatabase(databaseOid, missingOk);
@@ -94,26 +92,34 @@ citus_internal_database_size(PG_FUNCTION_ARGS)
 							   databaseOid)));
 		PG_RETURN_INT64(-1);
 	}
-	elog(INFO, "group id: %d", groupId);
 
 	WorkerNode *workerNode = LookupNodeForGroup(groupId);
 
 	char *workerNodeName = workerNode->workerName;
 	uint32 workerNodePort = workerNode->workerPort;
 
-	elog(INFO, "workerNodeName: %s", workerNodeName);
-	elog(INFO, "workerNodePort: %d", workerNodePort);
-
 	if (groupId == GetLocalGroupId())
 	{
 		/*local database */
-		elog(INFO, "local database");
+		elog(DEBUG1,
+			 "Initiating process to get the size of the local database.\n"
+			 "Database Name: %s\n"
+			 "Server Group ID: %d\n"
+			 "Worker Node Name: %s\n"
+			 "Worker Node Port: %d",
+			 dbName->data, groupId, workerNodeName, workerNodePort);
 		PG_RETURN_INT64(DirectFunctionCall1(citus_internal_pg_database_size_by_db_name,
 											NameGetDatum(dbName)));
 	}
 	else
 	{
-		elog(INFO, "remote database");
+		elog(DEBUG1,
+			 "Initiating process to get the size of the remote database.\n"
+			 "Database Name: %s\n"
+			 "Server Group ID: %d\n"
+			 "Worker Node Name: %s\n"
+			 "Worker Node Port: %d",
+			 dbName->data, groupId, workerNodeName, workerNodePort);
 
 		/*remote database */
 		MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,

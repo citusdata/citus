@@ -60,6 +60,8 @@ test: alter_database_propagation
 
 test: citus_shards
 
+test: pg_dist_database_size
+
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
