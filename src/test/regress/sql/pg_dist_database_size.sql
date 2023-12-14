@@ -97,6 +97,10 @@ reset citus.log_remote_commands;
 
 drop function round_to_nearest_ten(BIGINT);
 
+SELECT result FROM run_command_on_all_nodes('delete from pg_dist_database where databaseid in (select oid from pg_database where datname in (''test_group0'', ''test_group1'', ''test_group2''))');
+
+set citus.enable_create_database_propagation to true;
+
 drop DATABASE test_group0;
 drop DATABASE test_group1;
 drop DATABASE test_group2;
