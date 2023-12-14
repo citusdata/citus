@@ -9,6 +9,16 @@
 --    pg_dist_database_size returns the size from the correct node.
 -- 5. Release the resources.
 
+CREATE OR REPLACE FUNCTION round_to_nearest_ten(size_in_byte BIGINT)
+RETURNS INT AS $$
+DECLARE
+    size_in_mb INT;
+BEGIN
+    size_in_mb := size_in_byte / 1024 / 1024;
+    RETURN (size_in_mb + 5) / 10 * 10;
+END;
+$$ LANGUAGE plpgsql;
+
 set citus.enable_create_database_propagation to true;
 
 -- Step 1 creates the databases on all nodes.
@@ -53,19 +63,39 @@ insert into test_table2 select generate_series(1,1000000);
 
 \c regression;
 
-select * from pg_dist_database;
+
+
 
 -- Step 4 checks the size of each database. Ensure each size is distinct and that pg_dist_database_size returns the size from the correct node.
-SET client_min_messages TO DEBUG1;
-select * from pg_dist_node;
-select pg_size_pretty(pg_dist_database_size('test_group0'));
 
-select pg_size_pretty(pg_dist_database_size('test_group1'));
+-- Below queries shows the size of each database on each node. Databases with lower sizes are shell databases.
+SELECT result FROM run_command_on_all_nodes('SELECT round_to_nearest_ten(pg_database_size(''test_group0'')) FROM pg_dist_database WHERE databaseid IN (SELECT oid FROM pg_database WHERE datname = ''test_group0'') order by groupid;');
+SELECT result FROM run_command_on_all_nodes('SELECT round_to_nearest_ten(pg_database_size(''test_group1'')) FROM pg_dist_database WHERE databaseid IN (SELECT oid FROM pg_database WHERE datname = ''test_group1'') order by groupid;');
+SELECT result FROM run_command_on_all_nodes('SELECT round_to_nearest_ten(pg_database_size(''test_group2'')) FROM pg_dist_database WHERE databaseid IN (SELECT oid FROM pg_database WHERE datname = ''test_group2'') order by groupid;');
+SET citus.log_remote_commands = true;
 
-select pg_size_pretty(pg_dist_database_size('test_group2'));
+--Below queries shows the non-shell databases, which has greater size than others.
+select CASE
+        WHEN size > 35000001 THEN 'CORRECT DATABASE'
+        ELSE 'SHELL DATABASE' end
+from (select  pg_dist_database_size('test_group0') as size) as size;
 
+
+select CASE
+        WHEN size > 35000001 THEN 'CORRECT DATABASE'
+        ELSE 'SHELL DATABASE' end
+from (select  pg_dist_database_size('test_group1') as size) as size;
+
+select CASE
+        WHEN size > 35000001 THEN 'CORRECT DATABASE'
+        ELSE 'SHELL DATABASE' end
+from (select  pg_dist_database_size('test_group2') as size) as size;
+
+--release the resources and reset the parameters.
 RESET client_min_messages;
+reset citus.log_remote_commands;
 
+drop function round_to_nearest_ten(BIGINT);
 
 drop DATABASE test_group0;
 drop DATABASE test_group1;
