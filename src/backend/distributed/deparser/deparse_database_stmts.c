@@ -323,10 +323,9 @@ DeparseDatabaseCommentStmt(Node *node)
 
 	char *databaseName = strVal(stmt->object);
 
+	char *comment = stmt->comment!=NULL?quote_literal_cstr(stmt->comment):"NULL";
 
-	appendStringInfo(&str, "COMMENT ON DATABASE %s IS %s;",
-					 databaseName,
-					 quote_literal_cstr(stmt->comment));
+	appendStringInfo(&str, "COMMENT ON DATABASE %s IS %s;",databaseName,comment);
 
 	return str.data;
 }

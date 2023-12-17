@@ -27,6 +27,17 @@ SELECT result FROM run_command_on_all_nodes(
   $$
 );
 
+comment on DATABASE test1 is null;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+    SELECT ds.description AS database_comment
+    FROM pg_database d
+    LEFT JOIN pg_shdescription ds ON d.oid = ds.objoid
+    WHERE d.datname = 'test1';
+  $$
+);
+
 drop DATABASE test1;
 reset citus.enable_create_database_propagation;
 reset citus.grep_remote_commands;
