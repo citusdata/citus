@@ -33,8 +33,7 @@ static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 static void AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt);
 static void AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt);
 static void AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt);
-static void AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool *
-											prefixAppendedForBasicOptions, char *dbname);
+static void AppendBasicAlterDatabaseOptions(StringInfo buf, AlterDatabaseStmt *stmt);
 static void AppendGrantDatabases(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname);
 
@@ -127,21 +126,14 @@ AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 {
 	if (stmt->options)
 	{
-		ListCell *cell = NULL;
-		bool prefixAppendedForBasicOptions = false;
-		foreach(cell, stmt->options)
+		DefElem *firstOption = linitial(stmt->options);
+		if (strcmp(firstOption->defname, "tablespace") == 0)
 		{
-			DefElem *def = castNode(DefElem, lfirst(cell));
-			if (strcmp(def->defname, "tablespace") == 0)
-			{
-				AppendAlterDatabaseSetTablespace(buf, def, stmt->dbname);
-				break;
-			}
-			else
-			{
-				AppendBasicAlterDatabaseOptions(buf, def, &prefixAppendedForBasicOptions,
-												stmt->dbname);
-			}
+			AppendAlterDatabaseSetTablespace(buf, firstOption, stmt->dbname);
+		}
+		else
+		{
+			AppendBasicAlterDatabaseOptions(buf, stmt);
 		}
 	}
 
@@ -164,28 +156,27 @@ AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
  * after the "WITH" keyword.(i.e. ALLOW_CONNECTIONS, CONNECTION LIMIT, IS_TEMPLATE)
  * The tablespace option is not a basic option since it is defined with SET option.
  *
- * This function takes a string buffer, a DefElem representing a database option,
- * a boolean indicating whether the prefix "ALTER DATABASE <dbname> WITH" has
- * already been appended, and a database name. It appends the SQL representation
- * of the database option to the string buffer.
+ * This function takes a string buffer and an AlterDatabaseStmt as input.
+ * It appends the basic options to the string buffer.
  *
- * Returns:
- *   A boolean indicating whether the prefix "ALTER DATABASE <dbname> WITH" has
- *   been appended to the buffer. This is the same as the input
- *   prefixAppendedForBasicOptions if the prefix was already appended, or true
- *   if this function appended the prefix.
  */
 static void
-AppendBasicAlterDatabaseOptions(StringInfo buf, DefElem *def, bool *
-								prefixAppendedForBasicOptions, char *dbname)
+AppendBasicAlterDatabaseOptions(StringInfo buf, AlterDatabaseStmt *stmt)
 {
-	if (!(*prefixAppendedForBasicOptions))
+	ListCell *cell = NULL;
+	bool prefixAppendedForBasicOptions = false;
+	foreach(cell, stmt->options)
 	{
-		appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(dbname));
-		*prefixAppendedForBasicOptions = true;
+		DefElem *def = castNode(DefElem, lfirst(cell));
+		if (!prefixAppendedForBasicOptions)
+		{
+			appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(
+								 stmt->dbname));
+			prefixAppendedForBasicOptions = true;
+		}
+		DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
+									 alterDatabaseOptionFormats));
 	}
-	DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
-								 alterDatabaseOptionFormats));
 }
 
 
