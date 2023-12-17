@@ -103,7 +103,7 @@ static void
 EnsureRequiredObjectExistOnAllNodes(const ObjectAddress *target,
 									RequiredObjectSet requiredObjectSet)
 {
-	if (!IsAnyObjectDistributed(list_make1((ObjectAddress *) target)))
+	if (IsAnyObjectDistributed(list_make1((ObjectAddress *) target)))
 	{
 		/* do not propagate for non-distributed types */
 		return;
