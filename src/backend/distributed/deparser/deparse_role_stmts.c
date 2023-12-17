@@ -533,3 +533,21 @@ AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt)
 	VariableSetStmt *setStmt = castNode(VariableSetStmt, stmt->setstmt);
 	AppendVariableSet(buf, setStmt);
 }
+
+
+char *
+DeparseRoleCommentStmt(Node *node)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	char *roleName = strVal(stmt->object);
+
+
+	appendStringInfo(&str, "COMMENT ON ROLE %s IS %s;",
+					 roleName,
+					 quote_literal_cstr(stmt->comment));
+
+	return str.data;
+}

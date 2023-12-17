@@ -312,3 +312,21 @@ DeparseDropDatabaseStmt(Node *node)
 
 	return str.data;
 }
+
+
+char *
+DeparseDatabaseCommentStmt(Node *node)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	char *databaseName = strVal(stmt->object);
+
+
+	appendStringInfo(&str, "COMMENT ON DATABASE %s IS %s;",
+					 databaseName,
+					 quote_literal_cstr(stmt->comment));
+
+	return str.data;
+}

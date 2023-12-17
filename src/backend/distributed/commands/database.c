@@ -701,3 +701,31 @@ CreateDatabaseDDLCommand(Oid dbId)
 
 	return outerDbStmt->data;
 }
+
+
+/*
+ * DatabaseCommentObjectAddress resolves the ObjectAddress for the DATABASE
+ * on which the comment is placed. Optionally errors if the database does not
+ * exist based on the missing_ok flag passed in by the caller.
+ */
+List *
+DatabaseCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	Assert(stmt->objtype == OBJECT_DATABASE);
+
+	char *databaseName = strVal(stmt->object);
+
+	Oid objid = get_database_oid(databaseName, missing_ok);
+
+	if (!OidIsValid(objid))
+	{
+		ereport(ERROR, (errmsg("database \"%s\" does not exist", databaseName)));
+	}
+	else
+	{
+		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*address, DatabaseRelationId, objid);
+		return list_make1(address);
+	}
+}

@@ -246,6 +246,8 @@ extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											  bool isPostprocess);
 extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 extern char * CreateDatabaseDDLCommand(Oid dbId);
+extern List * DatabaseCommentObjectAddress(Node *node, bool missing_ok, bool
+										   isPostprocess);
 
 
 /* domain.c - forward declarations */
@@ -517,6 +519,7 @@ extern List * RenameRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 
 extern void UnmarkRolesDistributed(List *roles);
 extern List * FilterDistributedRoles(List *roles);
+List * RoleCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 
 /* schema.c - forward declarations */
 extern List * PostprocessCreateSchemaStmt(Node *node, const char *queryString);

@@ -293,6 +293,17 @@ static DistributeObjectOps Any_DropRole = {
 	.address = NULL,
 	.markDistributed = false,
 };
+
+static DistributeObjectOps Role_Comment = {
+	.deparse = DeparseRoleCommentStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = RoleCommentObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Any_CreateForeignServer = {
 	.deparse = DeparseCreateForeignServerStmt,
 	.qualify = NULL,
@@ -521,8 +532,16 @@ static DistributeObjectOps Database_Set = {
 	.address = NULL,
 	.markDistributed = false,
 };
-
-
+static DistributeObjectOps Database_Comment = {
+	.deparse = DeparseDatabaseCommentStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = DatabaseCommentObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
 	.qualify = QualifyAlterDomainStmt,
@@ -1757,6 +1776,16 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TSDICTIONARY:
 				{
 					return &TextSearchDict_Comment;
+				}
+
+				case OBJECT_DATABASE:
+				{
+					return &Database_Comment;
+				}
+
+				case OBJECT_ROLE:
+				{
+					return &Role_Comment;
 				}
 
 				default:
