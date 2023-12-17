@@ -543,9 +543,9 @@ DeparseRoleCommentStmt(Node *node)
 	initStringInfo(&str);
 
 	char *roleName = strVal(stmt->object);
-	char *comment = stmt->comment!=NULL?quote_literal_cstr(stmt->comment):"NULL";
+	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
 
-	appendStringInfo(&str, "COMMENT ON ROLE %s IS %s;",roleName,comment);
+	appendStringInfo(&str, "COMMENT ON ROLE %s IS %s;", roleName, comment);
 
 	return str.data;
 }
