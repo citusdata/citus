@@ -154,10 +154,11 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
+
 /*
-* GetNewRoleAddress returns the ObjectAddress of the new role.
-* in the ReassignOwnedStmt.
-*/
+ * GetNewRoleAddress returns the ObjectAddress of the new role.
+ * in the ReassignOwnedStmt.
+ */
 static ObjectAddress *
 GetNewRoleAddress(ReassignOwnedStmt *stmt)
 {
