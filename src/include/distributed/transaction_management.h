@@ -163,7 +163,7 @@ extern bool MaybeExecutingUDF(void);
 extern void TrackPropagatedObject(const ObjectAddress *objectAddress);
 extern void TrackPropagatedTableAndSequences(Oid relationId);
 extern void ResetPropagatedObjects(void);
-extern bool HasAnyObjectInPropagatedObjects(List *objectList);
+extern bool HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);

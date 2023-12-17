@@ -149,7 +149,7 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 
-	EnsureObjectAndDependenciesExistOnAllNodes(newRoleAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(newRoleAddress));
 
 	/* rollback GUCs to the state before this session */
 	AtEOXact_GUC(true, saveNestLevel);
