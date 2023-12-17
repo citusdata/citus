@@ -95,7 +95,7 @@ PreprocessDropOwnedStmt(Node *node, const char *queryString,
 
 
 /*
- * Post-processes a REASSIGN OWNED statement.
+ * PostprocessReassignOwnedStmt Post-processes a REASSIGN OWNED statement.
  *
  * This function takes a Node pointer representing a REASSIGN OWNED statement,
  * and performs any necessary post-processing after the statement has been executed.
@@ -103,13 +103,6 @@ PreprocessDropOwnedStmt(Node *node, const char *queryString,
  * Therefore, we don't filter the roles based on whether they are distributed or not.
  * If roles are not distributed and those roles are not present in the nodes
  * where the statement is being propagated, then the statement will fail.
- *
- * Parameters:
- *   stmt: A pointer to a Node representing a REASSIGN OWNED statement.
- *   queryString: The original SQL command string from the client.
- *
- * Returns:
- *   List of SQL statements to be executed.
  */
 List *
 PostprocessReassignOwnedStmt(Node *node, const char *queryString)
@@ -161,7 +154,10 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
-
+/*
+* GetNewRoleAddress returns the ObjectAddress of the new role.
+* in the ReassignOwnedStmt.
+*/
 static ObjectAddress *
 GetNewRoleAddress(ReassignOwnedStmt *stmt)
 {
