@@ -159,7 +159,7 @@ AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
 
 
 /*
- * Appends basic ALTER DATABASE options to a string buffer.
+ * AppendBasicAlterDatabaseOptions appends basic ALTER DATABASE options to a string buffer.
  * Basic options are those that can be appended to the ALTER DATABASE statement
  * after the "WITH" keyword.(i.e. ALLOW_CONNECTIONS, CONNECTION LIMIT, IS_TEMPLATE)
  * The tablespace option is not a basic option since it is defined with SET option.
