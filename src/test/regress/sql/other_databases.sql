@@ -90,5 +90,9 @@ SELECT usename FROM pg_user WHERE usename LIKE 'worker\_user%' ORDER BY 1;
 -- some user creation commands will fail but let's make sure we try to drop them just in case
 DROP USER IF EXISTS worker_user1, worker_user2, worker_user3;
 
+\c - - - :worker_1_port
+DROP DATABASE other_db2;
+\c - - - :master_port
+
 DROP SCHEMA other_databases;
 DROP DATABASE other_db1;
