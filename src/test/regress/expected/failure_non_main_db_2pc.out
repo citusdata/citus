@@ -118,12 +118,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT nodeid, result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_3'$$) ORDER BY 1;
- nodeid | result
+SELECT result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_3'$$) ORDER BY 1;
+ result
 ---------------------------------------------------------------------
-      1 | user_3
-      2 |
-      3 | user_3
+
+ user_3
+ user_3
 (3 rows)
 
 SELECT recover_prepared_transactions();
@@ -132,12 +132,12 @@ SELECT recover_prepared_transactions();
                              1
 (1 row)
 
-SELECT nodeid, result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_3'$$) ORDER BY 1;
- nodeid | result
+SELECT result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_3'$$) ORDER BY 1;
+ result
 ---------------------------------------------------------------------
-      1 | user_3
-      2 | user_3
-      3 | user_3
+ user_3
+ user_3
+ user_3
 (3 rows)
 
 DROP DATABASE other_db2;
