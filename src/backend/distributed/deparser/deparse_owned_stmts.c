@@ -92,7 +92,7 @@ AppendReassignOwnedStmt(StringInfo buf, ReassignOwnedStmt *stmt)
 
 	AppendRoleList(buf, stmt->roles);
 	char const *newRoleName = RoleSpecString(stmt->newrole, true);
-	appendStringInfo(buf, " TO %s", quote_identifier(newRoleName));
+	appendStringInfo(buf, " TO %s", newRoleName);
 }
 
 

@@ -42,44 +42,44 @@ static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddr
 static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
-static void EnsureRequiredObjectExistOnAllNodes(const ObjectAddress *target,
-												RequiredObjectSet requiredObjectSet);
+static void EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
+												   RequiredObjectSet requiredObjectSet);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
 
 /*
  * EnsureObjectAndDependenciesExistOnAllNodes is a wrapper around
- * EnsureRequiredObjectExistOnAllNodes to ensure the "object itself" (together
+ * EnsureRequiredObjectSetExistOnAllNodes to ensure the "object itself" (together
  * with its dependencies) is available on all nodes.
  *
- * See EnsureRequiredObjectExistOnAllNodes to learn more about how this
+ * See EnsureRequiredObjectSetExistOnAllNodes to learn more about how this
  * function deals with an object created within the same transaction.
  */
 void
 EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
-	EnsureRequiredObjectExistOnAllNodes(target, REQUIRE_OBJECT_AND_DEPENDENCIES);
+	EnsureRequiredObjectSetExistOnAllNodes(target, REQUIRE_OBJECT_AND_DEPENDENCIES);
 }
 
 
 /*
  * EnsureDependenciesExistOnAllNodes is a wrapper around
- * EnsureRequiredObjectExistOnAllNodes to ensure "all dependencies" of given
+ * EnsureRequiredObjectSetExistOnAllNodes to ensure "all dependencies" of given
  * object --but not the object itself-- are available on all nodes.
  *
- * See EnsureRequiredObjectExistOnAllNodes to learn more about how this
+ * See EnsureRequiredObjectSetExistOnAllNodes to learn more about how this
  * function deals with an object created within the same transaction.
  */
 static void
 EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
-	EnsureRequiredObjectExistOnAllNodes(target, REQUIRE_ONLY_DEPENDENCIES);
+	EnsureRequiredObjectSetExistOnAllNodes(target, REQUIRE_ONLY_DEPENDENCIES);
 }
 
 
 /*
- * EnsureRequiredObjectExistOnAllNodes finds all the dependencies that we support and makes
+ * EnsureRequiredObjectSetExistOnAllNodes finds all the dependencies that we support and makes
  * sure these are available on all nodes if required object set is REQUIRE_ONLY_DEPENDENCIES.
  * Otherwise, i.e., if required object set is REQUIRE_OBJECT_AND_DEPENDENCIES, then this
  * function creates the object itself on all nodes too. This function ensures that each
@@ -100,8 +100,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
  */
 static void
-EnsureRequiredObjectExistOnAllNodes(const ObjectAddress *target,
-									RequiredObjectSet requiredObjectSet)
+EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
+									   RequiredObjectSet requiredObjectSet)
 {
 	Assert(requiredObjectSet == REQUIRE_ONLY_DEPENDENCIES ||
 		   requiredObjectSet == REQUIRE_OBJECT_AND_DEPENDENCIES);

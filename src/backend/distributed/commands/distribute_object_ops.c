@@ -281,7 +281,7 @@ static DistributeObjectOps Any_ReassignOwned = {
 	.qualify = NULL,
 	.preprocess = NULL,
 	.postprocess = PostprocessReassignOwnedStmt,
-	.operationType = DIST_OPS_DROP,
+	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
 	.markDistributed = false,
 };

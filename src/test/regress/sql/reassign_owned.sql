@@ -1,18 +1,18 @@
 CREATE ROLE distributed_source_role1;
 create ROLE "distributed_source_role-\!";
 
-CREATE ROLE distributed_target_role1;
+CREATE ROLE "distributed_target_role1-\!";
 
 set citus.enable_create_role_propagation to off;
 create ROLE local_target_role1;
-alter role local_target_role1 SET work_mem = '64MB';
+
 
 \c - - - :worker_1_port
-
+set citus.enable_create_role_propagation to off;
 CREATE ROLE local_target_role1;
 
 \c - - - :master_port
-
+set citus.enable_create_role_propagation to off;
 create role local_source_role1;
 reset citus.enable_create_role_propagation;
 
@@ -47,11 +47,11 @@ SELECT result from run_command_on_all_nodes(
 --tests for reassing owned by with multiple distributed roles and a local role to a distributed role
 --local role should be ignored
 set citus.log_remote_commands to on;
-REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1  TO distributed_target_role1;
+REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1  TO "distributed_target_role1-\!";
 reset citus.grep_remote_commands;
 reset citus.log_remote_commands;
 
---check if the owner changed to distributed_target_role1
+--check if the owner changed to "distributed_target_role1-\!"
 
 RESET citus.log_remote_commands;
 SELECT result from run_command_on_all_nodes(
@@ -117,7 +117,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
 
 --clear resources
-DROP OWNED BY distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1;
+DROP OWNED BY distributed_source_role1, "distributed_source_role-\!","distributed_target_role1-\!",local_target_role1;
 
 SELECT result from run_command_on_all_nodes(
   $$
@@ -135,6 +135,5 @@ WHERE
 ) ORDER BY result;
 
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP ROLE%';
-drop role distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1,local_source_role1;
+set client_min_messages to warning;
+drop role distributed_source_role1, "distributed_source_role-\!","distributed_target_role1-\!",local_target_role1,local_source_role1;

@@ -1,15 +1,20 @@
 CREATE ROLE distributed_source_role1;
 create ROLE "distributed_source_role-\!";
-CREATE ROLE distributed_target_role1;
+CREATE ROLE "distributed_target_role1-\!";
 set citus.enable_create_role_propagation to off;
 create ROLE local_target_role1;
 NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
 HINT:  Connect to other nodes directly to manually create all necessary users and roles.
-alter role local_target_role1 SET work_mem = '64MB';
 \c - - - :worker_1_port
+set citus.enable_create_role_propagation to off;
 CREATE ROLE local_target_role1;
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 \c - - - :master_port
+set citus.enable_create_role_propagation to off;
 create role local_source_role1;
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 reset citus.enable_create_role_propagation;
 GRANT CREATE ON SCHEMA public TO distributed_source_role1,"distributed_source_role-\!";
 SET ROLE distributed_source_role1;
@@ -54,12 +59,12 @@ SELECT result from run_command_on_all_nodes(
 --tests for reassing owned by with multiple distributed roles and a local role to a distributed role
 --local role should be ignored
 set citus.log_remote_commands to on;
-REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1  TO distributed_target_role1;
+REASSIGN OWNED BY distributed_source_role1,"distributed_source_role-\!",local_source_role1  TO "distributed_target_role1-\!";
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_create_or_alter_role('distributed_target_role1', 'CREATE ROLE distributed_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', 'ALTER ROLE distributed_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''')
+NOTICE:  issuing SELECT worker_create_or_alter_role(E'distributed_target_role1-\\!', E'CREATE ROLE "distributed_target_role1-\\!" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', E'ALTER ROLE "distributed_target_role1-\\!" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -67,7 +72,7 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_create_or_alter_role('distributed_target_role1', 'CREATE ROLE distributed_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', 'ALTER ROLE distributed_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''')
+NOTICE:  issuing SELECT worker_create_or_alter_role(E'distributed_target_role1-\\!', E'CREATE ROLE "distributed_target_role1-\\!" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', E'ALTER ROLE "distributed_target_role1-\\!" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -75,17 +80,17 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('role', ARRAY['distributed_target_role1']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('role', ARRAY[E'distributed_target_role1-\\!']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('role', ARRAY['distributed_target_role1']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('role', ARRAY[E'distributed_target_role1-\\!']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!", local_source_role1 TO distributed_target_role1
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!", local_source_role1 TO distributed_target_role1
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO "distributed_target_role1-\!"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO "distributed_target_role1-\!"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -101,7 +106,7 @@ NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 reset citus.grep_remote_commands;
 reset citus.log_remote_commands;
---check if the owner changed to distributed_target_role1
+--check if the owner changed to "distributed_target_role1-\!"
 RESET citus.log_remote_commands;
 SELECT result from run_command_on_all_nodes(
   $$
@@ -118,11 +123,11 @@ SELECT result from run_command_on_all_nodes(
   ) q2
   $$
 ) ORDER BY result;
-                                                                                             result
+                                                                                                 result
 ---------------------------------------------------------------------
- [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_target_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_target_role1"}]
- [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_target_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_target_role1"}]
- [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_target_role1"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_target_role1"}]
+ [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_target_role1-\\!"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_target_role1-\\!"}]
+ [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_target_role1-\\!"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_target_role1-\\!"}]
+ [{"tablename": "test_table", "schemaname": "public", "tableowner": "distributed_target_role1-\\!"}, {"tablename": "test_table2", "schemaname": "public", "tableowner": "distributed_target_role1-\\!"}]
 (3 rows)
 
 --tests for reassing owned by with multiple distributed roles and a local role to a local role
@@ -155,8 +160,6 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_create_or_alter_role('local_target_role1', 'CREATE ROLE local_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', 'ALTER ROLE local_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT alter_role_if_exists('local_target_role1', 'ALTER ROLE local_target_role1 SET work_mem = 65536')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
@@ -165,8 +168,6 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_create_or_alter_role('local_target_role1', 'CREATE ROLE local_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', 'ALTER ROLE local_target_role1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT alter_role_if_exists('local_target_role1', 'ALTER ROLE local_target_role1 SET work_mem = 65536')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
@@ -181,9 +182,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!", local_source_role1 TO local_target_role1
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO local_target_role1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!", local_source_role1 TO local_target_role1
+NOTICE:  issuing REASSIGN OWNED BY distributed_source_role1, "distributed_source_role-\!" TO local_target_role1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -245,7 +246,7 @@ SELECT result from run_command_on_all_nodes(
 (3 rows)
 
 --clear resources
-DROP OWNED BY distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1;
+DROP OWNED BY distributed_source_role1, "distributed_source_role-\!","distributed_target_role1-\!",local_target_role1;
 SELECT result from run_command_on_all_nodes(
   $$
   SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
@@ -267,10 +268,5 @@ WHERE
 
 (3 rows)
 
-SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%DROP ROLE%';
-drop role distributed_source_role1, "distributed_source_role-\!",distributed_target_role1,local_target_role1,local_source_role1;
-NOTICE:  issuing DROP ROLE distributed_source_role1, "distributed_source_role-\!", distributed_target_role1, local_target_role1, local_source_role1
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP ROLE distributed_source_role1, "distributed_source_role-\!", distributed_target_role1, local_target_role1, local_source_role1
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set client_min_messages to warning;
+drop role distributed_source_role1, "distributed_source_role-\!","distributed_target_role1-\!",local_target_role1,local_source_role1;

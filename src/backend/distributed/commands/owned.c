@@ -95,14 +95,14 @@ PreprocessDropOwnedStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessReassignOwnedStmt Post-processes a REASSIGN OWNED statement.
+ * PostprocessReassignOwnedStmt takes a Node pointer representing a REASSIGN
+ * OWNED statement and performs any necessary post-processing after the statement
+ * has been executed locally.
  *
- * This function takes a Node pointer representing a REASSIGN OWNED statement,
- * and performs any necessary post-processing after the statement has been executed.
- * In this method, we propagate all the roles that are being reassigned.
- * Therefore, we don't filter the roles based on whether they are distributed or not.
- * If roles are not distributed and those roles are not present in the nodes
- * where the statement is being propagated, then the statement will fail.
+ * We filter out local roles in OWNED BY clause before deparsing the command,
+ * meaning that we skip reassigning what is owned by local roles. However,
+ * if the role specified in TO clause is local, we automatically distribute
+ * it before deparsing the command.
  */
 List *
 PostprocessReassignOwnedStmt(Node *node, const char *queryString)
@@ -130,6 +130,10 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 
 	ObjectAddress *newRoleAddress = GetNewRoleAddress(stmt);
 
+	/*
+	 * We temporarily enable create / alter role propagation to properly
+	 * propagate the role specified in TO clause.
+	 */
 	int saveNestLevel = NewGUCNestLevel();
 	set_config_option("citus.enable_create_role_propagation", "on",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
@@ -156,8 +160,7 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 
 
 /*
- * GetNewRoleAddress returns the ObjectAddress of the new role.
- * in the ReassignOwnedStmt.
+ * GetNewRoleAddress returns the ObjectAddress of the new role
  */
 static ObjectAddress *
 GetNewRoleAddress(ReassignOwnedStmt *stmt)
