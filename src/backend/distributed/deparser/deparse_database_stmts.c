@@ -321,7 +321,7 @@ DeparseDatabaseCommentStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	char *databaseName = strVal(stmt->object);
+	char const *databaseName = quote_identifier(strVal(stmt->object));
 
 	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
 

@@ -712,20 +712,14 @@ List *
 DatabaseCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CommentStmt *stmt = castNode(CommentStmt, node);
+	Relation relation;
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	char *databaseName = strVal(stmt->object);
+	ObjectAddress objectAddress = get_object_address(stmt->objtype, stmt->object,
+													 &relation, AccessExclusiveLock,
+													 missing_ok);
 
-	Oid objid = get_database_oid(databaseName, missing_ok);
-
-	if (!OidIsValid(objid))
-	{
-		ereport(ERROR, (errmsg("database \"%s\" does not exist", databaseName)));
-	}
-	else
-	{
-		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*address, DatabaseRelationId, objid);
-		return list_make1(address);
-	}
+	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
+	*objectAddressCopy = objectAddress;
+	return list_make1(objectAddressCopy);
 }

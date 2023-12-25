@@ -1423,20 +1423,14 @@ List *
 RoleCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CommentStmt *stmt = castNode(CommentStmt, node);
+	Relation relation;
 	Assert(stmt->objtype == OBJECT_ROLE);
 
-	char *roleName = strVal(stmt->object);
+	ObjectAddress objectAddress = get_object_address(stmt->objtype, stmt->object,
+													 &relation, AccessExclusiveLock,
+													 missing_ok);
 
-	Oid objid = get_role_oid(roleName, missing_ok);
-
-	if (!OidIsValid(objid))
-	{
-		ereport(ERROR, (errmsg("role \"%s\" does not exist", roleName)));
-	}
-	else
-	{
-		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*address, AuthIdRelationId, objid);
-		return list_make1(address);
-	}
+	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
+	*objectAddressCopy = objectAddress;
+	return list_make1(objectAddressCopy);
 }

@@ -246,8 +246,8 @@ extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											  bool isPostprocess);
 extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 extern char * CreateDatabaseDDLCommand(Oid dbId);
-extern List * DatabaseCommentObjectAddress(Node *node, bool missing_ok, bool
-										   isPostprocess);
+extern List * DatabaseCommentObjectAddress(Node *node, bool missing_ok,
+										   bool isPostprocess);
 
 
 /* domain.c - forward declarations */
