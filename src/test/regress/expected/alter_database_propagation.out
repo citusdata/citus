@@ -189,7 +189,7 @@ alter DATABASE local_regression rename to local_regression2;
 drop database local_regression2;
 set citus.enable_create_database_propagation=on;
 drop database regression3;
-create database regression4;
+create database "regression!'4";
 SELECT result FROM run_command_on_all_nodes(
   $$
   ALTER TABLESPACE alter_db_tablespace RENAME TO "ts-needs\!escape"
@@ -202,12 +202,12 @@ SELECT result FROM run_command_on_all_nodes(
  ALTER TABLESPACE
 (3 rows)
 
-alter database regression4 set TABLESPACE "ts-needs\!escape";
-NOTICE:  issuing ALTER DATABASE regression4 SET TABLESPACE "ts-needs\!escape"
+alter database "regression!'4" set TABLESPACE "ts-needs\!escape";
+NOTICE:  issuing ALTER DATABASE "regression!'4" SET TABLESPACE "ts-needs\!escape"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression4 SET TABLESPACE "ts-needs\!escape"
+NOTICE:  issuing ALTER DATABASE "regression!'4" SET TABLESPACE "ts-needs\!escape"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-drop database regression4;
+drop database "regression!'4";
 set citus.log_remote_commands = false;
 set citus.enable_create_database_propagation=off;
 SELECT result FROM run_command_on_all_nodes(

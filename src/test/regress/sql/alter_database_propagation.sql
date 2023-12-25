@@ -90,7 +90,7 @@ set citus.enable_create_database_propagation=on;
 
 drop database regression3;
 
-create database regression4;
+create database "regression!'4";
 
 
 SELECT result FROM run_command_on_all_nodes(
@@ -99,9 +99,9 @@ SELECT result FROM run_command_on_all_nodes(
   $$
 );
 
-alter database regression4 set TABLESPACE "ts-needs\!escape";
+alter database "regression!'4" set TABLESPACE "ts-needs\!escape";
 
-drop database regression4;
+drop database "regression!'4";
 
 set citus.log_remote_commands = false;
 set citus.enable_create_database_propagation=off;
