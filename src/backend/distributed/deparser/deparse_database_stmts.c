@@ -124,17 +124,27 @@ AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
 static void
 AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt)
 {
+	if (list_length(stmt->options) == 0)
+	{
+		elog(ERROR, "got unexpected number of options for ALTER DATABASE");
+	}
+
 	if (stmt->options)
 	{
 		DefElem *firstOption = linitial(stmt->options);
 		if (strcmp(firstOption->defname, "tablespace") == 0)
 		{
 			AppendAlterDatabaseSetTablespace(buf, firstOption, stmt->dbname);
+
+			/* SET tablespace cannot be combined with other options */
+			return;
 		}
-		else
-		{
-			AppendBasicAlterDatabaseOptions(buf, stmt);
-		}
+
+
+		appendStringInfo(buf, "ALTER DATABASE %s WITH",
+						 quote_identifier(stmt->dbname));
+
+		AppendBasicAlterDatabaseOptions(buf, stmt);
 	}
 
 	appendStringInfo(buf, ";");
@@ -154,7 +164,7 @@ AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
  * AppendBasicAlterDatabaseOptions appends basic ALTER DATABASE options to a string buffer.
  * Basic options are those that can be appended to the ALTER DATABASE statement
  * after the "WITH" keyword.(i.e. ALLOW_CONNECTIONS, CONNECTION LIMIT, IS_TEMPLATE)
- * The tablespace option is not a basic option since it is defined with SET option.
+ * For example, the tablespace option is not a basic option since it is defined via SET keyword.
  *
  * This function takes a string buffer and an AlterDatabaseStmt as input.
  * It appends the basic options to the string buffer.
@@ -163,17 +173,9 @@ AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname)
 static void
 AppendBasicAlterDatabaseOptions(StringInfo buf, AlterDatabaseStmt *stmt)
 {
-	ListCell *cell = NULL;
-	bool prefixAppendedForBasicOptions = false;
-	foreach(cell, stmt->options)
+	DefElem *def = NULL;
+	foreach_ptr(def, stmt->options)
 	{
-		DefElem *def = castNode(DefElem, lfirst(cell));
-		if (!prefixAppendedForBasicOptions)
-		{
-			appendStringInfo(buf, "ALTER DATABASE %s WITH", quote_identifier(
-								 stmt->dbname));
-			prefixAppendedForBasicOptions = true;
-		}
 		DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
 									 alterDatabaseOptionFormats));
 	}

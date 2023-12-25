@@ -49,10 +49,12 @@ alter database regression set lock_timeout to DEFAULT;
 alter database regression RESET lock_timeout;
 
 set citus.enable_create_database_propagation=on;
-create database regression2;
-alter database regression2 with CONNECTION LIMIT 100;
-alter database regression2 with IS_TEMPLATE true CONNECTION LIMIT 50;
-alter database regression2 with IS_TEMPLATE false;
+create database "regression!'2";
+alter database "regression!'2" with CONNECTION LIMIT 100;
+alter database "regression!'2" with IS_TEMPLATE true CONNECTION LIMIT 50;
+alter database "regression!'2" with IS_TEMPLATE false;
+
+
 
 
 \set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
@@ -71,10 +73,10 @@ CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%ALTER DATABASE%';
 
-alter database regression2 set TABLESPACE alter_db_tablespace;
+alter database "regression!'2" set TABLESPACE alter_db_tablespace;
 
 set citus.enable_create_database_propagation=on;
-alter database regression2 rename to regression3;
+alter database "regression!'2" rename to regression3;
 
 -- check that the local database rename and alter comnmand is not propagated
 set citus.enable_create_database_propagation=off;

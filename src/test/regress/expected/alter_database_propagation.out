@@ -140,21 +140,21 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER DATABASE regression RESET lock_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set citus.enable_create_database_propagation=on;
-create database regression2;
-alter database regression2 with CONNECTION LIMIT 100;
-NOTICE:  issuing ALTER DATABASE regression2 WITH CONNECTION LIMIT 100;
+create database "regression!'2";
+alter database "regression!'2" with CONNECTION LIMIT 100;
+NOTICE:  issuing ALTER DATABASE "regression!'2" WITH CONNECTION LIMIT 100;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression2 WITH CONNECTION LIMIT 100;
+NOTICE:  issuing ALTER DATABASE "regression!'2" WITH CONNECTION LIMIT 100;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-alter database regression2 with IS_TEMPLATE true CONNECTION LIMIT 50;
-NOTICE:  issuing ALTER DATABASE regression2 WITH IS_TEMPLATE true CONNECTION LIMIT 50;
+alter database "regression!'2" with IS_TEMPLATE true CONNECTION LIMIT 50;
+NOTICE:  issuing ALTER DATABASE "regression!'2" WITH IS_TEMPLATE true CONNECTION LIMIT 50;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression2 WITH IS_TEMPLATE true CONNECTION LIMIT 50;
+NOTICE:  issuing ALTER DATABASE "regression!'2" WITH IS_TEMPLATE true CONNECTION LIMIT 50;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-alter database regression2 with IS_TEMPLATE false;
-NOTICE:  issuing ALTER DATABASE regression2 WITH IS_TEMPLATE false;
+alter database "regression!'2" with IS_TEMPLATE false;
+NOTICE:  issuing ALTER DATABASE "regression!'2" WITH IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression2 WITH IS_TEMPLATE false;
+NOTICE:  issuing ALTER DATABASE "regression!'2" WITH IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 \set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
 CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
@@ -167,16 +167,16 @@ CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
 \c - - - :master_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%ALTER DATABASE%';
-alter database regression2 set TABLESPACE alter_db_tablespace;
-NOTICE:  issuing ALTER DATABASE regression2 SET TABLESPACE alter_db_tablespace;
+alter database "regression!'2" set TABLESPACE alter_db_tablespace;
+NOTICE:  issuing ALTER DATABASE "regression!'2" SET TABLESPACE alter_db_tablespace
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression2 SET TABLESPACE alter_db_tablespace;
+NOTICE:  issuing ALTER DATABASE "regression!'2" SET TABLESPACE alter_db_tablespace
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set citus.enable_create_database_propagation=on;
-alter database regression2 rename to regression3;
-NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
+alter database "regression!'2" rename to regression3;
+NOTICE:  issuing ALTER DATABASE "regression!'2" RENAME TO regression3
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression2 RENAME TO regression3
+NOTICE:  issuing ALTER DATABASE "regression!'2" RENAME TO regression3
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- check that the local database rename and alter comnmand is not propagated
 set citus.enable_create_database_propagation=off;
@@ -203,9 +203,9 @@ SELECT result FROM run_command_on_all_nodes(
 (3 rows)
 
 alter database regression4 set TABLESPACE "ts-needs\!escape";
-NOTICE:  issuing ALTER DATABASE regression4 SET TABLESPACE "ts-needs\!escape";
+NOTICE:  issuing ALTER DATABASE regression4 SET TABLESPACE "ts-needs\!escape"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE regression4 SET TABLESPACE "ts-needs\!escape";
+NOTICE:  issuing ALTER DATABASE regression4 SET TABLESPACE "ts-needs\!escape"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 drop database regression4;
 set citus.log_remote_commands = false;
