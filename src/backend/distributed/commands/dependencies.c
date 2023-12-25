@@ -107,6 +107,11 @@ EnsureRequiredObjectExistOnAllNodes(const ObjectAddress *target,
 		   requiredObjectSet == REQUIRE_OBJECT_AND_DEPENDENCIES);
 
 
+	if (IsAnyObjectDistributed(list_make1((ObjectAddress *) target)))
+	{
+		return;
+	}
+
 	List *objectsWithCommands = NIL;
 	List *ddlCommands = NULL;
 
