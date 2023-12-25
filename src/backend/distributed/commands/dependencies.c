@@ -53,12 +53,37 @@ static char * DropTableIfExistsCommand(Oid relationId);
  * EnsureRequiredObjectSetExistOnAllNodes to ensure the "object itself" (together
  * with its dependencies) is available on all nodes.
  *
- * See EnsureRequiredObjectSetExistOnAllNodes to learn more about how this
+ * Different than EnsureDependenciesExistOnAllNodes, we return early if the
+ * target object is distributed already.
+ *
+ * The reason why we don't do the same in EnsureDependenciesExistOnAllNodes
+ * is that it's is used when altering an object too and hence the target object
+ * may instantly have a dependency that needs to be propagated now. For example,
+ * when "⁠GRANT non_dist_role TO dist_role" is executed, we need to propagate
+ * "non_dist_role" to all nodes before propagating the "GRANT" command itself.
+ * For this reason, we call EnsureDependenciesExistOnAllNodes for "dist_role"
+ * and it would automatically discover that "non_dist_role" is a dependency of
+ * "dist_role" and propagate it beforehand.
+ *
+ * However, when we're requested to create the target object itself (and
+ * implicitly its dependencies), we're sure that we're not altering the target
+ * object itself, hence we can return early if the target object is already
+ * distributed. This is the case, for example, when
+ * "REASSIGN OWNED BY dist_role TO non_dist_role" is executed. In that case,
+ * "non_dist_role" is not a dependency of "dist_role" but we want to distribute
+ * "non_dist_role" beforehand and we call this function for "non_dist_role",
+ * not for "dist_role".
+ *
+ * See EnsureRequiredObjectExistOnAllNodes to learn more about how this
  * function deals with an object created within the same transaction.
  */
 void
 EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
+	if (IsAnyObjectDistributed(list_make1((ObjectAddress *) target)))
+	{
+		return;
+	}
 	EnsureRequiredObjectSetExistOnAllNodes(target, REQUIRE_OBJECT_AND_DEPENDENCIES);
 }
 
