@@ -23,7 +23,7 @@ static char * GetCommentForObject(Oid oid);
 
 
 List *
-GetCommentPropagationCommands(Oid oid,char *objectName, ObjectType objectType)
+GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
 {
 	List *commands = NIL;
 
@@ -36,11 +36,13 @@ GetCommentPropagationCommands(Oid oid,char *objectName, ObjectType objectType)
 	/* Create the SQL command to propagate the comment to other nodes */
 	if (comment == NULL)
 	{
-		appendStringInfo(commentStmt, "COMMENT ON %s %s IS NULL;", commentObjectType, quote_identifier(objectName));
+		appendStringInfo(commentStmt, "COMMENT ON %s %s IS NULL;", commentObjectType,
+						 quote_identifier(objectName));
 	}
 	else
 	{
-		appendStringInfo(commentStmt, "COMMENT ON %s %s IS %s;", commentObjectType, quote_identifier(objectName),
+		appendStringInfo(commentStmt, "COMMENT ON %s %s IS %s;", commentObjectType,
+						 quote_identifier(objectName),
 						 quote_literal_cstr(comment));
 	}
 
@@ -51,16 +53,22 @@ GetCommentPropagationCommands(Oid oid,char *objectName, ObjectType objectType)
 	return commands;
 }
 
-static char * GetCommentObjectType(ObjectType objectType){
+
+static char *
+GetCommentObjectType(ObjectType objectType)
+{
 	char *objectName = NULL;
-	for(int i = 0; i < sizeof(commentStmtTypes)/sizeof(CommentStmtType); i++){
-		if(commentStmtTypes[i].objectType == objectType){
-			objectName =  commentStmtTypes[i].objectName;
+	for (int i = 0; i < sizeof(commentStmtTypes) / sizeof(CommentStmtType); i++)
+	{
+		if (commentStmtTypes[i].objectType == objectType)
+		{
+			objectName = commentStmtTypes[i].objectName;
 			break;
 		}
 	}
 	return objectName;
 }
+
 
 static char *
 GetCommentForObject(Oid oid)
@@ -100,7 +108,6 @@ GetCommentForObject(Oid oid)
 			}
 			break;
 		}
-
 	}
 
 	/* End the scan and close the catalog */

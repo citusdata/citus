@@ -9,4 +9,5 @@ typedef struct CommentStmtType
 } CommentStmtType;
 
 
-extern List * GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType);
+extern List * GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType
+											objectType);
