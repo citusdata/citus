@@ -129,13 +129,8 @@ CREATE USER "role-needs\!escape";
 CREATE DATABASE "db-needs\!escape" owner "role-needs\!escape" tablespace "ts-needs\!escape";
 
 -- Rename it to make check_database_on_all_nodes happy.
--- Today we don't support ALTER DATABASE .. RENAME TO .., so need to propagate it manually.
-SELECT result FROM run_command_on_all_nodes(
-  $$
-  ALTER DATABASE "db-needs\!escape" RENAME TO db_needs_escape
-  $$
-);
 
+ALTER DATABASE "db-needs\!escape" RENAME TO db_needs_escape;
 SELECT * FROM public.check_database_on_all_nodes('db_needs_escape') ORDER BY node_type;
 
 -- test database syncing after node addition
@@ -540,6 +535,7 @@ SELECT * FROM public.check_database_on_all_nodes('test_db') ORDER BY node_type;
 REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
 DROP DATABASE test_db;
 DROP ROLE propagated_role, non_propagated_role;
+
 
 --clean up resources created by this test
 

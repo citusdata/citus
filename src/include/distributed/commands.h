@@ -244,6 +244,8 @@ extern List * DropDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											bool isPostprocess);
 extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											  bool isPostprocess);
+extern List * GenerateGrantDatabaseCommandList(void);
+extern List * PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString);
 extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 extern char * CreateDatabaseDDLCommand(Oid dbId);
 
