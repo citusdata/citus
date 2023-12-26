@@ -4,7 +4,7 @@
 #include "access/htup_details.h"
 #include "catalog/pg_shdescription.h"
 
-#include "server/nodes/parsenodes.h"
+#include "nodes/parsenodes.h"
 #include "server/access/table.h"
 #include "server/utils/rel.h"
 #include "utils/builtins.h"
