@@ -691,11 +691,6 @@ extern List * AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node,
 extern List * AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node,
 															   bool missing_ok, bool
 															   isPostprocess);
-extern List * TextSearchConfigurationCommentObjectAddress(Node *node,
-														  bool missing_ok, bool
-														  isPostprocess);
-extern List * TextSearchDictCommentObjectAddress(Node *node,
-												 bool missing_ok, bool isPostprocess);
 extern List * AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
 															 bool missing_ok, bool
 															 isPostprocess);
