@@ -995,13 +995,13 @@ static DistributeObjectOps TextSearchConfig_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Comment = {
-	.deparse = DeparseCommentStmt,
+	.deparse = DeparseTextSearchConfigurationCommentStmt,
 	.qualify = QualifyTextSearchConfigurationCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSCONFIGURATION,
 	.operationType = DIST_OPS_ALTER,
-	.address = CommentObjectAddress,
+	.address = TextSearchConfigurationCommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Define = {
@@ -1064,13 +1064,13 @@ static DistributeObjectOps TextSearchDict_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Comment = {
-	.deparse = DeparseCommentStmt,
+	.deparse = DeparseTextSearchDictionaryCommentStmt,
 	.qualify = QualifyTextSearchDictionaryCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSDICTIONARY,
 	.operationType = DIST_OPS_ALTER,
-	.address = CommentObjectAddress,
+	.address = TextSearchDictCommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Define = {
