@@ -230,6 +230,7 @@ extern List * PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);
+extern List * GetDatabaseMetadataSyncCommands(Oid dbOid);
 
 
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
