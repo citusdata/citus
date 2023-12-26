@@ -306,7 +306,7 @@ static DistributeObjectOps Any_DropRole = {
 };
 
 static DistributeObjectOps Role_Comment = {
-	.deparse = DeparseRoleCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
@@ -545,7 +545,7 @@ static DistributeObjectOps Database_Set = {
 };
 
 static DistributeObjectOps Database_Comment = {
-	.deparse = DeparseDatabaseCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
@@ -994,7 +994,7 @@ static DistributeObjectOps TextSearchConfig_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Comment = {
-	.deparse = DeparseTextSearchConfigurationCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = QualifyTextSearchConfigurationCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
@@ -1063,7 +1063,7 @@ static DistributeObjectOps TextSearchDict_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Comment = {
-	.deparse = DeparseTextSearchDictionaryCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = QualifyTextSearchDictionaryCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,

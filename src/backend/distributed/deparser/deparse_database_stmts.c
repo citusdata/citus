@@ -353,20 +353,3 @@ DeparseDropDatabaseStmt(Node *node)
 
 	return str.data;
 }
-
-
-char *
-DeparseDatabaseCommentStmt(Node *node)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	char const *databaseName = quote_identifier(strVal(stmt->object));
-
-	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
-
-	appendStringInfo(&str, "COMMENT ON DATABASE %s IS %s;", databaseName, comment);
-
-	return str.data;
-}
