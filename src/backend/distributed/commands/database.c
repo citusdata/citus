@@ -16,6 +16,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/table.h"
 #include "access/xact.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_collation.h"
@@ -26,6 +27,7 @@
 #include "commands/defrem.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
@@ -33,8 +35,8 @@
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
-#include "distributed/comment.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -45,12 +47,6 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-
-
-#include "access/htup_details.h"
-#include "access/table.h"
-#include "utils/fmgroids.h"
-#include "utils/rel.h"
 
 /*
  * DatabaseCollationInfo is used to store collation related information of a database.
