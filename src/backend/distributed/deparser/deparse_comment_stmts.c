@@ -23,16 +23,11 @@
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
+#include "distributed/comment.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 
-
-typedef struct
-{
-	char *name;
-	int type;
-} ObjectTypeInfo;
 
 const ObjectTypeInfo ObjectTypeInfos[] =
 {
@@ -41,7 +36,11 @@ const ObjectTypeInfo ObjectTypeInfos[] =
 	[OBJECT_TSCONFIGURATION] = { "TEXT SEARCH CONFIGURATION", T_List },
 	[OBJECT_TSDICTIONARY] = { "TEXT SEARCH DICTIONARY", T_List },
 
-	/* etc. */
+	/* When support for propagating comments to new objects is introduced, an entry for each
+	 * statement type should be added to this list. The first element in each entry is the keyword
+	 * that will be included in the 'COMMENT ..' statement. The second element is the type of
+	 * stmt->object, which represents the name of the propagated object.
+	 */
 };
 
 char *
