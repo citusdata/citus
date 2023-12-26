@@ -123,3 +123,24 @@ GetCommentForObject(Oid oid)
 
 	return comment;
 }
+
+
+/*
+ * CommentObjectAddress resolves the ObjectAddress for the object
+ * on which the comment is placed. Optionally errors if the object does not
+ * exist based on the missing_ok flag passed in by the caller.
+ */
+List *
+CommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	Relation relation;
+
+	ObjectAddress objectAddress = get_object_address(stmt->objtype, stmt->object,
+													 &relation, AccessExclusiveLock,
+													 missing_ok);
+
+	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
+	*objectAddressCopy = objectAddress;
+	return list_make1(objectAddressCopy);
+}

@@ -1424,25 +1424,3 @@ RenameRoleStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 
 	return list_make1(address);
 }
-
-
-/*
- * RoleCommentObjectAddress resolves the ObjectAddress for the ROLE
- * on which the comment is placed. Optionally errors if the role does not
- * exist based on the missing_ok flag passed in by the caller.
- */
-List *
-RoleCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Relation relation;
-	Assert(stmt->objtype == OBJECT_ROLE);
-
-	ObjectAddress objectAddress = get_object_address(stmt->objtype, stmt->object,
-													 &relation, AccessExclusiveLock,
-													 missing_ok);
-
-	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
-	*objectAddressCopy = objectAddress;
-	return list_make1(objectAddressCopy);
-}

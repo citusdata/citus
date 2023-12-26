@@ -793,25 +793,3 @@ CreateDatabaseDDLCommand(Oid dbId)
 
 	return outerDbStmt->data;
 }
-
-
-/*
- * DatabaseCommentObjectAddress resolves the ObjectAddress for the DATABASE
- * on which the comment is placed. Optionally errors if the database does not
- * exist based on the missing_ok flag passed in by the caller.
- */
-List *
-DatabaseCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Relation relation;
-	Assert(stmt->objtype == OBJECT_DATABASE);
-
-	ObjectAddress objectAddress = get_object_address(stmt->objtype, stmt->object,
-													 &relation, AccessExclusiveLock,
-													 missing_ok);
-
-	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
-	*objectAddressCopy = objectAddress;
-	return list_make1(objectAddressCopy);
-}

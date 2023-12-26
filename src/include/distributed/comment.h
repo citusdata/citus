@@ -8,6 +8,9 @@
  *-------------------------------------------------------------------------
  */
 
+#ifndef COMMENT_H
+#define COMMENT_H
+
 #include "postgres.h"
 
 #include "nodes/parsenodes.h"
@@ -21,3 +24,6 @@ typedef struct CommentStmtType
 
 extern List * GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType
 											objectType);
+extern List * CommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
+
+# endif /* COMMENT_H */

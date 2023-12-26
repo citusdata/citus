@@ -15,6 +15,7 @@
 #include "pg_version_constants.h"
 
 #include "distributed/commands.h"
+#include "distributed/comment.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
@@ -312,7 +313,7 @@ static DistributeObjectOps Role_Comment = {
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
-	.address = RoleCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Any_CreateForeignServer = {
@@ -551,7 +552,7 @@ static DistributeObjectOps Database_Comment = {
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
-	.address = DatabaseCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 
@@ -1000,7 +1001,7 @@ static DistributeObjectOps TextSearchConfig_Comment = {
 	.postprocess = NULL,
 	.objectType = OBJECT_TSCONFIGURATION,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchConfigurationCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Define = {
@@ -1069,7 +1070,7 @@ static DistributeObjectOps TextSearchDict_Comment = {
 	.postprocess = NULL,
 	.objectType = OBJECT_TSDICTIONARY,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchDictCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Define = {

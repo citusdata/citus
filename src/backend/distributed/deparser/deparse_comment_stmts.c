@@ -27,13 +27,14 @@
 #include "distributed/log_utils.h"
 
 
-const char * const ObjectTypeNames[] =
+const char *const ObjectTypeNames[] =
 {
-    [OBJECT_DATABASE] = "DATABASE",
-    [OBJECT_ROLE] = "ROLE",
-    [OBJECT_TSCONFIGURATION]  = "TEXT SEARCH CONFIGURATION",
-    [OBJECT_TSDICTIONARY]  = "TEXT SEARCH DICTIONARY",
-    /* etc. */
+	[OBJECT_DATABASE] = "DATABASE",
+	[OBJECT_ROLE] = "ROLE",
+	[OBJECT_TSCONFIGURATION] = "TEXT SEARCH CONFIGURATION",
+	[OBJECT_TSDICTIONARY] = "TEXT SEARCH DICTIONARY",
+
+	/* etc. */
 };
 
 char *
@@ -44,12 +45,12 @@ DeparseCommentStmt(Node *node)
 	initStringInfo(&str);
 
 	const char *objectName = quote_identifier(strVal(stmt->object));
-	const char  *objectType = ObjectTypeNames[stmt->objtype];
+	const char *objectType = ObjectTypeNames[stmt->objtype];
 
 	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
 
 
-	appendStringInfo(&str, "COMMENT ON %s %s IS %s;",objectType, objectName, comment);
+	appendStringInfo(&str, "COMMENT ON %s %s IS %s;", objectType, objectName, comment);
 
 	return str.data;
 }
