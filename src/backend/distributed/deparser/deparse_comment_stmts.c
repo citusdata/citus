@@ -37,8 +37,8 @@ const ObjectTypeInfo ObjectTypeInfos[] =
 	[OBJECT_TSDICTIONARY] = { "TEXT SEARCH DICTIONARY", T_List },
 
 	/* When support for propagating comments to new objects is introduced, an entry for each
-	 * statement type should be added to this list. The first element in each entry is the keyword
-	 * that will be included in the 'COMMENT ..' statement. The second element is the type of
+	 * statement type should be added to this list. The first element in each entry is the 'object_type' keyword
+	 * that will be included in the 'COMMENT ON <object_type> ..' statement (i.e. DATABASE,). The second element is the type of
 	 * stmt->object, which represents the name of the propagated object.
 	 */
 };
