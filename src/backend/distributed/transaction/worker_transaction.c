@@ -234,7 +234,8 @@ List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
 	List *workerNodeList = NIL;
-	if (targetWorkerSet == ALL_SHARD_NODES || targetWorkerSet == METADATA_NODES)
+	if (targetWorkerSet == ALL_SHARD_NODES ||
+		targetWorkerSet == METADATA_NODES)
 	{
 		workerNodeList = ActivePrimaryNodeList(lockMode);
 	}

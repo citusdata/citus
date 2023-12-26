@@ -21,6 +21,7 @@
 #include "catalog/dependency.h"
 #include "common/hashfn.h"
 #include "nodes/print.h"
+#include "postmaster/postmaster.h"
 #include "storage/fd.h"
 #include "utils/datum.h"
 #include "utils/guc.h"
@@ -46,6 +47,7 @@
 #include "distributed/multi_logical_replication.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/remote_commands.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/replication_origin_session_utils.h"
 #include "distributed/shard_cleaner.h"
@@ -54,6 +56,9 @@
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
+
+#define COMMIT_MANAGEMENT_COMMAND_2PC \
+	"SELECT citus_internal.commit_management_command_2pc()"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -317,10 +322,21 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			MemoryContext previousContext =
 				MemoryContextSwitchTo(CitusXactCallbackContext);
 
-			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
+			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED &&
+				!IsMainDBCommand)
 			{
 				/* handles both already prepared and open transactions */
 				CoordinatedRemoteTransactionsCommit();
+			}
+
+			/*
+			 * If this is a non-Citus main database we should try to commit the prepared
+			 * transactions created by the Citus main database on the worker nodes.
+			 */
+			if (!IsMainDB && MainDBConnection != NULL)
+			{
+				RunCitusMainDBQuery(COMMIT_MANAGEMENT_COMMAND_2PC);
+				CleanCitusMainDBConnection();
 			}
 
 			/* close connections etc. */
@@ -377,6 +393,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			DisableWorkerMessagePropagation();
 
 			RemoveIntermediateResultsDirectories();
+
+			CleanCitusMainDBConnection();
 
 			/* handles both already prepared and open transactions */
 			if (CurrentCoordinatedTransactionState > COORD_TRANS_IDLE)
@@ -509,6 +527,17 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				break;
 			}
 
+
+			/*
+			 * If this is a non-Citus main database we should commit the Citus
+			 * main database query. So if some error happens on the distributed main
+			 * database query we wouldn't have committed the current query.
+			 */
+			if (!IsMainDB && MainDBConnection != NULL)
+			{
+				RunCitusMainDBQuery("COMMIT");
+			}
+
 			/*
 			 * TODO: It'd probably be a good idea to force constraints and
 			 * such to 'immediate' here. Deferred triggers might try to send
@@ -537,7 +566,10 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				 * us to mark failed placements as invalid.  Better don't use
 				 * this for anything important (i.e. DDL/metadata).
 				 */
-				CoordinatedRemoteTransactionsCommit();
+				if (IsMainDB)
+				{
+					CoordinatedRemoteTransactionsCommit();
+				}
 				CurrentCoordinatedTransactionState = COORD_TRANS_COMMITTED;
 			}
 

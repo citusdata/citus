@@ -19,14 +19,19 @@
 #include "miscadmin.h"
 
 #include "access/xact.h"
+#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/hsearch.h"
+#include "utils/xid8.h"
 
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
@@ -56,6 +61,9 @@ static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection
 
 static void Assign2PCIdentifier(MultiConnection *connection);
 
+PG_FUNCTION_INFO_V1(start_management_transaction);
+PG_FUNCTION_INFO_V1(execute_command_on_remote_nodes_as_user);
+PG_FUNCTION_INFO_V1(commit_management_command_2pc);
 
 static char *IsolationLevelName[] = {
 	"READ UNCOMMITTED",
@@ -63,6 +71,154 @@ static char *IsolationLevelName[] = {
 	"REPEATABLE READ",
 	"SERIALIZABLE"
 };
+
+/*
+ * These variables are necessary for running queries from a database that is not
+ * the Citus main database. Some of these queries need to be propagated to the
+ * workers and Citus main database will be used for these queries, such as
+ * CREATE ROLE. For that we create a connection to the Citus main database and
+ * run queries from there.
+ */
+
+/* The MultiConnection used for connecting Citus main database. */
+MultiConnection *MainDBConnection = NULL;
+
+/*
+ * IsMainDBCommand is true if this is a query in the Citus main database that is started
+ * by a query from a different database.
+ */
+bool IsMainDBCommand = false;
+
+/*
+ * The transaction id of the query from the other database that started the
+ * main database query.
+ */
+FullTransactionId OuterXid;
+
+/*
+ * Shows if this is the Citus main database or not. We needed a variable instead of
+ * checking if this database's name is the same as MainDb because we sometimes need
+ * this value outside a transaction where we cannot reach the current database name.
+ */
+bool IsMainDB = true;
+
+/*
+ * Name of a superuser role to be used during main database connections.
+ */
+char *SuperuserRole = NULL;
+
+
+/*
+ * start_management_transaction starts a management transaction
+ * in the main database by recording the outer transaction's transaction id and setting
+ * IsMainDBCommand to true.
+ */
+Datum
+start_management_transaction(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	OuterXid = PG_GETARG_FULLTRANSACTIONID(0);
+	IsMainDBCommand = true;
+
+	Use2PCForCoordinatedTransaction();
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * execute_command_on_remote_nodes_as_user executes the query on the nodes
+ * other than the current node, using the user passed.
+ */
+Datum
+execute_command_on_remote_nodes_as_user(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	text *queryText = PG_GETARG_TEXT_P(0);
+	char *query = text_to_cstring(queryText);
+
+	text *usernameText = PG_GETARG_TEXT_P(1);
+	char *username = text_to_cstring(usernameText);
+
+	StringInfo queryToSend = makeStringInfo();
+
+	appendStringInfo(queryToSend, "%s;%s;%s", DISABLE_METADATA_SYNC, query,
+					 ENABLE_METADATA_SYNC);
+
+	SendCommandToWorkersAsUser(REMOTE_NODES, username, queryToSend->data);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * commit_management_command_2pc is a wrapper UDF for
+ * CoordinatedRemoteTransactionsCommit
+ */
+Datum
+commit_management_command_2pc(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	RecoverTwoPhaseCommits();
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * RunCitusMainDBQuery creates a connection to Citus main database if necessary
+ * and runs the query over the connection in the main database.
+ */
+void
+RunCitusMainDBQuery(char *query)
+{
+	if (MainDBConnection == NULL)
+	{
+		if (strlen(SuperuserRole) == 0)
+		{
+			ereport(ERROR, (errmsg("No superuser role is given for Citus main "
+								   "database connection"),
+							errhint("Set citus.superuser to a superuser role name")));
+		}
+		int flags = 0;
+		MainDBConnection = GetNodeUserDatabaseConnection(flags, LocalHostName,
+														 PostPortNumber,
+														 SuperuserRole,
+														 MainDb);
+		RemoteTransactionBegin(MainDBConnection);
+	}
+
+	SendRemoteCommand(MainDBConnection, query);
+
+	PGresult *result = GetRemoteCommandResult(MainDBConnection, true);
+
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(MainDBConnection, result, ERROR);
+	}
+
+	ForgetResults(MainDBConnection);
+}
+
+
+/*
+ * CleanCitusMainDBConnection closes and removes the connection to Citus main database.
+ */
+void
+CleanCitusMainDBConnection(void)
+{
+	if (MainDBConnection == NULL)
+	{
+		return;
+	}
+	CloseConnection(MainDBConnection);
+	MainDBConnection = NULL;
+}
 
 
 /*
@@ -616,7 +772,7 @@ StartRemoteTransactionPrepare(struct MultiConnection *connection)
 	WorkerNode *workerNode = FindWorkerNode(connection->hostname, connection->port);
 	if (workerNode != NULL)
 	{
-		LogTransactionRecord(workerNode->groupId, transaction->preparedName);
+		LogTransactionRecord(workerNode->groupId, transaction->preparedName, OuterXid);
 	}
 
 	/*

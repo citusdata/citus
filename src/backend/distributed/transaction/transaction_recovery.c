@@ -29,10 +29,12 @@
 #include "lib/stringinfo.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
+#include "storage/procarray.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/xid8.h"
 
 #include "pg_version_constants.h"
 
@@ -82,7 +84,7 @@ recover_prepared_transactions(PG_FUNCTION_ARGS)
  * prepared transaction should be committed.
  */
 void
-LogTransactionRecord(int32 groupId, char *transactionName)
+LogTransactionRecord(int32 groupId, char *transactionName, FullTransactionId outerXid)
 {
 	Datum values[Natts_pg_dist_transaction];
 	bool isNulls[Natts_pg_dist_transaction];
@@ -93,6 +95,7 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 
 	values[Anum_pg_dist_transaction_groupid - 1] = Int32GetDatum(groupId);
 	values[Anum_pg_dist_transaction_gid - 1] = CStringGetTextDatum(transactionName);
+	values[Anum_pg_dist_transaction_outerxid - 1] = FullTransactionIdGetDatum(outerXid);
 
 	/* open transaction relation and insert new tuple */
 	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
@@ -256,6 +259,54 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 			 * aborting or vice-versa.
 			 */
 			continue;
+		}
+
+		/* Check if the transaction is created by an outer transaction from a non-main database */
+		bool outerXidIsNull = false;
+		Datum outerXidDatum = heap_getattr(heapTuple,
+										   Anum_pg_dist_transaction_outerxid,
+										   tupleDescriptor, &outerXidIsNull);
+
+		TransactionId outerXid = 0;
+		if (!outerXidIsNull)
+		{
+			FullTransactionId outerFullXid = DatumGetFullTransactionId(outerXidDatum);
+			outerXid = XidFromFullTransactionId(outerFullXid);
+		}
+
+		if (outerXid != 0)
+		{
+			bool outerXactIsInProgress = TransactionIdIsInProgress(outerXid);
+			bool outerXactDidCommit = TransactionIdDidCommit(outerXid);
+			if (outerXactIsInProgress && !outerXactDidCommit)
+			{
+				/*
+				 * The transaction is initiated from an outer transaction and the outer
+				 * transaction is not yet committed, so we should not commit either.
+				 * We remove this transaction from the pendingTransactionSet so it'll
+				 * not be aborted by the loop below.
+				 */
+				hash_search(pendingTransactionSet, transactionName, HASH_REMOVE,
+							&foundPreparedTransactionBeforeCommit);
+				continue;
+			}
+			else if (!outerXactIsInProgress && !outerXactDidCommit)
+			{
+				/*
+				 * Since outer transaction isn't in progress and did not commit we need to
+				 * abort the prepared transaction too. We do this by simply doing the same
+				 * thing we would  do for transactions that are initiated from the main
+				 * database.
+				 */
+				continue;
+			}
+			else
+			{
+				/*
+				 * Outer transaction did commit, so we can try to commit the prepared
+				 * transaction too.
+				 */
+			}
 		}
 
 		/*

@@ -94,6 +94,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/remote_transaction.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/replication_origin_session_utils.h"
 #include "distributed/resource_lock.h"
@@ -2570,6 +2571,17 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.superuser",
+		gettext_noop("Name of a superuser role to be used in Citus main database "
+					 "connections"),
+		NULL,
+		&SuperuserRole,
+		"",
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.task_assignment_policy",
 		gettext_noop("Sets the policy to use when assigning tasks to worker nodes."),
@@ -3149,6 +3161,8 @@ CitusAuthHook(Port *port, int status)
 	 */
 	InitializeBackendData(port->application_name);
 
+	IsMainDB = (strncmp(MainDb, "", NAMEDATALEN) == 0 ||
+				strncmp(MainDb, port->database_name, NAMEDATALEN) == 0);
 
 	/* let other authentication hooks to kick in first */
 	if (original_client_auth_hook)
