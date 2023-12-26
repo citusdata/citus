@@ -34,12 +34,7 @@ GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
 	char *commentObjectType = GetCommentObjectType(objectType);
 
 	/* Create the SQL command to propagate the comment to other nodes */
-	if (comment == NULL)
-	{
-		appendStringInfo(commentStmt, "COMMENT ON %s %s IS NULL;", commentObjectType,
-						 quote_identifier(objectName));
-	}
-	else
+	if (comment != NULL)
 	{
 		appendStringInfo(commentStmt, "COMMENT ON %s %s IS %s;", commentObjectType,
 						 quote_identifier(objectName),
@@ -48,7 +43,10 @@ GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
 
 
 	/* Add the command to the list */
-	commands = list_make1(commentStmt->data);
+	if (commentStmt->len > 0)
+	{
+		commands = list_make1(commentStmt->data);
+	}
 
 	return commands;
 }
@@ -73,16 +71,15 @@ GetCommentObjectType(ObjectType objectType)
 static char *
 GetCommentForObject(Oid oid)
 {
-	Relation shdescRelation;
-	SysScanDesc scan;
 	HeapTuple tuple;
 	char *comment = NULL;
 
 	/* Open pg_shdescription catalog */
-	shdescRelation = table_open(SharedDescriptionRelationId, AccessShareLock);
+	Relation shdescRelation = table_open(SharedDescriptionRelationId, AccessShareLock);
 
 	/* Scan the table */
-	scan = systable_beginscan(shdescRelation, InvalidOid, false, NULL, 0, NULL);
+	SysScanDesc scan = systable_beginscan(shdescRelation, InvalidOid, false, NULL, 0,
+										  NULL);
 	while ((tuple = systable_getnext(scan)) != NULL)
 	{
 		Form_pg_shdescription shdesc = (Form_pg_shdescription) GETSTRUCT(tuple);

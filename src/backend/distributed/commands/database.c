@@ -70,7 +70,6 @@ typedef struct DatabaseCollationInfo
 #endif
 } DatabaseCollationInfo;
 
-
 static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database
 															databaseForm);
 static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
