@@ -44,6 +44,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
+#include "distributed/comment.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
@@ -582,6 +583,17 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}
+
+		/*
+		 * append COMMENT ON ROLE commands for this specific user
+		 * When we propagate user creation, we also want to make sure that we propagate
+		 * all the comments it has been given. For this, we check pg_shdescription
+		 * for the ROLE entry corresponding to roleOid, and generate the relevant
+		 * Comment stmts to be run in the new node.
+		 */
+		List *commentStmts = GetCommentPropagationCommands(roleOid, rolename,
+														   OBJECT_ROLE);
+		completeRoleList = list_concat(completeRoleList, commentStmts);
 	}
 
 	return completeRoleList;
