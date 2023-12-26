@@ -1,3 +1,14 @@
+/*-------------------------------------------------------------------------
+ *
+ * comment.c
+ *    Commands to interact with the comments for all database
+ *    object types.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #include "postgres.h"
 
 #include "access/genam.h"
