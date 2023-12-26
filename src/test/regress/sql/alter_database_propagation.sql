@@ -1,20 +1,12 @@
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%ALTER DATABASE%';
 
-
--- since ALLOW_CONNECTIONS alter option should be executed in a different database
--- and since we don't have a multiple database support for now,
--- this statement will get error
-alter database regression ALLOW_CONNECTIONS false;
-
-
 alter database regression with CONNECTION LIMIT 100;
 alter database regression with IS_TEMPLATE true CONNECTION LIMIT 50;
 alter database regression with CONNECTION LIMIT -1;
 alter database regression with IS_TEMPLATE true;
 alter database regression with IS_TEMPLATE false;
--- this statement will get error since we don't have a multiple database support for now
-alter database regression rename to regression2;
+
 
 alter database regression set default_transaction_read_only = true;
 
@@ -56,4 +48,66 @@ alter database regression set lock_timeout from current;
 alter database regression set lock_timeout to DEFAULT;
 alter database regression RESET lock_timeout;
 
+set citus.enable_create_database_propagation=on;
+create database "regression!'2";
+alter database "regression!'2" with CONNECTION LIMIT 100;
+alter database "regression!'2" with IS_TEMPLATE true CONNECTION LIMIT 50;
+alter database "regression!'2" with IS_TEMPLATE false;
+
+
+
+
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :worker_1_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :worker_2_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :master_port
+
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+
+alter database "regression!'2" set TABLESPACE alter_db_tablespace;
+
+set citus.enable_create_database_propagation=on;
+alter database "regression!'2" rename to regression3;
+
+-- check that the local database rename and alter comnmand is not propagated
+set citus.enable_create_database_propagation=off;
+CREATE database local_regression;
+
+alter DATABASE local_regression with CONNECTION LIMIT 100;
+alter DATABASE local_regression rename to local_regression2;
+drop database local_regression2;
+
+set citus.enable_create_database_propagation=on;
+
+drop database regression3;
+
+create database "regression!'4";
+
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  ALTER TABLESPACE alter_db_tablespace RENAME TO "ts-needs\!escape"
+  $$
+);
+
+alter database "regression!'4" set TABLESPACE "ts-needs\!escape";
+
+drop database "regression!'4";
+
 set citus.log_remote_commands = false;
+set citus.enable_create_database_propagation=off;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  drop tablespace "ts-needs\!escape"
+  $$
+);

@@ -532,6 +532,7 @@ static DistributeObjectOps Database_Set = {
 	.address = NULL,
 	.markDistributed = false,
 };
+
 static DistributeObjectOps Database_Comment = {
 	.deparse = DeparseDatabaseCommentStmt,
 	.qualify = NULL,
@@ -542,6 +543,18 @@ static DistributeObjectOps Database_Comment = {
 	.address = DatabaseCommentObjectAddress,
 	.markDistributed = false,
 };
+
+static DistributeObjectOps Database_Rename = {
+	.deparse = DeparseAlterDatabaseRenameStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessAlterDatabaseRenameStmt,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
 	.qualify = QualifyAlterDomainStmt,
@@ -2114,6 +2127,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Rename;
+				}
+
+				case OBJECT_DATABASE:
+				{
+					return &Database_Rename;
 				}
 
 				case OBJECT_DOMAIN:

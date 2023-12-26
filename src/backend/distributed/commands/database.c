@@ -193,6 +193,25 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 
 
 /*
+ * IsSetTablespaceStatement returns true if the statement is a SET TABLESPACE statement,
+ * false otherwise.
+ */
+static bool
+IsSetTablespaceStatement(AlterDatabaseStmt *stmt)
+{
+	DefElem *def = NULL;
+	foreach_ptr(def, stmt->options)
+	{
+		if (strcmp(def->defname, "tablespace") == 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+/*
  * PreprocessAlterDatabaseStmt is executed before the statement is applied to the local
  * postgres instance.
  *
@@ -203,22 +222,38 @@ List *
 PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 							ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = false;
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
-
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
 	EnsureCoordinator();
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
+								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	if (IsSetTablespaceStatement(stmt))
+	{
+		/*
+		 * Set tablespace does not work inside a transaction.Therefore, we need to use
+		 * NontransactionalNodeDDLTask to run the command on the workers outside
+		 * the transaction block.
+		 */
+
+		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	}
+	else
+	{
+		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	}
 }
 
 
@@ -255,6 +290,36 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 
 #endif
+
+/*
+ * PreprocessAlterDatabaseRenameStmt is executed before the statement is applied to the local
+ * postgres instance. In this stage we prepare ALTER DATABASE RENAME statement to be run on
+ * all workers.
+ */
+List *
+PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString)
+{
+	bool missingOk = false;
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->newname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
 
 /*
  * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
