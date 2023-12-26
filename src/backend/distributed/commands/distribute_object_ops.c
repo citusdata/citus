@@ -996,6 +996,11 @@ static DistributeObjectOps TextSearchConfig_AlterOwner = {
 };
 static DistributeObjectOps TextSearchConfig_Comment = {
 	.deparse = DeparseCommentStmt,
+
+	/* TODO: When adding new comment types we should create an abstracted
+	 * qualify function, just like we have an abstract deparse
+	 * and adress function
+	 */
 	.qualify = QualifyTextSearchConfigurationCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,

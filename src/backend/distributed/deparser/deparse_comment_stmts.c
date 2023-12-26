@@ -34,7 +34,7 @@ typedef struct
 	int type;
 } ObjectTypeInfo;
 
-const ObjectTypeInfo ObjectTypeNames[] =
+const ObjectTypeInfo ObjectTypeInfos[] =
 {
 	[OBJECT_DATABASE] = { "DATABASE", T_String },
 	[OBJECT_ROLE] = { "ROLE", T_String },
@@ -52,11 +52,11 @@ DeparseCommentStmt(Node *node)
 	initStringInfo(&str);
 
 	const char *objectName = NULL;
-	if (ObjectTypeNames[stmt->objtype].type == T_String)
+	if (IsA(stmt->object, String))
 	{
 		objectName = quote_identifier(strVal(stmt->object));
 	}
-	else if (ObjectTypeNames[stmt->objtype].type == T_List)
+	else if (IsA(stmt->object, List))
 	{
 		objectName = NameListToQuotedString(castNode(List, stmt->object));
 	}
@@ -67,7 +67,7 @@ DeparseCommentStmt(Node *node)
 				 errmsg("unknown object type")));
 	}
 
-	const char *objectType = ObjectTypeNames[stmt->objtype].name;
+	const char *objectType = ObjectTypeInfos[stmt->objtype].name;
 
 	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
 
