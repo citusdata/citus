@@ -17,6 +17,7 @@
 #include "nodes/parsenodes.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
+#include "utils/elog.h"
 
 #include "pg_version_compat.h"
 
@@ -27,12 +28,18 @@
 #include "distributed/log_utils.h"
 
 
-const char *const ObjectTypeNames[] =
+typedef struct
 {
-	[OBJECT_DATABASE] = "DATABASE",
-	[OBJECT_ROLE] = "ROLE",
-	[OBJECT_TSCONFIGURATION] = "TEXT SEARCH CONFIGURATION",
-	[OBJECT_TSDICTIONARY] = "TEXT SEARCH DICTIONARY",
+	char *name;
+	int type;
+} ObjectTypeInfo;
+
+const ObjectTypeInfo ObjectTypeNames[] =
+{
+	[OBJECT_DATABASE] = { "DATABASE", T_String },
+	[OBJECT_ROLE] = { "ROLE", T_String },
+	[OBJECT_TSCONFIGURATION] = { "TEXT SEARCH CONFIGURATION", T_List },
+	[OBJECT_TSDICTIONARY] = { "TEXT SEARCH DICTIONARY", T_List },
 
 	/* etc. */
 };
@@ -44,8 +51,23 @@ DeparseCommentStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	const char *objectName = quote_identifier(strVal(stmt->object));
-	const char *objectType = ObjectTypeNames[stmt->objtype];
+	const char *objectName = NULL;
+	if (ObjectTypeNames[stmt->objtype].type == T_String)
+	{
+		objectName = quote_identifier(strVal(stmt->object));
+	}
+	else if (ObjectTypeNames[stmt->objtype].type == T_List)
+	{
+		objectName = NameListToQuotedString(castNode(List, stmt->object));
+	}
+	else
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("unknown object type")));
+	}
+
+	const char *objectType = ObjectTypeNames[stmt->objtype].name;
 
 	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
 

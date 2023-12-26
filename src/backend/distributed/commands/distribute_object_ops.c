@@ -15,8 +15,8 @@
 #include "pg_version_constants.h"
 
 #include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
 #include "distributed/comment.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
 
@@ -995,13 +995,13 @@ static DistributeObjectOps TextSearchConfig_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Comment = {
-	.deparse = DeparseTextSearchConfigurationCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = QualifyTextSearchConfigurationCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSCONFIGURATION,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchConfigurationCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Define = {
@@ -1064,13 +1064,13 @@ static DistributeObjectOps TextSearchDict_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Comment = {
-	.deparse = DeparseTextSearchDictionaryCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = QualifyTextSearchDictionaryCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSDICTIONARY,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchDictCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Define = {
