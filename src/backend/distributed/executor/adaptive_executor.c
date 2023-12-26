@@ -729,10 +729,11 @@ static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time end
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
-static ExecutionParams * GetExecutionParams(RowModifyLevel modLevel, List *taskList,
-											TupleDestination *tupleDest,
-											bool expectResults,
-											ParamListInfo paramListInfo);
+static ExecutionParams * CreateDefaultExecutionParams(RowModifyLevel modLevel,
+													  List *taskList,
+													  TupleDestination *tupleDest,
+													  bool expectResults,
+													  ParamListInfo paramListInfo);
 
 
 /*
@@ -1023,10 +1024,10 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
  * bind params (presumably from executor state) with defaults for some of the arguments.
  */
 static ExecutionParams *
-GetExecutionParams(RowModifyLevel modLevel, List *taskList,
-				   TupleDestination *tupleDest,
-				   bool expectResults,
-				   ParamListInfo paramListInfo)
+CreateDefaultExecutionParams(RowModifyLevel modLevel, List *taskList,
+							 TupleDestination *tupleDest,
+							 bool expectResults,
+							 ParamListInfo paramListInfo)
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool localExecutionSupported = true;
@@ -1054,8 +1055,10 @@ ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
 									  bool expectResults,
 									  ParamListInfo paramListInfo)
 {
-	ExecutionParams *executionParams = GetExecutionParams(modLevel, taskList, tupleDest,
-														  expectResults, paramListInfo);
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
@@ -1070,8 +1073,10 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 							 bool expectResults)
 {
 	ParamListInfo paramListInfo = NULL;
-	ExecutionParams *executionParams = GetExecutionParams(modLevel, taskList, tupleDest,
-														  expectResults, paramListInfo);
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
