@@ -15,8 +15,8 @@
 #include "pg_version_constants.h"
 
 #include "distributed/commands.h"
-#include "distributed/comment.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
 
