@@ -2,12 +2,12 @@
 
 #include "access/genam.h"
 #include "access/htup_details.h"
+#include "access/table.h"
 #include "catalog/pg_shdescription.h"
 
 #include "nodes/parsenodes.h"
-#include "server/access/table.h"
-#include "server/utils/rel.h"
 #include "utils/builtins.h"
+#include "utils/rel.h"
 
 #include "distributed/comment.h"
 

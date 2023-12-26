@@ -1,6 +1,6 @@
 #include "postgres.h"
 
-#include "server/nodes/parsenodes.h"
+#include "nodes/parsenodes.h"
 
 typedef struct CommentStmtType
 {
