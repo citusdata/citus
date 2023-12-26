@@ -21,14 +21,6 @@
 
 #include "distributed/comment.h"
 
-
-const CommentStmtType commentStmtTypes[] = {
-	{ OBJECT_DATABASE, "DATABASE" },
-	{ OBJECT_ROLE, "ROLE" }
-};
-
-
-static char * GetCommentObjectType(ObjectType objectType);
 static char * GetCommentForObject(Oid oid);
 
 
@@ -41,7 +33,7 @@ GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
 
 	/* Get the comment for the database */
 	char *comment = GetCommentForObject(oid);
-	char *commentObjectType = GetCommentObjectType(objectType);
+	char *commentObjectType = ObjectTypeInfos[objectType].name;
 
 	/* Create the SQL command to propagate the comment to other nodes */
 	if (comment != NULL)
@@ -59,22 +51,6 @@ GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
 	}
 
 	return commands;
-}
-
-
-static char *
-GetCommentObjectType(ObjectType objectType)
-{
-	char *objectName = NULL;
-	for (int i = 0; i < sizeof(commentStmtTypes) / sizeof(CommentStmtType); i++)
-	{
-		if (commentStmtTypes[i].objectType == objectType)
-		{
-			objectName = commentStmtTypes[i].objectName;
-			break;
-		}
-	}
-	return objectName;
 }
 
 

@@ -15,11 +15,13 @@
 
 #include "nodes/parsenodes.h"
 
-typedef struct CommentStmtType
+typedef struct
 {
-	ObjectType objectType;
-	char *objectName;
-} CommentStmtType;
+	char *name;
+	int type;
+} ObjectTypeInfo;
+
+extern const ObjectTypeInfo ObjectTypeInfos[];
 
 
 extern List * GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType
