@@ -885,6 +885,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 
 		char *workerPgDistObjectUpdateCommand =
 			MarkObjectsDistributedCreateCommand(objectAddressList,
+												NIL,
 												distArgumentIndexList,
 												colocationIdList,
 												forceDelegationList);
