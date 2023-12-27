@@ -1562,7 +1562,7 @@ set_join_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	}
 
 	/* Assert we processed the right number of columns */
-#ifdef USE_ASSERT_CHECKING
+#if 1
 	while (i < colinfo->num_cols && colinfo->colnames[i] == NULL)
 		i++;
 	Assert(i == colinfo->num_cols);
