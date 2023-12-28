@@ -1019,8 +1019,8 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
- * Prepare execution parameters for a task list.It is used by the
- * functions that execute task lists.
+ * CreateDefaultExecutionParams returns execution params based on given (possibly null)
+ * bind params (presumably from executor state) with defaults for some of the arguments.
  */
 static ExecutionParams *
 GetExecutionParams(RowModifyLevel modLevel, List *taskList,
@@ -1069,8 +1069,9 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 							 TupleDestination *tupleDest,
 							 bool expectResults)
 {
+	ParamListInfo paramListInfo = NULL;
 	ExecutionParams *executionParams = GetExecutionParams(modLevel, taskList, tupleDest,
-														  expectResults, NULL);
+														  expectResults, paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
