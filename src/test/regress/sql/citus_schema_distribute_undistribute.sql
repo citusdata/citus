@@ -185,7 +185,7 @@ SELECT citus_schema_undistribute('tenant1');
 
 -- assign all tables to dummyregular except table5
 SET role tenantuser;
-SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY tenantuser TO dummyregular; $$);
+REASSIGN OWNED BY tenantuser TO dummyregular;
 CREATE TABLE tenant1.table5(id int);
 
 -- table owner check fails the distribution
@@ -219,7 +219,7 @@ SELECT result FROM run_command_on_all_nodes($$ SELECT COUNT(*)=0 FROM pg_dist_co
 SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORDER BY logicalrelid) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant1.%' AND colocationid > 0 $$);
 
 RESET role;
-SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY dummyregular TO tenantuser; $$);
+REASSIGN OWNED BY dummyregular TO tenantuser;
 DROP USER dummyregular;
 
 CREATE USER dummysuper superuser;

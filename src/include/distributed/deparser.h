@@ -232,6 +232,7 @@ extern char * DeparseCreateRoleStmt(Node *stmt);
 extern char * DeparseDropRoleStmt(Node *stmt);
 extern char * DeparseGrantRoleStmt(Node *stmt);
 extern char * DeparseRoleCommentStmt(Node *node);
+extern char * DeparseReassignOwnedStmt(Node *node);
 
 /* forward declarations for deparse_owned_stmts.c */
 extern char * DeparseDropOwnedStmt(Node *node);

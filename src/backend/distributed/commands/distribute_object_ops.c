@@ -275,6 +275,17 @@ static DistributeObjectOps Any_CreateRole = {
 	.address = CreateRoleStmtObjectAddress,
 	.markDistributed = true,
 };
+
+static DistributeObjectOps Any_ReassignOwned = {
+	.deparse = DeparseReassignOwnedStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessReassignOwnedStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Any_DropOwned = {
 	.deparse = DeparseDropOwnedStmt,
 	.qualify = NULL,
@@ -1908,6 +1919,11 @@ GetDistributeObjectOps(Node *node)
 		case T_DropOwnedStmt:
 		{
 			return &Any_DropOwned;
+		}
+
+		case T_ReassignOwnedStmt:
+		{
+			return &Any_ReassignOwned;
 		}
 
 		case T_DropStmt:
