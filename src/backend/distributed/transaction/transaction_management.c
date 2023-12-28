@@ -1171,18 +1171,17 @@ ResetPropagatedObjects(void)
 
 
 /*
- * HasAnyDependencyInPropagatedObjects decides if any dependency of given object is
+ * HasAnyObjectInPropagatedObjects decides if any of the objects in given list are
  * propagated in the current transaction.
  */
 bool
-HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
+HasAnyObjectInPropagatedObjects(List *objectList)
 {
-	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
-	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencyList)
+	ObjectAddress *object = NULL;
+	foreach_ptr(object, objectList)
 	{
 		/* first search in root transaction */
-		if (DependencyInPropagatedObjectsHash(PropagatedObjectsInTx, dependency))
+		if (DependencyInPropagatedObjectsHash(PropagatedObjectsInTx, object))
 		{
 			return true;
 		}
@@ -1195,7 +1194,7 @@ HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
 		SubXactContext *state = NULL;
 		foreach_ptr(state, activeSubXactContexts)
 		{
-			if (DependencyInPropagatedObjectsHash(state->propagatedObjects, dependency))
+			if (DependencyInPropagatedObjectsHash(state->propagatedObjects, object))
 			{
 				return true;
 			}

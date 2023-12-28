@@ -442,6 +442,7 @@ extern List * CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok, bool
 /* owned.c -  forward declarations */
 extern List * PreprocessDropOwnedStmt(Node *node, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
+extern List * PostprocessReassignOwnedStmt(Node *node, const char *queryString);
 
 /* policy.c -  forward declarations */
 extern List * CreatePolicyCommands(Oid relationId);
