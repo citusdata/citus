@@ -289,3 +289,16 @@ list_filter_oid(List *list, bool (*keepElement)(Oid element))
 
 	return result;
 }
+
+
+/*
+ * CompareStringNodes returns the result of strcmp on given two String nodes.
+ */
+int
+CompareStringNodes(const void *leftElement, const void *rightElement)
+{
+	String *leftString = castNode(String, (Node *) leftElement);
+	String *rightString = castNode(String, (Node *) rightElement);
+
+	return strcmp(strVal(leftString), strVal(rightString));
+}

@@ -3,8 +3,8 @@ SET search_path TO other_databases;
 SET citus.next_shard_id TO 10231023;
 CREATE DATABASE other_db1;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c other_db1
 SHOW citus.main_db;
  citus.main_db
@@ -94,8 +94,8 @@ DROP USER other_db_user9, nonsuperuser;
 \c - - - :worker_1_port
 CREATE DATABASE other_db2;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c other_db2
 CREATE USER worker_user1;
 BEGIN;
