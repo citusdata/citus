@@ -536,6 +536,19 @@ REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
 DROP DATABASE test_db;
 DROP ROLE propagated_role, non_propagated_role;
 
+-- show that we don't try to propagate commands on non-distributed databases
+SET citus.enable_create_database_propagation TO OFF;
+CREATE DATABASE local_database_1;
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE ROLE local_role_1;
+
+GRANT CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 TO local_role_1;
+ALTER DATABASE local_database_1 SET default_transaction_read_only = 'true';
+
+REVOKE CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 FROM local_role_1;
+DROP ROLE local_role_1;
+DROP DATABASE local_database_1;
 
 --clean up resources created by this test
 

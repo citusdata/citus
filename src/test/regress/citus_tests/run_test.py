@@ -199,6 +199,7 @@ DEPS = {
         repeatable=False,
     ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
+    "pg15": TestDeps("base_schedule"),
 }
 
 
