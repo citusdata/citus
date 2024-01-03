@@ -74,6 +74,7 @@ static char * GetTablespaceName(Oid tablespaceOid);
 static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
 														  bool missingOk);
 
+static List * FilterDistributedDatabases(List *databases);
 static Oid get_database_owner(Oid dbId);
 
 
@@ -173,22 +174,52 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	List *databaseList = stmt->objects;
+	List *distributedDatabases = FilterDistributedDatabases(stmt->objects);
 
-	if (list_length(databaseList) == 0)
+	if (list_length(distributedDatabases) == 0)
 	{
 		return NIL;
 	}
 
 	EnsureCoordinator();
 
+	List *originalObjects = stmt->objects;
+
+	stmt->objects = distributedDatabases;
+
 	char *sql = DeparseTreeNode((Node *) stmt);
+
+	stmt->objects = originalObjects;
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * FilterDistributedDatabases filters the database list and returns the distributed ones,
+ * as a list.
+ */
+static List *
+FilterDistributedDatabases(List *databases)
+{
+	List *distributedDatabases = NIL;
+	String *databaseName = NULL;
+	foreach_ptr(databaseName, databases)
+	{
+		bool missingOk = true;
+		ObjectAddress *dbAddress =
+			GetDatabaseAddressFromDatabaseName(strVal(databaseName), missingOk);
+		if (IsAnyObjectDistributed(list_make1(dbAddress)))
+		{
+			distributedDatabases = lappend(distributedDatabases, databaseName);
+		}
+	}
+
+	return distributedDatabases;
 }
 
 
@@ -270,12 +301,15 @@ List *
 PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 									   ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = true;
+	AlterDatabaseRefreshCollStmt *stmt = castNode(AlterDatabaseRefreshCollStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
-
-	AlterDatabaseRefreshCollStmt *stmt = castNode(AlterDatabaseRefreshCollStmt, node);
 
 	EnsureCoordinator();
 
@@ -332,12 +366,15 @@ List *
 PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 							   ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+
+	bool missingOk = true;
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
-
-	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
 	EnsureCoordinator();
 
