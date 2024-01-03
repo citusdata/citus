@@ -199,6 +199,9 @@ DEPS = {
         repeatable=False,
     ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
+    "foreign_key_to_reference_shard_rebalance": TestDeps(
+        "minimal_schedule", ["remove_coordinator_from_metadata"]
+    )
 }
 
 
