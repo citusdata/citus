@@ -544,10 +544,10 @@ SELECT result from run_command_on_all_nodes(
   revoke connect,temp,temporary,create on database db_role_grants_test_non_distributed from public
   $$
 ) ORDER BY result;
-                    result
+ result
 ---------------------------------------------------------------------
- ERROR:  operation is not allowed on this node
- ERROR:  operation is not allowed on this node
+ REVOKE
+ REVOKE
  REVOKE
 (3 rows)
 
@@ -577,11 +577,7 @@ grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test to db_role_grants
 NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test TO db_role_grants_test_role_missing_on_node_2;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_exists_on_node_2;
-NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test_non_distributed TO db_role_grants_test_role_exists_on_node_2;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 grant CONNECT,TEMPORARY,CREATE on DATABASE db_role_grants_test_non_distributed to db_role_grants_test_role_missing_on_node_2;
-NOTICE:  issuing GRANT connect, temporary, create ON DATABASE db_role_grants_test_non_distributed TO db_role_grants_test_role_missing_on_node_2;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- check the privileges before add_node for database db_role_grants_test,
 --  role db_role_grants_test_role_exists_on_node_2
 SELECT result from run_command_on_all_nodes(
@@ -661,7 +657,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
  result
 ---------------------------------------------------------------------
- t
+ f
  t
 (2 rows)
 
@@ -672,7 +668,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
  result
 ---------------------------------------------------------------------
- t
+ f
  t
 (2 rows)
 
@@ -683,7 +679,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
  result
 ---------------------------------------------------------------------
- t
+ f
  t
 (2 rows)
 
@@ -696,7 +692,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
  result
 ---------------------------------------------------------------------
- t
+ f
  t
 (2 rows)
 
@@ -707,7 +703,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
  result
 ---------------------------------------------------------------------
- t
+ f
  t
 (2 rows)
 
@@ -718,7 +714,7 @@ SELECT result from run_command_on_all_nodes(
 ) ORDER BY result;
  result
 ---------------------------------------------------------------------
- t
+ f
  t
 (2 rows)
 
@@ -816,7 +812,7 @@ SELECT result from run_command_on_all_nodes(
  result
 ---------------------------------------------------------------------
  f
- t
+ f
  t
 (3 rows)
 
@@ -828,7 +824,7 @@ SELECT result from run_command_on_all_nodes(
  result
 ---------------------------------------------------------------------
  f
- t
+ f
  t
 (3 rows)
 
@@ -840,7 +836,7 @@ SELECT result from run_command_on_all_nodes(
  result
 ---------------------------------------------------------------------
  f
- t
+ f
  t
 (3 rows)
 
@@ -854,7 +850,7 @@ SELECT result from run_command_on_all_nodes(
  result
 ---------------------------------------------------------------------
  f
- t
+ f
  t
 (3 rows)
 
@@ -866,7 +862,7 @@ SELECT result from run_command_on_all_nodes(
  result
 ---------------------------------------------------------------------
  f
- t
+ f
  t
 (3 rows)
 
@@ -878,7 +874,7 @@ SELECT result from run_command_on_all_nodes(
  result
 ---------------------------------------------------------------------
  f
- t
+ f
  t
 (3 rows)
 
@@ -932,6 +928,19 @@ SELECT * FROM public.check_database_on_all_nodes('test_db') ORDER BY node_type;
 REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
 DROP DATABASE test_db;
 DROP ROLE propagated_role, non_propagated_role;
+-- show that we don't try to propagate commands on non-distributed databases
+SET citus.enable_create_database_propagation TO OFF;
+CREATE DATABASE local_database_1;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+SET citus.enable_create_database_propagation TO ON;
+CREATE ROLE local_role_1;
+GRANT CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 TO local_role_1;
+ALTER DATABASE local_database_1 SET default_transaction_read_only = 'true';
+REVOKE CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 FROM local_role_1;
+DROP ROLE local_role_1;
+DROP DATABASE local_database_1;
 --clean up resources created by this test
 -- DROP TABLESPACE is not supported, so we need to drop it manually.
 SELECT result FROM run_command_on_all_nodes(
