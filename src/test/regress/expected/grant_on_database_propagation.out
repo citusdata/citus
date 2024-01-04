@@ -677,7 +677,7 @@ select has_database_privilege('myuser','regression', 'TEMPORARY');
 select has_database_privilege('myuser','test_db', 'CREATE');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 select has_database_privilege('myuser','test_db', 'CONNECT');
@@ -725,7 +725,7 @@ select has_database_privilege('myuser_1','regression', 'TEMPORARY');
 select has_database_privilege('myuser_1','test_db', 'CREATE');
  has_database_privilege
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 select has_database_privilege('myuser_1','test_db', 'CONNECT');
@@ -884,19 +884,19 @@ select has_database_privilege('myuser','test_db', 'CREATE');
 select has_database_privilege('myuser','test_db', 'CONNECT');
  has_database_privilege
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 select has_database_privilege('myuser','test_db', 'TEMP');
  has_database_privilege
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 select has_database_privilege('myuser','test_db', 'TEMPORARY');
  has_database_privilege
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 select has_database_privilege('myuser_1','regression', 'CREATE');
@@ -932,19 +932,19 @@ select has_database_privilege('myuser_1','test_db', 'CREATE');
 select has_database_privilege('myuser_1','test_db', 'CONNECT');
  has_database_privilege
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 select has_database_privilege('myuser_1','test_db', 'TEMP');
  has_database_privilege
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 select has_database_privilege('myuser_1','test_db', 'TEMPORARY');
  has_database_privilege
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 \c - - - :master_port

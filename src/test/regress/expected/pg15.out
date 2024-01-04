@@ -1529,6 +1529,16 @@ alter database regression REFRESH COLLATION VERSION;
 NOTICE:  version has not changed
 NOTICE:  issuing ALTER DATABASE regression REFRESH COLLATION VERSION;
 NOTICE:  issuing ALTER DATABASE regression REFRESH COLLATION VERSION;
+SET citus.enable_create_database_propagation TO OFF;
+CREATE DATABASE local_database_1;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+RESET citus.enable_create_database_propagation;
+CREATE ROLE local_role_1;
+ALTER DATABASE local_database_1 REFRESH COLLATION VERSION;
+NOTICE:  version has not changed
+REVOKE CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 FROM local_role_1;
+DROP ROLE local_role_1;
+DROP DATABASE local_database_1;
 set citus.log_remote_commands = false;
 -- Clean up
 \set VERBOSITY terse
