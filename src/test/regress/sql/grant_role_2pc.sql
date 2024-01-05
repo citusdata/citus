@@ -7,11 +7,6 @@ SET search_path TO grant_role2pc;
 set citus.enable_create_database_propagation to on;
 
 
-set citus.log_remote_commands to on;
-
-
-SET citus.next_shard_id TO 10231023;
-
 CREATE DATABASE grant_role2pc_db;
 
 revoke connect,temp,temporary,create  on database grant_role2pc_db from public;
