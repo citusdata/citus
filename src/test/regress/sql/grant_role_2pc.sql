@@ -112,6 +112,8 @@ SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_rol
 DROP SCHEMA grant_role2pc;
 
 REVOKE ALL PRIVILEGES ON DATABASE grant_role2pc_db FROM grant_role2pc_user1;
+
+set citus.enable_create_database_propagation to on;
 DROP DATABASE grant_role2pc_db;
 
 drop user grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
