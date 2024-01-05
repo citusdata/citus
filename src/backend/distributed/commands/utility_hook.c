@@ -1664,10 +1664,10 @@ RunPostprocessMainDBCommand(Node *parsetree)
 	}
 }
 
+
 /*
  * IsStatementSupportedIn2Pc returns true if the statement is supported in 2pc
  */
-
 static bool
 IsStatementSupportedIn2Pc(Node *parsetree)
 {
@@ -1684,6 +1684,7 @@ IsStatementSupportedIn2Pc(Node *parsetree)
 
 	return false;
 }
+
 
 /*
  * IsStatementMarkDistributedFor2PC returns true if the statement should be marked
