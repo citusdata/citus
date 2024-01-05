@@ -109,13 +109,6 @@ SELECT * FROM public.check_database_privileges('grant_role2pc_user5', 'grant_rol
 SELECT * FROM public.check_database_privileges('grant_role2pc_user6', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
 SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
 
-
-
-
-
-
-
-
 DROP SCHEMA grant_role2pc;
 
 REVOKE ALL PRIVILEGES ON DATABASE grant_role2pc_db FROM grant_role2pc_user1;

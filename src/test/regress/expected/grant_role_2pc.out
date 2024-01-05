@@ -1,0 +1,394 @@
+CREATE SCHEMA grant_role2pc;
+SET search_path TO grant_role2pc;
+set citus.enable_create_database_propagation to on;
+set citus.log_remote_commands to on;
+SET citus.next_shard_id TO 10231023;
+CREATE DATABASE grant_role2pc_db;
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE DATABASE grant_role2pc_db
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE DATABASE grant_role2pc_db
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('database', ARRAY['grant_role2pc_db']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('database', ARRAY['grant_role2pc_db']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+revoke connect,temp,temporary,create  on database grant_role2pc_db from public;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing REVOKE connect, temp, temporary, create ON DATABASE grant_role2pc_db FROM PUBLIC RESTRICT;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing REVOKE connect, temp, temporary, create ON DATABASE grant_role2pc_db FROM PUBLIC RESTRICT;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c grant_role2pc_db
+SHOW citus.main_db;
+ citus.main_db
+---------------------------------------------------------------------
+ regression
+(1 row)
+
+-- check that empty citus.superuser gives error
+SET citus.superuser TO '';
+CREATE USER empty_superuser;
+ERROR:  No superuser role is given for Citus main database connection
+HINT:  Set citus.superuser to a superuser role name
+SET citus.superuser TO 'postgres';
+CREATE USER grant_role2pc_user1;
+CREATE USER grant_role2pc_user2;
+CREATE USER grant_role2pc_user3;
+CREATE USER grant_role2pc_user4;
+CREATE USER grant_role2pc_user5;
+CREATE USER grant_role2pc_user6;
+CREATE USER grant_role2pc_user7;
+\c regression
+SELECT * FROM public.check_database_privileges('grant_role2pc_user2', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+grant create,connect,temporary,temp on database grant_role2pc_db to grant_role2pc_user1;
+\c grant_role2pc_db
+grant grant_role2pc_user1 to grant_role2pc_user2;
+\c regression
+SELECT * FROM public.check_database_privileges('grant_role2pc_user2', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | t
+ CREATE     | t
+ CREATE     | t
+ CONNECT    | t
+ CONNECT    | t
+ CONNECT    | t
+ TEMP       | t
+ TEMP       | t
+ TEMP       | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+(12 rows)
+
+\c grant_role2pc_db
+--test grant under transactional context with multiple operations
+BEGIN;
+grant grant_role2pc_user1 to grant_role2pc_user3;
+grant grant_role2pc_user1 to grant_role2pc_user4;
+COMMIT;
+BEGIN;
+grant grant_role2pc_user1 to grant_role2pc_user5;
+grant grant_role2pc_user1 to grant_role2pc_user6;
+ROLLBACK;
+BEGIN;
+grant grant_role2pc_user1 to grant_role2pc_user7;
+SELECT 1/0;
+ERROR:  division by zero
+commit;
+\c regression
+SELECT * FROM public.check_database_privileges('grant_role2pc_user3', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | t
+ CREATE     | t
+ CREATE     | t
+ CONNECT    | t
+ CONNECT    | t
+ CONNECT    | t
+ TEMP       | t
+ TEMP       | t
+ TEMP       | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user4', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | t
+ CREATE     | t
+ CREATE     | t
+ CONNECT    | t
+ CONNECT    | t
+ CONNECT    | t
+ TEMP       | t
+ TEMP       | t
+ TEMP       | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user5', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user6', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+\c grant_role2pc_db
+grant grant_role2pc_user1 to grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
+\c regression
+SELECT * FROM public.check_database_privileges('grant_role2pc_user5', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | t
+ CREATE     | t
+ CREATE     | t
+ CONNECT    | t
+ CONNECT    | t
+ CONNECT    | t
+ TEMP       | t
+ TEMP       | t
+ TEMP       | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user6', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | t
+ CREATE     | t
+ CREATE     | t
+ CONNECT    | t
+ CONNECT    | t
+ CONNECT    | t
+ TEMP       | t
+ TEMP       | t
+ TEMP       | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | t
+ CREATE     | t
+ CREATE     | t
+ CONNECT    | t
+ CONNECT    | t
+ CONNECT    | t
+ TEMP       | t
+ TEMP       | t
+ TEMP       | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+ TEMPORARY  | t
+(12 rows)
+
+\c grant_role2pc_db
+revoke grant_role2pc_user1 from grant_role2pc_user2;
+--test revoke under transactional context with multiple operations
+BEGIN;
+revoke grant_role2pc_user1 from grant_role2pc_user3;
+revoke grant_role2pc_user1 from grant_role2pc_user4;
+COMMIT;
+BEGIN;
+revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;
+revoke grant_role2pc_user1 from grant_role2pc_user7;
+COMMIT;
+\c regression
+SELECT * FROM public.check_database_privileges('grant_role2pc_user2', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user3', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user4', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user5', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user6', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+ permission | result
+---------------------------------------------------------------------
+ CREATE     | f
+ CREATE     | f
+ CREATE     | f
+ CONNECT    | f
+ CONNECT    | f
+ CONNECT    | f
+ TEMP       | f
+ TEMP       | f
+ TEMP       | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+ TEMPORARY  | f
+(12 rows)
+
+DROP SCHEMA grant_role2pc;
+REVOKE ALL PRIVILEGES ON DATABASE grant_role2pc_db FROM grant_role2pc_user1;
+DROP DATABASE grant_role2pc_db;
+drop user grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
+drop user grant_role2pc_user1;
+grant connect,temp,temporary  on database regression to public;
+reset citus.enable_create_database_propagation;
