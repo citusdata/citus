@@ -43,6 +43,7 @@
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
@@ -95,6 +96,18 @@
 	"SELECT citus_internal.mark_object_distributed(%d, %s, %d)"
 
 
+typedef struct TwoPcStatementInfo
+{
+	int statementType;
+	bool markAsDistributed;
+} TwoPcStatementInfo;
+
+const TwoPcStatementInfo twoPcSupportedStatements[] = {
+	{ T_GrantRoleStmt, false },
+	{ T_CreateRoleStmt, true }
+};
+
+
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_IMMEDIATE;
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
@@ -124,6 +137,8 @@ static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
 static void RunPostprocessMainDBCommand(Node *parsetree);
+static bool IsStatementSupportedIn2Pc(Node *parsetree);
+static bool IsStatementMarkDistributedFor2PC(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1603,20 +1618,22 @@ DropSchemaOrDBInProgress(void)
 static void
 RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 {
-	if (IsA(parsetree, CreateRoleStmt))
+	if (!IsStatementSupportedIn2Pc(parsetree))
 	{
-		StringInfo mainDBQuery = makeStringInfo();
-		appendStringInfo(mainDBQuery,
-						 START_MANAGEMENT_TRANSACTION,
-						 GetCurrentFullTransactionId().value);
-		RunCitusMainDBQuery(mainDBQuery->data);
-		mainDBQuery = makeStringInfo();
-		appendStringInfo(mainDBQuery,
-						 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
-						 quote_literal_cstr(queryString),
-						 quote_literal_cstr(CurrentUserName()));
-		RunCitusMainDBQuery(mainDBQuery->data);
+		return;
 	}
+
+	StringInfo mainDBQuery = makeStringInfo();
+	appendStringInfo(mainDBQuery,
+					 START_MANAGEMENT_TRANSACTION,
+					 GetCurrentFullTransactionId().value);
+	RunCitusMainDBQuery(mainDBQuery->data);
+	mainDBQuery = makeStringInfo();
+	appendStringInfo(mainDBQuery,
+					 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
+					 quote_literal_cstr(queryString),
+					 quote_literal_cstr(CurrentUserName()));
+	RunCitusMainDBQuery(mainDBQuery->data);
 }
 
 
@@ -1627,6 +1644,12 @@ RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void
 RunPostprocessMainDBCommand(Node *parsetree)
 {
+	if (!IsStatementSupportedIn2Pc(parsetree) ||
+		!IsStatementMarkDistributedFor2PC(parsetree))
+	{
+		return;
+	}
+
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		StringInfo mainDBQuery = makeStringInfo();
@@ -1639,4 +1662,46 @@ RunPostprocessMainDBCommand(Node *parsetree)
 						 roleOid);
 		RunCitusMainDBQuery(mainDBQuery->data);
 	}
+}
+
+/*
+ * IsStatementSupportedIn2Pc returns true if the statement is supported in 2pc
+ */
+
+static bool
+IsStatementSupportedIn2Pc(Node *parsetree)
+{
+	NodeTag type = nodeTag(parsetree);
+
+	for (int i = 0; i < sizeof(twoPcSupportedStatements) /
+		 sizeof(twoPcSupportedStatements[0]); i++)
+	{
+		if (type == twoPcSupportedStatements[i].statementType)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
+ * IsStatementMarkDistributedFor2PC returns true if the statement should be marked
+ * as distributed in 2pc
+ */
+static bool
+IsStatementMarkDistributedFor2PC(Node *parsetree)
+{
+	NodeTag type = nodeTag(parsetree);
+
+	for (int i = 0; i < sizeof(twoPcSupportedStatements) /
+		 sizeof(twoPcSupportedStatements[0]); i++)
+	{
+		if (type == twoPcSupportedStatements[i].statementType)
+		{
+			return twoPcSupportedStatements[i].markAsDistributed;
+		}
+	}
+
+	return false;
 }
