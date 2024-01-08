@@ -141,6 +141,14 @@ SerializeDistributedDDLsOnObjectClassInternal(ObjectClass objectClass,
 		return;
 	}
 
+	/*
+	 * Indeed we would already ensure permission checks in remote node
+	 * --via AcquireCitusAdvisoryObjectClassLock()-- but we first do so on
+	 * the local node to avoid from reporting confusing error messages.
+	 */
+	Oid oid = AcquireCitusAdvisoryObjectClassLockGetOid(objectClass, qualifiedObjectName);
+	AcquireCitusAdvisoryObjectClassLockCheckPrivileges(objectClass, oid);
+
 	Task *task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
 

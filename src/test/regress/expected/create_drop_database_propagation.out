@@ -1218,22 +1218,16 @@ SET ROLE no_createdb;
 SET citus.enable_create_database_propagation TO ON;
 CREATE DATABASE no_createdb;
 ERROR:  permission denied to create / rename database
-CONTEXT:  while executing command on localhost:xxxxx
 ALTER DATABASE distributed_db RENAME TO rename_test;
 ERROR:  permission denied to create / rename database
-CONTEXT:  while executing command on localhost:xxxxx
 DROP DATABASE distributed_db;
 ERROR:  must be owner of database distributed_db
-CONTEXT:  while executing command on localhost:xxxxx
 ALTER DATABASE distributed_db SET TABLESPACE pg_default;
 ERROR:  must be owner of database distributed_db
-CONTEXT:  while executing command on localhost:xxxxx
 ALTER DATABASE distributed_db SET timezone TO 'UTC';
 ERROR:  must be owner of database distributed_db
-CONTEXT:  while executing command on localhost:xxxxx
 ALTER DATABASE distributed_db RESET timezone;
 ERROR:  must be owner of database distributed_db
-CONTEXT:  while executing command on localhost:xxxxx
 GRANT ALL ON DATABASE distributed_db TO postgres;
 WARNING:  no privileges were granted for "distributed_db"
 RESET ROLE;
@@ -1242,7 +1236,6 @@ SET ROLE no_createdb;
 CREATE DATABASE no_createdb;
 ALTER DATABASE distributed_db RENAME TO rename_test;
 ERROR:  must be owner of database distributed_db
-CONTEXT:  while executing command on localhost:xxxxx
 RESET ROLE;
 SELECT 1 FROM run_command_on_all_nodes($$GRANT ALL ON TABLESPACE pg_default TO no_createdb$$);
  ?column?
