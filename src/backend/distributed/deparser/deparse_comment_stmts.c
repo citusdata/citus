@@ -29,12 +29,12 @@
 #include "distributed/log_utils.h"
 
 
-const ObjectTypeInfo ObjectTypeInfos[] =
+const char *ObjectTypeInfos[] =
 {
-	[OBJECT_DATABASE] = { "DATABASE", T_String },
-	[OBJECT_ROLE] = { "ROLE", T_String },
-	[OBJECT_TSCONFIGURATION] = { "TEXT SEARCH CONFIGURATION", T_List },
-	[OBJECT_TSDICTIONARY] = { "TEXT SEARCH DICTIONARY", T_List },
+	[OBJECT_DATABASE] = "DATABASE",
+	[OBJECT_ROLE] = "ROLE",
+	[OBJECT_TSCONFIGURATION] = "TEXT SEARCH CONFIGURATION",
+	[OBJECT_TSDICTIONARY] = "TEXT SEARCH DICTIONARY",
 
 	/* When support for propagating comments to new objects is introduced, an entry for each
 	 * statement type should be added to this list. The first element in each entry is the 'object_type' keyword
@@ -66,7 +66,7 @@ DeparseCommentStmt(Node *node)
 				 errmsg("unknown object type")));
 	}
 
-	const char *objectType = ObjectTypeInfos[stmt->objtype].name;
+	const char *objectType = ObjectTypeInfos[stmt->objtype];
 
 	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
 

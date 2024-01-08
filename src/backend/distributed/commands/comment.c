@@ -33,7 +33,7 @@ GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
 
 	/* Get the comment for the database */
 	char *comment = GetCommentForObject(oid);
-	char *commentObjectType = ObjectTypeInfos[objectType].name;
+	char const *commentObjectType = ObjectTypeInfos[objectType];
 
 	/* Create the SQL command to propagate the comment to other nodes */
 	if (comment != NULL)
