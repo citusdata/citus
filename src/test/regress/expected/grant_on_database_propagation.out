@@ -542,8 +542,8 @@ create user myuser;
 create user myuser_1;
 create database test_db;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 SELECT result FROM run_command_on_workers($$create database test_db$$);
      result
 ---------------------------------------------------------------------

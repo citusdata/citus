@@ -204,6 +204,11 @@ DEPS = {
         "minimal_schedule", ["remove_coordinator_from_metadata"]
     ),
     "limit_intermediate_size": TestDeps("base_schedule"),
+    "columnar_drop": TestDeps(
+        "minimal_schedule",
+        ["columnar_create", "columnar_load"],
+        repeatable=False,
+    ),
 }
 
 
