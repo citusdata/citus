@@ -74,6 +74,7 @@ static char * GetTablespaceName(Oid tablespaceOid);
 static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
 														  bool missingOk);
 
+static List * FilterDistributedDatabases(List *databases);
 static Oid get_database_owner(Oid dbId);
 
 
@@ -173,22 +174,71 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	List *databaseList = stmt->objects;
+	List *distributedDatabases = FilterDistributedDatabases(stmt->objects);
 
-	if (list_length(databaseList) == 0)
+	if (list_length(distributedDatabases) == 0)
 	{
 		return NIL;
 	}
 
 	EnsureCoordinator();
 
+	List *originalObjects = stmt->objects;
+
+	stmt->objects = distributedDatabases;
+
 	char *sql = DeparseTreeNode((Node *) stmt);
+
+	stmt->objects = originalObjects;
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * FilterDistributedDatabases filters the database list and returns the distributed ones,
+ * as a list.
+ */
+static List *
+FilterDistributedDatabases(List *databases)
+{
+	List *distributedDatabases = NIL;
+	String *databaseName = NULL;
+	foreach_ptr(databaseName, databases)
+	{
+		bool missingOk = true;
+		ObjectAddress *dbAddress =
+			GetDatabaseAddressFromDatabaseName(strVal(databaseName), missingOk);
+		if (IsAnyObjectDistributed(list_make1(dbAddress)))
+		{
+			distributedDatabases = lappend(distributedDatabases, databaseName);
+		}
+	}
+
+	return distributedDatabases;
+}
+
+
+/*
+ * IsSetTablespaceStatement returns true if the statement is a SET TABLESPACE statement,
+ * false otherwise.
+ */
+static bool
+IsSetTablespaceStatement(AlterDatabaseStmt *stmt)
+{
+	DefElem *def = NULL;
+	foreach_ptr(def, stmt->options)
+	{
+		if (strcmp(def->defname, "tablespace") == 0)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -203,22 +253,38 @@ List *
 PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 							ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = false;
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
-
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
 	EnsureCoordinator();
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
+								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	if (IsSetTablespaceStatement(stmt))
+	{
+		/*
+		 * Set tablespace does not work inside a transaction.Therefore, we need to use
+		 * NontransactionalNodeDDLTask to run the command on the workers outside
+		 * the transaction block.
+		 */
+
+		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	}
+	else
+	{
+		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	}
 }
 
 
@@ -235,12 +301,15 @@ List *
 PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 									   ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = true;
+	AlterDatabaseRefreshCollStmt *stmt = castNode(AlterDatabaseRefreshCollStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
-
-	AlterDatabaseRefreshCollStmt *stmt = castNode(AlterDatabaseRefreshCollStmt, node);
 
 	EnsureCoordinator();
 
@@ -257,6 +326,36 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 #endif
 
 /*
+ * PreprocessAlterDatabaseRenameStmt is executed before the statement is applied to the local
+ * postgres instance. In this stage we prepare ALTER DATABASE RENAME statement to be run on
+ * all workers.
+ */
+List *
+PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString)
+{
+	bool missingOk = false;
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->newname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
  * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
  * postgres instance.
  *
@@ -267,12 +366,15 @@ List *
 PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 							   ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+
+	bool missingOk = true;
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
-
-	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
 
 	EnsureCoordinator();
 

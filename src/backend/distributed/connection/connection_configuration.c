@@ -425,11 +425,13 @@ GetConnParam(const char *keyword)
 
 /*
  * GetEffectiveConnKey checks whether there is any pooler configuration for the
- * provided key (host/port combination). The one case where this logic is not
- * applied is for loopback connections originating within the task tracker. If
- * a corresponding row is found in the poolinfo table, a modified (effective)
- * key is returned with the node, port, and dbname overridden, as applicable,
- * otherwise, the original key is returned unmodified.
+ * provided key (host/port combination). If a corresponding row is found in the
+ * poolinfo table, a modified (effective) key is returned with the node, port,
+ * and dbname overridden, as applicable, otherwise, the original key is returned
+ * unmodified.
+ *
+ * In the case of Citus non-main databases we just return the key, since we
+ * would not have access to tables with worker information.
  */
 ConnectionHashKey *
 GetEffectiveConnKey(ConnectionHashKey *key)
@@ -444,7 +446,17 @@ GetEffectiveConnKey(ConnectionHashKey *key)
 		return key;
 	}
 
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * This happens when we connect to main database over localhost
+		 * from some non Citus database.
+		 */
+		return key;
+	}
+
 	WorkerNode *worker = FindWorkerNode(key->hostname, key->port);
+
 	if (worker == NULL)
 	{
 		/* this can be hit when the key references an unknown node */

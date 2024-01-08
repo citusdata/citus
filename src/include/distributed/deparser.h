@@ -231,6 +231,7 @@ extern void QualifyAlterRoleSetStmt(Node *stmt);
 extern char * DeparseCreateRoleStmt(Node *stmt);
 extern char * DeparseDropRoleStmt(Node *stmt);
 extern char * DeparseGrantRoleStmt(Node *stmt);
+extern char * DeparseReassignOwnedStmt(Node *node);
 
 /* forward declarations for deparse_owned_stmts.c */
 extern char * DeparseDropOwnedStmt(Node *node);
@@ -251,6 +252,7 @@ extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
 extern char * DeparseAlterDatabaseSetStmt(Node *node);
 extern char * DeparseCreateDatabaseStmt(Node *node);
 extern char * DeparseDropDatabaseStmt(Node *node);
+extern char * DeparseAlterDatabaseRenameStmt(Node *node);
 
 
 /* forward declaration for deparse_publication_stmts.c */

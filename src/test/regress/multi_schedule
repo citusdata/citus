@@ -1,6 +1,7 @@
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 test: create_role_propagation
+test: pg16
 test: multi_create_fdw
 test: multi_test_catalog_views
 test: replicated_table_disable_node
@@ -65,7 +66,6 @@ test: pg13 pg12
 test: pg14
 test: pg15
 test: pg15_jsonpath detect_conn_close
-test: pg16
 test: drop_column_partitioned_table
 test: tableam
 
@@ -108,6 +108,7 @@ test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes
 test: background_task_queue_monitor
+test: other_databases
 
 # Causal clock test
 test: clock
