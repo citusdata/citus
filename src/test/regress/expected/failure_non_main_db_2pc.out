@@ -8,8 +8,8 @@ CREATE SCHEMA failure_non_main_db_2pc;
 SET SEARCH_PATH TO 'failure_non_main_db_2pc';
 CREATE DATABASE other_db1;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 SELECT citus.mitmproxy('conn.onQuery(query="COMMIT PREPARED").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -101,8 +101,8 @@ SELECT citus_set_coordinator_host('localhost');
 \c - - - :worker_1_port
 CREATE DATABASE other_db2;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 SELECT citus.mitmproxy('conn.onQuery(query="COMMIT PREPARED").kill()');
  mitmproxy
 ---------------------------------------------------------------------
