@@ -182,8 +182,8 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set citus.enable_create_database_propagation=off;
 CREATE database local_regression;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 alter DATABASE local_regression with CONNECTION LIMIT 100;
 alter DATABASE local_regression rename to local_regression2;
 drop database local_regression2;

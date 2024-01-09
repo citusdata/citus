@@ -255,19 +255,19 @@ SELECT citus_remove_node('localhost', :master_port);
 -- they fail because the coordinator is not added to metadata
 DROP ROLE test_role_renamed;
 ERROR:  coordinator is not added to the metadata
-HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 ALTER ROLE test_role_renamed RENAME TO test_role;
 ERROR:  coordinator is not added to the metadata
-HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 ALTER ROLE test_role_renamed CREATEDB;
 ERROR:  coordinator is not added to the metadata
-HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 ALTER ROLE current_user IN DATABASE "regression" SET enable_hashjoin TO OFF;
 ERROR:  coordinator is not added to the metadata
-HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 GRANT another_user TO test_role_renamed;
 ERROR:  coordinator is not added to the metadata
-HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 \c - - - :master_port
 DROP ROLE test_role_renamed, another_user;
 SET client_min_messages TO WARNING;
