@@ -48,14 +48,21 @@ get_guc_variables_compat(int *gucCount)
 
 #define pgstat_fetch_stat_local_beentry(a) pgstat_get_local_beentry_by_index(a)
 
+#define have_createdb_privilege() have_createdb_privilege()
+
 #else
 
+#include "miscadmin.h"
+
+#include "catalog/pg_authid.h"
 #include "catalog/pg_class_d.h"
+#include "catalog/pg_database_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc_d.h"
 #include "storage/relfilenode.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/syscache.h"
 
 #define pg_clean_ascii_compat(a, b) pg_clean_ascii(a)
 
@@ -105,6 +112,11 @@ object_ownercheck(Oid classid, Oid objectid, Oid roleid)
 			return pg_proc_ownercheck(objectid, roleid);
 		}
 
+		case DatabaseRelationId:
+		{
+			return pg_database_ownercheck(objectid, roleid);
+		}
+
 		default:
 		{
 			ereport(ERROR,
@@ -137,6 +149,28 @@ object_aclcheck(Oid classid, Oid objectid, Oid roleid, AclMode mode)
 																	classid)));
 		}
 	}
+}
+
+
+static inline bool
+have_createdb_privilege(void)
+{
+	bool result = false;
+	HeapTuple utup;
+
+	/* Superusers can always do everything */
+	if (superuser())
+	{
+		return true;
+	}
+
+	utup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(GetUserId()));
+	if (HeapTupleIsValid(utup))
+	{
+		result = ((Form_pg_authid) GETSTRUCT(utup))->rolcreatedb;
+		ReleaseSysCache(utup);
+	}
+	return result;
 }
 
 
