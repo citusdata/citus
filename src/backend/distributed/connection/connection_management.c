@@ -1046,8 +1046,15 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 
 				continue;
 			}
-
+			bool beforePollSocket = PQsocket(connectionState->connection->pgConn);
 			bool connectionStateChanged = MultiConnectionStatePoll(connectionState);
+
+			if (beforePollSocket != PQsocket(connectionState->connection->pgConn))
+			{
+				/* rebuild the wait events if MultiConnectionStatePoll() changed the socket */
+				waitEventSetRebuild = true;
+			}
+
 			if (connectionStateChanged)
 			{
 				if (connectionState->phase != MULTI_CONNECTION_PHASE_CONNECTING)
