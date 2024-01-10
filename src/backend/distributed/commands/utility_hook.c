@@ -95,13 +95,23 @@
 #define MARK_OBJECT_DISTRIBUTED \
 	"SELECT citus_internal.mark_object_distributed(%d, %s, %d)"
 
-
+/*
+ * TwoPcStatementInfo is used to determine whether a statement is supported in 2PC
+ * and whether it should be marked as distributed in 2PC.
+*/
 typedef struct TwoPcStatementInfo
 {
 	int statementType;
 	bool markAsDistributed;
 } TwoPcStatementInfo;
 
+/*
+ * twoPcSupportedStatements is a list of statements that are supported in 2PC.
+ * The list is used to determine whether a statement is supported in 2PC and
+ * whether it should be marked as distributed in 2PC.
+ * We use this array to avoid hardcoding the list of supported statements in
+ * multiple places.
+*/
 const TwoPcStatementInfo twoPcSupportedStatements[] = {
 	{ T_GrantRoleStmt, false },
 	{ T_CreateRoleStmt, true }
@@ -137,8 +147,8 @@ static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
 static void RunPostprocessMainDBCommand(Node *parsetree);
-static bool IsStatementSupportedIn2Pc(Node *parsetree);
-static bool IsStatementMarkDistributedFor2PC(Node *parsetree);
+static bool IsStatementSupportedIn2PC(Node *parsetree);
+static bool DoesStatementRequireMarkDistributedFor2PC(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1618,7 +1628,7 @@ DropSchemaOrDBInProgress(void)
 static void
 RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 {
-	if (!IsStatementSupportedIn2Pc(parsetree))
+	if (!IsStatementSupportedIn2PC(parsetree))
 	{
 		return;
 	}
@@ -1644,8 +1654,8 @@ RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void
 RunPostprocessMainDBCommand(Node *parsetree)
 {
-	if (!IsStatementSupportedIn2Pc(parsetree) ||
-		!IsStatementMarkDistributedFor2PC(parsetree))
+	if (!IsStatementSupportedIn2PC(parsetree) ||
+		!DoesStatementRequireMarkDistributedFor2PC(parsetree))
 	{
 		return;
 	}
@@ -1669,7 +1679,7 @@ RunPostprocessMainDBCommand(Node *parsetree)
  * IsStatementSupportedIn2Pc returns true if the statement is supported in 2pc
  */
 static bool
-IsStatementSupportedIn2Pc(Node *parsetree)
+IsStatementSupportedIn2PC(Node *parsetree)
 {
 	NodeTag type = nodeTag(parsetree);
 
@@ -1687,11 +1697,11 @@ IsStatementSupportedIn2Pc(Node *parsetree)
 
 
 /*
- * IsStatementMarkDistributedFor2PC returns true if the statement should be marked
+ * DoesStatementRequireMarkDistributedFor2PC returns true if the statement should be marked
  * as distributed in 2pc
  */
 static bool
-IsStatementMarkDistributedFor2PC(Node *parsetree)
+DoesStatementRequireMarkDistributedFor2PC(Node *parsetree)
 {
 	NodeTag type = nodeTag(parsetree);
 

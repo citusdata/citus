@@ -16,7 +16,6 @@ SHOW citus.main_db;
 
 -- check that empty citus.superuser gives error
 SET citus.superuser TO '';
-CREATE USER empty_superuser;
 SET citus.superuser TO 'postgres';
 
 CREATE USER grant_role2pc_user1;
@@ -27,22 +26,30 @@ CREATE USER grant_role2pc_user5;
 CREATE USER grant_role2pc_user6;
 CREATE USER grant_role2pc_user7;
 
-
-\c regression
-
-SELECT * FROM public.check_database_privileges('grant_role2pc_user2', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-
-grant create,connect,temporary,temp on database grant_role2pc_db to grant_role2pc_user1;
-
 \c grant_role2pc_db
 
+--test with empty superuser
+SET citus.superuser TO '';
 grant grant_role2pc_user1 to grant_role2pc_user2;
+
+SET citus.superuser TO 'postgres';
+grant grant_role2pc_user1 to grant_role2pc_user2 with admin option granted by CURRENT_USER;
 
 \c regression
 
-
-SELECT * FROM public.check_database_privileges('grant_role2pc_user2', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-
+select result FROM run_command_on_all_nodes(
+    $$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+    SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
+    FROM pg_auth_members m
+    JOIN pg_roles r ON r.oid = m.roleid
+    JOIN pg_roles g ON g.oid = m.member
+    JOIN pg_roles a ON a.oid = m.grantor
+    WHERE g.rolname = 'grant_role2pc_user2'
+    ) t
+    $$
+);
 
 \c grant_role2pc_db
 --test grant under transactional context with multiple operations
@@ -66,23 +73,39 @@ commit;
 
 \c regression
 
-SELECT * FROM public.check_database_privileges('grant_role2pc_user3', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user4', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user5', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user6', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+  SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
+  FROM pg_auth_members m
+  JOIN pg_roles r ON r.oid = m.roleid
+  JOIN pg_roles g ON g.oid = m.member
+  JOIN pg_roles a ON a.oid = m.grantor
+  WHERE g.rolname in ('grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+) t
+$$);
+
 
 \c grant_role2pc_db
 
-grant grant_role2pc_user1 to grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
+grant grant_role2pc_user1,grant_role2pc_user2 to grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
 
 \c regression
-SELECT * FROM public.check_database_privileges('grant_role2pc_user5', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user6', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+  SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
+  FROM pg_auth_members m
+  JOIN pg_roles r ON r.oid = m.roleid
+  JOIN pg_roles g ON g.oid = m.member
+  JOIN pg_roles a ON a.oid = m.grantor
+  WHERE g.rolname in ('grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+) t
+$$);
 
 \c grant_role2pc_db
-revoke grant_role2pc_user1 from grant_role2pc_user2;
+revoke admin option for grant_role2pc_user1 from grant_role2pc_user2 granted by CURRENT_USER;
 
 --test revoke under transactional context with multiple operations
 BEGIN;
@@ -97,16 +120,21 @@ COMMIT;
 
 \c regression
 
-SELECT * FROM public.check_database_privileges('grant_role2pc_user2', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user3', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user4', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user5', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user6', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
-SELECT * FROM public.check_database_privileges('grant_role2pc_user7', 'grant_role2pc_db', ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+  SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
+  FROM pg_auth_members m
+  JOIN pg_roles r ON r.oid = m.roleid
+  JOIN pg_roles g ON g.oid = m.member
+  JOIN pg_roles a ON a.oid = m.grantor
+  WHERE g.rolname in ('grant_role2pc_user2','grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+) t
+$$);
 
 DROP SCHEMA grant_role2pc;
 
-REVOKE ALL PRIVILEGES ON DATABASE grant_role2pc_db FROM grant_role2pc_user1;
+
 
 set citus.enable_create_database_propagation to on;
 DROP DATABASE grant_role2pc_db;
