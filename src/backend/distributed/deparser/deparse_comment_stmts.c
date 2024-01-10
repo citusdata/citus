@@ -29,7 +29,7 @@
 #include "distributed/log_utils.h"
 
 
-const char *ObjectTypeInfos[] =
+const char *ObjectTypeNames[] =
 {
 	[OBJECT_DATABASE] = "DATABASE",
 	[OBJECT_ROLE] = "ROLE",
@@ -66,7 +66,7 @@ DeparseCommentStmt(Node *node)
 				 errmsg("unknown object type")));
 	}
 
-	const char *objectType = ObjectTypeInfos[stmt->objtype];
+	const char *objectType = ObjectTypeNames[stmt->objtype];
 
 	char *comment = stmt->comment != NULL ? quote_literal_cstr(stmt->comment) : "NULL";
 

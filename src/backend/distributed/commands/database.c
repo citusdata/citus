@@ -586,7 +586,8 @@ GetDatabaseMetadataSyncCommands(Oid dbOid)
 	List *ddlCommands = list_make1(databaseDDLCommand);
 
 	List *grantDDLCommands = GrantOnDatabaseDDLCommands(dbOid);
-	List *commentDDLCommands = GetCommentPropagationCommands(dbOid, databaseName,
+	List *commentDDLCommands = GetCommentPropagationCommands(DatabaseRelationId, dbOid,
+															 databaseName,
 															 OBJECT_DATABASE);
 
 	ddlCommands = list_concat(ddlCommands, grantDDLCommands);

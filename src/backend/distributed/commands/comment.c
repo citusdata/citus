@@ -18,22 +18,24 @@
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
+#include "utils/fmgroids.h"
 
 #include "distributed/comment.h"
 
-static char * GetCommentForObject(Oid oid);
+static char * GetCommentForObject(Oid classOid, Oid objectOid);
 
 
 List *
-GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
+GetCommentPropagationCommands(Oid classOid, Oid objOoid, char *objectName, ObjectType
+							  objectType)
 {
 	List *commands = NIL;
 
 	StringInfo commentStmt = makeStringInfo();
 
 	/* Get the comment for the database */
-	char *comment = GetCommentForObject(oid);
-	char const *commentObjectType = ObjectTypeInfos[objectType];
+	char *comment = GetCommentForObject(classOid, objOoid);
+	char const *commentObjectType = ObjectTypeNames[objectType];
 
 	/* Create the SQL command to propagate the comment to other nodes */
 	if (comment != NULL)
@@ -55,7 +57,7 @@ GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType objectType)
 
 
 static char *
-GetCommentForObject(Oid oid)
+GetCommentForObject(Oid classOid, Oid objectOid)
 {
 	HeapTuple tuple;
 	char *comment = NULL;
@@ -64,8 +66,21 @@ GetCommentForObject(Oid oid)
 	Relation shdescRelation = table_open(SharedDescriptionRelationId, AccessShareLock);
 
 	/* Scan the table */
-	SysScanDesc scan = systable_beginscan(shdescRelation, InvalidOid, false, NULL, 0,
-										  NULL);
+	ScanKeyData scanKey[2];
+
+	ScanKeyInit(&scanKey[0],
+				Anum_pg_shdescription_objoid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(objectOid));
+	ScanKeyInit(&scanKey[1],
+				Anum_pg_shdescription_classoid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(classOid));
+	bool indexOk = true;
+	int scanKeyCount = 2;
+	SysScanDesc scan = systable_beginscan(shdescRelation, SharedDescriptionObjIndexId,
+										  indexOk, NULL, scanKeyCount,
+										  scanKey);
 	while ((tuple = systable_getnext(scan)) != NULL)
 	{
 		Form_pg_shdescription shdesc = (Form_pg_shdescription) GETSTRUCT(tuple);
@@ -78,7 +93,7 @@ GetCommentForObject(Oid oid)
 									   &isNull);
 
 		/* Check if the objoid matches the databaseOid */
-		if (shdesc->objoid == oid)
+		if (shdesc->objoid == objectOid && shdesc->classoid == classOid)
 		{
 			/* Add the command to the list */
 			if (!isNull)

@@ -16,11 +16,11 @@
 #include "nodes/parsenodes.h"
 
 
-extern const char *ObjectTypeInfos[];
+extern const char *ObjectTypeNames[];
 
 
-extern List * GetCommentPropagationCommands(Oid oid, char *objectName, ObjectType
-											objectType);
+extern List * GetCommentPropagationCommands(Oid classOid, Oid oid, char *objectName,
+											ObjectType objectType);
 extern List * CommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 
 # endif /* COMMENT_H */

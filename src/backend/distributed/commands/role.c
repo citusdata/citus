@@ -591,8 +591,8 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		 * for the ROLE entry corresponding to roleOid, and generate the relevant
 		 * Comment stmts to be run in the new node.
 		 */
-		List *commentStmts = GetCommentPropagationCommands(roleOid, rolename,
-														   OBJECT_ROLE);
+		List *commentStmts = GetCommentPropagationCommands(AuthIdRelationId, roleOid,
+														   rolename, OBJECT_ROLE);
 		completeRoleList = list_concat(completeRoleList, commentStmts);
 	}
 
