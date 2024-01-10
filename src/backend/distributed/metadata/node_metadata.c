@@ -2771,11 +2771,23 @@ EnsureCoordinatorIsInMetadata(void)
 {
 	bool isCoordinatorInMetadata = false;
 	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &isCoordinatorInMetadata);
-	if (!isCoordinatorInMetadata)
+	if (isCoordinatorInMetadata)
+	{
+		return;
+	}
+
+	/* be more descriptive when we're not on coordinator */
+	if (IsCoordinator())
 	{
 		ereport(ERROR, (errmsg("coordinator is not added to the metadata"),
 						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
 								"to configure the coordinator hostname")));
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("coordinator is not added to the metadata"),
+						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
+								"on coordinator to configure the coordinator hostname")));
 	}
 }
 

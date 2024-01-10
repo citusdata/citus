@@ -242,18 +242,18 @@ drop database "mydatabase#1'2";
 
 SET citus.enable_create_database_propagation TO ON;
 
--- show that dropping the database from workers is not allowed when citus.enable_create_database_propagation is on
+-- show that dropping the database from workers is allowed when citus.enable_create_database_propagation is on
 DROP DATABASE db_needs_escape;
 
 -- and the same applies to create database too
 create database error_test;
+drop database error_test;
 
 \c - - - :master_port
 
 SET citus.enable_create_database_propagation TO ON;
 
 DROP DATABASE test_node_activation;
-DROP DATABASE db_needs_escape;
 DROP USER "role-needs\!escape";
 
 -- drop database with force options test
@@ -536,6 +536,217 @@ REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
 DROP DATABASE test_db;
 DROP ROLE propagated_role, non_propagated_role;
 
+-- show that we don't try to propagate commands on non-distributed databases
+SET citus.enable_create_database_propagation TO OFF;
+CREATE DATABASE local_database_1;
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE ROLE local_role_1;
+
+GRANT CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 TO local_role_1;
+ALTER DATABASE local_database_1 SET default_transaction_read_only = 'true';
+
+REVOKE CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 FROM local_role_1;
+DROP ROLE local_role_1;
+DROP DATABASE local_database_1;
+
+-- test create / drop database commands from workers
+
+-- remove one of the workers to test node activation too
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
+
+\c - - - :worker_1_port
+
+CREATE DATABASE local_worker_db;
+
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE DATABASE db_created_from_worker
+    WITH template=template1
+    OWNER = create_drop_db_test_user
+            ENCODING = 'UTF8'
+            CONNECTION LIMIT = 42
+            TABLESPACE = "ts-needs\!escape"
+            ALLOW_CONNECTIONS = false;
+
+\c - - - :master_port
+
+SET citus.enable_create_database_propagation TO ON;
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+\c - - - :worker_1_port
+
+SET citus.enable_create_database_propagation TO ON;
+
+SELECT * FROM public.check_database_on_all_nodes('local_worker_db') ORDER BY node_type;
+SELECT * FROM public.check_database_on_all_nodes('db_created_from_worker') ORDER BY node_type;
+
+DROP DATABASE db_created_from_worker;
+
+SELECT * FROM public.check_database_on_all_nodes('db_created_from_worker') ORDER BY node_type;
+
+-- drop the local database while the GUC is on
+DROP DATABASE local_worker_db;
+SELECT * FROM public.check_database_on_all_nodes('local_worker_db') ORDER BY node_type;
+
+SET citus.enable_create_database_propagation TO OFF;
+
+CREATE DATABASE local_worker_db;
+
+-- drop the local database while the GUC is off
+DROP DATABASE local_worker_db;
+SELECT * FROM public.check_database_on_all_nodes('local_worker_db') ORDER BY node_type;
+
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE DATABASE another_db_created_from_worker;
+
+\c - - - :master_port
+
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+
+\c - - - :worker_1_port
+
+SET citus.enable_create_database_propagation TO ON;
+
+-- fails because coordinator is not added into metadata
+DROP DATABASE another_db_created_from_worker;
+
+-- fails because coordinator is not added into metadata
+CREATE DATABASE new_db;
+
+\c - - - :master_port
+
+SET client_min_messages TO WARNING;
+SELECT 1 FROM citus_add_node('localhost', :master_port, 0);
+RESET client_min_messages;
+
+SET citus.enable_create_database_propagation TO ON;
+
+-- dropping a database that was created from a worker via a different node works fine
+DROP DATABASE another_db_created_from_worker;
+SELECT * FROM public.check_database_on_all_nodes('another_db_created_from_worker') ORDER BY node_type;
+
+-- Show that we automatically propagate the dependencies (only roles atm) when
+-- creating a database from workers too.
+
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
+
+\c - - - :worker_1_port
+
+set citus.enable_create_role_propagation TO off;
+create role non_propagated_role;
+set citus.enable_create_role_propagation TO on;
+
+set citus.enable_create_database_propagation TO on;
+
+create database test_db OWNER non_propagated_role;
+
+create role propagated_role;
+
+\c - - - :master_port
+
+-- not supported from workers, so need to execute this via coordinator
+grant connect on database test_db to propagated_role;
+
+SET citus.enable_create_database_propagation TO ON;
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+SELECT * FROM public.check_database_on_all_nodes('test_db') ORDER BY node_type;
+
+REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
+DROP DATABASE test_db;
+DROP ROLE propagated_role, non_propagated_role;
+
+-- test pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock with null input
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(null, 'regression');
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), null);
+
+-- OCLASS_DATABASE
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), NULL);
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'regression');
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), '');
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'no_such_db');
+
+-- invalid OCLASS
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(-1, NULL);
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(-1, 'regression');
+
+-- invalid OCLASS
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(100, NULL);
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(100, 'regression');
+
+-- another valid OCLASS, but not implemented yet
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(10, NULL);
+SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(10, 'regression');
+
+SELECT 1 FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.enable_create_database_propagation TO ON');
+SELECT 1 FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+SELECT pg_sleep(0.1);
+
+-- only one of them succeeds and we don't run into a distributed deadlock
+SELECT COUNT(*) FROM run_command_on_all_nodes('CREATE DATABASE concurrent_create_db') WHERE success;
+SELECT * FROM public.check_database_on_all_nodes('concurrent_create_db') ORDER BY node_type;
+
+SELECT COUNT(*) FROM run_command_on_all_nodes('DROP DATABASE concurrent_create_db') WHERE success;
+SELECT * FROM public.check_database_on_all_nodes('concurrent_create_db') ORDER BY node_type;
+
+-- revert the system wide change that enables citus.enable_create_database_propagation on all nodes
+SELECT 1 FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.enable_create_database_propagation TO OFF');
+SELECT 1 FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+SELECT pg_sleep(0.1);
+
+-- but keep it enabled for coordinator for the rest of the tests
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE DATABASE distributed_db;
+
+CREATE USER no_createdb;
+SET ROLE no_createdb;
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE DATABASE no_createdb;
+ALTER DATABASE distributed_db RENAME TO rename_test;
+DROP DATABASE distributed_db;
+ALTER DATABASE distributed_db SET TABLESPACE pg_default;
+ALTER DATABASE distributed_db SET timezone TO 'UTC';
+ALTER DATABASE distributed_db RESET timezone;
+GRANT ALL ON DATABASE distributed_db TO postgres;
+
+RESET ROLE;
+
+ALTER ROLE no_createdb createdb;
+
+SET ROLE no_createdb;
+
+CREATE DATABASE no_createdb;
+
+ALTER DATABASE distributed_db RENAME TO rename_test;
+
+RESET ROLE;
+
+SELECT 1 FROM run_command_on_all_nodes($$GRANT ALL ON TABLESPACE pg_default TO no_createdb$$);
+ALTER DATABASE distributed_db OWNER TO no_createdb;
+
+SET ROLE no_createdb;
+
+ALTER DATABASE distributed_db SET TABLESPACE pg_default;
+ALTER DATABASE distributed_db SET timezone TO 'UTC';
+ALTER DATABASE distributed_db RESET timezone;
+GRANT ALL ON DATABASE distributed_db TO postgres;
+ALTER DATABASE distributed_db RENAME TO rename_test;
+DROP DATABASE rename_test;
+
+RESET ROLE;
+
+SELECT 1 FROM run_command_on_all_nodes($$REVOKE ALL ON TABLESPACE pg_default FROM no_createdb$$);
+
+DROP DATABASE no_createdb;
+DROP USER no_createdb;
+
+SET citus.enable_create_database_propagation TO ON;
 
 --clean up resources created by this test
 

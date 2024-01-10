@@ -10,3 +10,5 @@
 #include "udfs/commit_management_command_2pc/12.2-1.sql"
 
 ALTER TABLE pg_catalog.pg_dist_transaction ADD COLUMN outer_xid xid8;
+
+#include "udfs/citus_internal_acquire_citus_advisory_object_class_lock/12.2-1.sql"

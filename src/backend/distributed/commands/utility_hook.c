@@ -726,9 +726,9 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 			ereport(NOTICE, (errmsg("Citus partially supports CREATE DATABASE for "
 									"distributed databases"),
 							 errdetail("Citus does not propagate CREATE DATABASE "
-									   "command to workers"),
+									   "command to other nodes"),
 							 errhint("You can manually create a database and its "
-									 "extensions on workers.")));
+									 "extensions on other nodes.")));
 		}
 	}
 	else if (IsA(parsetree, CreateRoleStmt) && !EnableCreateRolePropagation)
