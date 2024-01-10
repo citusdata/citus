@@ -98,7 +98,7 @@
 /*
  * TwoPcStatementInfo is used to determine whether a statement is supported in 2PC
  * and whether it should be marked as distributed in 2PC.
-*/
+ */
 typedef struct TwoPcStatementInfo
 {
 	int statementType;
@@ -111,7 +111,7 @@ typedef struct TwoPcStatementInfo
  * whether it should be marked as distributed in 2PC.
  * We use this array to avoid hardcoding the list of supported statements in
  * multiple places.
-*/
+ */
 const TwoPcStatementInfo twoPcSupportedStatements[] = {
 	{ T_GrantRoleStmt, false },
 	{ T_CreateRoleStmt, true }
