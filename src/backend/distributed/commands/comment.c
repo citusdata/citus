@@ -17,8 +17,8 @@
 #include "catalog/pg_shdescription.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
-#include "utils/rel.h"
 #include "utils/fmgroids.h"
+#include "utils/rel.h"
 
 #include "distributed/comment.h"
 
