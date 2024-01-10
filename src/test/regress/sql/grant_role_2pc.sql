@@ -47,6 +47,7 @@ select result FROM run_command_on_all_nodes(
     JOIN pg_roles g ON g.oid = m.member
     JOIN pg_roles a ON a.oid = m.grantor
     WHERE g.rolname = 'grant_role2pc_user2'
+    order by g.rolname
     ) t
     $$
 );
@@ -82,6 +83,7 @@ FROM (
   JOIN pg_roles g ON g.oid = m.member
   JOIN pg_roles a ON a.oid = m.grantor
   WHERE g.rolname in ('grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+  order by g.rolname
 ) t
 $$);
 
@@ -101,6 +103,7 @@ FROM (
   JOIN pg_roles g ON g.oid = m.member
   JOIN pg_roles a ON a.oid = m.grantor
   WHERE g.rolname in ('grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+  order by g.rolname
 ) t
 $$);
 
@@ -129,6 +132,7 @@ FROM (
   JOIN pg_roles g ON g.oid = m.member
   JOIN pg_roles a ON a.oid = m.grantor
   WHERE g.rolname in ('grant_role2pc_user2','grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+  order by g.rolname
 ) t
 $$);
 
