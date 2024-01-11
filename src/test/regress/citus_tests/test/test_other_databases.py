@@ -27,6 +27,9 @@ def test_main_commited_outer_not_yet(cluster):
         )
         cur2.execute("COMMIT")
 
+        import pprint
+        pprint.pprint(cur2.execute('select * from pg_catalog.pg_dist_transaction').fetchall())
+
         # run the transaction recovery
         c.sql("SELECT recover_prepared_transactions()")
 
