@@ -31,6 +31,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "parser/parse_type.h"
+#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -80,7 +81,14 @@ mark_object_distributed(PG_FUNCTION_ARGS)
 	Oid objectId = PG_GETARG_OID(2);
 	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*objectAddress, classId, objectId);
-	MarkObjectDistributedWithName(objectAddress, objectName);
+
+	/*
+	 * This function is called when a query is run from a Citus non-main database.
+	 * We need to insert into local pg_dist_object over a connection to make sure
+	 * 2PC still works.
+	 */
+	bool useConnectionForLocalQuery = true;
+	MarkObjectDistributedWithName(objectAddress, objectName, useConnectionForLocalQuery);
 	PG_RETURN_VOID();
 }
 
@@ -184,7 +192,8 @@ ObjectExists(const ObjectAddress *address)
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
 {
-	MarkObjectDistributedWithName(distAddress, "");
+	bool useConnectionForLocalQuery = false;
+	MarkObjectDistributedWithName(distAddress, "", useConnectionForLocalQuery);
 }
 
 
@@ -194,13 +203,32 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
  * that is used in case the object does not exists for the current transaction.
  */
 void
-MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *objectName)
+MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *objectName,
+							  bool useConnectionForLocalQuery)
 {
 	if (!CitusHasBeenLoaded())
 	{
 		elog(ERROR, "Cannot mark object distributed because Citus has not been loaded.");
 	}
-	MarkObjectDistributedLocally(distAddress);
+
+	/*
+	 * When a query is run from a Citus non-main database we need to insert into pg_dist_object
+	 * over a connection to make sure 2PC still works.
+	 */
+	if (useConnectionForLocalQuery)
+	{
+		StringInfo insertQuery = makeStringInfo();
+		appendStringInfo(insertQuery,
+						 "INSERT INTO pg_catalog.pg_dist_object (classid, objid, objsubid)"
+						 "VALUES (%d, %d, %d) ON CONFLICT DO NOTHING",
+						 distAddress->classId, distAddress->objectId,
+						 distAddress->objectSubId);
+		SendCommandToWorker(LocalHostName, PostPortNumber, insertQuery->data);
+	}
+	else
+	{
+		MarkObjectDistributedLocally(distAddress);
+	}
 
 	if (EnableMetadataSync)
 	{

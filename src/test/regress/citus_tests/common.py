@@ -431,6 +431,12 @@ next_port = PORT_LOWER_BOUND
 
 def notice_handler(diag: psycopg.errors.Diagnostic):
     print(f"{diag.severity}: {diag.message_primary}")
+    if diag.message_detail:
+        print(f"DETAIL: {diag.message_detail}")
+    if diag.message_hint:
+        print(f"HINT: {diag.message_hint}")
+    if diag.context:
+        print(f"CONTEXT: {diag.context}")
 
 
 def cleanup_test_leftovers(nodes):
