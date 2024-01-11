@@ -5,9 +5,6 @@ def test_main_commited_outer_not_yet(cluster):
     # create a non-main database
     c.sql("CREATE DATABASE db1")
 
-    c.sql("ALTER SYSTEM SET citus.local_hostname TO '127.0.0.1'")
-    c.sql("SELECT pg_reload_conf()")
-
     # we will use cur1 to simulate non-main database user and
     # cur2 to manually do the steps we would do in the main database
     with c.cur(dbname="db1") as cur1, c.cur() as cur2:
@@ -17,6 +14,7 @@ def test_main_commited_outer_not_yet(cluster):
         txid = cur1.fetchall()
 
         # using the transaction id of the cur1 simulate the main database commands manually
+        cur2.execute("SET citus.log_remote_commands = 'on'")
         cur2.execute("BEGIN")
         cur2.execute(
             "SELECT citus_internal.start_management_transaction(%s)", (str(txid[0][0]),)
@@ -118,8 +116,6 @@ def test_main_commited_outer_aborted(cluster):
 
     # create a non-main database
     c.sql("CREATE DATABASE db2")
-
-    c.sql("SELECT citus_set_coordinator_host('localhost')")
 
     # we will use cur1 to simulate non-main database user and
     # cur2 to manually do the steps we would do in the main database
