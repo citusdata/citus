@@ -142,7 +142,17 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind, char *fragmentSch
 	fauxFunction->funcexpr = (Node *) fauxFuncExpr;
 
 	/* set the column count to pass ruleutils checks, not used elsewhere */
-	fauxFunction->funccolcount = list_length(rte->eref->colnames);
+	if (rte->relid != 0)
+	{
+		Relation rel = RelationIdGetRelation(rte->relid);
+		fauxFunction->funccolcount = RelationGetNumberOfAttributes(rel);
+		RelationClose(rel);
+	}
+	else
+	{
+		fauxFunction->funccolcount = list_length(rte->eref->colnames);
+	}
+
 	fauxFunction->funccolnames = funcColumnNames;
 	fauxFunction->funccoltypes = funcColumnTypes;
 	fauxFunction->funccoltypmods = funcColumnTypeMods;
