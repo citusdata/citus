@@ -14,7 +14,6 @@ def test_main_commited_outer_not_yet(cluster):
         txid = cur1.fetchall()
 
         # using the transaction id of the cur1 simulate the main database commands manually
-        cur2.execute("SET citus.log_remote_commands = 'on'")
         cur2.execute("BEGIN")
         cur2.execute(
             "SELECT citus_internal.start_management_transaction(%s)", (str(txid[0][0]),)
@@ -26,9 +25,6 @@ def test_main_commited_outer_not_yet(cluster):
             "SELECT citus_internal.mark_object_distributed(1260, 'u1', 123123)"
         )
         cur2.execute("COMMIT")
-
-        import pprint
-        pprint.pprint(cur2.execute('select * from pg_catalog.pg_dist_transaction').fetchall())
 
         # run the transaction recovery
         c.sql("SELECT recover_prepared_transactions()")
