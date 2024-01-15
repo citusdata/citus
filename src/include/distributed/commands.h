@@ -447,6 +447,9 @@ extern List * PreprocessDropOwnedStmt(Node *node, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
 extern List * PostprocessReassignOwnedStmt(Node *node, const char *queryString);
 
+/* parameter.c - forward declarations */
+extern List * PostprocessGrantParameterStmt(Node *node, const char *queryString);
+
 /* policy.c -  forward declarations */
 extern List * CreatePolicyCommands(Oid relationId);
 extern void ErrorIfUnsupportedPolicy(Relation relation);

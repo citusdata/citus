@@ -762,6 +762,18 @@ static DistributeObjectOps Index_Drop = {
 	.address = NULL,
 	.markDistributed = false,
 };
+
+static DistributeObjectOps Parameter_Grant = {
+	.deparse = DeparseGrantOnParameterStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessGrantParameterStmt,
+	.objectType = OBJECT_PARAMETER_ACL,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Policy_Drop = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -2059,6 +2071,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_DATABASE:
 				{
 					return &Database_Grant;
+				}
+
+				case OBJECT_PARAMETER_ACL:
+				{
+					return &Parameter_Grant;
 				}
 
 				default:
