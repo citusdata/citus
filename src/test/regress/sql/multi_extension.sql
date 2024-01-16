@@ -8,8 +8,6 @@
 --
 -- Upgrade tests verify the objects are added in citus_finish_pg_upgrade()
 
-SELECT 1;
-
 SET citus.next_shard_id TO 580000;
 CREATE SCHEMA multi_extension;
 
