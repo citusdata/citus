@@ -1,3 +1,5 @@
+SELECT 1;
+
 SET search_path TO upgrade_columnar, public;
 
 -- test we retained data

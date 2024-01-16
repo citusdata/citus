@@ -1,5 +1,7 @@
 -- File to create functions and helpers needed for subsequent tests
 
+SELECT 1;
+
 -- create a helper function to create objects on each node
 CREATE OR REPLACE FUNCTION run_command_on_master_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
