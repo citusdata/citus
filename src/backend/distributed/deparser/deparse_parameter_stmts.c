@@ -6,6 +6,8 @@
  * -------------------------------------------------------------------------
  */
 
+#include "pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_15
 #include "postgres.h"
 
 #include "utils/builtins.h"
@@ -60,3 +62,4 @@ DeparseGrantOnParameterStmt(Node *node)
 
 	return str.data;
 }
+#endif /* PG_VERSION_NUM >= PG_VERSION_15 */

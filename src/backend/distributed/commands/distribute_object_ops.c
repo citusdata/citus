@@ -763,6 +763,7 @@ static DistributeObjectOps Index_Drop = {
 	.markDistributed = false,
 };
 
+#if PG_VERSION_NUM >= PG_VERSION_15
 static DistributeObjectOps Parameter_Grant = {
 	.deparse = DeparseGrantOnParameterStmt,
 	.qualify = NULL,
@@ -773,6 +774,7 @@ static DistributeObjectOps Parameter_Grant = {
 	.address = NULL,
 	.markDistributed = false,
 };
+#endif /* PG_VERSION_NUM >= PG_VERSION_14  */
 
 static DistributeObjectOps Policy_Drop = {
 	.deparse = NULL,
@@ -2072,11 +2074,12 @@ GetDistributeObjectOps(Node *node)
 				{
 					return &Database_Grant;
 				}
-
+#if PG_VERSION_NUM >= PG_VERSION_15
 				case OBJECT_PARAMETER_ACL:
 				{
 					return &Parameter_Grant;
 				}
+#endif
 
 				default:
 				{
