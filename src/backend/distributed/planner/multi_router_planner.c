@@ -434,7 +434,7 @@ ExtractSelectRangeTableEntry(Query *query)
  * for the given modification query.
  *
  * The function errors out if the input query is not a
- * modify query (e.g., INSERT, UPDATE or DELETE). So, this
+ * modify query (e.g., INSERT, UPDATE, DELETE or MERGE). So, this
  * function is not expected to be called on SELECT queries.
  */
 Oid
@@ -2271,13 +2271,13 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 
 
 /*
- * RouterQuery runs router pruning logic for SELECT, UPDATE, DELETE, and MERGE queries.
- * If there are shards present and query is routable, all RTEs have been updated
- * to point to the relevant shards in the originalQuery. Also, placementList is
- * filled with the list of worker nodes that has all the required shard placements
- * for the query execution. anchorShardId is set to the first pruned shardId of
- * the given query. Finally, relationShardList is filled with the list of
- * relation-to-shard mappings for the query.
+ * PlanRouterQuery runs router pruning logic for SELECT, UPDATE, DELETE, and
+ * MERGE queries. If there are shards present and query is routable, all RTEs
+ * have been updated to point to the relevant shards in the originalQuery. Also,
+ * placementList is filled with the list of worker nodes that has all the
+ * required shard placements for the query execution. anchorShardId is set to
+ * the first pruned shardId of the given query. Finally, relationShardList is
+ * filled with the list of relation-to-shard mappings for the query.
  *
  * If the given query is not routable, it fills planningError with the related
  * DeferredErrorMessage. The caller can check this error message to see if query
@@ -2510,7 +2510,7 @@ AllShardsColocated(List *relationShardList)
 			if (currentTableType == RANGE_DISTRIBUTED ||
 				currentTableType == APPEND_DISTRIBUTED)
 			{
-				/* we do not have further strict colocation chceks */
+				/* we do not have further strict colocation checks */
 				continue;
 			}
 		}
@@ -2932,7 +2932,7 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 	}
 
 	/*
-	 * Different resrictions might have different partition columns.
+	 * Different restrictions might have different partition columns.
 	 * We report partition column value if there is only one.
 	 */
 	if (multiplePartitionValuesExist)
