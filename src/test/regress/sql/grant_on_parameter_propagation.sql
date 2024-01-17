@@ -18,7 +18,7 @@ SELECT check_parameter_privileges(ARRAY['grant_param_user1','grant_param_user2',
 --test the grant command admin option using grant_param_user1 with granted by
 set role grant_param_user1;
 SET citus.log_remote_commands to on;
-GRANT SET,ALTER SYSTEM ON PARAMETER max_connections,shared_buffers TO grant_param_user3 GRANTED BY grant_param_user1;
+GRANT ALL ON PARAMETER max_connections,shared_buffers TO grant_param_user3 GRANTED BY grant_param_user1;
 SELECT check_parameter_privileges(ARRAY['grant_param_user3'],ARRAY['max_connections','shared_buffers'], ARRAY['SET','ALTER SYSTEM']);
 
 reset role;
