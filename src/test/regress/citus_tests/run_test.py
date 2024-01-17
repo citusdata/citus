@@ -153,6 +153,9 @@ DEPS = {
     "isolation_extension_commands": TestDeps(
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
+    "isolation_update_node": TestDeps(
+        None, ["isolation_setup", "isolation_add_remove_node"]
+    ),
     "schema_based_sharding": TestDeps("minimal_schedule"),
     "multi_sequence_default": TestDeps(
         None, ["multi_test_helpers", "multi_cluster_management", "multi_table_ddl"]
