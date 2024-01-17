@@ -4725,8 +4725,10 @@ PropagateNodeWideObjectsCommandList(void)
 		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
 		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
+#if PG_VERSION_NUM >= PG_VERSION_15
 	List *grantOnParameterCommands = GrantOnParameters();
 	ddlCommands = list_concat(ddlCommands, grantOnParameterCommands);
+#endif /* PG_VERSION_NUM >= PG_VERSION_15 */
 
 	return ddlCommands;
 }

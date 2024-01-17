@@ -12,7 +12,10 @@
 
 #include "nodes/parsenodes.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_15
 extern List * GrantOnParameters(void);
+#endif /* PG_VERSION_NUM >= PG_VERSION_15 */
+
 extern char * GenerateSetRoleQuery(Oid roleOid);
 extern GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
 											  Oid roleOid,
