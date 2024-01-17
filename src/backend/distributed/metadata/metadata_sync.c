@@ -2165,7 +2165,13 @@ GenerateGrantStmtForRights(ObjectType objectType,
 										  withGrantOption);
 }
 
-
+/*
+ * GenerateGrantStmtForRightsWithObjectName is the function for creating
+ * GrantStmt's for all types of objects that are supported with object name.
+ * It takes parameters to fill a GrantStmt's fields and returns the GrantStmt.
+ * The field `objects` of GrantStmt doesn't have a common structure for all types.
+ * Make sure you have added your object type to GetObjectsForGrantStmt.
+ */
 GrantStmt *
 GenerateGrantStmtForRightsWithObjectName(ObjectType objectType,
 										 Oid roleOid,
@@ -2177,7 +2183,12 @@ GenerateGrantStmtForRightsWithObjectName(ObjectType objectType,
 										  permission, withGrantOption);
 }
 
-
+/*
+ * BaseGenerateGrantStmtForRights is the base function for creating
+ * GrantStmt's for all types of objects that are supported with object .
+ * It is used by GenerateGrantStmtForRights and GenerateGrantStmtForRightsWithObjectName
+ * to support both object id and object name.
+ */
 GrantStmt *
 BaseGenerateGrantStmtForRights(ObjectType objectType,
 							   Oid roleOid,
@@ -2259,7 +2270,6 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 		{
 			return list_make1(makeString(get_database_name(objectId)));
 		}
-
 
 		default:
 		{
