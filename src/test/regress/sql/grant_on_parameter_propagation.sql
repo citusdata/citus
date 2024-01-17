@@ -1,4 +1,13 @@
-
+--
+-- PG15
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+\else
+\q
+\endif
 
 create user grant_param_user1;
 create user grant_param_user2;

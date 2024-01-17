@@ -104,7 +104,7 @@ CheckPermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes)
 	{
 		AclMode mode = modes[i];
 		if(!(grants & mode) || (permissions & mode)){
-			ereport(ERROR, (errmsg("ACL item has no grant option for mode %d", mode)));
+			ereport(ERROR, (errmsg("ACL item has no grant option for mode %lu", mode)));
 		}
 	}
 }
