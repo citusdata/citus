@@ -448,6 +448,7 @@ extern List * PreprocessDropOwnedStmt(Node *node, const char *queryString,
 extern List * PostprocessReassignOwnedStmt(Node *node, const char *queryString);
 
 #if PG_VERSION_NUM >= PG_VERSION_15
+
 /* parameter.c - forward declarations */
 extern List * PostprocessGrantParameterStmt(Node *node, const char *queryString);
 #endif /* PG_VERSION_NUM >= PG_VERSION_15 */

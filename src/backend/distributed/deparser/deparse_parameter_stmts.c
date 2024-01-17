@@ -62,4 +62,6 @@ DeparseGrantOnParameterStmt(Node *node)
 
 	return str.data;
 }
+
+
 #endif /* PG_VERSION_NUM >= PG_VERSION_15 */

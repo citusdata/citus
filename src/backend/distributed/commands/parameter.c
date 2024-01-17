@@ -68,10 +68,11 @@ GenerateGrantOnParameterFromAclItem(char *parameterName, AclItem *aclItem)
 	return queries;
 }
 
+
 /*
  * CheckAndAppendQuery checks if the aclItem has the given mode and if it has, it appends the
  * corresponding query to the queries list.
-*/
+ */
 static void
 CheckAndAppendQuery(List **queries, AclItem *aclItem, Oid granteeOid, char *parameterName,
 					AclMode mode, char *modeStr)
@@ -92,10 +93,11 @@ CheckAndAppendQuery(List **queries, AclItem *aclItem, Oid granteeOid, char *para
 	}
 }
 
+
 /*
-* CheckPermissionsAndGrants checks if the aclItem has the valid permissions and grants
-* for the given modes.
-*/
+ * CheckPermissionsAndGrants checks if the aclItem has the valid permissions and grants
+ * for the given modes.
+ */
 static void
 CheckPermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes)
 {
@@ -105,7 +107,8 @@ CheckPermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes)
 	for (int i = 0; i < numModes; i++)
 	{
 		AclMode mode = modes[i];
-		if(!(grants & mode) || (permissions & mode)){
+		if (!(grants & mode) || (permissions & mode))
+		{
 			ereport(ERROR, (errmsg("ACL item has no grant option for mode %lu", mode)));
 		}
 	}
@@ -166,4 +169,6 @@ GrantOnParameters(void)
 
 	return commands;
 }
+
+
 #endif /* PG_VERSION_NUM >= PG_VERSION_15 */

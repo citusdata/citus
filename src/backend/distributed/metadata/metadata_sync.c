@@ -2165,6 +2165,7 @@ GenerateGrantStmtForRights(ObjectType objectType,
 										  withGrantOption);
 }
 
+
 /*
  * GenerateGrantStmtForRightsWithObjectName is the function for creating
  * GrantStmt's for all types of objects that are supported with object name.
@@ -2182,6 +2183,7 @@ GenerateGrantStmtForRightsWithObjectName(ObjectType objectType,
 	return BaseGenerateGrantStmtForRights(objectType, roleOid, InvalidOid, objectName,
 										  permission, withGrantOption);
 }
+
 
 /*
  * BaseGenerateGrantStmtForRights is the base function for creating

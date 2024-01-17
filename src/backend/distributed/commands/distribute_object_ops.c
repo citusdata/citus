@@ -2074,6 +2074,7 @@ GetDistributeObjectOps(Node *node)
 				{
 					return &Database_Grant;
 				}
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 				case OBJECT_PARAMETER_ACL:
 				{
