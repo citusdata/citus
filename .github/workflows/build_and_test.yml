@@ -471,14 +471,30 @@ jobs:
       run: |-
         detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
-        if [ -z "$tests" ]; then
-            echo "No test found."
+
+        # split the tests to be skipped --today we only skip upgrade tests
+        skipped_tests=""
+        not_skipped_tests=""
+        for test in $tests; do
+            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]]; then
+                skipped_tests="$skipped_tests $test"
+            else
+                not_skipped_tests="$not_skipped_tests $test"
+            fi
+        done
+
+        if [ ! -z "$skipped_tests" ]; then
+            echo "Skipped tests " $skipped_tests
+        fi
+
+        if [ -z "$not_skipped_tests" ]; then
+            echo "Not detected any tests that flaky test detection should run"
         else
-          echo "Detected tests " $tests
+            echo "Detected tests " $not_skipped_tests
         fi
 
         echo 'tests<<EOF' >> $GITHUB_OUTPUT
-        echo "$tests" >> "$GITHUB_OUTPUT"
+        echo "$not_skipped_tests" >> "$GITHUB_OUTPUT"
         echo 'EOF' >> $GITHUB_OUTPUT
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
