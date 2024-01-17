@@ -14,6 +14,7 @@
 
 #include "c.h"
 
+#include "catalog/dependency.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
 #include "tcop/utility.h"
@@ -45,7 +46,8 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_CLEANUP_OPERATION_ID = 10,
 	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12,
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13,
-	ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK = 14
+	ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK = 14,
+	ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION = 15
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -141,6 +143,72 @@ typedef enum CitusOperations
 						 (uint32) ((taskId) >> 32), \
 						 (uint32) (taskId), \
 						 ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK)
+
+/*
+ * IsNodeWideObjectClass returns true if the given object class is node-wide,
+ * i.e., that is not bound to a particular database but to whole server.
+ *
+ * Defined here as an inlined function so that SET_LOCKTAG_GLOBAL_DDL_SERIALIZATION
+ * macro can use it.
+ */
+static inline bool
+IsNodeWideObjectClass(ObjectClass objectClass)
+{
+	if ((int) objectClass < 0 || objectClass > LAST_OCLASS)
+	{
+		elog(ERROR, "invalid object class: %d", objectClass);
+	}
+
+	/*
+	 * We don't expect Postgres to change an object class to a node-wide one in the
+	 * future, but a newly added object class may be node-wide.
+	 *
+	 * So we put a static assert here to make sure that the developer who adds support
+	 * for a new Postgres version is aware of this.
+	 *
+	 * If new object classes are added and none of them are node-wide, then update
+	 * this assertion check based on latest supported major Postgres version.
+	 */
+	StaticAssertStmt(PG_MAJORVERSION_NUM <= 16,
+					 "better to check if any of newly added ObjectClass'es are node-wide");
+
+	switch (objectClass)
+	{
+		case OCLASS_ROLE:
+		case OCLASS_DATABASE:
+		case OCLASS_TBLSPACE:
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case OCLASS_PARAMETER_ACL:
+#endif
+#if PG_VERSION_NUM >= PG_VERSION_16
+		case OCLASS_ROLE_MEMBERSHIP:
+#endif
+			{
+				return true;
+			}
+
+		default:
+			return false;
+	}
+}
+
+
+/*
+ * Automatically sets databaseId to InvalidOid if the object class is
+ * node-wide, i.e., that is not bound to a particular database but to
+ * whole server. If the object class is not node-wide, sets databaseId
+ * to MyDatabaseId.
+ *
+ * That way, the lock is local to each database if the object class is
+ * not node-wide, and global if it is.
+ */
+#define SET_LOCKTAG_GLOBAL_DDL_SERIALIZATION(tag, objectClass, oid) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 (uint32) (IsNodeWideObjectClass(objectClass) ? InvalidOid : \
+								   MyDatabaseId), \
+						 (uint32) objectClass, \
+						 (uint32) oid, \
+						 ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION)
 
 /*
  * DistLockConfigs are used to configure the locking behaviour of AcquireDistributedLockOnRelations

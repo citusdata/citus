@@ -1751,6 +1751,10 @@ citus_internal_mark_node_not_synced(PG_FUNCTION_ARGS)
 /*
  * FindWorkerNode searches over the worker nodes and returns the workerNode
  * if it already exists. Else, the function returns NULL.
+ *
+ * NOTE: A special case that this handles is when nodeName and nodePort are set
+ * to LocalHostName and PostPortNumber. In that case we return the primary node
+ * for the local group.
  */
 WorkerNode *
 FindWorkerNode(const char *nodeName, int32 nodePort)
@@ -1771,6 +1775,11 @@ FindWorkerNode(const char *nodeName, int32 nodePort)
 		WorkerNode *workerNode = (WorkerNode *) palloc(sizeof(WorkerNode));
 		*workerNode = *cachedWorkerNode;
 		return workerNode;
+	}
+
+	if (strcmp(LocalHostName, nodeName) == 0 && nodePort == PostPortNumber)
+	{
+		return PrimaryNodeForGroup(GetLocalGroupId(), NULL);
 	}
 
 	return NULL;
@@ -2771,11 +2780,23 @@ EnsureCoordinatorIsInMetadata(void)
 {
 	bool isCoordinatorInMetadata = false;
 	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &isCoordinatorInMetadata);
-	if (!isCoordinatorInMetadata)
+	if (isCoordinatorInMetadata)
+	{
+		return;
+	}
+
+	/* be more descriptive when we're not on coordinator */
+	if (IsCoordinator())
 	{
 		ereport(ERROR, (errmsg("coordinator is not added to the metadata"),
 						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
 								"to configure the coordinator hostname")));
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("coordinator is not added to the metadata"),
+						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
+								"on coordinator to configure the coordinator hostname")));
 	}
 }
 

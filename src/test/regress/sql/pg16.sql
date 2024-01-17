@@ -588,31 +588,12 @@ REVOKE role1 FROM role2;
 GRANT role1 TO role2 WITH ADMIN TRUE;
 REVOKE role1 FROM role2;
 
-RESET citus.log_remote_commands;
-RESET citus.grep_remote_commands;
-
 --
 -- PG16 added new options to GRANT ROLE
 -- inherit: https://github.com/postgres/postgres/commit/e3ce2de
 -- set: https://github.com/postgres/postgres/commit/3d14e17
--- We don't propagate for now in Citus
+-- We now propagate these options in Citus
 --
-GRANT role1 TO role2 WITH INHERIT FALSE;
-REVOKE role1 FROM role2;
-GRANT role1 TO role2 WITH INHERIT TRUE;
-REVOKE role1 FROM role2;
-GRANT role1 TO role2 WITH INHERIT OPTION;
-REVOKE role1 FROM role2;
-GRANT role1 TO role2 WITH SET FALSE;
-REVOKE role1 FROM role2;
-GRANT role1 TO role2 WITH SET TRUE;
-REVOKE role1 FROM role2;
-GRANT role1 TO role2 WITH SET OPTION;
-REVOKE role1 FROM role2;
-
--- connect to worker node
-GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
-
 SELECT roleid::regrole::text AS role, member::regrole::text,
 admin_option, inherit_option, set_option FROM pg_auth_members
 WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
@@ -623,22 +604,15 @@ SELECT roleid::regrole::text AS role, member::regrole::text,
 admin_option, inherit_option, set_option FROM pg_auth_members
 WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
 
-SET citus.enable_ddl_propagation TO off;
-GRANT role1 TO role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
-RESET citus.enable_ddl_propagation;
-
-SELECT roleid::regrole::text AS role, member::regrole::text,
-admin_option, inherit_option, set_option FROM pg_auth_members
-WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
-
 \c - - - :master_port
-REVOKE role1 FROM role2;
+-- Set GUCs to log remote commands and filter on REVOKE commands
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%REVOKE%';
 
 -- test REVOKES as well
 GRANT role1 TO role2;
 REVOKE SET OPTION FOR role1 FROM role2;
 REVOKE INHERIT OPTION FOR role1 FROM role2;
-
 DROP ROLE role1, role2;
 
 -- test that everything works fine for roles that are not propagated
@@ -650,9 +624,89 @@ RESET citus.enable_ddl_propagation;
 -- by default, admin option is false, inherit is true, set is true
 GRANT role3 TO role4;
 GRANT role3 TO role5 WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;
-SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option FROM pg_auth_members WHERE roleid::regrole::text = 'role3' ORDER BY 1, 2;
+SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option FROM pg_auth_members
+WHERE roleid::regrole::text = 'role3' ORDER BY 1, 2;
 
 DROP ROLE role3, role4, role5;
+
+-- Test that everything works fine for roles that are propagated
+CREATE ROLE role6;
+CREATE ROLE role7;
+CREATE ROLE role8;
+CREATE ROLE role9;
+CREATE ROLE role10;
+CREATE ROLE role11;
+CREATE ROLE role12;
+CREATE ROLE role13;
+CREATE ROLE role14;
+CREATE ROLE role15;
+CREATE ROLE role16;
+CREATE ROLE role17;
+CREATE ROLE role18 NOINHERIT;
+CREATE ROLE role19;
+CREATE ROLE role20;
+
+-- Grant role with admin and inherit options set to true
+GRANT role6 TO role7 WITH ADMIN OPTION, INHERIT TRUE;
+-- GRANT with INHERIT and SET Options
+-- note that set is true by default so we don't include it in the propagation
+GRANT role7 TO role8 WITH INHERIT TRUE, SET TRUE;
+-- Grant role with admin option set to true and inherit option set to false
+GRANT role9 TO role10 WITH ADMIN OPTION, INHERIT FALSE;
+-- Grant role with admin option set to true, and inherit/set options set to false
+GRANT role11 TO role12 WITH INHERIT FALSE, ADMIN TRUE, SET FALSE;
+-- Grant role with inherit set to false
+GRANT role13 TO role14 WITH INHERIT FALSE;
+-- Grant role with set option set to false
+GRANT role15 TO role16 WITH SET FALSE;
+-- Handles with default inherit false
+-- we created role18 with noinherit option above
+GRANT role17 TO role18;
+-- Run GRANT/REVOKE commands on worker nodes
+\c - - - :worker_1_port
+-- Run GRANT command on worker node
+GRANT role19 TO role20;
+\c - - - :master_port
+
+SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option
+FROM pg_auth_members
+WHERE roleid::regrole::text LIKE 'role%'
+ORDER BY 1, 2;
+\c - - - :worker_1_port
+SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option
+FROM pg_auth_members
+WHERE roleid::regrole::text LIKE 'role%'
+ORDER BY 1, 2;
+
+\c - - - :master_port
+DROP ROLE role6, role7, role8, role9, role10, role11, role12,
+          role13, role14, role15, role16, role17, role18, role19, role20;
+
+-- here we test that we propagate admin, set and inherit options correctly
+-- when adding a new node.
+
+ -- First, we need to remove the node:
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+
+CREATE ROLE create_role1;
+CREATE ROLE create_role2;
+CREATE ROLE create_role3;
+
+-- test grant role
+GRANT create_role1 TO create_role2 WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
+GRANT create_role2 TO create_role3 WITH INHERIT TRUE, ADMIN FALSE, SET FALSE;
+
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option, inherit_option, set_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
+
+-- Add second worker node
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+\c - - - :worker_2_port
+
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text,  admin_option, inherit_option, set_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
+
+\c - - - :master_port
+DROP ROLE create_role1, create_role2, create_role3;
 
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
