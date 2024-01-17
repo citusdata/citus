@@ -88,6 +88,7 @@
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/utils/function.h"
+#include "distributed/grant_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -115,11 +116,6 @@ static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnE
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
-static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
-											  Oid roleOid,
-											  Oid objectId,
-											  char *permission,
-											  bool withGrantOption);
 static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
@@ -130,7 +126,6 @@ static List * GenerateGrantOnFunctionQueriesFromAclItem(Oid schemaOid,
 static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
 static List * GenerateGrantOnSequenceQueriesFromAclItem(Oid sequenceOid,
 														AclItem *aclItem);
-static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
@@ -2159,24 +2154,58 @@ GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
  * The field `objects` of GrantStmt doesn't have a common structure for all types.
  * Make sure you have added your object type to GetObjectsForGrantStmt.
  */
-static GrantStmt *
+GrantStmt *
 GenerateGrantStmtForRights(ObjectType objectType,
 						   Oid roleOid,
 						   Oid objectId,
 						   char *permission,
 						   bool withGrantOption)
 {
+	return BaseGenerateGrantStmtForRights(objectType,roleOid,objectId,NULL,permission,withGrantOption);
+}
+
+GrantStmt *
+GenerateGrantStmtForRightsWithObjectName(ObjectType objectType,
+						   Oid roleOid,
+						   char *objectName,
+						   char *permission,
+						   bool withGrantOption)
+{
+	return BaseGenerateGrantStmtForRights(objectType,roleOid,InvalidOid,objectName,permission,withGrantOption);
+}
+
+
+GrantStmt *
+BaseGenerateGrantStmtForRights(ObjectType objectType,
+						   Oid roleOid,
+						   Oid objectId,
+						   char *objectName,
+						   char *permission,
+						   bool withGrantOption)
+{
+
+	//either objectId or objectName should be valid
+	Assert(objectId != InvalidOid || objectName != NULL);
+
 	GrantStmt *stmt = makeNode(GrantStmt);
 	stmt->is_grant = true;
 	stmt->targtype = ACL_TARGET_OBJECT;
 	stmt->objtype = objectType;
-	stmt->objects = GetObjectsForGrantStmt(objectType, objectId);
+	if (objectId != InvalidOid)
+	{
+		stmt->objects = GetObjectsForGrantStmt(objectType, objectId);
+	}
+	else
+	{
+		stmt->objects = list_make1(makeString(objectName));
+	}
 	stmt->privileges = list_make1(GetAccessPrivObjectForGrantStmt(permission));
 	stmt->grantees = list_make1(GetRoleSpecObjectForUser(roleOid));
 	stmt->grant_option = withGrantOption;
 
 	return stmt;
 }
+
 
 
 /*
@@ -2229,6 +2258,7 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 		{
 			return list_make1(makeString(get_database_name(objectId)));
 		}
+
 
 		default:
 		{
@@ -2563,7 +2593,7 @@ SetLocalEnableMetadataSync(bool state)
 }
 
 
-static char *
+char *
 GenerateSetRoleQuery(Oid roleOid)
 {
 	StringInfo buf = makeStringInfo();
@@ -4682,6 +4712,8 @@ PropagateNodeWideObjectsCommandList(void)
 		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
 		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
+	List *grantOnParameterCommands = GrantOnParameters();
+	ddlCommands = list_concat(ddlCommands, grantOnParameterCommands);
 
 	return ddlCommands;
 }

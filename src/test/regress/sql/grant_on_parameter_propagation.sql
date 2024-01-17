@@ -47,6 +47,20 @@ GRANT ALTER SYSTEM ON PARAMETER max_connections,shared_buffers TO grant_param_us
 
 SELECT check_parameter_privileges(ARRAY['grant_param_user4'],ARRAY['max_connections','shared_buffers'], ARRAY['ALTER SYSTEM']);
 
+--test metadata_sync
+
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+GRANT SET,ALTER SYSTEM ON PARAMETER max_connections,shared_buffers TO grant_param_user3,"grant_param_user5-\!" WITH GRANT OPTION GRANTED BY CURRENT_USER;
+
+SELECT check_parameter_privileges(ARRAY['grant_param_user3','grant_param_user5-\!'],ARRAY['max_connections','shared_buffers'], ARRAY['SET','ALTER SYSTEM']);
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+SELECT check_parameter_privileges(ARRAY['grant_param_user3','grant_param_user5-\!'],ARRAY['max_connections','shared_buffers'], ARRAY['SET','ALTER SYSTEM']);
+
+REVOKE SET,ALTER SYSTEM ON PARAMETER max_connections,shared_buffers FROM grant_param_user3,"grant_param_user5-\!" cascade;
+
+
 --clean all resources
 DROP USER grant_param_user1;
 DROP USER grant_param_user2;
