@@ -4,7 +4,7 @@
  * All routines to deparse parameter statements.
  *
  * -------------------------------------------------------------------------
-*/
+ */
 
 #include "postgres.h"
 
@@ -33,6 +33,7 @@ AppendGrantParameters(StringInfo buf, GrantStmt *stmt)
 	}
 }
 
+
 static void
 AppendGrantOnParameterStmt(StringInfo buf, GrantStmt *stmt)
 {
@@ -59,5 +60,3 @@ DeparseGrantOnParameterStmt(Node *node)
 
 	return str.data;
 }
-
-

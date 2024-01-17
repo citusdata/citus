@@ -65,6 +65,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
+#include "distributed/grant_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata/dependency.h"
@@ -88,7 +89,6 @@
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/utils/function.h"
-#include "distributed/grant_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -2161,30 +2161,32 @@ GenerateGrantStmtForRights(ObjectType objectType,
 						   char *permission,
 						   bool withGrantOption)
 {
-	return BaseGenerateGrantStmtForRights(objectType,roleOid,objectId,NULL,permission,withGrantOption);
+	return BaseGenerateGrantStmtForRights(objectType, roleOid, objectId, NULL, permission,
+										  withGrantOption);
 }
+
 
 GrantStmt *
 GenerateGrantStmtForRightsWithObjectName(ObjectType objectType,
-						   Oid roleOid,
-						   char *objectName,
-						   char *permission,
-						   bool withGrantOption)
+										 Oid roleOid,
+										 char *objectName,
+										 char *permission,
+										 bool withGrantOption)
 {
-	return BaseGenerateGrantStmtForRights(objectType,roleOid,InvalidOid,objectName,permission,withGrantOption);
+	return BaseGenerateGrantStmtForRights(objectType, roleOid, InvalidOid, objectName,
+										  permission, withGrantOption);
 }
 
 
 GrantStmt *
 BaseGenerateGrantStmtForRights(ObjectType objectType,
-						   Oid roleOid,
-						   Oid objectId,
-						   char *objectName,
-						   char *permission,
-						   bool withGrantOption)
+							   Oid roleOid,
+							   Oid objectId,
+							   char *objectName,
+							   char *permission,
+							   bool withGrantOption)
 {
-
-	//either objectId or objectName should be valid
+	/*either objectId or objectName should be valid */
 	Assert(objectId != InvalidOid || objectName != NULL);
 
 	GrantStmt *stmt = makeNode(GrantStmt);
@@ -2205,7 +2207,6 @@ BaseGenerateGrantStmtForRights(ObjectType objectType,
 
 	return stmt;
 }
-
 
 
 /*
