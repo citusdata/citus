@@ -1,7 +1,7 @@
-#include "pg_version_constants.h"
-#if PG_VERSION_NUM >= PG_VERSION_15
 #include "postgres.h"
 
+#include "pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_15
 #include "access/genam.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_parameter_acl.h"
@@ -109,7 +109,7 @@ CheckPermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes)
 		AclMode mode = modes[i];
 		if (!(grants & mode) || (permissions & mode))
 		{
-			ereport(ERROR, (errmsg("ACL item has no grant option for mode %lu", mode)));
+			ereport(ERROR, (errmsg("ACL item has no grant option for mode %u", mode)));
 		}
 	}
 }

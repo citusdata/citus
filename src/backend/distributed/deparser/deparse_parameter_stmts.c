@@ -6,9 +6,10 @@
  * -------------------------------------------------------------------------
  */
 
+#include "postgres.h"
+
 #include "pg_version_constants.h"
 #if PG_VERSION_NUM >= PG_VERSION_15
-#include "postgres.h"
 
 #include "utils/builtins.h"
 
