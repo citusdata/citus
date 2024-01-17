@@ -209,27 +209,39 @@ SELECT check_parameter_privileges(ARRAY['grant_param_user3','grant_param_user5-\
 (16 rows)
 
 SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
-ERROR:  ACL item has no grant option for mode 4096
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT check_parameter_privileges(ARRAY['grant_param_user3','grant_param_user5-\!'],ARRAY['max_connections','shared_buffers'], ARRAY['SET','ALTER SYSTEM']);
                  check_parameter_privileges
 ---------------------------------------------------------------------
  (t,grant_param_user3,max_connections,SET)
  (t,grant_param_user3,max_connections,SET)
+ (t,grant_param_user3,max_connections,SET)
+ (t,grant_param_user3,max_connections,"ALTER SYSTEM")
  (t,grant_param_user3,max_connections,"ALTER SYSTEM")
  (t,grant_param_user3,max_connections,"ALTER SYSTEM")
  (t,grant_param_user3,shared_buffers,SET)
  (t,grant_param_user3,shared_buffers,SET)
+ (t,grant_param_user3,shared_buffers,SET)
+ (t,grant_param_user3,shared_buffers,"ALTER SYSTEM")
  (t,grant_param_user3,shared_buffers,"ALTER SYSTEM")
  (t,grant_param_user3,shared_buffers,"ALTER SYSTEM")
  (t,"grant_param_user5-\\!",max_connections,SET)
  (t,"grant_param_user5-\\!",max_connections,SET)
+ (t,"grant_param_user5-\\!",max_connections,SET)
+ (t,"grant_param_user5-\\!",max_connections,"ALTER SYSTEM")
  (t,"grant_param_user5-\\!",max_connections,"ALTER SYSTEM")
  (t,"grant_param_user5-\\!",max_connections,"ALTER SYSTEM")
  (t,"grant_param_user5-\\!",shared_buffers,SET)
  (t,"grant_param_user5-\\!",shared_buffers,SET)
+ (t,"grant_param_user5-\\!",shared_buffers,SET)
  (t,"grant_param_user5-\\!",shared_buffers,"ALTER SYSTEM")
  (t,"grant_param_user5-\\!",shared_buffers,"ALTER SYSTEM")
-(16 rows)
+ (t,"grant_param_user5-\\!",shared_buffers,"ALTER SYSTEM")
+(24 rows)
 
 REVOKE SET,ALTER SYSTEM ON PARAMETER max_connections,shared_buffers FROM grant_param_user3,"grant_param_user5-\!" cascade;
 --clean all resources
