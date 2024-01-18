@@ -125,12 +125,12 @@ enum MultiConnectionMode
 	 */
 	REQUIRE_REPLICATION_CONNECTION_PARAM = 1 << 8,
 
-    /*
-     * This flag specifies that connection is required for maintenance operations, e.g.
-     * transaction recovery, distributed deadlock detection. Such connections have
-     * a reserved quota of the MaxSharedPoolSize.
-     */
-    REQUIRE_MAINTENANCE_CONNECTION = 1 << 9
+	/*
+	 * This flag specifies that connection is required for maintenance operations, e.g.
+	 * transaction recovery, distributed deadlock detection. Such connections have
+	 * a reserved quota of the MaxSharedPoolSize.
+	 */
+	REQUIRE_MAINTENANCE_CONNECTION = 1 << 9
 };
 
 
@@ -230,8 +230,8 @@ typedef struct MultiConnection
 	/* replication option */
 	bool requiresReplication;
 
-    /* See REQUIRE_MAINTENANCE_CONNECTION */
-    bool useForMaintenanceOperations;
+	/* See REQUIRE_MAINTENANCE_CONNECTION */
+	bool useForMaintenanceOperations;
 
 	MultiConnectionStructInitializationState initializationState;
 } MultiConnection;

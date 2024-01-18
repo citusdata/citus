@@ -2160,7 +2160,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyDest->connectionStateHash = CreateConnectionStateHash(TopTransactionContext);
 
 	RecordRelationAccessIfNonDistTable(tableId, PLACEMENT_ACCESS_DML);
-    uint32 connectionFlags = 0;
+	uint32 connectionFlags = 0;
 
 	/*
 	 * Colocated intermediate results do not honor citus.max_shared_pool_size,
@@ -2212,7 +2212,8 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		 */
 		if (ShardIntervalListHasLocalPlacements(shardIntervalList))
 		{
-            bool reservedConnection = TryConnectionPossibilityForLocalPrimaryNode(connectionFlags);
+			bool reservedConnection = TryConnectionPossibilityForLocalPrimaryNode(
+				connectionFlags);
 			copyDest->shouldUseLocalCopy = !reservedConnection;
 		}
 	}
@@ -3635,7 +3636,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		return connection;
 	}
 
-    if (IsReservationPossible(connectionFlags))
+	if (IsReservationPossible(connectionFlags))
 	{
 		/*
 		 * Enforce the requirements for adaptive connection management

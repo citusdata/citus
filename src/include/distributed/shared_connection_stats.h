@@ -18,10 +18,10 @@
 
 enum SharedPoolCounterMode
 {
-    /*
-     * Use this flag to reserve a connection from a maintenance quota
-     */
-    MAINTENANCE_CONNECTION = 1 << 0
+	/*
+	 * Use this flag to reserve a connection from a maintenance quota
+	 */
+	MAINTENANCE_CONNECTION = 1 << 0
 };
 
 extern int MaxSharedPoolSize;
@@ -39,11 +39,14 @@ extern int GetMaxClientConnections(void);
 extern int GetMaxSharedPoolSize(void);
 extern int GetMaxMaintenanceSharedPoolSize(void);
 extern int GetLocalSharedPoolSize(void);
-extern bool TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
+extern bool TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname,
+												  int port);
 extern void WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port);
-extern void DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname, int port);
-extern void IncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port);
-extern int AdaptiveConnectionManagementFlag(bool connectToLocalNode, int
-											activeConnectionCount);
+extern void DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname,
+											 int port);
+extern void IncrementSharedConnectionCounter(uint32 flags, const char *hostname,
+											 int port);
+extern int AdaptiveConnectionManagementFlag(bool connectToLocalNode,
+											int activeConnectionCount);
 
 #endif /* SHARED_CONNECTION_STATS_H */

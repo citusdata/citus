@@ -1071,6 +1071,7 @@ citus_pid_for_gpid(PG_FUNCTION_ARGS)
 	PG_RETURN_INT32(ExtractProcessIdFromGlobalPID(globalPID));
 }
 
+
 /*
  * ExtractGlobalPID extracts the global process id from the application name and returns it
  * if the application name is not compatible with Citus' application names returns 0.

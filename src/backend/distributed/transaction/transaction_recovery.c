@@ -159,7 +159,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 	bool recoveryFailed = false;
 
-    int connectionFlags = WAIT_FOR_CONNECTION | REQUIRE_MAINTENANCE_CONNECTION;
+	int connectionFlags = WAIT_FOR_CONNECTION | REQUIRE_MAINTENANCE_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
 	if (connection->pgConn == NULL || PQstatus(connection->pgConn) != CONNECTION_OK)
 	{

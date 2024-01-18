@@ -92,10 +92,11 @@ static ReservedConnectionHashEntry * AllocateOrGetReservedConnectionEntry(char *
 																		  userId, Oid
 																		  databaseOid,
 																		  bool *found);
-static void EnsureConnectionPossibilityForNodeList(List *nodeList, uint32 connectionFlags);
+static void EnsureConnectionPossibilityForNodeList(List *nodeList, uint32
+												   connectionFlags);
 static bool EnsureConnectionPossibilityForNode(WorkerNode *workerNode,
-                                               bool waitForConnection,
-                                               uint32 connectionFlags);
+											   bool waitForConnection,
+											   uint32 connectionFlags);
 static uint32 LocalConnectionReserveHashHash(const void *key, Size keysize);
 static int LocalConnectionReserveHashCompare(const void *a, const void *b, Size keysize);
 
@@ -241,8 +242,9 @@ DeallocateReservedConnections(void)
 			 * We have not used this reservation, make sure to clean-up from
 			 * the shared memory as well.
 			 */
-            int sharedCounterFlags = 0;
-            DecrementSharedConnectionCounter(sharedCounterFlags, entry->key.hostname, entry->key.port);
+			int sharedCounterFlags = 0;
+			DecrementSharedConnectionCounter(sharedCounterFlags, entry->key.hostname,
+											 entry->key.port);
 
 			/* for completeness, set it to true */
 			entry->usedReservation = true;
@@ -332,7 +334,8 @@ TryConnectionPossibilityForLocalPrimaryNode(uint32 connectionFlags)
 	}
 
 	bool waitForConnection = false;
-	return EnsureConnectionPossibilityForNode(localNode, waitForConnection, connectionFlags);
+	return EnsureConnectionPossibilityForNode(localNode, waitForConnection,
+											  connectionFlags);
 }
 
 
@@ -365,7 +368,8 @@ EnsureConnectionPossibilityForNodeList(List *nodeList, uint32 connectionFlags)
 	foreach_ptr(workerNode, nodeList)
 	{
 		bool waitForConnection = true;
-		EnsureConnectionPossibilityForNode(workerNode, waitForConnection, connectionFlags);
+		EnsureConnectionPossibilityForNode(workerNode, waitForConnection,
+										   connectionFlags);
 	}
 }
 
@@ -384,9 +388,10 @@ EnsureConnectionPossibilityForNodeList(List *nodeList, uint32 connectionFlags)
  *   return false.
  */
 static bool
-EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnection, uint32 connectionFlags)
+EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnection, uint32
+								   connectionFlags)
 {
-    if (!IsReservationPossible(connectionFlags))
+	if (!IsReservationPossible(connectionFlags))
 	{
 		return false;
 	}
@@ -441,16 +446,17 @@ EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnectio
 		 * Increment the shared counter, we may need to wait if there are
 		 * no space left.
 		 */
-        int sharedCounterFlags = 0;
-        WaitLoopForSharedConnection(sharedCounterFlags, workerNode->workerName, workerNode->workerPort);
+		int sharedCounterFlags = 0;
+		WaitLoopForSharedConnection(sharedCounterFlags, workerNode->workerName,
+									workerNode->workerPort);
 	}
 	else
 	{
-        int sharedCounterFlags = 0;
-        bool incremented = TryToIncrementSharedConnectionCounter(
-                sharedCounterFlags,
-                workerNode->workerName,
-                workerNode->workerPort);
+		int sharedCounterFlags = 0;
+		bool incremented = TryToIncrementSharedConnectionCounter(
+			sharedCounterFlags,
+			workerNode->workerName,
+			workerNode->workerPort);
 		if (!incremented)
 		{
 			/*
@@ -482,11 +488,11 @@ EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnectio
 bool
 IsReservationPossible(uint32 connectionFlags)
 {
-    bool connectionThrottlingDisabled =
-            connectionFlags & REQUIRE_MAINTENANCE_CONNECTION
-            ? GetMaxMaintenanceSharedPoolSize() <= 0
-            : GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING;
-    if (connectionThrottlingDisabled)
+	bool connectionThrottlingDisabled =
+		connectionFlags & REQUIRE_MAINTENANCE_CONNECTION
+		? GetMaxMaintenanceSharedPoolSize() <= 0
+		: GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING;
+	if (connectionThrottlingDisabled)
 	{
 		/* connection throttling disabled */
 		return false;

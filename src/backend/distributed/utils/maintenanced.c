@@ -706,35 +706,35 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			timeout = Min(timeout, Recover2PCInterval);
 		}
 
-        /*
-         * Execute only on the maintenance database, if it configured, otherwise run from every daemon.
-         * The config value -1 disables the distributed deadlock detection
-         */
-        if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
+		/*
+		 * Execute only on the maintenance database, if it configured, otherwise run from every daemon.
+		 * The config value -1 disables the distributed deadlock detection
+		 */
+		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
-            double deadlockTimeout =
-                    DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout;
+			double deadlockTimeout =
+				DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout;
 
-            InvalidateMetadataSystemCache();
-            StartTransactionCommand();
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
 
-            /*
-             * We skip the deadlock detection if citus extension
-             * is not accessible.
-             *
-             * Similarly, we skip to run the deadlock checks if
-             * there exists any version mismatch or the extension
-             * is not fully created yet.
-             */
-            if (!LockCitusExtension())
-            {
-                ereport(DEBUG1, (errmsg("could not lock the citus extension, "
-                                        "skipping deadlock detection")));
-            }
-            else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
-            {
-                foundDeadlock = CheckForDistributedDeadlocks();
-            }
+			/*
+			 * We skip the deadlock detection if citus extension
+			 * is not accessible.
+			 *
+			 * Similarly, we skip to run the deadlock checks if
+			 * there exists any version mismatch or the extension
+			 * is not fully created yet.
+			 */
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping deadlock detection")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				foundDeadlock = CheckForDistributedDeadlocks();
+			}
 
 
 			CommitTransactionCommand();
@@ -1233,4 +1233,3 @@ MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData)
 
 	return metadataSyncTriggered;
 }
-
