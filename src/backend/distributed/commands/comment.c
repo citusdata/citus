@@ -83,8 +83,6 @@ GetCommentForObject(Oid classOid, Oid objectOid)
 										  scanKey);
 	if ((tuple = systable_getnext(scan)) != NULL)
 	{
-		Form_pg_shdescription shdesc = (Form_pg_shdescription) GETSTRUCT(tuple);
-
 		bool isNull = false;
 
 		TupleDesc tupdesc = RelationGetDescr(shdescRelation);
@@ -92,19 +90,15 @@ GetCommentForObject(Oid classOid, Oid objectOid)
 		Datum descDatum = heap_getattr(tuple, Anum_pg_shdescription_description, tupdesc,
 									   &isNull);
 
-		/* Check if the objoid matches the databaseOid */
-		if (shdesc->objoid == objectOid && shdesc->classoid == classOid)
+
+		/* Add the command to the list */
+		if (!isNull)
 		{
-			/* Add the command to the list */
-			if (!isNull)
-			{
-				comment = TextDatumGetCString(descDatum);
-			}
-			else
-			{
-				comment = NULL;
-			}
-			break;
+			comment = TextDatumGetCString(descDatum);
+		}
+		else
+		{
+			comment = NULL;
 		}
 	}
 
