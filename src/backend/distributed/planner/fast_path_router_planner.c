@@ -252,7 +252,7 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 
 	/*
 	 * Distribution column must be used in a simple equality match check and it must be
-	 * place at top level conjustion operator. In simple words, we should have
+	 * place at top level conjunction operator. In simple words, we should have
 	 *	    WHERE dist_key = VALUE [AND  ....];
 	 *
 	 *	We're also not allowing any other appearances of the distribution key in the quals.

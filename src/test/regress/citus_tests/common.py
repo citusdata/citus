@@ -92,7 +92,7 @@ PG_MAJOR_VERSION = get_pg_major_version()
 OLDEST_SUPPORTED_CITUS_VERSION_MATRIX = {
     14: "10.2.0",
     15: "11.1.5",
-    16: "12.1devel",
+    16: "12.1.1",
 }
 
 OLDEST_SUPPORTED_CITUS_VERSION = OLDEST_SUPPORTED_CITUS_VERSION_MATRIX[PG_MAJOR_VERSION]
@@ -431,6 +431,12 @@ next_port = PORT_LOWER_BOUND
 
 def notice_handler(diag: psycopg.errors.Diagnostic):
     print(f"{diag.severity}: {diag.message_primary}")
+    if diag.message_detail:
+        print(f"DETAIL: {diag.message_detail}")
+    if diag.message_hint:
+        print(f"HINT: {diag.message_hint}")
+    if diag.context:
+        print(f"CONTEXT: {diag.context}")
 
 
 def cleanup_test_leftovers(nodes):
