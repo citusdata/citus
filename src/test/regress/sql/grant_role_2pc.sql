@@ -14,10 +14,8 @@ revoke connect,temp,temporary,create  on database grant_role2pc_db from public;
 \c grant_role2pc_db
 SHOW citus.main_db;
 
--- check that empty citus.superuser gives error
-SET citus.superuser TO '';
-SET citus.superuser TO 'postgres';
 
+SET citus.superuser TO 'postgres';
 CREATE USER grant_role2pc_user1;
 CREATE USER grant_role2pc_user2;
 CREATE USER grant_role2pc_user3;
@@ -41,13 +39,10 @@ select result FROM run_command_on_all_nodes(
     $$
     SELECT array_to_json(array_agg(row_to_json(t)))
     FROM (
-    SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
-    FROM pg_auth_members m
-    JOIN pg_roles r ON r.oid = m.roleid
-    JOIN pg_roles g ON g.oid = m.member
-    JOIN pg_roles a ON a.oid = m.grantor
-    WHERE g.rolname = 'grant_role2pc_user2'
-    order by g.rolname
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text = 'grant_role2pc_user2'
+    order by member::regrole::text
     ) t
     $$
 );
@@ -55,12 +50,12 @@ select result FROM run_command_on_all_nodes(
 \c grant_role2pc_db
 --test grant under transactional context with multiple operations
 BEGIN;
-grant grant_role2pc_user1 to grant_role2pc_user3;
-grant grant_role2pc_user1 to grant_role2pc_user4;
+grant grant_role2pc_user1,grant_role2pc_user2 to grant_role2pc_user3 WITH ADMIN OPTION;
+grant grant_role2pc_user1 to grant_role2pc_user4 granted by grant_role2pc_user3 ;
 COMMIT;
 
 BEGIN;
-grant grant_role2pc_user1 to grant_role2pc_user5;
+grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION;
 grant grant_role2pc_user1 to grant_role2pc_user6;
 ROLLBACK;
 
@@ -77,38 +72,36 @@ commit;
 select result FROM run_command_on_all_nodes($$
 SELECT array_to_json(array_agg(row_to_json(t)))
 FROM (
-  SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
-  FROM pg_auth_members m
-  JOIN pg_roles r ON r.oid = m.roleid
-  JOIN pg_roles g ON g.oid = m.member
-  JOIN pg_roles a ON a.oid = m.grantor
-  WHERE g.rolname in ('grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-  order by g.rolname
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+    order by member::regrole::text
 ) t
 $$);
 
 
 \c grant_role2pc_db
 
-grant grant_role2pc_user1,grant_role2pc_user2 to grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
+grant grant_role2pc_user1,grant_role2pc_user2 to grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7 granted by grant_role2pc_user3;
 
 \c regression
 
 select result FROM run_command_on_all_nodes($$
 SELECT array_to_json(array_agg(row_to_json(t)))
 FROM (
-  SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
-  FROM pg_auth_members m
-  JOIN pg_roles r ON r.oid = m.roleid
-  JOIN pg_roles g ON g.oid = m.member
-  JOIN pg_roles a ON a.oid = m.grantor
-  WHERE g.rolname in ('grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-  order by g.rolname
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+    order by member::regrole::text
 ) t
 $$);
 
+
+
 \c grant_role2pc_db
-revoke admin option for grant_role2pc_user1 from grant_role2pc_user2 granted by CURRENT_USER;
+revoke admin option for grant_role2pc_user1 from grant_role2pc_user2 granted by grant_role2pc_user3;
 
 --test revoke under transactional context with multiple operations
 BEGIN;
@@ -126,26 +119,41 @@ COMMIT;
 select result FROM run_command_on_all_nodes($$
 SELECT array_to_json(array_agg(row_to_json(t)))
 FROM (
-  SELECT r.rolname AS role, g.rolname AS group, a.rolname AS grantor, m.admin_option
-  FROM pg_auth_members m
-  JOIN pg_roles r ON r.oid = m.roleid
-  JOIN pg_roles g ON g.oid = m.member
-  JOIN pg_roles a ON a.oid = m.grantor
-  WHERE g.rolname in ('grant_role2pc_user2','grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-  order by g.rolname
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user2','grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+    order by member::regrole::text
 ) t
 $$);
 
+\c - - - :worker_1_port
+BEGIN;
+grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION;
+grant grant_role2pc_user1 to grant_role2pc_user6;
+COMMIT;
+
+\c - - - :master_port
+
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user5','grant_role2pc_user6')
+    order by member::regrole::text
+) t
+$$);
+
+revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;
+
+--clean resources
 DROP SCHEMA grant_role2pc;
-
-
-
 set citus.enable_create_database_propagation to on;
 DROP DATABASE grant_role2pc_db;
 
 drop user grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
-
-
 drop user grant_role2pc_user1;
 
 grant connect,temp,temporary  on database regression to public;
