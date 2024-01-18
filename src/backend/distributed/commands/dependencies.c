@@ -584,15 +584,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			 */
 			if (dependency->objectId != MyDatabaseId && EnableCreateDatabasePropagation)
 			{
-				char *databaseDDLCommand = CreateDatabaseDDLCommand(dependency->objectId);
-
-				List *ddlCommands = list_make1(databaseDDLCommand);
-
-				List *grantDDLCommands = GrantOnDatabaseDDLCommands(dependency->objectId);
-
-				ddlCommands = list_concat(ddlCommands, grantDDLCommands);
-
-				return ddlCommands;
+				return GetDatabaseMetadataSyncCommands(dependency->objectId);
 			}
 
 			return NIL;

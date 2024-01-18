@@ -13,8 +13,10 @@
 
 #include "miscadmin.h"
 
+#include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/table.h"
 #include "access/xact.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_collation.h"
@@ -25,6 +27,7 @@
 #include "commands/defrem.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
@@ -33,6 +36,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -44,7 +48,6 @@
 #include "distributed/serialize_distributed_ddls.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-
 
 /*
  * DatabaseCollationInfo is used to store collation related information of a database.
@@ -669,6 +672,31 @@ GetTablespaceName(Oid tablespaceOid)
 	ReleaseSysCache(tuple);
 
 	return tablespaceName;
+}
+
+
+/*
+ * GetDatabaseMetadataSyncCommands returns a list of sql statements
+ * for the given database id. The list contains the database ddl command,
+ * grant commands and comment propagation commands.
+ */
+List *
+GetDatabaseMetadataSyncCommands(Oid dbOid)
+{
+	char *databaseName = get_database_name(dbOid);
+	char *databaseDDLCommand = CreateDatabaseDDLCommand(dbOid);
+
+	List *ddlCommands = list_make1(databaseDDLCommand);
+
+	List *grantDDLCommands = GrantOnDatabaseDDLCommands(dbOid);
+	List *commentDDLCommands = GetCommentPropagationCommands(DatabaseRelationId, dbOid,
+															 databaseName,
+															 OBJECT_DATABASE);
+
+	ddlCommands = list_concat(ddlCommands, grantDDLCommands);
+	ddlCommands = list_concat(ddlCommands, commentDDLCommands);
+
+	return ddlCommands;
 }
 
 
