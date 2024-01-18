@@ -254,8 +254,8 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
 -- also test case sensitivity
 CREATE DATABASE "REGRESSION";
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 ALTER ROLE CURRENT_USER IN DATABASE "REGRESSION" SET public.myguc TO "Hello from coordinator only";
 SELECT d.datname, r.setconfig FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%';
   datname   |                  setconfig

@@ -34,6 +34,7 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -44,6 +45,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#include "postmaster/postmaster.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -77,12 +79,20 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/string_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
+
+#define EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER \
+	"SELECT citus_internal.execute_command_on_remote_nodes_as_user(%s, %s)"
+#define START_MANAGEMENT_TRANSACTION \
+	"SELECT citus_internal.start_management_transaction('%lu')"
+#define MARK_OBJECT_DISTRIBUTED \
+	"SELECT citus_internal.mark_object_distributed(%d, %s, %d)"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -112,6 +122,8 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
+static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
+static void RunPostprocessMainDBCommand(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -243,12 +255,22 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 	if (!CitusHasBeenLoaded())
 	{
+		if (!IsMainDB)
+		{
+			RunPreprocessMainDBCommand(parsetree, queryString);
+		}
+
 		/*
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
 		PrevProcessUtility(pstmt, queryString, false, context,
 						   params, queryEnv, dest, completionTag);
+
+		if (!IsMainDB)
+		{
+			RunPostprocessMainDBCommand(parsetree);
+		}
 
 		return;
 	}
@@ -704,9 +726,9 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 			ereport(NOTICE, (errmsg("Citus partially supports CREATE DATABASE for "
 									"distributed databases"),
 							 errdetail("Citus does not propagate CREATE DATABASE "
-									   "command to workers"),
+									   "command to other nodes"),
 							 errhint("You can manually create a database and its "
-									 "extensions on workers.")));
+									 "extensions on other nodes.")));
 		}
 	}
 	else if (IsA(parsetree, CreateRoleStmt) && !EnableCreateRolePropagation)
@@ -1571,4 +1593,50 @@ bool
 DropSchemaOrDBInProgress(void)
 {
 	return activeDropSchemaOrDBs > 0;
+}
+
+
+/*
+ * RunPreprocessMainDBCommand runs the necessary commands for a query, in main
+ * database before query is run on the local node with PrevProcessUtility
+ */
+static void
+RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
+{
+	if (IsA(parsetree, CreateRoleStmt))
+	{
+		StringInfo mainDBQuery = makeStringInfo();
+		appendStringInfo(mainDBQuery,
+						 START_MANAGEMENT_TRANSACTION,
+						 GetCurrentFullTransactionId().value);
+		RunCitusMainDBQuery(mainDBQuery->data);
+		mainDBQuery = makeStringInfo();
+		appendStringInfo(mainDBQuery,
+						 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
+						 quote_literal_cstr(queryString),
+						 quote_literal_cstr(CurrentUserName()));
+		RunCitusMainDBQuery(mainDBQuery->data);
+	}
+}
+
+
+/*
+ * RunPostprocessMainDBCommand runs the necessary commands for a query, in main
+ * database after query is run on the local node with PrevProcessUtility
+ */
+static void
+RunPostprocessMainDBCommand(Node *parsetree)
+{
+	if (IsA(parsetree, CreateRoleStmt))
+	{
+		StringInfo mainDBQuery = makeStringInfo();
+		CreateRoleStmt *createRoleStmt = castNode(CreateRoleStmt, parsetree);
+		Oid roleOid = get_role_oid(createRoleStmt->role, false);
+		appendStringInfo(mainDBQuery,
+						 MARK_OBJECT_DISTRIBUTED,
+						 AuthIdRelationId,
+						 quote_literal_cstr(createRoleStmt->role),
+						 roleOid);
+		RunCitusMainDBQuery(mainDBQuery->data);
+	}
 }

@@ -715,8 +715,8 @@ MultiNodeTree(Query *queryTree)
 
 
 /*
- * ContainsReadIntermediateResultFunction determines whether an expresion tree contains
- * a call to the read_intermediate_result function.
+ * ContainsReadIntermediateResultFunction determines whether an expression tree
+ * contains a call to the read_intermediate_result function.
  */
 bool
 ContainsReadIntermediateResultFunction(Node *node)
@@ -726,7 +726,7 @@ ContainsReadIntermediateResultFunction(Node *node)
 
 
 /*
- * ContainsReadIntermediateResultArrayFunction determines whether an expresion
+ * ContainsReadIntermediateResultArrayFunction determines whether an expression
  * tree contains a call to the read_intermediate_results(result_ids, format)
  * function.
  */

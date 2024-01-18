@@ -17,7 +17,8 @@ cte2 AS MATERIALIZED (
 SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 
 
-SET citus.max_intermediate_result_size TO 17;
+SET citus.max_intermediate_result_size TO 9;
+-- regular adaptive executor CTE should fail
 WITH cte AS MATERIALIZED
 (
 	SELECT

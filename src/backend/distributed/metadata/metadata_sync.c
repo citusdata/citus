@@ -83,6 +83,7 @@
 #include "distributed/pg_dist_shard.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/remote_transaction.h"
 #include "distributed/resource_lock.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/utils/array_type.h"
@@ -900,6 +901,7 @@ NodeListIdempotentInsertCommand(List *workerNodeList)
  */
 char *
 MarkObjectsDistributedCreateCommand(List *addresses,
+									List *namesArg,
 									List *distributionArgumentIndexes,
 									List *colocationIds,
 									List *forceDelegations)
@@ -924,9 +926,25 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 		int forceDelegation = list_nth_int(forceDelegations, currentObjectCounter);
 		List *names = NIL;
 		List *args = NIL;
+		char *objectType = NULL;
 
-		char *objectType = getObjectTypeDescription(address, false);
-		getObjectIdentityParts(address, &names, &args, false);
+		if (IsMainDBCommand)
+		{
+			/*
+			 * When we try to distribute an object that's being created in a non Citus
+			 * main database, we cannot find the name, since the object is not visible
+			 * in Citus main database.
+			 * Because of that we need to pass the name to this function.
+			 */
+			names = list_nth(namesArg, currentObjectCounter);
+			bool missingOk = false;
+			objectType = getObjectTypeDescription(address, missingOk);
+		}
+		else
+		{
+			objectType = getObjectTypeDescription(address, false);
+			getObjectIdentityParts(address, &names, &args, IsMainDBCommand);
+		}
 
 		if (!isFirstObject)
 		{
@@ -5148,6 +5166,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 
 		char *workerMetadataUpdateCommand =
 			MarkObjectsDistributedCreateCommand(list_make1(address),
+												NIL,
 												list_make1_int(distributionArgumentIndex),
 												list_make1_int(colocationId),
 												list_make1_int(forceDelegation));
