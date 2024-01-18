@@ -2,7 +2,6 @@ CREATE SCHEMA grant_role2pc;
 SET search_path TO grant_role2pc;
 set citus.enable_create_database_propagation to on;
 CREATE DATABASE grant_role2pc_db;
-revoke connect,temp,temporary,create  on database grant_role2pc_db from public;
 \c grant_role2pc_db
 SHOW citus.main_db;
  citus.main_db
@@ -52,7 +51,7 @@ grant grant_role2pc_user1,grant_role2pc_user2 to grant_role2pc_user3 WITH ADMIN 
 grant grant_role2pc_user1 to grant_role2pc_user4 granted by grant_role2pc_user3 ;
 COMMIT;
 BEGIN;
-grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION;
+grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION granted by grant_role2pc_user3;
 grant grant_role2pc_user1 to grant_role2pc_user6;
 ROLLBACK;
 BEGIN;
@@ -99,22 +98,15 @@ $$);
 (3 rows)
 
 \c grant_role2pc_db
-revoke admin option for grant_role2pc_user1 from grant_role2pc_user2 granted by grant_role2pc_user3;
-WARNING:  role "grant_role2pc_user2" has not been granted membership in role "grant_role2pc_user1" by role "grant_role2pc_user3"
+revoke admin option for grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3;
 --test revoke under transactional context with multiple operations
 BEGIN;
-revoke grant_role2pc_user1 from grant_role2pc_user3;
-ERROR:  dependent privileges exist
-HINT:  Use CASCADE to revoke them too.
-revoke grant_role2pc_user1 from grant_role2pc_user4;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+revoke grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3 ;
+revoke grant_role2pc_user1 from grant_role2pc_user4 granted by grant_role2pc_user3;
 COMMIT;
 BEGIN;
-revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;
-WARNING:  role "grant_role2pc_user5" has not been granted membership in role "grant_role2pc_user1" by role "postgres"
-WARNING:  role "grant_role2pc_user6" has not been granted membership in role "grant_role2pc_user1" by role "postgres"
-revoke grant_role2pc_user1 from grant_role2pc_user7;
-WARNING:  role "grant_role2pc_user7" has not been granted membership in role "grant_role2pc_user1" by role "postgres"
+revoke grant_role2pc_user1 from grant_role2pc_user6,grant_role2pc_user7 granted by grant_role2pc_user3;
+revoke grant_role2pc_user1 from grant_role2pc_user3 cascade;
 COMMIT;
 \c regression
 select result FROM run_command_on_all_nodes($$
@@ -127,11 +119,11 @@ FROM (
     order by member::regrole::text
 ) t
 $$);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           result
+                                                                                                                                                                                                                                                                                  result
 ---------------------------------------------------------------------
- [{"member":"grant_role2pc_user2","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user2","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user4","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false}]
- [{"member":"grant_role2pc_user2","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user2","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user4","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false}]
- [{"member":"grant_role2pc_user2","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user2","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user4","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false}]
+ [{"member":"grant_role2pc_user2","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user2","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false}]
+ [{"member":"grant_role2pc_user2","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user2","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false}]
+ [{"member":"grant_role2pc_user2","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user3","role":"grant_role2pc_user2","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user7","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false}]
 (3 rows)
 
 \c - - - :worker_1_port
@@ -150,11 +142,11 @@ FROM (
     order by member::regrole::text
 ) t
 $$);
-                                                                                                                                                                                                                                                                                                                                            result
+                                                                                                                                                                                                                         result
 ---------------------------------------------------------------------
- [{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
- [{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
- [{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
+ [{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
+ [{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
+ [{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
 (3 rows)
 
 revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;
@@ -164,5 +156,4 @@ set citus.enable_create_database_propagation to on;
 DROP DATABASE grant_role2pc_db;
 drop user grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
 drop user grant_role2pc_user1;
-grant connect,temp,temporary  on database regression to public;
 reset citus.enable_create_database_propagation;

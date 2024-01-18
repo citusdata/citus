@@ -9,7 +9,6 @@ set citus.enable_create_database_propagation to on;
 
 CREATE DATABASE grant_role2pc_db;
 
-revoke connect,temp,temporary,create  on database grant_role2pc_db from public;
 
 \c grant_role2pc_db
 SHOW citus.main_db;
@@ -55,7 +54,7 @@ grant grant_role2pc_user1 to grant_role2pc_user4 granted by grant_role2pc_user3 
 COMMIT;
 
 BEGIN;
-grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION;
+grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION granted by grant_role2pc_user3;
 grant grant_role2pc_user1 to grant_role2pc_user6;
 ROLLBACK;
 
@@ -98,20 +97,18 @@ FROM (
 ) t
 $$);
 
-
-
 \c grant_role2pc_db
-revoke admin option for grant_role2pc_user1 from grant_role2pc_user2 granted by grant_role2pc_user3;
+revoke admin option for grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3;
 
 --test revoke under transactional context with multiple operations
 BEGIN;
-revoke grant_role2pc_user1 from grant_role2pc_user3;
-revoke grant_role2pc_user1 from grant_role2pc_user4;
+revoke grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3 ;
+revoke grant_role2pc_user1 from grant_role2pc_user4 granted by grant_role2pc_user3;
 COMMIT;
 
 BEGIN;
-revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;
-revoke grant_role2pc_user1 from grant_role2pc_user7;
+revoke grant_role2pc_user1 from grant_role2pc_user6,grant_role2pc_user7 granted by grant_role2pc_user3;
+revoke grant_role2pc_user1 from grant_role2pc_user3 cascade;
 COMMIT;
 
 \c regression
@@ -155,7 +152,5 @@ DROP DATABASE grant_role2pc_db;
 
 drop user grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
 drop user grant_role2pc_user1;
-
-grant connect,temp,temporary  on database regression to public;
 
 reset citus.enable_create_database_propagation;
