@@ -81,7 +81,7 @@ GetCommentForObject(Oid classOid, Oid objectOid)
 	SysScanDesc scan = systable_beginscan(shdescRelation, SharedDescriptionObjIndexId,
 										  indexOk, NULL, scanKeyCount,
 										  scanKey);
-	while ((tuple = systable_getnext(scan)) != NULL)
+	if ((tuple = systable_getnext(scan)) != NULL)
 	{
 		Form_pg_shdescription shdesc = (Form_pg_shdescription) GETSTRUCT(tuple);
 
