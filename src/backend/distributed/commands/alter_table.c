@@ -1855,7 +1855,9 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		{
 			char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 			char *workerChangeSequenceDependencyCommand =
-				CreateWorkerChangeSequenceDependencyCommand(qualifiedSequenceName, qualifiedSourceName, qualifiedTargetName);
+				CreateWorkerChangeSequenceDependencyCommand(qualifiedSequenceName,
+															qualifiedSourceName,
+															qualifiedTargetName);
 			SendCommandToWorkersWithMetadata(workerChangeSequenceDependencyCommand);
 		}
 		else if (ShouldSyncTableMetadata(sourceId))
@@ -2158,7 +2160,6 @@ CreateWorkerChangeSequenceDependencyCommand(char *qualifiedSequeceName,
 											char *qualifiedSourceName,
 											char *qualifiedTargetName)
 {
-
 	StringInfo query = makeStringInfo();
 	appendStringInfo(query, "SELECT worker_change_sequence_dependency(%s, %s, %s)",
 					 quote_literal_cstr(qualifiedSequeceName),

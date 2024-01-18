@@ -2548,7 +2548,7 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 		if (columnNulls[partitionColumnIndex])
 		{
 			char *qualifiedTableName = generate_qualified_relation_name(
-										copyDest->distributedRelationId);
+				copyDest->distributedRelationId);
 
 			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 							errmsg("the partition column of table %s cannot be NULL",
