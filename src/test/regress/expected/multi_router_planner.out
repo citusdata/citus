@@ -2703,10 +2703,10 @@ SET search_path TO multi_router_planner;
 -- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
 INSERT INTO failure_test VALUES (1, 1);
-ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
+ERROR:  connection to the remote node router_user@localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 ROLLBACK;
 INSERT INTO failure_test VALUES (2, 1);
-ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
+ERROR:  connection to the remote node router_user@localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
 		SELECT shardid FROM pg_dist_shard

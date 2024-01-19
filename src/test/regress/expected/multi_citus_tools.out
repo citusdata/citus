@@ -587,7 +587,7 @@ SET client_min_messages TO DEBUG;
 -- verify that we can create connections only with users with login privileges.
 SET ROLE role_without_login;
 SELECT citus_check_connection_to_node('localhost', :worker_1_port);
-WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: FATAL:  role "role_without_login" is not permitted to log in
+WARNING:  connection to the remote node role_without_login@localhost:xxxxx failed with the following error: FATAL:  role "role_without_login" is not permitted to log in
  citus_check_connection_to_node
 ---------------------------------------------------------------------
  f
