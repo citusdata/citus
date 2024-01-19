@@ -128,7 +128,7 @@ BEGIN;
 (1 row)
 
   SELECT count(*) FROM socket_test_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 ROLLBACK;
 -- repartition joins also can recover
 SET citus.enable_repartition_joins TO on;
