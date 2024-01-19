@@ -36,7 +36,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -271,7 +271,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
