@@ -80,7 +80,7 @@ TaskListRequiresRollback(List *taskList)
 
 	if (ReadOnlyTask(task->taskType))
 	{
-		return SelectOpensTransactionBlock &&
+		return SelectOpensTransactionBlock ||
 			   IsTransactionBlock();
 	}
 
