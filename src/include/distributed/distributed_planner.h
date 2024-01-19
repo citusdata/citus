@@ -104,7 +104,7 @@ typedef struct FastPathRestrictionContext
 	 * Set to true when distKey = Param; in the queryTree
 	 */
 	bool distributionKeyHasParam;
-}FastPathRestrictionContext;
+} FastPathRestrictionContext;
 
 typedef struct PlannerRestrictionContext
 {

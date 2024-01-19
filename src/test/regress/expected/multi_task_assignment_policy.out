@@ -75,11 +75,11 @@ DEBUG:  shard count after pruning for task_assignment_test_table: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
@@ -89,11 +89,11 @@ DEBUG:  shard count after pruning for task_assignment_test_table: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Next test the first-replica task assignment policy
@@ -105,11 +105,11 @@ DEBUG:  shard count after pruning for task_assignment_test_table: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
@@ -119,11 +119,11 @@ DEBUG:  shard count after pruning for task_assignment_test_table: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 COMMIT;
@@ -142,38 +142,38 @@ SET LOCAL citus.task_assignment_policy TO 'greedy';
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-                          QUERY PLAN
+                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   explain statements for distributed queries are not enabled
+   citus.explain_distributed_queries: false
 (2 rows)
 
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-                          QUERY PLAN
+                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   explain statements for distributed queries are not enabled
+   citus.explain_distributed_queries: false
 (2 rows)
 
 SET LOCAL citus.task_assignment_policy TO 'first-replica';
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-                          QUERY PLAN
+                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   explain statements for distributed queries are not enabled
+   citus.explain_distributed_queries: false
 (2 rows)
 
 EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-                          QUERY PLAN
+                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   explain statements for distributed queries are not enabled
+   citus.explain_distributed_queries: false
 (2 rows)
 
 ROLLBACK;
