@@ -791,45 +791,6 @@ AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok, bo
 
 
 /*
- * TextSearchConfigurationCommentObjectAddress resolves the ObjectAddress for the TEXT
- * SEARCH CONFIGURATION on which the comment is placed. Optionally errors if the
- * configuration does not exist based on the missing_ok flag passed in by the caller.
- */
-List *
-TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok, bool
-											isPostprocess)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
-
-	Oid objid = get_ts_config_oid(castNode(List, stmt->object), missing_ok);
-
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TSConfigRelationId, objid);
-	return list_make1(address);
-}
-
-
-/*
- * TextSearchDictCommentObjectAddress resolves the ObjectAddress for the TEXT SEARCH
- * DICTIONARY on which the comment is placed. Optionally errors if the dictionary does not
- * exist based on the missing_ok flag passed in by the caller.
- */
-List *
-TextSearchDictCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Assert(stmt->objtype == OBJECT_TSDICTIONARY);
-
-	Oid objid = get_ts_dict_oid(castNode(List, stmt->object), missing_ok);
-
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TSDictionaryRelationId, objid);
-	return list_make1(address);
-}
-
-
-/*
  * AlterTextSearchConfigurationOwnerObjectAddress resolves the ObjectAddress for the TEXT
  * SEARCH CONFIGURATION for which the owner is changed. Optionally errors if the
  * configuration does not exist based on the missing_ok flag passed in by the caller.
