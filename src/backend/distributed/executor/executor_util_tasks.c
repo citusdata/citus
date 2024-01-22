@@ -80,8 +80,8 @@ TaskListRequiresRollback(List *taskList)
 
 	if (ReadOnlyTask(task->taskType))
 	{
-		return SelectOpensTransactionBlock &&
-			   IsTransactionBlock();
+		return (SelectOpensTransactionBlock && IsTransactionBlock()) ||
+				IsolationUsesXactSnapshot();
 	}
 
 	if (IsMultiStatementTransaction())
