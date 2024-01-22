@@ -61,6 +61,7 @@ check-style:
 
 # depend on install-all so that downgrade scripts are installed as well
 check: all install-all
-	$(MAKE) -C src/test/regress check-full
+	# explicetely does not use $(MAKE) to avoid parallelism
+	make -C src/test/regress check
 
 .PHONY: all check clean install install-downgrades install-all
