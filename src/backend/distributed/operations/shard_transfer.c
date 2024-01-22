@@ -1940,11 +1940,7 @@ ConstructQualifiedShardName(ShardInterval *shardInterval)
 static List *
 RecreateTableDDLCommandList(Oid relationId)
 {
-	const char *relationName = get_rel_name(relationId);
-	Oid relationSchemaId = get_rel_namespace(relationId);
-	const char *relationSchemaName = get_namespace_name(relationSchemaId);
-	const char *qualifiedRelationName = quote_qualified_identifier(relationSchemaName,
-																   relationName);
+	const char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	StringInfo dropCommand = makeStringInfo();
 

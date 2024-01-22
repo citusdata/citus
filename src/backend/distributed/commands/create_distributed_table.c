@@ -1325,10 +1325,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	{
 		List *partitionList = PartitionList(relationId);
 		Oid partitionRelationId = InvalidOid;
-		Oid namespaceId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(namespaceId);
-		char *relationName = get_rel_name(relationId);
-		char *parentRelationName = quote_qualified_identifier(schemaName, relationName);
+		char *parentRelationName = generate_qualified_relation_name(relationId);
 
 		/*
 		 * when there are many partitions, each call to CreateDistributedTable
