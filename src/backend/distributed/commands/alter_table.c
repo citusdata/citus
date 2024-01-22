@@ -209,12 +209,9 @@ static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommand
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
-static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName,
-														  char *sequenceName,
-														  char *sourceSchemaName,
-														  char *sourceName,
-														  char *targetSchemaName,
-														  char *targetName);
+static char * CreateWorkerChangeSequenceDependencyCommand(char *qualifiedSequeceName,
+														  char *qualifiedSourceName,
+														  char *qualifiedTargetName);
 static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
@@ -791,13 +788,15 @@ ConvertTableInternal(TableConversionState *con)
 		justBeforeDropCommands = lappend(justBeforeDropCommands, detachFromParentCommand);
 	}
 
+	char *qualifiedRelationName = quote_qualified_identifier(con->schemaName,
+															 con->relationName);
+
 	if (PartitionedTable(con->relationId))
 	{
 		if (!con->suppressNoticeMessages)
 		{
 			ereport(NOTICE, (errmsg("converting the partitions of %s",
-									quote_qualified_identifier(con->schemaName,
-															   con->relationName))));
+									qualifiedRelationName)));
 		}
 
 		List *partitionList = PartitionList(con->relationId);
@@ -870,9 +869,7 @@ ConvertTableInternal(TableConversionState *con)
 
 	if (!con->suppressNoticeMessages)
 	{
-		ereport(NOTICE, (errmsg("creating a new table for %s",
-								quote_qualified_identifier(con->schemaName,
-														   con->relationName))));
+		ereport(NOTICE, (errmsg("creating a new table for %s", qualifiedRelationName)));
 	}
 
 	TableDDLCommand *tableCreationCommand = NULL;
@@ -999,8 +996,6 @@ ConvertTableInternal(TableConversionState *con)
 			{
 				continue;
 			}
-			char *qualifiedRelationName = quote_qualified_identifier(con->schemaName,
-																	 con->relationName);
 
 			TableConversionParameters cascadeParam = {
 				.relationId = colocatedTableId,
@@ -1750,9 +1745,7 @@ CreateMaterializedViewDDLCommand(Oid matViewOid)
 {
 	StringInfo query = makeStringInfo();
 
-	char *viewName = get_rel_name(matViewOid);
-	char *schemaName = get_namespace_name(get_rel_namespace(matViewOid));
-	char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+	char *qualifiedViewName = generate_qualified_relation_name(matViewOid);
 
 	/* here we need to get the access method of the view to recreate it */
 	char *accessMethodName = GetAccessMethodForMatViewIfExists(matViewOid);
@@ -1801,9 +1794,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 			 bool suppressNoticeMessages)
 {
 	char *sourceName = get_rel_name(sourceId);
-	char *targetName = get_rel_name(targetId);
-	Oid schemaId = get_rel_namespace(sourceId);
-	char *schemaName = get_namespace_name(schemaId);
+	char *qualifiedSourceName = generate_qualified_relation_name(sourceId);
+	char *qualifiedTargetName = generate_qualified_relation_name(targetId);
 
 	StringInfo query = makeStringInfo();
 
@@ -1811,8 +1803,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		if (!suppressNoticeMessages)
 		{
-			ereport(NOTICE, (errmsg("moving the data of %s",
-									quote_qualified_identifier(schemaName, sourceName))));
+			ereport(NOTICE, (errmsg("moving the data of %s", qualifiedSourceName)));
 		}
 
 		if (!HasAnyGeneratedStoredColumns(sourceId))
@@ -1822,8 +1813,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 			 * "INSERT INTO .. SELECT *"".
 			 */
 			appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
-							 quote_qualified_identifier(schemaName, targetName),
-							 quote_qualified_identifier(schemaName, sourceName));
+							 qualifiedTargetName, qualifiedSourceName);
 		}
 		else
 		{
@@ -1838,9 +1828,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 			char *insertColumnString = StringJoin(nonStoredColumnNameList, ',');
 			appendStringInfo(query,
 							 "INSERT INTO %s (%s) OVERRIDING SYSTEM VALUE SELECT %s FROM %s",
-							 quote_qualified_identifier(schemaName, targetName),
-							 insertColumnString, insertColumnString,
-							 quote_qualified_identifier(schemaName, sourceName));
+							 qualifiedTargetName, insertColumnString,
+							 insertColumnString, qualifiedSourceName);
 		}
 
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
@@ -1864,14 +1853,11 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		 */
 		if (ShouldSyncTableMetadata(targetId))
 		{
-			Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
-			char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
-			char *sequenceName = get_rel_name(sequenceOid);
+			char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 			char *workerChangeSequenceDependencyCommand =
-				CreateWorkerChangeSequenceDependencyCommand(sequenceSchemaName,
-															sequenceName,
-															schemaName, sourceName,
-															schemaName, targetName);
+				CreateWorkerChangeSequenceDependencyCommand(qualifiedSequenceName,
+															qualifiedSourceName,
+															qualifiedTargetName);
 			SendCommandToWorkersWithMetadata(workerChangeSequenceDependencyCommand);
 		}
 		else if (ShouldSyncTableMetadata(sourceId))
@@ -1894,25 +1880,23 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 
 	if (!suppressNoticeMessages)
 	{
-		ereport(NOTICE, (errmsg("dropping the old %s",
-								quote_qualified_identifier(schemaName, sourceName))));
+		ereport(NOTICE, (errmsg("dropping the old %s", qualifiedSourceName)));
 	}
 
 	resetStringInfo(query);
 	appendStringInfo(query, "DROP %sTABLE %s CASCADE",
 					 IsForeignTable(sourceId) ? "FOREIGN " : "",
-					 quote_qualified_identifier(schemaName, sourceName));
+					 qualifiedSourceName);
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
 
 	if (!suppressNoticeMessages)
 	{
-		ereport(NOTICE, (errmsg("renaming the new table to %s",
-								quote_qualified_identifier(schemaName, sourceName))));
+		ereport(NOTICE, (errmsg("renaming the new table to %s", qualifiedSourceName)));
 	}
 
 	resetStringInfo(query);
 	appendStringInfo(query, "ALTER TABLE %s RENAME TO %s",
-					 quote_qualified_identifier(schemaName, targetName),
+					 qualifiedTargetName,
 					 quote_identifier(sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
 }
@@ -2172,18 +2156,13 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
  * worker_change_sequence_dependency query with the parameters.
  */
 static char *
-CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName, char *sequenceName,
-											char *sourceSchemaName, char *sourceName,
-											char *targetSchemaName, char *targetName)
+CreateWorkerChangeSequenceDependencyCommand(char *qualifiedSequeceName,
+											char *qualifiedSourceName,
+											char *qualifiedTargetName)
 {
-	char *qualifiedSchemaName = quote_qualified_identifier(sequenceSchemaName,
-														   sequenceName);
-	char *qualifiedSourceName = quote_qualified_identifier(sourceSchemaName, sourceName);
-	char *qualifiedTargetName = quote_qualified_identifier(targetSchemaName, targetName);
-
 	StringInfo query = makeStringInfo();
 	appendStringInfo(query, "SELECT worker_change_sequence_dependency(%s, %s, %s)",
-					 quote_literal_cstr(qualifiedSchemaName),
+					 quote_literal_cstr(qualifiedSequeceName),
 					 quote_literal_cstr(qualifiedSourceName),
 					 quote_literal_cstr(qualifiedTargetName));
 

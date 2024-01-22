@@ -143,15 +143,10 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 										targetRelation->partitionColumn);
 			if (distributionColumnIndex == -1)
 			{
-				char *relationName = get_rel_name(targetRelationId);
-				Oid schemaOid = get_rel_namespace(targetRelationId);
-				char *schemaName = get_namespace_name(schemaOid);
-
 				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 								errmsg(
 									"the partition column of table %s should have a value",
-									quote_qualified_identifier(schemaName,
-															   relationName))));
+									generate_qualified_relation_name(targetRelationId))));
 			}
 
 			TargetEntry *selectPartitionTE = list_nth(selectQuery->targetList,

@@ -392,9 +392,7 @@ CreateViewDDLCommand(Oid viewOid)
 static void
 AppendQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid)
 {
-	char *viewName = get_rel_name(viewOid);
-	char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
-	char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+	char *qualifiedViewName = generate_qualified_relation_name(viewOid);
 
 	appendStringInfo(buf, "%s ", qualifiedViewName);
 }
