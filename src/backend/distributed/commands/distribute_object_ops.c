@@ -774,7 +774,7 @@ static DistributeObjectOps Parameter_Grant = {
 	.address = NULL,
 	.markDistributed = false,
 };
-#endif /* PG_VERSION_NUM >= PG_VERSION_14  */
+#endif /* PG_VERSION_NUM >= PG_VERSION_15  */
 
 static DistributeObjectOps Policy_Drop = {
 	.deparse = NULL,
