@@ -154,7 +154,8 @@ static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedIn2PC(Node *parsetree);
 static bool DoesStatementRequireMarkDistributedFor2PC(Node *parsetree);
-static bool IsObjectTypeSupported(Node *parsetree, TwoPcStatementInfo twoPcSupportedStatement);
+static bool IsObjectTypeSupported(Node *parsetree, TwoPcStatementInfo
+								  twoPcSupportedStatement);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1711,26 +1712,29 @@ IsStatementSupportedIn2PC(Node *parsetree)
 	return false;
 }
 
+
 /*
  * IsObjectTypeSupported returns true if the object type is supported in 2pc
  */
-bool IsObjectTypeSupported(Node *parsetree, TwoPcStatementInfo twoPcSupportedStatement)
+bool
+IsObjectTypeSupported(Node *parsetree, TwoPcStatementInfo twoPcSupportedStatement)
 {
 	NodeTag type = nodeTag(parsetree);
-    if (type == T_GrantStmt)
-    {
-        GrantStmt *stmt = castNode(GrantStmt, parsetree);
-        /* check if stmt->objtype is in supportedObjectTypes */
-        for (int j = 0; j < twoPcSupportedStatement.supportedObjectTypesSize; j++)
-        {
-            if (stmt->objtype == twoPcSupportedStatement.supportedObjectTypes[j])
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-    return false;
+	if (type == T_GrantStmt)
+	{
+		GrantStmt *stmt = castNode(GrantStmt, parsetree);
+
+		/* check if stmt->objtype is in supportedObjectTypes */
+		for (int j = 0; j < twoPcSupportedStatement.supportedObjectTypesSize; j++)
+		{
+			if (stmt->objtype == twoPcSupportedStatement.supportedObjectTypes[j])
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	return false;
 }
 
 
