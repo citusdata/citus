@@ -98,11 +98,11 @@ REVOKE ALL ON SCHEMA citus_internal FROM nonsuperuser;
 DROP USER other_db_user9, nonsuperuser;
 -- test from a worker
 \c - - - :worker_1_port
-CREATE DATABASE other_db2;
+CREATE DATABASE worker_other_db;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
 DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
 HINT:  You can manually create a database and its extensions on other nodes.
-\c other_db2
+\c worker_other_db
 CREATE USER worker_user1;
 BEGIN;
 CREATE USER worker_user2;
@@ -129,8 +129,84 @@ SELECT usename FROM pg_user WHERE usename LIKE 'worker\_user%' ORDER BY 1;
 -- some user creation commands will fail but let's make sure we try to drop them just in case
 DROP USER IF EXISTS worker_user1, worker_user2, worker_user3;
 NOTICE:  role "worker_user3" does not exist, skipping
-\c - - - :worker_1_port
-DROP DATABASE other_db2;
+-- test creating and dropping a database from a Citus non-main database
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+\c other_db1
+CREATE DATABASE other_db3;
+\c regression
+SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db3'$$);
+  result
+---------------------------------------------------------------------
+ other_db3
+ other_db3
+ other_db3
+(3 rows)
+
+\c other_db1
+DROP DATABASE other_db3;
+\c regression
+SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db3'$$);
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+\c worker_other_db - - :worker_1_port
+CREATE DATABASE other_db4;
+\c regression
+SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db4'$$);
+  result
+---------------------------------------------------------------------
+ other_db4
+ other_db4
+ other_db4
+(3 rows)
+
+\c worker_other_db
+DROP DATABASE other_db4;
+\c regression
+SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db4'$$);
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+DROP DATABASE worker_other_db;
 \c - - - :master_port
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
 DROP SCHEMA other_databases;
 DROP DATABASE other_db1;

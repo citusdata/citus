@@ -187,6 +187,7 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant }
 };
 
+static bool IsCommandToCreateOrDropMainDB(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -318,9 +319,23 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 	if (!CitusHasBeenLoaded())
 	{
-		if (!IsMainDB)
+		/*
+		 * We always execute CREATE/DROP DATABASE from the main database. There are no
+		 * transactional visibility issues, since these commands are non-transactional.
+		 * And this way we only have to consider one codepath when creating databases.
+		 * We don't try to send the query to the main database if the CREATE/DROP DATABASE
+		 * command is for the main database itself, this is a very rare case but it's
+		 * exercised by our test suite.
+		 */
+		if (!IsMainDB &&
+			!IsCommandToCreateOrDropMainDB(parsetree))
 		{
 			RunPreprocessMainDBCommand(parsetree);
+			if (IsA(parsetree, CreatedbStmt) ||
+				IsA(parsetree, DropdbStmt))
+			{
+				return;
+			}
 		}
 
 		/*
@@ -1679,6 +1694,17 @@ RunPreprocessMainDBCommand(Node *parsetree)
 	}
 
 	char *queryString = DeparseTreeNode(parsetree);
+
+	if (IsA(parsetree, CreatedbStmt) ||
+		IsA(parsetree, DropdbStmt))
+	{
+		IsMainDBCommandInXact = false;
+		RunCitusMainDBQuery((char *) queryString);
+		return;
+	}
+
+	IsMainDBCommandInXact = true;
+
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 START_MANAGEMENT_TRANSACTION,
@@ -1809,4 +1835,26 @@ NonMainDbCheckSupportedObjectTypeForGrant(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	return stmt->objtype == OBJECT_DATABASE;
+}
+
+
+/*
+ * IsCommandToCreateOrDropMainDB checks if this query creates or drops the
+ * main database, so we can make an exception and not send this query to
+ * the main database.
+ */
+static bool
+IsCommandToCreateOrDropMainDB(Node *parsetree)
+{
+	if (IsA(parsetree, CreatedbStmt))
+	{
+		CreatedbStmt *createdbStmt = castNode(CreatedbStmt, parsetree);
+		return strcmp(createdbStmt->dbname, MainDb) == 0;
+	}
+	else if (IsA(parsetree, DropdbStmt))
+	{
+		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
+		return strcmp(dropdbStmt->dbname, MainDb) == 0;
+	}
+	return false;
 }
