@@ -45,6 +45,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -80,7 +81,6 @@ static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
 static List * RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
-static bool IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt);
 
 /* controlled via GUC */
 bool EnableCreateRolePropagation = true;
@@ -583,6 +583,17 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}
+
+		/*
+		 * append COMMENT ON ROLE commands for this specific user
+		 * When we propagate user creation, we also want to make sure that we propagate
+		 * all the comments it has been given. For this, we check pg_shdescription
+		 * for the ROLE entry corresponding to roleOid, and generate the relevant
+		 * Comment stmts to be run in the new node.
+		 */
+		List *commentStmts = GetCommentPropagationCommands(AuthIdRelationId, roleOid,
+														   rolename, OBJECT_ROLE);
+		completeRoleList = list_concat(completeRoleList, commentStmts);
 	}
 
 	return completeRoleList;
@@ -893,10 +904,31 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		grantRoleStmt->grantor = NULL;
 
 #if PG_VERSION_NUM >= PG_VERSION_16
+
+		/* inherit option is always included */
+		DefElem *inherit_opt;
+		if (membership->inherit_option)
+		{
+			inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(true), -1);
+		}
+		else
+		{
+			inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(false), -1);
+		}
+		grantRoleStmt->opt = list_make1(inherit_opt);
+
+		/* admin option is false by default, only include true case */
 		if (membership->admin_option)
 		{
-			DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
-			grantRoleStmt->opt = list_make1(opt);
+			DefElem *admin_opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
+			grantRoleStmt->opt = lappend(grantRoleStmt->opt, admin_opt);
+		}
+
+		/* set option is true by default, only include false case */
+		if (!membership->set_option)
+		{
+			DefElem *set_opt = makeDefElem("set", (Node *) makeBoolean(false), -1);
+			grantRoleStmt->opt = lappend(grantRoleStmt->opt, set_opt);
 		}
 #else
 		grantRoleStmt->admin_opt = membership->admin_option;
@@ -1209,19 +1241,6 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	if (IsGrantRoleWithInheritOrSetOption(stmt))
-	{
-		if (EnableUnsupportedFeatureMessages)
-		{
-			ereport(NOTICE, (errmsg("not propagating GRANT/REVOKE commands with specified"
-									" INHERIT/SET options to worker nodes"),
-							 errhint(
-								 "Connect to worker nodes directly to manually run the same"
-								 " GRANT/REVOKE command after disabling DDL propagation.")));
-		}
-		return NIL;
-	}
-
 	/*
 	 * Postgres don't seem to use the grantor. Even dropping the grantor doesn't
 	 * seem to affect the membership. If this changes, we might need to add grantors
@@ -1270,27 +1289,6 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 		}
 	}
 	return NIL;
-}
-
-
-/*
- * IsGrantRoleWithInheritOrSetOption returns true if the given
- * GrantRoleStmt has inherit or set option specified in its options
- */
-static bool
-IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt)
-{
-#if PG_VERSION_NUM >= PG_VERSION_16
-	DefElem *opt = NULL;
-	foreach_ptr(opt, stmt->opt)
-	{
-		if (strcmp(opt->defname, "inherit") == 0 || strcmp(opt->defname, "set") == 0)
-		{
-			return true;
-		}
-	}
-#endif
-	return false;
 }
 
 

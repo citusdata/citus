@@ -16,7 +16,8 @@ SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 2 kB)
 DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
 HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
-SET citus.max_intermediate_result_size TO 17;
+SET citus.max_intermediate_result_size TO 9;
+-- regular adaptive executor CTE should fail
 WITH cte AS MATERIALIZED
 (
 	SELECT
@@ -38,20 +39,9 @@ FROM
 ORDER BY
 	1,2
 LIMIT 10;
- user_id | value_2
----------------------------------------------------------------------
-       1 |       0
-       1 |       0
-       1 |       0
-       1 |       0
-       1 |       0
-       1 |       0
-       1 |       0
-       1 |       0
-       1 |       0
-       1 |       0
-(10 rows)
-
+ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 9 kB)
+DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
+HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
 -- router queries should be able to get limitted too
 SET citus.max_intermediate_result_size TO 2;
 -- this should pass, since we fetch small portions in each subplan
@@ -117,11 +107,9 @@ WITH cte AS MATERIALIZED (
 	AND EXISTS (select * from cte2, cte3)
 )
 SELECT count(*) FROM cte WHERE EXISTS (select * from cte);
- count
----------------------------------------------------------------------
-   105
-(1 row)
-
+ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 4 kB)
+DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
+HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
 SET citus.max_intermediate_result_size TO 3;
 -- this should fail since the cte-subplan exceeds the limit even if the
 -- cte2 and cte3 does not

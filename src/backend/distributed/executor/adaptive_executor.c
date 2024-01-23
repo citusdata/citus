@@ -401,7 +401,7 @@ typedef struct WorkerPool
 
 	/*
 	 * Placement executions destined for worker node, but not assigned to any
-	 * connection and not ready to start.
+	 * connection and ready to start.
 	 */
 	dlist_head readyTaskQueue;
 	int readyTaskCount;
@@ -491,8 +491,6 @@ typedef struct WorkerSession
 	bool sessionHasActiveConnection;
 } WorkerSession;
 
-
-struct TaskPlacementExecution;
 
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
@@ -585,7 +583,7 @@ typedef enum TaskPlacementExecutionState
 } TaskPlacementExecutionState;
 
 /*
- * TaskPlacementExecution represents the an execution of a command
+ * TaskPlacementExecution represents the execution of a command
  * on a shard placement.
  */
 typedef struct TaskPlacementExecution
@@ -1925,7 +1923,7 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		/*
 		 * Iterate until all the tasks are finished. Once all the tasks
-		 * are finished, ensure that that all the connection initializations
+		 * are finished, ensure that all the connection initializations
 		 * are also finished. Otherwise, those connections are terminated
 		 * abruptly before they are established (or failed). Instead, we let
 		 * the ConnectionStateMachine() to properly handle them.
@@ -3135,7 +3133,7 @@ ConnectionStateMachine(WorkerSession *session)
 				 *
 				 * We can only retry connection when the remote transaction has
 				 * not started over the connection. Otherwise, we'd have to deal
-				 * with restoring the transaction state, which iis beyond our
+				 * with restoring the transaction state, which is beyond our
 				 * purpose at this time.
 				 */
 				RemoteTransaction *transaction = &connection->remoteTransaction;

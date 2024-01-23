@@ -31,6 +31,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "parser/parse_type.h"
+#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -49,16 +50,47 @@
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 
-static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
+static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress,
+											 char *objectName);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
 static bool IsObjectDistributed(const ObjectAddress *address);
 
+PG_FUNCTION_INFO_V1(mark_object_distributed);
 PG_FUNCTION_INFO_V1(citus_unmark_object_distributed);
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
+
+
+/*
+ * mark_object_distributed adds an object to pg_dist_object
+ * in all of the nodes.
+ */
+Datum
+mark_object_distributed(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	Oid classId = PG_GETARG_OID(0);
+	text *objectNameText = PG_GETARG_TEXT_P(1);
+	char *objectName = text_to_cstring(objectNameText);
+	Oid objectId = PG_GETARG_OID(2);
+	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*objectAddress, classId, objectId);
+
+	/*
+	 * This function is called when a query is run from a Citus non-main database.
+	 * We need to insert into local pg_dist_object over a connection to make sure
+	 * 2PC still works.
+	 */
+	bool useConnectionForLocalQuery = true;
+	MarkObjectDistributedWithName(objectAddress, objectName, useConnectionForLocalQuery);
+	PG_RETURN_VOID();
+}
 
 
 /*
@@ -160,12 +192,48 @@ ObjectExists(const ObjectAddress *address)
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
 {
-	MarkObjectDistributedLocally(distAddress);
+	bool useConnectionForLocalQuery = false;
+	MarkObjectDistributedWithName(distAddress, "", useConnectionForLocalQuery);
+}
+
+
+/*
+ * MarkObjectDistributedWithName marks an object as a distributed object.
+ * Same as MarkObjectDistributed but this function also allows passing an objectName
+ * that is used in case the object does not exists for the current transaction.
+ */
+void
+MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *objectName,
+							  bool useConnectionForLocalQuery)
+{
+	if (!CitusHasBeenLoaded())
+	{
+		elog(ERROR, "Cannot mark object distributed because Citus has not been loaded.");
+	}
+
+	/*
+	 * When a query is run from a Citus non-main database we need to insert into pg_dist_object
+	 * over a connection to make sure 2PC still works.
+	 */
+	if (useConnectionForLocalQuery)
+	{
+		StringInfo insertQuery = makeStringInfo();
+		appendStringInfo(insertQuery,
+						 "INSERT INTO pg_catalog.pg_dist_object (classid, objid, objsubid)"
+						 "VALUES (%d, %d, %d) ON CONFLICT DO NOTHING",
+						 distAddress->classId, distAddress->objectId,
+						 distAddress->objectSubId);
+		SendCommandToWorker(LocalHostName, PostPortNumber, insertQuery->data);
+	}
+	else
+	{
+		MarkObjectDistributedLocally(distAddress);
+	}
 
 	if (EnableMetadataSync)
 	{
 		char *workerPgDistObjectUpdateCommand =
-			CreatePgDistObjectEntryCommand(distAddress);
+			CreatePgDistObjectEntryCommand(distAddress, objectName);
 		SendCommandToRemoteNodesWithMetadata(workerPgDistObjectUpdateCommand);
 	}
 }
@@ -188,7 +256,7 @@ MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress)
 	if (EnableMetadataSync)
 	{
 		char *workerPgDistObjectUpdateCommand =
-			CreatePgDistObjectEntryCommand(distAddress);
+			CreatePgDistObjectEntryCommand(distAddress, "");
 		SendCommandToRemoteNodesWithMetadataViaSuperUser(workerPgDistObjectUpdateCommand);
 	}
 }
@@ -279,17 +347,21 @@ ShouldMarkRelationDistributed(Oid relationId)
  * for the given object address.
  */
 static char *
-CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress)
+CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress, char *objectName)
 {
 	/* create a list by adding the address of value to not to have warning */
 	List *objectAddressList =
 		list_make1((ObjectAddress *) objectAddress);
+
+	/* names also require a list so we create a nested list here */
+	List *objectNameList = list_make1(list_make1((char *) objectName));
 	List *distArgumetIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
 	List *colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
 	List *forceDelegationList = list_make1_int(NO_FORCE_PUSHDOWN);
 
 	char *workerPgDistObjectUpdateCommand =
 		MarkObjectsDistributedCreateCommand(objectAddressList,
+											objectNameList,
 											distArgumetIndexList,
 											colocationIdList,
 											forceDelegationList);

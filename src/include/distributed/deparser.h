@@ -143,6 +143,9 @@ extern void DefElemOptionToStatement(StringInfo buf, DefElem *option,
 									 const DefElemOptionFormat *opt_formats,
 									 int opt_formats_len);
 
+/* forward declarations for deparse_comment_stmts.c */
+extern char * DeparseCommentStmt(Node *node);
+
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
@@ -231,6 +234,7 @@ extern void QualifyAlterRoleSetStmt(Node *stmt);
 extern char * DeparseCreateRoleStmt(Node *stmt);
 extern char * DeparseDropRoleStmt(Node *stmt);
 extern char * DeparseGrantRoleStmt(Node *stmt);
+extern char * DeparseReassignOwnedStmt(Node *node);
 
 /* forward declarations for deparse_owned_stmts.c */
 extern char * DeparseDropOwnedStmt(Node *node);
@@ -251,6 +255,7 @@ extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
 extern char * DeparseAlterDatabaseSetStmt(Node *node);
 extern char * DeparseCreateDatabaseStmt(Node *node);
 extern char * DeparseDropDatabaseStmt(Node *node);
+extern char * DeparseAlterDatabaseRenameStmt(Node *node);
 
 
 /* forward declaration for deparse_publication_stmts.c */

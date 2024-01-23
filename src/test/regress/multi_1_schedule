@@ -38,6 +38,8 @@ test: create_single_shard_table
 test: create_drop_database_propagation
 test: create_drop_database_propagation_pg15
 test: create_drop_database_propagation_pg16
+test: comment_on_database
+test: comment_on_role
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
 test: schema_based_sharding
@@ -59,6 +61,7 @@ test: grant_on_database_propagation
 test: alter_database_propagation
 
 test: citus_shards
+test: reassign_owned
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools

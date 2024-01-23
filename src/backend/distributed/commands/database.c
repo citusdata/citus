@@ -13,8 +13,10 @@
 
 #include "miscadmin.h"
 
+#include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/table.h"
 #include "access/xact.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_collation.h"
@@ -25,6 +27,7 @@
 #include "commands/defrem.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
@@ -33,6 +36,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -41,9 +45,9 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/serialize_distributed_ddls.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-
 
 /*
  * DatabaseCollationInfo is used to store collation related information of a database.
@@ -74,6 +78,7 @@ static char * GetTablespaceName(Oid tablespaceOid);
 static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
 														  bool missingOk);
 
+static List * FilterDistributedDatabases(List *databases);
 static Oid get_database_owner(Oid dbId);
 
 
@@ -173,22 +178,71 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_DATABASE);
 
-	List *databaseList = stmt->objects;
+	List *distributedDatabases = FilterDistributedDatabases(stmt->objects);
 
-	if (list_length(databaseList) == 0)
+	if (list_length(distributedDatabases) == 0)
 	{
 		return NIL;
 	}
 
 	EnsureCoordinator();
 
+	List *originalObjects = stmt->objects;
+
+	stmt->objects = distributedDatabases;
+
 	char *sql = DeparseTreeNode((Node *) stmt);
+
+	stmt->objects = originalObjects;
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * FilterDistributedDatabases filters the database list and returns the distributed ones,
+ * as a list.
+ */
+static List *
+FilterDistributedDatabases(List *databases)
+{
+	List *distributedDatabases = NIL;
+	String *databaseName = NULL;
+	foreach_ptr(databaseName, databases)
+	{
+		bool missingOk = true;
+		ObjectAddress *dbAddress =
+			GetDatabaseAddressFromDatabaseName(strVal(databaseName), missingOk);
+		if (IsAnyObjectDistributed(list_make1(dbAddress)))
+		{
+			distributedDatabases = lappend(distributedDatabases, databaseName);
+		}
+	}
+
+	return distributedDatabases;
+}
+
+
+/*
+ * IsSetTablespaceStatement returns true if the statement is a SET TABLESPACE statement,
+ * false otherwise.
+ */
+static bool
+IsSetTablespaceStatement(AlterDatabaseStmt *stmt)
+{
+	DefElem *def = NULL;
+	foreach_ptr(def, stmt->options)
+	{
+		if (strcmp(def->defname, "tablespace") == 0)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -198,51 +252,78 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
  *
  * In this stage we can prepare the commands that need to be run on all workers to grant
  * on databases.
+ *
+ * We also serialize database commands globally by acquiring a Citus specific advisory
+ * lock based on OCLASS_DATABASE on the first primary worker node.
  */
 List *
 PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 							ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = false;
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
 
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
-
 	EnsureCoordinator();
+	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
+								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	if (IsSetTablespaceStatement(stmt))
+	{
+		/*
+		 * Set tablespace does not work inside a transaction.Therefore, we need to use
+		 * NontransactionalNodeDDLTask to run the command on the workers outside
+		 * the transaction block.
+		 */
+
+		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	}
+	else
+	{
+		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	}
 }
 
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 
 /*
- * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
- * postgres instance.
+ * PreprocessAlterDatabaseRefreshCollStmt is executed before the statement is applied to
+ * the local postgres instance.
  *
  * In this stage we can prepare the commands that need to be run on all workers to grant
  * on databases.
+ *
+ * We also serialize database commands globally by acquiring a Citus specific advisory
+ * lock based on OCLASS_DATABASE on the first primary worker node.
  */
 List *
 PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 									   ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = true;
+	AlterDatabaseRefreshCollStmt *stmt = castNode(AlterDatabaseRefreshCollStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
 
-	AlterDatabaseRefreshCollStmt *stmt = castNode(AlterDatabaseRefreshCollStmt, node);
-
 	EnsureCoordinator();
+	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -256,23 +337,66 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 #endif
 
+
 /*
- * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
- * postgres instance.
+ * PreprocessAlterDatabaseRenameStmt is executed before the statement is applied to
+ * the local postgres instance.
  *
- * In this stage we can prepare the commands that need to be run on all workers to grant
- * on databases.
+ * We also serialize database commands globally by acquiring a Citus specific advisory
+ * lock based on OCLASS_DATABASE on the first primary worker node.
+ *
+ * We acquire this lock here instead of PostprocessAlterDatabaseRenameStmt because the
+ * command renames the database and SerializeDistributedDDLsOnObjectClass resolves the
+ * object on workers based on database name. For this reason, we need to acquire the lock
+ * before the command is applied to the local postgres instance.
  */
 List *
-PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
-							   ProcessUtilityContext processUtilityContext)
+PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
+								  ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	bool missingOk = true;
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->subname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
 
-	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+	EnsureCoordinator();
+
+	/*
+	 * Different than other ALTER DATABASE commands, we first acquire a lock
+	 * by providing InvalidOid because we want ALTER TABLE .. RENAME TO ..
+	 * commands to block not only with ALTER DATABASE operations but also
+	 * with CREATE DATABASE operations because they might cause name conflicts
+	 * and that could also cause deadlocks too.
+	 */
+	SerializeDistributedDDLsOnObjectClass(OCLASS_DATABASE);
+	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->subname);
+
+	return NIL;
+}
+
+
+/*
+ * PostprocessAlterDatabaseRenameStmt is executed after the statement is applied to the local
+ * postgres instance. In this stage we prepare ALTER DATABASE RENAME statement to be run on
+ * all workers.
+ */
+List *
+PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString)
+{
+	bool missingOk = false;
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->newname,
+																  missingOk);
+
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
+	{
+		return NIL;
+	}
 
 	EnsureCoordinator();
 
@@ -287,12 +411,52 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessAlterDatabaseStmt is executed before the statement is applied to the local
+ * PreprocessAlterDatabaseSetStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on databases.
+ *
+ * We also serialize database commands globally by acquiring a Citus specific advisory
+ * lock based on OCLASS_DATABASE on the first primary worker node.
+ */
+List *
+PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
+							   ProcessUtilityContext processUtilityContext)
+{
+	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, node);
+
+	bool missingOk = true;
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * PreprocessCreateDatabaseStmt is executed before the statement is applied to the local
  * Postgres instance.
  *
  * In this stage, we perform validations that we want to ensure before delegating to
  * previous utility hooks because it might not be convenient to throw an error in an
  * implicit transaction that creates a database.
+ *
+ * We also serialize database commands globally by acquiring a Citus specific advisory
+ * lock based on OCLASS_DATABASE on the first primary worker node.
  */
 List *
 PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
@@ -303,10 +467,12 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	EnsureSupportedCreateDatabaseCommand(stmt);
+
+	SerializeDistributedDDLsOnObjectClass(OCLASS_DATABASE);
 
 	return NIL;
 }
@@ -328,7 +494,7 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	/*
 	 * Given that CREATE DATABASE doesn't support "IF NOT EXISTS" and we're
@@ -346,16 +512,19 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 								(void *) createDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
 /*
- * PreprocessDropDatabaseStmt is executed after the statement is applied to the local
+ * PreprocessDropDatabaseStmt is executed before the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
  * all workers to drop the database. Since the DROP DATABASE statement gives error in
  * transaction context, we need to use NontransactionalNodeDDLTaskList to send the
  * DROP DATABASE statement to the workers.
+ *
+ * We also serialize database commands globally by acquiring a Citus specific advisory
+ * lock based on OCLASS_DATABASE on the first primary worker node.
  */
 List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
@@ -366,7 +535,7 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 
@@ -386,13 +555,15 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
+
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) dropDatabaseCommand,
 								ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -501,6 +672,31 @@ GetTablespaceName(Oid tablespaceOid)
 	ReleaseSysCache(tuple);
 
 	return tablespaceName;
+}
+
+
+/*
+ * GetDatabaseMetadataSyncCommands returns a list of sql statements
+ * for the given database id. The list contains the database ddl command,
+ * grant commands and comment propagation commands.
+ */
+List *
+GetDatabaseMetadataSyncCommands(Oid dbOid)
+{
+	char *databaseName = get_database_name(dbOid);
+	char *databaseDDLCommand = CreateDatabaseDDLCommand(dbOid);
+
+	List *ddlCommands = list_make1(databaseDDLCommand);
+
+	List *grantDDLCommands = GrantOnDatabaseDDLCommands(dbOid);
+	List *commentDDLCommands = GetCommentPropagationCommands(DatabaseRelationId, dbOid,
+															 databaseName,
+															 OBJECT_DATABASE);
+
+	ddlCommands = list_concat(ddlCommands, grantDDLCommands);
+	ddlCommands = list_concat(ddlCommands, commentDDLCommands);
+
+	return ddlCommands;
 }
 
 

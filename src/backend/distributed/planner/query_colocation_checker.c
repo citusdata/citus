@@ -433,7 +433,7 @@ CreateTargetEntryForColumn(Form_pg_attribute attributeTuple, Index rteIndex,
 				attributeTuple->atttypmod, attributeTuple->attcollation, 0);
 	TargetEntry *targetEntry =
 		makeTargetEntry((Expr *) targetColumn, resno,
-						strdup(attributeTuple->attname.data), false);
+						pstrdup(attributeTuple->attname.data), false);
 	return targetEntry;
 }
 
