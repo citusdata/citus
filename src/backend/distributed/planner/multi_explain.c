@@ -197,9 +197,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	if (!ExplainDistributedQueries)
 	{
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		appendStringInfo(es->str, "explain statements for distributed queries ");
-		appendStringInfo(es->str, "are not enabled\n");
+		ExplainPropertyBool("citus.explain_distributed_queries", false, es);
 		return;
 	}
 

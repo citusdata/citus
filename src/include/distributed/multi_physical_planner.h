@@ -238,8 +238,8 @@ typedef struct Task
 	TaskQuery taskQuery;
 
 	/*
-	 * A task can have multiple queries, in which case queryCount will be > 1. If
-	 * a task has more one query, then taskQuery->queryType == TASK_QUERY_TEXT_LIST.
+	 * A task can have multiple queries, in which case queryCount will be > 1, and
+	 * taskQuery->queryType == TASK_QUERY_TEXT_LIST.
 	 */
 	int queryCount;
 
@@ -290,7 +290,7 @@ typedef struct Task
 
 	/*
 	 * When we evaluate functions and parameters in the query string then
-	 * we should no longer send the list of parameters long with the
+	 * we should no longer send the list of parameters along with the
 	 * query.
 	 */
 	bool parametersInQueryStringResolved;
