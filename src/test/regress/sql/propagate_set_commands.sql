@@ -84,7 +84,7 @@ BEGIN;
 SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
 END;
 
--- SET is not propagated and plain SELECT does not use transaction blocks
+-- SET is propagated due plain SELECT uses transaction blocks in repeatable read level
 SELECT DISTINCT current_setting('transaction_isolation') FROM test;
 
 -- the CTE will trigger transaction blocks
