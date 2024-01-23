@@ -1711,6 +1711,9 @@ IsStatementSupportedIn2PC(Node *parsetree)
 	return false;
 }
 
+/*
+ * IsObjectTypeSupported returns true if the object type is supported in 2pc
+ */
 bool IsObjectTypeSupported(Node *parsetree, TwoPcStatementInfo twoPcSupportedStatement)
 {
 	NodeTag type = nodeTag(parsetree);
