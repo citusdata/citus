@@ -449,7 +449,7 @@ CreateTargetEntryForNullCol(Form_pg_attribute attributeTuple, int resno)
 											attributeTuple->attcollation);
 	char *resName = attributeTuple->attname.data;
 	TargetEntry *targetEntry =
-		makeTargetEntry(nullExpr, resno, strdup(resName), false);
+		makeTargetEntry(nullExpr, resno, pstrdup(resName), false);
 	return targetEntry;
 }
 
