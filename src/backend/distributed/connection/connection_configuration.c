@@ -123,6 +123,10 @@ AddConnParam(const char *keyword, const char *value)
 						errmsg("ConnParams arrays bound check failed")));
 	}
 
+	/*
+	 * Don't use pstrdup here to avoid being tied to a memory context, we free
+	 * these later using ResetConnParams
+	 */
 	ConnParams.keywords[ConnParams.size] = strdup(keyword);
 	ConnParams.values[ConnParams.size] = strdup(value);
 	ConnParams.size++;
