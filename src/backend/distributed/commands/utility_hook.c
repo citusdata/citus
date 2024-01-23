@@ -102,6 +102,8 @@
 typedef struct TwoPcStatementInfo
 {
 	int statementType;
+	ObjectType *supportedObjectTypes;
+	int supportedObjectTypesSize;
 	bool markAsDistributed;
 } TwoPcStatementInfo;
 
@@ -112,9 +114,12 @@ typedef struct TwoPcStatementInfo
  * We use this array to avoid hardcoding the list of supported statements in
  * multiple places.
  */
-const TwoPcStatementInfo twoPcSupportedStatements[] = {
-	{ T_GrantRoleStmt, false },
-	{ T_CreateRoleStmt, true }
+ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
+TwoPcStatementInfo twoPcSupportedStatements[] = {
+	{ T_GrantRoleStmt, NULL, 0, false },
+	{ T_CreateRoleStmt, NULL, 0, true },
+	{ T_GrantStmt, supportedObjectTypesForGrantStmt,
+	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType), true }
 };
 
 
@@ -1688,7 +1693,28 @@ IsStatementSupportedIn2PC(Node *parsetree)
 	{
 		if (type == twoPcSupportedStatements[i].statementType)
 		{
-			return true;
+			if (twoPcSupportedStatements[i].supportedObjectTypes == NULL)
+			{
+				return true;
+			}
+			else
+			{
+				if (type == T_GrantStmt)
+				{
+					GrantStmt *stmt = castNode(GrantStmt, parsetree);
+					/* check if stmt->objtype is in supportedObjectTypes */
+					for (int j = 0; j <
+						 twoPcSupportedStatements[i].supportedObjectTypesSize; j++)
+					{
+						if (stmt->objtype ==
+							twoPcSupportedStatements[i].supportedObjectTypes[j])
+						{
+							return true;
+						}
+					}
+					return false;
+				}
+			}
 		}
 	}
 
