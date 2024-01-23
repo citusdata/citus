@@ -68,8 +68,7 @@ CREATE USER nonsuperuser CREATEROLE;
 GRANT ALL ON SCHEMA citus_internal TO nonsuperuser;
 SET ROLE nonsuperuser;
 SELECT citus_internal.execute_command_on_remote_nodes_as_user($$SELECT 'dangerous query'$$, 'postgres');
-ERROR:  operation is not allowed
-HINT:  Run the command with a superuser.
+ERROR:  permission denied for function execute_command_on_remote_nodes_as_user
 \c other_db1
 SET ROLE nonsuperuser;
 CREATE USER other_db_user9;
