@@ -54,6 +54,7 @@ revoke admin option for grant_role2pc_user1,grant_role2pc_user2 from grant_role2
 revoke grant_role2pc_user1,grant_role2pc_user2 from grant_role2pc_user3;
 \c regression
 drop user grant_role2pc_user1,grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5;
+set citus.enable_create_database_propagation to on;
 drop database metadata_sync_2pc_db;
 drop schema metadata_sync_2pc_schema;
 reset citus.enable_create_database_propagation;
