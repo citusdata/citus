@@ -246,6 +246,7 @@ ClearResultsIfReady(MultiConnection *connection)
 void
 ReportConnectionError(MultiConnection *connection, int elevel)
 {
+	char *userName = connection->user;
 	char *nodeName = connection->hostname;
 	int nodePort = connection->port;
 	PGconn *pgConn = connection->pgConn;
@@ -264,15 +265,15 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 	if (messageDetail)
 	{
 		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("connection to the remote node %s:%d failed with the "
-								"following error: %s", nodeName, nodePort,
+						 errmsg("connection to the remote node %s@%s:%d failed with the "
+								"following error: %s", userName, nodeName, nodePort,
 								messageDetail)));
 	}
 	else
 	{
 		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("connection to the remote node %s:%d failed",
-								nodeName, nodePort)));
+						 errmsg("connection to the remote node %s@%s:%d failed",
+								userName, nodeName, nodePort)));
 	}
 }
 

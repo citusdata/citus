@@ -125,7 +125,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 
 	/* First we start listening. */
 	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
-													LOCAL_HOST_NAME, PostPortNumber);
+													LocalHostName, PostPortNumber);
 	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
 
 	/*

@@ -445,7 +445,7 @@ GetEffectiveConnKey(ConnectionHashKey *key)
 	if (!IsTransactionState())
 	{
 		/* we're in the task tracker, so should only see loopback */
-		Assert(strncmp(LOCAL_HOST_NAME, key->hostname, MAX_NODE_LENGTH) == 0 &&
+		Assert(strncmp(LocalHostName, key->hostname, MAX_NODE_LENGTH) == 0 &&
 			   PostPortNumber == key->port);
 		return key;
 	}
@@ -521,8 +521,22 @@ char *
 GetAuthinfo(char *hostname, int32 port, char *user)
 {
 	char *authinfo = NULL;
-	bool isLoopback = (strncmp(LOCAL_HOST_NAME, hostname, MAX_NODE_LENGTH) == 0 &&
+	bool isLoopback = (strncmp(LocalHostName, hostname, MAX_NODE_LENGTH) == 0 &&
 					   PostPortNumber == port);
+
+	/*
+	 * Citus will not be loaded when we run a global DDL command from a
+	 * Citus non-main database.
+	 */
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * We don't expect non-main databases to connect to a node other than
+		 * the local one.
+		 */
+		Assert(isLoopback);
+		return "";
+	}
 
 	if (IsTransactionState())
 	{

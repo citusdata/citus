@@ -312,7 +312,7 @@ SELECT * FROM ref;
 
 ROLLBACK TO SAVEPOINT start;
 SELECT * FROM ref;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 END;
 -- clean up
 RESET client_min_messages;
