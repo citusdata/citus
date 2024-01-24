@@ -67,7 +67,8 @@ PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
 
 /*
  * mark_object_distributed adds an object to pg_dist_object
- * in all of the nodes.
+ * in all of the nodes, for the connections to the other nodes this function
+ * uses the user passed.
  */
 Datum
 mark_object_distributed(PG_FUNCTION_ARGS)
@@ -81,6 +82,8 @@ mark_object_distributed(PG_FUNCTION_ARGS)
 	Oid objectId = PG_GETARG_OID(2);
 	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*objectAddress, classId, objectId);
+	text *connectionUserText = PG_GETARG_TEXT_P(3);
+	char *connectionUser = text_to_cstring(connectionUserText);
 
 	/*
 	 * This function is called when a query is run from a Citus non-main database.
@@ -88,7 +91,8 @@ mark_object_distributed(PG_FUNCTION_ARGS)
 	 * 2PC still works.
 	 */
 	bool useConnectionForLocalQuery = true;
-	MarkObjectDistributedWithName(objectAddress, objectName, useConnectionForLocalQuery);
+	MarkObjectDistributedWithName(objectAddress, objectName, useConnectionForLocalQuery,
+								  connectionUser);
 	PG_RETURN_VOID();
 }
 
@@ -193,7 +197,8 @@ void
 MarkObjectDistributed(const ObjectAddress *distAddress)
 {
 	bool useConnectionForLocalQuery = false;
-	MarkObjectDistributedWithName(distAddress, "", useConnectionForLocalQuery);
+	MarkObjectDistributedWithName(distAddress, "", useConnectionForLocalQuery,
+								  CurrentUserName());
 }
 
 
@@ -204,7 +209,7 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
  */
 void
 MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *objectName,
-							  bool useConnectionForLocalQuery)
+							  bool useConnectionForLocalQuery, char *connectionUser)
 {
 	if (!CitusHasBeenLoaded())
 	{
@@ -234,7 +239,8 @@ MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *objectName
 	{
 		char *workerPgDistObjectUpdateCommand =
 			CreatePgDistObjectEntryCommand(distAddress, objectName);
-		SendCommandToRemoteNodesWithMetadata(workerPgDistObjectUpdateCommand);
+		SendCommandToRemoteMetadataNodesParams(workerPgDistObjectUpdateCommand,
+											   connectionUser, 0, NULL, NULL);
 	}
 }
 

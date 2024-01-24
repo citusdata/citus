@@ -71,6 +71,7 @@ SELECT citus_internal.execute_command_on_remote_nodes_as_user($$SELECT 'dangerou
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
 \c other_db1
+SET ROLE nonsuperuser;
 CREATE USER other_db_user9;
 RESET ROLE;
 \c regression
