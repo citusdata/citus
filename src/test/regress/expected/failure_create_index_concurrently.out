@@ -27,8 +27,8 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -60,8 +60,8 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -87,7 +87,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid(
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -112,7 +112,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid(
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -138,8 +138,8 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP INDEX CONCURRENTLY").kill()');
 
 DROP INDEX CONCURRENTLY IF EXISTS idx_index_test;
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -165,7 +165,7 @@ SELECT create_distributed_table('index_test_2', 'a');
 INSERT INTO index_test_2 VALUES (1, 1), (1, 2);
 CREATE UNIQUE INDEX CONCURRENTLY index_test_2_a_idx ON index_test_2(a);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
 ERROR:  could not create unique index "index_test_2_a_idx_1880019"
 DETAIL:  Key (a)=(1) is duplicated.
 CONTEXT:  while executing command on localhost:xxxxx

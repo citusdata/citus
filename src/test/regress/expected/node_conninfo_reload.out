@@ -47,7 +47,7 @@ show citus.node_conninfo;
 
 -- Should give a connection error because of bad sslmode
 select count(*) from test where a = 0;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();
@@ -118,7 +118,7 @@ select count(*) from test where a = 0;
 COMMIT;
 -- Should fail now with connection error, when transaction is finished
 select count(*) from test where a = 0;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();
@@ -181,7 +181,7 @@ COMMIT;
 -- Should fail now, when transaction is finished
 SET client_min_messages TO ERROR;
 select count(*) from test where a = 0;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 RESET client_min_messages;
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
@@ -235,11 +235,11 @@ show citus.node_conninfo;
 -- Should fail since a different shard is accessed and thus a new connection
 -- will to be created.
 select count(*) from test where a = 0;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 COMMIT;
 -- Should still fail now, when transaction is finished
 select count(*) from test where a = 0;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();
@@ -301,7 +301,7 @@ COMMIT;
 -- Should fail now, when transaction is finished
 SET client_min_messages TO ERROR;
 select count(*) from test;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 RESET client_min_messages;
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
@@ -359,7 +359,7 @@ ROLLBACK;
 -- Should fail now, when transaction is finished
 SET client_min_messages TO ERROR;
 select count(*) from test;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 RESET client_min_messages;
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
@@ -497,7 +497,7 @@ ALTER TABLE test ADD COLUMN c INT;
 COMMIT;
 -- Should fail now, when transaction is finished
 ALTER TABLE test ADD COLUMN d INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();
