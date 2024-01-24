@@ -727,6 +727,11 @@ static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time end
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
+static ExecutionParams * CreateDefaultExecutionParams(RowModifyLevel modLevel,
+													  List *taskList,
+													  TupleDestination *tupleDest,
+													  bool expectResults,
+													  ParamListInfo paramListInfo);
 
 
 /*
@@ -1013,14 +1018,14 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
- * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
- * bind params from executor state, and with defaults for some of the arguments.
+ * CreateDefaultExecutionParams returns execution params based on given (possibly null)
+ * bind params (presumably from executor state) with defaults for some of the arguments.
  */
-uint64
-ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
-									  TupleDestination *tupleDest,
-									  bool expectResults,
-									  ParamListInfo paramListInfo)
+static ExecutionParams *
+CreateDefaultExecutionParams(RowModifyLevel modLevel, List *taskList,
+							 TupleDestination *tupleDest,
+							 bool expectResults,
+							 ParamListInfo paramListInfo)
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool localExecutionSupported = true;
@@ -1034,6 +1039,24 @@ ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
 	executionParams->tupleDestination = tupleDest;
 	executionParams->paramListInfo = paramListInfo;
 
+	return executionParams;
+}
+
+
+/*
+ * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
+ * bind params from executor state, and with defaults for some of the arguments.
+ */
+uint64
+ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
+									  TupleDestination *tupleDest,
+									  bool expectResults,
+									  ParamListInfo paramListInfo)
+{
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
@@ -1047,17 +1070,11 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 							 TupleDestination *tupleDest,
 							 bool expectResults)
 {
-	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	bool localExecutionSupported = true;
-	ExecutionParams *executionParams = CreateBasicExecutionParams(
-		modLevel, taskList, targetPoolSize, localExecutionSupported
-		);
-
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, false);
-	executionParams->expectResults = expectResults;
-	executionParams->tupleDestination = tupleDest;
-
+	ParamListInfo paramListInfo = NULL;
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
