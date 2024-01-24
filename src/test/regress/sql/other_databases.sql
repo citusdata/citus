@@ -61,10 +61,6 @@ CREATE USER other_db_user9;
 
 RESET ROLE;
 RESET citus.local_hostname;
-
-SET ROLE nonsuperuser;
-CREATE USER other_db_user9;
-
 RESET ROLE;
 \c regression
 SELECT usename FROM pg_user WHERE usename LIKE 'other\_db\_user%' ORDER BY 1;

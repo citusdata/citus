@@ -77,11 +77,8 @@ SET ROLE nonsuperuser;
 -- Otherwise, we would get the following error:
 --   ERROR:  cache lookup failed for pg_dist_node, called too early?
 CREATE USER other_db_user9;
-ERROR:  cache lookup failed for pg_dist_node, called too early?
 RESET ROLE;
 RESET citus.local_hostname;
-SET ROLE nonsuperuser;
-CREATE USER other_db_user9;
 RESET ROLE;
 \c regression
 SELECT usename FROM pg_user WHERE usename LIKE 'other\_db\_user%' ORDER BY 1;
