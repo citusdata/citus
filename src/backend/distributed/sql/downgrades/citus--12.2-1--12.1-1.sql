@@ -15,7 +15,7 @@ DROP FUNCTION citus_internal.execute_command_on_remote_nodes_as_user(
 );
 
 DROP FUNCTION citus_internal.mark_object_distributed(
-    classId Oid, objectName text, objectId Oid
+    classId Oid, objectName text, objectId Oid, connectionUser text
 );
 
 DROP FUNCTION citus_internal.commit_management_command_2pc();

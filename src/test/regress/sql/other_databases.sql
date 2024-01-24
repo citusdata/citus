@@ -51,6 +51,7 @@ SET ROLE nonsuperuser;
 SELECT citus_internal.execute_command_on_remote_nodes_as_user($$SELECT 'dangerous query'$$, 'postgres');
 
 \c other_db1
+SET ROLE nonsuperuser;
 CREATE USER other_db_user9;
 
 RESET ROLE;

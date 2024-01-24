@@ -170,14 +170,10 @@ WorkerDropDistributedTable(Oid relationId)
 	 */
 	if (!IsAnyObjectAddressOwnedByExtension(list_make1(distributedTableObject), NULL))
 	{
-		char *relName = get_rel_name(relationId);
-		Oid schemaId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(schemaId);
-
 		StringInfo dropCommand = makeStringInfo();
 		appendStringInfo(dropCommand, "DROP%sTABLE %s CASCADE",
 						 IsForeignTable(relationId) ? " FOREIGN " : " ",
-						 quote_qualified_identifier(schemaName, relName));
+						 generate_qualified_relation_name(relationId));
 
 		Node *dropCommandNode = ParseTreeNode(dropCommand->data);
 
