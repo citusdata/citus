@@ -906,8 +906,8 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		grantorRole->location = -1;
 		grantorRole->rolename = GetUserNameFromId(membership->grantor, true);
 		grantRoleStmt->grantor = grantorRole;
-		//log grantor
-		//elog(ERROR, "grantor: %s", grantorRole->rolename);
+		/*log grantor */
+		/*elog(ERROR, "grantor: %s", grantorRole->rolename); */
 
 
 #if PG_VERSION_NUM >= PG_VERSION_16
