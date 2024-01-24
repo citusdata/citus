@@ -445,7 +445,7 @@ GetEffectiveConnKey(ConnectionHashKey *key)
 	if (!IsTransactionState())
 	{
 		/* we're in the task tracker, so should only see loopback */
-		Assert(strncmp(LOCAL_HOST_NAME, key->hostname, MAX_NODE_LENGTH) == 0 &&
+		Assert(strncmp(LocalHostName, key->hostname, MAX_NODE_LENGTH) == 0 &&
 			   PostPortNumber == key->port);
 		return key;
 	}
