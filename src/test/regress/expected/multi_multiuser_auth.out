@@ -82,7 +82,7 @@ GRANT ALL ON TABLE lineitem, orders, lineitem, customer, nation, part, supplier 
 \c :alice_conninfo
 -- router query (should break because of bad password)
 INSERT INTO customer VALUES (12345, 'name', NULL, 5, 'phone', 123.45, 'segment', 'comment');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  password authentication failed for user "alice"
+ERROR:  connection to the remote node alice@localhost:xxxxx failed with the following error: FATAL:  password authentication failed for user "alice"
 -- fix alice's worker1 password ...
 UPDATE pg_dist_authinfo
 SET authinfo = ('password=' || :'alice_worker_1_pw')

@@ -1207,15 +1207,15 @@ NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
 SET search_path TO multi_modifying_xacts;
 -- should fail since the worker doesn't have test_user anymore
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+ERROR:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 -- the same as the above, but wrapped within a transaction
 BEGIN;
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+ERROR:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 COMMIT;
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+ERROR:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 COMMIT;
 -- show that no data go through the table and shard states are good
 SET client_min_messages to 'ERROR';
@@ -1241,7 +1241,7 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- any failure rollbacks the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+ERROR:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 ABORT;
 -- none of placements are invalid after abort
 SELECT shardid, shardstate, nodename, nodeport
@@ -1262,8 +1262,8 @@ ORDER BY shardid, nodeport;
 
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
  count
 ---------------------------------------------------------------------
      0
@@ -1289,7 +1289,7 @@ ORDER BY shardid, nodeport;
 -- all failures roll back the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+ERROR:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 COMMIT;
 -- expect none of the placements to be market invalid after commit
 SELECT shardid, shardstate, nodename, nodeport
@@ -1310,8 +1310,8 @@ ORDER BY shardid, nodeport;
 
 -- verify no data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
  count
 ---------------------------------------------------------------------
      0
@@ -1326,7 +1326,7 @@ NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
 SET search_path TO multi_modifying_xacts;
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+ERROR:  connection to the remote node test_user@localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 -- connect back to the master with the proper user to continue the tests
 \c - :default_user - :master_port
 SET search_path TO multi_modifying_xacts;
