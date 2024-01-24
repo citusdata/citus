@@ -21,3 +21,4 @@ DROP FUNCTION citus_internal.mark_object_distributed(
 DROP FUNCTION citus_internal.commit_management_command_2pc();
 
 ALTER TABLE pg_catalog.pg_dist_transaction DROP COLUMN outer_xid;
+REVOKE USAGE ON SCHEMA citus_internal FROM PUBLIC;
