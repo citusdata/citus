@@ -155,7 +155,7 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 	StringInfo processStringInfo = makeStringInfo();
 	StringInfo workerProcessStringInfo = makeStringInfo();
-	MultiConnection *localConnection = GetNodeConnection(0, LOCAL_HOST_NAME,
+	MultiConnection *localConnection = GetNodeConnection(0, LocalHostName,
 														 PostPortNumber);
 
 	if (!singleConnection)

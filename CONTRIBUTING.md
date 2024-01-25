@@ -175,7 +175,7 @@ that are missing in earlier minor versions.
 
 ### Following our coding conventions
 
-CircleCI will automatically reject any PRs which do not follow our coding
+CI pipeline will automatically reject any PRs which do not follow our coding
 conventions. The easiest way to ensure your PR adheres to those conventions is
 to use the [citus_indent](https://github.com/citusdata/tools/tree/develop/uncrustify)
 tool. This tool uses `uncrustify` under the hood.

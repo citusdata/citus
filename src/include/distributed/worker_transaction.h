@@ -68,6 +68,10 @@ extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet,
 									   const char *nodeUser, const char *command);
 extern void SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);
+extern void SendCommandToRemoteMetadataNodesParams(const char *command,
+												   const char *user, int parameterCount,
+												   const Oid *parameterTypes,
+												   const char *const *parameterValues);
 extern bool SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName,
 															  int32 nodePort,
 															  const char *nodeUser,
