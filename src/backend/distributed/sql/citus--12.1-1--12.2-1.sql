@@ -25,3 +25,5 @@ REVOKE ALL ON FUNCTION citus_internal.refresh_isolation_tester_prepared_statemen
 REVOKE ALL ON FUNCTION citus_internal.replace_isolation_tester_func FROM PUBLIC;
 REVOKE ALL ON FUNCTION citus_internal.restore_isolation_tester_func FROM PUBLIC;
 REVOKE ALL ON FUNCTION citus_internal.start_management_transaction FROM PUBLIC;
+
+#include "udfs/citus_internal_add_colocation_metadata/12.2-1.sql"
