@@ -118,6 +118,8 @@ ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 TwoPcStatementInfo twoPcSupportedStatements[] = {
 	{ T_GrantRoleStmt, NULL, 0, false },
 	{ T_CreateRoleStmt, NULL, 0, true },
+	{ T_DropRoleStmt, NULL, 0, true },
+	{ T_AlterRoleStmt, NULL, 0, false },
 	{ T_GrantStmt, supportedObjectTypesForGrantStmt,
 	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType), true }
 };
