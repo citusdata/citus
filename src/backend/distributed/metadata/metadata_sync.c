@@ -4097,7 +4097,7 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 	StringInfo insertColocationCommand = makeStringInfo();
 
 	appendStringInfo(insertColocationCommand,
-					 "SELECT pg_catalog.citus_internal_add_colocation_metadata("
+					 "SELECT citus_internal.add_colocation_metadata("
 					 "%d, %d, %d, %s, %s)",
 					 colocationId,
 					 shardCount,
@@ -4906,7 +4906,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		}
 
 		appendStringInfo(colocationGroupCreateCommand,
-						 ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
+						 ") SELECT citus_internal.add_colocation_metadata("
 						 "colocationid, shardcount, replicationfactor, "
 						 "distributioncolumntype, coalesce(c.oid, 0)) "
 						 "FROM colocation_group_data d LEFT JOIN pg_collation c "
