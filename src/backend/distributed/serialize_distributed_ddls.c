@@ -170,7 +170,7 @@ SerializeDistributedDDLsOnObjectClassInternal(ObjectClass objectClass,
 
 /*
  * AcquireCitusAdvisoryObjectClassLockCommand returns a command to call
- * pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock().
+ * citus_internal.acquire_citus_advisory_object_class_lock().
  */
 static char *
 AcquireCitusAdvisoryObjectClassLockCommand(ObjectClass objectClass,
@@ -185,7 +185,7 @@ AcquireCitusAdvisoryObjectClassLockCommand(ObjectClass objectClass,
 
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(%d, %s)",
+					 "SELECT citus_internal.acquire_citus_advisory_object_class_lock(%d, %s)",
 					 objectClassInt, quotedObjectName);
 
 	return command->data;
