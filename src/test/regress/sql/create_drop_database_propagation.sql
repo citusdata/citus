@@ -660,27 +660,27 @@ REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
 DROP DATABASE test_db;
 DROP ROLE propagated_role, non_propagated_role;
 
--- test pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock with null input
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(null, 'regression');
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), null);
+-- test citus_internal.acquire_citus_advisory_object_class_lock with null input
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(null, 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), null);
 
 -- OCLASS_DATABASE
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), NULL);
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'regression');
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), '');
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'no_such_db');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), '');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'no_such_db');
 
 -- invalid OCLASS
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(-1, NULL);
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(-1, 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(-1, NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(-1, 'regression');
 
 -- invalid OCLASS
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(100, NULL);
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(100, 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(100, NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(100, 'regression');
 
 -- another valid OCLASS, but not implemented yet
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(10, NULL);
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(10, 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(10, NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(10, 'regression');
 
 SELECT 1 FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.enable_create_database_propagation TO ON');
 SELECT 1 FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
