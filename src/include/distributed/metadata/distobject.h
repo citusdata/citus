@@ -24,7 +24,8 @@ extern bool IsAnyObjectDistributed(const List *addresses);
 extern bool ClusterHasDistributedFunctionWithDistArgument(void);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *name,
-										  bool useConnectionForLocalQuery);
+										  bool useConnectionForLocalQuery,
+										  char *connectionUser);
 extern void MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);

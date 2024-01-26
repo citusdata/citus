@@ -110,6 +110,8 @@ test: run_command_on_all_nodes
 test: background_task_queue_monitor
 test: other_databases
 test: grant_role_2pc
+test: citus_internal_access
+
 
 # Causal clock test
 test: clock

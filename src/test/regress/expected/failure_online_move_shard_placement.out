@@ -407,7 +407,7 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -442,7 +442,7 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- failure on parallel create index
 ALTER SYSTEM RESET citus.max_adaptive_executor_pool_size;
 SELECT pg_reload_conf();
@@ -458,7 +458,7 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy

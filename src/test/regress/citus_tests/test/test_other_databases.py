@@ -22,7 +22,7 @@ def test_main_commited_outer_not_yet(cluster):
             "SELECT citus_internal.execute_command_on_remote_nodes_as_user('CREATE USER u1;', 'postgres')"
         )
         cur2.execute(
-            "SELECT citus_internal.mark_object_distributed(1260, 'u1', 123123)"
+            "SELECT citus_internal.mark_object_distributed(1260, 'u1', 123123, 'postgres')"
         )
         cur2.execute("COMMIT")
 
@@ -133,7 +133,7 @@ def test_main_commited_outer_aborted(cluster):
             "SELECT citus_internal.execute_command_on_remote_nodes_as_user('CREATE USER u2;', 'postgres')"
         )
         cur2.execute(
-            "SELECT citus_internal.mark_object_distributed(1260, 'u2', 321321)"
+            "SELECT citus_internal.mark_object_distributed(1260, 'u2', 321321, 'postgres')"
         )
         cur2.execute("COMMIT")
 

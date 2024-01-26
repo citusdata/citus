@@ -776,7 +776,7 @@ PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree)
 		/*create extension citus version xxx*/
 		if (newVersionValue)
 		{
-			char *newVersion = strdup(defGetString(newVersionValue));
+			char *newVersion = pstrdup(defGetString(newVersionValue));
 			versionNumber = GetExtensionVersionNumber(newVersion);
 		}
 
@@ -796,7 +796,7 @@ PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree)
 		Oid citusOid = get_extension_oid("citus", true);
 		if (citusOid != InvalidOid)
 		{
-			char *curCitusVersion = strdup(get_extension_version(citusOid));
+			char *curCitusVersion = pstrdup(get_extension_version(citusOid));
 			int curCitusVersionNum = GetExtensionVersionNumber(curCitusVersion);
 			if (curCitusVersionNum < 1110)
 			{
@@ -891,7 +891,7 @@ PreprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
 	if (newVersionValue)
 	{
 		char *newVersion = defGetString(newVersionValue);
-		double newVersionNumber = GetExtensionVersionNumber(strdup(newVersion));
+		double newVersionNumber = GetExtensionVersionNumber(pstrdup(newVersion));
 
 		/*alter extension citus update to version >= 11.1-1, and no citus_columnar installed */
 		if (newVersionNumber >= 1110 && citusColumnarOid == InvalidOid)
@@ -935,7 +935,7 @@ PostprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
 	if (newVersionValue)
 	{
 		char *newVersion = defGetString(newVersionValue);
-		double newVersionNumber = GetExtensionVersionNumber(strdup(newVersion));
+		double newVersionNumber = GetExtensionVersionNumber(pstrdup(newVersion));
 		if (newVersionNumber >= 1110 && citusColumnarOid != InvalidOid)
 		{
 			/*upgrade citus, after "ALTER EXTENSION citus update to xxx" updates citus_columnar Y to version Z. */
