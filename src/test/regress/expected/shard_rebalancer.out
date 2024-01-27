@@ -2416,6 +2416,13 @@ SELECT create_reference_table('r1');
 
 (1 row)
 
+CREATE TABLE d1 (a int PRIMARY KEY, b int);
+SELECT create_distributed_table('d1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 ALTER SEQUENCE pg_dist_groupid_seq RESTART WITH 15;
 SELECT 1 from master_add_node('localhost', :worker_2_port);
  ?column?
@@ -2434,6 +2441,35 @@ WHERE logicalrelid = 'r1'::regclass;
      1
 (1 row)
 
+-- #7426 We can't move shards to the fresh node before we copy reference tables there.
+-- rebalance_table_shards() will do the copy, but the low-level
+-- citus_move_shard_placement() should raise an error
+SELECT citus_move_shard_placement(pg_dist_shard.shardid, nodename, nodeport, 'localhost', :worker_2_port)
+    FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+    WHERE logicalrelid = 'd1'::regclass AND nodename = 'localhost' AND nodeport = :worker_1_port LIMIT 1;
+ERROR:  there are missing reference tables on some nodes
+SELECT replicate_reference_tables();
+ replicate_reference_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+-- After replication, the move should succeed.
+SELECT citus_move_shard_placement(pg_dist_shard.shardid, nodename, nodeport, 'localhost', :worker_2_port)
+    FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+    WHERE logicalrelid = 'd1'::regclass AND nodename = 'localhost' AND nodeport = :worker_1_port LIMIT 1;
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+-- And a JOIN with the reference table should work.
+SELECT 1 as dummy FROM d1 JOIN r1 USING (a);
+ dummy
+---------------------------------------------------------------------
+(0 rows)
+
+DROP TABLE d1;
 -- rebalance with _only_ a reference table, this should trigger the copy
 SELECT rebalance_table_shards();
  rebalance_table_shards
