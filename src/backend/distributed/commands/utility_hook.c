@@ -1630,7 +1630,7 @@ DropSchemaOrDBInProgress(void)
 static void
 RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 {
-	if (!IsStatementSupportedIn2PC(parsetree))
+	if (!IsStatementSupportedInNonMainDb(parsetree))
 	{
 		return;
 	}
@@ -1656,8 +1656,8 @@ RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void
 RunPostprocessMainDBCommand(Node *parsetree)
 {
-	if (!IsStatementSupportedIn2PC(parsetree) ||
-		!DoesStatementRequireMarkDistributedFor2PC(parsetree))
+	if (!IsStatementSupportedInNonMainDb(parsetree) ||
+		!StatementRequiresMarkDistributedFromNonMainDb(parsetree))
 	{
 		return;
 	}
@@ -1683,14 +1683,14 @@ RunPostprocessMainDBCommand(Node *parsetree)
  * non-main database.
  */
 static bool
-IsStatementSupportedIn2PC(Node *parsetree)
+IsStatementSupportedInNonMainDb(Node *parsetree)
 {
 	NodeTag type = nodeTag(parsetree);
 
-	for (int i = 0; i < sizeof(twoPcSupportedStatements) /
-		 sizeof(twoPcSupportedStatements[0]); i++)
+	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
+		 sizeof(NonMainDbSupportedStatements[0]); i++)
 	{
-		if (type == twoPcSupportedStatements[i].statementType)
+		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
 			return true;
 		}
@@ -1705,16 +1705,16 @@ IsStatementSupportedIn2PC(Node *parsetree)
  * as distributed when executed from a non-main database.
  */
 static bool
-DoesStatementRequireMarkDistributedFor2PC(Node *parsetree)
+StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 {
 	NodeTag type = nodeTag(parsetree);
 
-	for (int i = 0; i < sizeof(twoPcSupportedStatements) /
-		 sizeof(twoPcSupportedStatements[0]); i++)
+	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
+		 sizeof(NonMainDbSupportedStatements[0]); i++)
 	{
-		if (type == twoPcSupportedStatements[i].statementType)
+		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return twoPcSupportedStatements[i].markAsDistributed;
+			return NonMainDbSupportedStatements[i].explicitlyMarkAsDistributed;
 		}
 	}
 
