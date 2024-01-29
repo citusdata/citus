@@ -149,7 +149,7 @@ static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
 static void RunPostprocessMainDBCommand(Node *parsetree);
-static bool IsStatementSupportedIn2PC(Node *parsetree);
+static bool IsStatementSupportedInNonMainDb(Node *parsetree);
 static bool DoesStatementRequireMarkDistributedFor2PC(Node *parsetree);
 
 /*
