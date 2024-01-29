@@ -999,7 +999,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 	appendStringInfo(insertDistributedObjectsCommand, ") ");
 
 	appendStringInfo(insertDistributedObjectsCommand,
-					 "SELECT citus_internal_add_object_metadata("
+					 "SELECT citus_internal.add_object_metadata("
 					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) "
 					 "FROM distributed_object_data;");
 

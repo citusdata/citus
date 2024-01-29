@@ -376,7 +376,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('non_existing_type', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
 -- check the sanity of distributionArgumentIndex and colocationId
@@ -386,7 +386,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -100, 0, false))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -395,7 +395,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -1, -1, false))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
 -- check with non-existing object
@@ -405,10 +405,10 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('role', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
--- since citus_internal_add_object_metadata is strict function returns NULL
+-- since citus_internal.add_object_metadata is strict function returns NULL
 -- if any parameter is NULL
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
@@ -416,12 +416,12 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], 0, NULL::int, false))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
 \c - postgres - :worker_1_port
 
--- Show that citus_internal_add_object_metadata only works for object types
+-- Show that citus_internal.add_object_metadata only works for object types
 -- which is known how to distribute
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
@@ -437,10 +437,10 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET ROLE metadata_sync_helper_role;
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('operator', ARRAY['===']::text[], ARRAY['int','int']::text[], -1, 0, false))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
--- Show that citus_internal_add_object_metadata checks the priviliges
+-- Show that citus_internal.add_object_metadata checks the priviliges
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
     SET application_name to 'citus_internal gpid=10000000001';
@@ -454,7 +454,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     SET ROLE metadata_sync_helper_role;
     WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
         AS (VALUES ('function', ARRAY['distribution_test_function']::text[], ARRAY['integer']::text[], -1, 0, false))
-    SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+    SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -468,7 +468,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     SET ROLE metadata_sync_helper_role;
     WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
         AS (VALUES ('type', ARRAY['distributed_test_type']::text[], ARRAY[]::text[], -1, 0, false))
-    SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+    SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
 -- we do not allow wrong partmethod
