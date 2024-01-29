@@ -1699,7 +1699,7 @@ IsStatementSupportedIn2PC(Node *parsetree)
 
 /*
  * DoesStatementRequireMarkDistributedFor2PC returns true if the statement should be marked
- * as distributed in 2pc
+ * as distributed when executed from a non-main database.
  */
 static bool
 DoesStatementRequireMarkDistributedFor2PC(Node *parsetree)
