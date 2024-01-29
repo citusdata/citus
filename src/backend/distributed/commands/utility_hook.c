@@ -108,6 +108,8 @@ typedef struct NonMainDbDistributedStatementInfo
 {
 	int statementType;
 	bool explicitlyMarkAsDistributed;
+	ObjectType *supportedObjectTypes;
+	int supportedObjectTypesSize;
 } NonMainDbDistributedStatementInfo;
 
 typedef struct ObjectInfo
@@ -122,10 +124,10 @@ typedef struct ObjectInfo
  */
 ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, false },
-	{ T_CreateRoleStmt, true }
-	{ T_GrantStmt, supportedObjectTypesForGrantStmt,
-	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType), true }
+	{ T_GrantRoleStmt, false, NULL, 0 },
+	{ T_CreateRoleStmt, true, NULL, 0 },
+	{ T_GrantStmt, false, supportedObjectTypesForGrantStmt,
+	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType) }
 };
 
 
@@ -158,6 +160,8 @@ static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
 static void RunPostprocessMainDBCommand(Node *parsetree);
+static bool IsObjectTypeSupported(Node *parsetree, NonMainDbDistributedStatementInfo
+								  nonMainDbDistributedStatementInfo);
 static bool IsStatementSupportedInNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 static ObjectInfo GetObjectInfo(Node *parsetree);
@@ -1731,7 +1735,7 @@ IsStatementSupportedInNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			if (twoPcSupportedStatements[i].supportedObjectTypes == NULL)
+			if (NonMainDbSupportedStatements[i].supportedObjectTypes == NULL)
 			{
 				return true;
 			}
@@ -1739,7 +1743,8 @@ IsStatementSupportedInNonMainDb(Node *parsetree)
 			{
 				if (type == T_GrantStmt)
 				{
-					return IsObjectTypeSupported(parsetree, twoPcSupportedStatements[i]);
+					return IsObjectTypeSupported(parsetree,
+												 NonMainDbSupportedStatements[i]);
 				}
 			}
 		}
@@ -1753,7 +1758,8 @@ IsStatementSupportedInNonMainDb(Node *parsetree)
  * IsObjectTypeSupported returns true if the object type is supported in 2pc
  */
 bool
-IsObjectTypeSupported(Node *parsetree, TwoPcStatementInfo twoPcSupportedStatement)
+IsObjectTypeSupported(Node *parsetree, NonMainDbDistributedStatementInfo
+					  nonMainDbDistributedStatementInfo)
 {
 	NodeTag type = nodeTag(parsetree);
 	if (type == T_GrantStmt)
@@ -1761,9 +1767,11 @@ IsObjectTypeSupported(Node *parsetree, TwoPcStatementInfo twoPcSupportedStatemen
 		GrantStmt *stmt = castNode(GrantStmt, parsetree);
 
 		/* check if stmt->objtype is in supportedObjectTypes */
-		for (int j = 0; j < twoPcSupportedStatement.supportedObjectTypesSize; j++)
+		for (int j = 0; j < nonMainDbDistributedStatementInfo.supportedObjectTypesSize;
+			 j++)
 		{
-			if (stmt->objtype == twoPcSupportedStatement.supportedObjectTypes[j])
+			if (stmt->objtype ==
+				nonMainDbDistributedStatementInfo.supportedObjectTypes[j])
 			{
 				return true;
 			}
