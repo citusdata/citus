@@ -96,14 +96,19 @@
 	"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
 
 /*
- * TwoPcStatementInfo is used to determine whether a statement is supported in 2PC
- * and whether it should be marked as distributed in 2PC.
+ * NonMainDbDistributedStatementInfo is used to determine whether a statement is
+ * supported from non-main databases and whether it should be marked as
+ * distributed explicitly (*).
+ *
+ * We always have to mark such the objects created "as distributed" but while for
+ * some object types we can delegate this to main database, for some others we have
+ * to explicitly send a command to all nodes in this code-path to achieve this.
  */
-typedef struct TwoPcStatementInfo
+typedef struct NonMainDbDistributedStatementInfo
 {
 	int statementType;
-	bool markAsDistributed;
-} TwoPcStatementInfo;
+	bool explicitlyMarkAsDistributed;
+} NonMainDbDistributedStatementInfo;
 
 /*
  * twoPcSupportedStatements is a list of statements that are supported in 2PC.
