@@ -111,13 +111,10 @@ typedef struct NonMainDbDistributedStatementInfo
 } NonMainDbDistributedStatementInfo;
 
 /*
- * twoPcSupportedStatements is a list of statements that are supported in 2PC.
- * The list is used to determine whether a statement is supported in 2PC and
- * whether it should be marked as distributed in 2PC.
- * We use this array to avoid hardcoding the list of supported statements in
- * multiple places.
+ * NonMainDbSupportedStatements is an array of statements that are supported
+ * from non-main databases.
  */
-const TwoPcStatementInfo twoPcSupportedStatements[] = {
+static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
 	{ T_GrantRoleStmt, false },
 	{ T_CreateRoleStmt, true }
 };
