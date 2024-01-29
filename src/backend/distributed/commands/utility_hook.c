@@ -110,6 +110,12 @@ typedef struct NonMainDbDistributedStatementInfo
 	bool explicitlyMarkAsDistributed;
 } NonMainDbDistributedStatementInfo;
 
+typedef struct ObjectInfo
+{
+    char *name;
+    Oid id;
+} ObjectInfo;
+
 /*
  * NonMainDbSupportedStatements is an array of statements that are supported
  * from non-main databases.
@@ -151,6 +157,8 @@ static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedInNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
+static ObjectInfo GetObjectInfo(Node *parsetree);
+static void MarkObjectDistributedInNonMainDb( Node *parsetree, ObjectInfo objectInfo);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1662,20 +1670,44 @@ RunPostprocessMainDBCommand(Node *parsetree)
 		return;
 	}
 
-	if (IsA(parsetree, CreateRoleStmt))
-	{
-		StringInfo mainDBQuery = makeStringInfo();
-		CreateRoleStmt *createRoleStmt = castNode(CreateRoleStmt, parsetree);
-		Oid roleOid = get_role_oid(createRoleStmt->role, false);
-		appendStringInfo(mainDBQuery,
-						 MARK_OBJECT_DISTRIBUTED,
-						 AuthIdRelationId,
-						 quote_literal_cstr(createRoleStmt->role),
-						 roleOid,
-						 quote_literal_cstr(CurrentUserName()));
-		RunCitusMainDBQuery(mainDBQuery->data);
-	}
+	ObjectInfo objectInfo = GetObjectInfo(parsetree);
+	MarkObjectDistributedInNonMainDb(parsetree, objectInfo);
 }
+
+/*
+ * GetObjectInfo returns the name and oid of the object in the given parsetree.
+*/
+static ObjectInfo GetObjectInfo(Node *parsetree)
+{
+    ObjectInfo info;
+
+    if (IsA(parsetree, CreateRoleStmt))
+    {
+        CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
+        info.name = stmt->role;
+        info.id = get_role_oid(stmt->role, false);
+    }
+    // Add else if branches for other statement types
+
+    return info;
+}
+
+/*
+ * MarkObjectDistributedInNonMainDb marks the given object as distributed on the
+ * non-main database.
+*/
+static void MarkObjectDistributedInNonMainDb( Node *parsetree, ObjectInfo objectInfo)
+{
+    StringInfo mainDBQuery = makeStringInfo();
+    appendStringInfo(mainDBQuery,
+                     MARK_OBJECT_DISTRIBUTED,
+                     AuthIdRelationId,
+                     quote_literal_cstr(objectInfo.name),
+                     objectInfo.id,
+                     quote_literal_cstr(CurrentUserName()));
+    RunCitusMainDBQuery(mainDBQuery->data);
+}
+
 
 
 /*
