@@ -162,8 +162,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
- SELECT citus_internal_add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
- SELECT citus_internal_add_partition_metadata ('public.single_shard_tbl'::regclass, 'n', NULL, 3, 's')
+ SELECT citus_internal.add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
+ SELECT citus_internal.add_partition_metadata ('public.single_shard_tbl'::regclass, 'n', NULL, 3, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency('public.mx_test_table');
  SELECT pg_catalog.worker_drop_sequence_dependency('public.single_shard_tbl');
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
@@ -230,7 +230,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
- SELECT citus_internal_add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
+ SELECT citus_internal.add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency('public.mx_test_table');
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('public.mx_test_table_col_3_seq'::regclass,'public.mx_test_table'::regclass,'col_3')
@@ -291,7 +291,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
+ SELECT citus_internal.add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency('mx_testing_schema.mx_test_table');
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
@@ -359,7 +359,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
+ SELECT citus_internal.add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency('mx_testing_schema.mx_test_table');
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
@@ -420,7 +420,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
+ SELECT citus_internal.add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency('mx_testing_schema.mx_test_table');
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
@@ -1996,12 +1996,12 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
- SELECT citus_internal_add_partition_metadata ('mx_test_schema_1.mx_table_1'::regclass, 'h', 'col1', 7, 's')
- SELECT citus_internal_add_partition_metadata ('mx_test_schema_2.mx_table_2'::regclass, 'h', 'col1', 7, 's')
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
- SELECT citus_internal_add_partition_metadata ('public.dist_table_1'::regclass, 'h', 'a', 10010, 's')
- SELECT citus_internal_add_partition_metadata ('public.mx_ref'::regclass, 'n', NULL, 10009, 't')
- SELECT citus_internal_add_partition_metadata ('public.test_table'::regclass, 'h', 'id', 10010, 's')
+ SELECT citus_internal.add_partition_metadata ('mx_test_schema_1.mx_table_1'::regclass, 'h', 'col1', 7, 's')
+ SELECT citus_internal.add_partition_metadata ('mx_test_schema_2.mx_table_2'::regclass, 'h', 'col1', 7, 's')
+ SELECT citus_internal.add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
+ SELECT citus_internal.add_partition_metadata ('public.dist_table_1'::regclass, 'h', 'a', 10010, 's')
+ SELECT citus_internal.add_partition_metadata ('public.mx_ref'::regclass, 'n', NULL, 10009, 't')
+ SELECT citus_internal.add_partition_metadata ('public.test_table'::regclass, 'h', 'id', 10010, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency('mx_test_schema_1.mx_table_1');
  SELECT pg_catalog.worker_drop_sequence_dependency('mx_test_schema_2.mx_table_2');
  SELECT pg_catalog.worker_drop_sequence_dependency('mx_testing_schema.mx_test_table');

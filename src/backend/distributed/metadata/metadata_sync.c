@@ -1134,7 +1134,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	}
 
 	appendStringInfo(insertDistributionCommand,
-					 "SELECT citus_internal_add_partition_metadata "
+					 "SELECT citus_internal.add_partition_metadata "
 					 "(%s::regclass, '%c', %s, %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,

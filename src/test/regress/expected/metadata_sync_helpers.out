@@ -12,7 +12,7 @@ RESET client_min_messages;
 SET search_path TO metadata_sync_helpers;
 CREATE TABLE test(col_1 int);
 -- not in a distributed transaction
-SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
+SELECT citus_internal.add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 SELECT citus_internal_update_relation_colocation ('test'::regclass, 1);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
@@ -24,7 +24,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- in a distributed transaction and the application name is Citus, allowed.
@@ -36,8 +36,8 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -61,7 +61,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  must be owner of table test
 ROLLBACK;
 -- we do not own the relation
@@ -87,8 +87,8 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -109,8 +109,8 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_rebalancer gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -125,7 +125,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=not a correct gpid';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- also faills if done by the rebalancer
@@ -137,7 +137,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_rebalancer gpid=not a correct gpid';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- application_name with suffix is ok (e.g. pgbouncer might add this)
@@ -149,8 +149,8 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001 - from 10.12.14.16:10370';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -165,7 +165,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- empty application_name
@@ -177,7 +177,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to '';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- application_name with incorrect prefix
@@ -189,7 +189,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- fails because there is no X distribution method
@@ -201,7 +201,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
 ERROR:  Metadata syncing is only allowed for hash, reference and local tables:X
 ROLLBACK;
 -- fails because there is the column does not exist
@@ -213,7 +213,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'non_existing_col', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'non_existing_col', 0, 's');
 ERROR:  column "non_existing_col" of relation "test_2" does not exist
 ROLLBACK;
 --- fails because we do not allow NULL parameters
@@ -225,7 +225,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 		SET application_name to 'citus_internal gpid=10000000001';
-		SELECT citus_internal_add_partition_metadata (NULL, 'h', 'non_existing_col', 0, 's');
+		SELECT citus_internal.add_partition_metadata (NULL, 'h', 'non_existing_col', 0, 's');
 ERROR:  relation cannot be NULL
 ROLLBACK;
 -- fails because colocationId cannot be negative
@@ -237,7 +237,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', -1, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', -1, 's');
 ERROR:  Metadata syncing is only allowed for valid colocation id values.
 ROLLBACK;
 -- fails because there is no X replication model
@@ -249,7 +249,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 'X');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 'X');
 ERROR:  Metadata syncing is only allowed for hash, reference and local tables:X
 ROLLBACK;
 -- the same table cannot be added twice, that is enforced by a primary key
@@ -262,13 +262,13 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  duplicate key value violates unique constraint "pg_dist_partition_logical_relid_index"
 ROLLBACK;
 -- the same table cannot be added twice, that is enforced by a primary key even if distribution key changes
@@ -281,13 +281,13 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_2', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_2', 0, 's');
 ERROR:  duplicate key value violates unique constraint "pg_dist_partition_logical_relid_index"
 ROLLBACK;
 -- hash distributed table cannot have NULL distribution key
@@ -300,7 +300,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', NULL, 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', NULL, 0, 's');
 ERROR:  Distribution column cannot be NULL for relation "test_2"
 ROLLBACK;
 -- even if metadata_sync_helper_role is not owner of the table test
@@ -332,8 +332,8 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -378,7 +378,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
 ERROR:  role "non_existing_user" does not exist
 ROLLBACK;
 \c - postgres - :worker_1_port
@@ -409,7 +409,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', 'col_1', 0, 's');
+	SELECT citus_internal.add_partition_metadata ('test_ref'::regclass, 'n', 'col_1', 0, 's');
 ERROR:  Reference or local tables cannot have distribution columns
 ROLLBACK;
 -- non-valid replication model
@@ -421,7 +421,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 'A');
+	SELECT citus_internal.add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 'A');
 ERROR:  Metadata syncing is only allowed for known replication models.
 ROLLBACK;
 -- not-matching replication model for reference table
@@ -433,7 +433,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 'c');
+	SELECT citus_internal.add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 'c');
 ERROR:  Local or references tables can only have 's' or 't' as the replication model.
 ROLLBACK;
 -- add entry for super user table
@@ -448,8 +448,8 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('super_user_table'::regclass, 'h', 'col_1', 0, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('super_user_table'::regclass, 'h', 'col_1', 0, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -497,20 +497,20 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SET application_name to 'citus_internal gpid=10000000001';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 250, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 250, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-	SELECT citus_internal_add_partition_metadata ('test_3'::regclass, 'h', 'col_1', 251, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_3'::regclass, 'h', 'col_1', 251, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 't');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 't');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1343,13 +1343,13 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_add_partition_metadata ('test_5'::regclass, 'h', 'int_col', 500, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_5'::regclass, 'h', 'int_col', 500, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-	SELECT citus_internal_add_partition_metadata ('test_6'::regclass, 'h', 'text_col', 500, 's');
+	SELECT citus_internal.add_partition_metadata ('test_6'::regclass, 'h', 'text_col', 500, 's');
 ERROR:  cannot colocate tables test_6 and test_5
 ROLLBACK;
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -1367,13 +1367,13 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_add_partition_metadata ('test_7'::regclass, 'h', 'text_col', 500, 's');
- citus_internal_add_partition_metadata
+	SELECT citus_internal.add_partition_metadata ('test_7'::regclass, 'h', 'text_col', 500, 's');
+ add_partition_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-	SELECT citus_internal_add_partition_metadata ('test_8'::regclass, 'h', 'text_col', 500, 's');
+	SELECT citus_internal.add_partition_metadata ('test_8'::regclass, 'h', 'text_col', 500, 's');
 ERROR:  cannot colocate tables test_8 and test_7
 ROLLBACK;
 -- we don't need the table/schema anymore
