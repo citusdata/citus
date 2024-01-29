@@ -150,7 +150,7 @@ static bool ShouldCheckUndistributeCitusLocalTables(void);
 static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedInNonMainDb(Node *parsetree);
-static bool DoesStatementRequireMarkDistributedFor2PC(Node *parsetree);
+static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
