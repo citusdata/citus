@@ -1689,6 +1689,7 @@ GetObjectInfo(Node *parsetree)
 		info.name = stmt->role;
 		info.id = get_role_oid(stmt->role, false);
 	}
+
 	/* Add else if branches for other statement types */
 
 	return info;
