@@ -124,18 +124,10 @@ typedef struct ObjectInfo
  */
 ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 
-TwoPcStatementInfo twoPcSupportedStatements[] = {
-	{ T_GrantRoleStmt, NULL, 0, false },
-	{ T_CreateRoleStmt, NULL, 0, true },
-	{ T_DropRoleStmt, NULL, 0, true },
-	{ T_AlterRoleStmt, NULL, 0, false },
-	{ T_GrantStmt, supportedObjectTypesForGrantStmt,
-	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType), true }
-
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
 	{ T_GrantRoleStmt, false, NULL, 0 },
 	{ T_CreateRoleStmt, true, NULL, 0 },
-  { T_DropRoleStmt, true,NULL, 0 },
+    { T_DropRoleStmt, false,NULL, 0 },
 	{ T_AlterRoleStmt, false, NULL, 0 },
 	{ T_GrantStmt, false, supportedObjectTypesForGrantStmt,
 	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType) }
