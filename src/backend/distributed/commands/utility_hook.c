@@ -1677,7 +1677,8 @@ RunPostprocessMainDBCommand(Node *parsetree)
 
 
 /*
- * IsStatementSupportedIn2Pc returns true if the statement is supported in 2pc
+ * IsStatementSupportedIn2Pc returns true if the statement is supported from a
+ * non-main database.
  */
 static bool
 IsStatementSupportedIn2PC(Node *parsetree)
