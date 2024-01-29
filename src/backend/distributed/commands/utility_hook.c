@@ -1671,14 +1671,12 @@ RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void
 RunPostprocessMainDBCommand(Node *parsetree)
 {
-	if (!IsStatementSupportedInNonMainDb(parsetree) ||
-		!StatementRequiresMarkDistributedFromNonMainDb(parsetree))
+	if (IsStatementSupportedInNonMainDb(parsetree) &&
+		StatementRequiresMarkDistributedFromNonMainDb(parsetree))
 	{
-		return;
+		ObjectInfo objectInfo = GetObjectInfo(parsetree);
+		MarkObjectDistributedInNonMainDb(parsetree, objectInfo);
 	}
-
-	ObjectInfo objectInfo = GetObjectInfo(parsetree);
-	MarkObjectDistributedInNonMainDb(parsetree, objectInfo);
 }
 
 
