@@ -112,8 +112,8 @@ typedef struct NonMainDbDistributedStatementInfo
 
 typedef struct ObjectInfo
 {
-    char *name;
-    Oid id;
+	char *name;
+	Oid id;
 } ObjectInfo;
 
 /*
@@ -158,7 +158,7 @@ static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedInNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 static ObjectInfo GetObjectInfo(Node *parsetree);
-static void MarkObjectDistributedInNonMainDb( Node *parsetree, ObjectInfo objectInfo);
+static void MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo objectInfo);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1674,40 +1674,43 @@ RunPostprocessMainDBCommand(Node *parsetree)
 	MarkObjectDistributedInNonMainDb(parsetree, objectInfo);
 }
 
+
 /*
  * GetObjectInfo returns the name and oid of the object in the given parsetree.
-*/
-static ObjectInfo GetObjectInfo(Node *parsetree)
+ */
+static ObjectInfo
+GetObjectInfo(Node *parsetree)
 {
-    ObjectInfo info;
+	ObjectInfo info;
 
-    if (IsA(parsetree, CreateRoleStmt))
-    {
-        CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-        info.name = stmt->role;
-        info.id = get_role_oid(stmt->role, false);
-    }
-    // Add else if branches for other statement types
+	if (IsA(parsetree, CreateRoleStmt))
+	{
+		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
+		info.name = stmt->role;
+		info.id = get_role_oid(stmt->role, false);
+	}
+	/* Add else if branches for other statement types */
 
-    return info;
+	return info;
 }
+
 
 /*
  * MarkObjectDistributedInNonMainDb marks the given object as distributed on the
  * non-main database.
-*/
-static void MarkObjectDistributedInNonMainDb( Node *parsetree, ObjectInfo objectInfo)
+ */
+static void
+MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo objectInfo)
 {
-    StringInfo mainDBQuery = makeStringInfo();
-    appendStringInfo(mainDBQuery,
-                     MARK_OBJECT_DISTRIBUTED,
-                     AuthIdRelationId,
-                     quote_literal_cstr(objectInfo.name),
-                     objectInfo.id,
-                     quote_literal_cstr(CurrentUserName()));
-    RunCitusMainDBQuery(mainDBQuery->data);
+	StringInfo mainDBQuery = makeStringInfo();
+	appendStringInfo(mainDBQuery,
+					 MARK_OBJECT_DISTRIBUTED,
+					 AuthIdRelationId,
+					 quote_literal_cstr(objectInfo.name),
+					 objectInfo.id,
+					 quote_literal_cstr(CurrentUserName()));
+	RunCitusMainDBQuery(mainDBQuery->data);
 }
-
 
 
 /*
