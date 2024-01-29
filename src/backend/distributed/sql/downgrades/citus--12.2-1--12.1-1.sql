@@ -27,7 +27,5 @@ DROP FUNCTION citus_internal.add_colocation_metadata(int, int, int, regtype, oid
 #include "../udfs/citus_internal_add_colocation_metadata/11.0-1.sql"
 
 DROP FUNCTION citus_internal.add_object_metadata(text, text[], text[], integer, integer, boolean);
-#include "../udfs/citus_internal_add_object_metadata/11.0-1.sql"
 
 DROP FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char");
-#include "../udfs/citus_internal_add_partition_metadata/10.2-1.sql"
