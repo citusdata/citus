@@ -381,7 +381,7 @@ EnsureModificationsCanRun(void)
 
 
 /*
- * EnsureModificationsCanRunOnRelation firsts calls into EnsureModificationsCanRun() and
+ * EnsureModificationsCanRunOnRelation first calls into EnsureModificationsCanRun() and
  * then does one more additional check. The additional check is to give a proper error
  * message if any relation that is modified is replicated, as replicated tables use
  * 2PC and 2PC cannot happen when recovery is in progress.
@@ -5723,14 +5723,6 @@ GetPoolinfoViaCatalog(int32 nodeId)
 char *
 GetAuthinfoViaCatalog(const char *roleName, int64 nodeId)
 {
-	/*
-	 * Citus will not be loaded when we run a global DDL command from a
-	 * Citus non-main database.
-	 */
-	if (!CitusHasBeenLoaded())
-	{
-		return "";
-	}
 	char *authinfo = "";
 	Datum nodeIdDatumArray[2] = {
 		Int32GetDatum(nodeId),

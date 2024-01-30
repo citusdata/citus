@@ -31,6 +31,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "parser/parse_type.h"
+#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -66,7 +67,8 @@ PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
 
 /*
  * mark_object_distributed adds an object to pg_dist_object
- * in all of the nodes.
+ * in all of the nodes, for the connections to the other nodes this function
+ * uses the user passed.
  */
 Datum
 mark_object_distributed(PG_FUNCTION_ARGS)
@@ -80,7 +82,17 @@ mark_object_distributed(PG_FUNCTION_ARGS)
 	Oid objectId = PG_GETARG_OID(2);
 	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*objectAddress, classId, objectId);
-	MarkObjectDistributedWithName(objectAddress, objectName);
+	text *connectionUserText = PG_GETARG_TEXT_P(3);
+	char *connectionUser = text_to_cstring(connectionUserText);
+
+	/*
+	 * This function is called when a query is run from a Citus non-main database.
+	 * We need to insert into local pg_dist_object over a connection to make sure
+	 * 2PC still works.
+	 */
+	bool useConnectionForLocalQuery = true;
+	MarkObjectDistributedWithName(objectAddress, objectName, useConnectionForLocalQuery,
+								  connectionUser);
 	PG_RETURN_VOID();
 }
 
@@ -184,7 +196,9 @@ ObjectExists(const ObjectAddress *address)
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
 {
-	MarkObjectDistributedWithName(distAddress, "");
+	bool useConnectionForLocalQuery = false;
+	MarkObjectDistributedWithName(distAddress, "", useConnectionForLocalQuery,
+								  CurrentUserName());
 }
 
 
@@ -194,19 +208,39 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
  * that is used in case the object does not exists for the current transaction.
  */
 void
-MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *objectName)
+MarkObjectDistributedWithName(const ObjectAddress *distAddress, char *objectName,
+							  bool useConnectionForLocalQuery, char *connectionUser)
 {
 	if (!CitusHasBeenLoaded())
 	{
 		elog(ERROR, "Cannot mark object distributed because Citus has not been loaded.");
 	}
-	MarkObjectDistributedLocally(distAddress);
+
+	/*
+	 * When a query is run from a Citus non-main database we need to insert into pg_dist_object
+	 * over a connection to make sure 2PC still works.
+	 */
+	if (useConnectionForLocalQuery)
+	{
+		StringInfo insertQuery = makeStringInfo();
+		appendStringInfo(insertQuery,
+						 "INSERT INTO pg_catalog.pg_dist_object (classid, objid, objsubid)"
+						 "VALUES (%d, %d, %d) ON CONFLICT DO NOTHING",
+						 distAddress->classId, distAddress->objectId,
+						 distAddress->objectSubId);
+		SendCommandToWorker(LocalHostName, PostPortNumber, insertQuery->data);
+	}
+	else
+	{
+		MarkObjectDistributedLocally(distAddress);
+	}
 
 	if (EnableMetadataSync)
 	{
 		char *workerPgDistObjectUpdateCommand =
 			CreatePgDistObjectEntryCommand(distAddress, objectName);
-		SendCommandToRemoteNodesWithMetadata(workerPgDistObjectUpdateCommand);
+		SendCommandToRemoteMetadataNodesParams(workerPgDistObjectUpdateCommand,
+											   connectionUser, 0, NULL, NULL);
 	}
 }
 

@@ -230,6 +230,7 @@ extern List * PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);
+extern List * GetDatabaseMetadataSyncCommands(Oid dbOid);
 
 
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
@@ -245,6 +246,9 @@ extern List * DropDatabaseStmtObjectAddress(Node *node, bool missingOk,
 extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missingOk,
 											  bool isPostprocess);
 extern List * GenerateGrantDatabaseCommandList(void);
+extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext);
 extern List * PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString);
 extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 extern char * CreateDatabaseDDLCommand(Oid dbId);
@@ -690,11 +694,6 @@ extern List * AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node,
 extern List * AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node,
 															   bool missing_ok, bool
 															   isPostprocess);
-extern List * TextSearchConfigurationCommentObjectAddress(Node *node,
-														  bool missing_ok, bool
-														  isPostprocess);
-extern List * TextSearchDictCommentObjectAddress(Node *node,
-												 bool missing_ok, bool isPostprocess);
 extern List * AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
 															 bool missing_ok, bool
 															 isPostprocess);

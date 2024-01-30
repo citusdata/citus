@@ -153,6 +153,9 @@ DEPS = {
     "isolation_extension_commands": TestDeps(
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
+    "isolation_update_node": TestDeps(
+        None, ["isolation_setup", "isolation_add_remove_node"]
+    ),
     "schema_based_sharding": TestDeps("minimal_schedule"),
     "multi_sequence_default": TestDeps(
         None, ["multi_test_helpers", "multi_cluster_management", "multi_table_ddl"]
@@ -202,6 +205,12 @@ DEPS = {
     "pg15": TestDeps("base_schedule"),
     "foreign_key_to_reference_shard_rebalance": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"]
+    ),
+    "limit_intermediate_size": TestDeps("base_schedule"),
+    "columnar_drop": TestDeps(
+        "minimal_schedule",
+        ["columnar_create", "columnar_load"],
+        repeatable=False,
     ),
 }
 

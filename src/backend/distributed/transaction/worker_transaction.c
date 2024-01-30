@@ -36,10 +36,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 
-static void SendCommandToRemoteMetadataNodesParams(const char *command,
-												   const char *user, int parameterCount,
-												   const Oid *parameterTypes,
-												   const char *const *parameterValues);
 static void SendBareCommandListToMetadataNodesInternal(List *commandList,
 													   TargetWorkerSet targetWorkerSet);
 static void SendCommandToMetadataWorkersParams(const char *command,
@@ -209,7 +205,7 @@ SendCommandListToRemoteNodesWithMetadata(List *commands)
  * SendCommandToWorkersParamsInternal() that can be used to send commands
  * to remote metadata nodes.
  */
-static void
+void
 SendCommandToRemoteMetadataNodesParams(const char *command,
 									   const char *user, int parameterCount,
 									   const Oid *parameterTypes,

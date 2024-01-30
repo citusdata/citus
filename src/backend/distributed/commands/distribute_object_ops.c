@@ -16,6 +16,7 @@
 
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"
 
@@ -304,6 +305,17 @@ static DistributeObjectOps Any_DropRole = {
 	.address = NULL,
 	.markDistributed = false,
 };
+
+static DistributeObjectOps Role_Comment = {
+	.deparse = DeparseCommentStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = CommentObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Any_CreateForeignServer = {
 	.deparse = DeparseCreateForeignServerStmt,
 	.qualify = NULL,
@@ -533,10 +545,21 @@ static DistributeObjectOps Database_Set = {
 	.markDistributed = false,
 };
 
+static DistributeObjectOps Database_Comment = {
+	.deparse = DeparseCommentStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = CommentObjectAddress,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Database_Rename = {
 	.deparse = DeparseAlterDatabaseRenameStmt,
 	.qualify = NULL,
-	.preprocess = NULL,
+	.preprocess = PreprocessAlterDatabaseRenameStmt,
 	.postprocess = PostprocessAlterDatabaseRenameStmt,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
@@ -972,13 +995,18 @@ static DistributeObjectOps TextSearchConfig_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Comment = {
-	.deparse = DeparseTextSearchConfigurationCommentStmt,
+	.deparse = DeparseCommentStmt,
+
+	/* TODO: When adding new comment types we should create an abstracted
+	 * qualify function, just like we have an abstract deparse
+	 * and adress function
+	 */
 	.qualify = QualifyTextSearchConfigurationCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSCONFIGURATION,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchConfigurationCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Define = {
@@ -1041,13 +1069,13 @@ static DistributeObjectOps TextSearchDict_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Comment = {
-	.deparse = DeparseTextSearchDictionaryCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = QualifyTextSearchDictionaryCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSDICTIONARY,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchDictCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Define = {
@@ -1778,6 +1806,16 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TSDICTIONARY:
 				{
 					return &TextSearchDict_Comment;
+				}
+
+				case OBJECT_DATABASE:
+				{
+					return &Database_Comment;
+				}
+
+				case OBJECT_ROLE:
+				{
+					return &Role_Comment;
 				}
 
 				default:

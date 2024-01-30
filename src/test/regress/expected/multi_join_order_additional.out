@@ -77,10 +77,10 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "lineitem" ][ local partition join "lineitem" ]
 DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
 DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
-                          QUERY PLAN
+                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   explain statements for distributed queries are not enabled
+   citus.explain_distributed_queries: false
 (2 rows)
 
 SET client_min_messages TO LOG;
@@ -92,11 +92,11 @@ SELECT count(*) FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey AND l_quantity > 5)
 	OR (l_orderkey = o_orderkey AND l_quantity < 10);
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 EXPLAIN (COSTS OFF)
@@ -107,11 +107,11 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders" ][ dual partition join "lineitem_hash" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Verify we handle local joins between two hash-partitioned tables.
@@ -119,11 +119,11 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders_hash, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Validate that we can handle broadcast joins with hash-partitioned tables.
@@ -131,11 +131,11 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
 LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Validate that we don't use a single-partition join method for a hash
@@ -144,11 +144,11 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, lineitem, customer_append
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
 LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer_append" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Validate that we don't chose a single-partition join method with a
@@ -157,11 +157,11 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, customer_hash
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Validate that we can re-partition a hash partitioned table to join with a
@@ -170,11 +170,11 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders_hash" ][ dual partition join "customer_append" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Validate a 4 way join that could be done locally is planned as such by the logical
@@ -195,11 +195,11 @@ JOIN (
      WHERE event_type = 5
 ) AS some_users ON (some_users.user_id = bar.user_id);
 LOG:  join order: [ "users_table" ][ local partition join "events_table" ][ local partition join "users_table" ][ local partition join "events_table" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Reset client logging level to its previous value

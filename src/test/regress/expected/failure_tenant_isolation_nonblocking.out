@@ -159,7 +159,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SET TRANSACTION SNAPSHOT").kill()');
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancellation on setting snapshot
 SELECT citus.mitmproxy('conn.onQuery(query="SET TRANSACTION SNAPSHOT").cancel(' || :pid || ')');
  mitmproxy
@@ -177,7 +177,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").kill()');
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancellation on table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").cancel(' || :pid || ')');
  mitmproxy
@@ -195,7 +195,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").kill()');
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancellation on colocated table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").cancel(' || :pid || ')');
  mitmproxy

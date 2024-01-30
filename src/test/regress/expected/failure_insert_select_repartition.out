@@ -55,7 +55,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_partition_query_result").kill
 (1 row)
 
 INSERT INTO target_table SELECT * FROM source_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT * FROM target_table ORDER BY a;
  a | b
 ---------------------------------------------------------------------
@@ -68,7 +68,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_partition_query_result").kill
 (1 row)
 
 INSERT INTO target_table SELECT * FROM replicated_source_table;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT * FROM target_table ORDER BY a;
  a  |  b
 ---------------------------------------------------------------------
@@ -138,7 +138,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="read_intermediate_results").kill()')
 (1 row)
 
 INSERT INTO target_table SELECT * FROM source_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT * FROM target_table ORDER BY a;
  a | b
 ---------------------------------------------------------------------
@@ -151,7 +151,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="read_intermediate_results").kill()')
 (1 row)
 
 INSERT INTO target_table SELECT * FROM replicated_source_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT * FROM target_table ORDER BY a;
  a | b
 ---------------------------------------------------------------------
@@ -168,7 +168,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="read_intermediate_results").kill()')
 (1 row)
 
 INSERT INTO replicated_target_table SELECT * FROM source_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT * FROM replicated_target_table;
  a | b
 ---------------------------------------------------------------------

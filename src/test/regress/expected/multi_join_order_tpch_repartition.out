@@ -22,11 +22,11 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Query #3 from the TPC-H decision support benchmark
@@ -61,7 +61,7 @@ LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partitio
    ->  HashAggregate
          Group Key: remote_scan.l_orderkey, remote_scan.o_orderdate, remote_scan.o_shippriority
          ->  Custom Scan (Citus Adaptive)
-               explain statements for distributed queries are not enabled
+               citus.explain_distributed_queries: false
 (6 rows)
 
 -- Query #10 from the TPC-H decision support benchmark
@@ -98,12 +98,12 @@ GROUP BY
 ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partition join "customer_append" ][ reference join "nation" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.revenue DESC
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (4 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
@@ -138,11 +138,11 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ dual partition join "part_append" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Query to test multiple re-partition jobs in a single query
@@ -158,12 +158,12 @@ WHERE
 GROUP BY
       l_partkey;
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ dual partition join "part_append" ][ dual partition join "customer_append" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.l_partkey
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (4 rows)
 
 -- Reset client logging level to its previous value

@@ -279,9 +279,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE mx_metadata_sync_multi_t
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to add partition metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_partition_metadata").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_partition_metadata").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to add shard metadata
@@ -297,15 +297,15 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to add colocation metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.citus_internal_add_colocation_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_colocation_metadata").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.citus_internal_add_colocation_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_colocation_metadata").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to add distributed object metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_object_metadata").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_object_metadata").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to mark function as distributed

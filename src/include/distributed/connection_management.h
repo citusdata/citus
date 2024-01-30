@@ -61,14 +61,6 @@
  */
 #define LOCAL_NODE_ID UINT32_MAX
 
-/*
- * If you want to connect to the current node use `LocalHostName`, which is a GUC, instead
- * of the hardcoded loopback hostname. Only if you really need the loopback hostname use
- * this define.
- */
-#define LOCAL_HOST_NAME "localhost"
-
-
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
 struct MemoryContextData;

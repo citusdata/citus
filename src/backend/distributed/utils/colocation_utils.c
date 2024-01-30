@@ -362,10 +362,8 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 									  leftRelationName, rightRelationName)));
 		}
 
-		List *leftPlacementList = ShardPlacementListSortedByWorker(
-			leftShardId);
-		List *rightPlacementList = ShardPlacementListSortedByWorker(
-			rightShardId);
+		List *leftPlacementList = ShardPlacementList(leftShardId);
+		List *rightPlacementList = ShardPlacementList(rightShardId);
 
 		if (list_length(leftPlacementList) != list_length(rightPlacementList))
 		{

@@ -155,7 +155,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="UPDATE pg_dist_local_group SET group
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to drop node metadata
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").cancel(' || :pid || ')');
  mitmproxy
@@ -172,7 +172,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").kill()');
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to send node metadata
 SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO pg_dist_node").cancel(' || :pid || ')');
  mitmproxy
@@ -189,7 +189,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO pg_dist_node").kill()');
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to drop sequence dependency for all tables
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*FROM pg_dist_partition").cancel(' || :pid || ')');
  mitmproxy
@@ -206,7 +206,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequen
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to drop shell table
 SELECT citus.mitmproxy('conn.onQuery(query="CALL pg_catalog.worker_drop_all_shell_tables").cancel(' || :pid || ')');
  mitmproxy
@@ -223,7 +223,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CALL pg_catalog.worker_drop_all_shel
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to delete all pg_dist_partition metadata
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_partition").cancel(' || :pid || ')');
  mitmproxy
@@ -240,7 +240,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_partition").kill
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to delete all pg_dist_shard metadata
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_shard").cancel(' || :pid || ')');
  mitmproxy
@@ -257,7 +257,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_shard").kill()')
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to delete all pg_dist_placement metadata
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_placement").cancel(' || :pid || ')');
  mitmproxy
@@ -274,7 +274,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_placement").kill
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to delete all pg_dist_object metadata
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_catalog.pg_dist_object").cancel(' || :pid || ')');
  mitmproxy
@@ -291,7 +291,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_catalog.pg_dist_objec
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to delete all pg_dist_colocation metadata
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_catalog.pg_dist_colocation").cancel(' || :pid || ')');
  mitmproxy
@@ -308,7 +308,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_catalog.pg_dist_coloc
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to alter or create role
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_alter_role").cancel(' || :pid || ')');
  mitmproxy
@@ -325,7 +325,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_alter_role")
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to set database owner
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER DATABASE.*OWNER TO").cancel(' || :pid || ')');
  mitmproxy
@@ -342,7 +342,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER DATABASE.*OWNER TO").kill()');
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create schema
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA IF NOT EXISTS mx_metadata_sync_multi_trans AUTHORIZATION").cancel(' || :pid || ')');
  mitmproxy
@@ -359,7 +359,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA IF NOT EXISTS mx_metad
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create collation
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*CREATE COLLATION mx_metadata_sync_multi_trans.german_phonebook").cancel(' || :pid || ')');
  mitmproxy
@@ -376,7 +376,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_obje
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create function
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE OR REPLACE FUNCTION mx_metadata_sync_multi_trans.one_as_result").cancel(' || :pid || ')');
  mitmproxy
@@ -393,7 +393,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE OR REPLACE FUNCTION mx_metada
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create text search dictionary
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_german_dict").cancel(' || :pid || ')');
  mitmproxy
@@ -410,7 +410,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_obje
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create text search config
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*my_ts_config").cancel(' || :pid || ')');
  mitmproxy
@@ -427,7 +427,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_obje
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create type
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_object.*pair_type").cancel(' || :pid || ')');
  mitmproxy
@@ -444,7 +444,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_create_or_replace_obje
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create publication
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION.*pub_all").cancel(' || :pid || ')');
  mitmproxy
@@ -461,7 +461,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION.*pub_all").kill()
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create sequence
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_apply_sequence_command").cancel(' || :pid || ')');
  mitmproxy
@@ -478,7 +478,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_apply_sequence_command
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to drop sequence dependency for distributed table
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequence_dependency.*mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
  mitmproxy
@@ -495,7 +495,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_drop_sequen
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to drop distributed table if exists
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
  mitmproxy
@@ -512,7 +512,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS mx_metadata_syn
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create distributed table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.dist1").cancel(' || :pid || ')');
  mitmproxy
@@ -529,7 +529,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to record sequence dependency for table
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_record_sequence_dependency").cancel(' || :pid || ')');
  mitmproxy
@@ -546,7 +546,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.worker_record_sequ
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create index for table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE INDEX dist1_search_phone_idx ON mx_metadata_sync_multi_trans.dist1 USING gin").cancel(' || :pid || ')');
  mitmproxy
@@ -563,7 +563,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE INDEX dist1_search_phone_idx 
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create reference table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.ref").cancel(' || :pid || ')');
  mitmproxy
@@ -580,7 +580,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create local table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.loc1").cancel(' || :pid || ')');
  mitmproxy
@@ -597,7 +597,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create distributed partitioned table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.orders").cancel(' || :pid || ')');
  mitmproxy
@@ -614,7 +614,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to create distributed partition table
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_trans.orders_p2020_01_05").cancel(' || :pid || ')');
  mitmproxy
@@ -631,7 +631,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE mx_metadata_sync_multi_
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to attach partition
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE mx_metadata_sync_multi_trans.orders ATTACH PARTITION mx_metadata_sync_multi_trans.orders_p2020_01_05").cancel(' || :pid || ')');
  mitmproxy
@@ -648,9 +648,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE mx_metadata_sync_multi_t
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add partition metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_partition_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -658,14 +658,14 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_partition_metadata").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add shard metadata
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_shard_metadata").cancel(' || :pid || ')');
  mitmproxy
@@ -682,7 +682,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_shard_meta
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add placement metadata
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_metadata").cancel(' || :pid || ')');
  mitmproxy
@@ -699,9 +699,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add colocation metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.citus_internal_add_colocation_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_colocation_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -709,16 +709,16 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.citus_internal_add
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.citus_internal_add_colocation_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_colocation_metadata").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add distributed object metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_object_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -726,14 +726,14 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_met
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_object_metadata").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to mark function as distributed
 SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*one_as_result").cancel(' || :pid || ')');
  mitmproxy
@@ -750,7 +750,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*one_as
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to mark collation as distributed
 SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*german_phonebook").cancel(' || :pid || ')');
  mitmproxy
@@ -767,7 +767,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*german
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to mark text search dictionary as distributed
 SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_german_dict").cancel(' || :pid || ')');
  mitmproxy
@@ -784,7 +784,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_ger
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to mark text search configuration as distributed
 SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_ts_config").cancel(' || :pid || ')');
  mitmproxy
@@ -801,7 +801,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*my_ts_
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to mark type as distributed
 SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pair_type").cancel(' || :pid || ')');
  mitmproxy
@@ -818,7 +818,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pair_t
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to mark sequence as distributed
 SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*seq_owned").cancel(' || :pid || ')');
  mitmproxy
@@ -835,7 +835,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*seq_ow
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to mark publication as distributed
 SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pub_all").cancel(' || :pid || ')');
  mitmproxy
@@ -852,7 +852,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="WITH distributed_object_data.*pub_al
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to set isactive to true
 SELECT citus.mitmproxy('conn.onQuery(query="UPDATE pg_dist_node SET isactive = TRUE").cancel(' || :pid || ')');
  mitmproxy

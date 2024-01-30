@@ -401,7 +401,7 @@ typedef struct WorkerPool
 
 	/*
 	 * Placement executions destined for worker node, but not assigned to any
-	 * connection and not ready to start.
+	 * connection and ready to start.
 	 */
 	dlist_head readyTaskQueue;
 	int readyTaskCount;
@@ -491,8 +491,6 @@ typedef struct WorkerSession
 	bool sessionHasActiveConnection;
 } WorkerSession;
 
-
-struct TaskPlacementExecution;
 
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
@@ -585,7 +583,7 @@ typedef enum TaskPlacementExecutionState
 } TaskPlacementExecutionState;
 
 /*
- * TaskPlacementExecution represents the an execution of a command
+ * TaskPlacementExecution represents the execution of a command
  * on a shard placement.
  */
 typedef struct TaskPlacementExecution
@@ -729,6 +727,11 @@ static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time end
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
+static ExecutionParams * CreateDefaultExecutionParams(RowModifyLevel modLevel,
+													  List *taskList,
+													  TupleDestination *tupleDest,
+													  bool expectResults,
+													  ParamListInfo paramListInfo);
 
 
 /*
@@ -1015,14 +1018,14 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
- * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
- * bind params from executor state, and with defaults for some of the arguments.
+ * CreateDefaultExecutionParams returns execution params based on given (possibly null)
+ * bind params (presumably from executor state) with defaults for some of the arguments.
  */
-uint64
-ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
-									  TupleDestination *tupleDest,
-									  bool expectResults,
-									  ParamListInfo paramListInfo)
+static ExecutionParams *
+CreateDefaultExecutionParams(RowModifyLevel modLevel, List *taskList,
+							 TupleDestination *tupleDest,
+							 bool expectResults,
+							 ParamListInfo paramListInfo)
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool localExecutionSupported = true;
@@ -1036,6 +1039,24 @@ ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
 	executionParams->tupleDestination = tupleDest;
 	executionParams->paramListInfo = paramListInfo;
 
+	return executionParams;
+}
+
+
+/*
+ * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
+ * bind params from executor state, and with defaults for some of the arguments.
+ */
+uint64
+ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
+									  TupleDestination *tupleDest,
+									  bool expectResults,
+									  ParamListInfo paramListInfo)
+{
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
@@ -1049,17 +1070,11 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 							 TupleDestination *tupleDest,
 							 bool expectResults)
 {
-	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	bool localExecutionSupported = true;
-	ExecutionParams *executionParams = CreateBasicExecutionParams(
-		modLevel, taskList, targetPoolSize, localExecutionSupported
-		);
-
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, false);
-	executionParams->expectResults = expectResults;
-	executionParams->tupleDestination = tupleDest;
-
+	ParamListInfo paramListInfo = NULL;
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
@@ -1908,7 +1923,7 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		/*
 		 * Iterate until all the tasks are finished. Once all the tasks
-		 * are finished, ensure that that all the connection initializations
+		 * are finished, ensure that all the connection initializations
 		 * are also finished. Otherwise, those connections are terminated
 		 * abruptly before they are established (or failed). Instead, we let
 		 * the ConnectionStateMachine() to properly handle them.
@@ -3118,7 +3133,7 @@ ConnectionStateMachine(WorkerSession *session)
 				 *
 				 * We can only retry connection when the remote transaction has
 				 * not started over the connection. Otherwise, we'd have to deal
-				 * with restoring the transaction state, which iis beyond our
+				 * with restoring the transaction state, which is beyond our
 				 * purpose at this time.
 				 */
 				RemoteTransaction *transaction = &connection->remoteTransaction;
