@@ -1,6 +1,6 @@
 -- citus--12.2-1--12.1-1
 
-DROP FUNCTION pg_catalog.citus_internal_database_command(text);
+DROP FUNCTION citus_internal.database_command(text);
 DROP FUNCTION citus_internal.acquire_citus_advisory_object_class_lock(int, cstring);
 
 #include "../udfs/citus_add_rebalance_strategy/10.1-1.sql"
