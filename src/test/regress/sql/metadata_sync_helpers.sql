@@ -598,7 +598,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (-10, 1, 0::bigint, 1::int, 1500000::bigint))
-	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+	SELECT citus_internal.add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- invalid placementid
@@ -608,7 +608,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 0::bigint, 1::int, -10))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- non-existing shard
@@ -618,7 +618,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1430100, 0::bigint, 1::int, 10))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- non-existing node with non-existing node-id 123123123
@@ -628,7 +628,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES ( 1420000, 0::bigint, 123123123::int, 1500000))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- create a volatile function that returns the local node id
@@ -655,7 +655,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 0::bigint, get_node_id(), 1500000),
 				(1420000, 0::bigint, get_node_id(), 1500001))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- shard is not owned by us
@@ -665,7 +665,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardlength, groupid, placementid) AS
 		(VALUES (1420007, 0::bigint, get_node_id(), 1500000))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 ROLLBACK;
 
 -- sucessfully add placements
@@ -686,7 +686,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 				(1420011, 0::bigint, get_node_id(), 1500009),
 				(1420012, 0::bigint, get_node_id(), 1500010),
 				(1420013, 0::bigint, get_node_id(), 1500011))
-	SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+	SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 COMMIT;
 
 -- we should be able to colocate both tables now

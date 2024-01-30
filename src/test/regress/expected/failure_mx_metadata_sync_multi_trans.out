@@ -684,7 +684,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_shard_meta
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add placement metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_placement_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -692,7 +692,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_placement_metadata").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 

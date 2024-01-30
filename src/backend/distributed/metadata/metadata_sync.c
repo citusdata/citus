@@ -1259,7 +1259,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertPlacementCommand, ") ");
 
 	appendStringInfo(insertPlacementCommand,
-					 "SELECT citus_internal_add_placement_metadata("
+					 "SELECT citus_internal.add_placement_metadata("
 					 "shardid, shardlength, groupid, placementid) "
 					 "FROM placement_data;");
 
@@ -4276,7 +4276,7 @@ AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal_add_placement_metadata(%ld, %ld, %d, %ld)",
+					 "SELECT citus_internal.add_placement_metadata(%ld, %ld, %d, %ld)",
 					 shardId, shardLength, groupId, placementId);
 	return command->data;
 }

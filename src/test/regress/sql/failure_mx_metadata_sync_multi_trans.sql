@@ -291,9 +291,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_shard_meta
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to add placement metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_placement_metadata").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_placement_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_placement_metadata").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to add colocation metadata
