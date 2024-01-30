@@ -63,6 +63,7 @@ ORDER BY 1;
  function citus_internal.add_placement_metadata(bigint,bigint,integer,bigint)
  function citus_internal.add_placement_metadata(bigint,integer,bigint,integer,bigint)
  function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text)
+ function citus_internal.add_tenant_schema(oid,integer)
  function citus_internal.commit_management_command_2pc()
  function citus_internal.execute_command_on_remote_nodes_as_user(text,text)
  function citus_internal.find_groupid_for_node(text,integer)
@@ -355,5 +356,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(345 rows)
+(346 rows)
 

@@ -31,3 +31,4 @@ REVOKE ALL ON FUNCTION citus_internal.start_management_transaction FROM PUBLIC;
 #include "udfs/citus_internal_add_partition_metadata/12.2-1.sql"
 #include "udfs/citus_internal_add_placement_metadata/12.2-1.sql"
 #include "udfs/citus_internal_add_shard_metadata/12.2-1.sql"
+#include "udfs/citus_internal_add_tenant_schema/12.2-1.sql"

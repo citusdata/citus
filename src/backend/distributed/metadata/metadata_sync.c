@@ -4225,7 +4225,7 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+					 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 					 RemoteSchemaIdExpressionById(schemaId), colocationId);
 
 	return command->data;
@@ -4957,7 +4957,7 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+						 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 

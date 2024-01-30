@@ -13,9 +13,9 @@ SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 SET client_min_messages TO NOTICE;
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail on NULL input.
-SELECT citus_internal_add_tenant_schema(NULL, 1);
+SELECT citus_internal.add_tenant_schema(NULL, 1);
 ERROR:  schema_id cannot be NULL
-SELECT citus_internal_add_tenant_schema(1, NULL);
+SELECT citus_internal.add_tenant_schema(1, NULL);
 ERROR:  colocation_id cannot be NULL
 SELECT citus_internal_delete_tenant_schema(NULL);
 ERROR:  schema_id cannot be NULL
