@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION citus_internal.add_shard_metadata(
     AS 'MODULE_PATHNAME', $$citus_internal_add_shard_metadata$$;
 COMMENT ON FUNCTION citus_internal.add_shard_metadata(regclass, bigint, "char", text, text) IS
     'Inserts into pg_dist_shard with user checks';
-    
+
 CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_add_shard_metadata(
 							relation_id regclass, shard_id bigint,
 							storage_type "char", shard_min_value text,
