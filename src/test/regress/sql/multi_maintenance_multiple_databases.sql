@@ -168,7 +168,7 @@ FROM pg_database,
      dblink(format('dbname=%s host=localhost port=%s user=postgres', datname,
                    (SELECT setting::int FROM pg_settings WHERE name = 'port')),
             $statement$
-            SELECT *
+            SELECT groupid, gid
             FROM pg_dist_transaction
             WHERE gid LIKE 'citus_0_1234_4_0_%'
                 OR gid LIKE 'citus_0_should_be_forgotten_%'
@@ -235,7 +235,7 @@ FROM pg_database,
      dblink(format('dbname=%s host=localhost port=%s user=postgres', datname,
                    (SELECT setting::int FROM pg_settings WHERE name = 'port')),
             $statement$
-            SELECT *
+            SELECT groupid, gid
             FROM pg_dist_transaction
             WHERE gid LIKE 'citus_0_1234_4_0_%'
                 OR gid LIKE 'citus_0_should_be_forgotten_%'
