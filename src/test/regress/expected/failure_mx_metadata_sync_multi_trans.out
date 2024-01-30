@@ -650,7 +650,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE mx_metadata_sync_multi_t
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add partition metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_partition_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -658,7 +658,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_partition_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_partition_metadata").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -718,7 +718,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_colocation
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- Failure to add distributed object metadata
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_object_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -726,7 +726,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_met
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
-SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal_add_object_metadata").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT citus_internal.add_object_metadata").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 

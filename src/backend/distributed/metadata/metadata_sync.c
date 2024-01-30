@@ -999,7 +999,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 	appendStringInfo(insertDistributedObjectsCommand, ") ");
 
 	appendStringInfo(insertDistributedObjectsCommand,
-					 "SELECT citus_internal_add_object_metadata("
+					 "SELECT citus_internal.add_object_metadata("
 					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) "
 					 "FROM distributed_object_data;");
 
@@ -1134,7 +1134,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	}
 
 	appendStringInfo(insertDistributionCommand,
-					 "SELECT citus_internal_add_partition_metadata "
+					 "SELECT citus_internal.add_partition_metadata "
 					 "(%s::regclass, '%c', %s, %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
