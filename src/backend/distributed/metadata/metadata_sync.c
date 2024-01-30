@@ -1315,7 +1315,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertShardCommand, ") ");
 
 	appendStringInfo(insertShardCommand,
-					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
+					 "SELECT citus_internal.add_shard_metadata(relationname, shardid, "
 					 "storagetype, shardminvalue, shardmaxvalue) "
 					 "FROM shard_data;");
 

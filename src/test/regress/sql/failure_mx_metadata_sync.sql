@@ -59,7 +59,7 @@ CREATE TABLE t2 (id int PRIMARY KEY);
 SELECT citus.mitmproxy('conn.onParse(query="citus_internal.add_placement_metadata").kill()');
 SELECT create_distributed_table('t2', 'id');
 
-SELECT citus.mitmproxy('conn.onParse(query="citus_internal_add_shard_metadata").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onParse(query="citus_internal.add_shard_metadata").cancel(' || :pid || ')');
 SELECT create_distributed_table('t2', 'id');
 
 -- Verify that the table was not distributed

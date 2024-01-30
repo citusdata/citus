@@ -28,3 +28,4 @@ DROP FUNCTION citus_internal.add_object_metadata(text, text[], text[], integer, 
 DROP FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char");
 DROP FUNCTION citus_internal.add_placement_metadata(bigint, bigint, integer, bigint);
 DROP FUNCTION citus_internal.add_placement_metadata(bigint, integer, bigint, integer, bigint);
+DROP FUNCTION citus_internal.add_shard_metadata(regclass, bigint, "char", text, text);
