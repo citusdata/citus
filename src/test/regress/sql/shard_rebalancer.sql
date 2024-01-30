@@ -1375,6 +1375,7 @@ DROP TABLE d1, r1;
 
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync(30000);
+
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
 SELECT create_reference_table('r1');
 
