@@ -1168,7 +1168,7 @@ WITH RECURSIVE search_graph(f, t, label) AS (
         WHERE g.f = sg.t and  g.f = 1
 ) SEARCH DEPTH FIRST BY f, t SET seq
 SELECT * FROM search_graph ORDER BY seq;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 WITH RECURSIVE search_graph(f, t, label) AS (
     SELECT * FROM graph0 g WHERE f = 1
     UNION ALL
@@ -1177,7 +1177,7 @@ WITH RECURSIVE search_graph(f, t, label) AS (
         WHERE g.f = sg.t and  g.f = 1
 ) SEARCH DEPTH FIRST BY f, t SET seq
 DELETE FROM graph0 WHERE t IN (SELECT t FROM search_graph ORDER BY seq);
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 CREATE TABLE graph1(f INT, t INT, label TEXT);
 SELECT create_reference_table('graph1');
  create_reference_table
@@ -1196,7 +1196,7 @@ WITH RECURSIVE search_graph(f, t, label) AS (
         WHERE g.f = sg.t and  g.f = 1
 ) SEARCH DEPTH FIRST BY f, t SET seq
 SELECT * FROM search_graph ORDER BY seq;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 WITH RECURSIVE search_graph(f, t, label) AS (
     SELECT * FROM graph1 g WHERE f = 1
     UNION ALL
@@ -1205,7 +1205,7 @@ WITH RECURSIVE search_graph(f, t, label) AS (
         WHERE g.f = sg.t and  g.f = 1
 ) SEARCH DEPTH FIRST BY f, t SET seq
 DELETE FROM graph1 WHERE t IN (SELECT t FROM search_graph ORDER BY seq);
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 SELECT * FROM (
     WITH RECURSIVE search_graph(f, t, label) AS (
         SELECT *
@@ -1217,7 +1217,7 @@ SELECT * FROM (
     ) SEARCH DEPTH FIRST BY f, t SET seq
     SELECT * FROM search_graph ORDER BY seq
 ) as foo;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 --
 -- https://github.com/citusdata/citus/issues/5258
 --
