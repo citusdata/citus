@@ -154,6 +154,7 @@ ORDER BY 1;
  function citus_total_relation_size(regclass,boolean)
  function citus_truncate_trigger()
  function citus_unmark_object_distributed(oid,oid,integer)
+ function citus_unmark_object_distributed(oid,oid,integer,boolean)
  function citus_update_node(integer,text,integer,boolean,integer)
  function citus_update_shard_statistics(bigint)
  function citus_update_table_statistics(regclass)
@@ -350,5 +351,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(340 rows)
+(341 rows)
 

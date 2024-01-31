@@ -24,7 +24,7 @@ select result FROM run_command_on_all_nodes($$
     FROM (
         SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
-        (rolpassword != '') as pass_not_empty, rolvaliduntil
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
         WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
         ORDER BY rolname
@@ -50,7 +50,7 @@ select result FROM run_command_on_all_nodes($$
     FROM (
         SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
-        (rolpassword != '') as pass_not_empty, rolvaliduntil
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
         WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
         ORDER BY rolname
