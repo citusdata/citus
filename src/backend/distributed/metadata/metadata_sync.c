@@ -1354,7 +1354,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 
 	StringInfo deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
-					 "SELECT citus_internal_delete_shard_metadata(%ld);", shardId);
+					 "SELECT citus_internal.delete_shard_metadata(%ld);", shardId);
 
 	return list_make1(deleteShardCommand->data);
 }

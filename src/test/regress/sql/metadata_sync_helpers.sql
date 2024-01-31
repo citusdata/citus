@@ -745,7 +745,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(shardid)
 		AS (VALUES (1420007))
-	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
+	SELECT citus_internal.delete_shard_metadata(shardid) FROM shard_data;
 ROLLBACK;
 
 -- the user cannot delete non-existing shards
@@ -755,7 +755,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(shardid)
 		AS (VALUES (1420100))
-	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
+	SELECT citus_internal.delete_shard_metadata(shardid) FROM shard_data;
 ROLLBACK;
 
 
@@ -770,7 +770,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	\set VERBOSITY terse
 	WITH shard_data(shardid)
 		AS (VALUES (1420000))
-	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
+	SELECT citus_internal.delete_shard_metadata(shardid) FROM shard_data;
 
 	SELECT count(*) FROM pg_dist_shard WHERE shardid = 1420000;
 	SELECT count(*) FROM pg_dist_placement WHERE shardid = 1420000;

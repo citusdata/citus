@@ -36,3 +36,4 @@ REVOKE ALL ON FUNCTION citus_internal.start_management_transaction FROM PUBLIC;
 #include "udfs/citus_internal_delete_colocation_metadata/12.2-1.sql"
 #include "udfs/citus_internal_delete_partition_metadata/12.2-1.sql"
 #include "udfs/citus_internal_delete_placement_metadata/12.2-1.sql"
+#include "udfs/citus_internal_delete_shard_metadata/12.2-1.sql"

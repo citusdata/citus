@@ -33,3 +33,4 @@ DROP FUNCTION citus_internal.adjust_local_clock_to_remote(pg_catalog.cluster_clo
 DROP FUNCTION citus_internal.delete_colocation_metadata(int);
 DROP FUNCTION citus_internal.delete_partition_metadata(regclass);
 DROP FUNCTION citus_internal.delete_placement_metadata(bigint);
+DROP FUNCTION citus_internal.delete_shard_metadata(bigint);
