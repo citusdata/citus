@@ -14,7 +14,7 @@ SET client_min_messages TO NOTICE;
 -- fail on NULL input.
 SELECT citus_internal.add_tenant_schema(NULL, 1);
 SELECT citus_internal.add_tenant_schema(1, NULL);
-SELECT citus_internal_delete_tenant_schema(NULL);
+SELECT citus_internal.delete_tenant_schema(NULL);
 SELECT citus_internal_unregister_tenant_schema_globally(1, NULL);
 SELECT citus_internal_unregister_tenant_schema_globally(NULL, 'text');
 

@@ -34,3 +34,4 @@ DROP FUNCTION citus_internal.delete_colocation_metadata(int);
 DROP FUNCTION citus_internal.delete_partition_metadata(regclass);
 DROP FUNCTION citus_internal.delete_placement_metadata(bigint);
 DROP FUNCTION citus_internal.delete_shard_metadata(bigint);
+DROP FUNCTION citus_internal.delete_tenant_schema(oid);

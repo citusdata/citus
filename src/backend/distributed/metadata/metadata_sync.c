@@ -4241,7 +4241,7 @@ TenantSchemaDeleteCommand(char *schemaName)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 "SELECT citus_internal.delete_tenant_schema(%s)",
 					 RemoteSchemaIdExpressionByName(schemaName));
 
 	return command->data;
