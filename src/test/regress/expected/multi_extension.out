@@ -1426,12 +1426,16 @@ SELECT * FROM multi_extension.print_extension_changes();
                     | function citus_internal.add_colocation_metadata(integer,integer,integer,regtype,oid) void
                     | function citus_internal.add_object_metadata(text,text[],text[],integer,integer,boolean) void
                     | function citus_internal.add_partition_metadata(regclass,"char",text,integer,"char") void
+                    | function citus_internal.add_placement_metadata(bigint,bigint,integer,bigint) void
+                    | function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text) void
+                    | function citus_internal.add_tenant_schema(oid,integer) void
+                    | function citus_internal.adjust_local_clock_to_remote(cluster_clock) void
                     | function citus_internal.commit_management_command_2pc() void
+                    | function citus_internal.database_command(text) void
                     | function citus_internal.execute_command_on_remote_nodes_as_user(text,text) void
                     | function citus_internal.mark_object_distributed(oid,text,oid,text) void
                     | function citus_internal.start_management_transaction(xid8) void
-                    | function citus_internal_database_command(text) void
-(9 rows)
+(13 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
