@@ -1749,8 +1749,6 @@ The reason for handling dependencies and deparsing in post-process step is that 
 
 Not all table DDL is currently deparsed. In that case, the original command sent by the client is used. That is a shortcoming in our DDL logic that causes user-facing issues and should be addressed. We do not directly construct a separate DDL command for each shard. Instead, we call the `worker_apply_shard_ddl_command(shardid bigint, ddl_command text)` function which parses the DDL command, replaces the table names with shard names in the parse tree according to the shard ID, and then executes the command. That also has some shortcomings, because we cannot support more complex DDL commands in this manner (e.g. adding multiple foreign keys). Ideally, all DDL would be deparsed, and for table DDL the deparsed query string would have shard names, similar to regular queries.
 
-`markDistributed` is used to indicate whether we add a record to `pg_dist_object` to mark the object as "distributed".
-
 ## Defining a new DDL command
 
 All commands that are propagated by Citus should be defined in DistributeObjectOps struct. Below is a sample DistributeObjectOps for ALTER DATABASE command that is defined in [distribute_object_ops.c](commands/distribute_object_ops.c) file.
@@ -1809,6 +1807,14 @@ GetDistributeObjectOps(Node *node)
 		}
 ...
 ```
+
+Finally, when adding support for propagation of a new DDL command, you also need to make sure that:
+* Use `quote_identifier()` or `quote_literal_cstr()` for the fields that might need escaping some characters or bare quotes when deparsing a DDL command.
+* The code is tolerant to nullable fields within given `Stmt *` object, i.e., the ones that Postgres allows not specifying at all.
+* You register the object into `pg_dist_object` if it's a CREATE command and you delete the object from `pg_dist_object` if it's a DROP command.
+* Node activation (e.g., `citus_add_node()`) properly propagates the object and its dependencies to new nodes.
+* Add tests cases for all the scenarios noted above.
+* Add test cases for different options that can be specified for the settings. For example, `CREATE DATABASE .. IS_TEMPLATE = TRUE` and `CREATE DATABASE .. IS_TEMPLATE = FALSE` should be tested separately.
 
 ## Object & dependency propagation
 
