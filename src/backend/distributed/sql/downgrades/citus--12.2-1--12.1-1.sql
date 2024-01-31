@@ -28,4 +28,3 @@ DROP FUNCTION citus_internal.add_colocation_metadata(int, int, int, regtype, oid
 #include "../udfs/citus_internal_add_colocation_metadata/11.0-1.sql"
 
 DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid,oid,int,boolean);
-

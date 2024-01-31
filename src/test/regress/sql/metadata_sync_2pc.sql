@@ -175,4 +175,3 @@ drop schema metadata_sync_2pc_schema;
 
 reset citus.enable_create_database_propagation;
 reset search_path;
-
