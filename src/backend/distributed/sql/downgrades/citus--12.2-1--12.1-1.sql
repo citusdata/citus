@@ -27,7 +27,6 @@ DROP FUNCTION citus_internal.add_colocation_metadata(int, int, int, regtype, oid
 DROP FUNCTION citus_internal.add_object_metadata(text, text[], text[], integer, integer, boolean);
 DROP FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char");
 DROP FUNCTION citus_internal.add_placement_metadata(bigint, bigint, integer, bigint);
-DROP FUNCTION citus_internal.add_placement_metadata(bigint, integer, bigint, integer, bigint);
 DROP FUNCTION citus_internal.add_shard_metadata(regclass, bigint, "char", text, text);
 DROP FUNCTION citus_internal.add_tenant_schema(oid, integer);
 DROP FUNCTION citus_internal.adjust_local_clock_to_remote(pg_catalog.cluster_clock);
