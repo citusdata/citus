@@ -109,6 +109,12 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	Oid classid = PG_GETARG_OID(0);
 	Oid objid = PG_GETARG_OID(1);
 	int32 objsubid = PG_GETARG_INT32(2);
+	bool checkObjectExistence = true;
+	if (!PG_ARGISNULL(3))
+	{
+		checkObjectExistence = PG_GETARG_BOOL(3);
+	}
+
 
 	ObjectAddress address = { 0 };
 	ObjectAddressSubSet(address, classid, objid, objsubid);
@@ -119,7 +125,7 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	if (ObjectExists(&address))
+	if (checkObjectExistence && ObjectExists(&address))
 	{
 		ereport(ERROR, (errmsg("object still exists"),
 						errdetail("the %s \"%s\" still exists",

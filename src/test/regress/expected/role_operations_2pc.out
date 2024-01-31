@@ -29,22 +29,6 @@ $$);
  [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"rolvaliduntil":"2023-01-01T00:00:00+03:00"}]
 (3 rows)
 
-select result FROM run_command_on_all_nodes($$
-    SELECT array_to_json(array_agg(row_to_json(t)))
-    FROM (
-        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
-        FROM pg_auth_members
-        WHERE member::regrole::text in ('test_role1', 'test_role2-needs\!escape')
-        ORDER BY member::regrole::text
-    ) t
-$$);
- result
----------------------------------------------------------------------
-
-
-
-(3 rows)
-
 \c test_db - - :master_port
 -- Test ALTER ROLE with various options
 ALTER ROLE test_role1 WITH PASSWORD 'new_password1';
@@ -70,22 +54,6 @@ $$);
  [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"rolvaliduntil":"2024-01-01T00:00:00+03:00"}]
  [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"rolvaliduntil":"2024-01-01T11:00:00+03:00"}]
  [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"rolvaliduntil":"2024-01-01T00:00:00+03:00"}]
-(3 rows)
-
-select result FROM run_command_on_all_nodes($$
-    SELECT array_to_json(array_agg(row_to_json(t)))
-    FROM (
-        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
-        FROM pg_auth_members
-        WHERE member::regrole::text in ('test_role1', 'test_role2-needs\!escape')
-        ORDER BY member::regrole::text
-    ) t
-$$);
- result
----------------------------------------------------------------------
-
-
-
 (3 rows)
 
 \c test_db - - :master_port

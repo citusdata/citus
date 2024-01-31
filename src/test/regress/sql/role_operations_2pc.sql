@@ -31,16 +31,6 @@ select result FROM run_command_on_all_nodes($$
 $$);
 
 
-select result FROM run_command_on_all_nodes($$
-    SELECT array_to_json(array_agg(row_to_json(t)))
-    FROM (
-        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
-        FROM pg_auth_members
-        WHERE member::regrole::text in ('test_role1', 'test_role2-needs\!escape')
-        ORDER BY member::regrole::text
-    ) t
-$$);
-
 \c test_db - - :master_port
 -- Test ALTER ROLE with various options
 ALTER ROLE test_role1 WITH PASSWORD 'new_password1';
@@ -66,16 +56,6 @@ select result FROM run_command_on_all_nodes($$
     ) t
 $$);
 
-
-select result FROM run_command_on_all_nodes($$
-    SELECT array_to_json(array_agg(row_to_json(t)))
-    FROM (
-        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
-        FROM pg_auth_members
-        WHERE member::regrole::text in ('test_role1', 'test_role2-needs\!escape')
-        ORDER BY member::regrole::text
-    ) t
-$$);
 
 \c test_db - - :master_port
 

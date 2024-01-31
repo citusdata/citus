@@ -97,6 +97,8 @@ WITH
     SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION
 LIMIT 10 VALID UNTIL '2023-01-01' IN ROLE test_role1;
 
+create role test_role3;
+
 \c regression - - :master_port
 
 select 1 from citus_add_node('localhost', :worker_2_port);
@@ -144,8 +146,11 @@ $$);
 --test for drop user
 select 1 from citus_remove_node('localhost', :worker_2_port);
 
+\c metadata_sync_2pc_db - - :worker_1_port
+DROP ROLE test_role1, "test_role2-needs\!escape";
+
 \c metadata_sync_2pc_db - - :master_port
-DROP ROLE IF EXISTS test_role1, "test_role2-needs\!escape";
+DROP ROLE test_role3;
 
 \c regression - - :master_port
 
@@ -161,8 +166,6 @@ select result FROM run_command_on_all_nodes($$
         ORDER BY rolname
     ) t
 $$);
-
-select * from pg_dist_object;
 
 set citus.enable_create_database_propagation to on;
 drop database metadata_sync_2pc_db;

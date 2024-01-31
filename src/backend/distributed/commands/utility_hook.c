@@ -95,6 +95,16 @@
 #define MARK_OBJECT_DISTRIBUTED \
 	"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
 
+#define UNMARK_OBJECT_DISTRIBUTED \
+	"SELECT pg_catalog.citus_unmark_object_distributed(%d, %d, %d,%s)"
+
+typedef enum
+{
+	NO_DISTRIBUTED_OPS,
+	MARK_DISTRIBUTED,
+	UNMARK_DISTRIBUTED
+} DistributedOperation;
+
 /*
  * NonMainDbDistributedStatementInfo is used to determine whether a statement is
  * supported from non-main databases and whether it should be marked as
@@ -107,7 +117,7 @@
 typedef struct NonMainDbDistributedStatementInfo
 {
 	int statementType;
-	bool explicitlyMarkAsDistributed;
+	DistributedOperation distributedOperation;
 	ObjectType *supportedObjectTypes;
 	int supportedObjectTypesSize;
 } NonMainDbDistributedStatementInfo;
@@ -125,11 +135,11 @@ typedef struct ObjectInfo
 ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, false, NULL, 0 },
-	{ T_CreateRoleStmt, true, NULL, 0 },
-    { T_DropRoleStmt, false,NULL, 0 },
-	{ T_AlterRoleStmt, false, NULL, 0 },
-	{ T_GrantStmt, false, supportedObjectTypesForGrantStmt,
+	{ T_GrantRoleStmt, NO_DISTRIBUTED_OPS, NULL, 0 },
+	{ T_CreateRoleStmt, MARK_DISTRIBUTED, NULL, 0 },
+	{ T_DropRoleStmt, UNMARK_DISTRIBUTED, NULL, 0 },
+	{ T_AlterRoleStmt, NO_DISTRIBUTED_OPS, NULL, 0 },
+	{ T_GrantStmt, NO_DISTRIBUTED_OPS, supportedObjectTypesForGrantStmt,
 	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType) }
 };
 
@@ -167,8 +177,10 @@ static bool IsObjectTypeSupported(Node *parsetree, NonMainDbDistributedStatement
 								  nonMainDbDistributedStatementInfo);
 static bool IsStatementSupportedInNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
-static ObjectInfo GetObjectInfo(Node *parsetree);
-static void MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo objectInfo);
+static bool StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree);
+static List * GetObjectInfoList(Node *parsetree);
+static void MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo *objectInfo);
+static void UnmarkObjectDistributedInNonMainDb(List *objectInfoList);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1663,6 +1675,14 @@ RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 					 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
 					 quote_literal_cstr(queryString),
 					 quote_literal_cstr(CurrentUserName()));
+
+	if (StatementRequiresUnmarkDistributedFromNonMainDb(parsetree))
+	{
+		List *objectInfoList = GetObjectInfoList(parsetree);
+
+		UnmarkObjectDistributedInNonMainDb(objectInfoList);
+	}
+
 	RunCitusMainDBQuery(mainDBQuery->data);
 }
 
@@ -1677,30 +1697,50 @@ RunPostprocessMainDBCommand(Node *parsetree)
 	if (IsStatementSupportedInNonMainDb(parsetree) &&
 		StatementRequiresMarkDistributedFromNonMainDb(parsetree))
 	{
-		ObjectInfo objectInfo = GetObjectInfo(parsetree);
-		MarkObjectDistributedInNonMainDb(parsetree, objectInfo);
+		List *objectInfoList = GetObjectInfoList(parsetree);
+		ObjectInfo *objectInfo = NULL;
+
+		if (objectInfoList != NIL)
+		{
+			objectInfo = (ObjectInfo *) linitial(objectInfoList);
+			MarkObjectDistributedInNonMainDb(parsetree, objectInfo);
+		}
 	}
 }
 
 
 /*
- * GetObjectInfo returns the name and oid of the object in the given parsetree.
+ * GetObjectInfoList returns the names and oids of the object in the given parsetree.
  */
-static ObjectInfo
-GetObjectInfo(Node *parsetree)
+List *
+GetObjectInfoList(Node *parsetree)
 {
-	ObjectInfo info;
+	List *infoList = NIL;
 
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		info.name = stmt->role;
-		info.id = get_role_oid(stmt->role, false);
+		ObjectInfo *info = palloc(sizeof(ObjectInfo));
+		info->name = stmt->role;
+		info->id = get_role_oid(stmt->role, false);
+		infoList = lappend(infoList, info);
+	}
+	else if (IsA(parsetree, DropRoleStmt))
+	{
+		DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
+		RoleSpec *roleSpec;
+		foreach_ptr(roleSpec, stmt->roles)
+		{
+			ObjectInfo *info = palloc(sizeof(ObjectInfo));
+			info->name = roleSpec->rolename;
+			info->id = get_role_oid(roleSpec->rolename, false);
+			infoList = lappend(infoList, info);
+		}
 	}
 
 	/* Add else if branches for other statement types */
 
-	return info;
+	return infoList;
 }
 
 
@@ -1709,16 +1749,39 @@ GetObjectInfo(Node *parsetree)
  * non-main database.
  */
 static void
-MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo objectInfo)
+MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo *objectInfo)
 {
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 MARK_OBJECT_DISTRIBUTED,
 					 AuthIdRelationId,
-					 quote_literal_cstr(objectInfo.name),
-					 objectInfo.id,
+					 quote_literal_cstr(objectInfo->name),
+					 objectInfo->id,
 					 quote_literal_cstr(CurrentUserName()));
 	RunCitusMainDBQuery(mainDBQuery->data);
+}
+
+
+/*
+ * UnmarkObjectDistributedInNonMainDb unmarks the given object as distributed on the
+ * non-main database.
+ */
+static void
+UnmarkObjectDistributedInNonMainDb(List *objectInfoList)
+{
+	ObjectInfo *objectInfo = NULL;
+	int subObjectId = 0;
+	char *checkObjectExistence = "false";
+	foreach_ptr(objectInfo, objectInfoList)
+	{
+		StringInfo query = makeStringInfo();
+		appendStringInfo(query,
+						 UNMARK_OBJECT_DISTRIBUTED,
+						 AuthIdRelationId,
+						 objectInfo->id,
+						 subObjectId, checkObjectExistence);
+		RunCitusMainDBQuery(query->data);
+	}
 }
 
 
@@ -1784,7 +1847,7 @@ IsObjectTypeSupported(Node *parsetree, NonMainDbDistributedStatementInfo
 
 
 /*
- * DoesStatementRequireMarkDistributedFor2PC returns true if the statement should be marked
+ * StatementRequiresMarkDistributedFromNonMainDb returns true if the statement should be marked
  * as distributed when executed from a non-main database.
  */
 static bool
@@ -1797,7 +1860,31 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return NonMainDbSupportedStatements[i].explicitlyMarkAsDistributed;
+			return NonMainDbSupportedStatements[i].distributedOperation ==
+				   MARK_DISTRIBUTED;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * StatementRequiresUnmarkDistributedFromNonMainDb returns true if the statement should be marked
+ * as distributed when executed from a non-main database.
+ */
+static bool
+StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree)
+{
+	NodeTag type = nodeTag(parsetree);
+
+	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
+		 sizeof(NonMainDbSupportedStatements[0]); i++)
+	{
+		if (type == NonMainDbSupportedStatements[i].statementType)
+		{
+			return NonMainDbSupportedStatements[i].distributedOperation ==
+				   UNMARK_DISTRIBUTED;
 		}
 	}
 
