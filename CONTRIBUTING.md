@@ -243,7 +243,7 @@ But when you're asking for a review, you're asking for someone to review your wo
 
 * Your changes don't perform **unnecessary line addition / deletions / style changes on unrelated files / lines**.
 
-* All CI jobs are **passing**, including **style checks** and **flaky test detection jobs**.
+* All CI jobs are **passing**, including **style checks** and **flaky test detection jobs**. Note that if you're an external contributor, you don't have to wait CI jobs to run (and finish) because they don't get automatically triggered for external contributors.
 
 * Your PR has necessary amount of **tests** and that they're passing.
 
