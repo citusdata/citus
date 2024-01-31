@@ -173,6 +173,10 @@ that are missing in earlier minor versions.
   make check
   ```
 
+### Following our coding conventions
+
+Our coding conventions are documented in [STYLEGUIDE.md](STYLEGUIDE.md).
+
 ### Making SQL changes
 
 Sometimes you need to make change to the SQL that the citus extension runs upon
