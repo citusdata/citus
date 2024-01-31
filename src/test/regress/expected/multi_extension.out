@@ -1432,10 +1432,11 @@ SELECT * FROM multi_extension.print_extension_changes();
                     | function citus_internal.adjust_local_clock_to_remote(cluster_clock) void
                     | function citus_internal.commit_management_command_2pc() void
                     | function citus_internal.database_command(text) void
+                    | function citus_internal.delete_colocation_metadata(integer) void
                     | function citus_internal.execute_command_on_remote_nodes_as_user(text,text) void
                     | function citus_internal.mark_object_distributed(oid,text,oid,text) void
                     | function citus_internal.start_management_transaction(xid8) void
-(13 rows)
+(14 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

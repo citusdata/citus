@@ -4209,7 +4209,7 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 	StringInfo deleteColocationCommand = makeStringInfo();
 
 	appendStringInfo(deleteColocationCommand,
-					 "SELECT pg_catalog.citus_internal_delete_colocation_metadata(%d)",
+					 "SELECT citus_internal.delete_colocation_metadata(%d)",
 					 colocationId);
 
 	return deleteColocationCommand->data;
