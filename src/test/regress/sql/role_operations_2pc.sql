@@ -4,6 +4,7 @@ set citus.enable_create_database_propagation to on;
 
 CREATE DATABASE test_db;
 
+SET citus.superuser TO 'postgres';
 -- Connect to the new database
 \c test_db
 -- Test CREATE ROLE with various options
