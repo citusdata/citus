@@ -220,7 +220,7 @@ ROLLBACK;
 -- reference tables.
 
 SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', 1, true);
-SELECT pg_catalog.citus_internal_delete_placement_metadata(1);
+SELECT citus_internal.delete_placement_metadata(1);
 
 CREATE ROLE test_user_create_ref_dist WITH LOGIN;
 GRANT ALL ON SCHEMA create_ref_dist_from_citus_local TO test_user_create_ref_dist;
@@ -239,7 +239,7 @@ SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, null, 1, tru
 SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', null, true);
 SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', 1, null);
 
-SELECT pg_catalog.citus_internal_delete_placement_metadata(null);
+SELECT citus_internal.delete_placement_metadata(null);
 
 CREATE TABLE udf_test (col_1 int);
 SELECT citus_add_local_table_to_metadata('udf_test');
@@ -253,7 +253,7 @@ BEGIN;
     SELECT placementid AS udf_test_placementid FROM pg_dist_shard_placement
     WHERE shardid = get_shard_id_for_distribution_column('create_ref_dist_from_citus_local.udf_test') \gset
 
-    SELECT pg_catalog.citus_internal_delete_placement_metadata(:udf_test_placementid);
+    SELECT citus_internal.delete_placement_metadata(:udf_test_placementid);
 
     SELECT COUNT(*)=0 FROM pg_dist_placement WHERE placementid = :udf_test_placementid;
 ROLLBACK;

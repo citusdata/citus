@@ -66,6 +66,11 @@ ORDER BY 1;
  function citus_internal.adjust_local_clock_to_remote(cluster_clock)
  function citus_internal.commit_management_command_2pc()
  function citus_internal.database_command(text)
+ function citus_internal.delete_colocation_metadata(integer)
+ function citus_internal.delete_partition_metadata(regclass)
+ function citus_internal.delete_placement_metadata(bigint)
+ function citus_internal.delete_shard_metadata(bigint)
+ function citus_internal.delete_tenant_schema(oid)
  function citus_internal.execute_command_on_remote_nodes_as_user(text,text)
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.mark_object_distributed(oid,text,oid,text)
@@ -356,5 +361,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(346 rows)
+(351 rows)
 

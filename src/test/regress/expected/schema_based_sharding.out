@@ -17,7 +17,7 @@ SELECT citus_internal.add_tenant_schema(NULL, 1);
 ERROR:  schema_id cannot be NULL
 SELECT citus_internal.add_tenant_schema(1, NULL);
 ERROR:  colocation_id cannot be NULL
-SELECT citus_internal_delete_tenant_schema(NULL);
+SELECT citus_internal.delete_tenant_schema(NULL);
 ERROR:  schema_id cannot be NULL
 SELECT citus_internal_unregister_tenant_schema_globally(1, NULL);
 ERROR:  schema_name cannot be NULL

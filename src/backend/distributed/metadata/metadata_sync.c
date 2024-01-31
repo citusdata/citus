@@ -1176,7 +1176,7 @@ DistributionDeleteMetadataCommand(Oid relationId)
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	appendStringInfo(deleteCommand,
-					 "SELECT pg_catalog.citus_internal_delete_partition_metadata(%s)",
+					 "SELECT citus_internal.delete_partition_metadata(%s)",
 					 quote_literal_cstr(qualifiedRelationName));
 
 	return deleteCommand->data;
@@ -1354,7 +1354,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 
 	StringInfo deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
-					 "SELECT citus_internal_delete_shard_metadata(%ld);", shardId);
+					 "SELECT citus_internal.delete_shard_metadata(%ld);", shardId);
 
 	return list_make1(deleteShardCommand->data);
 }
@@ -4209,7 +4209,7 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 	StringInfo deleteColocationCommand = makeStringInfo();
 
 	appendStringInfo(deleteColocationCommand,
-					 "SELECT pg_catalog.citus_internal_delete_colocation_metadata(%d)",
+					 "SELECT citus_internal.delete_colocation_metadata(%d)",
 					 colocationId);
 
 	return deleteColocationCommand->data;
@@ -4241,7 +4241,7 @@ TenantSchemaDeleteCommand(char *schemaName)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 "SELECT citus_internal.delete_tenant_schema(%s)",
 					 RemoteSchemaIdExpressionByName(schemaName));
 
 	return command->data;
@@ -4291,7 +4291,7 @@ DeletePlacementMetadataCommand(uint64 placementId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_placement_metadata(%ld)",
+					 "SELECT citus_internal.delete_placement_metadata(%ld)",
 					 placementId);
 	return command->data;
 }
