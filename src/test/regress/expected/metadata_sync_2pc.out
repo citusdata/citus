@@ -155,17 +155,17 @@ select result FROM run_command_on_all_nodes($$
     FROM (
         SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
-        (rolpassword != '') as pass_not_empty, rolvaliduntil
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
         WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
-                                                                                                                                                                                                                                                    result
+                                                                                                                                                                                                                                   result
 ---------------------------------------------------------------------
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"rolvaliduntil":"2023-01-01T00:00:00+03:00"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"rolvaliduntil":"2023-01-01T11:00:00+03:00"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":"infinity"},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"rolvaliduntil":"2023-01-01T00:00:00+03:00"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":"infinity"},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
 (3 rows)
 
 --test for alter user
@@ -195,17 +195,17 @@ select result FROM run_command_on_all_nodes($$
     FROM (
         SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
-        (rolpassword != '') as pass_not_empty, rolvaliduntil
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
         WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
-                                                                                                                                                                                                                                                       result
+                                                                                                                                                                                                                                      result
 ---------------------------------------------------------------------
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"rolvaliduntil":"2024-01-01T00:00:00+03:00"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"rolvaliduntil":"2024-01-01T11:00:00+03:00"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":"infinity"},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"rolvaliduntil":"2024-01-01T00:00:00+03:00"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":"infinity"},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
 (3 rows)
 
 --test for drop user
@@ -231,17 +231,17 @@ select result FROM run_command_on_all_nodes($$
     FROM (
         SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
-        (rolpassword != '') as pass_not_empty, rolvaliduntil
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
         WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
-                                                                                                                                                                                                                                                       result
+                                                                                                                                                                                                                                      result
 ---------------------------------------------------------------------
 
 
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"rolvaliduntil":"infinity"},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"rolvaliduntil":"2024-01-01T00:00:00+03:00"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":"infinity"},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
 (3 rows)
 
 set citus.enable_create_database_propagation to on;

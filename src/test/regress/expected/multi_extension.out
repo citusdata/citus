@@ -1429,7 +1429,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_internal.mark_object_distributed(oid,text,oid,text) void
                  | function citus_internal.start_management_transaction(xid8) void
                  | function citus_internal_database_command(text) void
-(7 rows)
+				 | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
+(8 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
