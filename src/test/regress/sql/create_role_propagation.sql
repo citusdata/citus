@@ -99,7 +99,7 @@ GRANT non_dist_role_1 TO non_dist_role_2;
 
 SET citus.enable_create_role_propagation TO OFF;
 
-GRANT dist_role_1 TO dist_role_2;
+GRANT dist_role_1 TO dist_role_2 granted by postgres;
 
 RESET ROLE;
 
