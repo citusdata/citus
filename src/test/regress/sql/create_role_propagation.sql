@@ -93,13 +93,13 @@ CREATE ROLE non_dist_role_4;
 
 SET citus.enable_create_role_propagation TO ON;
 
-SET ROLE dist_role_1;
+SET ROLE non_dist_role_1;
 
 GRANT non_dist_role_1 TO non_dist_role_2;
 
 SET citus.enable_create_role_propagation TO OFF;
 
-GRANT dist_role_1 TO dist_role_2 granted by postgres;
+GRANT dist_role_1 TO dist_role_2;
 
 RESET ROLE;
 
