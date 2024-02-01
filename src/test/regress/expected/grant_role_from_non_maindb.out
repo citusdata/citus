@@ -33,7 +33,7 @@ select result FROM run_command_on_all_nodes(
     SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
     FROM pg_auth_members
     WHERE member::regrole::text = 'grant_role2pc_user2'
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
     ) t
     $$
 );
@@ -67,7 +67,7 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
                                                                                                                                                                result
@@ -87,7 +87,7 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
                                                                                                                                                                                                                                                                                                                                                        result
@@ -104,6 +104,7 @@ BEGIN;
 revoke grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3 ;
 revoke grant_role2pc_user1 from grant_role2pc_user4 granted by grant_role2pc_user3;
 COMMIT;
+\c grant_role2pc_db - - :worker_1_port
 BEGIN;
 revoke grant_role2pc_user1 from grant_role2pc_user6,grant_role2pc_user7 granted by grant_role2pc_user3;
 revoke grant_role2pc_user1 from grant_role2pc_user3 cascade;
@@ -116,7 +117,7 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user2','grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
                                                                                                                                                                                                                                                                                   result
@@ -139,14 +140,14 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user5','grant_role2pc_user6')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
                                                                                                                                                                                                                          result
 ---------------------------------------------------------------------
- [{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
- [{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
- [{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false}]
+ [{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false}]
+ [{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false}]
+ [{"member":"grant_role2pc_user5","role":"grant_role2pc_user1","grantor":"postgres","admin_option":true},{"member":"grant_role2pc_user5","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user1","grantor":"postgres","admin_option":false},{"member":"grant_role2pc_user6","role":"grant_role2pc_user2","grantor":"grant_role2pc_user3","admin_option":false}]
 (3 rows)
 
 revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;

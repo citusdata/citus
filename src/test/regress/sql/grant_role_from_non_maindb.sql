@@ -1,18 +1,13 @@
 
 
 CREATE SCHEMA grant_role2pc;
-
 SET search_path TO grant_role2pc;
-
 set citus.enable_create_database_propagation to on;
-
 
 CREATE DATABASE grant_role2pc_db;
 
-
 \c grant_role2pc_db
 SHOW citus.main_db;
-
 
 SET citus.superuser TO 'postgres';
 CREATE USER grant_role2pc_user1;
@@ -41,7 +36,7 @@ select result FROM run_command_on_all_nodes(
     SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
     FROM pg_auth_members
     WHERE member::regrole::text = 'grant_role2pc_user2'
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
     ) t
     $$
 );
@@ -75,7 +70,7 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
 
@@ -93,7 +88,7 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
 
@@ -105,7 +100,7 @@ BEGIN;
 revoke grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3 ;
 revoke grant_role2pc_user1 from grant_role2pc_user4 granted by grant_role2pc_user3;
 COMMIT;
-
+\c grant_role2pc_db - - :worker_1_port
 BEGIN;
 revoke grant_role2pc_user1 from grant_role2pc_user6,grant_role2pc_user7 granted by grant_role2pc_user3;
 revoke grant_role2pc_user1 from grant_role2pc_user3 cascade;
@@ -120,7 +115,7 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user2','grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
 
@@ -139,7 +134,7 @@ FROM (
     FROM pg_auth_members
     WHERE member::regrole::text in
         ('grant_role2pc_user5','grant_role2pc_user6')
-    order by member::regrole::text
+    order by member::regrole::text, roleid::regrole::text
 ) t
 $$);
 
@@ -149,8 +144,6 @@ revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;
 DROP SCHEMA grant_role2pc;
 set citus.enable_create_database_propagation to on;
 DROP DATABASE grant_role2pc_db;
-
 drop user grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
 drop user grant_role2pc_user1;
-
 reset citus.enable_create_database_propagation;

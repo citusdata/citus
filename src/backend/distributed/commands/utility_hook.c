@@ -158,7 +158,7 @@ static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedInNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 static ObjectInfo GetObjectInfo(Node *parsetree);
-static void MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo objectInfo);
+static void MarkObjectDistributedInNonMainDb(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1667,8 +1667,7 @@ RunPostprocessMainDBCommand(Node *parsetree)
 	if (IsStatementSupportedInNonMainDb(parsetree) &&
 		StatementRequiresMarkDistributedFromNonMainDb(parsetree))
 	{
-		ObjectInfo objectInfo = GetObjectInfo(parsetree);
-		MarkObjectDistributedInNonMainDb(parsetree, objectInfo);
+		MarkObjectDistributedInNonMainDb(parsetree);
 	}
 }
 
@@ -1699,8 +1698,9 @@ GetObjectInfo(Node *parsetree)
  * non-main database.
  */
 static void
-MarkObjectDistributedInNonMainDb(Node *parsetree, ObjectInfo objectInfo)
+MarkObjectDistributedInNonMainDb(Node *parsetree)
 {
+	ObjectInfo objectInfo = GetObjectInfo(parsetree);
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 MARK_OBJECT_DISTRIBUTED,
