@@ -1,5 +1,3 @@
-
-
 CREATE SCHEMA grant_role2pc;
 SET search_path TO grant_role2pc;
 set citus.enable_create_database_propagation to on;
@@ -119,13 +117,13 @@ FROM (
 ) t
 $$);
 
-\c - - - :worker_1_port
+\c grant_role2pc_db - - :worker_1_port
 BEGIN;
 grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION;
 grant grant_role2pc_user1 to grant_role2pc_user6;
 COMMIT;
 
-\c - - - :master_port
+\c regression - - :master_port
 
 select result FROM run_command_on_all_nodes($$
 SELECT array_to_json(array_agg(row_to_json(t)))

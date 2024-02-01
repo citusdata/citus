@@ -100,8 +100,8 @@
  * supported from non-main databases and whether it should be marked as
  * distributed explicitly (*).
  *
- * We always have to mark such the objects created "as distributed" but while for
- * some object types we can delegate this to main database, for some others we have
+ * (*) We always have to mark such objects as "distributed" but while for some
+ * object types we can delegate this to main database, for some others we have
  * to explicitly send a command to all nodes in this code-path to achieve this.
  */
 typedef struct NonMainDbDistributedStatementInfo
@@ -157,8 +157,8 @@ static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedInNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
-static ObjectInfo GetObjectInfo(Node *parsetree);
 static void MarkObjectDistributedInNonMainDb(Node *parsetree);
+static ObjectInfo GetObjectInfo(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1673,23 +1673,26 @@ RunPostprocessMainDBCommand(Node *parsetree)
 
 
 /*
- * GetObjectInfo returns the name and oid of the object in the given parsetree.
+ * GetObjectInfo returns ObjectInfo for the target object of given parsetree.
  */
 static ObjectInfo
 GetObjectInfo(Node *parsetree)
 {
-	ObjectInfo info;
 
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		info.name = stmt->role;
-		info.id = get_role_oid(stmt->role, false);
+    	ObjectInfo info = {
+			.name = stmt->role,
+			.id = get_role_oid(stmt->role, false)
+		};
+
+		return info;
 	}
 
 	/* Add else if branches for other statement types */
 
-	return info;
+	elog(ERROR, "unsupported statement type");
 }
 
 
@@ -1713,7 +1716,7 @@ MarkObjectDistributedInNonMainDb(Node *parsetree)
 
 
 /*
- * IsStatementSupportedIn2Pc returns true if the statement is supported from a
+ * IsStatementSupportedInNonMainDb returns true if the statement is supported from a
  * non-main database.
  */
 static bool
@@ -1735,7 +1738,7 @@ IsStatementSupportedInNonMainDb(Node *parsetree)
 
 
 /*
- * DoesStatementRequireMarkDistributedFor2PC returns true if the statement should be marked
+ * StatementRequiresMarkDistributedFromNonMainDb returns true if the statement should be marked
  * as distributed when executed from a non-main database.
  */
 static bool
