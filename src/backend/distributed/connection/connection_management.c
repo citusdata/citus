@@ -42,12 +42,6 @@
 #include "distributed/time_constants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
-#include "mb/pg_wchar.h"
-#include "pg_config.h"
-#include "portability/instr_time.h"
-#include "storage/ipc.h"
-#include "utils/hsearch.h"
-#include "utils/memutils.h"
 
 
 int NodeConnectionTimeout = 30000;

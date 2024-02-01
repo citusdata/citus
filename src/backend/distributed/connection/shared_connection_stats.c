@@ -13,6 +13,7 @@
 #include "postgres.h"
 
 #include "libpq-fe.h"
+#include "math.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 
@@ -32,10 +33,8 @@
 #include "distributed/placement_connection.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/time_constants.h"
-#include "distributed/worker_manager.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
-#include "math.h"
 
 #define REMOTE_CONNECTION_STATS_COLUMNS 4
 
@@ -162,7 +161,6 @@ static void DecrementSharedConnectionCounterInternal(uint32 externalFlags, const
 
 
 PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
-
 
 /*
  * citus_remote_connection_stats returns all the avaliable information about all
@@ -964,8 +962,7 @@ SharedWorkerNodeDatabaseHashHash(const void *key, Size keysize)
 {
 	SharedWorkerNodeDatabaseConnStatsHashKey *entry =
 		(SharedWorkerNodeDatabaseConnStatsHashKey *) key;
-	uint32 hash = string_hash(entry->workerNodeKey.hostname, NAMEDATALEN);
-	hash = hash_combine(hash, hash_uint32(entry->workerNodeKey.port));
+	uint32 hash = SharedConnectionHashHash(&(entry->workerNodeKey), keysize);
 	hash = hash_combine(hash, hash_uint32(entry->database));
 
 	return hash;
@@ -991,9 +988,9 @@ SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size keysize)
 	SharedWorkerNodeDatabaseConnStatsHashKey *cb =
 		(SharedWorkerNodeDatabaseConnStatsHashKey *) b;
 
-	return strncmp(ca->workerNodeKey.hostname, cb->workerNodeKey.hostname,
-				   MAX_NODE_LENGTH) != 0 ||
-		   ca->workerNodeKey.port != cb->workerNodeKey.port ||
+	int sharedConnectionHashCompare =
+		SharedConnectionHashCompare(&(ca->workerNodeKey), &(cb->workerNodeKey), keysize);
+	return sharedConnectionHashCompare ||
 		   ca->database != cb->database;
 }
 

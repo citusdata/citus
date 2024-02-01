@@ -49,6 +49,7 @@
 
 #include "distributed/background_jobs.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/connection_management.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -60,7 +61,6 @@
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
-#include "distributed/connection_management.h"
 
 /*
  * Shared memory data for all maintenance workers.
