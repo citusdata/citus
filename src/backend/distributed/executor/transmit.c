@@ -17,6 +17,7 @@
 #include "pgstat.h"
 
 #include "commands/defrem.h"
+#include "common/file_perm.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "storage/fd.h"
@@ -48,8 +49,7 @@ RedirectCopyDataToRegularFile(const char *filename)
 {
 	StringInfo copyData = makeStringInfo();
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-	const int fileMode = (S_IRUSR | S_IWUSR);
-	File fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	File fileDesc = FileOpenForTransmit(filename, fileFlags);
 	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
 
 	SendCopyInStart();
@@ -92,7 +92,7 @@ SendRegularFile(const char *filename)
 	const int fileMode = 0;
 
 	/* we currently do not check if the caller has permissions for this file */
-	File fileDesc = FileOpenForTransmit(filename, fileFlags, fileMode);
+	File fileDesc = FileOpenForTransmitPerm(filename, fileFlags, fileMode);
 	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
 
 	/*
@@ -136,12 +136,23 @@ FreeStringInfo(StringInfo stringInfo)
 
 
 /*
- * FileOpenForTransmit opens file with the given filename and flags. On success,
- * the function returns the internal file handle for the opened file. On failure
- * the function errors out.
+ * Open a file with FileOpenForTransmitPerm() and pass default file mode for
+ * the fileMode parameter.
  */
 File
-FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
+FileOpenForTransmit(const char *filename, int fileFlags)
+{
+	return FileOpenForTransmitPerm(filename, fileFlags, pg_file_create_mode);
+}
+
+
+/*
+ * FileOpenForTransmitPerm opens file with the given filename and flags. On
+ * success, the function returns the internal file handle for the opened file.
+ * On failure the function errors out.
+ */
+File
+FileOpenForTransmitPerm(const char *filename, int fileFlags, int fileMode)
 {
 	struct stat fileStat;
 
