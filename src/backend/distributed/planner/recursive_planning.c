@@ -1097,8 +1097,8 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 	if (query->hasRecursive)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "recursive CTEs are not supported in distributed "
-							 "queries",
+							 "recursive CTEs are only supported when they "
+							 "contain a filter on the distribution column",
 							 NULL, NULL);
 	}
 

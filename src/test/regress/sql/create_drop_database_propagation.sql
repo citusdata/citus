@@ -5,7 +5,7 @@
 -- For versions >= 16, pg16_create_drop_database_propagation.sql is used.
 
 -- Test the UDF that we use to issue database command during metadata sync.
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 
 CREATE ROLE test_db_commands WITH LOGIN;
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_db_commands';
@@ -14,20 +14,20 @@ SELECT pg_sleep(0.1);
 SET ROLE test_db_commands;
 
 -- fails on null input
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 
 -- fails on non create / drop db command
-SELECT pg_catalog.citus_internal_database_command('CREATE TABLE foo_bar(a int)');
-SELECT pg_catalog.citus_internal_database_command('SELECT 1');
-SELECT pg_catalog.citus_internal_database_command('asfsfdsg');
-SELECT pg_catalog.citus_internal_database_command('');
+SELECT citus_internal.database_command('CREATE TABLE foo_bar(a int)');
+SELECT citus_internal.database_command('SELECT 1');
+SELECT citus_internal.database_command('asfsfdsg');
+SELECT citus_internal.database_command('');
 
 RESET ROLE;
 ALTER ROLE test_db_commands nocreatedb;
 SET ROLE test_db_commands;
 
--- make sure that pg_catalog.citus_internal_database_command doesn't cause privilege escalation
-SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE no_permissions');
+-- make sure that citus_internal.database_command doesn't cause privilege escalation
+SELECT citus_internal.database_command('CREATE DATABASE no_permissions');
 
 RESET ROLE;
 DROP USER test_db_commands;
