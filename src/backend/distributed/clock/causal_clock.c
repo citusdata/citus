@@ -397,7 +397,7 @@ AdjustClocksToTransactionHighest(List *nodeConnectionList,
 
 	/* Set the clock value on participating worker nodes */
 	appendStringInfo(queryToSend,
-					 "SELECT pg_catalog.citus_internal_adjust_local_clock_to_remote"
+					 "SELECT citus_internal.adjust_local_clock_to_remote"
 					 "('(%lu, %u)'::pg_catalog.cluster_clock);",
 					 transactionClockValue->logical, transactionClockValue->counter);
 
