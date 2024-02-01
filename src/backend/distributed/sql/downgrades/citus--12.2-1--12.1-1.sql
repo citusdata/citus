@@ -35,3 +35,9 @@ DROP FUNCTION citus_internal.delete_partition_metadata(regclass);
 DROP FUNCTION citus_internal.delete_placement_metadata(bigint);
 DROP FUNCTION citus_internal.delete_shard_metadata(bigint);
 DROP FUNCTION citus_internal.delete_tenant_schema(oid);
+DROP FUNCTION citus_internal.local_blocked_processes();
+#include "../udfs/citus_blocking_pids/11.0-1.sql"
+#include "../udfs/citus_isolation_test_session_is_blocked/11.1-1.sql"
+DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
+#include "../udfs/citus_lock_waits/11.0-1.sql"
+DROP FUNCTION citus_internal.global_blocked_processes;

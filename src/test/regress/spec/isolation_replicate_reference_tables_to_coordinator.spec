@@ -90,7 +90,7 @@ step "s2-view-worker"
       ('%pg_prepared_xacts%'),
       ('%COMMIT%'),
       ('%dump_local_%'),
-      ('%citus_internal_local_blocked_processes%'),
+      ('%citus_internal.local_blocked_processes%'),
       ('%add_node%'),
       ('%csa_from_one_node%'),
       ('%pg_locks%'))
