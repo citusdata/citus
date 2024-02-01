@@ -606,7 +606,7 @@ CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
 
-	int makeOK = mkdir(resultDirectory, S_IRWXU);
+	int makeOK = MakePGDirectory(resultDirectory);
 	if (makeOK != 0)
 	{
 		if (errno == EEXIST)

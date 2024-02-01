@@ -29,7 +29,7 @@ static bool FileIsLink(const char *filename, struct stat filestat);
 void
 CitusCreateDirectory(StringInfo directoryName)
 {
-	int makeOK = mkdir(directoryName->data, S_IRWXU);
+	int makeOK = MakePGDirectory(directoryName->data);
 	if (makeOK != 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),

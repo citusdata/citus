@@ -903,7 +903,7 @@ CreateRequiredDirectories(void)
 
 	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
 	{
-		int ret = mkdir(subdirs[dirNo], S_IRWXU);
+		int ret = MakePGDirectory(subdirs[dirNo]);
 
 		if (ret != 0 && errno != EEXIST)
 		{
