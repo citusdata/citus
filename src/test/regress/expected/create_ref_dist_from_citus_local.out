@@ -371,7 +371,7 @@ ROLLBACK;
 -- reference tables.
 SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', 1, true);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
-SELECT pg_catalog.citus_internal_delete_placement_metadata(1);
+SELECT citus_internal.delete_placement_metadata(1);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 CREATE ROLE test_user_create_ref_dist WITH LOGIN;
 GRANT ALL ON SCHEMA create_ref_dist_from_citus_local TO test_user_create_ref_dist;
@@ -401,7 +401,7 @@ SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', null, t
 ERROR:  colocation_id cannot be NULL
 SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', 1, null);
 ERROR:  auto_converted cannot be NULL
-SELECT pg_catalog.citus_internal_delete_placement_metadata(null);
+SELECT citus_internal.delete_placement_metadata(null);
 ERROR:  placement_id cannot be NULL
 CREATE TABLE udf_test (col_1 int);
 SELECT citus_add_local_table_to_metadata('udf_test');
@@ -426,8 +426,8 @@ BEGIN;
 
     SELECT placementid AS udf_test_placementid FROM pg_dist_shard_placement
     WHERE shardid = get_shard_id_for_distribution_column('create_ref_dist_from_citus_local.udf_test') \gset
-    SELECT pg_catalog.citus_internal_delete_placement_metadata(:udf_test_placementid);
- citus_internal_delete_placement_metadata
+    SELECT citus_internal.delete_placement_metadata(:udf_test_placementid);
+ delete_placement_metadata
 ---------------------------------------------------------------------
 
 (1 row)

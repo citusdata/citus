@@ -999,7 +999,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 	appendStringInfo(insertDistributedObjectsCommand, ") ");
 
 	appendStringInfo(insertDistributedObjectsCommand,
-					 "SELECT citus_internal_add_object_metadata("
+					 "SELECT citus_internal.add_object_metadata("
 					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) "
 					 "FROM distributed_object_data;");
 
@@ -1134,7 +1134,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	}
 
 	appendStringInfo(insertDistributionCommand,
-					 "SELECT citus_internal_add_partition_metadata "
+					 "SELECT citus_internal.add_partition_metadata "
 					 "(%s::regclass, '%c', %s, %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
@@ -1176,7 +1176,7 @@ DistributionDeleteMetadataCommand(Oid relationId)
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	appendStringInfo(deleteCommand,
-					 "SELECT pg_catalog.citus_internal_delete_partition_metadata(%s)",
+					 "SELECT citus_internal.delete_partition_metadata(%s)",
 					 quote_literal_cstr(qualifiedRelationName));
 
 	return deleteCommand->data;
@@ -1259,7 +1259,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertPlacementCommand, ") ");
 
 	appendStringInfo(insertPlacementCommand,
-					 "SELECT citus_internal_add_placement_metadata("
+					 "SELECT citus_internal.add_placement_metadata("
 					 "shardid, shardlength, groupid, placementid) "
 					 "FROM placement_data;");
 
@@ -1315,7 +1315,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertShardCommand, ") ");
 
 	appendStringInfo(insertShardCommand,
-					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
+					 "SELECT citus_internal.add_shard_metadata(relationname, shardid, "
 					 "storagetype, shardminvalue, shardmaxvalue) "
 					 "FROM shard_data;");
 
@@ -1354,7 +1354,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 
 	StringInfo deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
-					 "SELECT citus_internal_delete_shard_metadata(%ld);", shardId);
+					 "SELECT citus_internal.delete_shard_metadata(%ld);", shardId);
 
 	return list_make1(deleteShardCommand->data);
 }
@@ -4056,7 +4056,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		ereport(ERROR, (errmsg("citus_internal_database_command() can only be used "
+		ereport(ERROR, (errmsg("citus_internal.database_command() can only be used "
 							   "for CREATE DATABASE command by Citus.")));
 	}
 
@@ -4209,7 +4209,7 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 	StringInfo deleteColocationCommand = makeStringInfo();
 
 	appendStringInfo(deleteColocationCommand,
-					 "SELECT pg_catalog.citus_internal_delete_colocation_metadata(%d)",
+					 "SELECT citus_internal.delete_colocation_metadata(%d)",
 					 colocationId);
 
 	return deleteColocationCommand->data;
@@ -4225,7 +4225,7 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+					 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 					 RemoteSchemaIdExpressionById(schemaId), colocationId);
 
 	return command->data;
@@ -4241,7 +4241,7 @@ TenantSchemaDeleteCommand(char *schemaName)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 "SELECT citus_internal.delete_tenant_schema(%s)",
 					 RemoteSchemaIdExpressionByName(schemaName));
 
 	return command->data;
@@ -4276,7 +4276,7 @@ AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal_add_placement_metadata(%ld, %ld, %d, %ld)",
+					 "SELECT citus_internal.add_placement_metadata(%ld, %ld, %d, %ld)",
 					 shardId, shardLength, groupId, placementId);
 	return command->data;
 }
@@ -4291,7 +4291,7 @@ DeletePlacementMetadataCommand(uint64 placementId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_placement_metadata(%ld)",
+					 "SELECT citus_internal.delete_placement_metadata(%ld)",
 					 placementId);
 	return command->data;
 }
@@ -4957,7 +4957,7 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+						 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
