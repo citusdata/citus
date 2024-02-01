@@ -1678,11 +1678,10 @@ RunPostprocessMainDBCommand(Node *parsetree)
 static ObjectInfo
 GetObjectInfo(Node *parsetree)
 {
-
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-    	ObjectInfo info = {
+		ObjectInfo info = {
 			.name = stmt->role,
 			.id = get_role_oid(stmt->role, false)
 		};
