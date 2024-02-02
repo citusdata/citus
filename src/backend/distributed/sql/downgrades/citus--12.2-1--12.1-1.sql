@@ -47,3 +47,7 @@ DROP FUNCTION citus_internal.unregister_tenant_schema_globally(oid, text);
 #include "../udfs/citus_drop_trigger/12.0-1.sql"
 DROP FUNCTION citus_internal.update_none_dist_table_metadata(oid, "char", bigint, boolean);
 DROP FUNCTION citus_internal.update_placement_metadata(bigint, integer, integer);
+DROP FUNCTION citus_internal.update_relation_colocation(oid, int);
+DROP FUNCTION citus_internal.start_replication_origin_tracking();
+DROP FUNCTION citus_internal.stop_replication_origin_tracking();
+DROP FUNCTION citus_internal.is_replication_origin_tracking_active();

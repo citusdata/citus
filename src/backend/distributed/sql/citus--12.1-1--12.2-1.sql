@@ -50,3 +50,5 @@ DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
 #include "udfs/citus_drop_trigger/12.2-1.sql"
 #include "udfs/citus_internal_update_none_dist_table_metadata/12.2-1.sql"
 #include "udfs/citus_internal_update_placement_metadata/12.2-1.sql"
+#include "udfs/citus_internal_update_relation_colocation/12.2-1.sql"
+#include "udfs/repl_origin_helper/12.2-1.sql"
