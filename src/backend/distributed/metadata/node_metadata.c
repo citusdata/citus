@@ -1692,7 +1692,7 @@ EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid)
 	if (!parentHasExclusiveLock)
 	{
 		ereport(ERROR, (errmsg("lock is not held by the caller. Unexpected caller "
-							   "for citus_internal_mark_node_not_synced")));
+							   "for citus_internal.mark_node_not_synced")));
 	}
 }
 

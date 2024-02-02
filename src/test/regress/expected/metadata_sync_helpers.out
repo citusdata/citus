@@ -349,7 +349,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420007, 10000, 11111);
+	SELECT citus_internal.update_placement_metadata(1420007, 10000, 11111);
 ERROR:  could not find valid entry for shard xxxxx
 ROLLBACK;
 -- non-existing users should fail to pass the checks
@@ -1130,7 +1130,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420000, get_node_id(), get_node_id()+1000);
+	SELECT citus_internal.update_placement_metadata(1420000, get_node_id(), get_node_id()+1000);
 ERROR:  Node with group id 1014 for shard placement xxxxx does not exist
 COMMIT;
 -- fails because the source node doesn't contain the shard
@@ -1143,7 +1143,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420000, get_node_id()+10000, get_node_id());
+	SELECT citus_internal.update_placement_metadata(1420000, get_node_id()+10000, get_node_id());
 ERROR:  Active placement for shard xxxxx is not found on group:14
 COMMIT;
 -- fails because shard does not exist
@@ -1156,7 +1156,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(0, get_node_id(), get_node_id()+1);
+	SELECT citus_internal.update_placement_metadata(0, get_node_id(), get_node_id()+1);
 ERROR:  Shard id does not exists: 0
 COMMIT;
 -- fails because none-existing shard
@@ -1169,7 +1169,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(213123123123, get_node_id(), get_node_id()+1);
+	SELECT citus_internal.update_placement_metadata(213123123123, get_node_id(), get_node_id()+1);
 ERROR:  Shard id does not exists: 213123123123
 COMMIT;
 -- fails because we do not own the shard
@@ -1182,7 +1182,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420007, get_node_id(), get_node_id()+1);
+	SELECT citus_internal.update_placement_metadata(1420007, get_node_id(), get_node_id()+1);
 ERROR:  must be owner of table super_user_table
 COMMIT;
 -- the user only allowed to delete their own shards

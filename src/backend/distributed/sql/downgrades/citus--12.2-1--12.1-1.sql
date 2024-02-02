@@ -35,3 +35,9 @@ DROP FUNCTION citus_internal.delete_partition_metadata(regclass);
 DROP FUNCTION citus_internal.delete_placement_metadata(bigint);
 DROP FUNCTION citus_internal.delete_shard_metadata(bigint);
 DROP FUNCTION citus_internal.delete_tenant_schema(oid);
+
+DROP FUNCTION citus_internal.mark_node_not_synced(int, int);
+DROP FUNCTION citus_internal.unregister_tenant_schema_globally(oid, text);
+#include "../udfs/citus_drop_trigger/12.0-1.sql"
+DROP FUNCTION citus_internal.update_none_dist_table_metadata(oid, "char", bigint, boolean);
+DROP FUNCTION citus_internal.update_placement_metadata(bigint, integer, integer);
