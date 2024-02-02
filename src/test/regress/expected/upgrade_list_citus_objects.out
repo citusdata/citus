@@ -75,6 +75,7 @@ ORDER BY 1;
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.global_blocked_processes()
  function citus_internal.local_blocked_processes()
+ function citus_internal.mark_node_not_synced(integer,integer)
  function citus_internal.mark_object_distributed(oid,text,oid,text)
  function citus_internal.pg_dist_node_trigger_func()
  function citus_internal.pg_dist_rebalance_strategy_trigger_func()
@@ -83,6 +84,9 @@ ORDER BY 1;
  function citus_internal.replace_isolation_tester_func()
  function citus_internal.restore_isolation_tester_func()
  function citus_internal.start_management_transaction(xid8)
+ function citus_internal.unregister_tenant_schema_globally(oid,text)
+ function citus_internal.update_none_dist_table_metadata(oid,"char",bigint,boolean)
+ function citus_internal.update_placement_metadata(bigint,integer,integer)
  function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid)
  function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean)
  function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char")
@@ -363,5 +367,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(353 rows)
+(357 rows)
 

@@ -202,7 +202,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420007, 10000, 11111);
+	SELECT citus_internal.update_placement_metadata(1420007, 10000, 11111);
 ROLLBACK;
 
 -- non-existing users should fail to pass the checks
@@ -703,7 +703,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420000, get_node_id(), get_node_id()+1000);
+	SELECT citus_internal.update_placement_metadata(1420000, get_node_id(), get_node_id()+1000);
 COMMIT;
 
 -- fails because the source node doesn't contain the shard
@@ -711,7 +711,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420000, get_node_id()+10000, get_node_id());
+	SELECT citus_internal.update_placement_metadata(1420000, get_node_id()+10000, get_node_id());
 COMMIT;
 
 -- fails because shard does not exist
@@ -719,7 +719,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(0, get_node_id(), get_node_id()+1);
+	SELECT citus_internal.update_placement_metadata(0, get_node_id(), get_node_id()+1);
 COMMIT;
 
 -- fails because none-existing shard
@@ -727,7 +727,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(213123123123, get_node_id(), get_node_id()+1);
+	SELECT citus_internal.update_placement_metadata(213123123123, get_node_id(), get_node_id()+1);
 COMMIT;
 
 -- fails because we do not own the shard
@@ -735,7 +735,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal_update_placement_metadata(1420007, get_node_id(), get_node_id()+1);
+	SELECT citus_internal.update_placement_metadata(1420007, get_node_id(), get_node_id()+1);
 COMMIT;
 
 -- the user only allowed to delete their own shards

@@ -41,3 +41,9 @@ DROP FUNCTION citus_internal.local_blocked_processes();
 DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
 #include "../udfs/citus_lock_waits/11.0-1.sql"
 DROP FUNCTION citus_internal.global_blocked_processes;
+
+DROP FUNCTION citus_internal.mark_node_not_synced(int, int);
+DROP FUNCTION citus_internal.unregister_tenant_schema_globally(oid, text);
+#include "../udfs/citus_drop_trigger/12.0-1.sql"
+DROP FUNCTION citus_internal.update_none_dist_table_metadata(oid, "char", bigint, boolean);
+DROP FUNCTION citus_internal.update_placement_metadata(bigint, integer, integer);

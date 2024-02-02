@@ -4258,7 +4258,7 @@ UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(%s, '%c', %u, %s)",
+					 "SELECT citus_internal.update_none_dist_table_metadata(%s, '%c', %u, %s)",
 					 RemoteTableIdExpression(relationId), replicationModel, colocationId,
 					 autoConverted ? "true" : "false");
 

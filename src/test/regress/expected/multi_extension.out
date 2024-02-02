@@ -1440,9 +1440,13 @@ SELECT * FROM multi_extension.print_extension_changes();
                     | function citus_internal.execute_command_on_remote_nodes_as_user(text,text) void
                     | function citus_internal.global_blocked_processes() SETOF record
                     | function citus_internal.local_blocked_processes() SETOF record
+                    | function citus_internal.mark_node_not_synced(integer,integer) void
                     | function citus_internal.mark_object_distributed(oid,text,oid,text) void
                     | function citus_internal.start_management_transaction(xid8) void
-(20 rows)
+                    | function citus_internal.unregister_tenant_schema_globally(oid,text) void
+                    | function citus_internal.update_none_dist_table_metadata(oid,"char",bigint,boolean) void
+                    | function citus_internal.update_placement_metadata(bigint,integer,integer) void
+(24 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

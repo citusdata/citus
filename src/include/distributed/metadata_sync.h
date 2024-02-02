@@ -189,7 +189,7 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define WORKER_DROP_ALL_SHELL_TABLES \
 	"CALL pg_catalog.worker_drop_all_shell_tables(%s)"
 #define CITUS_INTERNAL_MARK_NODE_NOT_SYNCED \
-	"SELECT citus_internal_mark_node_not_synced(%d, %d)"
+	"SELECT citus_internal.mark_node_not_synced(%d, %d)"
 
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"

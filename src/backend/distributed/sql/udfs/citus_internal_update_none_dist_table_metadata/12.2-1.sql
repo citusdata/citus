@@ -9,7 +9,7 @@ VOLATILE
 AS 'MODULE_PATHNAME', $$citus_internal_update_none_dist_table_metadata$$;
 COMMENT ON FUNCTION citus_internal.update_none_dist_table_metadata(oid, "char", bigint, boolean)
     IS 'Update pg_dist_partition metadata table for given none-distributed table, to convert it to another type of none-distributed table.';
-
+    
 CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_update_none_dist_table_metadata(
     relation_id oid,
     replication_model "char",
