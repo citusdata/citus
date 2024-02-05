@@ -241,25 +241,28 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT result FROM run_command_on_all_nodes(
   $$
   SELECT json_agg(q.* ORDER BY member) FROM (
-    SELECT roleid::regrole::text AS role, member::regrole::text,
-    grantor::regrole::text AS grantor,
-    admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2
+    SELECT member::regrole::text, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
   ) q;
   $$
 );
-                                                result
+                                      result
 ---------------------------------------------------------------------
- [{"role":"dist_role_1","member":"dist_role_2","grantor":"postgres","admin_option":false},            +
-  {"role":"non_dist_role_4","member":"dist_role_4","grantor":"postgres","admin_option":false},        +
-  {"role":"non_dist_role_1","member":"non_dist_role_2","grantor":"postgres","admin_option":false},    +
-  {"role":"dist_role_3","member":"non_dist_role_3","grantor":"test_admin_role","admin_option":false}, +
-  {"role":"dist_role_3","member":"test_admin_role","grantor":"postgres","admin_option":true}]
- [{"role":"non_dist_role_4","member":"dist_role_4","grantor":"postgres","admin_option":false},        +
-  {"role":"dist_role_3","member":"test_admin_role","grantor":"postgres","admin_option":true}]
- [{"role":"dist_role_1","member":"dist_role_2","grantor":"postgres","admin_option":false},            +
-  {"role":"non_dist_role_4","member":"dist_role_4","grantor":"postgres","admin_option":false},        +
-  {"role":"dist_role_3","member":"test_admin_role","grantor":"postgres","admin_option":true}]
+ [{"member":"non_dist_role_3","grantor":"test_admin_role","admin_option":false}, +
+  {"member":"test_admin_role","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","grantor":"postgres","admin_option":true}]
 (3 rows)
+
+SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
+      role       |     member      | grantor | admin_option
+---------------------------------------------------------------------
+ dist_role_1     | dist_role_2     | t       | f
+ dist_role_3     | non_dist_role_3 | f       | f
+ dist_role_3     | test_admin_role | t       | t
+ non_dist_role_1 | non_dist_role_2 | t       | f
+ non_dist_role_4 | dist_role_4     | t       | f
+(5 rows)
 
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
       objid
