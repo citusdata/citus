@@ -107,13 +107,19 @@ RESET ROLE;
 
 SET citus.enable_create_role_propagation TO ON;
 
-GRANT dist_role_3 TO non_dist_role_3 granted by postgres;
+create role test_admin_role;
+grant dist_role_3 to test_admin_role with admin option;
+
+GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
 GRANT non_dist_role_4 TO dist_role_4;
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
+
+REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role;
+drop role test_admin_role;
 
 \c - - - :worker_1_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
