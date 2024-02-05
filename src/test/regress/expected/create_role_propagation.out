@@ -254,11 +254,11 @@ SELECT result FROM run_command_on_all_nodes(
  [{"member":"test_admin_role","grantor":"postgres","admin_option":true}]
 (3 rows)
 
-SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
+SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1','test_admin_role')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
       role       |     member      | grantor | admin_option
 ---------------------------------------------------------------------
  dist_role_1     | dist_role_2     | t       | f
- dist_role_3     | non_dist_role_3 | f       | f
+ dist_role_3     | non_dist_role_3 | t       | f
  dist_role_3     | test_admin_role | t       | t
  non_dist_role_1 | non_dist_role_2 | t       | f
  non_dist_role_4 | dist_role_4     | t       | f
