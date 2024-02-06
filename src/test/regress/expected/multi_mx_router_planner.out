@@ -370,7 +370,7 @@ WITH RECURSIVE hierarchy as (
 				h.company_id = ce.company_id))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- logically wrong query, query involves different shards
 -- from the same table, but still router plannable due to
 -- shard being placed on the same worker.
@@ -386,7 +386,7 @@ WITH RECURSIVE hierarchy as (
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- grouping sets are supported on single shard
 SELECT
 	id, substring(title, 2, 1) AS subtitle, count(*)

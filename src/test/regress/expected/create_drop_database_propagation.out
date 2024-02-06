@@ -3,7 +3,7 @@
 -- For versions >= 15, pg15_create_drop_database_propagation.sql is used.
 -- For versions >= 16, pg16_create_drop_database_propagation.sql is used.
 -- Test the UDF that we use to issue database command during metadata sync.
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 CREATE ROLE test_db_commands WITH LOGIN;
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_db_commands';
@@ -21,22 +21,22 @@ SELECT pg_sleep(0.1);
 
 SET ROLE test_db_commands;
 -- fails on null input
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 ERROR:  command cannot be NULL
 -- fails on non create / drop db command
-SELECT pg_catalog.citus_internal_database_command('CREATE TABLE foo_bar(a int)');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
-SELECT pg_catalog.citus_internal_database_command('SELECT 1');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
-SELECT pg_catalog.citus_internal_database_command('asfsfdsg');
+SELECT citus_internal.database_command('CREATE TABLE foo_bar(a int)');
+ERROR:  citus_internal.database_command() can only be used for CREATE DATABASE command by Citus.
+SELECT citus_internal.database_command('SELECT 1');
+ERROR:  citus_internal.database_command() can only be used for CREATE DATABASE command by Citus.
+SELECT citus_internal.database_command('asfsfdsg');
 ERROR:  syntax error at or near "asfsfdsg"
-SELECT pg_catalog.citus_internal_database_command('');
+SELECT citus_internal.database_command('');
 ERROR:  cannot execute multiple utility events
 RESET ROLE;
 ALTER ROLE test_db_commands nocreatedb;
 SET ROLE test_db_commands;
--- make sure that pg_catalog.citus_internal_database_command doesn't cause privilege escalation
-SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE no_permissions');
+-- make sure that citus_internal.database_command doesn't cause privilege escalation
+SELECT citus_internal.database_command('CREATE DATABASE no_permissions');
 ERROR:  permission denied to create database
 RESET ROLE;
 DROP USER test_db_commands;
@@ -1095,46 +1095,46 @@ SELECT * FROM public.check_database_on_all_nodes('test_db') ORDER BY node_type;
 REVOKE CONNECT ON DATABASE test_db FROM propagated_role;
 DROP DATABASE test_db;
 DROP ROLE propagated_role, non_propagated_role;
--- test pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock with null input
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(null, 'regression');
+-- test citus_internal.acquire_citus_advisory_object_class_lock with null input
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(null, 'regression');
 ERROR:  object_class cannot be NULL
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), null);
- citus_internal_acquire_citus_advisory_object_class_lock
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), null);
+ acquire_citus_advisory_object_class_lock
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- OCLASS_DATABASE
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), NULL);
- citus_internal_acquire_citus_advisory_object_class_lock
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), NULL);
+ acquire_citus_advisory_object_class_lock
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'regression');
- citus_internal_acquire_citus_advisory_object_class_lock
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'regression');
+ acquire_citus_advisory_object_class_lock
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), '');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), '');
 ERROR:  database "" does not exist
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'no_such_db');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'no_such_db');
 ERROR:  database "no_such_db" does not exist
 -- invalid OCLASS
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(-1, NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(-1, NULL);
 ERROR:  unsupported object class: -1
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(-1, 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(-1, 'regression');
 ERROR:  unsupported object class: -1
 -- invalid OCLASS
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(100, NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(100, NULL);
 ERROR:  unsupported object class: 100
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(100, 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(100, 'regression');
 ERROR:  unsupported object class: 100
 -- another valid OCLASS, but not implemented yet
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(10, NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(10, NULL);
 ERROR:  unsupported object class: 10
-SELECT pg_catalog.citus_internal_acquire_citus_advisory_object_class_lock(10, 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock(10, 'regression');
 ERROR:  unsupported object class: 10
 SELECT 1 FROM run_command_on_all_nodes('ALTER SYSTEM SET citus.enable_create_database_propagation TO ON');
  ?column?

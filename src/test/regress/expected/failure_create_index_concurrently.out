@@ -29,7 +29,7 @@ CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
 If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
 if applicable, and then re-attempt the original command.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -63,7 +63,7 @@ CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
 If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
 if applicable, and then re-attempt the original command.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -144,7 +144,7 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_index_test;
 WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
 If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
 if applicable, and then re-attempt the original command.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

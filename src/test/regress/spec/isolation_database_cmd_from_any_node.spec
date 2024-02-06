@@ -20,8 +20,8 @@ step "s1-rollback" { ROLLBACK; }
 step "s1-create-user-dbuser" { CREATE USER dbuser; }
 step "s1-drop-user-dbuser" { DROP USER dbuser; }
 
-step "s1-acquire-citus-adv-oclass-lock" { SELECT citus_internal_acquire_citus_advisory_object_class_lock(value, NULL) FROM oclass_database; }
-step "s1-acquire-citus-adv-oclass-lock-with-oid-testdb1" { SELECT citus_internal_acquire_citus_advisory_object_class_lock(value, 'testdb1') FROM oclass_database; }
+step "s1-acquire-citus-adv-oclass-lock" { SELECT citus_internal.acquire_citus_advisory_object_class_lock(value, NULL) FROM oclass_database; }
+step "s1-acquire-citus-adv-oclass-lock-with-oid-testdb1" { SELECT citus_internal.acquire_citus_advisory_object_class_lock(value, 'testdb1') FROM oclass_database; }
 
 step "s1-create-testdb1" { CREATE DATABASE testdb1; }
 step "s1-drop-testdb1" { DROP DATABASE testdb1; }
@@ -42,9 +42,9 @@ step "s2-begin" { BEGIN; }
 step "s2-commit" { COMMIT; }
 step "s2-rollback" { ROLLBACK; }
 
-step "s2-acquire-citus-adv-oclass-lock" { SELECT citus_internal_acquire_citus_advisory_object_class_lock(value, NULL) FROM oclass_database; }
-step "s2-acquire-citus-adv-oclass-lock-with-oid-testdb1" { SELECT citus_internal_acquire_citus_advisory_object_class_lock(value, 'testdb1') FROM oclass_database; }
-step "s2-acquire-citus-adv-oclass-lock-with-oid-testdb2" { SELECT citus_internal_acquire_citus_advisory_object_class_lock(value, 'testdb2') FROM oclass_database; }
+step "s2-acquire-citus-adv-oclass-lock" { SELECT citus_internal.acquire_citus_advisory_object_class_lock(value, NULL) FROM oclass_database; }
+step "s2-acquire-citus-adv-oclass-lock-with-oid-testdb1" { SELECT citus_internal.acquire_citus_advisory_object_class_lock(value, 'testdb1') FROM oclass_database; }
+step "s2-acquire-citus-adv-oclass-lock-with-oid-testdb2" { SELECT citus_internal.acquire_citus_advisory_object_class_lock(value, 'testdb2') FROM oclass_database; }
 
 step "s2-alter-testdb1-rename-to-db1" { ALTER DATABASE testdb1 RENAME TO db1; }
 

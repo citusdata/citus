@@ -5723,14 +5723,6 @@ GetPoolinfoViaCatalog(int32 nodeId)
 char *
 GetAuthinfoViaCatalog(const char *roleName, int64 nodeId)
 {
-	/*
-	 * Citus will not be loaded when we run a global DDL command from a
-	 * Citus non-main database.
-	 */
-	if (!CitusHasBeenLoaded())
-	{
-		return "";
-	}
 	char *authinfo = "";
 	Datum nodeIdDatumArray[2] = {
 		Int32GetDatum(nodeId),

@@ -92,7 +92,7 @@
 #define START_MANAGEMENT_TRANSACTION \
 	"SELECT citus_internal.start_management_transaction('%lu')"
 #define MARK_OBJECT_DISTRIBUTED \
-	"SELECT citus_internal.mark_object_distributed(%d, %s, %d)"
+	"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -1636,7 +1636,8 @@ RunPostprocessMainDBCommand(Node *parsetree)
 						 MARK_OBJECT_DISTRIBUTED,
 						 AuthIdRelationId,
 						 quote_literal_cstr(createRoleStmt->role),
-						 roleOid);
+						 roleOid,
+						 quote_literal_cstr(CurrentUserName()));
 		RunCitusMainDBQuery(mainDBQuery->data);
 	}
 }

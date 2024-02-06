@@ -250,7 +250,7 @@ count
 step s1-commit-prepared:
     COMMIT prepared 'label';
 
-s2: WARNING:  connection to the remote node non-existent:57637 failed with the following error: could not translate host name "non-existent" to address: <system specific error>
+s2: WARNING:  connection to the remote node postgres@non-existent:57637 failed with the following error: could not translate host name "non-existent" to address: <system specific error>
 step s2-execute-prepared:
     EXECUTE foo;
 
