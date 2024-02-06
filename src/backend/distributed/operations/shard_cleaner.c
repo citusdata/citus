@@ -92,6 +92,8 @@ static bool TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 													 char *nodeName,
 													 int nodePort);
 static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int nodePort);
+static bool TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName,
+											  int nodePort);
 
 static CleanupRecord * GetCleanupRecordByNameAndType(char *objectName,
 													 CleanupObject type);
@@ -141,7 +143,6 @@ Datum
 citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 	PreventInTransactionBlock(true, "citus_cleanup_orphaned_resources");
 
 	int droppedCount = DropOrphanedResourcesForCleanup();
@@ -245,12 +246,6 @@ TryDropOrphanedResources()
 static int
 DropOrphanedResourcesForCleanup()
 {
-	/* Only runs on Coordinator */
-	if (!IsCoordinator())
-	{
-		return 0;
-	}
-
 	List *cleanupRecordList = ListCleanupRecords();
 
 	/*
@@ -603,6 +598,12 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 			return TryDropUserOutsideTransaction(record->objectName, nodeName, nodePort);
 		}
 
+		case CLEANUP_OBJECT_DATABASE:
+		{
+			return TryDropDatabaseOutsideTransaction(record->objectName, nodeName,
+													 nodePort);
+		}
+
 		default:
 		{
 			ereport(WARNING, (errmsg(
@@ -880,6 +881,64 @@ TryDropUserOutsideTransaction(char *username,
 					 quote_identifier(username))));
 
 	return success;
+}
+
+
+/*
+ * TryDropDatabaseOutsideTransaction drops the database with the given name
+ * if it exists.
+ */
+static bool
+TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePort)
+{
+	int connectionFlags = (OUTSIDE_TRANSACTION | FORCE_NEW_CONNECTION);
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		return false;
+	}
+
+	/*
+	 * We want to disable DDL propagation and set lock_timeout before issuing
+	 * the DROP DATABASE command but we cannot do so in a way that's scoped
+	 * to the DROP DATABASE command. This is because, we cannot use a
+	 * transaction block for the DROP DATABASE command.
+	 *
+	 * For this reason, to avoid leaking the lock_timeout and DDL propagation
+	 * settings to future commands, we force the connection to close at the end
+	 * of the transaction.
+	 */
+	ForceConnectionCloseAtTransactionEnd(connection);
+
+	/*
+	 * The DROP DATABASE command should not propagate, so we disable DDL
+	 * propagation.
+	 */
+	List *commandList = list_make3(
+		"SET lock_timeout TO '1s'",
+		"SET citus.enable_ddl_propagation TO OFF;",
+		psprintf("DROP DATABASE IF EXISTS %s;", quote_identifier(databaseName))
+		);
+
+	bool executeCommand = true;
+
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		if (ExecuteOptionalRemoteCommand(connection, commandString, NULL) !=
+			RESPONSE_OKAY)
+		{
+			executeCommand = false;
+			break;
+		}
+	}
+
+	CloseConnection(connection);
+	return executeCommand;
 }
 
 

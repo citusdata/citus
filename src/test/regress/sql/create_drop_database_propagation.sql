@@ -219,6 +219,7 @@ SELECT * FROM public.check_database_on_all_nodes('my_template_database') ORDER B
 set citus.enable_create_database_propagation=on;
 SET citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%CREATE DATABASE%';
+SET citus.next_operation_id TO 2000;
 
 create database "mydatabase#1'2";
 
@@ -745,6 +746,46 @@ SELECT 1 FROM run_command_on_all_nodes($$REVOKE ALL ON TABLESPACE pg_default FRO
 
 DROP DATABASE no_createdb;
 DROP USER no_createdb;
+
+-- Test a failure scenario by trying to create a distributed database that
+-- already exists on one of the nodes.
+
+\c - - - :worker_1_port
+CREATE DATABASE "test_\!failure";
+
+\c - - - :master_port
+
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE DATABASE "test_\!failure";
+
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+
+SELECT result AS database_cleanedup_on_node FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+SELECT * FROM public.check_database_on_all_nodes($$test_\!failure$$) ORDER BY node_type, result;
+
+SET citus.enable_create_database_propagation TO OFF;
+CREATE DATABASE "test_\!failure1";
+
+\c - - - :worker_1_port
+DROP DATABASE "test_\!failure";
+
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE DATABASE "test_\!failure1";
+
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+
+SELECT result AS database_cleanedup_on_node FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+SELECT * FROM public.check_database_on_all_nodes($$test_\!failure1$$) ORDER BY node_type, result;
+
+\c - - - :master_port
+
+DROP DATABASE "test_\!failure1";
 
 SET citus.enable_create_database_propagation TO ON;
 
