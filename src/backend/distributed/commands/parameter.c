@@ -18,9 +18,12 @@
 
 static List * GenerateGrantOnParameterFromAclItem(char *parameterName, AclItem *aclItem);
 static bool HasAclGrantOption(AclItem *aclItem, AclMode aclMode);
-static void CheckPermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes);
-static void CheckAndAppendQuery(List **queries, AclItem *aclItem, Oid granteeOid,
-								char *parameterName, AclMode mode, char *modeStr);
+static void ValidatePermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes);
+static void CheckAndAppendGrantParameterQuery(List **queries, AclItem *aclItem, Oid
+											  granteeOid,
+											  char *parameterName, AclMode mode,
+											  char *modeStr);
+static void RemoveSemicolonFromEnd(char *query);
 
 
 List *
@@ -39,13 +42,18 @@ PostprocessGrantParameterStmt(Node *node, const char *queryString)
 								(void *) command,
 								ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
 /*
- * GenerateGrantOnParameterFromAclItem generates a query string for replicating a users permissions
- * on a database.
+ * GenerateGrantOnParameterFromAclItem generates the grant queries for the given aclItem.
+ * First it sets the current role to the grantor of the aclItem, then it appends the grant
+ * privilege queries for the aclItem, and finally it resets the role to the original role.
+ * Ex: If the aclItem has the grant option for ACL_SET, it generates the following queries:
+ * 	SET ROLE <grantor>;
+ * 	GRANT SET ON <parameterName> TO <grantee>;
+ * 	RESET ROLE;
  */
 static List *
 GenerateGrantOnParameterFromAclItem(char *parameterName, AclItem *aclItem)
@@ -53,15 +61,17 @@ GenerateGrantOnParameterFromAclItem(char *parameterName, AclItem *aclItem)
 	/*
 	 * seems unlikely but we check if there is a grant option in the list without the actual permission
 	 */
-	CheckPermissionsAndGrants(aclItem, (AclMode[]) { ACL_SET, ACL_ALTER_SYSTEM }, 2);
+	ValidatePermissionsAndGrants(aclItem, (AclMode[]) { ACL_SET, ACL_ALTER_SYSTEM }, 2);
 	Oid granteeOid = aclItem->ai_grantee;
 	List *queries = NIL;
 
 	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
 
-	CheckAndAppendQuery(&queries, aclItem, granteeOid, parameterName, ACL_SET, "SET");
-	CheckAndAppendQuery(&queries, aclItem, granteeOid, parameterName, ACL_ALTER_SYSTEM,
-						"ALTER SYSTEM");
+	CheckAndAppendGrantParameterQuery(&queries, aclItem, granteeOid, parameterName,
+									  ACL_SET, "SET");
+	CheckAndAppendGrantParameterQuery(&queries, aclItem, granteeOid, parameterName,
+									  ACL_ALTER_SYSTEM,
+									  "ALTER SYSTEM");
 
 	queries = lappend(queries, "RESET ROLE");
 
@@ -70,12 +80,14 @@ GenerateGrantOnParameterFromAclItem(char *parameterName, AclItem *aclItem)
 
 
 /*
- * CheckAndAppendQuery checks if the aclItem has the given mode and if it has, it appends the
+ * CheckAndAppendGrantParameterQuery checks if the aclItem has the given mode and if it has, it appends the
  * corresponding query to the queries list.
+ * Ex: If the mode is ACL_SET, it appends the query "GRANT SET ON <parameterName> TO <grantee>"
  */
 static void
-CheckAndAppendQuery(List **queries, AclItem *aclItem, Oid granteeOid, char *parameterName,
-					AclMode mode, char *modeStr)
+CheckAndAppendGrantParameterQuery(List **queries, AclItem *aclItem, Oid granteeOid,
+								  char *parameterName,
+								  AclMode mode, char *modeStr)
 {
 	AclResult aclresult = pg_parameter_aclcheck(parameterName, granteeOid, mode);
 	if (aclresult == ACLCHECK_OK)
@@ -85,9 +97,7 @@ CheckAndAppendQuery(List **queries, AclItem *aclItem, Oid granteeOid, char *para
 										  modeStr,
 										  HasAclGrantOption(aclItem, mode)));
 
-		/* remove the semicolon at the end of the query since it is already */
-		/* appended in metadata_sync phase */
-		query[strlen(query) - 1] = '\0';
+		RemoveSemicolonFromEnd(query);
 
 		*queries = lappend(*queries, query);
 	}
@@ -95,11 +105,26 @@ CheckAndAppendQuery(List **queries, AclItem *aclItem, Oid granteeOid, char *para
 
 
 /*
- * CheckPermissionsAndGrants checks if the aclItem has the valid permissions and grants
+ * RemoveSemicolonFromEnd removes the semicolon at the end of the query if it exists.
+ */
+static void
+RemoveSemicolonFromEnd(char *query)
+{
+	/* remove the semicolon at the end of the query since it is already */
+	/* appended in metadata_sync phase */
+	if (query[strlen(query) - 1] == ';')
+	{
+		query[strlen(query) - 1] = '\0';
+	}
+}
+
+
+/*
+ * ValidatePermissionsAndGrants validates if the aclItem has the valid permissions and grants
  * for the given modes.
  */
 static void
-CheckPermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes)
+ValidatePermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes)
 {
 	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_PARAMETER_ACL;
 	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_PARAMETER_ACL;
@@ -119,6 +144,9 @@ CheckPermissionsAndGrants(AclItem *aclItem, AclMode modes[], int numModes)
 }
 
 
+/*
+ * HasAclGrantOption checks if the aclItem has the grant option for the given mode.
+ */
 static bool
 HasAclGrantOption(AclItem *aclItem, AclMode aclMode)
 {
@@ -126,8 +154,12 @@ HasAclGrantOption(AclItem *aclItem, AclMode aclMode)
 }
 
 
+/*
+ * GenerateGrantStmtOnParametersFromCatalogTable generates the grant statements for the parameters
+ * from the pg_parameter_acl catalog table.
+ */
 List *
-GrantOnParameters(void)
+GenerateGrantStmtOnParametersFromCatalogTable(void)
 {
 	/* Open pg_shdescription catalog */
 	Relation paramPermissionRelation = table_open(ParameterAclRelationId,

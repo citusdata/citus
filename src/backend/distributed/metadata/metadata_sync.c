@@ -4726,7 +4726,7 @@ PropagateNodeWideObjectsCommandList(void)
 		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
 #if PG_VERSION_NUM >= PG_VERSION_15
-	List *grantOnParameterCommands = GrantOnParameters();
+	List *grantOnParameterCommands = GenerateGrantStmtOnParametersFromCatalogTable();
 	ddlCommands = list_concat(ddlCommands, grantOnParameterCommands);
 #endif /* PG_VERSION_NUM >= PG_VERSION_15 */
 

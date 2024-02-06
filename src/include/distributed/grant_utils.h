@@ -13,7 +13,7 @@
 #include "nodes/parsenodes.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_15
-extern List * GrantOnParameters(void);
+extern List * GenerateGrantStmtOnParametersFromCatalogTable(void);
 #endif /* PG_VERSION_NUM >= PG_VERSION_15 */
 
 extern char * GenerateSetRoleQuery(Oid roleOid);
