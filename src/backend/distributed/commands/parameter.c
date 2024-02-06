@@ -51,9 +51,9 @@ PostprocessGrantParameterStmt(Node *node, const char *queryString)
  * First it sets the current role to the grantor of the aclItem, then it appends the grant
  * privilege queries for the aclItem, and finally it resets the role to the original role.
  * Ex: If the aclItem has the grant option for ACL_SET, it generates the following queries:
- * 	SET ROLE <grantor>;
- * 	GRANT SET ON <parameterName> TO <grantee>;
- * 	RESET ROLE;
+ * SET ROLE <grantor>;
+ * GRANT SET ON <parameterName> TO <grantee>;
+ * RESET ROLE;
  */
 static List *
 GenerateGrantOnParameterFromAclItem(char *parameterName, AclItem *aclItem)
@@ -205,6 +205,5 @@ GenerateGrantStmtOnParametersFromCatalogTable(void)
 
 	return commands;
 }
-
 
 #endif /* PG_VERSION_NUM >= PG_VERSION_15 */
