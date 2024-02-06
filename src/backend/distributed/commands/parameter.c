@@ -206,4 +206,5 @@ GenerateGrantStmtOnParametersFromCatalogTable(void)
 	return commands;
 }
 
+
 #endif /* PG_VERSION_NUM >= PG_VERSION_15 */
