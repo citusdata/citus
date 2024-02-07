@@ -170,6 +170,12 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 	Node *parsetree = pstmt->utilityStmt;
 
+	if (IsA(parsetree, GrantRoleStmt))
+	{
+		GrantRoleStmt *grantRoleStmt = (GrantRoleStmt *) parsetree;
+		elog(LOG, "GrantRoleStmt: ");
+	}
+
 	if (IsA(parsetree, TransactionStmt))
 	{
 		TransactionStmt *transactionStmt = (TransactionStmt *) parsetree;

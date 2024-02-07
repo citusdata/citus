@@ -1241,12 +1241,6 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	/*
-	 * Postgres don't seem to use the grantor. Even dropping the grantor doesn't
-	 * seem to affect the membership. If this changes, we might need to add grantors
-	 * to the dependency resolution too. For now we just don't propagate it.
-	 */
-	stmt->grantor = NULL;
 	stmt->grantee_roles = distributedGranteeRoles;
 	char *sql = DeparseTreeNode((Node *) stmt);
 	stmt->grantee_roles = allGranteeRoles;

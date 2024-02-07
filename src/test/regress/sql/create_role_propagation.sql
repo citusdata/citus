@@ -131,6 +131,8 @@ SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
 
 REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role;
+
+revoke dist_role_3 from test_admin_role cascade;
 drop role test_admin_role;
 
 \c - - - :worker_1_port

@@ -252,7 +252,7 @@ SELECT result FROM run_command_on_all_nodes(
  [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false},     +
   {"member":"non_dist_role_3","role":"dist_role_3","grantor":"test_admin_role","admin_option":false}, +
   {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
- [{"member":"dist_role_4","role":"dist_role_3","grantor":"postgres","admin_option":false},            +
+ [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false},     +
   {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
  [{"member":"dist_role_4","role":"dist_role_3","grantor":"postgres","admin_option":false},            +
   {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
@@ -280,6 +280,7 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 (5 rows)
 
 REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role;
+revoke dist_role_3 from test_admin_role cascade;
 drop role test_admin_role;
 \c - - - :worker_1_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
