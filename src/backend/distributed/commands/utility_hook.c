@@ -1673,48 +1673,6 @@ RunPostprocessMainDBCommand(Node *parsetree)
 
 
 /*
- * GetObjectInfo returns ObjectInfo for the target object of given parsetree.
- */
-static ObjectInfo
-GetObjectInfo(Node *parsetree)
-{
-	if (IsA(parsetree, CreateRoleStmt))
-	{
-		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		ObjectInfo info = {
-			.name = stmt->role,
-			.id = get_role_oid(stmt->role, false)
-		};
-
-		return info;
-	}
-
-	/* Add else if branches for other statement types */
-
-	elog(ERROR, "unsupported statement type");
-}
-
-
-/*
- * MarkObjectDistributedInNonMainDb marks the given object as distributed on the
- * non-main database.
- */
-static void
-MarkObjectDistributedInNonMainDb(Node *parsetree)
-{
-	ObjectInfo objectInfo = GetObjectInfo(parsetree);
-	StringInfo mainDBQuery = makeStringInfo();
-	appendStringInfo(mainDBQuery,
-					 MARK_OBJECT_DISTRIBUTED,
-					 AuthIdRelationId,
-					 quote_literal_cstr(objectInfo.name),
-					 objectInfo.id,
-					 quote_literal_cstr(CurrentUserName()));
-	RunCitusMainDBQuery(mainDBQuery->data);
-}
-
-
-/*
  * IsStatementSupportedInNonMainDb returns true if the statement is supported from a
  * non-main database.
  */
@@ -1755,4 +1713,46 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 	}
 
 	return false;
+}
+
+
+/*
+ * MarkObjectDistributedInNonMainDb marks the given object as distributed on the
+ * non-main database.
+ */
+static void
+MarkObjectDistributedInNonMainDb(Node *parsetree)
+{
+	ObjectInfo objectInfo = GetObjectInfo(parsetree);
+	StringInfo mainDBQuery = makeStringInfo();
+	appendStringInfo(mainDBQuery,
+					 MARK_OBJECT_DISTRIBUTED,
+					 AuthIdRelationId,
+					 quote_literal_cstr(objectInfo.name),
+					 objectInfo.id,
+					 quote_literal_cstr(CurrentUserName()));
+	RunCitusMainDBQuery(mainDBQuery->data);
+}
+
+
+/*
+ * GetObjectInfo returns ObjectInfo for the target object of given parsetree.
+ */
+static ObjectInfo
+GetObjectInfo(Node *parsetree)
+{
+	if (IsA(parsetree, CreateRoleStmt))
+	{
+		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
+		ObjectInfo info = {
+			.name = stmt->role,
+			.id = get_role_oid(stmt->role, false)
+		};
+
+		return info;
+	}
+
+	/* Add else if branches for other statement types */
+
+	elog(ERROR, "unsupported statement type");
 }
