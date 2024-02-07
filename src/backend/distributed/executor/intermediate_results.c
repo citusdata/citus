@@ -295,7 +295,6 @@ PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
 	if (resultDest->writeLocalFile)
 	{
 		const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-		const int fileMode = (S_IRUSR | S_IWUSR);
 
 		/* make sure the directory exists */
 		CreateIntermediateResultsDirectory();
@@ -303,8 +302,7 @@ PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
 		const char *fileName = QueryResultFileName(resultId);
 
 		resultDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(fileName,
-																			 fileFlags,
-																			 fileMode));
+																			 fileFlags));
 	}
 
 	WorkerNode *workerNode = NULL;
@@ -606,7 +604,7 @@ CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
 
-	int makeOK = mkdir(resultDirectory, S_IRWXU);
+	int makeOK = MakePGDirectory(resultDirectory);
 	if (makeOK != 0)
 	{
 		if (errno == EEXIST)
@@ -976,7 +974,6 @@ FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
 
 	StringInfo copyCommand = makeStringInfo();
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-	const int fileMode = (S_IRUSR | S_IWUSR);
 
 	PGconn *pgConn = connection->pgConn;
 	int socket = PQsocket(pgConn);
@@ -998,7 +995,7 @@ FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
 
 	PQclear(result);
 
-	File fileDesc = FileOpenForTransmit(localPath, fileFlags, fileMode);
+	File fileDesc = FileOpenForTransmit(localPath, fileFlags);
 	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
 
 	while (true)

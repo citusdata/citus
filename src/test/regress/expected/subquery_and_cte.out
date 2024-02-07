@@ -527,7 +527,7 @@ FROM
      ) as bar
 WHERE foo.user_id = bar.user_id
 ORDER BY 1 DESC;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 CREATE TABLE ref_table_1 (a int);
 SELECT create_reference_table('ref_table_1');
  create_reference_table
