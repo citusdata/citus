@@ -895,22 +895,13 @@ DecrementExternalClientBackendCounterAtExit(int code, Datum arg)
 static void
 CreateRequiredDirectories(void)
 {
-	const char *subdirs[] = {
-		"pg_foreign_file",
-		"pg_foreign_file/cached",
-		("base/" PG_JOB_CACHE_DIR)
-	};
+	const char *subdir = ("base/" PG_JOB_CACHE_DIR);
 
-	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
+	if (MakePGDirectory(subdir) != 0 && errno != EEXIST)
 	{
-		int ret = mkdir(subdirs[dirNo], S_IRWXU);
-
-		if (ret != 0 && errno != EEXIST)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not create directory \"%s\": %m",
-								   subdirs[dirNo])));
-		}
+		ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not create directory \"%s\": %m",
+							   subdir)));
 	}
 }
 
