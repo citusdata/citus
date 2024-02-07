@@ -1424,7 +1424,7 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 	StringInfo command = makeStringInfo();
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 	appendStringInfo(command,
-					 "SELECT citus_internal_update_relation_colocation(%s::regclass, %d)",
+					 "SELECT citus_internal.update_relation_colocation(%s::regclass, %d)",
 					 quote_literal_cstr(qualifiedRelationName), colocationId);
 
 	return command->data;
@@ -4258,7 +4258,7 @@ UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(%s, '%c', %u, %s)",
+					 "SELECT citus_internal.update_none_dist_table_metadata(%s, '%c', %u, %s)",
 					 RemoteTableIdExpression(relationId), replicationModel, colocationId,
 					 autoConverted ? "true" : "false");
 
