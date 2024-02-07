@@ -1439,7 +1439,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                     | function citus_internal.delete_tenant_schema(oid) void
                     | function citus_internal.execute_command_on_remote_nodes_as_user(text,text) void
                     | function citus_internal.global_blocked_processes() SETOF record
-                    |  function citus_internal.is_replication_origin_tracking_active() boolean
+                    | function citus_internal.is_replication_origin_tracking_active() boolean
                     | function citus_internal.local_blocked_processes() SETOF record
                     | function citus_internal.mark_node_not_synced(integer,integer) void
                     | function citus_internal.mark_object_distributed(oid,text,oid,text) void
