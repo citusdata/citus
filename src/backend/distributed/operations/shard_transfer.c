@@ -294,6 +294,17 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
+	List *referenceTableIdList = NIL;
+
+	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
+	{
+		ereport(ERROR, (errmsg("there are missing reference tables on some nodes"),
+						errhint("Copy reference tables first with "
+								"replicate_reference_tables() or use "
+								"citus_rebalance_start() that will do it automatically."
+								)));
+	}
+
 	int64 shardId = PG_GETARG_INT64(0);
 	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
 	int32 sourceNodePort = PG_GETARG_INT32(2);

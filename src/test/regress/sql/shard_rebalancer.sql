@@ -1326,6 +1326,43 @@ DROP TABLE t1, r1, r2;
 -- test suites should clean up their distributed tables.
 SELECT count(*) FROM pg_dist_partition;
 
+-- verify a system with a new node won't copy distributed table shards without reference tables
+
+SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
+
+CREATE TABLE r1 (a int PRIMARY KEY, b int);
+SELECT create_reference_table('r1');
+
+CREATE TABLE d1 (a int PRIMARY KEY, b int);
+SELECT create_distributed_table('d1', 'a');
+
+ALTER SEQUENCE pg_dist_groupid_seq RESTART WITH 15;
+SELECT 1 from master_add_node('localhost', :worker_2_port);
+
+-- count the number of placements for the reference table to verify it is not available on
+-- all nodes
+SELECT count(*)
+FROM pg_dist_shard
+JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'r1'::regclass;
+
+-- #7426 We can't move shards to the fresh node before we copy reference tables there.
+-- rebalance_table_shards() will do the copy, but the low-level
+-- citus_move_shard_placement() should raise an error
+SELECT citus_move_shard_placement(pg_dist_shard.shardid, nodename, nodeport, 'localhost', :worker_2_port)
+    FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+    WHERE logicalrelid = 'd1'::regclass AND nodename = 'localhost' AND nodeport = :worker_1_port LIMIT 1;
+
+SELECT replicate_reference_tables();
+
+-- After replication, the move should succeed.
+SELECT citus_move_shard_placement(pg_dist_shard.shardid, nodename, nodeport, 'localhost', :worker_2_port)
+    FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+    WHERE logicalrelid = 'd1'::regclass AND nodename = 'localhost' AND nodeport = :worker_1_port LIMIT 1;
+
+DROP TABLE d1, r1;
+
 -- verify a system having only reference tables will copy the reference tables when
 -- executing the rebalancer
 
