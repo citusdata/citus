@@ -112,17 +112,20 @@ grant dist_role_3 to test_admin_role with admin option;
 
 GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
 GRANT non_dist_role_4 TO dist_role_4;
+GRANT dist_role_3 TO dist_role_4 granted by test_admin_role;
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT result FROM run_command_on_all_nodes(
   $$
   SELECT json_agg(q.* ORDER BY member) FROM (
-    SELECT member::regrole::text, grantor::regrole::text, admin_option
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
     FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
   ) q;
   $$
 );
+
+REVOKE dist_role_3 from dist_role_4 granted by test_admin_role;
 
 SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1','test_admin_role')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
