@@ -481,9 +481,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 /*
  * PostprocessCreateDatabaseStmt is executed after the statement is applied to the local
  * postgres instance. In this stage we prepare the commands that need to be run on
- * all workers to create the database. Since the CREATE DATABASE statement gives error
- * in a transaction block, we need to use NontransactionalNodeDDLTaskList to send the
- * CREATE DATABASE statement to the workers.
+ * all workers to create the database.
  *
  */
 List *
@@ -508,20 +506,25 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 
 	char *createDatabaseCommand = DeparseTreeNode(node);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) createDatabaseCommand,
-								ENABLE_DDL_PROPAGATION);
+	List *createDatabaseCommands = list_make3(DISABLE_DDL_PROPAGATION,
+											  (void *) createDatabaseCommand,
+											  ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands);
+	/*
+	 * Since the CREATE DATABASE statements cannot be executed in a transaction
+	 * block, we need to use NontransactionalNodeDDLTaskList() to send the CREATE
+	 * DATABASE statement to the workers.
+	 */
+	List *createDatabaseDDLJobList =
+		NontransactionalNodeDDLTaskList(REMOTE_NODES, createDatabaseCommands);
+	return createDatabaseDDLJobList;
 }
 
 
 /*
  * PreprocessDropDatabaseStmt is executed before the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
- * all workers to drop the database. Since the DROP DATABASE statement gives error in
- * transaction context, we need to use NontransactionalNodeDDLTaskList to send the
- * DROP DATABASE statement to the workers.
+ * all workers to drop the database.
  *
  * We also serialize database commands globally by acquiring a Citus specific advisory
  * lock based on OCLASS_DATABASE on the first primary worker node.
@@ -559,11 +562,18 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) dropDatabaseCommand,
-								ENABLE_DDL_PROPAGATION);
+	List *dropDatabaseCommands = list_make3(DISABLE_DDL_PROPAGATION,
+											(void *) dropDatabaseCommand,
+											ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands);
+	/*
+	 * Due to same reason stated in PostprocessCreateDatabaseStmt(), we need to
+	 * use NontransactionalNodeDDLTaskList() to send the DROP DATABASE statement
+	 * to the workers.
+	 */
+	List *dropDatabaseDDLJobList =
+		NontransactionalNodeDDLTaskList(REMOTE_NODES, dropDatabaseCommands);
+	return dropDatabaseDDLJobList;
 }
 
 
