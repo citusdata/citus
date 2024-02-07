@@ -155,9 +155,9 @@ static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
 static void RunPostprocessMainDBCommand(Node *parsetree);
-static bool IsStatementSupportedInNonMainDb(Node *parsetree);
+static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
-static void MarkObjectDistributedInNonMainDb(Node *parsetree);
+static void MarkObjectDistributedOnNonMainDb(Node *parsetree);
 static ObjectInfo GetObjectInfo(Node *parsetree);
 
 /*
@@ -1638,7 +1638,7 @@ DropSchemaOrDBInProgress(void)
 static void
 RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 {
-	if (!IsStatementSupportedInNonMainDb(parsetree))
+	if (!IsStatementSupportedFromNonMainDb(parsetree))
 	{
 		return;
 	}
@@ -1664,20 +1664,20 @@ RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
 static void
 RunPostprocessMainDBCommand(Node *parsetree)
 {
-	if (IsStatementSupportedInNonMainDb(parsetree) &&
+	if (IsStatementSupportedFromNonMainDb(parsetree) &&
 		StatementRequiresMarkDistributedFromNonMainDb(parsetree))
 	{
-		MarkObjectDistributedInNonMainDb(parsetree);
+		MarkObjectDistributedOnNonMainDb(parsetree);
 	}
 }
 
 
 /*
- * IsStatementSupportedInNonMainDb returns true if the statement is supported from a
+ * IsStatementSupportedFromNonMainDb returns true if the statement is supported from a
  * non-main database.
  */
 static bool
-IsStatementSupportedInNonMainDb(Node *parsetree)
+IsStatementSupportedFromNonMainDb(Node *parsetree)
 {
 	NodeTag type = nodeTag(parsetree);
 
@@ -1717,11 +1717,11 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 
 
 /*
- * MarkObjectDistributedInNonMainDb marks the given object as distributed on the
+ * MarkObjectDistributedOnNonMainDb marks the given object as distributed on the
  * non-main database.
  */
 static void
-MarkObjectDistributedInNonMainDb(Node *parsetree)
+MarkObjectDistributedOnNonMainDb(Node *parsetree)
 {
 	ObjectInfo objectInfo = GetObjectInfo(parsetree);
 	StringInfo mainDBQuery = makeStringInfo();
