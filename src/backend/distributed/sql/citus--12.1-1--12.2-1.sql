@@ -38,3 +38,17 @@ REVOKE ALL ON FUNCTION citus_internal.start_management_transaction FROM PUBLIC;
 #include "udfs/citus_internal_delete_placement_metadata/12.2-1.sql"
 #include "udfs/citus_internal_delete_shard_metadata/12.2-1.sql"
 #include "udfs/citus_internal_delete_tenant_schema/12.2-1.sql"
+#include "udfs/citus_internal_local_blocked_processes/12.2-1.sql"
+#include "udfs/citus_internal_global_blocked_processes/12.2-1.sql"
+#include "udfs/citus_blocking_pids/12.2-1.sql"
+#include "udfs/citus_isolation_test_session_is_blocked/12.2-1.sql"
+DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
+#include "udfs/citus_lock_waits/12.2-1.sql"
+
+#include "udfs/citus_internal_mark_node_not_synced/12.2-1.sql"
+#include "udfs/citus_internal_unregister_tenant_schema_globally/12.2-1.sql"
+#include "udfs/citus_drop_trigger/12.2-1.sql"
+#include "udfs/citus_internal_update_none_dist_table_metadata/12.2-1.sql"
+#include "udfs/citus_internal_update_placement_metadata/12.2-1.sql"
+#include "udfs/citus_internal_update_relation_colocation/12.2-1.sql"
+#include "udfs/repl_origin_helper/12.2-1.sql"
