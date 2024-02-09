@@ -16,6 +16,7 @@ pytest-timeout = "*"
 pytest-xdist = "*"
 pytest-repeat = "*"
 pyyaml = "*"
+werkzeug = "==2.2.2"
 
 [dev-packages]
 black = "*"
