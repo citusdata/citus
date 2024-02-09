@@ -20,6 +20,6 @@ tail -n +$RegisterCitusConfigVariables_begin_linenumber src/backend/distributed/
 
 # extract citus gucs in the form of <tab><tab>"citus.X"
 grep -P "^[\t][\t]\"citus\.[a-zA-Z_0-9]+\"" RegisterCitusConfigVariables_func_def.out > gucs.out
-sort -c gucs.out
+LC_COLLATE=C sort -c gucs.out
 rm gucs.out
 rm RegisterCitusConfigVariables_func_def.out
