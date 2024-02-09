@@ -901,7 +901,11 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		granteeRole->rolename = GetUserNameFromId(membership->member, true);
 		grantRoleStmt->grantee_roles = list_make1(granteeRole);
 
-		grantRoleStmt->grantor = NULL;
+		RoleSpec *grantorRole = makeNode(RoleSpec);
+		grantorRole->roletype = ROLESPEC_CSTRING;
+		grantorRole->location = -1;
+		grantorRole->rolename = GetUserNameFromId(membership->grantor, true);
+		grantRoleStmt->grantor = grantorRole;
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 
