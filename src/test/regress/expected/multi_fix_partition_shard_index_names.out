@@ -696,9 +696,9 @@ NOTICE:  issuing SELECT citus_internal.add_partition_metadata ('fix_idx_names.p2
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT citus_internal.add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370001, 's')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal.add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, needsseparatenode)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647', false)) SELECT citus_internal.add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, needsseparatenode) FROM shard_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal.add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, needsseparatenode)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647', false)) SELECT citus_internal.add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue, needsseparatenode) FROM shard_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing WITH placement_data(shardid, shardlength, groupid, placementid)  AS (VALUES (xxxxxx, xxxxxx, xxxxxx, xxxxxx)) SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

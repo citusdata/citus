@@ -166,7 +166,14 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	uint64 shardId = GetNextShardId();
 
 	/* if enough live groups, add an extra candidate node as backup */
-	List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
+	List *workerNodeList = NewDistributedTablePlacementNodeList(NoLock);
+
+	if (workerNodeList == NIL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("no worker nodes are available for placing shards"),
+						errhint("Add more worker nodes.")));
+	}
 
 	if (list_length(workerNodeList) > ShardReplicationFactor)
 	{
@@ -193,7 +200,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
+	bool needsSeparateNode = false;
+	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue,
+				   needsSeparateNode);
 
 	CreateAppendDistributedShardPlacements(relationId, shardId, candidateNodeList,
 										   ShardReplicationFactor);

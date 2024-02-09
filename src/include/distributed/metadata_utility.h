@@ -68,6 +68,7 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
+	bool needsSeparateNode;
 } ShardInterval;
 
 
@@ -102,6 +103,14 @@ typedef struct ShardPlacement
 	uint32 colocationGroupId;
 	uint32 representativeValue;
 } ShardPlacement;
+
+
+typedef struct
+{
+	uint32 colocatationId;
+	int shardIntervalIndex;
+	int32 nodeGroupId;
+} ShardgroupPlacement;
 
 
 typedef enum CascadeToColocatedOption
@@ -323,7 +332,13 @@ extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
+extern ShardgroupPlacement * NodeGroupGetSeparatedShardgroupPlacement(int32 groupId);
+extern bool ShardgroupPlacementsSame(const ShardgroupPlacement *leftGroup,
+									 const ShardgroupPlacement *rightGroup);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
+extern bool NodeGroupHasDistributedTableShardPlacements(int32 groupId);
+extern ShardgroupPlacement * GetShardgroupPlacementForPlacement(uint64 shardId,
+																uint64 placementId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
 extern bool IsRemoteShardPlacement(ShardPlacement *shardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
@@ -350,7 +365,8 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-						   text *shardMinValue, text *shardMaxValue);
+						   text *shardMinValue, text *shardMaxValue,
+						   bool needsSeparateNode);
 extern void DeleteShardRow(uint64 shardId);
 extern ShardPlacement * InsertShardPlacementRowGlobally(uint64 shardId,
 														uint64 placementId,
@@ -434,6 +450,7 @@ extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds,
 extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
+extern void ShardgroupSetProperty(uint64 shardId, bool *needsSeparateNodePtr);
 extern void ExecuteQueryViaSPI(char *query, int SPIOK);
 extern void ExecuteAndLogQueryViaSPI(char *query, int SPIOK, int logLevel);
 extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid

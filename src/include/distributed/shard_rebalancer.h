@@ -164,6 +164,7 @@ typedef struct NodeFillState
 typedef struct ShardCost
 {
 	uint64 shardId;
+	uint64 placementId;
 
 	/*
 	 * cost is the cost of the shard. This doesn't have a unit.
@@ -182,9 +183,10 @@ typedef struct DisallowedPlacement
 
 typedef struct RebalancePlanFunctions
 {
-	bool (*shardAllowedOnNode)(uint64 shardId, WorkerNode *workerNode, void *context);
+	bool (*shardAllowedOnNode)(uint64 shardId, uint64 placementId, WorkerNode *workerNode,
+							   void *context);
 	float4 (*nodeCapacity)(WorkerNode *workerNode, void *context);
-	ShardCost (*shardCost)(uint64 shardId, void *context);
+	ShardCost (*shardCost)(uint64 shardId, uint64 placementId, void *context);
 	void *context;
 } RebalancePlanFunctions;
 
@@ -221,5 +223,8 @@ extern void SetupRebalanceMonitor(List *placementUpdateList,
 								  Oid relationId,
 								  uint64 initialProgressState,
 								  PlacementUpdateStatus initialStatus);
+
+extern List * NonColocatedDistRelationIdList(void);
+extern List * FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray);
 
 #endif   /* SHARD_REBALANCER_H */

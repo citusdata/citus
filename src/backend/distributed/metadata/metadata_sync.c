@@ -185,6 +185,7 @@ PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_update_none_dist_table_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_database_command);
+PG_FUNCTION_INFO_V1(citus_internal_shard_property_set);
 
 
 static bool got_SIGTERM = false;
@@ -1267,7 +1268,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	StringInfo insertShardCommand = makeStringInfo();
 	appendStringInfo(insertShardCommand,
 					 "WITH shard_data(relationname, shardid, storagetype, "
-					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
+					 "shardminvalue, shardmaxvalue, needsseparatenode)  AS (VALUES ");
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1299,12 +1300,13 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
+						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
 						 minHashToken->data,
-						 maxHashToken->data);
+						 maxHashToken->data,
+						 shardInterval->needsSeparateNode ? "true" : "false");
 
 		if (llast(shardIntervalList) != shardInterval)
 		{
@@ -1316,7 +1318,7 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertShardCommand,
 					 "SELECT citus_internal.add_shard_metadata(relationname, shardid, "
-					 "storagetype, shardminvalue, shardmaxvalue) "
+					 "storagetype, shardminvalue, shardmaxvalue, needsseparatenode) "
 					 "FROM shard_data;");
 
 	/*
@@ -3359,6 +3361,9 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 		shardMaxValue = PG_GETARG_TEXT_P(4);
 	}
 
+	PG_ENSURE_ARGNOTNULL(5, "needs separate node");
+	bool needsSeparateNode = PG_GETARG_BOOL(5);
+
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);
 
@@ -3379,7 +3384,8 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 								  shardMaxValue);
 	}
 
-	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue);
+	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue,
+				   needsSeparateNode);
 
 	PG_RETURN_VOID();
 }
@@ -4068,6 +4074,45 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_internal_shard_property_set is an internal UDF to
+ * set shard properties for all the shards within the shard group
+ * that given shard belongs to.
+ */
+Datum
+citus_internal_shard_property_set(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "shard_id");
+	uint64 shardId = PG_GETARG_INT64(0);
+
+	/* only owner of the table (or superuser) is allowed to modify the Citus metadata */
+	Oid distributedRelationId = RelationIdForShard(shardId);
+	EnsureTableOwner(distributedRelationId);
+
+	/* we want to serialize all the metadata changes to this table */
+	LockRelationOid(distributedRelationId, ShareUpdateExclusiveLock);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		EnsureCitusInitiatedOperation();
+	}
+
+	bool *needsSeparateNodePtr = NULL;
+
+	if (!PG_ARGISNULL(1))
+	{
+		needsSeparateNodePtr = palloc(sizeof(bool));
+		*needsSeparateNodePtr = PG_GETARG_BOOL(1);
+	}
+
+	ShardgroupSetProperty(shardId, needsSeparateNodePtr);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * SyncNewColocationGroup synchronizes a new pg_dist_colocation entry to a worker.
  */
 void
@@ -4261,6 +4306,24 @@ UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 					 "SELECT citus_internal.update_none_dist_table_metadata(%s, '%c', %u, %s)",
 					 RemoteTableIdExpression(relationId), replicationModel, colocationId,
 					 autoConverted ? "true" : "false");
+
+	return command->data;
+}
+
+
+/*
+ * ShardgroupSetPropertyCommand returns a command to call
+ * citus_internal.shard_property_set().
+ */
+char *
+ShardgroupSetPropertyCommand(uint64 shardId, bool *needsSeparateNodePtr)
+{
+	char *needsSeparateNodeStr = !needsSeparateNodePtr ? "null" :
+								 (*needsSeparateNodePtr ? "true" : "false");
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT citus_internal.shard_property_set(%lu, %s)",
+					 shardId, needsSeparateNodeStr);
 
 	return command->data;
 }

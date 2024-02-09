@@ -20,6 +20,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_split.h"
@@ -55,6 +56,10 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 	Oid shardTransferModeOid = PG_GETARG_OID(3);
 	SplitMode shardSplitMode = LookupSplitMode(shardTransferModeOid);
 
+	/* we don't inherit needsseparatenode for new shards */
+	List *needsSeparateNodeForPlacementList =
+		GenerateListFromIntElement(false, list_length(nodeIdsForPlacementList));
+
 	DistributionColumnMap *distributionColumnOverrides = NULL;
 	List *sourceColocatedShardIntervalList = NIL;
 	SplitShard(
@@ -63,6 +68,7 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 		shardIdToSplit,
 		shardSplitPointsList,
 		nodeIdsForPlacementList,
+		needsSeparateNodeForPlacementList,
 		distributionColumnOverrides,
 		sourceColocatedShardIntervalList,
 		INVALID_COLOCATION_ID);

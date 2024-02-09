@@ -652,3 +652,94 @@ BEGIN
     JOIN pg_dist_node USING (nodeid);
 END;
 $func$ LANGUAGE plpgsql;
+
+-- Takes a table name and returns an array of colocated shards
+-- --by enumerating them based on shardminvalue-- for each shard
+-- of given distributed table (including colocated shards).
+CREATE OR REPLACE FUNCTION get_enumerated_shard_groups(
+    qualified_table_name text)
+RETURNS TABLE (
+    shardids bigint[],
+    shardgroupindex bigint
+)
+AS $func$
+  BEGIN
+    RETURN QUERY
+    SELECT array_agg(shardid ORDER BY shardid) AS shardids,
+           ROW_NUMBER() OVER (ORDER BY shardminvalue) AS shardgroupindex
+    FROM pg_dist_shard
+    JOIN pg_dist_partition USING(logicalrelid)
+    WHERE colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = qualified_table_name::regclass)
+    GROUP BY shardminvalue;
+  END;
+$func$ LANGUAGE plpgsql;
+
+
+-- Takes a table name and returns a json object for each shard group that
+-- contains a shard whose placements need separate nodes.
+--
+-- This does not only return the shards of input relation but also considers
+-- all colocated relations.
+--
+-- An example output is as follows:
+--
+-- [
+--    {"10": [{"dist_1": true},{"dist_2": false}]},
+--    {"15": [{"dist_1": false},{"dist_3": true}]}
+-- ]
+--
+-- It only returned shard groups 10 and 15 because they are the only shard groups
+-- that contain at least one shard whose placements need an isolation.
+--
+-- (Innermost) Boolean values represent needsseparatenode value for given
+-- shard. For example,
+--
+-- {"15": [{"dist_1": false},{"dist_3": true}]}
+--
+-- means that the placements of dist_3 within shard group 15 needs
+-- to be isolated.
+CREATE OR REPLACE FUNCTION get_colocated_shards_needisolatednode(
+    qualified_table_name text)
+RETURNS SETOF jsonb AS $func$
+  BEGIN
+    RETURN QUERY
+    SELECT
+        COALESCE(
+            jsonb_agg(jsonb_build_object(shardgroupindex, needsseparatenodejson) ORDER BY shardgroupindex),
+            '{}'::jsonb
+        ) AS result
+    FROM (
+        SELECT shardgroupindex,
+               jsonb_agg(jsonb_build_object(logicalrelid, needsseparatenode) ORDER BY logicalrelid::text) AS needsseparatenodejson
+        FROM (
+            SELECT shardgroupindex,
+                   logicalrelid,
+                   needsseparatenode
+            FROM public.get_enumerated_shard_groups(qualified_table_name) AS shardgroups
+            JOIN pg_dist_shard
+            ON shardid = ANY(shardids)
+        ) q1
+        GROUP BY shardgroupindex
+    ) q2
+    WHERE needsseparatenodejson::text LIKE '%true%';
+  END;
+$func$ LANGUAGE plpgsql;
+
+-- Returns true if all placement groups within given shard group are isolated.
+CREATE OR REPLACE FUNCTION verify_placements_in_shard_group_isolated(
+    qualified_table_name text,
+    shard_group_index bigint)
+RETURNS boolean
+AS $func$
+DECLARE
+    v_result boolean;
+  BEGIN
+    SELECT bool_and(has_separate_node) INTO v_result
+    FROM citus_shards
+    JOIN (
+        SELECT shardids FROM public.get_enumerated_shard_groups(qualified_table_name) WHERE shardgroupindex = shard_group_index
+    ) q
+    ON (shardid = ANY(q.shardids));
+    RETURN v_result;
+  END;
+$func$ LANGUAGE plpgsql;

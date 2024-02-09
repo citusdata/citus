@@ -108,3 +108,75 @@ ERROR:  table "table_to_distribute" is already distributed
 step s2-commit:
  COMMIT;
 
+
+starting permutation: s1-create_distributed_table s1-begin s2-begin s1_set-shard-property s2-create_distributed_table_colocated s1-rollback s2-commit
+step s1-create_distributed_table:
+ SELECT create_distributed_table('table_to_distribute', 'id');
+
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+ BEGIN;
+
+step s1_set-shard-property:
+ SELECT citus_shard_property_set(shardid, anti_affinity=>'true')
+    FROM pg_dist_shard WHERE logicalrelid = 'table_to_distribute'::regclass
+    ORDER BY shardid LIMIT 1;
+
+citus_shard_property_set
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create_distributed_table_colocated:
+ SELECT create_distributed_table('table_to_colocate', 'id', colocate_with=>'table_to_distribute');
+
+ERROR:  could not acquire the lock required to colocate distributed table public.table_to_distribute
+step s1-rollback:
+    ROLLBACK;
+
+step s2-commit:
+ COMMIT;
+
+
+starting permutation: s1-create_distributed_table s1-begin s2-begin s2-create_distributed_table_colocated s1_set-shard-property s1-rollback s2-commit
+step s1-create_distributed_table:
+ SELECT create_distributed_table('table_to_distribute', 'id');
+
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+ BEGIN;
+
+step s2-create_distributed_table_colocated:
+ SELECT create_distributed_table('table_to_colocate', 'id', colocate_with=>'table_to_distribute');
+
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1_set-shard-property:
+ SELECT citus_shard_property_set(shardid, anti_affinity=>'true')
+    FROM pg_dist_shard WHERE logicalrelid = 'table_to_distribute'::regclass
+    ORDER BY shardid LIMIT 1;
+
+ERROR:  could not acquire the lock required to set a property for a shard of public.table_to_distribute
+step s1-rollback:
+    ROLLBACK;
+
+step s2-commit:
+ COMMIT;
+

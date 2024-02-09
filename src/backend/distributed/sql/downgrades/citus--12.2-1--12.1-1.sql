@@ -27,7 +27,6 @@ DROP FUNCTION citus_internal.add_colocation_metadata(int, int, int, regtype, oid
 DROP FUNCTION citus_internal.add_object_metadata(text, text[], text[], integer, integer, boolean);
 DROP FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char");
 DROP FUNCTION citus_internal.add_placement_metadata(bigint, bigint, integer, bigint);
-DROP FUNCTION citus_internal.add_shard_metadata(regclass, bigint, "char", text, text);
 DROP FUNCTION citus_internal.add_tenant_schema(oid, integer);
 DROP FUNCTION citus_internal.adjust_local_clock_to_remote(pg_catalog.cluster_clock);
 DROP FUNCTION citus_internal.delete_colocation_metadata(int);
@@ -51,3 +50,15 @@ DROP FUNCTION citus_internal.update_relation_colocation(oid, int);
 DROP FUNCTION citus_internal.start_replication_origin_tracking();
 DROP FUNCTION citus_internal.stop_replication_origin_tracking();
 DROP FUNCTION citus_internal.is_replication_origin_tracking_active();
+
+DROP VIEW pg_catalog.citus_shards;
+#include "../udfs/citus_shards/12.0-1.sql"
+
+DROP FUNCTION citus_internal.add_shard_metadata(regclass, bigint, "char", text, text, boolean);
+DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(regclass, bigint, "char", text, text, boolean);
+#include "../udfs/citus_internal_add_shard_metadata/10.2-1.sql"
+
+DROP FUNCTION pg_catalog.citus_shard_property_set(shard_id bigint, anti_affinity boolean);
+DROP FUNCTION citus_internal.shard_property_set(shard_id bigint, needs_separate_node boolean);
+
+ALTER TABLE pg_dist_shard DROP COLUMN needsseparatenode;

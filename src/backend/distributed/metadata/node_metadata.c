@@ -62,8 +62,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 
-#define INVALID_GROUP_ID -1
-
 /* default group size */
 int GroupSize = 1;
 

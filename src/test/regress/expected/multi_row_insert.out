@@ -12,10 +12,10 @@ SELECT create_distributed_table('source_table_xyz', 'key', 'range');
 
 CALL public.create_range_partitioned_shards('source_table_xyz', '{"(0,a)","(25,z)"}','{"(24,a)","(49,z)"}');
 SELECT * FROM pg_dist_shard WHERE logicalrelid='source_table_xyz'::regclass::oid ORDER BY shardid;
-   logicalrelid   | shardid | shardstorage | shardminvalue | shardmaxvalue
+   logicalrelid   | shardid | shardstorage | shardminvalue | shardmaxvalue | needsseparatenode
 ---------------------------------------------------------------------
- source_table_xyz | 4213581 | t            | (0,a)         | (24,a)
- source_table_xyz | 4213582 | t            | (25,z)        | (49,z)
+ source_table_xyz | 4213581 | t            | (0,a)         | (24,a)        | f
+ source_table_xyz | 4213582 | t            | (25,z)        | (49,z)        | f
 (2 rows)
 
 SELECT shardid, nodename, nodeport FROM pg_dist_shard_placement WHERE EXISTS(SELECT shardid FROM pg_dist_shard WHERE shardid=pg_dist_shard_placement.shardid AND logicalrelid='source_table_xyz'::regclass::oid) ORDER BY 1, 2, 3;
