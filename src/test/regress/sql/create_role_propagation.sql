@@ -75,6 +75,8 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 
 \c - - - :master_port
 
+create role test_admin_role;
+
 -- test grants with distributed and non-distributed roles
 
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -84,6 +86,8 @@ CREATE ROLE dist_role_2;
 CREATE ROLE dist_role_3;
 CREATE ROLE dist_role_4;
 
+
+
 SET citus.enable_create_role_propagation TO OFF;
 
 CREATE ROLE non_dist_role_1 SUPERUSER;
@@ -92,6 +96,9 @@ CREATE ROLE non_dist_role_3;
 CREATE ROLE non_dist_role_4;
 
 SET citus.enable_create_role_propagation TO ON;
+
+
+grant dist_role_3,dist_role_1 to test_admin_role with admin option;
 
 SET ROLE dist_role_1;
 
@@ -107,8 +114,6 @@ RESET ROLE;
 
 SET citus.enable_create_role_propagation TO ON;
 
-create role test_admin_role;
-grant dist_role_3 to test_admin_role with admin option;
 
 GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
 GRANT non_dist_role_4 TO dist_role_4;
@@ -132,7 +137,7 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 
 REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role;
 
-revoke dist_role_3 from test_admin_role cascade;
+revoke dist_role_3,dist_role_1 from test_admin_role cascade;
 drop role test_admin_role;
 
 \c - - - :worker_1_port
