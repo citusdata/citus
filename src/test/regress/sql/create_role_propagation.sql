@@ -119,6 +119,7 @@ GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
 GRANT non_dist_role_4 TO dist_role_4;
 GRANT dist_role_3 TO dist_role_4 granted by test_admin_role;
 
+
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT result FROM run_command_on_all_nodes(
