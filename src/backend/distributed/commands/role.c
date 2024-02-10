@@ -884,13 +884,12 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 
 	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
 	{
-
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
 		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*roleAddress, AuthIdRelationId, membership->grantor);
-		if (!IsAnyObjectDistributed(list_make1(roleAddress))){
-
+		if (!IsAnyObjectDistributed(list_make1(roleAddress)))
+		{
 			/* we only need to propagate the grant if the grantor is distributed */
 			continue;
 		}
