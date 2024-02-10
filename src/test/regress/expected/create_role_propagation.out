@@ -226,8 +226,9 @@ grant dist_role_3,dist_role_1 to test_admin_role with admin option;
 SET ROLE dist_role_1;
 GRANT non_dist_role_1 TO non_dist_role_2;
 SET citus.enable_create_role_propagation TO OFF;
+grant dist_role_1 to non_dist_role_1 with admin option;
 SET ROLE non_dist_role_1;
-GRANT dist_role_1 TO dist_role_2;
+GRANT dist_role_1 TO dist_role_2 granted by non_dist_role_1;
 RESET ROLE;
 SET citus.enable_create_role_propagation TO ON;
 GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
@@ -263,12 +264,13 @@ SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::
       role       |     member      | grantor | admin_option
 ---------------------------------------------------------------------
  dist_role_1     | dist_role_2     | t       | f
+ dist_role_1     | non_dist_role_1 | t       | t
  dist_role_1     | test_admin_role | t       | t
  dist_role_3     | non_dist_role_3 | t       | f
  dist_role_3     | test_admin_role | t       | t
  non_dist_role_1 | non_dist_role_2 | t       | f
  non_dist_role_4 | dist_role_4     | t       | f
-(6 rows)
+(7 rows)
 
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
       objid

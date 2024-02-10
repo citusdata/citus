@@ -106,9 +106,10 @@ GRANT non_dist_role_1 TO non_dist_role_2;
 
 SET citus.enable_create_role_propagation TO OFF;
 
+grant dist_role_1 to non_dist_role_1 with admin option;
 SET ROLE non_dist_role_1;
 
-GRANT dist_role_1 TO dist_role_2;
+GRANT dist_role_1 TO dist_role_2 granted by non_dist_role_1;
 
 RESET ROLE;
 
