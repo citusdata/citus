@@ -1,7 +1,7 @@
 ### citus v11.0.9 (February 12, 2024) ###
 
 * Improve failure handling of distributed execution (#7090)
-  
+
 * Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
 
 * Fixes a bug with deleting colocation groups (#6929)
