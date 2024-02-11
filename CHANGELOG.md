@@ -1,7 +1,5 @@
 ### citus v11.2.2 (February 12, 2024) ###
 
-* Disallow creating a replicated distributed table concurrently (#7216)
-
 * Fixes a bug in background shard rebalancer where the replicate
   reference tables task fails if the current user is not a superuser (#6930)
 
@@ -18,6 +16,8 @@
 * Fixes the incorrect column count after ALTER TABLE (#7379)
 
 * Improves failure handling of distributed execution (#7090)
+
+* Makes sure to disallow creating a replicated distributed table concurrently (#7219)
 
 * Removes pg_send_cancellation (#7135)
 
