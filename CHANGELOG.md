@@ -1,7 +1,5 @@
 ### citus v11.0.9 (February 12, 2024) ###
 
-* Improve failure handling of distributed execution (#7090)
-
 * Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
 
 * Fixes a bug with deleting colocation groups (#6929)
@@ -9,6 +7,8 @@
 * Fixes leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
 
 * Fixes the incorrect column count after ALTER TABLE (#7462)
+
+* Improve failure handling of distributed execution (#7090)
 
 ### citus v11.0.8 (April 20, 2023) ###
 
