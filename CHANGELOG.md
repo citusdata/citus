@@ -2,6 +2,9 @@
 
 * Disallow creating a replicated distributed table concurrently (#7216)
 
+* Fixes a bug in background shard rebalancer where the replicate
+  reference tables task fails if the current user is not a superuser (#6930)
+
 * Fixes a bug related to non-existent objects in DDL commands (#6984)
 
 * Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
