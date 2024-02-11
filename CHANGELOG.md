@@ -1,3 +1,4 @@
+
 ### citus v11.2.2 (February 12, 2024) ###
 
 * Fixes a bug in background shard rebalancer where the replicate
@@ -17,7 +18,8 @@
 
 * Improves failure handling of distributed execution (#7090)
 
-* Makes sure to disallow creating a replicated distributed table concurrently (#7219)
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
 
 * Removes pg_send_cancellation (#7135)
 
