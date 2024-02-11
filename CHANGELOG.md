@@ -2,13 +2,14 @@
 
 * Changes PROCESS_TOAST default value to true (#7122)
 
-* Fixes a bug that causes an unexpected error when adding a column with a NULL constraint (#7093)
+* Fixes a bug that causes an unexpected error when adding a column
+  with a NULL constraint (#7093)
 
 * Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
 
 * Fixes a bug with deleting colocation groups (#6929)
 
-* Fixes leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
+* Fixes memory and memory contexts leaks in Foreign Constraint Graphs (#7236)
 
 * Fixes shard size bug with too many shards (#7018)
 
@@ -16,7 +17,8 @@
 
 * Improves citus_tables view performance (#7018)
 
-* Makes sure to disallow creating a replicated distributed table concurrently (#7219)
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
 
 * Removes pg_send_cancellation and all references (#7135)
 
