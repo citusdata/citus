@@ -1,3 +1,23 @@
+### citus v11.2.2 (February 12, 2024) ###
+
+* Fixes incorrect results on fetching scrollable with hold cursors (#7014)
+
+* Fixes a bug related to non-existent objects in DDL commands (#6984)
+
+* Improve failure handling of distributed execution (#7090)
+
+* Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
+
+* Fixes a bug with deleting colocation groups (#6929)
+
+* Removes pg_send_cancellation (#7135)
+
+* Fix leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
+
+* Disallow creating a replicated distributed table concurrently (#7216)
+
+* Fixes the incorrect column count after ALTER TABLE (#7379)
+
 ### citus v11.2.1 (April 20, 2023) ###
 
 * Correctly reports shard size in `citus_shards` view (#6748)
