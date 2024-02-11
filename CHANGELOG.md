@@ -22,7 +22,6 @@
 
 * Removes pg_send_cancellation and all references (#7135)
 
-
 ### citus v11.3.0 (May 2, 2023) ###
 
 * Introduces CDC implementation for Citus using logical replication
