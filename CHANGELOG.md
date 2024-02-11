@@ -17,7 +17,7 @@
 
 * Fixes the incorrect column count after ALTER TABLE (#7379)
 
-* Improve failure handling of distributed execution (#7090)
+* Improves failure handling of distributed execution (#7090)
 
 * Removes pg_send_cancellation (#7135)
 
