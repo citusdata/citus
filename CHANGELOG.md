@@ -1,6 +1,5 @@
 ### citus v11.1.7 (February 12, 2024) ###
 
-
 * Fixes memory and memory context leaks in Foreign Constraint Graphs (#7236)
 
 * Fixes a bug related to non-existent objects in DDL commands (#6984)
