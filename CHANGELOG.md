@@ -16,7 +16,8 @@
 
 * Improves citus_shard_sizes performance (#7051)
 
-* Makes sure to disallow creating a replicated distributed table concurrently (#7219)
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
 
 * MERGE is unsupported with filters that prune down to zero shards (#6946)
 
