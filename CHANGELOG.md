@@ -15,7 +15,8 @@
 
 * Improves failure handling of distributed execution (#7090)
 
-* Makes sure to disallow creating a replicated distributed table concurrently (#7219)
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
 
 * Removes pg_send_cancellation and all references (#7135)
 
