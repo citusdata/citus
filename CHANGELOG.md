@@ -14,7 +14,7 @@
 
 * Fix leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
 
-* Disallow creating a replicated distributed table concurrently (#7216)
+* Disallow creating a replicated distributed table concurrently (#7219)
 
 * Fixes the incorrect column count after ALTER TABLE (#7379)
 
