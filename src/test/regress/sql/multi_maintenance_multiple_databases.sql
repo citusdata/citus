@@ -222,25 +222,37 @@ WHERE state = 'idle'
 
 -- Let maintenance do it's work...
 
-SELECT pg_sleep_for('10 seconds'::interval);
+DO
+$$
+    BEGIN
+        FOR i IN 0 .. 300
+            LOOP
+                IF i = 300 THEN RAISE 'Waited too long'; END IF;
+                PERFORM pg_stat_clear_snapshot();
+                PERFORM * FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+                IF (SELECT count(*) = 0 AS pg_dist_transaction_after_recovery_coordinator_test
+                    FROM pg_database,
+                         dblink(format('dbname=%s host=localhost port=%s user=postgres', datname,
+                                       (SELECT setting::int FROM pg_settings WHERE name = 'port')),
+                                $statement$
+                                SELECT groupid, gid
+                                FROM pg_dist_transaction
+                                WHERE gid LIKE 'citus_0_1234_4_0_%'
+                                    OR gid LIKE 'citus_0_should_be_forgotten_%'
+                                $statement$) AS t(groupid integer, gid text)
+                    WHERE datname LIKE 'db%') THEN
+                    EXIT;
+                END IF;
+                PERFORM pg_sleep_for('1 SECOND'::interval);
+            END LOOP;
+    END
+$$;
 
 -- Verify maintenance result
 
 SELECT count(*) = 0 AS too_many_clients_test
 FROM regexp_split_to_table(pg_read_file('../log/postmaster.log'), E'\n') AS t(log_line)
 WHERE log_line LIKE '%sorry, too many clients already%';
-
-SELECT count(*) = 0 AS pg_dist_transaction_after_recovery_coordinator_test
-FROM pg_database,
-     dblink(format('dbname=%s host=localhost port=%s user=postgres', datname,
-                   (SELECT setting::int FROM pg_settings WHERE name = 'port')),
-            $statement$
-            SELECT groupid, gid
-            FROM pg_dist_transaction
-            WHERE gid LIKE 'citus_0_1234_4_0_%'
-                OR gid LIKE 'citus_0_should_be_forgotten_%'
-            $statement$) AS t(groupid integer, gid text)
-WHERE datname LIKE 'db%';
 
 SELECT count(*) = 0 AS cached_connections_after_recovery_coordinator_test
 FROM pg_stat_activity
