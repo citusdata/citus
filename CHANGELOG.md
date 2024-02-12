@@ -12,7 +12,7 @@
 
 * Removes pg_send_cancellation (#7135)
 
-* Fix leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
+* Fixes leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
 
 * Disallow creating a replicated distributed table concurrently (#7216)
 
