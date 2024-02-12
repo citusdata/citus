@@ -4,7 +4,7 @@
 
 * Fixes a bug related to non-existent objects in DDL commands (#6984)
 
-* Improve failure handling of distributed execution (#7090)
+* Improves failure handling of distributed execution (#7090)
 
 * Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
 
