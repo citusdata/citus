@@ -6,7 +6,7 @@
 
 * Fixes a bug with deleting colocation groups (#6929)
 
-* Fix leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
+* Fixes leaking of memory and memory contexts in Foreign Constraint Graphs (#7236)
 
 * Fixes the incorrect column count after ALTER TABLE (#7462)
 
