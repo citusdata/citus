@@ -1,6 +1,5 @@
 ### citus v11.1.7 (February 12, 2024) ###
 
-* Disallow creating a replicated distributed table concurrently (#7219)
 
 * Fixes memory and memory context leaks in Foreign Constraint Graphs (#7236)
 
@@ -15,6 +14,8 @@
 * Fixes the incorrect column count after ALTER TABLE (#7379)
 
 * Improves failure handling of distributed execution (#7090)
+
+* Makes sure to disallow creating a replicated distributed table concurrently (#7219)
 
 * Removes pg_send_cancellation and all references (#7135)
 
