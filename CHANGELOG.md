@@ -1,5 +1,7 @@
 ### citus v11.3.1 (February 12, 2024) ###
 
+* Disallows MERGE when the query prunes down to zero shards (#6946)
+
 * Fixes a bug related to non-existent objects in DDL commands (#6984)
 
 * Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
@@ -14,12 +16,10 @@
 
 * Fixes the incorrect column count after ALTER TABLE (#7379)
 
-* Improves citus_shard_sizes performance (#7051)
+* Improves citus_shard_sizes performance (#7050)
 
 * Makes sure to disallow creating a replicated distributed table
   concurrently (#7219)
-
-* MERGE is unsupported with filters that prune down to zero shards (#6946)
 
 * Removes pg_send_cancellation and all references (#7135)
 
