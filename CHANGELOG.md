@@ -1,3 +1,7 @@
+### citus v12.1.2 (February 12, 2024) ###
+
+* Fixes the incorrect column count after ALTER TABLE (#7379)
+
 ### citus v12.1.1 (November 9, 2023) ###
 
 * Fixes leaking of memory and memory contexts in Citus foreign key cache
