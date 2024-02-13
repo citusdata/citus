@@ -1,6 +1,6 @@
 ### citus v12.0.1 (July 11, 2023) ###
 
-* Changes PROCESS_TOAST default value to true (#7122)
+* Fixes incorrect default value assumption for VACUUM(PROCESS_TOAST) #7122)
 
 * Fixes a bug that causes an unexpected error when adding a column
   with a NULL constraint (#7093)
@@ -15,7 +15,7 @@
 
 * Fixes the incorrect column count after ALTER TABLE (#7379)
 
-* Improves citus_tables view performance (#7018)
+* Improves citus_tables view performance (#7050)
 
 * Makes sure to disallow creating a replicated distributed table
   concurrently (#7219)
