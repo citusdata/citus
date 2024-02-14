@@ -11,6 +11,8 @@
 
 #include "postgres.h"
 
+#include "nodes/pg_list.h"
+
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
@@ -29,7 +31,7 @@
 List *
 PostprocessSecLabelStmt(Node *node, const char *queryString)
 {
-	if (!ShouldPropagate())
+	if (!EnableAlterRolePropagation || !ShouldPropagate())
 	{
 		return NIL;
 	}
@@ -59,21 +61,17 @@ PostprocessSecLabelStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	if (!EnableCreateRolePropagation)
-	{
-		return NIL;
-	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 
-	const char *sql = DeparseTreeNode((Node *) secLabelStmt);
+	const char *secLabelCommands = DeparseTreeNode((Node *) secLabelStmt);
 
 	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
-								   (void *) sql,
+								   (void *) secLabelCommands,
 								   ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
+	return NodeDDLTaskList(REMOTE_NODES, commandList);
 }
 
 
