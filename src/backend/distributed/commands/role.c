@@ -912,7 +912,7 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		RoleSpec *grantorRole = makeNode(RoleSpec);
 		grantorRole->roletype = ROLESPEC_CSTRING;
 		grantorRole->location = -1;
-		grantorRole->rolename = GetUserNameFromId(membership->grantor, true);
+		grantorRole->rolename = GetUserNameFromId(membership->grantor, false);
 		grantRoleStmt->grantor = grantorRole;
 
 #if PG_VERSION_NUM >= PG_VERSION_16
