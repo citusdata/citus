@@ -28,7 +28,7 @@ FROM (
     SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
     FROM pg_auth_members
     WHERE member::regrole::text in
-        ('grant_role2pc''_user2','grant_role2pc''_user3','grant_role2pc_user4','grant_role2pc_user5')
+        ('"grant_role2pc''_user2"','"grant_role2pc''_user3"','grant_role2pc_user4','grant_role2pc_user5')
     order by member::regrole::text
 ) t
 $$);
