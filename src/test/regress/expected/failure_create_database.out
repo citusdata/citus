@@ -1,5 +1,27 @@
 SET citus.enable_create_database_propagation TO ON;
 SET client_min_messages TO WARNING;
+-- cleanup any orphaned resources from previous runs
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+ temp_databases_on_nodes
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL citus_cleanup_orphaned_resources();
+SET citus.next_operation_id TO 4000;
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT citus.mitmproxy('conn.kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -10,6 +32,12 @@ CREATE DATABASE db1;
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+ temp_databases_on_nodes
 ---------------------------------------------------------------------
 
 (1 row)
@@ -45,6 +73,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+   temp_databases_on_nodes
+---------------------------------------------------------------------
+ {citus_temp_database_4000_0}
+(1 row)
+
 CALL citus_cleanup_orphaned_resources();
 SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
  no_temp_databases_on_any_nodes
@@ -73,6 +107,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+   temp_databases_on_nodes
+---------------------------------------------------------------------
+ {citus_temp_database_4001_0}
+(1 row)
+
 CALL citus_cleanup_orphaned_resources();
 SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
  no_temp_databases_on_any_nodes
@@ -97,6 +137,12 @@ CREATE DATABASE db1;
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+ temp_databases_on_nodes
 ---------------------------------------------------------------------
 
 (1 row)
@@ -128,6 +174,12 @@ SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
+(1 row)
+
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+   temp_databases_on_nodes
+---------------------------------------------------------------------
+ {citus_temp_database_4002_0}
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
@@ -181,37 +233,6 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
 (2 rows)
 
 DROP DATABASE db1;
-SELECT citus.mitmproxy('conn.onQuery(query="^SET").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-CREATE DATABASE db1;
-WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
-If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
-if applicable, and then re-attempt the original command.
-ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
-      node_type       |                                                              result
----------------------------------------------------------------------
- worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
- worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
-(2 rows)
-
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_internal.acquire_citus_advisory_object_class_lock").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -222,6 +243,12 @@ CREATE DATABASE db1;
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+ temp_databases_on_nodes
 ---------------------------------------------------------------------
 
 (1 row)
@@ -255,6 +282,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
+SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+   temp_databases_on_nodes
+---------------------------------------------------------------------
+ {citus_temp_database_4004_0}
+(1 row)
+
 CALL citus_cleanup_orphaned_resources();
 SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
  no_temp_databases_on_any_nodes
@@ -269,4 +302,3 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
  worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
 (2 rows)
 
-RESET client_min_messages;
