@@ -153,7 +153,7 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
-static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
+static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
@@ -292,7 +292,7 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 	{
 		if (!IsMainDB)
 		{
-			RunPreprocessMainDBCommand(parsetree, queryString);
+			RunPreprocessMainDBCommand(parsetree);
 		}
 
 		/*
@@ -1636,13 +1636,14 @@ DropSchemaOrDBInProgress(void)
  * database before query is run on the local node with PrevProcessUtility
  */
 static void
-RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
+RunPreprocessMainDBCommand(Node *parsetree)
 {
+
 	if (!IsStatementSupportedFromNonMainDb(parsetree))
 	{
 		return;
 	}
-
+	char *queryString = DeparseTreeNode(parsetree);
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 START_MANAGEMENT_TRANSACTION,
