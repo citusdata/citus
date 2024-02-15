@@ -43,7 +43,6 @@
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
-#include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
