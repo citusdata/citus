@@ -52,4 +52,20 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
 
 DROP DATABASE db1;
 
+SELECT citus.mitmproxy('conn.onQuery(query="^SET").kill()');
+CREATE DATABASE db1;
+SELECT citus.mitmproxy('conn.allow()');
+
+CALL citus_cleanup_orphaned_resources();
+SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
+
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_internal.acquire_citus_advisory_object_class_lock").kill()');
+CREATE DATABASE db1;
+SELECT citus.mitmproxy('conn.allow()');
+
+CALL citus_cleanup_orphaned_resources();
+SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
+
 RESET client_min_messages;
