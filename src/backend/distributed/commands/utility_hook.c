@@ -738,6 +738,13 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 						 errhint("Connect to other nodes directly to manually create all"
 								 " necessary users and roles.")));
 	}
+	else if (IsA(parsetree, SecLabelStmt) && !EnableAlterRolePropagation)
+	{
+		ereport(NOTICE, (errmsg("not propagating SECURITY LABEL commands to other"
+								" nodes"),
+						 errhint("Connect to other nodes directly to manually assign"
+								 " necessary labels.")));
+	}
 
 	/*
 	 * Make sure that on DROP EXTENSION we terminate the background daemon
