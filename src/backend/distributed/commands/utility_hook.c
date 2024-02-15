@@ -158,7 +158,7 @@ static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
-static void MarkObjectDistributedOnNonMainDb(Node *parsetree);
+static void MarkObjectDistributedFromNonMainDb(Node *parsetree);
 static MarkObjectDistributedParams GetMarkObjectDistributedParams(Node *parsetree);
 
 /*
@@ -1643,6 +1643,7 @@ RunPreprocessMainDBCommand(Node *parsetree)
 	{
 		return;
 	}
+
 	char *queryString = DeparseTreeNode(parsetree);
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
@@ -1668,7 +1669,7 @@ RunPostprocessMainDBCommand(Node *parsetree)
 	if (IsStatementSupportedFromNonMainDb(parsetree) &&
 		StatementRequiresMarkDistributedFromNonMainDb(parsetree))
 	{
-		MarkObjectDistributedOnNonMainDb(parsetree);
+		MarkObjectDistributedFromNonMainDb(parsetree);
 	}
 }
 
@@ -1718,11 +1719,11 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 
 
 /*
- * MarkObjectDistributedOnNonMainDb marks the given object as distributed on the
+ * MarkObjectDistributedFromNonMainDb marks the given object as distributed on the
  * non-main database.
  */
 static void
-MarkObjectDistributedOnNonMainDb(Node *parsetree)
+MarkObjectDistributedFromNonMainDb(Node *parsetree)
 {
 	MarkObjectDistributedParams markObjectDistributedParams =
 		GetMarkObjectDistributedParams(parsetree);
