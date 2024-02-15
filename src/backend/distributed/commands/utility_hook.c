@@ -110,11 +110,12 @@ typedef struct NonMainDbDistributedStatementInfo
 	bool explicitlyMarkAsDistributed;
 } NonMainDbDistributedStatementInfo;
 
-typedef struct ObjectInfo
+typedef struct MarkObjectDistributedParams
 {
 	char *name;
 	Oid id;
-} ObjectInfo;
+	uint16 catalogRelId;
+} MarkObjectDistributedParams;
 
 /*
  * NonMainDbSupportedStatements is an array of statements that are supported
@@ -158,7 +159,7 @@ static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 static void MarkObjectDistributedOnNonMainDb(Node *parsetree);
-static ObjectInfo GetObjectInfo(Node *parsetree);
+static MarkObjectDistributedParams GetMarkObjectDistributedParams(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1638,7 +1639,6 @@ DropSchemaOrDBInProgress(void)
 static void
 RunPreprocessMainDBCommand(Node *parsetree)
 {
-
 	if (!IsStatementSupportedFromNonMainDb(parsetree))
 	{
 		return;
@@ -1724,29 +1724,31 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 static void
 MarkObjectDistributedOnNonMainDb(Node *parsetree)
 {
-	ObjectInfo objectInfo = GetObjectInfo(parsetree);
+	MarkObjectDistributedParams markObjectDistributedParams =
+		GetMarkObjectDistributedParams(parsetree);
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 MARK_OBJECT_DISTRIBUTED,
-					 AuthIdRelationId,
-					 quote_literal_cstr(objectInfo.name),
-					 objectInfo.id,
+					 markObjectDistributedParams.catalogRelId,
+					 quote_literal_cstr(markObjectDistributedParams.name),
+					 markObjectDistributedParams.id,
 					 quote_literal_cstr(CurrentUserName()));
 	RunCitusMainDBQuery(mainDBQuery->data);
 }
 
 
 /*
- * GetObjectInfo returns ObjectInfo for the target object of given parsetree.
+ * GetMarkObjectDistributedParams returns ObjectInfo for the target object of given parsetree.
  */
-static ObjectInfo
-GetObjectInfo(Node *parsetree)
+static MarkObjectDistributedParams
+GetMarkObjectDistributedParams(Node *parsetree)
 {
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		ObjectInfo info = {
+		MarkObjectDistributedParams info = {
 			.name = stmt->role,
+			.catalogRelId = AuthIdRelationId,
 			.id = get_role_oid(stmt->role, false)
 		};
 
