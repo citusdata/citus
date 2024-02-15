@@ -11,8 +11,6 @@
 
 #include "postgres.h"
 
-#include "nodes/pg_list.h"
-
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
