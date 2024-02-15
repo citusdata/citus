@@ -1327,6 +1327,32 @@ SELECT * FROM public.check_database_on_all_nodes($$test_\!failure1$$) ORDER BY n
 (3 rows)
 
 \c - - - :master_port
+-- Before dropping local "test_\!failure1" database, test a failure scenario
+-- by trying to create a distributed database that already exists "on local
+-- node" this time.
+SET citus.enable_create_database_propagation TO ON;
+CREATE DATABASE "test_\!failure1";
+ERROR:  database "test_\!failure1" already exists
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+SELECT result AS database_cleanedup_on_node FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+ database_cleanedup_on_node
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes($$test_\!failure1$$) ORDER BY node_type, result;
+      node_type       |                                                                                                                                                                                                                           result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "test_\\!failure1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SET citus.enable_create_database_propagation TO OFF;
 DROP DATABASE "test_\!failure1";
 SET citus.enable_create_database_propagation TO ON;
 --clean up resources created by this test

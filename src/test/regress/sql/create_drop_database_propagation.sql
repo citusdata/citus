@@ -785,6 +785,23 @@ SELECT * FROM public.check_database_on_all_nodes($$test_\!failure1$$) ORDER BY n
 
 \c - - - :master_port
 
+-- Before dropping local "test_\!failure1" database, test a failure scenario
+-- by trying to create a distributed database that already exists "on local
+-- node" this time.
+
+SET citus.enable_create_database_propagation TO ON;
+
+CREATE DATABASE "test_\!failure1";
+
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+
+SELECT result AS database_cleanedup_on_node FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+SELECT * FROM public.check_database_on_all_nodes($$test_\!failure1$$) ORDER BY node_type, result;
+
+SET citus.enable_create_database_propagation TO OFF;
+
 DROP DATABASE "test_\!failure1";
 
 SET citus.enable_create_database_propagation TO ON;
