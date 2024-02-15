@@ -1,3 +1,7 @@
+### citus v11.0.10 (February 15, 2024) ###
+
+* Removes pg_send_cancellation and all references (#7509)
+
 ### citus v11.0.9 (February 12, 2024) ###
 
 * Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
