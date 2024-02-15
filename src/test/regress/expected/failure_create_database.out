@@ -240,4 +240,33 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
  worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
 (2 rows)
 
+SELECT citus.mitmproxy('conn.onParse(query="^WITH distributed_object_data").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE DATABASE db1;
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL citus_cleanup_orphaned_resources();
+SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+ no_temp_databases_on_any_nodes
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
+      node_type       |                                                              result
+---------------------------------------------------------------------
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(2 rows)
+
 RESET client_min_messages;
