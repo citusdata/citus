@@ -11,7 +11,7 @@ endif
 
 include Makefile.global
 
-all: extension pg_send_cancellation
+all: extension
 
 # build extension
 extension: $(citus_top_builddir)/src/include/citus_version.h
@@ -33,21 +33,13 @@ clean-full:
 
 install-downgrades:
 	$(MAKE) -C src/backend/distributed/ install-downgrades
-install-all: install-headers install-pg_send_cancellation
+install-all: install-headers
 	$(MAKE) -C src/backend/distributed/ install-all
 
-# build citus_send_cancellation binary
-pg_send_cancellation:
-	$(MAKE) -C src/bin/pg_send_cancellation/ all
-install-pg_send_cancellation: pg_send_cancellation
-	$(MAKE) -C src/bin/pg_send_cancellation/ install
-clean-pg_send_cancellation:
-	$(MAKE) -C src/bin/pg_send_cancellation/ clean
-.PHONY: pg_send_cancellation install-pg_send_cancellation clean-pg_send_cancellation
 
 # Add to generic targets
-install: install-extension install-headers install-pg_send_cancellation
-clean: clean-extension clean-pg_send_cancellation
+install: install-extension install-headers
+clean: clean-extension
 
 # apply or check style
 reindent:
