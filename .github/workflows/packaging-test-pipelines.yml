@@ -74,6 +74,7 @@ jobs:
 
       - name: Set Postgres and python parameters for rpm based distros
         run: |
+          git config --global --add safe.directory '*'
           echo "/usr/pgsql-${{ matrix.POSTGRES_VERSION }}/bin" >> $GITHUB_PATH
           echo "/root/.pyenv/bin:$PATH" >> $GITHUB_PATH
           echo "PACKAGING_PYTHON_VERSION=3.8.16" >> $GITHUB_ENV
