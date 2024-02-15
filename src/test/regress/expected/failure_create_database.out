@@ -1,12 +1,16 @@
 SET citus.enable_create_database_propagation TO ON;
 SET client_min_messages TO WARNING;
+CREATE FUNCTION get_temp_databases_on_nodes()
+RETURNS TEXT AS $func$
+  SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
+$func$
+LANGUAGE sql;
+CREATE FUNCTION ensure_no_temp_databases_on_any_nodes()
+RETURNS BOOLEAN AS $func$
+  SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+$func$
+LANGUAGE sql;
 -- cleanup any orphaned resources from previous runs
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
- temp_databases_on_nodes
----------------------------------------------------------------------
-
-(1 row)
-
 CALL citus_cleanup_orphaned_resources();
 SET citus.next_operation_id TO 4000;
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
@@ -36,15 +40,15 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
- temp_databases_on_nodes
+SELECT get_temp_databases_on_nodes();
+ get_temp_databases_on_nodes
 ---------------------------------------------------------------------
 
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -73,15 +77,15 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
-   temp_databases_on_nodes
+SELECT get_temp_databases_on_nodes();
+ get_temp_databases_on_nodes
 ---------------------------------------------------------------------
  {citus_temp_database_4000_0}
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -107,15 +111,15 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
-   temp_databases_on_nodes
+SELECT get_temp_databases_on_nodes();
+ get_temp_databases_on_nodes
 ---------------------------------------------------------------------
  {citus_temp_database_4001_0}
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -141,15 +145,15 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
- temp_databases_on_nodes
+SELECT get_temp_databases_on_nodes();
+ get_temp_databases_on_nodes
 ---------------------------------------------------------------------
 
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -176,15 +180,15 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
-   temp_databases_on_nodes
+SELECT get_temp_databases_on_nodes();
+ get_temp_databases_on_nodes
 ---------------------------------------------------------------------
  {citus_temp_database_4002_0}
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -219,8 +223,8 @@ SELECT recover_prepared_transactions();
                              1
 (1 row)
 
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -247,15 +251,15 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
- temp_databases_on_nodes
+SELECT get_temp_databases_on_nodes();
+ get_temp_databases_on_nodes
 ---------------------------------------------------------------------
 
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -282,15 +286,15 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
-   temp_databases_on_nodes
+SELECT get_temp_databases_on_nodes();
+ get_temp_databases_on_nodes
 ---------------------------------------------------------------------
  {citus_temp_database_4004_0}
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
- no_temp_databases_on_any_nodes
+SELECT ensure_no_temp_databases_on_any_nodes();
+ ensure_no_temp_databases_on_any_nodes
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -302,3 +306,5 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
  worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
 (2 rows)
 
+DROP FUNCTION get_temp_databases_on_nodes();
+DROP FUNCTION ensure_no_temp_databases_on_any_nodes();
