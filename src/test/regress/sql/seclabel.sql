@@ -67,7 +67,7 @@ SECURITY LABEL for "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus_cla
 \c - - - :worker_1_port
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
--- command from the worker node should be propagated to the master
+-- command from the worker node should be propagated to the coordinator
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
 SECURITY LABEL for "citus '!tests_label_provider" ON ROLE user1 IS 'citus_classified';
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
@@ -75,10 +75,7 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORD
 RESET citus.log_remote_commands;
 SECURITY LABEL for "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified';
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
-RESET citus.log_remote_commands;
-
 \c - - - :master_port
-RESET citus.log_remote_commands;
 
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
@@ -95,8 +92,6 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') 
 SET citus.enable_alter_role_propagation TO off;
 SECURITY LABEL ON ROLE user1 IS 'citus_unclassified';
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
-RESET citus.enable_alter_role_propagation;
-RESET citus.log_remote_commands;
 
 \c - - - :worker_2_port
 SET citus.log_remote_commands TO on;

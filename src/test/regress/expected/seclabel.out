@@ -121,7 +121,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 \c - - - :worker_1_port
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
--- command from the worker node should be propagated to the master
+-- command from the worker node should be propagated to the coordinator
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
   node_type  |                                             result
 ---------------------------------------------------------------------
@@ -148,9 +148,7 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') 
  worker_1    | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (2 rows)
 
-RESET citus.log_remote_commands;
 \c - - - :master_port
-RESET citus.log_remote_commands;
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
   node_type  |                                             result
 ---------------------------------------------------------------------
@@ -207,8 +205,6 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORD
  worker_2    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (3 rows)
 
-RESET citus.enable_alter_role_propagation;
-RESET citus.log_remote_commands;
 \c - - - :worker_2_port
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
