@@ -487,7 +487,7 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 	AppendRoleList(buf, stmt->grantee_roles);
 	AppendGrantWithAdminOption(buf, stmt);
 	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
-	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior,stmt->is_grant);
+	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
 	appendStringInfo(buf, ";");
 }
 
