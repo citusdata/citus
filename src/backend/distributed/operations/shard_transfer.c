@@ -121,7 +121,6 @@ static void EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName,
 								   int32 sourceNodePort, const char *targetNodeName,
 								   int32 targetNodePort);
 static List * RecreateTableDDLCommandList(Oid relationId);
-static void EnsureTableListOwner(List *tableIdList);
 static void ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList);
 
 static void DropShardPlacementsFromMetadata(List *shardList,
@@ -153,7 +152,6 @@ static bool TransferAlreadyCompleted(List *colocatedShardList,
 									 char *sourceNodeName, uint32 sourceNodePort,
 									 char *targetNodeName, uint32 targetNodePort,
 									 ShardTransferType transferType);
-static void LockColocatedRelationsForMove(List *colocatedTableList);
 static void ErrorIfForeignTableForShardTransfer(List *colocatedTableList,
 												ShardTransferType transferType);
 static List * RecreateShardDDLCommandList(ShardInterval *shardInterval,
@@ -679,7 +677,7 @@ IsShardListOnNode(List *colocatedShardList, char *targetNodeName, uint32 targetN
  * LockColocatedRelationsForMove takes a list of relations, locks all of them
  * using ShareUpdateExclusiveLock
  */
-static void
+void
 LockColocatedRelationsForMove(List *colocatedTableList)
 {
 	Oid colocatedTableId = InvalidOid;
@@ -1292,7 +1290,7 @@ LookupShardTransferMode(Oid shardReplicationModeOid)
  * EnsureTableListOwner ensures current user owns given tables. Superusers
  * are regarded as owners.
  */
-static void
+void
 EnsureTableListOwner(List *tableIdList)
 {
 	Oid tableId = InvalidOid;

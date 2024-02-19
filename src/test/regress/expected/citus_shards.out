@@ -21,16 +21,16 @@ SELECT create_distributed_table('"t with space"', 'i');
 INSERT INTO t1 SELECT generate_series(1, 100);
 INSERT INTO "t with space" SELECT generate_series(1, 1000);
 SELECT * FROM citus_shards;
-   table_name   | shardid  |              shard_name              | citus_table_type | colocation_id | nodename  | nodeport | shard_size
+   table_name   | shardid  |              shard_name              | citus_table_type | colocation_id | nodename  | nodeport | shard_size | has_separate_node
 ---------------------------------------------------------------------
- "t with space" | 99456904 | citus_shards."t with space_99456904" | distributed      |        456900 | localhost |    57637 |      40960
- "t with space" | 99456905 | citus_shards."t with space_99456905" | distributed      |        456900 | localhost |    57638 |      40960
- "t with space" | 99456906 | citus_shards."t with space_99456906" | distributed      |        456900 | localhost |    57637 |      40960
- "t with space" | 99456907 | citus_shards."t with space_99456907" | distributed      |        456900 | localhost |    57638 |      40960
- t1             | 99456900 | citus_shards.t1_99456900             | distributed      |        456900 | localhost |    57637 |       8192
- t1             | 99456901 | citus_shards.t1_99456901             | distributed      |        456900 | localhost |    57638 |       8192
- t1             | 99456902 | citus_shards.t1_99456902             | distributed      |        456900 | localhost |    57637 |       8192
- t1             | 99456903 | citus_shards.t1_99456903             | distributed      |        456900 | localhost |    57638 |       8192
+ "t with space" | 99456904 | citus_shards."t with space_99456904" | distributed      |        456900 | localhost |    57637 |      40960 | f
+ "t with space" | 99456905 | citus_shards."t with space_99456905" | distributed      |        456900 | localhost |    57638 |      40960 | f
+ "t with space" | 99456906 | citus_shards."t with space_99456906" | distributed      |        456900 | localhost |    57637 |      40960 | f
+ "t with space" | 99456907 | citus_shards."t with space_99456907" | distributed      |        456900 | localhost |    57638 |      40960 | f
+ t1             | 99456900 | citus_shards.t1_99456900             | distributed      |        456900 | localhost |    57637 |       8192 | f
+ t1             | 99456901 | citus_shards.t1_99456901             | distributed      |        456900 | localhost |    57638 |       8192 | f
+ t1             | 99456902 | citus_shards.t1_99456902             | distributed      |        456900 | localhost |    57637 |       8192 | f
+ t1             | 99456903 | citus_shards.t1_99456903             | distributed      |        456900 | localhost |    57638 |       8192 | f
 (8 rows)
 
 SET client_min_messages TO WARNING;

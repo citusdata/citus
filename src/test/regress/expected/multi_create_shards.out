@@ -68,7 +68,7 @@ ERROR:  0 is outside the valid range for parameter "citus.shard_replication_fact
 -- use a replication factor higher than shard count
 SET citus.shard_replication_factor TO 3;
 SELECT create_distributed_table('table_to_distribute', 'name', 'hash');
-ERROR:  replication_factor (3) exceeds number of worker nodes (2)
+ERROR:  replication_factor (3) exceeds number of available worker nodes (2)
 HINT:  Add more worker nodes or try again with a lower replication factor.
 RESET citus.shard_replication_factor;
 -- finally, create shards and inspect metadata

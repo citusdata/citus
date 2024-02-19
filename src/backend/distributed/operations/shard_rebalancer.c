@@ -59,6 +59,7 @@
 #include "distributed/multi_progress.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_rebalance_strategy.h"
+#include "distributed/rebalancer_placement_separation.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -147,6 +148,8 @@ typedef struct RebalanceContext
 	FmgrInfo shardCostUDF;
 	FmgrInfo nodeCapacityUDF;
 	FmgrInfo shardAllowedOnNodeUDF;
+
+	RebalancerPlacementSeparationContext *shardgroupPlacementSeparationContext;
 } RebalanceContext;
 
 /* WorkerHashKey contains hostname and port to be used as a key in a hash */
@@ -255,7 +258,8 @@ static bool FindAndMoveShardCost(float4 utilizationLowerBound,
 								 float4 utilizationUpperBound,
 								 float4 improvementThreshold,
 								 RebalanceState *state);
-static NodeFillState * FindAllowedTargetFillState(RebalanceState *state, uint64 shardId);
+static NodeFillState * FindAllowedTargetFillState(RebalanceState *state, uint64 shardId,
+												  uint64 placementId);
 static void MoveShardCost(NodeFillState *sourceFillState, NodeFillState *targetFillState,
 						  ShardCost *shardCost, RebalanceState *state);
 static int CompareNodeFillStateAsc(const void *void1, const void *void2);
@@ -264,10 +268,10 @@ static int CompareShardCostAsc(const void *void1, const void *void2);
 static int CompareShardCostDesc(const void *void1, const void *void2);
 static int CompareDisallowedPlacementAsc(const void *void1, const void *void2);
 static int CompareDisallowedPlacementDesc(const void *void1, const void *void2);
-static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *context);
+static bool ShardAllowedOnNode(uint64 shardId, uint64 placementId, WorkerNode *workerNode,
+							   void *context);
 static float4 NodeCapacity(WorkerNode *workerNode, void *context);
-static ShardCost GetShardCost(uint64 shardId, void *context);
-static List * NonColocatedDistRelationIdList(void);
+static ShardCost GetShardCost(uint64 shardId, uint64 placementId, void *context);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
 static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
 											shardReplicationModeOid);
@@ -435,7 +439,7 @@ BigIntArrayDatumContains(Datum *array, int arrayLength, uint64 toFind)
  * FullShardPlacementList returns a List containing all the shard placements of
  * a specific table (excluding the excludedShardArray)
  */
-static List *
+List *
 FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 {
 	List *shardPlacementList = NIL;
@@ -467,6 +471,9 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 			ShardPlacement *placement = CitusMakeNode(ShardPlacement);
 			placement->shardId = groupPlacement->shardId;
 			placement->shardLength = groupPlacement->shardLength;
+			placement->groupId = groupPlacement->groupId;
+			placement->colocationGroupId = citusTableCacheEntry->colocationId;
+			placement->partitionMethod = citusTableCacheEntry->partitionMethod;
 			placement->nodeId = worker->nodeId;
 			placement->nodeName = pstrdup(worker->workerName);
 			placement->nodePort = worker->workerPort;
@@ -590,6 +597,12 @@ GetRebalanceSteps(RebalanceOptions *options)
 		options->threshold = options->rebalanceStrategy->minimumThreshold;
 	}
 
+	context.shardgroupPlacementSeparationContext =
+		PrepareRebalancerPlacementSeparationContext(
+			activeWorkerList,
+			FlattenNestedList(activeShardPlacementListList),
+			context.shardAllowedOnNodeUDF);
+
 	return RebalancePlacementUpdates(activeWorkerList,
 									 activeShardPlacementListList,
 									 options->threshold,
@@ -604,7 +617,8 @@ GetRebalanceSteps(RebalanceOptions *options)
  * ShardAllowedOnNode determines if shard is allowed on a specific worker node.
  */
 static bool
-ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *voidContext)
+ShardAllowedOnNode(uint64 shardId, uint64 placementId, WorkerNode *workerNode,
+				   void *voidContext)
 {
 	if (!workerNode->shouldHaveShards)
 	{
@@ -612,6 +626,14 @@ ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *voidContext)
 	}
 
 	RebalanceContext *context = voidContext;
+
+	if (!RebalancerPlacementSeparationContextPlacementIsAllowedOnWorker(
+			context->shardgroupPlacementSeparationContext,
+			shardId, placementId, workerNode))
+	{
+		return false;
+	}
+
 	Datum allowed = FunctionCall2(&context->shardAllowedOnNodeUDF, shardId,
 								  workerNode->nodeId);
 	return DatumGetBool(allowed);
@@ -645,10 +667,11 @@ NodeCapacity(WorkerNode *workerNode, void *voidContext)
  * to be.
  */
 static ShardCost
-GetShardCost(uint64 shardId, void *voidContext)
+GetShardCost(uint64 shardId, uint64 placementId, void *voidContext)
 {
 	ShardCost shardCost = { 0 };
 	shardCost.shardId = shardId;
+	shardCost.placementId = placementId;
 	RebalanceContext *context = voidContext;
 	Datum shardCostDatum = FunctionCall1(&context->shardCostUDF, UInt64GetDatum(shardId));
 	shardCost.cost = DatumGetFloat4(shardCostDatum);
@@ -794,9 +817,9 @@ AcquirePlacementColocationLock(Oid relationId, int lockMode,
 		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
 							   operationName,
 							   generate_qualified_relation_name(relationId)),
-						errdetail("It means that either a concurrent shard move "
-								  "or colocated distributed table creation is "
-								  "happening."),
+						errdetail("It means that either a concurrent shard move, "
+								  "colocated distributed table creation or "
+								  "shard property change is happening."),
 						errhint("Make sure that the concurrent operation has "
 								"finished and re-run the command")));
 	}
@@ -1828,7 +1851,7 @@ AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int workerPort,
  * NonColocatedDistRelationIdList returns a list of distributed table oids, one
  * for each existing colocation group.
  */
-static List *
+List *
 NonColocatedDistRelationIdList(void)
 {
 	List *relationIdList = NIL;
@@ -2562,7 +2585,8 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 
 		Assert(fillState != NULL);
 
-		*shardCost = functions->shardCost(placement->shardId, functions->context);
+		*shardCost = functions->shardCost(placement->shardId, placement->placementId,
+										  functions->context);
 
 		fillState->totalCost += shardCost->cost;
 		fillState->utilization = CalculateUtilization(fillState->totalCost,
@@ -2574,8 +2598,8 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 
 		state->totalCost += shardCost->cost;
 
-		if (!functions->shardAllowedOnNode(placement->shardId, fillState->node,
-										   functions->context))
+		if (!functions->shardAllowedOnNode(placement->shardId, placement->placementId,
+										   fillState->node, functions->context))
 		{
 			DisallowedPlacement *disallowed = palloc0(sizeof(DisallowedPlacement));
 			disallowed->shardCost = shardCost;
@@ -2735,7 +2759,8 @@ MoveShardsAwayFromDisallowedNodes(RebalanceState *state)
 	foreach_ptr(disallowedPlacement, state->disallowedPlacementList)
 	{
 		NodeFillState *targetFillState = FindAllowedTargetFillState(
-			state, disallowedPlacement->shardCost->shardId);
+			state, disallowedPlacement->shardCost->shardId,
+			disallowedPlacement->shardCost->placementId);
 		if (targetFillState == NULL)
 		{
 			ereport(WARNING, (errmsg(
@@ -2784,7 +2809,7 @@ CompareDisallowedPlacementDesc(const void *a, const void *b)
  * where the shard can be moved to.
  */
 static NodeFillState *
-FindAllowedTargetFillState(RebalanceState *state, uint64 shardId)
+FindAllowedTargetFillState(RebalanceState *state, uint64 shardId, uint64 placementId)
 {
 	NodeFillState *targetFillState = NULL;
 	foreach_ptr(targetFillState, state->fillStateListAsc)
@@ -2795,6 +2820,7 @@ FindAllowedTargetFillState(RebalanceState *state, uint64 shardId)
 			targetFillState->node);
 		if (!hasShard && state->functions->shardAllowedOnNode(
 				shardId,
+				placementId,
 				targetFillState->node,
 				state->functions->context))
 		{
@@ -2969,6 +2995,7 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 
 				/* Skip shards that already are not allowed on the node */
 				if (!state->functions->shardAllowedOnNode(shardCost->shardId,
+														  shardCost->placementId,
 														  targetFillState->node,
 														  state->functions->context))
 				{
@@ -3165,7 +3192,7 @@ ReplicationPlacementUpdates(List *workerNodeList, List *activeShardPlacementList
 		{
 			WorkerNode *workerNode = list_nth(workerNodeList, workerNodeIndex);
 
-			if (!NodeCanHaveDistTablePlacements(workerNode))
+			if (!NodeCanBeUsedForNonSeparatedPlacements(workerNode))
 			{
 				/* never replicate placements to nodes that should not have placements */
 				continue;

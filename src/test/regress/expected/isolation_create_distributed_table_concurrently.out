@@ -57,12 +57,12 @@ step s2-print-status:
  -- sanity check on total elements in the table
  SELECT COUNT(*) FROM table_1;
 
-logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue
+logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue|needsseparatenode
 ---------------------------------------------------------------------
-table_1     |1400294|t           |  -2147483648|  -1073741825
-table_1     |1400295|t           |  -1073741824|           -1
-table_1     |1400296|t           |            0|   1073741823
-table_1     |1400297|t           |   1073741824|   2147483647
+table_1     |1400306|t           |  -2147483648|  -1073741825|f
+table_1     |1400307|t           |  -1073741824|           -1|f
+table_1     |1400308|t           |            0|   1073741823|f
+table_1     |1400309|t           |   1073741824|   2147483647|f
 (4 rows)
 
 count
@@ -125,12 +125,12 @@ step s2-print-status:
  -- sanity check on total elements in the table
  SELECT COUNT(*) FROM table_1;
 
-logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue
+logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue|needsseparatenode
 ---------------------------------------------------------------------
-table_1     |1400299|t           |  -2147483648|  -1073741825
-table_1     |1400300|t           |  -1073741824|           -1
-table_1     |1400301|t           |            0|   1073741823
-table_1     |1400302|t           |   1073741824|   2147483647
+table_1     |1400311|t           |  -2147483648|  -1073741825|f
+table_1     |1400312|t           |  -1073741824|           -1|f
+table_1     |1400313|t           |            0|   1073741823|f
+table_1     |1400314|t           |   1073741824|   2147483647|f
 (4 rows)
 
 count
@@ -193,12 +193,12 @@ step s2-print-status:
  -- sanity check on total elements in the table
  SELECT COUNT(*) FROM table_1;
 
-logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue
+logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue|needsseparatenode
 ---------------------------------------------------------------------
-table_1     |1400304|t           |  -2147483648|  -1073741825
-table_1     |1400305|t           |  -1073741824|           -1
-table_1     |1400306|t           |            0|   1073741823
-table_1     |1400307|t           |   1073741824|   2147483647
+table_1     |1400316|t           |  -2147483648|  -1073741825|f
+table_1     |1400317|t           |  -1073741824|           -1|f
+table_1     |1400318|t           |            0|   1073741823|f
+table_1     |1400319|t           |   1073741824|   2147483647|f
 (4 rows)
 
 count
@@ -261,12 +261,12 @@ step s2-print-status:
  -- sanity check on total elements in the table
  SELECT COUNT(*) FROM table_1;
 
-logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue
+logicalrelid|shardid|shardstorage|shardminvalue|shardmaxvalue|needsseparatenode
 ---------------------------------------------------------------------
-table_1     |1400309|t           |  -2147483648|  -1073741825
-table_1     |1400310|t           |  -1073741824|           -1
-table_1     |1400311|t           |            0|   1073741823
-table_1     |1400312|t           |   1073741824|   2147483647
+table_1     |1400321|t           |  -2147483648|  -1073741825|f
+table_1     |1400322|t           |  -1073741824|           -1|f
+table_1     |1400323|t           |            0|   1073741823|f
+table_1     |1400324|t           |   1073741824|   2147483647|f
 (4 rows)
 
 count

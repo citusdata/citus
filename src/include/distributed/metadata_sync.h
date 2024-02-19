@@ -144,6 +144,7 @@ extern char * TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId);
 extern char * TenantSchemaDeleteCommand(char *schemaName);
 extern char * UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 												 uint32 colocationId, bool autoConverted);
+extern char * ShardgroupSetPropertyCommand(uint64 shardId, bool *needsSeparateNodePtr);
 extern char * AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
 										  uint64 shardLength, int32 groupId);
 extern char * DeletePlacementMetadataCommand(uint64 placementId);

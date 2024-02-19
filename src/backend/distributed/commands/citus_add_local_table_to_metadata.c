@@ -1454,8 +1454,9 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 
 	text *shardMinValue = NULL;
 	text *shardMaxValue = NULL;
+	bool needsSeparateNode = false;
 	InsertShardRow(citusLocalTableId, shardId, shardStorageType,
-				   shardMinValue, shardMaxValue);
+				   shardMinValue, shardMaxValue, needsSeparateNode);
 
 	List *nodeList = list_make1(CoordinatorNodeIfAddedAsWorkerOrError());
 

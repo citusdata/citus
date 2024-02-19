@@ -147,15 +147,16 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/* load and sort the worker node list for deterministic placement */
-	List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
+	List *workerNodeList = NewDistributedTablePlacementNodeList(NoLock);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	int32 workerNodeCount = list_length(workerNodeList);
 	if (replicationFactor > workerNodeCount)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("replication_factor (%d) exceeds number of worker nodes "
-							   "(%d)", replicationFactor, workerNodeCount),
+						errmsg("replication_factor (%d) exceeds number of "
+							   "available worker nodes (%d)",
+							   replicationFactor, workerNodeCount),
 						errhint("Add more worker nodes or try again with a lower "
 								"replication factor.")));
 	}
@@ -184,8 +185,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
+		bool needsSeparateNode = false;
 		InsertShardRow(distributedTableId, *shardIdPtr, shardStorageType,
-					   minHashTokenText, maxHashTokenText);
+					   minHashTokenText, maxHashTokenText, needsSeparateNode);
 
 		InsertShardPlacementRows(distributedTableId,
 								 *shardIdPtr,
@@ -282,8 +284,10 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		List *sourceShardPlacementList = ShardPlacementListSortedByWorker(
 			sourceShardId);
 
+		/* inherit from the colocated shard */
+		bool needsSeparateNode = sourceShardInterval->needsSeparateNode;
 		InsertShardRow(targetRelationId, *newShardIdPtr, targetShardStorageType,
-					   shardMinValueText, shardMaxValueText);
+					   shardMinValueText, shardMaxValueText, needsSeparateNode);
 
 		ShardPlacement *sourcePlacement = NULL;
 		foreach_ptr(sourcePlacement, sourceShardPlacementList)
@@ -365,8 +369,9 @@ CreateReferenceTableShard(Oid distributedTableId)
 	/* get the next shard id */
 	uint64 shardId = GetNextShardId();
 
+	bool needsSeparateNode = false;
 	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
-				   shardMaxValue);
+				   shardMaxValue, needsSeparateNode);
 
 	InsertShardPlacementRows(distributedTableId,
 							 shardId,
@@ -411,7 +416,7 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 	 * Also take a RowShareLock on pg_dist_node to disallow concurrent
 	 * node list changes that require an exclusive lock.
 	 */
-	List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
+	List *workerNodeList = NewDistributedTablePlacementNodeList(RowShareLock);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	int roundRobinNodeIdx =
@@ -421,8 +426,9 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 	text *minHashTokenText = NULL;
 	text *maxHashTokenText = NULL;
 	uint64 shardId = GetNextShardId();
+	bool needsSeparateNode = false;
 	InsertShardRow(relationId, shardId, shardStorageType,
-				   minHashTokenText, maxHashTokenText);
+				   minHashTokenText, maxHashTokenText, needsSeparateNode);
 
 	int replicationFactor = 1;
 	InsertShardPlacementRows(relationId,
@@ -454,17 +460,17 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
  * group" should be placed on.
  *
  * This is determined by modulo of the colocation id by the length of the
- * list returned by DistributedTablePlacementNodeList().
+ * list returned by NewDistributedTablePlacementNodeList().
  */
 int
 EmptySingleShardTableColocationDecideNodeId(uint32 colocationId)
 {
-	List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
+	List *workerNodeList = NewDistributedTablePlacementNodeList(RowShareLock);
 	int32 workerNodeCount = list_length(workerNodeList);
 	if (workerNodeCount == 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("couldn't find any worker nodes"),
+						errmsg("couldn't find any available worker nodes"),
 						errhint("Add more worker nodes")));
 	}
 

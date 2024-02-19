@@ -33,6 +33,7 @@
 
 #define WORKER_DEFAULT_CLUSTER "default"
 
+#define INVALID_GROUP_ID -1
 #define COORDINATOR_GROUP_ID 0
 
 /*
@@ -76,8 +77,8 @@ extern bool CoordinatorAddedAsWorkerNode(void);
 extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern WorkerNode * CoordinatorNodeIfAddedAsWorkerOrError(void);
 extern void ErrorIfCoordinatorNotAddedAsWorkerNode(void);
-extern List * DistributedTablePlacementNodeList(LOCKMODE lockMode);
-extern bool NodeCanHaveDistTablePlacements(WorkerNode *node);
+extern List * NewDistributedTablePlacementNodeList(LOCKMODE lockMode);
+extern bool NodeCanBeUsedForNonSeparatedPlacements(WorkerNode *node);
 extern List * ActiveReadableNonCoordinatorNodeList(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * FindWorkerNode(const char *nodeName, int32 nodePort);

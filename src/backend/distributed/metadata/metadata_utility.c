@@ -48,6 +48,7 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/argutils.h"
 #include "distributed/background_jobs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_safe_lib.h"
@@ -75,6 +76,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/tuplestore.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
@@ -117,6 +119,7 @@ static void AppendShardIdNameValues(StringInfo selectQuery, ShardInterval *shard
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
 									  uint64 totalBytes);
 static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
+static void ShardgroupSetPropertyGlobally(uint64 shardId, bool *needsSeparateNodePtr);
 static BackgroundTask * DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor,
 													  HeapTuple taskTuple);
 
@@ -139,6 +142,7 @@ PG_FUNCTION_INFO_V1(citus_table_size);
 PG_FUNCTION_INFO_V1(citus_total_relation_size);
 PG_FUNCTION_INFO_V1(citus_relation_size);
 PG_FUNCTION_INFO_V1(citus_shard_sizes);
+PG_FUNCTION_INFO_V1(citus_shard_property_set);
 
 
 /*
@@ -358,6 +362,169 @@ citus_relation_size(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_INT64(relationSize);
+}
+
+
+/*
+ * citus_shard_property_set allows setting shard properties for all
+ * the shards within the shard group that given shard belongs to.
+ */
+Datum
+citus_shard_property_set(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	PG_ENSURE_ARGNOTNULL(0, "shard_id");
+	uint64 shardId = PG_GETARG_INT64(0);
+
+	/* RelationIdForShard() first checks whether the shard id is valid */
+	Oid distributedRelationId = RelationIdForShard(shardId);
+
+	List *colocatedTableList = ColocatedTableList(distributedRelationId);
+	colocatedTableList = SortList(colocatedTableList, CompareOids);
+	EnsureTableListOwner(colocatedTableList);
+
+	AcquirePlacementColocationLock(distributedRelationId, ExclusiveLock,
+								   "set a property for a shard of");
+
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
+	{
+		/*
+		 * Prevent relations from being dropped while we are setting the
+		 * property.
+		 */
+		LockRelationOid(colocatedTableId, AccessShareLock);
+	}
+
+	bool *needsSeparateNodePtr = NULL;
+
+	if (!PG_ARGISNULL(1))
+	{
+		if (!IsCitusTableType(distributedRelationId, HASH_DISTRIBUTED) &&
+			!IsCitusTableType(distributedRelationId, SINGLE_SHARD_DISTRIBUTED))
+		{
+			ereport(ERROR, (errmsg("setting anti-affinity property is only "
+								   "supported for hash distributed tables")));
+		}
+
+		needsSeparateNodePtr = palloc(sizeof(bool));
+		*needsSeparateNodePtr = PG_GETARG_BOOL(1);
+	}
+
+	ShardgroupSetPropertyGlobally(shardId, needsSeparateNodePtr);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * ShardgroupSetPropertyGlobally calls ShardgroupSetProperty
+ * on all nodes.
+ */
+static void
+ShardgroupSetPropertyGlobally(uint64 shardId, bool *needsSeparateNodePtr)
+{
+	ShardgroupSetProperty(shardId, needsSeparateNodePtr);
+
+	char *metadataCommand =
+		ShardgroupSetPropertyCommand(shardId, needsSeparateNodePtr);
+	SendCommandToWorkersWithMetadata(metadataCommand);
+}
+
+
+/*
+ * ShardgroupSetProperty sets shard properties for all the shards within
+ * the shard group that given shard belongs to.
+ */
+void
+ShardgroupSetProperty(uint64 shardId, bool *needsSeparateNodePtr)
+{
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	List *colocatedShardIntervalList = ColocatedShardIntervalList(shardInterval);
+
+	int nShardInterval = list_length(colocatedShardIntervalList);
+	Datum *shardIdDatumArray = (Datum *) palloc(nShardInterval * sizeof(Datum));
+
+	int shardIndex = 0;
+	ShardInterval *colocatedShardInterval = NULL;
+	foreach_ptr(colocatedShardInterval, colocatedShardIntervalList)
+	{
+		shardIdDatumArray[shardIndex] = UInt64GetDatum(colocatedShardInterval->shardId);
+		shardIndex++;
+	}
+
+	ArrayType *shardIdArrayDatum = DatumArrayToArrayType(shardIdDatumArray,
+														 nShardInterval, INT8OID);
+
+	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, PointerGetDatum(shardIdArrayDatum));
+	scanKey[0].sk_flags |= SK_SEARCHARRAY;
+
+	bool indexOK = true;
+	Oid indexId = DistShardShardidIndexId();
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													indexId, indexOK, NULL,
+													scanKeyCount, scanKey);
+
+	Datum values[Natts_pg_dist_shard];
+	bool isnull[Natts_pg_dist_shard];
+	bool replace[Natts_pg_dist_shard];
+
+	memset(values, 0, sizeof(values));
+	memset(isnull, false, sizeof(isnull));
+	memset(replace, false, sizeof(replace));
+
+	if (needsSeparateNodePtr)
+	{
+		values[Anum_pg_dist_shard_needsseparatenode - 1] = BoolGetDatum(
+			*needsSeparateNodePtr);
+		isnull[Anum_pg_dist_shard_needsseparatenode - 1] = false;
+		replace[Anum_pg_dist_shard_needsseparatenode - 1] = true;
+	}
+
+	bool updatedAny = false;
+
+	CatalogIndexState indexState = CatalogOpenIndexes(pgDistShard);
+
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
+		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdateWithInfo(pgDistShard, &heapTuple->t_self, heapTuple,
+								   indexState);
+
+		updatedAny = true;
+	}
+
+	if (!updatedAny)
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for shard "
+							   UINT64_FORMAT,
+							   shardId)));
+	}
+
+	CatalogCloseIndexes(indexState);
+
+	/*
+	 * We don't need to send invalidations for all the shards as
+	 * CitusInvalidateRelcacheByShardId() will send the invalidation based on
+	 * id of the belonging distributed table, not just for the input shard.
+	 */
+	CitusInvalidateRelcacheByShardId(shardInterval->shardId);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistShard, NoLock);
 }
 
 
@@ -1350,6 +1517,7 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->maxValueExists = srcInterval->maxValueExists;
 	destInterval->shardId = srcInterval->shardId;
 	destInterval->shardIndex = srcInterval->shardIndex;
+	destInterval->needsSeparateNode = srcInterval->needsSeparateNode;
 
 	destInterval->minValue = 0;
 	if (destInterval->minValueExists)
@@ -1398,6 +1566,92 @@ ShardLength(uint64 shardId)
 
 
 /*
+ * NodeGroupGetSeparatedShardgroupPlacement returns the shard group placement
+ * that given node group is used to separate from others. Returns NULL if this
+ * node is not used to separate a shard group placement.
+ */
+ShardgroupPlacement *
+NodeGroupGetSeparatedShardgroupPlacement(int32 groupId)
+{
+	ShardgroupPlacement *nodeShardgroupPlacement = NULL;
+	bool shardgroupPlacementNeedsSeparateNode = false;
+
+	bool indexOK = true;
+	ScanKeyData scanKey[1];
+
+	Relation pgDistPlacement = table_open(DistPlacementRelationId(),
+										  AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPlacement,
+													DistPlacementGroupidIndexId(),
+													indexOK,
+													NULL, lengthof(scanKey), scanKey);
+
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
+
+		GroupShardPlacement *placement =
+			TupleToGroupShardPlacement(tupleDescriptor, heapTuple);
+
+		ShardInterval *shardInterval = LoadShardInterval(placement->shardId);
+		Oid citusTableId = shardInterval->relationId;
+		if (!IsCitusTableType(citusTableId, DISTRIBUTED_TABLE))
+		{
+			continue;
+		}
+
+		ShardgroupPlacement *shardgroupPlacement =
+			GetShardgroupPlacementForPlacement(placement->shardId,
+											   placement->placementId);
+
+		if (nodeShardgroupPlacement &&
+			!ShardgroupPlacementsSame(shardgroupPlacement,
+									  nodeShardgroupPlacement))
+		{
+			/*
+			 * If we have more than one shardgroup placement on the node,
+			 * then this means that the node is not actually used to separate
+			 * a shardgroup placement.
+			 */
+			nodeShardgroupPlacement = NULL;
+			shardgroupPlacementNeedsSeparateNode = false;
+			break;
+		}
+
+		nodeShardgroupPlacement = shardgroupPlacement;
+		shardgroupPlacementNeedsSeparateNode = shardInterval->needsSeparateNode;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPlacement, NoLock);
+
+	if (!shardgroupPlacementNeedsSeparateNode)
+	{
+		return NULL;
+	}
+
+	return nodeShardgroupPlacement;
+}
+
+
+/*
+ * ShardgroupPlacementsSame returns true if two shardgroup placements are the same.
+ */
+bool
+ShardgroupPlacementsSame(const ShardgroupPlacement *leftGroup,
+						 const ShardgroupPlacement *rightGroup)
+{
+	return leftGroup->colocatationId == rightGroup->colocatationId &&
+		   leftGroup->shardIntervalIndex == rightGroup->shardIntervalIndex &&
+		   leftGroup->nodeGroupId == rightGroup->nodeGroupId;
+}
+
+
+/*
  * NodeGroupHasShardPlacements returns whether any active shards are placed on the group
  */
 bool
@@ -1426,6 +1680,70 @@ NodeGroupHasShardPlacements(int32 groupId)
 	table_close(pgPlacement, NoLock);
 
 	return hasActivePlacements;
+}
+
+
+/*
+ * NodeGroupHasDistributedTableShardPlacements returns whether any active
+ * distributed table shards are placed on the group
+ */
+bool
+NodeGroupHasDistributedTableShardPlacements(int32 groupId)
+{
+	bool nodeGroupHasDistributedTableShardPlacements = false;
+
+	Relation pgPlacement = table_open(DistPlacementRelationId(), AccessShareLock);
+
+	ScanKeyData scanKey[1];
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
+
+	bool indexOK = true;
+	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement,
+													DistPlacementGroupidIndexId(),
+													indexOK,
+													NULL, lengthof(scanKey), scanKey);
+
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgPlacement);
+
+		GroupShardPlacement *placement =
+			TupleToGroupShardPlacement(tupleDescriptor, heapTuple);
+
+		ShardInterval *shardInterval = LoadShardInterval(placement->shardId);
+		Oid citusTableId = shardInterval->relationId;
+		if (IsCitusTableType(citusTableId, DISTRIBUTED_TABLE))
+		{
+			nodeGroupHasDistributedTableShardPlacements = true;
+			break;
+		}
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgPlacement, NoLock);
+
+	return nodeGroupHasDistributedTableShardPlacements;
+}
+
+
+/*
+ * GetShardgroupPlacementForPlacement returns ShardgroupPlacement that placement
+ * with given shardId & placementId belongs to.
+ */
+ShardgroupPlacement *
+GetShardgroupPlacementForPlacement(uint64 shardId, uint64 placementId)
+{
+	ShardPlacement *shardPlacement = LoadShardPlacement(shardId, placementId);
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+
+	ShardgroupPlacement *placementGroup = palloc(sizeof(ShardgroupPlacement));
+	placementGroup->colocatationId = shardPlacement->colocationGroupId;
+	placementGroup->shardIntervalIndex = shardInterval->shardIndex;
+	placementGroup->nodeGroupId = shardPlacement->groupId;
+
+	return placementGroup;
 }
 
 
@@ -1803,7 +2121,8 @@ IsDummyPlacement(ShardPlacement *taskPlacement)
  */
 void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-			   text *shardMinValue, text *shardMaxValue)
+			   text *shardMinValue, text *shardMaxValue,
+			   bool needsSeparateNode)
 {
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
@@ -1815,6 +2134,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	values[Anum_pg_dist_shard_logicalrelid - 1] = ObjectIdGetDatum(relationId);
 	values[Anum_pg_dist_shard_shardid - 1] = Int64GetDatum(shardId);
 	values[Anum_pg_dist_shard_shardstorage - 1] = CharGetDatum(storageType);
+	values[Anum_pg_dist_shard_needsseparatenode - 1] = BoolGetDatum(needsSeparateNode);
 
 	/* dropped shardalias column must also be set; it is still part of the tuple */
 	isNulls[Anum_pg_dist_shard_shardalias_DROPPED - 1] = true;

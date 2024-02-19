@@ -30,7 +30,6 @@ REVOKE ALL ON FUNCTION citus_internal.start_management_transaction FROM PUBLIC;
 #include "udfs/citus_internal_add_object_metadata/12.2-1.sql"
 #include "udfs/citus_internal_add_partition_metadata/12.2-1.sql"
 #include "udfs/citus_internal_add_placement_metadata/12.2-1.sql"
-#include "udfs/citus_internal_add_shard_metadata/12.2-1.sql"
 #include "udfs/citus_internal_add_tenant_schema/12.2-1.sql"
 #include "udfs/citus_internal_adjust_local_clock_to_remote/12.2-1.sql"
 #include "udfs/citus_internal_delete_colocation_metadata/12.2-1.sql"
@@ -52,3 +51,14 @@ DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
 #include "udfs/citus_internal_update_placement_metadata/12.2-1.sql"
 #include "udfs/citus_internal_update_relation_colocation/12.2-1.sql"
 #include "udfs/repl_origin_helper/12.2-1.sql"
+
+ALTER TABLE pg_dist_shard ADD COLUMN needsseparatenode boolean NOT NULL DEFAULT false;
+
+DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(regclass, bigint, "char", text, text);
+#include "udfs/citus_internal_add_shard_metadata/12.2-1.sql"
+
+#include "udfs/citus_internal_shard_property_set/12.2-1.sql"
+#include "udfs/citus_shard_property_set/12.2-1.sql"
+
+DROP VIEW citus_shards;
+#include "udfs/citus_shards/12.2-1.sql"
