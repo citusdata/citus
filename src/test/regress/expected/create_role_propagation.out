@@ -265,6 +265,7 @@ SELECT result FROM run_command_on_all_nodes(
   SELECT json_agg(q.* ORDER BY member) FROM (
     SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
     FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
   ) q;
   $$
 );
@@ -304,6 +305,7 @@ SELECT result FROM run_command_on_all_nodes(
   SELECT json_agg(q.* ORDER BY member) FROM (
     SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
     FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
   ) q;
   $$
 );
