@@ -1335,10 +1335,10 @@ CreatePublications(MultiConnection *connection,
 
 		WorkerNode *worker = FindWorkerNode(connection->hostname,
 											connection->port);
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_PUBLICATION,
-											entry->name,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_PUBLICATION,
+											  entry->name,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		ExecuteCriticalRemoteCommand(connection, DISABLE_DDL_PROPAGATION);
 		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
@@ -1435,10 +1435,10 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 
 		WorkerNode *worker = FindWorkerNode(sourceConnection->hostname,
 											sourceConnection->port);
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
-											replicationSlot->name,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
+											  replicationSlot->name,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		if (!firstReplicationSlot)
 		{
@@ -1506,10 +1506,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					quote_identifier(GetUserNameFromId(ownerId, false))
 					)));
 
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
-											target->subscriptionOwnerName,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_USER,
+											  target->subscriptionOwnerName,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		StringInfo conninfo = makeStringInfo();
 		appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
@@ -1567,10 +1567,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		pfree(createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand);
 
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SUBSCRIPTION,
-											target->subscriptionName,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SUBSCRIPTION,
+											  target->subscriptionName,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
