@@ -272,10 +272,8 @@ SELECT result FROM run_command_on_all_nodes(
 ---------------------------------------------------------------------
  [{"member":"non_dist_role_3","role":"dist_role_3","grantor":"test_admin_role","admin_option":false}, +
   {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
- [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false},     +
-  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
- [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false},     +
-  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
 (3 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1','test_admin_role')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
@@ -309,13 +307,11 @@ SELECT result FROM run_command_on_all_nodes(
   ) q;
   $$
 );
-                                              result
+                                            result
 ---------------------------------------------------------------------
  [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
- [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false}, +
-  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
- [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false}, +
-  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
 (3 rows)
 
 revoke dist_role_3,dist_role_1 from test_admin_role cascade;
