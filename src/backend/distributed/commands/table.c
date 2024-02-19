@@ -3053,11 +3053,16 @@ ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
 	else if (constraint->contype == CONSTR_FOREIGN)
 	{
 		RangeVar *referencedTable = constraint->pktable;
-		char *referencedColumn = strVal(lfirst(list_head(constraint->pk_attrs)));
 		Oid referencedRelationId = RangeVarGetRelid(referencedTable, NoLock, false);
 
-		appendStringInfo(errHint, "FOREIGN KEY (%s) REFERENCES %s(%s)", colName,
-						 get_rel_name(referencedRelationId), referencedColumn);
+		appendStringInfo(errHint, "FOREIGN KEY (%s) REFERENCES %s", colName,
+						 get_rel_name(referencedRelationId));
+
+		if (list_length(constraint->pk_attrs) > 0)
+		{
+			char *referencedColumn = strVal(lfirst(list_head(constraint->pk_attrs)));
+			appendStringInfo(errHint, "(%s)", referencedColumn);
+		}
 
 		if (constraint->fk_del_action == FKCONSTR_ACTION_SETNULL)
 		{
