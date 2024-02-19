@@ -1745,7 +1745,8 @@ MarkObjectDistributedFromNonMainDb(Node *parsetree)
 
 
 /*
- * GetMarkObjectDistributedParams returns ObjectInfo for the target object of given parsetree.
+ * GetMarkObjectDistributedParams returns MarkObjectDistributedParams for the target
+ * object of given parsetree.
  */
 static MarkObjectDistributedParams
 GetMarkObjectDistributedParams(Node *parsetree)
