@@ -12,15 +12,15 @@ SET client_min_messages TO NOTICE;
 
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail on NULL input.
-SELECT citus_internal_add_tenant_schema(NULL, 1);
-SELECT citus_internal_add_tenant_schema(1, NULL);
-SELECT citus_internal_delete_tenant_schema(NULL);
-SELECT citus_internal_unregister_tenant_schema_globally(1, NULL);
-SELECT citus_internal_unregister_tenant_schema_globally(NULL, 'text');
+SELECT citus_internal.add_tenant_schema(NULL, 1);
+SELECT citus_internal.add_tenant_schema(1, NULL);
+SELECT citus_internal.delete_tenant_schema(NULL);
+SELECT citus_internal.unregister_tenant_schema_globally(1, NULL);
+SELECT citus_internal.unregister_tenant_schema_globally(NULL, 'text');
 
--- Verify that citus_internal_unregister_tenant_schema_globally can only
+-- Verify that citus_internal.unregister_tenant_schema_globally can only
 -- be called on schemas that are dropped already.
-SELECT citus_internal_unregister_tenant_schema_globally('regular_schema'::regnamespace, 'regular_schema');
+SELECT citus_internal.unregister_tenant_schema_globally('regular_schema'::regnamespace, 'regular_schema');
 
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
@@ -1022,9 +1022,9 @@ SELECT pg_reload_conf();
 ALTER SYSTEM SET citus.enable_schema_based_sharding TO ON;
 SELECT pg_reload_conf();
 
--- Verify that citus_internal_unregister_tenant_schema_globally is a no-op
+-- Verify that citus_internal.unregister_tenant_schema_globally is a no-op
 -- on workers.
-SELECT citus_internal_unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
+SELECT citus_internal.unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
 
 \c - - - :master_port
 
