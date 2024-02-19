@@ -282,7 +282,7 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
  non_dist_role_4
 (5 rows)
 
-REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role;
+REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role cascade;
 revoke dist_role_3,dist_role_1 from test_admin_role cascade;
 drop role test_admin_role;
 \c - - - :worker_1_port
