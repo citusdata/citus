@@ -1,0 +1,147 @@
+CREATE SCHEMA grant_role2pc;
+SET search_path TO grant_role2pc;
+set citus.enable_create_database_propagation to on;
+
+CREATE DATABASE grant_role2pc_db;
+
+\c grant_role2pc_db
+SHOW citus.main_db;
+
+SET citus.superuser TO 'postgres';
+CREATE USER grant_role2pc_user1;
+CREATE USER grant_role2pc_user2;
+CREATE USER grant_role2pc_user3;
+CREATE USER grant_role2pc_user4;
+CREATE USER grant_role2pc_user5;
+CREATE USER grant_role2pc_user6;
+CREATE USER grant_role2pc_user7;
+
+\c grant_role2pc_db
+
+--test with empty superuser
+SET citus.superuser TO '';
+grant grant_role2pc_user1 to grant_role2pc_user2;
+
+SET citus.superuser TO 'postgres';
+grant grant_role2pc_user1 to grant_role2pc_user2 with admin option granted by CURRENT_USER;
+
+\c regression
+
+select result FROM run_command_on_all_nodes(
+    $$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text = 'grant_role2pc_user2'
+    order by member::regrole::text, roleid::regrole::text
+    ) t
+    $$
+);
+
+\c grant_role2pc_db
+--test grant under transactional context with multiple operations
+BEGIN;
+grant grant_role2pc_user1,grant_role2pc_user2 to grant_role2pc_user3 WITH ADMIN OPTION;
+grant grant_role2pc_user1 to grant_role2pc_user4 granted by grant_role2pc_user3 ;
+COMMIT;
+
+BEGIN;
+grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION granted by grant_role2pc_user3;
+grant grant_role2pc_user1 to grant_role2pc_user6;
+ROLLBACK;
+
+
+
+BEGIN;
+grant grant_role2pc_user1 to grant_role2pc_user7;
+SELECT 1/0;
+commit;
+
+
+\c regression
+
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+    order by member::regrole::text, roleid::regrole::text
+) t
+$$);
+
+
+\c grant_role2pc_db
+
+grant grant_role2pc_user1,grant_role2pc_user2 to grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7 granted by grant_role2pc_user3;
+
+\c regression
+
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+    order by member::regrole::text, roleid::regrole::text
+) t
+$$);
+
+\c grant_role2pc_db
+revoke admin option for grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3;
+
+--test revoke under transactional context with multiple operations
+BEGIN;
+revoke grant_role2pc_user1 from grant_role2pc_user5 granted by grant_role2pc_user3 ;
+revoke grant_role2pc_user1 from grant_role2pc_user4 granted by grant_role2pc_user3;
+COMMIT;
+\c grant_role2pc_db - - :worker_1_port
+BEGIN;
+revoke grant_role2pc_user1 from grant_role2pc_user6,grant_role2pc_user7 granted by grant_role2pc_user3;
+revoke grant_role2pc_user1 from grant_role2pc_user3 cascade;
+COMMIT;
+
+\c regression
+
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user2','grant_role2pc_user3','grant_role2pc_user4','grant_role2pc_user5','grant_role2pc_user6','grant_role2pc_user7')
+    order by member::regrole::text, roleid::regrole::text
+) t
+$$);
+
+\c grant_role2pc_db - - :worker_1_port
+BEGIN;
+grant grant_role2pc_user1 to grant_role2pc_user5 WITH ADMIN OPTION;
+grant grant_role2pc_user1 to grant_role2pc_user6;
+COMMIT;
+
+\c regression - - :master_port
+
+select result FROM run_command_on_all_nodes($$
+SELECT array_to_json(array_agg(row_to_json(t)))
+FROM (
+    SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+    FROM pg_auth_members
+    WHERE member::regrole::text in
+        ('grant_role2pc_user5','grant_role2pc_user6')
+    order by member::regrole::text, roleid::regrole::text
+) t
+$$);
+
+revoke grant_role2pc_user1 from grant_role2pc_user5,grant_role2pc_user6;
+
+--clean resources
+DROP SCHEMA grant_role2pc;
+set citus.enable_create_database_propagation to on;
+DROP DATABASE grant_role2pc_db;
+drop user grant_role2pc_user2,grant_role2pc_user3,grant_role2pc_user4,grant_role2pc_user5,grant_role2pc_user6,grant_role2pc_user7;
+drop user grant_role2pc_user1;
+reset citus.enable_create_database_propagation;
