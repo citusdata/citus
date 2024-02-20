@@ -604,10 +604,10 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 			 * we do not generate a record at all.
 			 */
-			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-													qualifiedShardName,
-													placement->groupId,
-													CLEANUP_DEFERRED_ON_SUCCESS);
+			InsertCleanupOnSuccessRecordInCurrentTransaction(
+				CLEANUP_OBJECT_SHARD_PLACEMENT,
+				qualifiedShardName,
+				placement->groupId);
 		}
 	}
 }
@@ -634,10 +634,9 @@ InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
 		 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 		 * we do not generate a record at all.
 		 */
-		InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												qualifiedShardName,
-												groupId,
-												CLEANUP_DEFERRED_ON_SUCCESS);
+		InsertCleanupOnSuccessRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+														 qualifiedShardName,
+														 groupId);
 	}
 }
 
@@ -1393,10 +1392,11 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		/* drop the shard we created on the target, in case of failure */
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-											ConstructQualifiedShardName(shardInterval),
-											GroupForNode(targetNodeName, targetNodePort),
-											CLEANUP_ON_FAILURE);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											  ConstructQualifiedShardName(shardInterval),
+											  GroupForNode(targetNodeName,
+														   targetNodePort),
+											  CLEANUP_ON_FAILURE);
 
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner,
@@ -1466,10 +1466,11 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		/* drop the shard we created on the target, in case of failure */
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-											ConstructQualifiedShardName(shardInterval),
-											GroupForNode(targetNodeName, targetNodePort),
-											CLEANUP_ON_FAILURE);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											  ConstructQualifiedShardName(shardInterval),
+											  GroupForNode(targetNodeName,
+														   targetNodePort),
+											  CLEANUP_ON_FAILURE);
 
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner, ddlCommandList);
