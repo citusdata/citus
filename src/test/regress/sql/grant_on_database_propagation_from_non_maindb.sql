@@ -3,20 +3,15 @@
 -- since public role privileges are inherited by new roles/users
 set citus.enable_create_database_propagation to on;
 create database test_2pc_db;
-
 show citus.main_db;
 
 revoke connect,temp,temporary  on database test_2pc_db from public;
 
-
-
 CREATE SCHEMA grant_on_database_propagation_non_maindb;
 SET search_path TO grant_on_database_propagation_non_maindb;
 
-
 -- test grant/revoke CREATE privilege propagation on database
 create user "myuser'_test";
-
 
 \c test_2pc_db - - :master_port
 grant create on database test_2pc_db to "myuser'_test";
@@ -247,5 +242,7 @@ grant connect,temp,temporary  on database test_2pc_db to public;
 drop database test_2pc_db;
 set citus.enable_create_database_propagation to off;
 DROP SCHEMA grant_on_database_propagation_non_maindb CASCADE;
+
+reset citus.enable_create_database_propagation;
 
 ---------------------------------------------------------------------------
