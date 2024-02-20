@@ -379,7 +379,6 @@ select check_database_privileges('myuser_2','test_db',ARRAY['CREATE', 'CONNECT',
 
 \c test_2pc_db - - :master_port
 RESET ROLE;
---below test should fail and should throw an error
 revoke  CREATE,CONNECT,TEMP,TEMPORARY on database test_2pc_db,test_db from myuser8 ;
 --below test should succeed and should not throw any error
 revoke  CREATE,CONNECT,TEMP,TEMPORARY on database test_2pc_db,test_db from myuser_2;
