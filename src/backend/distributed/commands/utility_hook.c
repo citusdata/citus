@@ -1712,6 +1712,7 @@ IsStatementSupportedFromNonMainDb(Node *parsetree)
 				if (type == T_GrantStmt)
 				{
 					GrantStmt *stmt = castNode(GrantStmt, parsetree);
+
 					/* check if stmt->objtype is in supportedObjectTypes */
 					for (int j = 0; j <
 						 NonMainDbSupportedStatements[i].supportedObjectTypesSize; j++)
