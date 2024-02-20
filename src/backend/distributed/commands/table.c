@@ -3060,8 +3060,7 @@ ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
 
 		if (list_length(constraint->pk_attrs) > 0)
 		{
-			char *referencedColumn = strVal(lfirst(list_head(constraint->pk_attrs)));
-			appendStringInfo(errHint, "(%s)", referencedColumn);
+			AppendColumnNameList(errHint, constraint->pk_attrs);
 		}
 
 		if (constraint->fk_del_action == FKCONSTR_ACTION_SETNULL)

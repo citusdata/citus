@@ -49,6 +49,10 @@ ALTER TABLE referencing ADD COLUMN test_9 bool, ADD COLUMN test_10 int REFERENCE
 ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
 DETAIL:  Adding a column with a constraint in one command is not supported because all constraints in Citus must have explicit names
 HINT:  You can issue each command separately such as ALTER TABLE referencing ADD COLUMN test_10 data_type; ALTER TABLE referencing ADD CONSTRAINT constraint_name FOREIGN KEY (test_10) REFERENCES referenced;
+ALTER TABLE referencing ADD COLUMN test_9 bool, ADD COLUMN test_10 int REFERENCES referenced(int_col);
+ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
+DETAIL:  Adding a column with a constraint in one command is not supported because all constraints in Citus must have explicit names
+HINT:  You can issue each command separately such as ALTER TABLE referencing ADD COLUMN test_10 data_type; ALTER TABLE referencing ADD CONSTRAINT constraint_name FOREIGN KEY (test_10) REFERENCES referenced (int_col );
 -- try to add test_6 again, but with IF NOT EXISTS
 ALTER TABLE referencing ADD COLUMN IF NOT EXISTS test_6 text;
 NOTICE:  column "test_6" of relation "referencing" already exists, skipping

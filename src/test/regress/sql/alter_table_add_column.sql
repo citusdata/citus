@@ -43,6 +43,7 @@ ALTER TABLE referencing ADD COLUMN test_8 integer CONSTRAINT check_test_8 CHECK 
 
 -- error out properly even if the REFERENCES does not include the column list of the referenced table
 ALTER TABLE referencing ADD COLUMN test_9 bool, ADD COLUMN test_10 int REFERENCES referenced;
+ALTER TABLE referencing ADD COLUMN test_9 bool, ADD COLUMN test_10 int REFERENCES referenced(int_col);
 
 -- try to add test_6 again, but with IF NOT EXISTS
 ALTER TABLE referencing ADD COLUMN IF NOT EXISTS test_6 text;
