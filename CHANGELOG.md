@@ -1,3 +1,7 @@
+### citus v11.0.10 (February 15, 2024) ###
+
+* Removes pg_send_cancellation and all references (#7135)
+
 ### citus v12.1.2 (February 12, 2024) ###
 
 * Fixes the incorrect column count after ALTER TABLE (#7379)
