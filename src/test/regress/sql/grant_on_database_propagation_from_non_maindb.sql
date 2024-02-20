@@ -10,8 +10,8 @@ revoke connect,temp,temporary  on database test_2pc_db from public;
 
 
 
-CREATE SCHEMA grant_on_database_propagation;
-SET search_path TO grant_on_database_propagation;
+CREATE SCHEMA grant_on_database_propagation_non_maindb;
+SET search_path TO grant_on_database_propagation_non_maindb;
 
 
 -- test grant/revoke CREATE privilege propagation on database
@@ -246,6 +246,6 @@ drop database test_db;
 grant connect,temp,temporary  on database test_2pc_db to public;
 drop database test_2pc_db;
 set citus.enable_create_database_propagation to off;
-DROP SCHEMA grant_on_database_propagation CASCADE;
+DROP SCHEMA grant_on_database_propagation_non_maindb CASCADE;
 
 ---------------------------------------------------------------------------
