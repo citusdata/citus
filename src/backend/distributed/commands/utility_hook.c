@@ -115,6 +115,7 @@ static void citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 										 struct QueryEnvironment *queryEnv,
 										 DestReceiver *dest,
 										 QueryCompletion *completionTag);
+static bool ShouldSkipPrevProcessUtility(Node *node);
 static void set_indexsafe_procflags(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
@@ -785,8 +786,11 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 			PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
-		PrevProcessUtility(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
+		if (!ShouldSkipPrevProcessUtility(parsetree))
+		{
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
+		}
 
 		if (isAlterExtensionUpdateCitusStmt)
 		{
@@ -944,6 +948,13 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 			}
 		}
 	}
+}
+
+
+static bool
+ShouldSkipPrevProcessUtility(Node *node)
+{
+	return IsDistributedDropDatabaseCommand(node);
 }
 
 

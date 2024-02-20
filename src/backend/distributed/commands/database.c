@@ -632,12 +632,10 @@ List *
 PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
 {
-	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
+	if (!IsDistributedDropDatabaseCommand(node))
 	{
 		return NIL;
 	}
-
-	EnsurePropagationToCoordinator();
 
 	DropdbStmt *stmt = (DropdbStmt *) node;
 
@@ -657,22 +655,78 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsurePropagationToCoordinator();
+
 	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
 
-	char *dropDatabaseCommand = DeparseTreeNode(node);
+	OperationId operationId = RegisterOperationNeedingCleanup();
 
-	List *dropDatabaseCommands = list_make3(DISABLE_DDL_PROPAGATION,
-											(void *) dropDatabaseCommand,
-											ENABLE_DDL_PROPAGATION);
+	char *tempDatabaseName = psprintf(TEMP_DATABASE_NAME_FMT,
+									  operationId, GetLocalGroupId());
 
-	/*
-	 * Due to same reason stated in PostprocessCreateDatabaseStmt(), we need to
-	 * use NontransactionalNodeDDLTaskList() to send the DROP DATABASE statement
-	 * to the workers.
-	 */
-	List *dropDatabaseDDLJobList =
-		NontransactionalNodeDDLTaskList(REMOTE_NODES, dropDatabaseCommands);
-	return dropDatabaseDDLJobList;
+	UnmarkObjectDistributed(linitial(addresses));
+
+	char *unmarkObjectDistributedCommand =
+		psprintf("SELECT pg_catalog.citus_unmark_object_distributed("
+				 "(SELECT oid FROM pg_class WHERE relname = 'pg_database'), "
+				 "(SELECT oid FROM pg_database WHERE datname = %s), "
+				 "0);",
+				 quote_literal_cstr(tempDatabaseName));
+	List *unmarkObjectDistributedCommands = list_make1(unmarkObjectDistributedCommand);
+	List *unmarkObjectDistributedDDLJobList =
+		NodeDDLTaskList(REMOTE_NODES, unmarkObjectDistributedCommands);
+
+	char *renameDatabaseCommand =
+		psprintf("ALTER DATABASE %s RENAME TO %s",
+				 quote_identifier(stmt->dbname),
+				 quote_identifier(tempDatabaseName));
+
+	int saveNestLevel = NewGUCNestLevel();
+	set_config_option("citus.enable_ddl_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	ExecuteUtilityCommand(renameDatabaseCommand);
+
+	AtEOXact_GUC(true, saveNestLevel);
+
+	List *renameDatabaseCommands = list_make3(DISABLE_DDL_PROPAGATION,
+											  renameDatabaseCommand,
+											  ENABLE_DDL_PROPAGATION);
+
+	List *renameDatabaseDDLJobList =
+		NodeDDLTaskList(REMOTE_NODES, renameDatabaseCommands);
+
+	List *allNodes = TargetWorkerSetNodeList(ALL_SHARD_NODES, RowShareLock);
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, allNodes)
+	{
+		InsertCleanupRecordInCurrentTransaction(
+			CLEANUP_OBJECT_DATABASE,
+			pstrdup(quote_identifier(tempDatabaseName)),
+			workerNode->groupId,
+			CLEANUP_DEFERRED_ON_SUCCESS
+			);
+	}
+
+	return list_concat(renameDatabaseDDLJobList, unmarkObjectDistributedDDLJobList);
+}
+
+
+bool
+IsDistributedDropDatabaseCommand(Node *node)
+{
+	if (!IsA(node, DropdbStmt))
+	{
+		return false;
+	}
+
+	if (!EnableCreateDatabasePropagation || !ShouldPropagate())
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

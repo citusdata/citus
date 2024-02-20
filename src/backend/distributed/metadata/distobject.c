@@ -119,19 +119,6 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	if (ObjectExists(&address))
-	{
-		ereport(ERROR, (errmsg("object still exists"),
-						errdetail("the %s \"%s\" still exists",
-								  getObjectTypeDescription(&address,
-
-		                                                   /* missingOk: */ false),
-								  getObjectIdentity(&address,
-
-		                                            /* missingOk: */ false)),
-						errhint("drop the object via a DROP command")));
-	}
-
 	UnmarkObjectDistributed(&address);
 
 	PG_RETURN_VOID();
@@ -455,19 +442,6 @@ UnmarkNodeWideObjectsDistributed(Node *node)
 		if (list_length(distributedDropRoles) > 0)
 		{
 			UnmarkRolesDistributed(distributedDropRoles);
-		}
-	}
-	else if (IsA(node, DropdbStmt))
-	{
-		DropdbStmt *stmt = castNode(DropdbStmt, node);
-		char *dbName = stmt->dbname;
-
-		Oid dbOid = get_database_oid(dbName, stmt->missing_ok);
-		ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, dbOid);
-		if (IsAnyObjectDistributed(list_make1(dbObjectAddress)))
-		{
-			UnmarkObjectDistributed(dbObjectAddress);
 		}
 	}
 }
