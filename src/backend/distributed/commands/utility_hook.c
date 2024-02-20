@@ -100,7 +100,7 @@
  * supported from non-main databases and whether it should be marked as
  * distributed explicitly (*).
  *
-
+ *
  * (*) We always have to mark such objects as "distributed" but while for some
  * object types we can delegate this to main database, for some others we have
  * to explicitly send a command to all nodes in this code-path to achieve this.
@@ -1655,7 +1655,6 @@ DropSchemaOrDBInProgress(void)
 static void
 RunPreprocessMainDBCommand(Node *parsetree)
 {
-
 	if (!IsStatementSupportedFromNonMainDb(parsetree))
 	{
 		return;
