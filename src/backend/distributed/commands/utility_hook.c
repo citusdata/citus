@@ -43,7 +43,6 @@
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
-#include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
@@ -100,7 +99,6 @@
  * supported from non-main databases and whether it should be marked as
  * distributed explicitly (*).
  *
- *
  * (*) We always have to mark such objects as "distributed" but while for some
  * object types we can delegate this to main database, for some others we have
  * to explicitly send a command to all nodes in this code-path to achieve this.
@@ -113,14 +111,16 @@ typedef struct NonMainDbDistributedStatementInfo
 	int supportedObjectTypesSize;
 } NonMainDbDistributedStatementInfo;
 
-
+/*
+ * MarkObjectDistributedParams is used to pass parameters to the
+ * MarkObjectDistributedFromNonMainDb function.
+*/
 typedef struct MarkObjectDistributedParams
 {
 	char *name;
 	Oid id;
 	uint16 catalogRelId;
 } MarkObjectDistributedParams;
-
 
 /*
  * NonMainDbSupportedStatements is an array of statements that are supported
@@ -164,7 +164,6 @@ static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
 static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
-
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 static void MarkObjectDistributedFromNonMainDb(Node *parsetree);
@@ -1659,8 +1658,8 @@ RunPreprocessMainDBCommand(Node *parsetree)
 	{
 		return;
 	}
-	char *queryString = DeparseTreeNode(parsetree);
 
+	char *queryString = DeparseTreeNode(parsetree);
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 START_MANAGEMENT_TRANSACTION,
@@ -1774,5 +1773,6 @@ GetMarkObjectDistributedParams(Node *parsetree)
 	}
 
 	/* Add else if branches for other statement types */
+
 	elog(ERROR, "unsupported statement type");
 }
