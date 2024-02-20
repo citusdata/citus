@@ -1703,7 +1703,28 @@ IsStatementSupportedFromNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return true;
+			if (NonMainDbSupportedStatements[i].supportedObjectTypes == NULL)
+			{
+				return true;
+			}
+			else
+			{
+				if (type == T_GrantStmt)
+				{
+					GrantStmt *stmt = castNode(GrantStmt, parsetree);
+					/* check if stmt->objtype is in supportedObjectTypes */
+					for (int j = 0; j <
+						 NonMainDbSupportedStatements[i].supportedObjectTypesSize; j++)
+					{
+						if (stmt->objtype ==
+							NonMainDbSupportedStatements[i].supportedObjectTypes[j])
+						{
+							return true;
+						}
+					}
+					return false;
+				}
+			}
 		}
 	}
 

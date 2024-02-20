@@ -4,7 +4,6 @@
 set citus.enable_create_database_propagation to on;
 create database test_2pc_db;
 show citus.main_db;
-
 revoke connect,temp,temporary  on database test_2pc_db from public;
 
 CREATE SCHEMA grant_on_database_propagation_non_maindb;
