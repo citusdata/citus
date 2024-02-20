@@ -243,5 +243,5 @@ set citus.enable_create_database_propagation to off;
 DROP SCHEMA grant_on_database_propagation_non_maindb CASCADE;
 
 reset citus.enable_create_database_propagation;
-
+reset search_path;
 ---------------------------------------------------------------------------
