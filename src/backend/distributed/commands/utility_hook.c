@@ -114,7 +114,7 @@ typedef struct NonMainDbDistributedStatementInfo
 /*
  * MarkObjectDistributedParams is used to pass parameters to the
  * MarkObjectDistributedFromNonMainDb function.
-*/
+ */
 typedef struct MarkObjectDistributedParams
 {
 	char *name;
