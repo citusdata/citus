@@ -16,5 +16,25 @@
                 }
             ],
         },
-    ]
+        {
+            "name": "Open core file",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/citus/.pgenv/pgsql/bin/postgres",
+            "coreDumpPath": "${input:corefile}",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+        }
+    ],
+    "inputs": [
+        {
+            "id": "corefile",
+            "type": "command",
+            "command": "extension.commandvariable.file.pickFile",
+            "args": {
+                "dialogTitle": "Select core file",
+                "include": "**/core*",
+            },
+        },
+    ],
 }
