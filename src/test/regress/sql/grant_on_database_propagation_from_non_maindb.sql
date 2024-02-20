@@ -15,22 +15,22 @@ SET search_path TO grant_on_database_propagation;
 
 
 -- test grant/revoke CREATE privilege propagation on database
-create user myuser;
+create user "myuser'_test";
 
 
 \c test_2pc_db - - :master_port
-grant create on database test_2pc_db to myuser;
+grant create on database test_2pc_db to "myuser'_test";
 
 \c regression - - :master_port;
-select check_database_privileges('myuser','test_2pc_db',ARRAY['CREATE']);
+select check_database_privileges('myuser''_test','test_2pc_db',ARRAY['CREATE']);
 
 \c test_2pc_db - - :master_port
-revoke create on database test_2pc_db from myuser;
+revoke create on database test_2pc_db from "myuser'_test";
 
 \c regression - - :master_port;
-select check_database_privileges('myuser','test_2pc_db',ARRAY['CREATE']);
+select check_database_privileges('myuser''_test','test_2pc_db',ARRAY['CREATE']);
 
-drop user myuser;
+drop user "myuser'_test";
 -----------------------------------------------------------------------
 
 -- test grant/revoke CONNECT privilege propagation on database
@@ -140,7 +140,7 @@ create user myuser_1;
 grant CREATE,CONNECT,TEMP,TEMPORARY on database test_2pc_db to myuser7;
 
 set role myuser7;
---here since myuser does not have grant option, it should fail
+--here since myuser7 does not have grant option, it should fail
 grant CREATE,CONNECT,TEMP,TEMPORARY on database test_2pc_db to myuser_1;
 
 \c regression - - :master_port
@@ -171,7 +171,7 @@ revoke grant option for CREATE,CONNECT,TEMP,TEMPORARY on database test_2pc_db fr
 --below test should succeed and should not throw any error since myuser_1 privileges are revoked with cascade
 revoke grant option for CREATE,CONNECT,TEMP,TEMPORARY on database test_2pc_db from myuser7 cascade ;
 
---here we test if myuser still have the privileges after revoke grant option for
+--here we test if myuser7 still have the privileges after revoke grant option for
 
 \c regression - - :master_port
 select check_database_privileges('myuser7','test_2pc_db',ARRAY['CREATE', 'CONNECT', 'TEMP', 'TEMPORARY']);
