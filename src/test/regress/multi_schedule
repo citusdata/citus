@@ -112,7 +112,6 @@ test: grant_role_2pc
 test: other_databases grant_role_from_non_maindb
 test: citus_internal_access
 
-
 # Causal clock test
 test: clock
 
