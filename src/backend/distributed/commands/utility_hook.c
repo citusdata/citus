@@ -162,6 +162,7 @@ static bool ShouldCheckUndistributeCitusLocalTables(void);
  * Functions to support commands used to manage node-wide objects from non-main
  * databases.
  */
+static bool IsCommandToCreateOrDropMainDB(Node *parsetree);
 static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
@@ -187,7 +188,6 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant }
 };
 
-static bool IsCommandToCreateOrDropMainDB(Node *parsetree);
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -331,6 +331,7 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 			!IsCommandToCreateOrDropMainDB(parsetree))
 		{
 			RunPreprocessMainDBCommand(parsetree);
+
 			if (IsA(parsetree, CreatedbStmt) ||
 				IsA(parsetree, DropdbStmt))
 			{
@@ -1682,6 +1683,29 @@ DropSchemaOrDBInProgress(void)
 
 
 /*
+ * IsCommandToCreateOrDropMainDB checks if this query creates or drops the
+ * main database, so we can make an exception and not send this query to
+ * the main database.
+ */
+static bool
+IsCommandToCreateOrDropMainDB(Node *parsetree)
+{
+	if (IsA(parsetree, CreatedbStmt))
+	{
+		CreatedbStmt *createdbStmt = castNode(CreatedbStmt, parsetree);
+		return strcmp(createdbStmt->dbname, MainDb) == 0;
+	}
+	else if (IsA(parsetree, DropdbStmt))
+	{
+		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
+		return strcmp(dropdbStmt->dbname, MainDb) == 0;
+	}
+
+	return false;
+}
+
+
+/*
  * RunPreprocessMainDBCommand runs the necessary commands for a query, in main
  * database before query is run on the local node with PrevProcessUtility
  */
@@ -1835,26 +1859,4 @@ NonMainDbCheckSupportedObjectTypeForGrant(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	return stmt->objtype == OBJECT_DATABASE;
-}
-
-
-/*
- * IsCommandToCreateOrDropMainDB checks if this query creates or drops the
- * main database, so we can make an exception and not send this query to
- * the main database.
- */
-static bool
-IsCommandToCreateOrDropMainDB(Node *parsetree)
-{
-	if (IsA(parsetree, CreatedbStmt))
-	{
-		CreatedbStmt *createdbStmt = castNode(CreatedbStmt, parsetree);
-		return strcmp(createdbStmt->dbname, MainDb) == 0;
-	}
-	else if (IsA(parsetree, DropdbStmt))
-	{
-		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
-		return strcmp(dropdbStmt->dbname, MainDb) == 0;
-	}
-	return false;
 }
