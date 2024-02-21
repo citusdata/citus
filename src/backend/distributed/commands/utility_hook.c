@@ -97,50 +97,13 @@
 #define UNMARK_OBJECT_DISTRIBUTED \
 	"SELECT pg_catalog.citus_unmark_object_distributed(%d, %d, %d,%s)"
 
-typedef enum
+typedef enum DistributedOperation
 {
 	NO_DISTRIBUTED_OPS,
 	MARK_DISTRIBUTED,
 	UNMARK_DISTRIBUTED
 } DistributedOperation;
 
-/*
- * NonMainDbDistributedStatementInfo is used to determine whether a statement is
- * supported from non-main databases and whether it should be marked as
- * distributed explicitly (*).
- *
- * We always have to mark such the objects created "as distributed" but while for
- * some object types we can delegate this to main database, for some others we have
- * to explicitly send a command to all nodes in this code-path to achieve this.
- */
-typedef struct NonMainDbDistributedStatementInfo
-{
-	int statementType;
-	DistributedOperation distributedOperation;
-	ObjectType *supportedObjectTypes;
-	int supportedObjectTypesSize;
-} NonMainDbDistributedStatementInfo;
-
-typedef struct ObjectInfo
-{
-	char *name;
-	Oid id;
-} ObjectInfo;
-
-/*
- * NonMainDbSupportedStatements is an array of statements that are supported
- * from non-main databases.
- */
-ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
-
-static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, NO_DISTRIBUTED_OPS, NULL, 0 },
-	{ T_CreateRoleStmt, MARK_DISTRIBUTED, NULL, 0 },
-	{ T_DropRoleStmt, UNMARK_DISTRIBUTED, NULL, 0 },
-	{ T_AlterRoleStmt, NO_DISTRIBUTED_OPS, NULL, 0 },
-	{ T_GrantStmt, NO_DISTRIBUTED_OPS, supportedObjectTypesForGrantStmt,
-	  sizeof(supportedObjectTypesForGrantStmt) / sizeof(ObjectType) }
-};
 
 /*
  * NonMainDbDistributedStatementInfo is used to determine whether a statement is
@@ -232,11 +195,13 @@ static bool NonMainDbCheckSupportedObjectTypeForGrant(Node *node);
  */
 ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, false, NULL },
-	{ T_CreateRoleStmt, true, NULL },
-	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant },
-	{ T_CreatedbStmt, false, NULL },
-	{ T_DropdbStmt, false, NULL },
+	{ T_GrantRoleStmt, NO_DISTRIBUTED_OPS, NULL },
+	{ T_CreateRoleStmt, MARK_DISTRIBUTED, NULL, 0 },
+	{ T_DropRoleStmt, UNMARK_DISTRIBUTED, NULL, 0 },
+	{ T_AlterRoleStmt, NO_DISTRIBUTED_OPS, NULL, 0 },
+	{ T_GrantStmt, NO_DISTRIBUTED_OPS, NonMainDbCheckSupportedObjectTypeForGrant },
+	{ T_CreatedbStmt, NO_DISTRIBUTED_OPS, NULL },
+	{ T_DropdbStmt, NO_DISTRIBUTED_OPS, NULL },
 };
 
 
@@ -1777,7 +1742,7 @@ RunPreprocessMainDBCommand(Node *parsetree)
 		RunCitusMainDBQuery((char *) queryString);
 		return;
 	}
-	
+
 
 	if (StatementRequiresUnmarkDistributedFromNonMainDb(parsetree))
 	{
