@@ -1720,12 +1720,13 @@ IsStatementSupportedFromNonMainDb(Node *parsetree)
 	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
 		 sizeof(NonMainDbSupportedStatements[0]); i++)
 	{
-		if (type == NonMainDbSupportedStatements[i].statementType &&
-			(!NonMainDbSupportedStatements[i].checkSupportedObjectTypes ||
-			 NonMainDbSupportedStatements[i].checkSupportedObjectTypes(parsetree)))
+		if (type != NonMainDbSupportedStatements[i].statementType)
 		{
-			return true;
+			continue;
 		}
+
+		return !NonMainDbSupportedStatements[i].checkSupportedObjectTypes ||
+			   NonMainDbSupportedStatements[i].checkSupportedObjectTypes(parsetree);
 	}
 
 	return false;
