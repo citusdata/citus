@@ -162,6 +162,7 @@ static bool ShouldCheckUndistributeCitusLocalTables(void);
  * Functions to support commands used to manage node-wide objects from non-main
  * databases.
  */
+static bool IsCommandToCreateOrDropMainDB(Node *parsetree);
 static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
@@ -184,7 +185,9 @@ ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
 	{ T_GrantRoleStmt, false, NULL },
 	{ T_CreateRoleStmt, true, NULL },
-	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant }
+	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant },
+	{ T_CreatedbStmt, false, NULL },
+	{ T_DropdbStmt, false, NULL },
 };
 
 
@@ -318,9 +321,24 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 	if (!CitusHasBeenLoaded())
 	{
-		if (!IsMainDB)
+		/*
+		 * We always execute CREATE/DROP DATABASE from the main database. There are no
+		 * transactional visibility issues, since these commands are non-transactional.
+		 * And this way we only have to consider one codepath when creating databases.
+		 * We don't try to send the query to the main database if the CREATE/DROP DATABASE
+		 * command is for the main database itself, this is a very rare case but it's
+		 * exercised by our test suite.
+		 */
+		if (!IsMainDB &&
+			!IsCommandToCreateOrDropMainDB(parsetree))
 		{
 			RunPreprocessMainDBCommand(parsetree);
+
+			if (IsA(parsetree, CreatedbStmt) ||
+				IsA(parsetree, DropdbStmt))
+			{
+				return;
+			}
 		}
 
 		/*
@@ -1667,6 +1685,29 @@ DropSchemaOrDBInProgress(void)
 
 
 /*
+ * IsCommandToCreateOrDropMainDB checks if this query creates or drops the
+ * main database, so we can make an exception and not send this query to
+ * the main database.
+ */
+static bool
+IsCommandToCreateOrDropMainDB(Node *parsetree)
+{
+	if (IsA(parsetree, CreatedbStmt))
+	{
+		CreatedbStmt *createdbStmt = castNode(CreatedbStmt, parsetree);
+		return strcmp(createdbStmt->dbname, MainDb) == 0;
+	}
+	else if (IsA(parsetree, DropdbStmt))
+	{
+		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
+		return strcmp(dropdbStmt->dbname, MainDb) == 0;
+	}
+
+	return false;
+}
+
+
+/*
  * RunPreprocessMainDBCommand runs the necessary commands for a query, in main
  * database before query is run on the local node with PrevProcessUtility
  */
@@ -1679,6 +1720,17 @@ RunPreprocessMainDBCommand(Node *parsetree)
 	}
 
 	char *queryString = DeparseTreeNode(parsetree);
+
+	if (IsA(parsetree, CreatedbStmt) ||
+		IsA(parsetree, DropdbStmt))
+	{
+		IsMainDBCommandInXact = false;
+		RunCitusMainDBQuery((char *) queryString);
+		return;
+	}
+
+	IsMainDBCommandInXact = true;
+
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 START_MANAGEMENT_TRANSACTION,

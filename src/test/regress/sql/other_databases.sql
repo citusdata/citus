@@ -75,9 +75,9 @@ DROP USER other_db_user9, nonsuperuser;
 -- test from a worker
 \c - - - :worker_1_port
 
-CREATE DATABASE other_db2;
+CREATE DATABASE worker_other_db;
 
-\c other_db2
+\c worker_other_db
 
 CREATE USER worker_user1;
 
@@ -98,9 +98,85 @@ SELECT usename FROM pg_user WHERE usename LIKE 'worker\_user%' ORDER BY 1;
 -- some user creation commands will fail but let's make sure we try to drop them just in case
 DROP USER IF EXISTS worker_user1, worker_user2, worker_user3;
 
-\c - - - :worker_1_port
-DROP DATABASE other_db2;
+-- test creating and dropping a database from a Citus non-main database
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
+\c other_db1
+CREATE DATABASE other_db3;
+
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db3') ORDER BY node_type;
+
+\c other_db1
+DROP DATABASE other_db3;
+
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db3') ORDER BY node_type;
+
+\c worker_other_db - - :worker_1_port
+CREATE DATABASE other_db4;
+
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db4') ORDER BY node_type;
+
+\c worker_other_db
+DROP DATABASE other_db4;
+
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db4') ORDER BY node_type;
+
+DROP DATABASE worker_other_db;
+
+CREATE DATABASE other_db5;
+
+-- disable create database propagation for the next test
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
+
+\c other_db5 - - :worker_2_port
+
+-- locally create a database
+CREATE DATABASE local_db;
+
+\c regression - - -
+
+-- re-enable create database propagation
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
+
+\c other_db5 - - :master_port
+
+-- Test a scenario where create database fails because the database
+-- already exists on another node and we don't crash etc.
+CREATE DATABASE local_db;
+
+\c regression - - -
+
+SELECT * FROM public.check_database_on_all_nodes('local_db') ORDER BY node_type, result;
+
+\c - - - :worker_2_port
+
+-- locally drop the database for cleanup purposes
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
+
+DROP DATABASE local_db;
+
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
+
 \c - - - :master_port
+
+DROP DATABASE other_db5;
+
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
 
 DROP SCHEMA other_databases;
 DROP DATABASE other_db1;
