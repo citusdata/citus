@@ -101,6 +101,7 @@ DROP USER IF EXISTS worker_user1, worker_user2, worker_user3;
 -- test creating and dropping a database from a Citus non-main database
 SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
 SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
 \c other_db1
 CREATE DATABASE other_db3;
 
@@ -130,6 +131,7 @@ DROP DATABASE worker_other_db;
 
 SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
 SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+SELECT pg_sleep(0.1);
 
 DROP SCHEMA other_databases;
 DROP DATABASE other_db1;
