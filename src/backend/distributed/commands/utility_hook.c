@@ -189,7 +189,7 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant },
 	{ T_CreatedbStmt, false, NULL },
 	{ T_DropdbStmt, false, NULL },
-	{ T_SecLabelStmt, false, NonMainDbCheckSupportedObjectTypeForSecLabel},
+	{ T_SecLabelStmt, false, NonMainDbCheckSupportedObjectTypeForSecLabel },
 };
 
 
