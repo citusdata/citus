@@ -106,25 +106,25 @@ SELECT pg_sleep(0.1);
 CREATE DATABASE other_db3;
 
 \c regression
-SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db3'$$);
+SELECT * FROM public.check_database_on_all_nodes('other_db3') ORDER BY node_type;
 
 \c other_db1
 DROP DATABASE other_db3;
 
 \c regression
-SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db3'$$);
+SELECT * FROM public.check_database_on_all_nodes('other_db3') ORDER BY node_type;
 
 \c worker_other_db - - :worker_1_port
 CREATE DATABASE other_db4;
 
 \c regression
-SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db4'$$);
+SELECT * FROM public.check_database_on_all_nodes('other_db4') ORDER BY node_type;
 
 \c worker_other_db
 DROP DATABASE other_db4;
 
 \c regression
-SELECT result FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname = 'other_db4'$$);
+SELECT * FROM public.check_database_on_all_nodes('other_db4') ORDER BY node_type;
 
 DROP DATABASE worker_other_db;
 \c - - - :master_port
