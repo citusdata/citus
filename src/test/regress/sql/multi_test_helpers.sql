@@ -661,7 +661,8 @@ DECLARE
 BEGIN
     FOREACH permission IN ARRAY permissions
     LOOP
-        RETURN QUERY EXECUTE format($inner$SELECT '%s', result FROM run_command_on_all_nodes($$select has_database_privilege('%s','%s', '%s'); $$)$inner$, permission, role_name, db_name, permission);
+        RETURN QUERY EXECUTE format($inner$SELECT %s, result FROM run_command_on_all_nodes($$select has_database_privilege(%s,%s,%s); $$)$inner$,
+        quote_literal(permission), quote_literal(role_name), quote_literal(db_name), quote_literal(permission));
     END LOOP;
 END;
 $func$ LANGUAGE plpgsql;
