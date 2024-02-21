@@ -107,23 +107,26 @@ typedef struct NonMainDbDistributedStatementInfo
 {
 	int statementType;
 	bool explicitlyMarkAsDistributed;
+
+	/*
+	 * checkSupportedObjectTypes is a callback function that checks whether
+	 * type of the object referred to by given statement is supported.
+	 *
+	 * Can be NULL if not applicable for the statement type.
+	 */
+	bool (*checkSupportedObjectTypes)(Node *node);
 } NonMainDbDistributedStatementInfo;
 
+/*
+ * MarkObjectDistributedParams is used to pass parameters to the
+ * MarkObjectDistributedFromNonMainDb function.
+ */
 typedef struct MarkObjectDistributedParams
 {
 	char *name;
 	Oid id;
 	uint16 catalogRelId;
 } MarkObjectDistributedParams;
-
-/*
- * NonMainDbSupportedStatements is an array of statements that are supported
- * from non-main databases.
- */
-static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, false },
-	{ T_CreateRoleStmt, true }
-};
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -153,12 +156,37 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
+
+
+/*
+ * Functions to support commands used to manage node-wide objects from non-main
+ * databases.
+ */
 static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 static void MarkObjectDistributedFromNonMainDb(Node *parsetree);
 static MarkObjectDistributedParams GetMarkObjectDistributedParams(Node *parsetree);
+
+/*
+ * checkSupportedObjectTypes callbacks for
+ * NonMainDbDistributedStatementInfo objects.
+ */
+static bool NonMainDbCheckSupportedObjectTypeForGrant(Node *node);
+
+
+/*
+ * NonMainDbSupportedStatements is an array of statements that are supported
+ * from non-main databases.
+ */
+ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
+static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
+	{ T_GrantRoleStmt, false, NULL },
+	{ T_CreateRoleStmt, true, NULL },
+	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant }
+};
+
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -1692,10 +1720,13 @@ IsStatementSupportedFromNonMainDb(Node *parsetree)
 	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
 		 sizeof(NonMainDbSupportedStatements[0]); i++)
 	{
-		if (type == NonMainDbSupportedStatements[i].statementType)
+		if (type != NonMainDbSupportedStatements[i].statementType)
 		{
-			return true;
+			continue;
 		}
+
+		return !NonMainDbSupportedStatements[i].checkSupportedObjectTypes ||
+			   NonMainDbSupportedStatements[i].checkSupportedObjectTypes(parsetree);
 	}
 
 	return false;
@@ -1766,4 +1797,16 @@ GetMarkObjectDistributedParams(Node *parsetree)
 	/* Add else if branches for other statement types */
 
 	elog(ERROR, "unsupported statement type");
+}
+
+
+/*
+ * NonMainDbCheckSupportedObjectTypeForGrant implements checkSupportedObjectTypes
+ * callback for GrantStmt.
+ */
+static bool
+NonMainDbCheckSupportedObjectTypeForGrant(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	return stmt->objtype == OBJECT_DATABASE;
 }
