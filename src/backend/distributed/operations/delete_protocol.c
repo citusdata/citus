@@ -426,10 +426,9 @@ ExecuteDropShardPlacementCommandRemotely(ShardPlacement *shardPlacement,
 						  errdetail("Marking this shard placement for "
 									"deletion")));
 
-		InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												shardRelationName,
-												shardPlacement->groupId,
-												CLEANUP_DEFERRED_ON_SUCCESS);
+		InsertCleanupOnSuccessRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+														 shardRelationName,
+														 shardPlacement->groupId);
 
 		return;
 	}

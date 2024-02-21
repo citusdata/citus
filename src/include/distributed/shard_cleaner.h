@@ -81,16 +81,16 @@ typedef enum CleanupPolicy
 extern OperationId RegisterOperationNeedingCleanup(void);
 
 /*
- * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
+ * InsertCleanupOnSuccessRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
  * as part of the current transaction.
  *
  * This is primarily useful for deferred cleanup (CLEANUP_DEFERRED_ON_SUCCESS)
- * scenarios, since the records would roll back in case of failure.
+ * scenarios, since the records would roll back in case of failure. And for the
+ * same reason, always sets the policy type to CLEANUP_DEFERRED_ON_SUCCESS.
  */
-extern void InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
-													char *objectName,
-													int nodeGroupId,
-													CleanupPolicy policy);
+extern void InsertCleanupOnSuccessRecordInCurrentTransaction(CleanupObject objectType,
+															 char *objectName,
+															 int nodeGroupId);
 
 /*
  * InsertCleanupRecordInSeparateTransaction inserts a new pg_dist_cleanup entry
@@ -99,10 +99,10 @@ extern void InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
  * This is used in scenarios where we need to cleanup resources on operation
  * completion (CLEANUP_ALWAYS) or on failure (CLEANUP_ON_FAILURE).
  */
-extern void InsertCleanupRecordInSubtransaction(CleanupObject objectType,
-												char *objectName,
-												int nodeGroupId,
-												CleanupPolicy policy);
+extern void InsertCleanupRecordOutsideTransaction(CleanupObject objectType,
+												  char *objectName,
+												  int nodeGroupId,
+												  CleanupPolicy policy);
 
 /*
  * FinalizeOperationNeedingCleanupOnSuccess is be called by an operation to signal

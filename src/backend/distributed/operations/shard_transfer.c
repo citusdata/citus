@@ -294,6 +294,17 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
+	List *referenceTableIdList = NIL;
+
+	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
+	{
+		ereport(ERROR, (errmsg("there are missing reference tables on some nodes"),
+						errhint("Copy reference tables first with "
+								"replicate_reference_tables() or use "
+								"citus_rebalance_start() that will do it automatically."
+								)));
+	}
+
 	int64 shardId = PG_GETARG_INT64(0);
 	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
 	int32 sourceNodePort = PG_GETARG_INT32(2);
@@ -593,10 +604,10 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 			 * we do not generate a record at all.
 			 */
-			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-													qualifiedShardName,
-													placement->groupId,
-													CLEANUP_DEFERRED_ON_SUCCESS);
+			InsertCleanupOnSuccessRecordInCurrentTransaction(
+				CLEANUP_OBJECT_SHARD_PLACEMENT,
+				qualifiedShardName,
+				placement->groupId);
 		}
 	}
 }
@@ -623,10 +634,9 @@ InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
 		 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 		 * we do not generate a record at all.
 		 */
-		InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												qualifiedShardName,
-												groupId,
-												CLEANUP_DEFERRED_ON_SUCCESS);
+		InsertCleanupOnSuccessRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+														 qualifiedShardName,
+														 groupId);
 	}
 }
 
@@ -1382,10 +1392,11 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		/* drop the shard we created on the target, in case of failure */
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-											ConstructQualifiedShardName(shardInterval),
-											GroupForNode(targetNodeName, targetNodePort),
-											CLEANUP_ON_FAILURE);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											  ConstructQualifiedShardName(shardInterval),
+											  GroupForNode(targetNodeName,
+														   targetNodePort),
+											  CLEANUP_ON_FAILURE);
 
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner,
@@ -1455,10 +1466,11 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		/* drop the shard we created on the target, in case of failure */
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-											ConstructQualifiedShardName(shardInterval),
-											GroupForNode(targetNodeName, targetNodePort),
-											CLEANUP_ON_FAILURE);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											  ConstructQualifiedShardName(shardInterval),
+											  GroupForNode(targetNodeName,
+														   targetNodePort),
+											  CLEANUP_ON_FAILURE);
 
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner, ddlCommandList);
@@ -2035,7 +2047,7 @@ UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 		StringInfo updateCommand = makeStringInfo();
 
 		appendStringInfo(updateCommand,
-						 "SELECT citus_internal_update_placement_metadata(%ld, %d, %d)",
+						 "SELECT citus_internal.update_placement_metadata(%ld, %d, %d)",
 						 colocatedShard->shardId,
 						 sourceGroupId, targetGroupId);
 		SendCommandToWorkersWithMetadata(updateCommand->data);

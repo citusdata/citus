@@ -733,11 +733,11 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 									   workerPlacementNode->workerPort)));
 			}
 
-			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(
-													shardInterval),
-												workerPlacementNode->groupId,
-												CLEANUP_ON_FAILURE);
+			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												  ConstructQualifiedShardName(
+													  shardInterval),
+												  workerPlacementNode->groupId,
+												  CLEANUP_ON_FAILURE);
 
 			/* Create new split child shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1314,7 +1314,7 @@ DropShardListMetadata(List *shardIntervalList)
 		{
 			ListCell *commandCell = NULL;
 
-			/* send the commands one by one (calls citus_internal_delete_shard_metadata internally) */
+			/* send the commands one by one (calls citus_internal.delete_shard_metadata internally) */
 			List *shardMetadataDeleteCommandList = ShardDeleteCommandList(shardInterval);
 			foreach(commandCell, shardMetadataDeleteCommandList)
 			{
@@ -1717,11 +1717,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(
-													shardInterval),
-												workerPlacementNode->groupId,
-												CLEANUP_ALWAYS);
+			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												  ConstructQualifiedShardName(
+													  shardInterval),
+												  workerPlacementNode->groupId,
+												  CLEANUP_ALWAYS);
 
 			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1780,11 +1780,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(
-													shardInterval),
-												sourceWorkerNode->groupId,
-												CLEANUP_ALWAYS);
+			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												  ConstructQualifiedShardName(
+													  shardInterval),
+												  sourceWorkerNode->groupId,
+												  CLEANUP_ALWAYS);
 
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);

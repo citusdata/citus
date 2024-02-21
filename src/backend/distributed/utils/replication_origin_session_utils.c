@@ -186,7 +186,7 @@ SetupReplicationOriginRemoteSession(MultiConnection *connection)
 	{
 		StringInfo replicationOriginSessionSetupQuery = makeStringInfo();
 		appendStringInfo(replicationOriginSessionSetupQuery,
-						 "select pg_catalog.citus_internal_start_replication_origin_tracking();");
+						 "select citus_internal.start_replication_origin_tracking();");
 		ExecuteCriticalRemoteCommand(connection,
 									 replicationOriginSessionSetupQuery->data);
 		connection->isReplicationOriginSessionSetup = true;
@@ -205,7 +205,7 @@ ResetReplicationOriginRemoteSession(MultiConnection *connection)
 	{
 		StringInfo replicationOriginSessionResetQuery = makeStringInfo();
 		appendStringInfo(replicationOriginSessionResetQuery,
-						 "select pg_catalog.citus_internal_stop_replication_origin_tracking();");
+						 "select citus_internal.stop_replication_origin_tracking();");
 		ExecuteCriticalRemoteCommand(connection,
 									 replicationOriginSessionResetQuery->data);
 		connection->isReplicationOriginSessionSetup = false;
@@ -229,7 +229,7 @@ IsRemoteReplicationOriginSessionSetup(MultiConnection *connection)
 
 	StringInfo isReplicationOriginSessionSetupQuery = makeStringInfo();
 	appendStringInfo(isReplicationOriginSessionSetupQuery,
-					 "SELECT pg_catalog.citus_internal_is_replication_origin_tracking_active()");
+					 "SELECT citus_internal.is_replication_origin_tracking_active()");
 	bool result =
 		ExecuteRemoteCommandAndCheckResult(connection,
 										   isReplicationOriginSessionSetupQuery->data,

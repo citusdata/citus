@@ -3,7 +3,7 @@
 -- For versions >= 15, pg15_create_drop_database_propagation.sql is used.
 -- For versions >= 16, pg16_create_drop_database_propagation.sql is used.
 -- Test the UDF that we use to issue database command during metadata sync.
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 CREATE ROLE test_db_commands WITH LOGIN;
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_db_commands';
@@ -21,22 +21,22 @@ SELECT pg_sleep(0.1);
 
 SET ROLE test_db_commands;
 -- fails on null input
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 ERROR:  command cannot be NULL
 -- fails on non create / drop db command
-SELECT pg_catalog.citus_internal_database_command('CREATE TABLE foo_bar(a int)');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
-SELECT pg_catalog.citus_internal_database_command('SELECT 1');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
-SELECT pg_catalog.citus_internal_database_command('asfsfdsg');
+SELECT citus_internal.database_command('CREATE TABLE foo_bar(a int)');
+ERROR:  citus_internal.database_command() can only be used for CREATE DATABASE command by Citus.
+SELECT citus_internal.database_command('SELECT 1');
+ERROR:  citus_internal.database_command() can only be used for CREATE DATABASE command by Citus.
+SELECT citus_internal.database_command('asfsfdsg');
 ERROR:  syntax error at or near "asfsfdsg"
-SELECT pg_catalog.citus_internal_database_command('');
+SELECT citus_internal.database_command('');
 ERROR:  cannot execute multiple utility events
 RESET ROLE;
 ALTER ROLE test_db_commands nocreatedb;
 SET ROLE test_db_commands;
--- make sure that pg_catalog.citus_internal_database_command doesn't cause privilege escalation
-SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE no_permissions');
+-- make sure that citus_internal.database_command doesn't cause privilege escalation
+SELECT citus_internal.database_command('CREATE DATABASE no_permissions');
 ERROR:  permission denied to create database
 RESET ROLE;
 DROP USER test_db_commands;

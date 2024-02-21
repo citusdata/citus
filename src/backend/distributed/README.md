@@ -1749,8 +1749,6 @@ The reason for handling dependencies and deparsing in post-process step is that 
 
 Not all table DDL is currently deparsed. In that case, the original command sent by the client is used. That is a shortcoming in our DDL logic that causes user-facing issues and should be addressed. We do not directly construct a separate DDL command for each shard. Instead, we call the `worker_apply_shard_ddl_command(shardid bigint, ddl_command text)` function which parses the DDL command, replaces the table names with shard names in the parse tree according to the shard ID, and then executes the command. That also has some shortcomings, because we cannot support more complex DDL commands in this manner (e.g. adding multiple foreign keys). Ideally, all DDL would be deparsed, and for table DDL the deparsed query string would have shard names, similar to regular queries.
 
-`markDistributed` is used to indicate whether we add a record to `pg_dist_object` to mark the object as "distributed".
-
 ## Defining a new DDL command
 
 All commands that are propagated by Citus should be defined in DistributeObjectOps struct. Below is a sample DistributeObjectOps for ALTER DATABASE command that is defined in [distribute_object_ops.c](commands/distribute_object_ops.c) file.
@@ -1809,6 +1807,14 @@ GetDistributeObjectOps(Node *node)
 		}
 ...
 ```
+
+Finally, when adding support for propagation of a new DDL command, you also need to make sure that:
+* Use `quote_identifier()` or `quote_literal_cstr()` for the fields that might need escaping some characters or bare quotes when deparsing a DDL command.
+* The code is tolerant to nullable fields within given `Stmt *` object, i.e., the ones that Postgres allows not specifying at all.
+* You register the object into `pg_dist_object` if it's a CREATE command and you delete the object from `pg_dist_object` if it's a DROP command.
+* Node activation (e.g., `citus_add_node()`) properly propagates the object and its dependencies to new nodes.
+* Add tests cases for all the scenarios noted above.
+* Add test cases for different options that can be specified for the settings. For example, `CREATE DATABASE .. IS_TEMPLATE = TRUE` and `CREATE DATABASE .. IS_TEMPLATE = FALSE` should be tested separately.
 
 ## Object & dependency propagation
 
@@ -1885,7 +1891,7 @@ Generally, the process is straightforward: When a new object is created, Citus a
 
 Citus employs a universal strategy for dealing with objects. Every object creation, alteration, or deletion event (like custom types, tables, or extensions) is represented by the C struct `DistributeObjectOps`. You can find a list of all supported object types in [`distribute_object_ops.c`](https://github.com/citusdata/citus/blob/2c190d068918d1c457894adf97f550e5b3739184/src/backend/distributed/commands/distribute_object_ops.c#L4). As of Citus 12.1, most Postgres objects are supported, although there are a few exceptions.
 
-Whenever `DistributeObjectOps->markDistributed` is set to true—usually during `CREATE` operations—Citus calls `MarkObjectDistributed()`. Citus also labels the same objects as distributed across all nodes via the `citus_internal_add_object_metadata()` UDF.
+Whenever `DistributeObjectOps->markDistributed` is set to true—usually during `CREATE` operations—Citus calls `MarkObjectDistributed()`. Citus also labels the same objects as distributed across all nodes via the `citus_internal.add_object_metadata()` UDF.
 
 Here's a simple example:
 
@@ -1895,7 +1901,7 @@ CREATE TYPE type_test AS (a int, b int);
 ...
 NOTICE:  issuing SELECT worker_create_or_replace_object('CREATE TYPE public.type_test AS (a integer, b integer);');
 ....
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  ...
 
 -- Then, check pg_dist_object. This should be consistent across all nodes.
@@ -2423,7 +2429,7 @@ Cleanup records always need to be committed before creating the actual object. I
 
 PostgreSQL supports change data capture (CDC) via the logical decoding interface. The basic idea behind logical decoding is that you make a replication connection (a special type of postgres connection), start replication, and then the backend process reads through the WAL and decodes the WAL records and emits it over the wire in a format defined by the output plugin. If we were to use regular logical decoding on the nodes of a Citus cluster, we would see the name of the shard in each write, and internal data transfers such as shard moves would result in inserts being emitted. We use several techniques to avoid this.
 
-All writes in PostgreSQL are marked with a replication origin (0 by default) and the decoder can make decisions on whether to emit the change based on the replication origin. We use this to filter out internal data transfers. If `citus.enable_change_data_capture` is enabled, all internal data transfers are marked with the special DoNotReplicateId replication origin by calling the `citus_internal_start_replication_origin_tracking()` UDF before writing the data. This replication origin ID is special in the sense that it does not need to be created (which prevents locking issues, especially when dropping replication origins). It is still up to output plugin to decide what to do with changes marked as DoNotReplicateId.
+All writes in PostgreSQL are marked with a replication origin (0 by default) and the decoder can make decisions on whether to emit the change based on the replication origin. We use this to filter out internal data transfers. If `citus.enable_change_data_capture` is enabled, all internal data transfers are marked with the special DoNotReplicateId replication origin by calling the `citus_internal.start_replication_origin_tracking()` UDF before writing the data. This replication origin ID is special in the sense that it does not need to be created (which prevents locking issues, especially when dropping replication origins). It is still up to output plugin to decide what to do with changes marked as DoNotReplicateId.
 
 We have very minimal control over replication commands like `CREATE_REPLICATION_SLOT`, since there are no direct hooks, and decoder names (e.g. “pgoutput”) are typically hard-coded in the client. The only method we found of overriding logical decoding behaviour is to overload the output plugin name in the dynamic library path.
 
