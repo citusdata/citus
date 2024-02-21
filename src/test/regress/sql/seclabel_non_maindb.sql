@@ -29,7 +29,7 @@ SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus_unc
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
 
-\c database1 
+\c database1
 -- Set a SECURITY LABEL on database, it should not be propagated
 SECURITY LABEL FOR "citus '!tests_label_provider" ON DATABASE database1 IS 'citus_classified';
 
@@ -63,8 +63,10 @@ ROLLBACK;
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
 
 -- clean up
+SET citus.enable_create_database_propagation to ON;
 DROP DATABASE database1;
 DROP DATABASE database2;
 DROP DATABASE database_w1;
 DROP ROLE user1;
 DROP ROLE "user 2";
+RESET citus.enable_create_database_propagation;

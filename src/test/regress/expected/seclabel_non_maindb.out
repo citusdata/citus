@@ -103,8 +103,10 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') 
 (3 rows)
 
 -- clean up
+SET citus.enable_create_database_propagation to ON;
 DROP DATABASE database1;
 DROP DATABASE database2;
 DROP DATABASE database_w1;
 DROP ROLE user1;
 DROP ROLE "user 2";
+RESET citus.enable_create_database_propagation;
