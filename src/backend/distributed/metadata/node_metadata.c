@@ -507,7 +507,13 @@ citus_disable_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	bool synchronousDisableNode = PG_GETARG_BOOL(2);
+
+	bool synchronousDisableNode = 1;
+	Assert(PG_NARGS() == 2 || PG_NARGS() == 3);
+	if (PG_NARGS() == 3)
+	{
+		synchronousDisableNode = PG_GETARG_BOOL(2);
+	}
 
 	char *nodeName = text_to_cstring(nodeNameText);
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
