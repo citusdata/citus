@@ -185,7 +185,9 @@ ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
 	{ T_GrantRoleStmt, false, NULL },
 	{ T_CreateRoleStmt, true, NULL },
-	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant }
+	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant },
+	{ T_CreatedbStmt, false, NULL },
+	{ T_DropdbStmt, false, NULL },
 };
 
 
