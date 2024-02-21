@@ -5,6 +5,11 @@ RETURNS TEXT AS $func$
   SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
 $func$
 LANGUAGE sql;
+CREATE FUNCTION count_db_cleanup_records()
+RETURNS TABLE(object_name TEXT, count INTEGER) AS $func$
+  SELECT object_name, COUNT(*) FROM pg_dist_cleanup WHERE object_name LIKE 'citus_temp_database_%' GROUP BY object_name;
+$func$
+LANGUAGE sql;
 CREATE FUNCTION ensure_no_temp_databases_on_any_nodes()
 RETURNS BOOLEAN AS $func$
   SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
@@ -46,6 +51,11 @@ SELECT get_temp_databases_on_nodes();
 
 (1 row)
 
+SELECT * FROM count_db_cleanup_records();
+ object_name | count
+---------------------------------------------------------------------
+(0 rows)
+
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
  ensure_no_temp_databases_on_any_nodes
@@ -67,9 +77,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^CREATE DATABASE").cancel(' || pg_ba
 (1 row)
 
 CREATE DATABASE db1;
-WARNING:  Commands that are not transaction-safe may result in partial failure, potentially leading to an inconsistent state.
-If the problematic command is a CREATE operation, consider using the 'IF EXISTS' syntax to drop the object,
-if applicable, and then re-attempt the original command.
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -81,6 +88,12 @@ SELECT get_temp_databases_on_nodes();
  get_temp_databases_on_nodes
 ---------------------------------------------------------------------
  {citus_temp_database_4000_0}
+(1 row)
+
+SELECT * FROM count_db_cleanup_records();
+        object_name         | count
+---------------------------------------------------------------------
+ citus_temp_database_4000_0 |     2
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
@@ -117,6 +130,12 @@ SELECT get_temp_databases_on_nodes();
  {citus_temp_database_4001_0}
 (1 row)
 
+SELECT * FROM count_db_cleanup_records();
+        object_name         | count
+---------------------------------------------------------------------
+ citus_temp_database_4001_0 |     2
+(1 row)
+
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
  ensure_no_temp_databases_on_any_nodes
@@ -151,6 +170,11 @@ SELECT get_temp_databases_on_nodes();
 
 (1 row)
 
+SELECT * FROM count_db_cleanup_records();
+ object_name | count
+---------------------------------------------------------------------
+(0 rows)
+
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
  ensure_no_temp_databases_on_any_nodes
@@ -184,6 +208,12 @@ SELECT get_temp_databases_on_nodes();
  get_temp_databases_on_nodes
 ---------------------------------------------------------------------
  {citus_temp_database_4002_0}
+(1 row)
+
+SELECT * FROM count_db_cleanup_records();
+        object_name         | count
+---------------------------------------------------------------------
+ citus_temp_database_4002_0 |     2
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
@@ -237,6 +267,12 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
 (2 rows)
 
 DROP DATABASE db1;
+-- after recovering the prepared transactions, cleanup records should also be removed
+SELECT * FROM count_db_cleanup_records();
+ object_name | count
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_internal.acquire_citus_advisory_object_class_lock").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -256,6 +292,11 @@ SELECT get_temp_databases_on_nodes();
 ---------------------------------------------------------------------
 
 (1 row)
+
+SELECT * FROM count_db_cleanup_records();
+ object_name | count
+---------------------------------------------------------------------
+(0 rows)
 
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
@@ -292,6 +333,12 @@ SELECT get_temp_databases_on_nodes();
  {citus_temp_database_4004_0}
 (1 row)
 
+SELECT * FROM count_db_cleanup_records();
+        object_name         | count
+---------------------------------------------------------------------
+ citus_temp_database_4004_0 |     2
+(1 row)
+
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
  ensure_no_temp_databases_on_any_nodes
@@ -306,5 +353,13 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
  worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
 (2 rows)
 
+CREATE DATABASE db1;
+-- show that a successful database creation doesn't leave any pg_dist_cleanup records behind
+SELECT * FROM count_db_cleanup_records();
+ object_name | count
+---------------------------------------------------------------------
+(0 rows)
+
+DROP DATABASE db1;
 DROP FUNCTION get_temp_databases_on_nodes();
 DROP FUNCTION ensure_no_temp_databases_on_any_nodes();

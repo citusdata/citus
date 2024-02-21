@@ -929,6 +929,11 @@ TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePo
 	const char *commandString = NULL;
 	foreach_ptr(commandString, commandList)
 	{
+		/*
+		 * Cannot use SendOptionalCommandListToWorkerOutsideTransactionWithConnection()
+		 * because we don't want to open a transaction block on remote nodes as DROP
+		 * DATABASE commands cannot be run inside a transaction block.
+		 */
 		if (ExecuteOptionalRemoteCommand(connection, commandString, NULL) !=
 			RESPONSE_OKAY)
 		{

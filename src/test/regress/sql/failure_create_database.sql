@@ -7,6 +7,12 @@ RETURNS TEXT AS $func$
 $func$
 LANGUAGE sql;
 
+CREATE FUNCTION count_db_cleanup_records()
+RETURNS TABLE(object_name TEXT, count INTEGER) AS $func$
+  SELECT object_name, COUNT(*) FROM pg_dist_cleanup WHERE object_name LIKE 'citus_temp_database_%' GROUP BY object_name;
+$func$
+LANGUAGE sql;
+
 CREATE FUNCTION ensure_no_temp_databases_on_any_nodes()
 RETURNS BOOLEAN AS $func$
   SELECT bool_and(result::boolean) AS no_temp_databases_on_any_nodes FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
@@ -27,6 +33,7 @@ CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 SELECT get_temp_databases_on_nodes();
+SELECT * FROM count_db_cleanup_records();
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
@@ -36,6 +43,7 @@ CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 SELECT get_temp_databases_on_nodes();
+SELECT * FROM count_db_cleanup_records();
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
@@ -45,6 +53,7 @@ CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 SELECT get_temp_databases_on_nodes();
+SELECT * FROM count_db_cleanup_records();
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
@@ -54,6 +63,7 @@ CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 SELECT get_temp_databases_on_nodes();
+SELECT * FROM count_db_cleanup_records();
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
@@ -63,6 +73,7 @@ CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 SELECT get_temp_databases_on_nodes();
+SELECT * FROM count_db_cleanup_records();
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
@@ -78,11 +89,15 @@ SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, re
 
 DROP DATABASE db1;
 
+-- after recovering the prepared transactions, cleanup records should also be removed
+SELECT * FROM count_db_cleanup_records();
+
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_internal.acquire_citus_advisory_object_class_lock").kill()');
 CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 SELECT get_temp_databases_on_nodes();
+SELECT * FROM count_db_cleanup_records();
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
@@ -92,9 +107,17 @@ CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 SELECT get_temp_databases_on_nodes();
+SELECT * FROM count_db_cleanup_records();
 CALL citus_cleanup_orphaned_resources();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
+
+CREATE DATABASE db1;
+
+-- show that a successful database creation doesn't leave any pg_dist_cleanup records behind
+SELECT * FROM count_db_cleanup_records();
+
+DROP DATABASE db1;
 
 DROP FUNCTION get_temp_databases_on_nodes();
 DROP FUNCTION ensure_no_temp_databases_on_any_nodes();

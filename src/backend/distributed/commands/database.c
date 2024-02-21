@@ -309,8 +309,9 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		 * NontransactionalNodeDDLTask to run the command on the workers outside
 		 * the transaction block.
 		 */
-
-		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+		bool warnForPartialFailure = true;
+		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands,
+											   warnForPartialFailure);
 	}
 	else
 	{
@@ -522,6 +523,14 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 	CreateDatabaseCommandOriginalDbName = stmt->dbname;
 	stmt->dbname = tempDatabaseName;
 
+	/*
+	 * Delete cleanup records in the same transaction so that if the current
+	 * transactions fails for some reason, then the cleanup records won't be
+	 * deleted. In the happy path, we will delete the cleanup records without
+	 * deferring them to the background worker.
+	 */
+	FinalizeOperationNeedingCleanupOnSuccess("create database");
+
 	return NIL;
 }
 
@@ -537,7 +546,6 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
  * cleanup records that we inserted in PreprocessCreateDatabaseStmt() and in case of a
  * failure, we won't leak any databases called as the name that user intended to use for
  * the database.
- *
  */
 List *
 PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
@@ -570,8 +578,10 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 	 * block, we need to use NontransactionalNodeDDLTaskList() to send the CREATE
 	 * DATABASE statement to the workers.
 	 */
+	bool warnForPartialFailure = false;
 	List *createDatabaseDDLJobList =
-		NontransactionalNodeDDLTaskList(REMOTE_NODES, createDatabaseCommands);
+		NontransactionalNodeDDLTaskList(REMOTE_NODES, createDatabaseCommands,
+										warnForPartialFailure);
 
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 
@@ -670,8 +680,10 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 	 * use NontransactionalNodeDDLTaskList() to send the DROP DATABASE statement
 	 * to the workers.
 	 */
+	bool warnForPartialFailure = true;
 	List *dropDatabaseDDLJobList =
-		NontransactionalNodeDDLTaskList(REMOTE_NODES, dropDatabaseCommands);
+		NontransactionalNodeDDLTaskList(REMOTE_NODES, dropDatabaseCommands,
+										warnForPartialFailure);
 	return dropDatabaseDDLJobList;
 }
 

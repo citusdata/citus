@@ -218,7 +218,7 @@ SELECT * FROM public.check_database_on_all_nodes('my_template_database') ORDER B
 --tests for special characters in database name
 set citus.enable_create_database_propagation=on;
 SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
+set citus.grep_remote_commands = '%DATABASE%';
 SET citus.next_operation_id TO 2000;
 
 create database "mydatabase#1'2";
