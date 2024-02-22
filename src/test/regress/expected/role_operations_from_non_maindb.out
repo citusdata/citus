@@ -11,6 +11,8 @@ CREATE USER "test_role2-needs\!escape"
 WITH
     SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION
 LIMIT 10 VALID UNTIL '2023-01-01' IN ROLE test_role1;
+create role test_role3;
+create role "test_role4-needs\!escape";
 \c regression - - :master_port
 select result FROM run_command_on_all_nodes($$
     SELECT array_to_json(array_agg(row_to_json(t)))
@@ -19,15 +21,15 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
-                                                                                                                                                                                                                                result
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                  result
 ---------------------------------------------------------------------
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"},{"rolname":"test_role3","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null},{"rolname":"test_role4-needs\\!escape","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"},{"rolname":"test_role3","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null},{"rolname":"test_role4-needs\\!escape","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"},{"rolname":"test_role3","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null},{"rolname":"test_role4-needs\\!escape","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null}]
 (3 rows)
 
 select result FROM run_command_on_all_nodes($$
@@ -36,15 +38,15 @@ select result FROM run_command_on_all_nodes($$
         SELECT r.rolname
         FROM pg_dist_object d
         JOIN pg_roles r ON d.objid = r.oid
-        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         order by r.rolname
     ) t
 $$);
-                               result
+                                                               result
 ---------------------------------------------------------------------
- [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"}]
- [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"}]
- [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"}]
+ [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"},{"rolname":"test_role3"},{"rolname":"test_role4-needs\\!escape"}]
+ [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"},{"rolname":"test_role3"},{"rolname":"test_role4-needs\\!escape"}]
+ [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"},{"rolname":"test_role3"},{"rolname":"test_role4-needs\\!escape"}]
 (3 rows)
 
 \c role_operations_test_db - - :master_port
@@ -63,20 +65,22 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
-                                                                                                                                                                                                                                   result
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                     result
 ---------------------------------------------------------------------
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
- [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"},{"rolname":"test_role3","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null},{"rolname":"test_role4-needs\\!escape","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"},{"rolname":"test_role3","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null},{"rolname":"test_role4-needs\\!escape","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"},{"rolname":"test_role3","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null},{"rolname":"test_role4-needs\\!escape","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":null,"date":null}]
 (3 rows)
 
 \c role_operations_test_db - - :master_port
 -- Test DROP ROLE
 DROP ROLE IF EXISTS test_role1, "test_role2-needs\!escape";
+DROP ROLE IF EXISTS test_role3;
+DROP ROLE "test_role4-needs\!escape";
 \c regression - - :master_port
 --verify that roles and dist_object are dropped
 select result FROM run_command_on_all_nodes($$
@@ -86,7 +90,7 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
@@ -103,7 +107,7 @@ select result FROM run_command_on_all_nodes($$
         SELECT r.rolname
         FROM pg_dist_object d
         JOIN pg_roles r ON d.objid = r.oid
-        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         order by r.rolname
     ) t
 $$);

@@ -13,6 +13,9 @@ WITH
     SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION
 LIMIT 10 VALID UNTIL '2023-01-01' IN ROLE test_role1;
 
+create role test_role3;
+create role "test_role4-needs\!escape";
+
 \c regression - - :master_port
 
 select result FROM run_command_on_all_nodes($$
@@ -22,7 +25,7 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
@@ -33,7 +36,7 @@ select result FROM run_command_on_all_nodes($$
         SELECT r.rolname
         FROM pg_dist_object d
         JOIN pg_roles r ON d.objid = r.oid
-        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         order by r.rolname
     ) t
 $$);
@@ -56,7 +59,7 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
@@ -64,6 +67,8 @@ $$);
 \c role_operations_test_db - - :master_port
 -- Test DROP ROLE
 DROP ROLE IF EXISTS test_role1, "test_role2-needs\!escape";
+DROP ROLE IF EXISTS test_role3;
+DROP ROLE "test_role4-needs\!escape";
 
 \c regression - - :master_port
 --verify that roles and dist_object are dropped
@@ -74,7 +79,7 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         ORDER BY rolname
     ) t
 $$);
@@ -85,7 +90,7 @@ select result FROM run_command_on_all_nodes($$
         SELECT r.rolname
         FROM pg_dist_object d
         JOIN pg_roles r ON d.objid = r.oid
-        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape', 'test_role3', 'test_role4-needs\!escape')
         order by r.rolname
     ) t
 $$);
