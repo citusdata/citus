@@ -87,11 +87,9 @@ drop user "grant_role2pc'_user1","grant_role2pc'_user2","grant_role2pc'_user3",g
 select 1 from citus_remove_node('localhost', :worker_2_port);
 
 \c metadata_sync_2pc_db - - :master_port
-
 CREATE ROLE test_role1 WITH LOGIN PASSWORD 'password1';
 
 \c metadata_sync_2pc_db - - :worker_1_port
-
 CREATE USER "test_role2-needs\!escape"
 WITH
     SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION
@@ -100,9 +98,9 @@ LIMIT 10 VALID UNTIL '2023-01-01' IN ROLE test_role1;
 create role test_role3;
 
 \c regression - - :master_port
-
 select 1 from citus_add_node('localhost', :worker_2_port);
 
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
 select result FROM run_command_on_all_nodes($$
     SELECT array_to_json(array_agg(row_to_json(t)))
     FROM (
@@ -110,7 +108,7 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
         ORDER BY rolname
     ) t
 $$);
@@ -137,7 +135,7 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
         ORDER BY rolname
     ) t
 $$);
@@ -152,7 +150,6 @@ DROP ROLE test_role1, "test_role2-needs\!escape";
 DROP ROLE test_role3;
 
 \c regression - - :master_port
-
 select 1 from citus_add_node('localhost', :worker_2_port);
 select result FROM run_command_on_all_nodes($$
     SELECT array_to_json(array_agg(row_to_json(t)))
