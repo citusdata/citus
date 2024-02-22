@@ -109,7 +109,7 @@ test: undistribute_table
 test: run_command_on_all_nodes
 test: background_task_queue_monitor
 test: other_databases grant_role_from_non_maindb
-test: role_operations_2pc
+test: role_operations_from_non_maindb
 test: citus_internal_access
 
 # Causal clock test

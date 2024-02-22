@@ -1,5 +1,4 @@
 -- Create a new database
-
 set citus.enable_create_database_propagation to on;
 
 CREATE DATABASE test_db;
@@ -9,7 +8,6 @@ SET citus.superuser TO 'postgres';
 \c test_db
 -- Test CREATE ROLE with various options
 CREATE ROLE test_role1 WITH LOGIN PASSWORD 'password1';
-
 \c test_db - - :worker_1_port
 
 CREATE USER "test_role2-needs\!escape"

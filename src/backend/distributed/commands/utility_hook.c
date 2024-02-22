@@ -1914,12 +1914,12 @@ GetMarkObjectDistributedParams(Node *parsetree)
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		MarkObjectDistributedParams params = {
-			.name = stmt->role,
-			.catalogRelId = AuthIdRelationId,
-			.id = get_role_oid(stmt->role, false)
-		};
-		paramsList = lappend(paramsList, &params);
+		MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(sizeof(MarkObjectDistributedParams));
+		params->name = stmt->role;
+		params->catalogRelId = AuthIdRelationId;
+		params->id = get_role_oid(stmt->role, false);
+
+		paramsList = lappend(paramsList, params);
 	}
 	else if (IsA(parsetree, DropRoleStmt))
 	{
@@ -1927,12 +1927,12 @@ GetMarkObjectDistributedParams(Node *parsetree)
 		RoleSpec *roleSpec;
 		foreach_ptr(roleSpec, stmt->roles)
 		{
-			MarkObjectDistributedParams params = {
-				.name = roleSpec->rolename,
-				.catalogRelId = AuthIdRelationId,
-				.id = get_role_oid(roleSpec->rolename, false)
-			};
-			paramsList = lappend(paramsList, &params);
+			MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(sizeof(MarkObjectDistributedParams));
+			params->name = roleSpec->rolename;
+			params->catalogRelId = AuthIdRelationId;
+			params->id = get_role_oid(roleSpec->rolename, false);
+
+			paramsList = lappend(paramsList, params);
 		}
 	}
 	/* Add else if branches for other statement types */
