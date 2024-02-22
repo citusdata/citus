@@ -99,8 +99,6 @@ select result FROM run_command_on_all_nodes($$
     ) t
 $$);
 
-
-
 --test for alter user
 select 1 from citus_remove_node('localhost', :worker_2_port);
 \c metadata_sync_2pc_db - - :master_port
@@ -154,7 +152,6 @@ $$);
 
 set citus.enable_create_database_propagation to on;
 drop database metadata_sync_2pc_db;
-
 drop schema metadata_sync_2pc_schema;
 
 reset citus.enable_create_database_propagation;
