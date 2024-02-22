@@ -508,14 +508,18 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 	char *tempDatabaseName = psprintf(TEMP_DATABASE_NAME_FMT,
 									  operationId, GetLocalGroupId());
 
-	List *allNodes = TargetWorkerSetNodeList(ALL_SHARD_NODES, RowShareLock);
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, allNodes)
+	/*
+	 * Temporary database creation on local node would anyway rollback
+	 * in case of a failure, so only insert the records for remote nodes.
+	 */
+	List *remoteNodes = TargetWorkerSetNodeList(REMOTE_NODES, RowShareLock);
+	WorkerNode *remoteNode = NULL;
+	foreach_ptr(remoteNode, remoteNodes)
 	{
 		InsertCleanupRecordOutsideTransaction(
 			CLEANUP_OBJECT_DATABASE,
 			pstrdup(quote_identifier(tempDatabaseName)),
-			workerNode->groupId,
+			remoteNode->groupId,
 			CLEANUP_ON_FAILURE
 			);
 	}
