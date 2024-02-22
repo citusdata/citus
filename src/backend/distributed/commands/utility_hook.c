@@ -181,7 +181,7 @@ static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree);
 static void MarkObjectDistributedFromNonMainDb(Node *parsetree);
 static List * GetMarkObjectDistributedParams(Node *parsetree);
-static void UnMarkObjectDistributedFromNonMainDb(List *objectInfoList);
+static void UnMarkObjectDistributedFromNonMainDb(List *unmarkDistributedList);
 
 /*
  * checkSupportedObjectTypes callbacks for
@@ -1747,9 +1747,9 @@ RunPreprocessMainDBCommand(Node *parsetree)
 
 	if (StatementRequiresUnmarkDistributedFromNonMainDb(parsetree))
 	{
-		List *objectInfoList = GetMarkObjectDistributedParams(parsetree);
+		List *unmarkParams = GetMarkObjectDistributedParams(parsetree);
 
-		UnMarkObjectDistributedFromNonMainDb(objectInfoList);
+		UnMarkObjectDistributedFromNonMainDb(unmarkParams);
 	}
 
 	IsMainDBCommandInXact = true;
@@ -1832,7 +1832,7 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 
 
 /*
- * StatementRequiresMarkDistributedFromNonMainDb returns true if the statement should be marked
+ * StatementRequiresUnmarkDistributedFromNonMainDb returns true if the statement should be unmarked
  * as distributed when executed from a non-main database.
  */
 static bool
