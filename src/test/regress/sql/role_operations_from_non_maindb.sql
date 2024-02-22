@@ -27,6 +27,17 @@ select result FROM run_command_on_all_nodes($$
     ) t
 $$);
 
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT r.rolname
+        FROM pg_dist_object d
+        JOIN pg_roles r ON d.objid = r.oid
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        order by r.rolname
+    ) t
+$$);
+
 \c role_operations_test_db - - :master_port
 -- Test ALTER ROLE with various options
 ALTER ROLE test_role1 WITH PASSWORD 'new_password1';
@@ -54,8 +65,32 @@ $$);
 -- Test DROP ROLE
 DROP ROLE IF EXISTS test_role1, "test_role2-needs\!escape";
 
--- Clean up: drop the database
 \c regression - - :master_port
+--verify that roles and dist_object are dropped
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        ORDER BY rolname
+    ) t
+$$);
+
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT r.rolname
+        FROM pg_dist_object d
+        JOIN pg_roles r ON d.objid = r.oid
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        order by r.rolname
+    ) t
+$$);
+
+-- Clean up: drop the database
 set citus.enable_create_database_propagation to on;
 DROP DATABASE role_operations_test_db;
 reset citus.enable_create_database_propagation;
