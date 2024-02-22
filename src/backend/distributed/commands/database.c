@@ -512,7 +512,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, allNodes)
 	{
-		InsertCleanupRecordInSubtransaction(
+		InsertCleanupRecordOutsideTransaction(
 			CLEANUP_OBJECT_DATABASE,
 			pstrdup(quote_identifier(tempDatabaseName)),
 			workerNode->groupId,
