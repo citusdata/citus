@@ -41,8 +41,7 @@ SECURITY LABEL ON TABLE a IS 'citus_classified';
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('database1') ORDER BY node_type;
 
 -- Check that only the SECURITY LABEL for ROLES is propagated to the non-main databases on other nodes
-\c - - - :worker_1_port
-\c database_w1
+\c database_w1 - - :worker_1_port
 SELECT provider, objtype, label, objname FROM pg_seclabels ORDER BY objname;
 
 
