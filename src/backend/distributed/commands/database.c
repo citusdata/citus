@@ -480,7 +480,7 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
  * implicit transaction that creates a database. Also in this stage, we save the original
  * database name and replace dbname field with a temporary name for failure handling
  * purposes. We let Postgres create the database with the temporary name, insert a cleanup
- * record for the temporary database name on all workers and let PostprocessCreateDatabaseStmt()
+ * record for the temporary database name on all nodes and let PostprocessCreateDatabaseStmt()
  * to return the distributed DDL job that both creates the database with the temporary name
  * and then renames it back to its original name.
  *
@@ -496,7 +496,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsurePropagationToCoordinator();
+	EnsureCoordinatorIsInMetadata();
 
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	EnsureSupportedCreateDatabaseCommand(stmt);
@@ -508,11 +508,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 	char *tempDatabaseName = psprintf(TEMP_DATABASE_NAME_FMT,
 									  operationId, GetLocalGroupId());
 
-	/*
-	 * Temporary database creation on local node would anyway rollback
-	 * in case of a failure, so only insert the records for remote nodes.
-	 */
-	List *remoteNodes = TargetWorkerSetNodeList(REMOTE_NODES, RowShareLock);
+	List *remoteNodes = TargetWorkerSetNodeList(ALL_SHARD_NODES, RowShareLock);
 	WorkerNode *remoteNode = NULL;
 	foreach_ptr(remoteNode, remoteNodes)
 	{

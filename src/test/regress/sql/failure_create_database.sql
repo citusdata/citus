@@ -1,6 +1,8 @@
 SET citus.enable_create_database_propagation TO ON;
 SET client_min_messages TO WARNING;
 
+SELECT 1 FROM citus_add_node('localhost', :master_port, 0);
+
 CREATE FUNCTION get_temp_databases_on_nodes()
 RETURNS TEXT AS $func$
   SELECT array_agg(DISTINCT result ORDER BY result) AS temp_databases_on_nodes FROM run_command_on_all_nodes($$SELECT datname FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$) WHERE result != '';
@@ -122,3 +124,5 @@ DROP DATABASE db1;
 DROP FUNCTION get_temp_databases_on_nodes();
 DROP FUNCTION ensure_no_temp_databases_on_any_nodes();
 DROP FUNCTION count_db_cleanup_records();
+
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
