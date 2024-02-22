@@ -145,7 +145,25 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
+        ORDER BY rolname
+    ) t
+$$);
+
+-- Clean up: drop the database on worker node 2
+\c regression - - :worker_2_port
+DROP ROLE if exists test_role1, "test_role2-needs\!escape", test_role3;
+
+\c regression - - :master_port
+
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
         ORDER BY rolname
     ) t
 $$);
@@ -153,6 +171,5 @@ $$);
 set citus.enable_create_database_propagation to on;
 drop database metadata_sync_2pc_db;
 drop schema metadata_sync_2pc_schema;
-
 reset citus.enable_create_database_propagation;
 reset search_path;
