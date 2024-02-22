@@ -85,7 +85,7 @@ CREATE DATABASE db1;
 SELECT citus.mitmproxy('conn.allow()');
 
 -- not call citus_cleanup_orphaned_resources() but recover the prepared transactions this time
-SELECT recover_prepared_transactions();
+SELECT 1 FROM recover_prepared_transactions();
 SELECT ensure_no_temp_databases_on_any_nodes();
 SELECT * FROM public.check_database_on_all_nodes($$db1$$) ORDER BY node_type, result;
 

@@ -258,10 +258,10 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 -- not call citus_cleanup_orphaned_resources() but recover the prepared transactions this time
-SELECT recover_prepared_transactions();
- recover_prepared_transactions
+SELECT 1 FROM recover_prepared_transactions();
+ ?column?
 ---------------------------------------------------------------------
-                             1
+        1
 (1 row)
 
 SELECT ensure_no_temp_databases_on_any_nodes();
