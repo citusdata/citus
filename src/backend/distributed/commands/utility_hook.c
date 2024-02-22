@@ -1914,7 +1914,8 @@ GetMarkObjectDistributedParams(Node *parsetree)
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(sizeof(MarkObjectDistributedParams));
+		MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(
+			sizeof(MarkObjectDistributedParams));
 		params->name = stmt->role;
 		params->catalogRelId = AuthIdRelationId;
 		params->id = get_role_oid(stmt->role, false);
@@ -1927,7 +1928,8 @@ GetMarkObjectDistributedParams(Node *parsetree)
 		RoleSpec *roleSpec;
 		foreach_ptr(roleSpec, stmt->roles)
 		{
-			MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(sizeof(MarkObjectDistributedParams));
+			MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(
+				sizeof(MarkObjectDistributedParams));
 			params->name = roleSpec->rolename;
 			params->catalogRelId = AuthIdRelationId;
 			params->id = get_role_oid(roleSpec->rolename, false);
