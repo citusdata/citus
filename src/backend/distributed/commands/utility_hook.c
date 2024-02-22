@@ -117,7 +117,7 @@ typedef enum DistributedOperation
 typedef struct NonMainDbDistributedStatementInfo
 {
 	int statementType;
-	bool explicitlyMarkAsDistributed;
+	DistributedOperation distributedOperation;
 
 	/*
 	 * checkSupportedObjectTypes is a callback function that checks whether
@@ -178,9 +178,10 @@ static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
+static bool StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree);
 static void MarkObjectDistributedFromNonMainDb(Node *parsetree);
-static MarkObjectDistributedParams GetMarkObjectDistributedParams(Node *parsetree);
-static void UnmarkObjectDistributedInNonMainDb(List *objectInfoList);
+static List * GetMarkObjectDistributedParams(Node *parsetree);
+static void UnMarkObjectDistributedFromNonMainDb(List *objectInfoList);
 
 /*
  * checkSupportedObjectTypes callbacks for
@@ -196,9 +197,9 @@ static bool NonMainDbCheckSupportedObjectTypeForGrant(Node *node);
 ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
 	{ T_GrantRoleStmt, NO_DISTRIBUTED_OPS, NULL },
-	{ T_CreateRoleStmt, MARK_DISTRIBUTED, NULL, 0 },
-	{ T_DropRoleStmt, UNMARK_DISTRIBUTED, NULL, 0 },
-	{ T_AlterRoleStmt, NO_DISTRIBUTED_OPS, NULL, 0 },
+	{ T_CreateRoleStmt, MARK_DISTRIBUTED, NULL },
+	{ T_DropRoleStmt, UNMARK_DISTRIBUTED, NULL },
+	{ T_AlterRoleStmt, NO_DISTRIBUTED_OPS, NULL },
 	{ T_GrantStmt, NO_DISTRIBUTED_OPS, NonMainDbCheckSupportedObjectTypeForGrant },
 	{ T_CreatedbStmt, NO_DISTRIBUTED_OPS, NULL },
 	{ T_DropdbStmt, NO_DISTRIBUTED_OPS, NULL },
@@ -1746,9 +1747,9 @@ RunPreprocessMainDBCommand(Node *parsetree)
 
 	if (StatementRequiresUnmarkDistributedFromNonMainDb(parsetree))
 	{
-		List *objectInfoList = GetObjectInfoList(parsetree);
+		List *objectInfoList = GetMarkObjectDistributedParams(parsetree);
 
-		UnmarkObjectDistributedInNonMainDb(objectInfoList);
+		UnMarkObjectDistributedFromNonMainDb(objectInfoList);
 	}
 
 	IsMainDBCommandInXact = true;
@@ -1821,7 +1822,31 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return NonMainDbSupportedStatements[i].explicitlyMarkAsDistributed;
+			return NonMainDbSupportedStatements[i].distributedOperation ==
+				   MARK_DISTRIBUTED;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * StatementRequiresMarkDistributedFromNonMainDb returns true if the statement should be marked
+ * as distributed when executed from a non-main database.
+ */
+static bool
+StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree)
+{
+	NodeTag type = nodeTag(parsetree);
+
+	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
+		 sizeof(NonMainDbSupportedStatements[0]); i++)
+	{
+		if (type == NonMainDbSupportedStatements[i].statementType)
+		{
+			return NonMainDbSupportedStatements[i].distributedOperation ==
+				   UNMARK_DISTRIBUTED;
 		}
 	}
 
@@ -1836,16 +1861,45 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 static void
 MarkObjectDistributedFromNonMainDb(Node *parsetree)
 {
-	MarkObjectDistributedParams markObjectDistributedParams =
+	List *markObjectDistributedParams =
 		GetMarkObjectDistributedParams(parsetree);
-	StringInfo mainDBQuery = makeStringInfo();
-	appendStringInfo(mainDBQuery,
-					 MARK_OBJECT_DISTRIBUTED,
-					 markObjectDistributedParams.catalogRelId,
-					 quote_literal_cstr(markObjectDistributedParams.name),
-					 markObjectDistributedParams.id,
-					 quote_literal_cstr(CurrentUserName()));
-	RunCitusMainDBQuery(mainDBQuery->data);
+
+	MarkObjectDistributedParams *markObjectDistributedParam = NULL;
+
+	foreach_ptr(markObjectDistributedParam, markObjectDistributedParams)
+	{
+		StringInfo mainDBQuery = makeStringInfo();
+		appendStringInfo(mainDBQuery,
+						 MARK_OBJECT_DISTRIBUTED,
+						 markObjectDistributedParam->catalogRelId,
+						 quote_literal_cstr(markObjectDistributedParam->name),
+						 markObjectDistributedParam->id,
+						 quote_literal_cstr(CurrentUserName()));
+		RunCitusMainDBQuery(mainDBQuery->data);
+	}
+}
+
+
+/*
+ * UnMarkObjectDistributedFromNonMainDb unmarks the given object as distributed on the
+ * non-main database.
+ */
+static void
+UnMarkObjectDistributedFromNonMainDb(List *markObjectDistributedParamList)
+{
+	MarkObjectDistributedParams *markObjectDistributedParam = NULL;
+	int subObjectId = 0;
+	char *checkObjectExistence = "false";
+	foreach_ptr(markObjectDistributedParam, markObjectDistributedParamList)
+	{
+		StringInfo query = makeStringInfo();
+		appendStringInfo(query,
+						 UNMARK_OBJECT_DISTRIBUTED,
+						 AuthIdRelationId,
+						 markObjectDistributedParam->id,
+						 subObjectId, checkObjectExistence);
+		RunCitusMainDBQuery(query->data);
+	}
 }
 
 
@@ -1853,24 +1907,40 @@ MarkObjectDistributedFromNonMainDb(Node *parsetree)
  * GetMarkObjectDistributedParams returns MarkObjectDistributedParams for the target
  * object of given parsetree.
  */
-static MarkObjectDistributedParams
+List *
 GetMarkObjectDistributedParams(Node *parsetree)
 {
+	List *paramsList = NIL;
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		MarkObjectDistributedParams info = {
+		MarkObjectDistributedParams params = {
 			.name = stmt->role,
 			.catalogRelId = AuthIdRelationId,
 			.id = get_role_oid(stmt->role, false)
 		};
-
-		return info;
+		paramsList = lappend(paramsList, &params);
 	}
-
+	else if (IsA(parsetree, DropRoleStmt))
+	{
+		DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
+		RoleSpec *roleSpec;
+		foreach_ptr(roleSpec, stmt->roles)
+		{
+			MarkObjectDistributedParams params = {
+				.name = roleSpec->rolename,
+				.catalogRelId = AuthIdRelationId,
+				.id = get_role_oid(roleSpec->rolename, false)
+			};
+			paramsList = lappend(paramsList, &params);
+		}
+	}
 	/* Add else if branches for other statement types */
-
-	elog(ERROR, "unsupported statement type");
+	else
+	{
+		elog(ERROR, "unsupported statement type");
+	}
+	return paramsList;
 }
 
 
