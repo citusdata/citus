@@ -121,3 +121,4 @@ DROP DATABASE db1;
 
 DROP FUNCTION get_temp_databases_on_nodes();
 DROP FUNCTION ensure_no_temp_databases_on_any_nodes();
+DROP FUNCTION count_db_cleanup_records();
