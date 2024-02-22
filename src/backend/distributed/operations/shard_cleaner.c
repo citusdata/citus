@@ -447,15 +447,15 @@ CompareCleanupRecordsByObjectType(const void *leftElement, const void *rightElem
 
 
 /*
- * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
+ * InsertCleanupOnSuccessRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
  * as part of the current transaction. This is primarily useful for deferred drop scenarios,
- * since these records would roll back in case of operation failure.
+ * since these records would roll back in case of operation failure. And for the same reason,
+ * always sets the policy type to CLEANUP_DEFERRED_ON_SUCCESS.
  */
 void
-InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
-										char *objectName,
-										int nodeGroupId,
-										CleanupPolicy policy)
+InsertCleanupOnSuccessRecordInCurrentTransaction(CleanupObject objectType,
+												 char *objectName,
+												 int nodeGroupId)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
 	 * will call RegisterOperationNeedingCleanup.
@@ -477,7 +477,8 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 	values[Anum_pg_dist_cleanup_object_type - 1] = Int32GetDatum(objectType);
 	values[Anum_pg_dist_cleanup_object_name - 1] = CStringGetTextDatum(objectName);
 	values[Anum_pg_dist_cleanup_node_group_id - 1] = Int32GetDatum(nodeGroupId);
-	values[Anum_pg_dist_cleanup_policy_type - 1] = Int32GetDatum(policy);
+	values[Anum_pg_dist_cleanup_policy_type - 1] =
+		Int32GetDatum(CLEANUP_DEFERRED_ON_SUCCESS);
 
 	/* open cleanup relation and insert new tuple */
 	Oid relationId = DistCleanupRelationId();
@@ -494,22 +495,26 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 
 
 /*
- * InsertCleanupRecordInSubtransaction inserts a new pg_dist_cleanup entry in a
+ * InsertCleanupRecordOutsideTransaction inserts a new pg_dist_cleanup entry in a
  * separate transaction to ensure the record persists after rollback. We should
  * delete these records if the operation completes successfully.
  *
- * For failure scenarios, use a subtransaction (direct insert via localhost).
+ * This is used in scenarios where we need to cleanup resources on operation
+ * completion (CLEANUP_ALWAYS) or on failure (CLEANUP_ON_FAILURE).
  */
 void
-InsertCleanupRecordInSubtransaction(CleanupObject objectType,
-									char *objectName,
-									int nodeGroupId,
-									CleanupPolicy policy)
+InsertCleanupRecordOutsideTransaction(CleanupObject objectType,
+									  char *objectName,
+									  int nodeGroupId,
+									  CleanupPolicy policy)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
 	 * will call RegisterOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
+
+	/* assert the circumstance noted in function comment */
+	Assert(policy == CLEANUP_ALWAYS || policy == CLEANUP_ON_FAILURE);
 
 	StringInfo sequenceName = makeStringInfo();
 	appendStringInfo(sequenceName, "%s.%s",

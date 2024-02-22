@@ -333,7 +333,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * If this is a non-Citus main database we should try to commit the prepared
 			 * transactions created by the Citus main database on the worker nodes.
 			 */
-			if (!IsMainDB && MainDBConnection != NULL)
+			if (!IsMainDB && MainDBConnection != NULL && IsMainDBCommandInXact)
 			{
 				RunCitusMainDBQuery(COMMIT_MANAGEMENT_COMMAND_2PC);
 				CleanCitusMainDBConnection();
@@ -533,7 +533,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * main database query. So if some error happens on the distributed main
 			 * database query we wouldn't have committed the current query.
 			 */
-			if (!IsMainDB && MainDBConnection != NULL)
+			if (!IsMainDB && MainDBConnection != NULL && IsMainDBCommandInXact)
 			{
 				RunCitusMainDBQuery("COMMIT");
 			}

@@ -132,12 +132,32 @@ SELECT result FROM run_command_on_all_nodes(
   $$
 );
 
-REVOKE dist_role_3 from dist_role_4 granted by test_admin_role;
+REVOKE dist_role_3 from dist_role_4 granted by test_admin_role cascade;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
+  ) q;
+  $$
+);
 
 SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1','test_admin_role')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
 
-REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role;
+REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role cascade;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
+  ) q;
+  $$
+);
 
 revoke dist_role_3,dist_role_1 from test_admin_role cascade;
 drop role test_admin_role;
