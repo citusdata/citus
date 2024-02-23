@@ -37,7 +37,15 @@ select check_database_privileges('grant_role2pc''_user1','metadata_sync_2pc_db',
 select check_database_privileges('grant_role2pc''_user2','metadata_sync_2pc_db',ARRAY['CONNECT']);
 select check_database_privileges('grant_role2pc''_user3','metadata_sync_2pc_db',ARRAY['CREATE','CONNECT','TEMP','TEMPORARY']);
 
+-- test for security label on role
+\c metadata_sync_2pc_db - - :master_port
+SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE grant_role2pc_user4 IS 'citus_unclassified';
+SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "grant_role2pc'_user1" IS 'citus_classified';
+
 \c regression
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('grant_role2pc_user4') ORDER BY node_type;
+SELECT node_type, result FROM get_citus_tests_label_provider_labels($$"grant_role2pc''_user1"$$) ORDER BY node_type;
+
 set citus.enable_create_database_propagation to on;
 select 1 from citus_add_node('localhost', :worker_2_port);
 
@@ -55,6 +63,9 @@ $$);
 select check_database_privileges('grant_role2pc''_user1','metadata_sync_2pc_db',ARRAY['CREATE']);
 select check_database_privileges('grant_role2pc''_user2','metadata_sync_2pc_db',ARRAY['CONNECT']);
 select check_database_privileges('grant_role2pc''_user3','metadata_sync_2pc_db',ARRAY['CREATE','CONNECT','TEMP','TEMPORARY']);
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('grant_role2pc_user4') ORDER BY node_type;
+SELECT node_type, result FROM get_citus_tests_label_provider_labels($$"grant_role2pc''_user1"$$) ORDER BY node_type;
 
 \c metadata_sync_2pc_db
 revoke "grant_role2pc'_user1","grant_role2pc'_user2" from grant_role2pc_user4,grant_role2pc_user5 ;

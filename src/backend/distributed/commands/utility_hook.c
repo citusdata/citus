@@ -188,6 +188,7 @@ static void UnMarkObjectDistributedFromNonMainDb(List *unmarkDistributedList);
  * NonMainDbDistributedStatementInfo objects.
  */
 static bool NonMainDbCheckSupportedObjectTypeForGrant(Node *node);
+static bool NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node);
 
 
 /*
@@ -203,6 +204,7 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_GrantStmt, NO_DISTRIBUTED_OPS, NonMainDbCheckSupportedObjectTypeForGrant },
 	{ T_CreatedbStmt, NO_DISTRIBUTED_OPS, NULL },
 	{ T_DropdbStmt, NO_DISTRIBUTED_OPS, NULL },
+  { T_SecLabelStmt, false, NonMainDbCheckSupportedObjectTypeForSecLabel },
 };
 
 
@@ -1955,4 +1957,16 @@ NonMainDbCheckSupportedObjectTypeForGrant(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	return stmt->objtype == OBJECT_DATABASE;
+}
+
+
+/*
+ * NonMainDbCheckSupportedObjectTypeForSecLabel implements checkSupportedObjectTypes
+ * callback for SecLabel.
+ */
+static bool
+NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node)
+{
+	SecLabelStmt *stmt = castNode(SecLabelStmt, node);
+	return stmt->objtype == OBJECT_ROLE;
 }
