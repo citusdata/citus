@@ -175,6 +175,7 @@ static MarkObjectDistributedParams GetMarkObjectDistributedParams(Node *parsetre
  * NonMainDbDistributedStatementInfo objects.
  */
 static bool NonMainDbCheckSupportedObjectTypeForGrant(Node *node);
+static bool NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node);
 
 
 /*
@@ -188,6 +189,7 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant },
 	{ T_CreatedbStmt, false, NULL },
 	{ T_DropdbStmt, false, NULL },
+	{ T_SecLabelStmt, false, NonMainDbCheckSupportedObjectTypeForSecLabel },
 };
 
 
@@ -1861,4 +1863,16 @@ NonMainDbCheckSupportedObjectTypeForGrant(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	return stmt->objtype == OBJECT_DATABASE;
+}
+
+
+/*
+ * NonMainDbCheckSupportedObjectTypeForSecLabel implements checkSupportedObjectTypes
+ * callback for SecLabel.
+ */
+static bool
+NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node)
+{
+	SecLabelStmt *stmt = castNode(SecLabelStmt, node);
+	return stmt->objtype == OBJECT_ROLE;
 }
