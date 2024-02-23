@@ -152,6 +152,7 @@ RUN sudo apt update \
     lsof \
     man \
     net-tools \
+    psmisc \
     pspg \
     tree \
     vim \
