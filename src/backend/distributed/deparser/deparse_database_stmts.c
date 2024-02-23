@@ -277,6 +277,11 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 	/*
 	 * Make sure that we don't try to deparse something that this
 	 * function doesn't expect.
+	 *
+	 * This is also useful to throw an error for unsupported CREATE
+	 * DATABASE options when the command is issued from non-main dbs
+	 * because we use the same function to deparse CREATE DATABASE
+	 * commands there too.
 	 */
 	EnsureSupportedCreateDatabaseCommand(stmt);
 
