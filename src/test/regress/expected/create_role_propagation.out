@@ -121,17 +121,17 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, (rolpassword != '') as pass_not_empty, rolvaliduntil FROM pg_authid WHERE rolname LIKE 'create\_%' ORDER BY rolname;
            rolname           | rolsuper | rolinherit | rolcreaterole | rolcreatedb | rolcanlogin | rolreplication | rolbypassrls | rolconnlimit | pass_not_empty |        rolvaliduntil
 ---------------------------------------------------------------------
- create_group                | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_group_2              | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role                 | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_group                | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_group_2              | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role                 | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_with_everything | t        | t          | t             | t           | t           | t              | t            |          105 | t              | Thu May 04 17:00:00 2045 PDT
  create_role_with_nothing    | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
- create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
- create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
+ create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
+ create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
 (11 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
