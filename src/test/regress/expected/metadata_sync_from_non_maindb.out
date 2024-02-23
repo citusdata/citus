@@ -63,7 +63,25 @@ select check_database_privileges('grant_role2pc''_user3','metadata_sync_2pc_db',
  (TEMPORARY,t)
 (8 rows)
 
+-- test for security label on role
+\c metadata_sync_2pc_db - - :master_port
+SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE grant_role2pc_user4 IS 'citus_unclassified';
+SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "grant_role2pc'_user1" IS 'citus_classified';
 \c regression
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('grant_role2pc_user4') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels($$"grant_role2pc''_user1"$$) ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
 set citus.enable_create_database_propagation to on;
 select 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
@@ -120,6 +138,22 @@ select check_database_privileges('grant_role2pc''_user3','metadata_sync_2pc_db',
  (TEMPORARY,t)
  (TEMPORARY,t)
 (12 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('grant_role2pc_user4') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels($$"grant_role2pc''_user1"$$) ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(3 rows)
 
 \c metadata_sync_2pc_db
 revoke "grant_role2pc'_user1","grant_role2pc'_user2" from grant_role2pc_user4,grant_role2pc_user5 ;
