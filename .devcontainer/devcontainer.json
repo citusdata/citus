@@ -1,5 +1,5 @@
 {
-    "image": "ghcr.io/citusdata/citus-devcontainer:devcontainer-coredumps",
+    "image": "ghcr.io/citusdata/citus-devcontainer:main",
     "runArgs": [
         "--cap-add=SYS_PTRACE",
         "--ulimit=core=-1",
@@ -34,3 +34,4 @@
     "updateContentCommand": "./configure",
     "postCreateCommand": "make -C .devcontainer/",
 }
+
