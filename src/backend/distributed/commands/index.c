@@ -493,6 +493,7 @@ GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement, const char *createInd
 	ddlJob->startNewTransaction = createIndexStatement->concurrent;
 	ddlJob->metadataSyncCommand = createIndexCommand;
 	ddlJob->taskList = CreateIndexTaskList(createIndexStatement);
+	ddlJob->warnForPartialFailure = true;
 
 	return ddlJob;
 }
@@ -652,6 +653,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 																	"concurrently");
 			ddlJob->metadataSyncCommand = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
+			ddlJob->warnForPartialFailure = true;
 
 			ddlJobs = list_make1(ddlJob);
 		}
@@ -780,6 +782,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		ddlJob->metadataSyncCommand = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
+		ddlJob->warnForPartialFailure = true;
 
 		ddlJobs = list_make1(ddlJob);
 	}

@@ -140,7 +140,12 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER DATABASE regression RESET lock_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set citus.enable_create_database_propagation=on;
+SET citus.next_operation_id TO 3000;
 create database "regression!'2";
+NOTICE:  issuing ALTER DATABASE citus_temp_database_3000_0 RENAME TO "regression!'2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE citus_temp_database_3000_0 RENAME TO "regression!'2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "regression!'2" with CONNECTION LIMIT 100;
 NOTICE:  issuing ALTER DATABASE "regression!'2" WITH CONNECTION LIMIT 100;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -189,7 +194,12 @@ alter DATABASE local_regression rename to local_regression2;
 drop database local_regression2;
 set citus.enable_create_database_propagation=on;
 drop database regression3;
+SET citus.next_operation_id TO 3100;
 create database "regression!'4";
+NOTICE:  issuing ALTER DATABASE citus_temp_database_3100_0 RENAME TO "regression!'4"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE citus_temp_database_3100_0 RENAME TO "regression!'4"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SELECT result FROM run_command_on_all_nodes(
   $$
   ALTER TABLESPACE alter_db_tablespace RENAME TO "ts-needs\!escape"
