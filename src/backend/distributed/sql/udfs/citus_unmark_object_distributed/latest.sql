@@ -1,4 +1,4 @@
-CREATE FUNCTION pg_catalog.citus_unmark_object_distributed(classid oid, objid oid, objsubid int,checkobjectexistence boolean)
+CREATE FUNCTION pg_catalog.citus_unmark_object_distributed(classid oid, objid oid, objsubid int, checkobjectexistence boolean)
     RETURNS void
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$citus_unmark_object_distributed$$;
