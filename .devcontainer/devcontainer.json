@@ -2,8 +2,11 @@
     "image": "ghcr.io/citusdata/citus-devcontainer:main",
     "runArgs": [
         "--cap-add=SYS_PTRACE",
+        "--ulimit=core=-1",
     ],
-    "forwardPorts": [9700],
+    "forwardPorts": [
+        9700
+    ],
     "customizations": {
         "vscode": {
             "extensions": [
@@ -14,6 +17,7 @@
                 "github.vscode-pull-request-github",
                 "ms-vscode.cpptools-extension-pack",
                 "ms-vsliveshare.vsliveshare",
+                "rioj7.command-variable",
             ],
             "settings": {
                 "files.exclude": {
@@ -30,3 +34,4 @@
     "updateContentCommand": "./configure",
     "postCreateCommand": "make -C .devcontainer/",
 }
+
