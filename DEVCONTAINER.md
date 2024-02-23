@@ -8,7 +8,7 @@ To verify if corefiles are written run the following command in a terminal. This
 cat /proc/sys/kernel/core_pattern
 ```
 
-This should be configured with a relative path or simply a simple filename. When your environment shows an absolute path you will need to change this setting. How to change this setting depends highly on the underlying system as the setting needs to be changed on the kernel of the host running the container.
+This should be configured with a relative path or simply a simple filename, such as `core`. When your environment shows an absolute path you will need to change this setting. How to change this setting depends highly on the underlying system as the setting needs to be changed on the kernel of the host running the container.
 
 When a coredump is written you can use the debug/launch configuration `Open core file` which is preconfigured in the devcontainer. This will open a fileprompt that lists all coredumps that are found in your workspace. When you want to debug coredumps from `citus_dev` that are run in your `/data` directory, you can add the data directory to your workspace. In the command pallet of vscode you can run `>Workspace: Add Folder to Workspace...` and select the `/data` directory. This will allow you to open the coredumps from the `/data` directory in the `Open core file` debug configuration.
 
