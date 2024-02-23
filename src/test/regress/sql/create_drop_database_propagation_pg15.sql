@@ -67,6 +67,7 @@ create database unsupported_option_from_non_main_db with oid = 12345;
 
 \c regression - - :master_port
 
+set citus.enable_create_database_propagation to on;
 drop database test_locale_provider;
 
 \c - - - :master_port
