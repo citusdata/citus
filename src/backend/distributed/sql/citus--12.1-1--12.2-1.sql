@@ -27,8 +27,8 @@ REVOKE ALL ON FUNCTION citus_internal.restore_isolation_tester_func FROM PUBLIC;
 REVOKE ALL ON FUNCTION citus_internal.start_management_transaction FROM PUBLIC;
 
 #include "udfs/citus_internal_add_colocation_metadata/12.2-1.sql"
-#include "udfs/citus_unmark_object_distributed/12.2-1.sql"
 #include "udfs/mark_object_distributed/12.2-1.sql"
+#include "udfs/citus_unmark_object_distributed/12.2-1.sql"
 #include "udfs/citus_internal_add_object_metadata/12.2-1.sql"
 #include "udfs/citus_internal_add_partition_metadata/12.2-1.sql"
 #include "udfs/citus_internal_add_placement_metadata/12.2-1.sql"
