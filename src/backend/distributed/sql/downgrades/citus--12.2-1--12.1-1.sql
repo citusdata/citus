@@ -52,4 +52,4 @@ DROP FUNCTION citus_internal.start_replication_origin_tracking();
 DROP FUNCTION citus_internal.stop_replication_origin_tracking();
 DROP FUNCTION citus_internal.is_replication_origin_tracking_active();
 DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid,oid,int,boolean);
-ROP FUNCTION citus_internal.mark_object_distributed( classId Oid, objectName text, objectId Oid, connectionUser text );
+DROP FUNCTION citus_internal.mark_object_distributed( classId Oid, objectName text, objectId Oid, connectionUser text );
