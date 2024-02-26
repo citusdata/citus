@@ -79,9 +79,3 @@ DROP USER "grant_param_user5-\!";
 
 reset  citus.log_remote_commands;
 reset citus.grep_remote_commands;
-
-
-
-
-
-
