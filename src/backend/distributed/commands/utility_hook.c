@@ -101,7 +101,7 @@ typedef enum DistObjectOperation
 {
 	NO_DIST_OBJECT_OPERATION,
 	MARK_DISTRIBUTED_GLOBALLY,
-	UNMARK_DISTRIBUTED_GLOBALLY
+	UNMARK_DISTRIBUTED_LOCALLY
 } DistObjectOperation;
 
 
@@ -138,15 +138,16 @@ typedef struct NonMainDbDistributedStatementInfo
 } NonMainDbDistributedStatementInfo;
 
 /*
- * MarkObjectDistributedParams is used to pass parameters to the
- * MarkObjectDistributedGloballyFromNonMainDb function.
+ * DistObjectOperationParams is used to pass parameters to the
+ * MarkObjectDistributedGloballyFromNonMainDb function and
+ * UnMarkObjectDistributedLocallyFromNonMainDb functions.
  */
-typedef struct MarkObjectDistributedParams
+typedef struct DistObjectOperationParams
 {
 	char *name;
 	Oid id;
 	uint16 catalogRelId;
-} MarkObjectDistributedParams;
+} DistObjectOperationParams;
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -189,8 +190,8 @@ static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedGloballyFromNonMainDb(Node *parsetree);
 static bool StatementRequiresUnmarkDistributedLocallyFromNonMainDb(Node *parsetree);
 static void MarkObjectDistributedGloballyFromNonMainDb(Node *parsetree);
-static List * GetMarkObjectDistributedParams(Node *parsetree);
 static void UnMarkObjectDistributedLocallyFromNonMainDb(List *unmarkDistributedList);
+static List * GetDistObjectOperationParams(Node *parsetree);
 
 /*
  * checkSupportedObjectTypes callbacks for
@@ -208,7 +209,7 @@ ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
 	{ T_GrantRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_CreateRoleStmt, MARK_DISTRIBUTED_GLOBALLY, NULL },
-	{ T_DropRoleStmt, UNMARK_DISTRIBUTED_GLOBALLY, NULL },
+	{ T_DropRoleStmt, UNMARK_DISTRIBUTED_LOCALLY, NULL },
 	{ T_AlterRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_GrantStmt, NO_DIST_OBJECT_OPERATION, NonMainDbCheckSupportedObjectTypeForGrant },
 	{ T_CreatedbStmt, NO_DIST_OBJECT_OPERATION, NULL },
@@ -1771,7 +1772,7 @@ RunPreprocessMainDBCommand(Node *parsetree)
 
 	if (StatementRequiresUnmarkDistributedLocallyFromNonMainDb(parsetree))
 	{
-		List *unmarkParams = GetMarkObjectDistributedParams(parsetree);
+		List *unmarkParams = GetDistObjectOperationParams(parsetree);
 
 		UnMarkObjectDistributedLocallyFromNonMainDb(unmarkParams);
 	}
@@ -1863,7 +1864,7 @@ StatementRequiresUnmarkDistributedLocallyFromNonMainDb(Node *parsetree)
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
 			return NonMainDbSupportedStatements[i].DistObjectOperation ==
-				   UNMARK_DISTRIBUTED_GLOBALLY;
+				   UNMARK_DISTRIBUTED_LOCALLY;
 		}
 	}
 
@@ -1878,19 +1879,19 @@ StatementRequiresUnmarkDistributedLocallyFromNonMainDb(Node *parsetree)
 static void
 MarkObjectDistributedGloballyFromNonMainDb(Node *parsetree)
 {
-	List *markObjectDistributedParams =
-		GetMarkObjectDistributedParams(parsetree);
+	List *distObjectOperationParams =
+		GetDistObjectOperationParams(parsetree);
 
-	MarkObjectDistributedParams *markObjectDistributedParam = NULL;
+	DistObjectOperationParams *distObjectOperationParam = NULL;
 
-	foreach_ptr(markObjectDistributedParam, markObjectDistributedParams)
+	foreach_ptr(distObjectOperationParam, distObjectOperationParams)
 	{
 		StringInfo mainDBQuery = makeStringInfo();
 		appendStringInfo(mainDBQuery,
 						 MARK_OBJECT_DISTRIBUTED,
-						 markObjectDistributedParam->catalogRelId,
-						 quote_literal_cstr(markObjectDistributedParam->name),
-						 markObjectDistributedParam->id,
+						 distObjectOperationParam->catalogRelId,
+						 quote_literal_cstr(distObjectOperationParam->name),
+						 distObjectOperationParam->id,
 						 quote_literal_cstr(CurrentUserName()));
 		RunCitusMainDBQuery(mainDBQuery->data);
 	}
@@ -1904,7 +1905,7 @@ MarkObjectDistributedGloballyFromNonMainDb(Node *parsetree)
 static void
 UnMarkObjectDistributedLocallyFromNonMainDb(List *markObjectDistributedParamList)
 {
-	MarkObjectDistributedParams *markObjectDistributedParam = NULL;
+	DistObjectOperationParams *markObjectDistributedParam = NULL;
 	int subObjectId = 0;
 	char *checkObjectExistence = "false";
 	foreach_ptr(markObjectDistributedParam, markObjectDistributedParamList)
@@ -1921,18 +1922,18 @@ UnMarkObjectDistributedLocallyFromNonMainDb(List *markObjectDistributedParamList
 
 
 /*
- * GetMarkObjectDistributedParams returns MarkObjectDistributedParams for the target
+ * GetDistObjectOperationParams returns DistObjectOperationParams for the target
  * object of given parsetree.
  */
 List *
-GetMarkObjectDistributedParams(Node *parsetree)
+GetDistObjectOperationParams(Node *parsetree)
 {
 	List *paramsList = NIL;
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		MarkObjectDistributedParams *params =
-			(MarkObjectDistributedParams *) palloc(sizeof(MarkObjectDistributedParams));
+		DistObjectOperationParams *params =
+			(DistObjectOperationParams *) palloc(sizeof(DistObjectOperationParams));
 		params->name = stmt->role;
 		params->catalogRelId = AuthIdRelationId;
 		params->id = get_role_oid(stmt->role, false);
@@ -1945,8 +1946,8 @@ GetMarkObjectDistributedParams(Node *parsetree)
 		RoleSpec *roleSpec;
 		foreach_ptr(roleSpec, stmt->roles)
 		{
-			MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(
-				sizeof(MarkObjectDistributedParams));
+			DistObjectOperationParams *params = (DistObjectOperationParams *) palloc(
+				sizeof(DistObjectOperationParams));
 			params->name = roleSpec->rolename;
 			params->catalogRelId = AuthIdRelationId;
 			params->id = get_role_oid(roleSpec->rolename, false);
@@ -1954,7 +1955,6 @@ GetMarkObjectDistributedParams(Node *parsetree)
 			paramsList = lappend(paramsList, params);
 		}
 	}
-	/* Add else if branches for other statement types */
 	else
 	{
 		elog(ERROR, "unsupported statement type");

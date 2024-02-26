@@ -65,8 +65,6 @@ $$);
 -- Test DROP ROLE
 DROP ROLE IF EXISTS test_role1, "test_role2-needs\!escape";
 
-
-
 \c regression - - :master_port
 --verify that roles and dist_object are dropped
 select result FROM run_command_on_all_nodes($$
