@@ -1402,7 +1402,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 						 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
 								 "invalid index, then retry the original command.")));
 			}
-			else
+			else if (ddlJob->warnForPartialFailure)
 			{
 				ereport(WARNING,
 						(errmsg(
@@ -1411,9 +1411,9 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 							 "state.\nIf the problematic command is a CREATE operation, "
 							 "consider using the 'IF EXISTS' syntax to drop the object,"
 							 "\nif applicable, and then re-attempt the original command.")));
-
-				PG_RE_THROW();
 			}
+
+			PG_RE_THROW();
 		}
 		PG_END_TRY();
 	}
@@ -1629,9 +1629,12 @@ DDLTaskList(Oid relationId, const char *commandString)
  * NontransactionalNodeDDLTaskList builds a list of tasks to execute a DDL command on a
  * given target set of nodes with cannotBeExecutedInTransaction is set to make sure
  * that task list is executed outside a transaction block.
+ *
+ * Also sets warnForPartialFailure for the returned DDLJobs.
  */
 List *
-NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands)
+NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
+								bool warnForPartialFailure)
 {
 	List *ddlJobs = NodeDDLTaskList(targets, commands);
 	DDLJob *ddlJob = NULL;
@@ -1642,6 +1645,8 @@ NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands)
 		{
 			task->cannotBeExecutedInTransaction = true;
 		}
+
+		ddlJob->warnForPartialFailure = warnForPartialFailure;
 	}
 	return ddlJobs;
 }
