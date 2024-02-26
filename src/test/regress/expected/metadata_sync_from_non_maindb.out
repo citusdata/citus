@@ -229,6 +229,7 @@ select 1 from citus_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
 select result FROM run_command_on_all_nodes($$
     SELECT array_to_json(array_agg(row_to_json(t)))
     FROM (
@@ -265,6 +266,7 @@ select 1 from citus_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
 select result FROM run_command_on_all_nodes($$
     SELECT array_to_json(array_agg(row_to_json(t)))
     FROM (
