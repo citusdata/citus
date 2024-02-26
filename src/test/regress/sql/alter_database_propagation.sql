@@ -49,6 +49,7 @@ alter database regression set lock_timeout to DEFAULT;
 alter database regression RESET lock_timeout;
 
 set citus.enable_create_database_propagation=on;
+SET citus.next_operation_id TO 3000;
 create database "regression!'2";
 alter database "regression!'2" with CONNECTION LIMIT 100;
 alter database "regression!'2" with IS_TEMPLATE true CONNECTION LIMIT 50;
@@ -90,6 +91,7 @@ set citus.enable_create_database_propagation=on;
 
 drop database regression3;
 
+SET citus.next_operation_id TO 3100;
 create database "regression!'4";
 
 

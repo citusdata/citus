@@ -2,11 +2,15 @@ setup
 {
     -- OCLASS for database changed in PG 16 from 25 to 26
     SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS value INTO oclass_database;
+
+    SELECT 1 FROM citus_add_node('localhost', 57636, 0);
 }
 
 teardown
 {
     DROP TABLE IF EXISTS oclass_database;
+
+    select 1 from citus_remove_node('localhost', 57636);
 }
 
 session "s1"
