@@ -128,6 +128,7 @@ LIMIT 5 VALID UNTIL '2024-01-01';
 \c regression - - :master_port
 select 1 from citus_add_node('localhost', :worker_2_port);
 
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
 select result FROM run_command_on_all_nodes($$
     SELECT array_to_json(array_agg(row_to_json(t)))
     FROM (
@@ -151,6 +152,8 @@ DROP ROLE test_role3;
 
 \c regression - - :master_port
 select 1 from citus_add_node('localhost', :worker_2_port);
+
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
 select result FROM run_command_on_all_nodes($$
     SELECT array_to_json(array_agg(row_to_json(t)))
     FROM (

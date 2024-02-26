@@ -97,27 +97,37 @@
 #define UNMARK_OBJECT_DISTRIBUTED \
 	"SELECT pg_catalog.citus_unmark_object_distributed(%d, %d, %d,%s)"
 
-typedef enum DistributedOperation
+/* see NonMainDbDistributedStatementInfo for the explanation of these flags */
+typedef enum DistObjectOperation
 {
-	NO_DISTRIBUTED_OPS,
-	MARK_DISTRIBUTED,
-	UNMARK_DISTRIBUTED
-} DistributedOperation;
+	NO_DIST_OBJECT_OPERATION,
+	MARK_DISTRIBUTED_GLOBALLY,
+	UNMARK_DISTRIBUTED_GLOBALLY
+} DistObjectOperation;
 
 
 /*
  * NonMainDbDistributedStatementInfo is used to determine whether a statement is
- * supported from non-main databases and whether it should be marked as
- * distributed explicitly (*).
+ * supported from non-main databases and whether it should be marked or unmarked
+ * as distributed.
  *
- * (*) We always have to mark such objects as "distributed" but while for some
- * object types we can delegate this to main database, for some others we have
- * to explicitly send a command to all nodes in this code-path to achieve this.
+ * When creating a distributed object, we always have to mark such objects as
+ * "distributed" but while for some object types we can delegate this to main
+ * database, for some others we have to explicitly send a command to all nodes
+ * in this code-path to achieve this. Callers need to provide
+ * MARK_DISTRIBUTED_GLOBALLY when that is the case.
+ *
+ * Similarly when dropping a distributed object, we always have to unmark such
+ * objects as "distributed" and our utility hook on remote nodes achieve this
+ * via UnmarkNodeWideObjectsDistributed() because the commands that we send to
+ * workers are executed via main db. However for the local node, this is not the
+ * case as we're not in the main db. For this reason, callers need to provide
+ * UNMARK_DISTRIBUTED_LOCALLY to unmark an object for local node as well.
  */
 typedef struct NonMainDbDistributedStatementInfo
 {
 	int statementType;
-	DistributedOperation distributedOperation;
+	DistObjectOperation DistObjectOperation;
 
 	/*
 	 * checkSupportedObjectTypes is a callback function that checks whether
@@ -130,7 +140,7 @@ typedef struct NonMainDbDistributedStatementInfo
 
 /*
  * MarkObjectDistributedParams is used to pass parameters to the
- * MarkObjectDistributedFromNonMainDb function.
+ * MarkObjectDistributedGloballyFromNonMainDb function.
  */
 typedef struct MarkObjectDistributedParams
 {
@@ -177,11 +187,11 @@ static bool IsCommandToCreateOrDropMainDB(Node *parsetree);
 static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
-static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
-static bool StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree);
-static void MarkObjectDistributedFromNonMainDb(Node *parsetree);
+static bool StatementRequiresMarkDistributedGloballyFromNonMainDb(Node *parsetree);
+static bool StatementRequiresUnmarkDistributedLocallyFromNonMainDb(Node *parsetree);
+static void MarkObjectDistributedGloballyFromNonMainDb(Node *parsetree);
 static List * GetMarkObjectDistributedParams(Node *parsetree);
-static void UnMarkObjectDistributedFromNonMainDb(List *unmarkDistributedList);
+static void UnMarkObjectDistributedLocallyFromNonMainDb(List *unmarkDistributedList);
 
 /*
  * checkSupportedObjectTypes callbacks for
@@ -197,14 +207,15 @@ static bool NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node);
  */
 ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, NO_DISTRIBUTED_OPS, NULL },
-	{ T_CreateRoleStmt, MARK_DISTRIBUTED, NULL },
-	{ T_DropRoleStmt, UNMARK_DISTRIBUTED, NULL },
-	{ T_AlterRoleStmt, NO_DISTRIBUTED_OPS, NULL },
-	{ T_GrantStmt, NO_DISTRIBUTED_OPS, NonMainDbCheckSupportedObjectTypeForGrant },
-	{ T_CreatedbStmt, NO_DISTRIBUTED_OPS, NULL },
-	{ T_DropdbStmt, NO_DISTRIBUTED_OPS, NULL },
-	{ T_SecLabelStmt, false, NonMainDbCheckSupportedObjectTypeForSecLabel },
+	{ T_GrantRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_CreateRoleStmt, MARK_DISTRIBUTED_GLOBALLY, NULL },
+	{ T_DropRoleStmt, UNMARK_DISTRIBUTED_GLOBALLY, NULL },
+	{ T_AlterRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_GrantStmt, NO_DIST_OBJECT_OPERATION, NonMainDbCheckSupportedObjectTypeForGrant },
+	{ T_CreatedbStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_DropdbStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_SecLabelStmt, NO_DIST_OBJECT_OPERATION,
+	  NonMainDbCheckSupportedObjectTypeForSecLabel },
 };
 
 
@@ -1746,14 +1757,6 @@ RunPreprocessMainDBCommand(Node *parsetree)
 		return;
 	}
 
-
-	if (StatementRequiresUnmarkDistributedFromNonMainDb(parsetree))
-	{
-		List *unmarkParams = GetMarkObjectDistributedParams(parsetree);
-
-		UnMarkObjectDistributedFromNonMainDb(unmarkParams);
-	}
-
 	IsMainDBCommandInXact = true;
 
 	StringInfo mainDBQuery = makeStringInfo();
@@ -1761,6 +1764,14 @@ RunPreprocessMainDBCommand(Node *parsetree)
 					 START_MANAGEMENT_TRANSACTION,
 					 GetCurrentFullTransactionId().value);
 	RunCitusMainDBQuery(mainDBQuery->data);
+
+	if (StatementRequiresUnmarkDistributedLocallyFromNonMainDb(parsetree))
+	{
+		List *unmarkParams = GetMarkObjectDistributedParams(parsetree);
+
+		UnMarkObjectDistributedLocallyFromNonMainDb(unmarkParams);
+	}
+
 	mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
@@ -1778,9 +1789,9 @@ static void
 RunPostprocessMainDBCommand(Node *parsetree)
 {
 	if (IsStatementSupportedFromNonMainDb(parsetree) &&
-		StatementRequiresMarkDistributedFromNonMainDb(parsetree))
+		StatementRequiresMarkDistributedGloballyFromNonMainDb(parsetree))
 	{
-		MarkObjectDistributedFromNonMainDb(parsetree);
+		MarkObjectDistributedGloballyFromNonMainDb(parsetree);
 	}
 }
 
@@ -1811,11 +1822,11 @@ IsStatementSupportedFromNonMainDb(Node *parsetree)
 
 
 /*
- * StatementRequiresMarkDistributedFromNonMainDb returns true if the statement should be marked
+ * StatementRequiresMarkDistributedGloballyFromNonMainDb returns true if the statement should be marked
  * as distributed when executed from a non-main database.
  */
 static bool
-StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
+StatementRequiresMarkDistributedGloballyFromNonMainDb(Node *parsetree)
 {
 	NodeTag type = nodeTag(parsetree);
 
@@ -1824,8 +1835,8 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return NonMainDbSupportedStatements[i].distributedOperation ==
-				   MARK_DISTRIBUTED;
+			return NonMainDbSupportedStatements[i].DistObjectOperation ==
+				   MARK_DISTRIBUTED_GLOBALLY;
 		}
 	}
 
@@ -1834,11 +1845,11 @@ StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
 
 
 /*
- * StatementRequiresUnmarkDistributedFromNonMainDb returns true if the statement should be unmarked
+ * StatementRequiresUnmarkDistributedLocallyFromNonMainDb returns true if the statement should be unmarked
  * as distributed when executed from a non-main database.
  */
 static bool
-StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree)
+StatementRequiresUnmarkDistributedLocallyFromNonMainDb(Node *parsetree)
 {
 	NodeTag type = nodeTag(parsetree);
 
@@ -1847,8 +1858,8 @@ StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return NonMainDbSupportedStatements[i].distributedOperation ==
-				   UNMARK_DISTRIBUTED;
+			return NonMainDbSupportedStatements[i].DistObjectOperation ==
+				   UNMARK_DISTRIBUTED_GLOBALLY;
 		}
 	}
 
@@ -1857,11 +1868,11 @@ StatementRequiresUnmarkDistributedFromNonMainDb(Node *parsetree)
 
 
 /*
- * MarkObjectDistributedFromNonMainDb marks the given object as distributed on the
+ * MarkObjectDistributedGloballyFromNonMainDb marks the given object as distributed on the
  * non-main database.
  */
 static void
-MarkObjectDistributedFromNonMainDb(Node *parsetree)
+MarkObjectDistributedGloballyFromNonMainDb(Node *parsetree)
 {
 	List *markObjectDistributedParams =
 		GetMarkObjectDistributedParams(parsetree);
@@ -1883,11 +1894,11 @@ MarkObjectDistributedFromNonMainDb(Node *parsetree)
 
 
 /*
- * UnMarkObjectDistributedFromNonMainDb unmarks the given object as distributed on the
+ * UnMarkObjectDistributedLocallyFromNonMainDb unmarks the given object as distributed on the
  * non-main database.
  */
 static void
-UnMarkObjectDistributedFromNonMainDb(List *markObjectDistributedParamList)
+UnMarkObjectDistributedLocallyFromNonMainDb(List *markObjectDistributedParamList)
 {
 	MarkObjectDistributedParams *markObjectDistributedParam = NULL;
 	int subObjectId = 0;

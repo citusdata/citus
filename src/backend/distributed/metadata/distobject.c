@@ -98,10 +98,10 @@ mark_object_distributed(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_unmark_object_distributed(classid oid, objid oid, objsubid int)
+ * citus_unmark_object_distributed(classid oid, objid oid, objsubid int,checkobjectexistence bool)
  *
- * removes the entry for an object address from pg_dist_object. Only removes the entry if
- * the object does not exist anymore.
+ * removes the entry for an object address from pg_dist_object. if checkobjectexistence is true ,
+ * checks for object existence and if not existsi removes the entry .
  */
 Datum
 citus_unmark_object_distributed(PG_FUNCTION_ARGS)
