@@ -93,7 +93,6 @@
 	"SELECT citus_internal.start_management_transaction('%lu')"
 #define MARK_OBJECT_DISTRIBUTED \
 	"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
-
 #define UNMARK_OBJECT_DISTRIBUTED \
 	"SELECT pg_catalog.citus_unmark_object_distributed(%d, %d, %d,%s)"
 
@@ -1927,8 +1926,8 @@ GetMarkObjectDistributedParams(Node *parsetree)
 	if (IsA(parsetree, CreateRoleStmt))
 	{
 		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		MarkObjectDistributedParams *params = (MarkObjectDistributedParams *) palloc(
-			sizeof(MarkObjectDistributedParams));
+		MarkObjectDistributedParams *params =
+			(MarkObjectDistributedParams *) palloc(sizeof(MarkObjectDistributedParams));
 		params->name = stmt->role;
 		params->catalogRelId = AuthIdRelationId;
 		params->id = get_role_oid(stmt->role, false);
@@ -1955,6 +1954,7 @@ GetMarkObjectDistributedParams(Node *parsetree)
 	{
 		elog(ERROR, "unsupported statement type");
 	}
+
 	return paramsList;
 }
 
