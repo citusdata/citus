@@ -644,7 +644,7 @@ BEGIN
         END LOOP;
     END LOOP;
 END;
-$func$ LANGUAGE plpgsql;;
+$func$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION check_database_privileges(role_name text, db_name text, permissions text[])
 RETURNS TABLE(permission text, result text)
 AS $func$
