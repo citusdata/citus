@@ -89,7 +89,7 @@ select result FROM run_command_on_all_nodes($$
     FROM (
         SELECT r.rolname
         FROM pg_roles r
-        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape','new_role','no_such_role')
         order by r.rolname
     ) t
 $$);
@@ -99,9 +99,6 @@ SELECT result FROM run_command_on_all_nodes($$
   FROM pg_dist_object LEFT JOIN pg_authid ON (objid = oid)
   WHERE classid = 1260 AND oid IS NULL
 $$);
-
-DROP ROLE no_such_role;
-DROP ROLE IF EXISTS no_such_role;
 
 -- Clean up: drop the database
 set citus.enable_create_database_propagation to on;

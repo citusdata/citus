@@ -109,7 +109,7 @@ select result FROM run_command_on_all_nodes($$
     FROM (
         SELECT r.rolname
         FROM pg_roles r
-        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape','new_role','no_such_role')
         order by r.rolname
     ) t
 $$);
@@ -132,10 +132,6 @@ $$);
  0
 (3 rows)
 
-DROP ROLE no_such_role;
-ERROR:  role "no_such_role" does not exist
-DROP ROLE IF EXISTS no_such_role;
-NOTICE:  role "no_such_role" does not exist, skipping
 -- Clean up: drop the database
 set citus.enable_create_database_propagation to on;
 DROP DATABASE role_operations_test_db;
