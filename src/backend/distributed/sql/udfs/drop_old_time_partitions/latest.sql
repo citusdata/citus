@@ -57,7 +57,8 @@ BEGIN
         ORDER BY to_value%1$s::timestamptz', custom_cast);
     FOR r IN EXECUTE older_partitions_query USING table_name, older_than
     LOOP
-        RAISE NOTICE 'dropping % with start time % and end time %', r.partition, r.from_value, r.to_value;
+        RAISE NOTICE 'dropping % with start time % and end time % using DETACH PARTITION partition_name AND THEN DROP IT. ', r.partition, r.from_value, r.to_value;
+        EXECUTE format('DETACH PARTITION ', r.partition);
         EXECUTE format('DROP TABLE %I.%I', r.schema_name, r.table_name);
     END LOOP;
 END;
