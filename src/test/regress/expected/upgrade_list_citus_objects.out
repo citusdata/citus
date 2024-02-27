@@ -372,4 +372,3 @@ ORDER BY 1;
  view pg_dist_shard_placement
  view time_partitions
 (361 rows)
-
