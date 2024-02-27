@@ -1770,19 +1770,18 @@ RunPreprocessMainDBCommand(Node *parsetree)
 					 GetCurrentFullTransactionId().value);
 	RunCitusMainDBQuery(mainDBQuery->data);
 
-	if (StatementRequiresUnmarkDistributedLocallyFromNonMainDb(parsetree))
-	{
-		List *unmarkParams = GetDistObjectOperationParams(parsetree);
-
-		UnMarkObjectDistributedLocallyFromNonMainDb(unmarkParams);
-	}
-
 	mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
 					 quote_literal_cstr(queryString),
 					 quote_literal_cstr(CurrentUserName()));
 	RunCitusMainDBQuery(mainDBQuery->data);
+
+	if (StatementRequiresUnmarkDistributedLocallyFromNonMainDb(parsetree))
+	{
+		List *unmarkParams = GetDistObjectOperationParams(parsetree);
+		UnMarkObjectDistributedLocallyFromNonMainDb(unmarkParams);
+	}
 }
 
 
@@ -1948,9 +1947,17 @@ GetDistObjectOperationParams(Node *parsetree)
 		{
 			DistObjectOperationParams *params = (DistObjectOperationParams *) palloc(
 				sizeof(DistObjectOperationParams));
+
+			Oid roleOid = get_role_oid(roleSpec->rolename, true);
+
+			if (roleOid == InvalidOid)
+			{
+				continue;
+			}
+
+			params->id = roleOid;
 			params->name = roleSpec->rolename;
 			params->catalogRelId = AuthIdRelationId;
-			params->id = get_role_oid(roleSpec->rolename, false);
 
 			paramsList = lappend(paramsList, params);
 		}

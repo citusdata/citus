@@ -63,6 +63,11 @@ $$);
 
 \c role_operations_test_db - - :master_port
 -- Test DROP ROLE
+DROP ROLE no_such_role; -- fails nicely
+DROP ROLE IF EXISTS no_such_role;  -- doesn't fail
+
+CREATE ROLE new_role;
+DROP ROLE IF EXISTS no_such_role, new_role; -- doesn't fail
 DROP ROLE IF EXISTS test_role1, "test_role2-needs\!escape";
 
 \c regression - - :master_port
@@ -74,7 +79,7 @@ select result FROM run_command_on_all_nodes($$
         rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
         (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
         FROM pg_authid
-        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','new_role','no_such_role')
         ORDER BY rolname
     ) t
 $$);
