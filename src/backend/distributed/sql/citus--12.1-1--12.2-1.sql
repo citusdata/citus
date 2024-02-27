@@ -7,6 +7,7 @@
 #include "udfs/start_management_transaction/12.2-1.sql"
 #include "udfs/execute_command_on_remote_nodes_as_user/12.2-1.sql"
 #include "udfs/mark_object_distributed/12.2-1.sql"
+DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid, oid, int);
 #include "udfs/citus_unmark_object_distributed/12.2-1.sql"
 #include "udfs/commit_management_command_2pc/12.2-1.sql"
 
