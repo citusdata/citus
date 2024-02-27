@@ -45,16 +45,16 @@ SELECT * FROM master_run_on_worker(
     true);
  node_name | node_port | success |                                      result
 ---------------------------------------------------------------------
- localhost |     57638 | f       | ERROR:  deadlock detected
+ localhost |     57638 | t       | UPDATE 1
  localhost |     57637 | t       | UPDATE 1
- localhost |     57637 | f       | ERROR:  deadlock detected
- localhost |     57638 | f       | ERROR:  deadlock detected
- localhost |     57637 | f       | ERROR:  canceling the transaction since it was involved in a distributed deadlock
- localhost |     57638 | f       | ERROR:  deadlock detected
- localhost |     57637 | f       | ERROR:  deadlock detected
- localhost |     57638 | f       | ERROR:  deadlock detected
- localhost |     57638 | f       | ERROR:  canceling the transaction since it was involved in a distributed deadlock
- localhost |     57637 | f       | ERROR:  deadlock detected
+ localhost |     57637 | t       | UPDATE 1
+ localhost |     57638 | t       | UPDATE 1
+ localhost |     57637 | t       | UPDATE 1
+ localhost |     57638 | t       | UPDATE 1
+ localhost |     57637 | t       | UPDATE 1
+ localhost |     57638 | t       | UPDATE 1
+ localhost |     57638 | t       | UPDATE 1
+ localhost |     57637 | t       | UPDATE 1
 (10 rows)
 
 --- cleanup

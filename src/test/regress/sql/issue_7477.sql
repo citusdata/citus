@@ -1,5 +1,5 @@
 
---- Test for updating a table that has a foreign key reference to another reference table. 
+--- Test for updating a table that has a foreign key reference to another reference table.
 --- Issue #7477: Distributed deadlock after issuing a simple UPDATE statement
 --- https://github.com/citusdata/citus/issues/7477
 
@@ -15,7 +15,7 @@ CREATE TABLE table2 (
 SELECT create_reference_table('table2');
 INSERT INTO table2 VALUES (1, 'test');
 
---- Runs the update command in parallel on workers. 
+--- Runs the update command in parallel on workers.
 --- Due to bug #7477, before the fix, the result is non-deterministic
 --- and have several rows of the form:
 ---  localhost |     57638 | f       | ERROR:  deadlock detected
@@ -23,7 +23,7 @@ INSERT INTO table2 VALUES (1, 'test');
 ---  localhost |     57637 | f       | ERROR:  canceling the transaction since it was involved in a distributed deadlock
 
 SELECT * FROM master_run_on_worker(
-    ARRAY['localhost', 'localhost','localhost', 'localhost','localhost', 
+    ARRAY['localhost', 'localhost','localhost', 'localhost','localhost',
             'localhost','localhost', 'localhost','localhost', 'localhost']::text[],
     ARRAY[57638, 57637, 57637, 57638, 57637, 57638, 57637, 57638, 57638, 57637]::int[],
     ARRAY['UPDATE table2 SET info = ''test_update'' WHERE id = 1',
