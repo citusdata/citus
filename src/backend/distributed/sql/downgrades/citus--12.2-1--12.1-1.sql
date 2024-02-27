@@ -17,8 +17,8 @@ DROP FUNCTION citus_internal.execute_command_on_remote_nodes_as_user(
 DROP FUNCTION citus_internal.mark_object_distributed(
     classId Oid, objectName text, objectId Oid, connectionUser text
 );
-DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid,oid,int,boolean);
 
+DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid,oid,int,boolean);
 #include "../udfs/citus_unmark_object_distributed/10.0-1.sql"
 
 DROP FUNCTION citus_internal.commit_management_command_2pc();
