@@ -174,7 +174,6 @@ ORDER BY 1;
  function citus_text_send_as_jsonb(text)
  function citus_total_relation_size(regclass,boolean)
  function citus_truncate_trigger()
- function citus_unmark_object_distributed(oid,oid,integer)
  function citus_unmark_object_distributed(oid,oid,integer,boolean)
  function citus_update_node(integer,text,integer,boolean,integer)
  function citus_update_shard_statistics(bigint)
