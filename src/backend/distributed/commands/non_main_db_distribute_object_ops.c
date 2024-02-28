@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "access/xact.h"
+#include "catalog/pg_authid_d.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
