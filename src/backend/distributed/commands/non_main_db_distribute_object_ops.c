@@ -165,7 +165,7 @@ static NonMainDbDistributeObjectOps Role_SecLabel = {
 const NonMainDbDistributeObjectOps * GetNonMainDbDistributeObjectOps(Node *parsetree);
 static void MarkObjectDistributedGloballyOnMainDbs(
 	MarkDistributedGloballyParams *markDistributedParams);
-static void UnmarkObjectDistributedOnLocalMainDb(List *unmarkDistributedList);
+static void UnmarkObjectsDistributedOnLocalMainDb(List *unmarkDistributedList);
 
 
 /*
@@ -221,7 +221,7 @@ RunPreprocessNonMainDBCommand(Node *parsetree)
 	if (ops->getUnmarkDistributedParams)
 	{
 		List *unmarkDistributedParamsList = ops->getUnmarkDistributedParams(parsetree);
-		UnmarkObjectDistributedOnLocalMainDb(unmarkDistributedParamsList);
+		UnmarkObjectsDistributedOnLocalMainDb(unmarkDistributedParamsList);
 	}
 
 	return false;
@@ -377,11 +377,11 @@ MarkObjectDistributedGloballyOnMainDbs(
 
 
 /*
- * UnmarkObjectDistributedOnLocalMainDb unmarks a list of objects as
+ * UnmarkObjectsDistributedOnLocalMainDb unmarks a list of objects as
  * distributed on the local main database.
  */
 static void
-UnmarkObjectDistributedOnLocalMainDb(List *unmarkDistributedParamsList)
+UnmarkObjectsDistributedOnLocalMainDb(List *unmarkDistributedParamsList)
 {
 	int subObjectId = 0;
 	char *checkObjectExistence = "false";
