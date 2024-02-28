@@ -105,7 +105,6 @@ typedef struct DistributeObjectOps
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
 /* functions to support node-wide object management commands from non-main dbs */
-extern bool IsCommandToCreateOrDropMainDB(Node *parsetree);
 extern bool RunPreprocessNonMainDBCommand(Node *parsetree);
 extern void RunPostprocessNonMainDBCommand(Node *parsetree);
 

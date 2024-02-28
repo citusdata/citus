@@ -62,7 +62,7 @@ typedef enum DistObjectOperation
 typedef struct NonMainDbDistributedStatementInfo
 {
 	int statementType;
-	DistObjectOperation DistObjectOperation;
+	DistObjectOperation distObjectOperation;
 
 	/*
 	 * checkSupportedObjectTypes is a callback function that checks whether
@@ -71,6 +71,9 @@ typedef struct NonMainDbDistributedStatementInfo
 	 * Can be NULL if not applicable for the statement type.
 	 */
 	bool (*checkSupportedObjectTypes)(Node *node);
+
+	/* indicates whether the statement cannot be executed in a transaction */
+	bool cannotBeExecutedInTransaction;
 } NonMainDbDistributedStatementInfo;
 
 /*
@@ -90,6 +93,8 @@ typedef struct DistObjectOperationParams
  * checkSupportedObjectTypes callbacks for
  * NonMainDbDistributedStatementInfo objects.
  */
+static bool NonMainDbCheckSupportedObjectTypeForCreateDatabase(Node *node);
+static bool NonMainDbCheckSupportedObjectTypeForDropDatabase(Node *node);
 static bool NonMainDbCheckSupportedObjectTypeForGrant(Node *node);
 static bool NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node);
 
@@ -99,47 +104,28 @@ static bool NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node);
  */
 ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
 static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
-	{ T_CreateRoleStmt, MARK_DISTRIBUTED_GLOBALLY, NULL },
-	{ T_DropRoleStmt, UNMARK_DISTRIBUTED_LOCALLY, NULL },
-	{ T_AlterRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
-	{ T_GrantStmt, NO_DIST_OBJECT_OPERATION, NonMainDbCheckSupportedObjectTypeForGrant },
-	{ T_CreatedbStmt, NO_DIST_OBJECT_OPERATION, NULL },
-	{ T_DropdbStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_GrantRoleStmt, NO_DIST_OBJECT_OPERATION, NULL, false },
+	{ T_CreateRoleStmt, MARK_DISTRIBUTED_GLOBALLY, NULL, false },
+	{ T_DropRoleStmt, UNMARK_DISTRIBUTED_LOCALLY, NULL, false },
+	{ T_AlterRoleStmt, NO_DIST_OBJECT_OPERATION, NULL, false },
+	{ T_GrantStmt, NO_DIST_OBJECT_OPERATION,
+	  NonMainDbCheckSupportedObjectTypeForGrant, false },
+	{ T_CreatedbStmt, NO_DIST_OBJECT_OPERATION,
+	  NonMainDbCheckSupportedObjectTypeForCreateDatabase, true },
+	{ T_DropdbStmt, NO_DIST_OBJECT_OPERATION,
+	  NonMainDbCheckSupportedObjectTypeForDropDatabase, true },
 	{ T_SecLabelStmt, NO_DIST_OBJECT_OPERATION,
-	  NonMainDbCheckSupportedObjectTypeForSecLabel },
+	  NonMainDbCheckSupportedObjectTypeForSecLabel, false },
 };
 
 
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
 static bool StatementRequiresMarkDistributedGloballyFromNonMainDb(Node *parsetree);
 static bool StatementRequiresUnmarkDistributedLocallyFromNonMainDb(Node *parsetree);
+static bool StatementCannotBeExecutedInTransaction(Node *parsetree);
 static void MarkObjectDistributedGloballyFromNonMainDb(Node *parsetree);
 static void UnMarkObjectDistributedLocallyFromNonMainDb(List *unmarkDistributedList);
 static List * GetDistObjectOperationParams(Node *parsetree);
-
-
-/*
- * IsCommandToCreateOrDropMainDB checks if this query creates or drops the
- * main database, so we can make an exception and not send this query to
- * the main database.
- */
-bool
-IsCommandToCreateOrDropMainDB(Node *parsetree)
-{
-	if (IsA(parsetree, CreatedbStmt))
-	{
-		CreatedbStmt *createdbStmt = castNode(CreatedbStmt, parsetree);
-		return strcmp(createdbStmt->dbname, MainDb) == 0;
-	}
-	else if (IsA(parsetree, DropdbStmt))
-	{
-		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
-		return strcmp(dropdbStmt->dbname, MainDb) == 0;
-	}
-
-	return false;
-}
 
 
 /*
@@ -157,25 +143,15 @@ RunPreprocessNonMainDBCommand(Node *parsetree)
 		return false;
 	}
 
-	if (IsCommandToCreateOrDropMainDB(parsetree))
-	{
-		/*
-		 * We don't try to send the query to the main database if the CREATE/DROP DATABASE
-		 * command is for the main database itself, this is a very rare case but it's
-		 * exercised by our test suite.
-		 */
-		return false;
-	}
-
 	char *queryString = DeparseTreeNode(parsetree);
 
-	if (IsA(parsetree, CreatedbStmt) || IsA(parsetree, DropdbStmt))
+	/*
+	 * For the commands that cannot be executed in a transaction, there are no
+	 * transactional visibility issues. We directly route them to main database
+	 * so that we only have to consider one code-path when creating databases.
+	 */
+	if (StatementCannotBeExecutedInTransaction(parsetree))
 	{
-		/*
-		 * We always execute CREATE/DROP DATABASE from the main database. There are no
-		 * transactional visibility issues, since these commands are non-transactional.
-		 * And this way we only have to consider one codepath when creating databases.
-		 */
 		IsMainDBCommandInXact = false;
 		RunCitusMainDBQuery((char *) queryString);
 		return true;
@@ -264,7 +240,7 @@ StatementRequiresMarkDistributedGloballyFromNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return NonMainDbSupportedStatements[i].DistObjectOperation ==
+			return NonMainDbSupportedStatements[i].distObjectOperation ==
 				   MARK_DISTRIBUTED_GLOBALLY;
 		}
 	}
@@ -287,8 +263,30 @@ StatementRequiresUnmarkDistributedLocallyFromNonMainDb(Node *parsetree)
 	{
 		if (type == NonMainDbSupportedStatements[i].statementType)
 		{
-			return NonMainDbSupportedStatements[i].DistObjectOperation ==
+			return NonMainDbSupportedStatements[i].distObjectOperation ==
 				   UNMARK_DISTRIBUTED_LOCALLY;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * StatementCannotBeExecutedInTransaction returns true if the statement cannot be executed in a
+ * transaction.
+ */
+static bool
+StatementCannotBeExecutedInTransaction(Node *parsetree)
+{
+	NodeTag type = nodeTag(parsetree);
+
+	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
+		 sizeof(NonMainDbSupportedStatements[0]); i++)
+	{
+		if (type == NonMainDbSupportedStatements[i].statementType)
+		{
+			return NonMainDbSupportedStatements[i].cannotBeExecutedInTransaction;
 		}
 	}
 
@@ -393,6 +391,38 @@ GetDistObjectOperationParams(Node *parsetree)
 	}
 
 	return paramsList;
+}
+
+
+/*
+ * NonMainDbCheckSupportedObjectTypeForCreateDatabase implements checkSupportedObjectTypes
+ * callback for CreatedbStmt.
+ *
+ * We don't try to send the query to the main database if the CREATE DATABASE
+ * command is for the main database itself, this is a very rare case but it's
+ * exercised by our test suite.
+ */
+static bool
+NonMainDbCheckSupportedObjectTypeForCreateDatabase(Node *node)
+{
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	return strcmp(stmt->dbname, MainDb) != 0;
+}
+
+
+/*
+ * NonMainDbCheckSupportedObjectTypeForDropDatabase implements checkSupportedObjectTypes
+ * callback for DropdbStmt.
+ *
+ * We don't try to send the query to the main database if the DROP DATABASE
+ * command is for the main database itself, this is a very rare case but it's
+ * exercised by our test suite.
+ */
+static bool
+NonMainDbCheckSupportedObjectTypeForDropDatabase(Node *node)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	return strcmp(stmt->dbname, MainDb) != 0;
 }
 
 
