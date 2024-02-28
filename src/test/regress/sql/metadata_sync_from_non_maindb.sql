@@ -80,9 +80,112 @@ revoke CREATE on database metadata_sync_2pc_db from "grant_role2pc'_user1";
 \c regression
 
 drop user "grant_role2pc'_user1","grant_role2pc'_user2","grant_role2pc'_user3",grant_role2pc_user4,grant_role2pc_user5;
+--test for user operations
+
+--test for create user
+\c regression - - :master_port
+select 1 from citus_remove_node('localhost', :worker_2_port);
+
+\c metadata_sync_2pc_db - - :master_port
+CREATE ROLE test_role1 WITH LOGIN PASSWORD 'password1';
+
+\c metadata_sync_2pc_db - - :worker_1_port
+CREATE USER "test_role2-needs\!escape"
+WITH
+    SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION
+LIMIT 10 VALID UNTIL '2023-01-01' IN ROLE test_role1;
+
+create role test_role3;
+
+\c regression - - :master_port
+select 1 from citus_add_node('localhost', :worker_2_port);
+
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
+        ORDER BY rolname
+    ) t
+$$);
+
+--test for alter user
+select 1 from citus_remove_node('localhost', :worker_2_port);
+\c metadata_sync_2pc_db - - :master_port
+-- Test ALTER ROLE with various options
+ALTER ROLE test_role1 WITH PASSWORD 'new_password1';
+
+\c metadata_sync_2pc_db - - :worker_1_port
+ALTER USER "test_role2-needs\!escape"
+WITH
+    NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION
+LIMIT 5 VALID UNTIL '2024-01-01';
+
+\c regression - - :master_port
+select 1 from citus_add_node('localhost', :worker_2_port);
+
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
+        ORDER BY rolname
+    ) t
+$$);
+
+--test for drop user
+select 1 from citus_remove_node('localhost', :worker_2_port);
+
+\c metadata_sync_2pc_db - - :worker_1_port
+DROP ROLE test_role1, "test_role2-needs\!escape";
+
+\c metadata_sync_2pc_db - - :master_port
+DROP ROLE test_role3;
+
+\c regression - - :master_port
+select 1 from citus_add_node('localhost', :worker_2_port);
+
+-- XXX: date is not correct on one of the workers due to https://github.com/citusdata/citus/issues/7533
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
+        ORDER BY rolname
+    ) t
+$$);
+
+-- Clean up: drop the database on worker node 2
+\c regression - - :worker_2_port
+DROP ROLE if exists test_role1, "test_role2-needs\!escape", test_role3;
+
+\c regression - - :master_port
+
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','test_role3')
+        ORDER BY rolname
+    ) t
+$$);
+
 set citus.enable_create_database_propagation to on;
 drop database metadata_sync_2pc_db;
 drop schema metadata_sync_2pc_schema;
-
 reset citus.enable_create_database_propagation;
 reset search_path;
