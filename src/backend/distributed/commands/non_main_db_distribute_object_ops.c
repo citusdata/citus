@@ -120,7 +120,11 @@ static MarkDistributedGloballyParams * CreateRoleStmtGetMarkDistributedParams(
 static List * DropRoleStmtGetUnmarkDistributedParams(Node *parsetree);
 
 
-/* NonMainDbDistributeObjectOps for different command types */
+/*
+ * NonMainDbDistributeObjectOps for different command types.
+ *
+ * Naming of these structs are stolen from distribute_object_ops.c.
+ */
 static NonMainDbDistributeObjectOps Any_CreateRole = {
 	.getMarkDistributedParams = CreateRoleStmtGetMarkDistributedParams,
 	.getUnmarkDistributedParams = NULL,
@@ -137,14 +141,16 @@ static NonMainDbDistributeObjectOps Any_AlterRole = {
 	.cannotBeExecutedInTransaction = false
 };
 static NonMainDbDistributeObjectOps Any_GrantRole = {
+	.getMarkDistributedParams = NULL,
+	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = false
 };
-static NonMainDbDistributeObjectOps Database_Create = {
+static NonMainDbDistributeObjectOps Any_CreateDatabase = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = true
 };
-static NonMainDbDistributeObjectOps Database_Drop = {
+static NonMainDbDistributeObjectOps Any_DropDatabase = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = true
@@ -296,7 +302,7 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 			 */
 			if (strcmp(stmt->dbname, MainDb) != 0)
 			{
-				return &Database_Create;
+				return &Any_CreateDatabase;
 			}
 
 			return NULL;
@@ -313,7 +319,7 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 			 */
 			if (strcmp(stmt->dbname, MainDb) != 0)
 			{
-				return &Database_Drop;
+				return &Any_DropDatabase;
 			}
 
 			return NULL;
