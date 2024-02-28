@@ -706,10 +706,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			timeout = Min(timeout, Recover2PCInterval);
 		}
 
-		/*
-		 * Execute only on the maintenance database, if it configured, otherwise run from every daemon.
-		 * The config value -1 disables the distributed deadlock detection
-		 */
+		/* the config value -1 disables the distributed deadlock detection  */
 		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
 			double deadlockTimeout =
@@ -735,7 +732,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			{
 				foundDeadlock = CheckForDistributedDeadlocks();
 			}
-
 
 			CommitTransactionCommand();
 

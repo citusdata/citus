@@ -327,7 +327,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	 */
 
 	ConnectionHashEntry *entry = hash_search(ConnectionHash, &key, HASH_ENTER, &found);
-	if (!(found && entry->isValid))
+	if (!found || !entry->isValid)
 	{
 		/*
 		 * We are just building hash entry or previously it was left in an
