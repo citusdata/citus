@@ -247,36 +247,25 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 	if (!CitusHasBeenLoaded())
 	{
 		/*
-		 * We always execute CREATE/DROP DATABASE from the main database. There are no
-		 * transactional visibility issues, since these commands are non-transactional.
-		 * And this way we only have to consider one codepath when creating databases.
-		 * We don't try to send the query to the main database if the CREATE/DROP DATABASE
-		 * command is for the main database itself, this is a very rare case but it's
-		 * exercised by our test suite.
+		 * Process the command via RunPreprocessNonMainDBCommand and
+		 * RunPostprocessNonMainDBCommand hooks if we're in a non-main database
+		 * and if the command is a node-wide object management command that we
+		 * support from non-main databases.
 		 */
-		if (!IsMainDB &&
-			!IsCommandToCreateOrDropMainDB(parsetree))
-		{
-			RunPreprocessMainDBCommand(parsetree);
 
-			if (IsA(parsetree, CreatedbStmt) ||
-				IsA(parsetree, DropdbStmt))
-			{
-				return;
-			}
+		bool shouldSkipPrevUtilityHook = RunPreprocessNonMainDBCommand(parsetree);
+
+		if (!shouldSkipPrevUtilityHook)
+		{
+			/*
+			 * Ensure that utility commands do not behave any differently until CREATE
+			 * EXTENSION is invoked.
+			 */
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
 		}
 
-		/*
-		 * Ensure that utility commands do not behave any differently until CREATE
-		 * EXTENSION is invoked.
-		 */
-		PrevProcessUtility(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
-
-		if (!IsMainDB)
-		{
-			RunPostprocessMainDBCommand(parsetree);
-		}
+		RunPostprocessNonMainDBCommand(parsetree);
 
 		return;
 	}

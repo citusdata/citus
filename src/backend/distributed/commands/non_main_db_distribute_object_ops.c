@@ -143,25 +143,42 @@ IsCommandToCreateOrDropMainDB(Node *parsetree)
 
 
 /*
- * RunPreprocessMainDBCommand runs the necessary commands for a query, in main
- * database before query is run on the local node with PrevProcessUtility
+ * RunPreprocessNonMainDBCommand runs the necessary commands for a query, in main
+ * database before query is run on the local node with PrevProcessUtility.
+ *
+ * Returns true if previous utility hook needs to be skipped after completing
+ * preprocess phase.
  */
-void
-RunPreprocessMainDBCommand(Node *parsetree)
+bool
+RunPreprocessNonMainDBCommand(Node *parsetree)
 {
-	if (!IsStatementSupportedFromNonMainDb(parsetree))
+	if (IsMainDB || !IsStatementSupportedFromNonMainDb(parsetree))
 	{
-		return;
+		return false;
+	}
+
+	if (IsCommandToCreateOrDropMainDB(parsetree))
+	{
+		/*
+		 * We don't try to send the query to the main database if the CREATE/DROP DATABASE
+		 * command is for the main database itself, this is a very rare case but it's
+		 * exercised by our test suite.
+		 */
+		return false;
 	}
 
 	char *queryString = DeparseTreeNode(parsetree);
 
-	if (IsA(parsetree, CreatedbStmt) ||
-		IsA(parsetree, DropdbStmt))
+	if (IsA(parsetree, CreatedbStmt) || IsA(parsetree, DropdbStmt))
 	{
+		/*
+		 * We always execute CREATE/DROP DATABASE from the main database. There are no
+		 * transactional visibility issues, since these commands are non-transactional.
+		 * And this way we only have to consider one codepath when creating databases.
+		 */
 		IsMainDBCommandInXact = false;
 		RunCitusMainDBQuery((char *) queryString);
-		return;
+		return true;
 	}
 
 	IsMainDBCommandInXact = true;
@@ -184,18 +201,24 @@ RunPreprocessMainDBCommand(Node *parsetree)
 		List *unmarkParams = GetDistObjectOperationParams(parsetree);
 		UnMarkObjectDistributedLocallyFromNonMainDb(unmarkParams);
 	}
+
+	return false;
 }
 
 
 /*
- * RunPostprocessMainDBCommand runs the necessary commands for a query, in main
- * database after query is run on the local node with PrevProcessUtility
+ * RunPostprocessNonMainDBCommand runs the necessary commands for a query, in main
+ * database after query is run on the local node with PrevProcessUtility.
  */
 void
-RunPostprocessMainDBCommand(Node *parsetree)
+RunPostprocessNonMainDBCommand(Node *parsetree)
 {
-	if (IsStatementSupportedFromNonMainDb(parsetree) &&
-		StatementRequiresMarkDistributedGloballyFromNonMainDb(parsetree))
+	if (IsMainDB || !IsStatementSupportedFromNonMainDb(parsetree))
+	{
+		return;
+	}
+
+	if (StatementRequiresMarkDistributedGloballyFromNonMainDb(parsetree))
 	{
 		MarkObjectDistributedGloballyFromNonMainDb(parsetree);
 	}
