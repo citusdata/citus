@@ -123,7 +123,11 @@ static List * DropRoleStmtGetUnmarkDistributedParams(Node *parsetree);
 /*
  * NonMainDbDistributeObjectOps for different command types.
  *
- * Naming of these structs are stolen from distribute_object_ops.c.
+ * Naming of these structs are stolen from distribute_object_ops.c. We use
+ * "Any" if the command doesn't have any other variations or if the structs
+ * implements it for all variations. For example, while we name the struct
+ * for CreateRoleStmt as Any_CreateRole, we name the struct that implements
+ * SecLabelStmt for role objects as Role_SecLabel.
  */
 static NonMainDbDistributeObjectOps Any_CreateRole = {
 	.getMarkDistributedParams = CreateRoleStmtGetMarkDistributedParams,
