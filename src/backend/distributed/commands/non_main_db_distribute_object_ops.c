@@ -124,47 +124,47 @@ static List * DropRoleStmtGetUnmarkDistributedParams(Node *parsetree);
  * NonMainDbDistributeObjectOps for different command types.
  *
  * Naming of these structs are stolen from distribute_object_ops.c. We use
- * "Any" if the command doesn't have any other variations or if the structs
- * implements it for all variations. For example, while we name the struct
+ * "Any" if the command doesn't have any other variations or if the struct
+ * implements it for all its variations. For example, while we name the struct
  * for CreateRoleStmt as Any_CreateRole, we name the struct that implements
  * SecLabelStmt for role objects as Role_SecLabel.
  */
-static NonMainDbDistributeObjectOps Any_CreateRole = {
+static const NonMainDbDistributeObjectOps Any_CreateRole = {
 	.getMarkDistributedParams = CreateRoleStmtGetMarkDistributedParams,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = false
 };
-static NonMainDbDistributeObjectOps Any_DropRole = {
+static const NonMainDbDistributeObjectOps Any_DropRole = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = DropRoleStmtGetUnmarkDistributedParams,
 	.cannotBeExecutedInTransaction = false
 };
-static NonMainDbDistributeObjectOps Any_AlterRole = {
+static const NonMainDbDistributeObjectOps Any_AlterRole = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = false
 };
-static NonMainDbDistributeObjectOps Any_GrantRole = {
+static const NonMainDbDistributeObjectOps Any_GrantRole = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = false
 };
-static NonMainDbDistributeObjectOps Any_CreateDatabase = {
+static const NonMainDbDistributeObjectOps Any_CreateDatabase = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = true
 };
-static NonMainDbDistributeObjectOps Any_DropDatabase = {
+static const NonMainDbDistributeObjectOps Any_DropDatabase = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = true
 };
-static NonMainDbDistributeObjectOps Database_Grant = {
+static const NonMainDbDistributeObjectOps Database_Grant = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = false
 };
-static NonMainDbDistributeObjectOps Role_SecLabel = {
+static const NonMainDbDistributeObjectOps Role_SecLabel = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = false
@@ -175,7 +175,7 @@ static NonMainDbDistributeObjectOps Role_SecLabel = {
 const NonMainDbDistributeObjectOps * GetNonMainDbDistributeObjectOps(Node *parsetree);
 static void MarkObjectDistributedGloballyOnMainDbs(
 	MarkDistributedGloballyParams *markDistributedParams);
-static void UnmarkObjectsDistributedOnLocalMainDb(List *unmarkDistributedList);
+static void UnmarkObjectsDistributedOnLocalMainDb(List *unmarkDistributedParamsList);
 
 
 /*
