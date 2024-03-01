@@ -177,6 +177,15 @@ static void MarkObjectDistributedGloballyOnMainDbs(
 	MarkDistributedGloballyParams *markDistributedParams);
 static void UnmarkObjectsDistributedOnLocalMainDb(List *unmarkDistributedParamsList);
 
+const NonMainDbDistributeObjectOps * HandleCreateRoleStmt(Node *parsetree);
+const NonMainDbDistributeObjectOps * HandleDropRoleStmt(Node *parsetree);
+const NonMainDbDistributeObjectOps * HandleAlterRoleStmt(Node *parsetree);
+const NonMainDbDistributeObjectOps * HandleGrantRoleStmt(Node *parsetree);
+const NonMainDbDistributeObjectOps * HandleCreatedbStmt(Node *parsetree);
+const NonMainDbDistributeObjectOps * HandleDropdbStmt(Node *parsetree);
+const NonMainDbDistributeObjectOps * HandleGrantStmt(Node *parsetree);
+const NonMainDbDistributeObjectOps * HandleSecLabelStmt(Node *parsetree);
+
 
 /*
  * RunPreprocessNonMainDBCommand runs the necessary commands for a query, in main
@@ -265,6 +274,127 @@ RunPostprocessNonMainDBCommand(Node *parsetree)
 }
 
 
+const NonMainDbDistributeObjectOps *
+HandleCreateRoleStmt(Node *parsetree)
+{
+	return &Any_CreateRole;
+}
+
+
+const NonMainDbDistributeObjectOps *
+HandleDropRoleStmt(Node *parsetree)
+{
+	return &Any_DropRole;
+}
+
+
+const NonMainDbDistributeObjectOps *
+HandleAlterRoleStmt(Node *parsetree)
+{
+	return &Any_AlterRole;
+}
+
+
+const NonMainDbDistributeObjectOps *
+HandleGrantRoleStmt(Node *parsetree)
+{
+	return &Any_GrantRole;
+}
+
+
+const NonMainDbDistributeObjectOps *
+HandleCreatedbStmt(Node *parsetree)
+{
+	CreatedbStmt *stmt = castNode(CreatedbStmt, parsetree);
+
+	/*
+	 * We don't try to send the query to the main database if the CREATE
+	 * DATABASE command is for the main database itself, this is a very
+	 * rare case but it's exercised by our test suite.
+	 */
+	if (strcmp(stmt->dbname, MainDb) != 0)
+	{
+		return &Any_CreateDatabase;
+	}
+
+	return NULL;
+}
+
+
+const NonMainDbDistributeObjectOps *
+HandleDropdbStmt(Node *parsetree)
+{
+	DropdbStmt *stmt = castNode(DropdbStmt, parsetree);
+
+	/*
+	 * We don't try to send the query to the main database if the DROP
+	 * DATABASE command is for the main database itself, this is a very
+	 * rare case but it's exercised by our test suite.
+	 */
+	if (strcmp(stmt->dbname, MainDb) != 0)
+	{
+		return &Any_DropDatabase;
+	}
+
+	return NULL;
+}
+
+
+const NonMainDbDistributeObjectOps *
+HandleGrantStmt(Node *parsetree)
+{
+	GrantStmt *stmt = castNode(GrantStmt, parsetree);
+
+	switch (stmt->objtype)
+	{
+		case OBJECT_DATABASE:
+		{
+			return &Database_Grant;
+		}
+
+		default:
+			return NULL;
+	}
+}
+
+
+const NonMainDbDistributeObjectOps *
+HandleSecLabelStmt(Node *parsetree)
+{
+	SecLabelStmt *stmt = castNode(SecLabelStmt, parsetree);
+
+	switch (stmt->objtype)
+	{
+		case OBJECT_ROLE:
+		{
+			return &Role_SecLabel;
+		}
+
+		default:
+			return NULL;
+	}
+}
+
+
+typedef const NonMainDbDistributeObjectOps *(*HandlerFunc)(Node *);
+
+static const struct
+{
+	NodeTag tag;
+	HandlerFunc handler;
+}
+handlers[] = {
+	{ T_CreateRoleStmt, HandleCreateRoleStmt },
+	{ T_DropRoleStmt, HandleDropRoleStmt },
+	{ T_AlterRoleStmt, HandleAlterRoleStmt },
+	{ T_GrantRoleStmt, HandleGrantRoleStmt },
+	{ T_CreatedbStmt, HandleCreatedbStmt },
+	{ T_DropdbStmt, HandleDropdbStmt },
+	{ T_GrantStmt, HandleGrantStmt },
+	{ T_SecLabelStmt, HandleSecLabelStmt },
+};
+
+
 /*
  * GetNonMainDbDistributeObjectOps returns the NonMainDbDistributeObjectOps for given
  * command if it's node-wide object management command that's supported from non-main
@@ -273,97 +403,17 @@ RunPostprocessNonMainDBCommand(Node *parsetree)
 const NonMainDbDistributeObjectOps *
 GetNonMainDbDistributeObjectOps(Node *parsetree)
 {
-	switch (nodeTag(parsetree))
+	NodeTag tag = nodeTag(parsetree);
+
+	for (int i = 0; i < sizeof(handlers) / sizeof(handlers[0]); i++)
 	{
-		case T_CreateRoleStmt:
+		if (handlers[i].tag == tag)
 		{
-			return &Any_CreateRole;
+			return handlers[i].handler(parsetree);
 		}
-
-		case T_DropRoleStmt:
-		{
-			return &Any_DropRole;
-		}
-
-		case T_AlterRoleStmt:
-		{
-			return &Any_AlterRole;
-		}
-
-		case T_GrantRoleStmt:
-		{
-			return &Any_GrantRole;
-		}
-
-		case T_CreatedbStmt:
-		{
-			CreatedbStmt *stmt = castNode(CreatedbStmt, parsetree);
-
-			/*
-			 * We don't try to send the query to the main database if the CREATE
-			 * DATABASE command is for the main database itself, this is a very
-			 * rare case but it's exercised by our test suite.
-			 */
-			if (strcmp(stmt->dbname, MainDb) != 0)
-			{
-				return &Any_CreateDatabase;
-			}
-
-			return NULL;
-		}
-
-		case T_DropdbStmt:
-		{
-			DropdbStmt *stmt = castNode(DropdbStmt, parsetree);
-
-			/*
-			 * We don't try to send the query to the main database if the DROP
-			 * DATABASE command is for the main database itself, this is a very
-			 * rare case but it's exercised by our test suite.
-			 */
-			if (strcmp(stmt->dbname, MainDb) != 0)
-			{
-				return &Any_DropDatabase;
-			}
-
-			return NULL;
-		}
-
-		case T_GrantStmt:
-		{
-			GrantStmt *stmt = castNode(GrantStmt, parsetree);
-
-			switch (stmt->objtype)
-			{
-				case OBJECT_DATABASE:
-				{
-					return &Database_Grant;
-				}
-
-				default:
-					return NULL;
-			}
-		}
-
-		case T_SecLabelStmt:
-		{
-			SecLabelStmt *stmt = castNode(SecLabelStmt, parsetree);
-
-			switch (stmt->objtype)
-			{
-				case OBJECT_ROLE:
-				{
-					return &Role_SecLabel;
-				}
-
-				default:
-					return NULL;
-			}
-		}
-
-		default:
-			return NULL;
 	}
+
+	return NULL;
 }
 
 
