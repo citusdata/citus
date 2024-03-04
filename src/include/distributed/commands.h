@@ -515,7 +515,7 @@ extern List * PreprocessDropRoleStmt(Node *stmt, const char *queryString,
 extern List * PreprocessGrantRoleStmt(Node *stmt, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
 extern List * PostprocessGrantRoleStmt(Node *stmt, const char *queryString);
-extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
+extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid,bool fetchGrantStatements);
 extern List * CreateRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 										  isPostprocess);
 
@@ -524,6 +524,7 @@ extern List * RenameRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 
 extern void UnmarkRolesDistributed(List *roles);
 extern List * FilterDistributedRoles(List *roles);
+extern List * GenerateGrantRoleStmts(void);
 
 /* schema.c - forward declarations */
 extern List * PostprocessCreateSchemaStmt(Node *node, const char *queryString);

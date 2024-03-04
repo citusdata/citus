@@ -1828,13 +1828,6 @@ ExpandRolesToGroups(Oid roleid)
 		ObjectAddressSet(definition->data.address, AuthIdRelationId, membership->roleid);
 
 		roles = lappend(roles, definition);
-
-		DependencyDefinition *definition1 = palloc0(sizeof(DependencyDefinition));
-		definition1->mode = DependencyObjectAddress;
-		ObjectAddressSet(definition1->data.address, AuthIdRelationId,
-						 membership->grantor);
-
-		roles = lappend(roles, definition1);
 	}
 
 	systable_endscan(scanDescriptor);
