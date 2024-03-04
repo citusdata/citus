@@ -18,6 +18,9 @@ DROP FUNCTION citus_internal.mark_object_distributed(
     classId Oid, objectName text, objectId Oid, connectionUser text
 );
 
+DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid,oid,int,boolean);
+#include "../udfs/citus_unmark_object_distributed/10.0-1.sql"
+
 DROP FUNCTION citus_internal.commit_management_command_2pc();
 
 ALTER TABLE pg_catalog.pg_dist_transaction DROP COLUMN outer_xid;
