@@ -63,6 +63,7 @@ test: alter_database_propagation
 
 test: citus_shards
 test: reassign_owned
+test: granted_by_support
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
