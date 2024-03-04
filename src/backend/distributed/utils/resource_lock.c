@@ -709,6 +709,21 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 	List *replicatedShardList = NIL;
 	bool anyTableReplicated = AnyTableReplicated(shardIntervalList, &replicatedShardList);
 
+	/*
+	 * Acquire locks on the modified table.
+	 * If the table is replicated, the locks are first acquired on the first worker node then locally.
+	 */
+	if (anyTableReplicated && ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
+	{
+		LockShardListResourcesOnFirstWorker(lockMode, replicatedShardList);
+	}
+	LockShardListResources(shardIntervalList, lockMode);
+
+	/*
+	 * Next, acquire locks on the reference tables if there is any.
+	 * Note that LockReferencedReferenceShardResources() first acquires locks on the first worker,
+	 * then locally.
+	 */
 	if (anyTableReplicated)
 	{
 		ShardInterval *firstShardInterval =
@@ -725,11 +740,6 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 			LockReferencedReferenceShardResources(firstShardInterval->shardId, lockMode);
 		}
 	}
-	if (anyTableReplicated && ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
-	{
-		LockShardListResourcesOnFirstWorker(lockMode, replicatedShardList);
-	}
-	LockShardListResources(shardIntervalList, lockMode);
 }
 
 
