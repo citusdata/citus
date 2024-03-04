@@ -18,20 +18,30 @@ grant role3 to "role5'_test" granted by role4;
 grant role2 to "role5'_test" granted by role3;
 grant role4 to "role5'_test" with admin option;
 grant role4 to role1 with admin option GRANTED BY "role5'_test";
-ERROR:  Citus can not handle circular dependencies between distributed objects
-DETAIL:  "role role1" circularly depends itself, resolve circular dependency first
 grant role4 to role3 with admin option GRANTED BY role1;
-ERROR:  permission denied to grant privileges as role "role1"
-DETAIL:  The grantor must have the ADMIN option on role "role4".
+ERROR:  role "role4" is a member of role "role3"
 grant role3 to role1 with admin option GRANTED BY role4;
-ERROR:  Citus can not handle circular dependencies between distributed objects
-DETAIL:  "role role1" circularly depends itself, resolve circular dependency first
 grant "role5'_test" to role1 with admin option;
-ERROR:  Citus can not handle circular dependencies between distributed objects
-DETAIL:  "role role1" circularly depends itself, resolve circular dependency first
 grant "role5'_test" to role3 with admin option GRANTED BY role1;
-ERROR:  permission denied to grant privileges as role "role1"
-DETAIL:  The grantor must have the ADMIN option on role "role5'_test".
+ERROR:  role "role5'_test" is a member of role "role3"
+SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+        FROM pg_auth_members
+        WHERE member::regrole::text in
+            ('role1','role2','role3','role4','"role5''_test"')
+        order by member::regrole::text, roleid::regrole::text;
+    member     |     role      |    grantor    | admin_option
+---------------------------------------------------------------------
+ "role5'_test" | role2         | role3         | f
+ "role5'_test" | role3         | role4         | f
+ "role5'_test" | role4         | postgres      | t
+ role1         | "role5'_test" | postgres      | t
+ role1         | role2         | postgres      | t
+ role1         | role3         | role4         | t
+ role1         | role4         | "role5'_test" | t
+ role3         | role2         | role1         | t
+ role4         | role3         | postgres      | t
+(9 rows)
+
 select result FROM run_command_on_all_nodes(
     $$
     SELECT array_to_json(array_agg(row_to_json(t)))
@@ -44,10 +54,10 @@ select result FROM run_command_on_all_nodes(
     ) t
     $$
 );
-                                                                                                                                                                                                                                           result
+                                                                                                                                                                                                                                                                                                                                                                  result
 ---------------------------------------------------------------------
- [{"member":"\"role5'_test\"","role":"role2","grantor":"role3","admin_option":false},{"member":"\"role5'_test\"","role":"role3","grantor":"role4","admin_option":false},{"member":"\"role5'_test\"","role":"role4","grantor":"postgres","admin_option":true},{"member":"role1","role":"role2","grantor":"postgres","admin_option":true},{"member":"role3","role":"role2","grantor":"role1","admin_option":true},{"member":"role4","role":"role3","grantor":"postgres","admin_option":true}]
- [{"member":"\"role5'_test\"","role":"role2","grantor":"role3","admin_option":false},{"member":"\"role5'_test\"","role":"role3","grantor":"role4","admin_option":false},{"member":"\"role5'_test\"","role":"role4","grantor":"postgres","admin_option":true},{"member":"role1","role":"role2","grantor":"postgres","admin_option":true},{"member":"role3","role":"role2","grantor":"role1","admin_option":true},{"member":"role4","role":"role3","grantor":"postgres","admin_option":true}]
+ [{"member":"\"role5'_test\"","role":"role2","grantor":"role3","admin_option":false},{"member":"\"role5'_test\"","role":"role3","grantor":"role4","admin_option":false},{"member":"\"role5'_test\"","role":"role4","grantor":"postgres","admin_option":true},{"member":"role1","role":"\"role5'_test\"","grantor":"postgres","admin_option":true},{"member":"role1","role":"role2","grantor":"postgres","admin_option":true},{"member":"role1","role":"role3","grantor":"role4","admin_option":true},{"member":"role1","role":"role4","grantor":"\"role5'_test\"","admin_option":true},{"member":"role3","role":"role2","grantor":"role1","admin_option":true},{"member":"role4","role":"role3","grantor":"postgres","admin_option":true}]
+ [{"member":"\"role5'_test\"","role":"role2","grantor":"role3","admin_option":false},{"member":"\"role5'_test\"","role":"role3","grantor":"role4","admin_option":false},{"member":"\"role5'_test\"","role":"role4","grantor":"postgres","admin_option":true},{"member":"role1","role":"\"role5'_test\"","grantor":"postgres","admin_option":true},{"member":"role1","role":"role2","grantor":"postgres","admin_option":true},{"member":"role1","role":"role3","grantor":"role4","admin_option":true},{"member":"role1","role":"role4","grantor":"\"role5'_test\"","admin_option":true},{"member":"role3","role":"role2","grantor":"role1","admin_option":true},{"member":"role4","role":"role3","grantor":"postgres","admin_option":true}]
 (2 rows)
 
 select 1 from citus_add_node ('localhost',:worker_2_port);
@@ -55,6 +65,25 @@ select 1 from citus_add_node ('localhost',:worker_2_port);
 ---------------------------------------------------------------------
         1
 (1 row)
+
+select result FROM run_command_on_all_nodes(
+    $$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+        FROM pg_auth_members
+        WHERE member::regrole::text in
+            ('role1','role2','role3','role4','"role5''_test"')
+        order by member::regrole::text, roleid::regrole::text
+    ) t
+    $$
+);
+                                                                                                                                                                                                                                                                                                                                                                  result
+---------------------------------------------------------------------
+ [{"member":"\"role5'_test\"","role":"role2","grantor":"role3","admin_option":false},{"member":"\"role5'_test\"","role":"role3","grantor":"role4","admin_option":false},{"member":"\"role5'_test\"","role":"role4","grantor":"postgres","admin_option":true},{"member":"role1","role":"\"role5'_test\"","grantor":"postgres","admin_option":true},{"member":"role1","role":"role2","grantor":"postgres","admin_option":true},{"member":"role1","role":"role3","grantor":"role4","admin_option":true},{"member":"role1","role":"role4","grantor":"\"role5'_test\"","admin_option":true},{"member":"role3","role":"role2","grantor":"role1","admin_option":true},{"member":"role4","role":"role3","grantor":"postgres","admin_option":true}]
+ [{"member":"\"role5'_test\"","role":"role2","grantor":"role3","admin_option":false},{"member":"\"role5'_test\"","role":"role3","grantor":"role4","admin_option":false},{"member":"\"role5'_test\"","role":"role4","grantor":"postgres","admin_option":true},{"member":"role1","role":"\"role5'_test\"","grantor":"postgres","admin_option":true},{"member":"role1","role":"role2","grantor":"postgres","admin_option":true},{"member":"role1","role":"role3","grantor":"role4","admin_option":true},{"member":"role1","role":"role4","grantor":"\"role5'_test\"","admin_option":true},{"member":"role3","role":"role2","grantor":"role1","admin_option":true},{"member":"role4","role":"role3","grantor":"postgres","admin_option":true}]
+ [{"member":"\"role5'_test\"","role":"role2","grantor":"role3","admin_option":false},{"member":"\"role5'_test\"","role":"role3","grantor":"role4","admin_option":false},{"member":"\"role5'_test\"","role":"role4","grantor":"postgres","admin_option":true},{"member":"role1","role":"\"role5'_test\"","grantor":"postgres","admin_option":true},{"member":"role1","role":"role2","grantor":"postgres","admin_option":true},{"member":"role1","role":"role3","grantor":"role4","admin_option":true},{"member":"role1","role":"role4","grantor":"\"role5'_test\"","admin_option":true},{"member":"role3","role":"role2","grantor":"role1","admin_option":true},{"member":"role4","role":"role3","grantor":"postgres","admin_option":true}]
+(3 rows)
 
 --clean all resources
 drop role role1,role2,role3,role4,"role5'_test";

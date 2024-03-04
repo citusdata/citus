@@ -56,11 +56,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 
-typedef struct GrantRoleStmts
-{
-    List *adminStmts;
-    List *otherStmts;
-} GrantRoleStmts;
 
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
@@ -72,7 +67,9 @@ static DefElem * makeDefElemInt(char *name, int value);
 static DefElem * makeDefElemBool(char *name, bool value);
 static List * GenerateRoleOptionsList(HeapTuple tuple);
 static List * GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options);
-static GrantRoleStmts GenerateGrantRoleStmtsOfRole(Oid roleid);
+static List * GenerateGrantRoleStmtsOfRole(Oid roleid);
+static GrantRoleStmt * GetGrantRoleStmtFromAuthMemberRecord(Form_pg_auth_members
+															membership);
 static List * GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename);
 static void EnsureSequentialModeForRoleDDL(void);
 
@@ -521,8 +518,6 @@ GenerateRoleOptionsList(HeapTuple tuple)
 List *
 GenerateCreateOrAlterRoleCommand(Oid roleOid, bool fetchGrantStmts)
 {
-
-	elog(NOTICE, "Generating create or alter role command for role %u with fetchGrantStmts %s", roleOid,fetchGrantStmts ? "true" : "false");
 	HeapTuple roleTuple = SearchSysCache1(AUTHOID, ObjectIdGetDatum(roleOid));
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(roleTuple));
 	char *rolename = pstrdup(NameStr(role->rolname));
@@ -571,18 +566,10 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid, bool fetchGrantStmts)
 
 	if (EnableCreateRolePropagation)
 	{
-		if(fetchGrantStmts){
-			elog(NOTICE, "Fetching grant statements for role %s", rolename);
-			List *grantRoleStmtList = NIL;
-			GrantRoleStmts grantRoleStmts= GenerateGrantRoleStmtsOfRole(roleOid);
-
-			grantRoleStmtList = list_concat(grantRoleStmts.adminStmts, grantRoleStmts.otherStmts);
-
-			Node *stmt = NULL;
-			foreach_ptr(stmt, grantRoleStmtList)
-			{
-				completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
-			}
+		if (fetchGrantStmts)
+		{
+			completeRoleList = list_concat(completeRoleList, GenerateGrantRoleStmtsOfRole(
+											   roleOid));
 		}
 
 		/*
@@ -883,151 +870,171 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
  * GenerateGrantRoleStmtsOfRole generates the GrantRoleStmts for the memberships
  * of the role whose oid is roleid.
  */
-static GrantRoleStmts
+static List *
 GenerateGrantRoleStmtsOfRole(Oid roleid)
 {
-    Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
-    HeapTuple tuple = NULL;
+	Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
+	HeapTuple tuple = NULL;
 
-    List *adminStmts = NIL;
-    List *otherStmts = NIL;
+	List *adminStmts = NIL;
+	List *otherStmts = NIL;
+	List *allStmts = NIL;
 
-    ScanKeyData skey[1];
+	ScanKeyData skey[1];
 
-    ScanKeyInit(&skey[0], Anum_pg_auth_members_member, BTEqualStrategyNumber, F_OIDEQ,
-                ObjectIdGetDatum(roleid));
-    SysScanDesc scan = systable_beginscan(pgAuthMembers, AuthMemMemRoleIndexId, true,
-                                          NULL, 1, &skey[0]);
+	ScanKeyInit(&skey[0], Anum_pg_auth_members_member, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(roleid));
+	SysScanDesc scan = systable_beginscan(pgAuthMembers, AuthMemMemRoleIndexId, true,
+										  NULL, 1, &skey[0]);
 
-    while (HeapTupleIsValid(tuple = systable_getnext(scan)))
-    {
-        Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
+	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
+	{
+		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
-        ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
-        ObjectAddressSet(*roleAddress, AuthIdRelationId, membership->grantor);
-        if (!IsAnyObjectDistributed(list_make1(roleAddress)))
-        {
-            /* we only need to propagate the grant if the grantor is distributed */
-            continue;
-        }
+		GrantRoleStmt *grantRoleStmt = GetGrantRoleStmtFromAuthMemberRecord(membership);
+		if (grantRoleStmt == NULL)
+		{
+			continue;
+		}
 
-        GrantRoleStmt *grantRoleStmt = makeNode(GrantRoleStmt);
-        grantRoleStmt->is_grant = true;
+		if (membership->admin_option)
+		{
+			adminStmts = lappend(adminStmts, grantRoleStmt);
+		}
+		else
+		{
+			otherStmts = lappend(otherStmts, grantRoleStmt);
+		}
+	}
 
-        RoleSpec *grantedRole = makeNode(RoleSpec);
-        grantedRole->roletype = ROLESPEC_CSTRING;
-        grantedRole->location = -1;
-        grantedRole->rolename = GetUserNameFromId(membership->roleid, true);
-        grantRoleStmt->granted_roles = list_make1(grantedRole);
+	systable_endscan(scan);
+	table_close(pgAuthMembers, AccessShareLock);
 
-        RoleSpec *granteeRole = makeNode(RoleSpec);
-        granteeRole->roletype = ROLESPEC_CSTRING;
-        granteeRole->location = -1;
-        granteeRole->rolename = GetUserNameFromId(membership->member, true);
-        grantRoleStmt->grantee_roles = list_make1(granteeRole);
+	allStmts = list_concat(adminStmts, otherStmts);
+	List *commands = NIL;
+	Node *stmt = NULL;
+	foreach_ptr(stmt, allStmts)
+	{
+		commands = lappend(commands, DeparseTreeNode(stmt));
+	}
 
-        RoleSpec *grantorRole = makeNode(RoleSpec);
-        grantorRole->roletype = ROLESPEC_CSTRING;
-        grantorRole->location = -1;
-        grantorRole->rolename = GetUserNameFromId(membership->grantor, false);
-        grantRoleStmt->grantor = grantorRole;
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-        /* inherit option is always included */
-        DefElem *inherit_opt;
-        if (membership->inherit_option)
-        {
-            inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(true), -1);
-        }
-        else
-        {
-            inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(false), -1);
-        }
-        grantRoleStmt->opt = list_make1(inherit_opt);
-
-        /* admin option is false by default, only include true case */
-        if (membership->admin_option)
-        {
-            DefElem *admin_opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
-            grantRoleStmt->opt = lappend(grantRoleStmt->opt, admin_opt);
-        }
-
-        /* set option is true by default, only include false case */
-        if (!membership->set_option)
-        {
-            DefElem *set_opt = makeDefElem("set", (Node *) makeBoolean(false), -1);
-            grantRoleStmt->opt = lappend(grantRoleStmt->opt, set_opt);
-        }
-#else
-        grantRoleStmt->admin_opt = membership->admin_option;
-#endif
-        if (membership->admin_option)
-        {
-            adminStmts = lappend(adminStmts, grantRoleStmt);
-        }
-        else
-        {
-            otherStmts = lappend(otherStmts, grantRoleStmt);
-        }
-    }
-
-    systable_endscan(scan);
-    table_close(pgAuthMembers, AccessShareLock);
-
-    GrantRoleStmts result;
-    result.adminStmts = adminStmts;
-    result.otherStmts = otherStmts;
-
-    return result;
+	return commands;
 }
 
 
-/**/
-List * GenerateGrantRoleStmts()
+List *
+GenerateGrantRoleStmts()
 {
-    Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
-    HeapTuple tuple = NULL;
-    List *adminStmts = NIL;
-    List *otherStmts = NIL;
+	Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
+	HeapTuple tuple = NULL;
+	List *adminStmts = NIL;
+	List *otherStmts = NIL;
 
-    SysScanDesc scan = systable_beginscan(pgAuthMembers, InvalidOid, false,
-                                          NULL, 0, NULL);
+	SysScanDesc scan = systable_beginscan(pgAuthMembers, InvalidOid, false,
+										  NULL, 0, NULL);
 
-    while (HeapTupleIsValid(tuple = systable_getnext(scan)))
-    {
-        Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
-
-        ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
-        ObjectAddressSet(*roleAddress, AuthIdRelationId, membership->grantor);
-		elog(NOTICE, "Role name: %s", GetUserNameFromId(membership->roleid, true));
-		elog(NOTICE, "Member name: %s", GetUserNameFromId(membership->member, true));
-        if (!IsAnyObjectDistributed(list_make1(roleAddress)))
-        {
-            /* we only need to propagate the grant if the grantor is distributed */
-            continue;
-        }
-
-		//log role name
-		elog(NOTICE, "Role name fetched: %s", GetUserNameFromId(membership->roleid, true));
-		elog(NOTICE, "Member name fetched: %s", GetUserNameFromId(membership->member, true));
-		GrantRoleStmts grantRoleStmts = GenerateGrantRoleStmtsOfRole(membership->roleid);
-		adminStmts = list_concat(adminStmts, grantRoleStmts.adminStmts);
-		otherStmts = list_concat(otherStmts, grantRoleStmts.otherStmts);
-    }
-
-    systable_endscan(scan);
-    table_close(pgAuthMembers, AccessShareLock);
-
-    List *allGrantStatements =  list_concat(adminStmts, otherStmts);
-
-	Node *stmt = NULL;
-	List *grantStatements = NIL;
-	foreach_ptr(stmt, allGrantStatements)
+	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
 	{
-		grantStatements = lappend(grantStatements, DeparseTreeNode(stmt));
+		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
+
+		GrantRoleStmt *grantRoleStmt = GetGrantRoleStmtFromAuthMemberRecord(membership);
+		if (grantRoleStmt == NULL)
+		{
+			continue;
+		}
+
+		if (membership->admin_option)
+		{
+			adminStmts = lappend(adminStmts, grantRoleStmt);
+		}
+		else
+		{
+			otherStmts = lappend(otherStmts, grantRoleStmt);
+		}
 	}
 
-	return grantStatements;
+	systable_endscan(scan);
+	table_close(pgAuthMembers, AccessShareLock);
+
+	List *allStmts = list_concat(adminStmts, otherStmts);
+
+	/*iterate through the list of adminStmts and otherStmts */
+	/*and using DeparseTreeNode to convert the GrantRoleStmt to a string */
+	/*and then add the string to the list of commands */
+	List *commands = NIL;
+	Node *stmt = NULL;
+	foreach_ptr(stmt, allStmts)
+	{
+		commands = lappend(commands, DeparseTreeNode(stmt));
+	}
+
+	return commands;
+}
+
+
+static GrantRoleStmt *
+GetGrantRoleStmtFromAuthMemberRecord(Form_pg_auth_members membership)
+{
+	ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*roleAddress, AuthIdRelationId, membership->grantor);
+	if (!IsAnyObjectDistributed(list_make1(roleAddress)))
+	{
+		/* we only need to propagate the grant if the grantor is distributed */
+		return NULL;
+	}
+
+	GrantRoleStmt *grantRoleStmt = makeNode(GrantRoleStmt);
+	grantRoleStmt->is_grant = true;
+
+	RoleSpec *grantedRole = makeNode(RoleSpec);
+	grantedRole->roletype = ROLESPEC_CSTRING;
+	grantedRole->location = -1;
+	grantedRole->rolename = GetUserNameFromId(membership->roleid, true);
+	grantRoleStmt->granted_roles = list_make1(grantedRole);
+
+	RoleSpec *granteeRole = makeNode(RoleSpec);
+	granteeRole->roletype = ROLESPEC_CSTRING;
+	granteeRole->location = -1;
+	granteeRole->rolename = GetUserNameFromId(membership->member, true);
+	grantRoleStmt->grantee_roles = list_make1(granteeRole);
+
+	RoleSpec *grantorRole = makeNode(RoleSpec);
+	grantorRole->roletype = ROLESPEC_CSTRING;
+	grantorRole->location = -1;
+	grantorRole->rolename = GetUserNameFromId(membership->grantor, false);
+	grantRoleStmt->grantor = grantorRole;
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+
+	/* inherit option is always included */
+	DefElem *inherit_opt;
+	if (membership->inherit_option)
+	{
+		inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(true), -1);
+	}
+	else
+	{
+		inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(false), -1);
+	}
+	grantRoleStmt->opt = list_make1(inherit_opt);
+
+	/* admin option is false by default, only include true case */
+	if (membership->admin_option)
+	{
+		DefElem *admin_opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
+		grantRoleStmt->opt = lappend(grantRoleStmt->opt, admin_opt);
+	}
+
+	/* set option is true by default, only include false case */
+	if (!membership->set_option)
+	{
+		DefElem *set_opt = makeDefElem("set", (Node *) makeBoolean(false), -1);
+		grantRoleStmt->opt = lappend(grantRoleStmt->opt, set_opt);
+	}
+#else
+	grantRoleStmt->admin_opt = membership->admin_option;
+#endif
+	return grantRoleStmt;
 }
 
 
