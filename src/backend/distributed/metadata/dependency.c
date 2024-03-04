@@ -1831,7 +1831,8 @@ ExpandRolesToGroups(Oid roleid)
 
 		DependencyDefinition *definition1 = palloc0(sizeof(DependencyDefinition));
 		definition1->mode = DependencyObjectAddress;
-		ObjectAddressSet(definition1->data.address, AuthIdRelationId, membership->grantor);
+		ObjectAddressSet(definition1->data.address, AuthIdRelationId,
+						 membership->grantor);
 
 		roles = lappend(roles, definition1);
 	}
