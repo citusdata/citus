@@ -1,5 +1,8 @@
+CREATE SCHEMA function_with_case;
+SET search_path TO function_with_case;
+
 -- create function
-CREATE OR REPLACE FUNCTION public.test_err(v1 text)
+CREATE OR REPLACE FUNCTION test_err(v1 text)
  RETURNS text
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -14,9 +17,9 @@ do $$ declare
  val text;
 begin 
  val = 'test';
- lNewValues = public.test_err(v1 => case when val::text = 'test'::text then 'yes' else 'no' end);
+ lNewValues = test_err(v1 => case when val::text = 'test'::text then 'yes' else 'no' end);
  raise notice 'lNewValues= %', lNewValues;
 end;$$ ;
 
 -- call function
-SELECT public.test_err('test');
+SELECT test_err('test');
