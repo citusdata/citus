@@ -12,10 +12,10 @@ begin
   return v1 || ' - ok';
 END;
 $function$;
-do $$ declare 
+do $$ declare
  lNewValues text;
  val text;
-begin 
+begin
  val = 'test';
  lNewValues = test_err(v1 => case when val::text = 'test'::text then 'yes' else 'no' end);
  raise notice 'lNewValues= %', lNewValues;
