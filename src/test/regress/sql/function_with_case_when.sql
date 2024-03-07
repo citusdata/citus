@@ -23,3 +23,5 @@ end;$$ ;
 
 -- call function
 SELECT test_err('test');
+
+DROP SCHEMA function_with_case CASCADE;

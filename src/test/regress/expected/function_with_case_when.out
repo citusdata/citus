@@ -28,3 +28,5 @@ SELECT test_err('test');
  test - ok
 (1 row)
 
+DROP SCHEMA function_with_case CASCADE;
+NOTICE:  drop cascades to function test_err(text)
