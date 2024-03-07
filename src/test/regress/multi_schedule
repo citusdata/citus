@@ -134,3 +134,5 @@ test: check_mx
 test: generated_identity
 test: drop_database
 test: check_cluster_state
+
+test: function_with_case_when
