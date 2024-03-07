@@ -50,6 +50,13 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	 * so we are using first primary worker node just for test purposes.
 	 */
 	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
+	if (dummyWorkerNode == NULL)
+	{
+		ereport(ERROR, (errmsg("no worker nodes found"),
+						errdetail("Function activate_node_snapshot is meant to be "
+								  "used when running tests on a multi-node cluster "
+								  "with workers.")));
+	}
 
 	/*
 	 * Create MetadataSyncContext which is used throughout nodes' activation.
