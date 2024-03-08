@@ -50,7 +50,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 
-extern List *FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray);
+extern List * FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray);
 static char * PartitionBound(Oid partitionId);
 static Relation try_relation_open_nolock(Oid relationId);
 static List * CreateFixPartitionConstraintsTaskList(Oid relationId);
@@ -558,24 +558,26 @@ CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
 
 	int taskId = 1;
 
-	List *shardPlacementList = FullShardPlacementList(parentRelationId, construct_empty_array(INT4OID));
+	List *shardPlacementList = FullShardPlacementList(parentRelationId,
+													  construct_empty_array(INT4OID));
 
-	
+
 	List *workerNodeList = ReadDistNode(true);
 
 	/* make sure we have deterministic output for our tests */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,                                                                                                                                                                     "CreateFixPartitionShardIndexNames",
-                                                                                                           ALLOCSET_DEFAULT_SIZES);
-        MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CreateFixPartitionShardIndexNames",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
 		List *shardsOnNode = FilterActiveShardPlacementListByNode(
-				shardPlacementList, workerNode);
-	
+			shardPlacementList, workerNode);
+
 		ShardPlacement *shardPlacement = NULL;
 
 		foreach_ptr(shardPlacement, shardsOnNode)
@@ -584,8 +586,8 @@ CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
 
 			List *queryStringList =
 				WorkerFixPartitionShardIndexNamesCommandList(parentShardId,
-														 parentIndexIdList,
-														 partitionRelationId);
+															 parentIndexIdList,
+															 partitionRelationId);
 			if (queryStringList != NIL)
 			{
 				Task *task = CitusMakeNode(Task);
