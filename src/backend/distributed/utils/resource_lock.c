@@ -720,7 +720,7 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 	LockShardListResources(shardIntervalList, lockMode);
 
 	/*
-	 * Next, acquire locks on the reference tables if there is any.
+	 * Next, acquire locks on the reference tables that are referenced by a foreign key if there are any.
 	 * Note that LockReferencedReferenceShardResources() first acquires locks on the first worker,
 	 * then locally.
 	 */
