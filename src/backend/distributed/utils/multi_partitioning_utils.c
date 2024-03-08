@@ -50,6 +50,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 
+extern List *FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray);
 static char * PartitionBound(Oid partitionId);
 static Relation try_relation_open_nolock(Oid relationId);
 static List * CreateFixPartitionConstraintsTaskList(Oid relationId);
@@ -555,43 +556,60 @@ CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(parentShardIntervalList, ShareLock);
 
-	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "CreateFixPartitionShardIndexNames",
-													   ALLOCSET_DEFAULT_SIZES);
-	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
-
 	int taskId = 1;
 
-	ShardInterval *parentShardInterval = NULL;
-	foreach_ptr(parentShardInterval, parentShardIntervalList)
-	{
-		uint64 parentShardId = parentShardInterval->shardId;
+	List *shardPlacementList = FullShardPlacementList(parentRelationId, construct_empty_array(INT4OID));
 
-		List *queryStringList =
-			WorkerFixPartitionShardIndexNamesCommandList(parentShardId,
+	
+	List *workerNodeList = ReadDistNode(true);
+
+	/* make sure we have deterministic output for our tests */
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,                                                                                                                                                                     "CreateFixPartitionShardIndexNames",
+                                                                                                           ALLOCSET_DEFAULT_SIZES);
+        MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		List *shardsOnNode = FilterActiveShardPlacementListByNode(
+				shardPlacementList, workerNode);
+	
+		ShardPlacement *shardPlacement = NULL;
+
+		foreach_ptr(shardPlacement, shardsOnNode)
+		{
+			uint64 parentShardId = shardPlacement->shardId;
+
+			List *queryStringList =
+				WorkerFixPartitionShardIndexNamesCommandList(parentShardId,
 														 parentIndexIdList,
 														 partitionRelationId);
-		if (queryStringList != NIL)
-		{
-			Task *task = CitusMakeNode(Task);
-			task->jobId = INVALID_JOB_ID;
-			task->taskId = taskId++;
-			task->taskType = DDL_TASK;
+			if (queryStringList != NIL)
+			{
+				Task *task = CitusMakeNode(Task);
+				task->jobId = INVALID_JOB_ID;
+				task->taskId = taskId++;
+				task->taskType = DDL_TASK;
 
-			char *prefix = "SELECT pg_catalog.citus_run_local_command($$";
-			char *postfix = "$$)";
-			char *string = StringJoinParams(queryStringList, ';', prefix, postfix);
+				char *prefix = "SELECT pg_catalog.citus_run_local_command($$";
+				char *postfix = "$$)";
+				char *string = StringJoinParams(queryStringList, ';', prefix, postfix);
 
-			SetTaskQueryString(task, string);
+				SetTaskQueryString(task, string);
 
 
-			task->dependentTaskList = NULL;
-			task->replicationModel = REPLICATION_MODEL_INVALID;
-			task->anchorShardId = parentShardId;
-			task->taskPlacementList = ActiveShardPlacementList(parentShardId);
+				task->dependentTaskList = NULL;
+				task->replicationModel = REPLICATION_MODEL_INVALID;
+				task->anchorShardId = parentShardId;
+				task->taskPlacementList = ActiveShardPlacementList(parentShardId);
 
-			bool localExecutionSupported = true;
-			ExecuteUtilityTaskList(list_make1(task), localExecutionSupported);
+				bool localExecutionSupported = true;
+				ExecuteUtilityTaskList(list_make1(task), localExecutionSupported);
+			}
+
+			break;
 		}
 
 		/* after every iteration, clean-up all the memory associated with it */

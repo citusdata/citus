@@ -435,7 +435,7 @@ BigIntArrayDatumContains(Datum *array, int arrayLength, uint64 toFind)
  * FullShardPlacementList returns a List containing all the shard placements of
  * a specific table (excluding the excludedShardArray)
  */
-static List *
+List *
 FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 {
 	List *shardPlacementList = NIL;
