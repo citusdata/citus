@@ -712,6 +712,7 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 	/*
 	 * Acquire locks on the modified table.
 	 * If the table is replicated, the locks are first acquired on the first worker node then locally.
+	 * But if we're already on the first worker, acquiring on the first worker node and locally are the same operation. So we only acquire locally in that case.  
 	 */
 	if (anyTableReplicated && ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
 	{
