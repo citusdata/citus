@@ -55,6 +55,8 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 
 grant dist_role4 to dist_role3 with admin option GRANTED BY dist_role1; --fails since already dist_role3 granted to dist_role4
 ERROR:  role "dist_role4" is a member of role "dist_role3"
+--Below command will not be successful since non_dist_role1 is propagated with the dependency resolution above
+--however, ADMIN OPTION is not propagated for non_dist_role1 to worker 1 because the citus.enable_create_role_propagation is off
 grant non_dist_role1 to dist_role4 granted by dist_role1;
 ERROR:  permission denied to grant privileges as role "dist_role1"
 DETAIL:  The grantor must have the ADMIN option on role "non_dist_role1".

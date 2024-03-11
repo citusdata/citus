@@ -1317,7 +1317,7 @@ UnmarkRolesDistributed(List *roles)
 List *
 FilterDistributedRoles(List *roles)
 {
-	List *distributedRoles = NIL;
+	List *validRoles = NIL;
 	Node *roleNode = NULL;
 	foreach_ptr(roleNode, roles)
 	{
@@ -1333,12 +1333,13 @@ FilterDistributedRoles(List *roles)
 		}
 		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
-		if (IsAnyObjectDistributed(list_make1(roleAddress)))
+		bool isSystemRole = IsReservedName(role->rolename);
+		if (IsAnyObjectDistributed(list_make1(roleAddress)) || isSystemRole)
 		{
-			distributedRoles = lappend(distributedRoles, role);
+			validRoles = lappend(validRoles, role);
 		}
 	}
-	return distributedRoles;
+	return validRoles;
 }
 
 
@@ -1349,7 +1350,7 @@ FilterDistributedRoles(List *roles)
 List *
 FilterDistributedGrantedRoles(List *roles)
 {
-	List *distributedRoles = NIL;
+	List *validRoles = NIL;
 	Node *roleNode = NULL;
 	foreach_ptr(roleNode, roles)
 	{
@@ -1365,12 +1366,13 @@ FilterDistributedGrantedRoles(List *roles)
 		}
 		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
-		if (IsAnyObjectDistributed(list_make1(roleAddress)))
+		bool isSystemRole = IsReservedName(role->priv_name);
+		if (IsAnyObjectDistributed(list_make1(roleAddress)) || isSystemRole)
 		{
-			distributedRoles = lappend(distributedRoles, role);
+			validRoles = lappend(validRoles, role);
 		}
 	}
-	return distributedRoles;
+	return validRoles;
 }
 
 

@@ -45,8 +45,9 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 
 grant dist_role4 to dist_role3 with admin option GRANTED BY dist_role1; --fails since already dist_role3 granted to dist_role4
 
+--Below command will not be successful since non_dist_role1 is propagated with the dependency resolution above
+--however, ADMIN OPTION is not propagated for non_dist_role1 to worker 1 because the citus.enable_create_role_propagation is off
 grant non_dist_role1 to dist_role4 granted by dist_role1;
-
 
 grant dist_role3 to dist_role1 with admin option GRANTED BY dist_role4;
 grant "dist_role5'_test" to dist_role1 with admin option;
@@ -218,10 +219,8 @@ set citus.enable_create_database_propagation to on;
 drop database test_granted_by_support;
 drop role dist_role1,dist_role2,dist_role3,dist_role4,"dist_role5'_test";
 drop role non_dist_role1;
+
 drop role if exists non_dist_role1;
-
-
-
 
 
 select result FROM run_command_on_all_nodes(
