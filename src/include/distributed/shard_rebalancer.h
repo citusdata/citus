@@ -222,6 +222,4 @@ extern void SetupRebalanceMonitor(List *placementUpdateList,
 								  uint64 initialProgressState,
 								  PlacementUpdateStatus initialStatus);
 
-extern List * FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray);
-
 #endif   /* SHARD_REBALANCER_H */
