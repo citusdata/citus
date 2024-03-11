@@ -879,7 +879,6 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 
 	List *adminStmts = NIL;
 	List *otherStmts = NIL;
-	List *allStmts = NIL;
 
 	ScanKeyData skey[1];
 
@@ -911,7 +910,7 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 	systable_endscan(scan);
 	table_close(pgAuthMembers, AccessShareLock);
 
-	allStmts = list_concat(adminStmts, otherStmts);
+	List *allStmts = list_concat(adminStmts, otherStmts);
 	List *commands = NIL;
 	Node *stmt = NULL;
 	foreach_ptr(stmt, allStmts)
