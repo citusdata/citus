@@ -600,7 +600,7 @@ CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
 			task->taskPlacementList = ActiveShardPlacementList(parentShardId);
 
 			bool localExecutionSupported = true;
-			ExecuteUtilityTaskList(task, localExecutionSupported);
+			ExecuteUtilityTaskList(list_make1(task), localExecutionSupported);
 		}
 
 		/* after every iteration, clean-up all the memory associated with it */
