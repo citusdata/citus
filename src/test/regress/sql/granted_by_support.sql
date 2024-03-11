@@ -6,7 +6,7 @@ select 1 from citus_remove_node ('localhost',:worker_2_port);
 set citus.enable_create_role_propagation to off;
 create role non_dist_role1;
 reset citus.enable_create_role_propagation;
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 
 create role dist_role1;
 create role dist_role2;
@@ -24,7 +24,7 @@ set citus.enable_create_role_propagation to off;
 grant non_dist_role1 to dist_role1 with admin option;
 reset citus.enable_create_role_propagation;
 
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 
 
 
@@ -41,7 +41,7 @@ grant dist_role4 to "dist_role5'_test" with admin option;
 --and citus sees granted roles as a dependency and citus propagates the dependent roles
 grant dist_role4 to dist_role1 with admin option GRANTED BY "dist_role5'_test";
 
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 
 grant dist_role4 to dist_role3 with admin option GRANTED BY dist_role1; --fails since already dist_role3 granted to dist_role4
 
@@ -85,7 +85,7 @@ select result FROM run_command_on_all_nodes(
 drop role dist_role1,dist_role2,dist_role3,dist_role4,"dist_role5'_test";
 drop role non_dist_role1;
 
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 reset citus.enable_create_role_propagation;
 
 select result FROM run_command_on_all_nodes(
@@ -107,7 +107,7 @@ create database test_granted_by_support;
 
 select 1 from citus_remove_node ('localhost',:worker_2_port);
 
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 
 \c test_granted_by_support
 --here in below block since 'citus.enable_create_role_propagation to off ' is not effective,
@@ -135,7 +135,7 @@ create role dist_role3;
 create role dist_role4;
 create role "dist_role5'_test";
 \c regression - - :master_port
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 
 
 \c test_granted_by_support
@@ -159,12 +159,12 @@ grant dist_role3 to "dist_role5'_test" granted by dist_role4;
 grant dist_role2 to "dist_role5'_test" granted by dist_role3;
 grant dist_role2 to dist_role4 granted by non_dist_role1 ;--will not be propagated since grantor is non-distributed
 \c regression - - :master_port
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 \c test_granted_by_support - - :worker_1_port
 grant dist_role4 to "dist_role5'_test" with admin option;
 
 \c regression - - :master_port
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 
 \c test_granted_by_support
 
@@ -173,7 +173,7 @@ select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid whe
 grant dist_role4 to dist_role1 with admin option GRANTED BY "dist_role5'_test";
 
 \c regression - - :master_port
-select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 
 
 \c test_granted_by_support - - :worker_1_port
