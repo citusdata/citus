@@ -56,6 +56,13 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 
+typedef struct DistributedRolesInGrantRoleStmt
+{
+	List *distributedGrantees;
+	List *distributedGrantedRoles;
+	RoleSpec *grantor;
+	bool isGrantRoleStmtValid;
+} DistributedRolesInGrantRoleStmt;
 
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
@@ -68,6 +75,7 @@ static DefElem * makeDefElemBool(char *name, bool value);
 static List * GenerateRoleOptionsList(HeapTuple tuple);
 static List * GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options);
 static List * GenerateGrantRoleStmtsOfRole(Oid roleid);
+static ObjectAddress * GetRoleObjectAddressFromOid(Oid roleOid);
 static GrantRoleStmt * GetGrantRoleStmtFromAuthMemberRecord(Form_pg_auth_members
 															membership);
 static List * GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename);
@@ -937,6 +945,29 @@ GenerateGrantRoleStmts()
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
+		/* we only propagate the grant if the grantor is
+		 * member and role are distributed since all are required
+		 * to be distributed for the grant to be propagated
+		 */
+
+
+		bool isAuthMemberDistributed = IsAnyObjectDistributed(list_make1(
+																  GetRoleObjectAddressFromOid(
+																	  membership->grantor)))
+									   &&
+									   IsAnyObjectDistributed(list_make1(
+																  GetRoleObjectAddressFromOid(
+																	  membership->member)))
+									   &&
+									   IsAnyObjectDistributed(list_make1(
+																  GetRoleObjectAddressFromOid(
+																	  membership->roleid)));
+		if (!isAuthMemberDistributed)
+		{
+			/* we only need to propagate the grant if the grantor is distributed */
+			continue;
+		}
+
 		GrantRoleStmt *grantRoleStmt = GetGrantRoleStmtFromAuthMemberRecord(membership);
 		if (grantRoleStmt == NULL)
 		{
@@ -969,6 +1000,15 @@ GenerateGrantRoleStmts()
 	}
 
 	return commands;
+}
+
+
+static ObjectAddress *
+GetRoleObjectAddressFromOid(Oid roleOid)
+{
+	ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
+	return roleAddress;
 }
 
 
@@ -1311,6 +1351,38 @@ FilterDistributedRoles(List *roles)
 
 
 /*
+ * FilterDistributedRoles filters the list of AccessPrivs and returns the ones
+ * that are distributed.
+ */
+List *
+FilterDistributedGrantedRoles(List *roles)
+{
+	List *distributedRoles = NIL;
+	Node *roleNode = NULL;
+	foreach_ptr(roleNode, roles)
+	{
+		AccessPriv *role = castNode(AccessPriv, roleNode);
+		Oid roleOid = get_role_oid(role->priv_name, false);
+		if (roleOid == InvalidOid)
+		{
+			/*
+			 * Non-existing roles are ignored silently here. Postgres will
+			 * handle to give an error or not for these roles.
+			 */
+			continue;
+		}
+		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
+		if (IsAnyObjectDistributed(list_make1(roleAddress)))
+		{
+			distributedRoles = lappend(distributedRoles, role);
+		}
+	}
+	return distributedRoles;
+}
+
+
+/*
  * PreprocessGrantRoleStmt finds the distributed grantee roles and creates the
  * query to run on the workers.
  */
@@ -1327,17 +1399,22 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
 	List *allGranteeRoles = stmt->grantee_roles;
+	List *allGrantedRoles = stmt->granted_roles;
 	RoleSpec *grantor = stmt->grantor;
 
-	List *distributedGranteeRoles = FilterDistributedRoles(allGranteeRoles);
-	if (list_length(distributedGranteeRoles) <= 0)
+	DistributedRolesInGrantRoleStmt *distributedRolesInGrantStmt =
+		ExtractDistributedRolesInGrantRoleStmt(stmt);
+
+	if (!distributedRolesInGrantStmt->isGrantRoleStmtValid)
 	{
 		return NIL;
 	}
 
-	stmt->grantee_roles = distributedGranteeRoles;
+	stmt->grantee_roles = distributedRolesInGrantStmt->distributedGrantees;
+	stmt->granted_roles = distributedRolesInGrantStmt->distributedGrantedRoles;
 	char *sql = DeparseTreeNode((Node *) stmt);
 	stmt->grantee_roles = allGranteeRoles;
+	stmt->granted_roles = allGrantedRoles;
 	stmt->grantor = grantor;
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -1345,6 +1422,55 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(REMOTE_NODES, commands);
+}
+
+
+DistributedRolesInGrantRoleStmt *
+ExtractDistributedRolesInGrantRoleStmt(GrantRoleStmt *stmt)
+{
+	DistributedRolesInGrantRoleStmt *distributedRolesInGrantRoleStmt = palloc0(
+		sizeof(DistributedRolesInGrantRoleStmt));
+	distributedRolesInGrantRoleStmt->distributedGrantees = FilterDistributedRoles(
+		stmt->grantee_roles);
+	distributedRolesInGrantRoleStmt->distributedGrantedRoles =
+		FilterDistributedGrantedRoles(stmt->granted_roles);
+	distributedRolesInGrantRoleStmt->grantor = stmt->grantor;
+	distributedRolesInGrantRoleStmt->isGrantRoleStmtValid = true;
+
+	bool grantorMissingOk = false;
+	bool isGrantorDefined = distributedRolesInGrantRoleStmt->grantor != NULL &&
+							get_rolespec_oid(distributedRolesInGrantRoleStmt->grantor,
+											 grantorMissingOk) !=
+							InvalidOid;
+	bool isGrantorDistributed = IsAnyObjectDistributed(RoleSpecToObjectAddress(
+														   distributedRolesInGrantRoleStmt
+														   ->grantor, grantorMissingOk));
+	bool skipDueToGrantor = isGrantorDefined && !isGrantorDistributed;
+	if (list_length(distributedRolesInGrantRoleStmt->distributedGrantees) <= 0)
+	{
+		ereport(NOTICE, (errmsg("not propagating GRANT command to other nodes"),
+						 errhint("Since no grantees are distributed, "
+								 "the GRANT command will not be propagated to other nodes.")));
+		distributedRolesInGrantRoleStmt->isGrantRoleStmtValid = false;
+	}
+
+	if (list_length(distributedRolesInGrantRoleStmt->distributedGrantedRoles) <= 0)
+	{
+		ereport(NOTICE, (errmsg("not propagating GRANT command to other nodes"),
+						 errhint("Since no granted roles are distributed, "
+								 "the GRANT command will not be propagated to other nodes.")));
+		distributedRolesInGrantRoleStmt->isGrantRoleStmtValid = false;
+	}
+
+	if (skipDueToGrantor)
+	{
+		ereport(NOTICE, (errmsg("not propagating GRANT command to other nodes"),
+						 errhint("Since grantor is not distributed, "
+								 "the GRANT command will not be propagated to other nodes.")));
+		distributedRolesInGrantRoleStmt->isGrantRoleStmtValid = false;
+	}
+
+	return distributedRolesInGrantRoleStmt;
 }
 
 

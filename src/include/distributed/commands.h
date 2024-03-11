@@ -523,7 +523,10 @@ extern List * RenameRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 										  isPostprocess);
 
 extern void UnmarkRolesDistributed(List *roles);
+extern List * FilterDistributedGrantedRoles(List *roles);
 extern List * FilterDistributedRoles(List *roles);
+extern DistributedRolesInGrantRoleStmt * ExtractDistributedRolesInGrantRoleStmt(
+	GrantRoleStmt *stmt);
 extern List * GenerateGrantRoleStmts(void);
 
 /* schema.c - forward declarations */

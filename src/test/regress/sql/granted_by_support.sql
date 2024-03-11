@@ -1,31 +1,56 @@
 -- Active: 1700033167033@@localhost@9700@gurkanindibay@public
 --In below tests, complex role hierarchy is created and then granted by support is tested.
 
+--- Test 1: Tests from main database
 select 1 from citus_remove_node ('localhost',:worker_2_port);
+set citus.enable_create_role_propagation to off;
+create role non_dist_role1;
+reset citus.enable_create_role_propagation;
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
 
-create role role1;
-create role role2;
-create role role3;
-create role role4;
-create role "role5'_test";
+create role dist_role1;
+create role dist_role2;
+create role dist_role3;
+create role dist_role4;
+create role "dist_role5'_test";
 
-grant role2 to role1 with admin option;
-grant role2 to role3 with admin option granted by role1;
-grant role3 to role4 with admin option;
-grant role3 to "role5'_test" granted by role4;
-grant role2 to "role5'_test" granted by role3;
-grant role4 to "role5'_test" with admin option;
-grant role4 to role1 with admin option GRANTED BY "role5'_test";
-grant role4 to role3 with admin option GRANTED BY role1;
-grant role3 to role1 with admin option GRANTED BY role4;
-grant "role5'_test" to role1 with admin option;
-grant "role5'_test" to role3 with admin option GRANTED BY role1;
+grant dist_role2 to dist_role1 with admin option;
+grant dist_role2 to dist_role3 with admin option granted by dist_role1;
+grant dist_role3 to dist_role4 with admin option;
 
-SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
-        FROM pg_auth_members
-        WHERE member::regrole::text in
-            ('role1','role2','role3','role4','"role5''_test"')
-        order by member::regrole::text, roleid::regrole::text;
+-- With enable_create_role_propagation on, all grantees are propagated.
+-- To test non-distributed grantor, set this option off for some roles.
+set citus.enable_create_role_propagation to off;
+grant non_dist_role1 to dist_role1 with admin option;
+reset citus.enable_create_role_propagation;
+
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+
+
+
+grant dist_role2 to non_dist_role1 with admin option;
+
+grant dist_role3 to "dist_role5'_test" granted by dist_role4;
+grant dist_role2 to "dist_role5'_test" granted by dist_role3;
+grant dist_role2 to dist_role4 granted by non_dist_role1 ;--will not be propagated since grantor is non-distributed
+
+
+grant dist_role4 to "dist_role5'_test" with admin option;
+
+--below command propagates the non_dist_role1 since non_dist_role1 is already granted to dist_role1
+--and citus sees granted roles as a dependency and citus propagates the dependent roles
+grant dist_role4 to dist_role1 with admin option GRANTED BY "dist_role5'_test";
+
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+
+grant dist_role4 to dist_role3 with admin option GRANTED BY dist_role1; --fails since already dist_role3 granted to dist_role4
+
+grant non_dist_role1 to dist_role4 granted by dist_role1;
+
+
+grant dist_role3 to dist_role1 with admin option GRANTED BY dist_role4;
+grant "dist_role5'_test" to dist_role1 with admin option;
+grant "dist_role5'_test" to dist_role3 with admin option GRANTED BY dist_role1;--fails since already dist_role3 granted to "dist_role5'_test"
 
 
 select result FROM run_command_on_all_nodes(
@@ -35,7 +60,139 @@ select result FROM run_command_on_all_nodes(
         SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
         FROM pg_auth_members
         WHERE member::regrole::text in
-            ('role1','role2','role3','role4','"role5''_test"')
+            ('dist_role1','dist_role2','dist_role3','dist_role4','"role5''_test"')
+        order by member::regrole::text, roleid::regrole::text
+    ) t
+    $$
+);
+
+select 1 from citus_add_node ('localhost',:worker_2_port);
+
+select result FROM run_command_on_all_nodes(
+    $$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+        FROM pg_auth_members
+        WHERE member::regrole::text in
+            ('dist_role1','dist_role2','dist_role3','dist_role4','"role5''_test"')
+        order by member::regrole::text, roleid::regrole::text
+    ) t
+    $$
+);
+
+--clean all resources
+drop role dist_role1,dist_role2,dist_role3,dist_role4,"dist_role5'_test";
+drop role non_dist_role1;
+
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+reset citus.enable_create_role_propagation;
+
+select result FROM run_command_on_all_nodes(
+    $$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+        FROM pg_auth_members
+        WHERE member::regrole::text in
+            ('dist_role1','dist_role2','dist_role3','dist_role4','"role5''_test"')
+        order by member::regrole::text, roleid::regrole::text
+    ) t
+    $$
+);
+
+--- Test 2: Tests from non-main database
+set citus.enable_create_database_propagation to on;
+create database test_granted_by_support;
+
+select 1 from citus_remove_node ('localhost',:worker_2_port);
+
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+
+\c test_granted_by_support
+--here in below block since 'citus.enable_create_role_propagation to off ' is not effective,
+--non_dist_role1 is being propagated to dist_role1 unlike main db scenario
+--non_dist_role1 will be used for the test scenarios in this section
+set citus.enable_create_role_propagation to off;
+create role non_dist_role1;
+reset citus.enable_create_role_propagation;
+
+--dropping since it isn't non-distributed as intended
+drop role non_dist_role1;
+
+--creating non_dist_role1 again in main database
+--This is actually non-distributed role
+\c regression
+set citus.enable_create_role_propagation to off;
+create role non_dist_role1;
+reset citus.enable_create_role_propagation;
+
+\c test_granted_by_support
+create role dist_role1;
+create role dist_role1;
+create role dist_role2;
+create role dist_role3;
+create role dist_role4;
+create role "dist_role5'_test";
+\c regression - - :master_port
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+
+
+\c test_granted_by_support
+grant dist_role2 to dist_role1 with admin option;
+grant dist_role2 to dist_role3 with admin option granted by dist_role1;
+grant dist_role3 to dist_role4 with admin option;
+
+-- With enable_create_role_propagation on, all grantees are propagated.
+-- To test non-distributed grantor, set this option off for some roles.
+
+\c regression
+set citus.enable_create_role_propagation to off;
+grant non_dist_role1 to dist_role1 with admin option;
+reset citus.enable_create_role_propagation;
+
+\c test_granted_by_support
+grant dist_role2 to non_dist_role1 with admin option;
+
+\c test_granted_by_support - - :worker_1_port
+grant dist_role3 to "dist_role5'_test" granted by dist_role4;
+grant dist_role2 to "dist_role5'_test" granted by dist_role3;
+grant dist_role2 to dist_role4 granted by non_dist_role1 ;--will not be propagated since grantor is non-distributed
+\c regression - - :master_port
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+\c test_granted_by_support - - :worker_1_port
+grant dist_role4 to "dist_role5'_test" with admin option;
+
+\c regression - - :master_port
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+
+\c test_granted_by_support
+
+-- Unlike maindb scenario, non-maindb scenario doesn't propagate 'create non_dist_role1' to
+--workers as it doesn't create dependency objects for non-distributed roles.
+grant dist_role4 to dist_role1 with admin option GRANTED BY "dist_role5'_test";
+
+\c regression - - :master_port
+select r.rolname from pg_roles r inner join pg_dist_object o on r.oid= objid where r.rolname = 'non_dist_role1';
+
+
+\c test_granted_by_support - - :worker_1_port
+grant dist_role4 to dist_role3 with admin option GRANTED BY dist_role1; --fails since already dist_role3 granted to dist_role4
+grant non_dist_role1 to dist_role4 granted by dist_role1;
+grant dist_role3 to dist_role1 with admin option GRANTED BY dist_role4;
+grant "dist_role5'_test" to dist_role1 with admin option;
+grant "dist_role5'_test" to dist_role3 with admin option GRANTED BY dist_role1;--fails since already dist_role3 granted to "dist_role5'_test"
+
+\c regression - - :master_port
+
+select result FROM run_command_on_all_nodes(
+    $$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
+        FROM pg_auth_members
+        WHERE member::regrole::text in
+            ('dist_role1','dist_role2','dist_role3','dist_role4','"role5''_test"')
         order by member::regrole::text, roleid::regrole::text
     ) t
     $$
@@ -49,14 +206,23 @@ select result FROM run_command_on_all_nodes(
         SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
         FROM pg_auth_members
         WHERE member::regrole::text in
-            ('role1','role2','role3','role4','"role5''_test"')
+            ('dist_role1','dist_role2','dist_role3','dist_role4','"role5''_test"')
         order by member::regrole::text, roleid::regrole::text
     ) t
     $$
 );
 
 --clean all resources
-drop role role1,role2,role3,role4,"role5'_test";
+
+set citus.enable_create_database_propagation to on;
+drop database test_granted_by_support;
+drop role dist_role1,dist_role2,dist_role3,dist_role4,"dist_role5'_test";
+drop role non_dist_role1;
+drop role if exists non_dist_role1;
+
+
+
+
 
 select result FROM run_command_on_all_nodes(
     $$
@@ -65,8 +231,9 @@ select result FROM run_command_on_all_nodes(
         SELECT member::regrole, roleid::regrole as role, grantor::regrole, admin_option
         FROM pg_auth_members
         WHERE member::regrole::text in
-            ('role1','role2','role3','role4','"role5''_test"')
+            ('dist_role1','dist_role2','dist_role3','dist_role4','"role5''_test"')
         order by member::regrole::text, roleid::regrole::text
     ) t
     $$
 );
+reset citus.enable_create_database_propagation;
