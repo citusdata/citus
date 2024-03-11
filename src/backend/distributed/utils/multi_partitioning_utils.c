@@ -50,10 +50,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 
-<<<<<<< HEAD
-extern List * FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray);
-=======
->>>>>>> parent of c48bf5eba (Rename per worker)
 static char * PartitionBound(Oid partitionId);
 static Relation try_relation_open_nolock(Oid relationId);
 static List * CreateFixPartitionConstraintsTaskList(Oid relationId);
