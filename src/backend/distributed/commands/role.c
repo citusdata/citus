@@ -56,13 +56,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 
-typedef struct DistributedRolesInGrantRoleStmt
-{
-	List *distributedGrantees;
-	List *distributedGrantedRoles;
-	RoleSpec *grantor;
-	bool isGrantRoleStmtValid;
-} DistributedRolesInGrantRoleStmt;
 
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
@@ -1440,8 +1433,7 @@ ExtractDistributedRolesInGrantRoleStmt(GrantRoleStmt *stmt)
 	bool grantorMissingOk = false;
 	bool isGrantorDefined = distributedRolesInGrantRoleStmt->grantor != NULL &&
 							get_rolespec_oid(distributedRolesInGrantRoleStmt->grantor,
-											 grantorMissingOk) !=
-							InvalidOid;
+											 grantorMissingOk) != InvalidOid;
 	bool isGrantorDistributed = IsAnyObjectDistributed(RoleSpecToObjectAddress(
 														   distributedRolesInGrantRoleStmt
 														   ->grantor, grantorMissingOk));

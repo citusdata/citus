@@ -170,6 +170,14 @@ typedef enum TenantOperation
 	TENANT_SET_SCHEMA,
 } TenantOperation;
 
+typedef struct DistributedRolesInGrantRoleStmt
+{
+	List *distributedGrantees;
+	List *distributedGrantedRoles;
+	RoleSpec *grantor;
+	bool isGrantRoleStmtValid;
+} DistributedRolesInGrantRoleStmt;
+
 #define TOTAL_TENANT_OPERATION 5
 extern const char *TenantOperationNames[TOTAL_TENANT_OPERATION];
 
