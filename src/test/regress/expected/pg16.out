@@ -1032,14 +1032,14 @@ WHERE roleid::regrole::text = 'role1' ORDER BY 1, 2;
 -- Set GUCs to log remote commands and filter on REVOKE commands
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%REVOKE%';
- -- test REVOKES as well
- GRANT role1 TO role2;
- REVOKE SET OPTION FOR role1 FROM role2;
+-- test REVOKES as well
+GRANT role1 TO role2;
+REVOKE SET OPTION FOR role1 FROM role2;
 NOTICE:  issuing REVOKE SET OPTION FOR role1 FROM  role2 RESTRICT;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REVOKE SET OPTION FOR role1 FROM  role2 RESTRICT;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
- REVOKE INHERIT OPTION FOR role1 FROM role2;
+REVOKE INHERIT OPTION FOR role1 FROM role2;
 NOTICE:  issuing REVOKE INHERIT OPTION FOR role1 FROM  role2 RESTRICT;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REVOKE INHERIT OPTION FOR role1 FROM  role2 RESTRICT;
@@ -1053,7 +1053,15 @@ CREATE ROLE role5;
 RESET citus.enable_ddl_propagation;
 -- by default, admin option is false, inherit is true, set is true
 GRANT role3 TO role4;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no granted roles are distributed, the GRANT command will not be propagated to other nodes.
 GRANT role3 TO role5 WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no granted roles are distributed, the GRANT command will not be propagated to other nodes.
 SELECT roleid::regrole::text AS role, member::regrole::text, admin_option, inherit_option, set_option FROM pg_auth_members
 WHERE roleid::regrole::text = 'role3' ORDER BY 1, 2;
  role  | member | admin_option | inherit_option | set_option
@@ -1140,7 +1148,7 @@ DROP ROLE role6, role7, role8, role9, role10, role11, role12,
 -- when adding a new node.
  -- First, we need to remove the node:
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
-?column?
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
