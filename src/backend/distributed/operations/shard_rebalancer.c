@@ -861,15 +861,28 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 	foreach(placementUpdateCell, placementUpdateList)
 	{
 		PlacementUpdateEvent *placementUpdate = lfirst(placementUpdateCell);
-		ereport(NOTICE, (errmsg(
-							 "%s shard %lu from %s:%u to %s:%u ...",
-							 noticeOperation,
-							 placementUpdate->shardId,
-							 placementUpdate->sourceNode->workerName,
-							 placementUpdate->sourceNode->workerPort,
-							 placementUpdate->targetNode->workerName,
-							 placementUpdate->targetNode->workerPort
-							 )));
+		List *colocatedUpdateList = GetColocatedRebalanceSteps(list_make1(
+																   placementUpdate));
+		ListCell *colocatedUpdateCell = NULL;
+
+		/*
+		 * Print the notification for each colocated shard as the placement of each colocated
+		 * shard will be updated in the subsequent call.
+		 */
+		foreach(colocatedUpdateCell, colocatedUpdateList)
+		{
+			PlacementUpdateEvent *colocatedUpdate = lfirst(colocatedUpdateCell);
+
+			ereport(NOTICE, (errmsg(
+								 "%s shard %lu from %s:%u to %s:%u ...",
+								 noticeOperation,
+								 colocatedUpdate->shardId,
+								 colocatedUpdate->sourceNode->workerName,
+								 colocatedUpdate->sourceNode->workerPort,
+								 colocatedUpdate->targetNode->workerName,
+								 colocatedUpdate->targetNode->workerPort
+								 )));
+		}
 		UpdateShardPlacement(placementUpdate, responsiveWorkerList,
 							 shardReplicationModeOid);
 		MemoryContextReset(localContext);
