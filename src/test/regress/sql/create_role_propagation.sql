@@ -205,6 +205,12 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
 
 SELECT master_remove_node('localhost', :worker_2_port);
 GRANT dist_mixed_1, dist_mixed_2, nondist_mixed_1 TO dist_mixed_3, dist_mixed_4, nondist_mixed_2;
+
+\c - - - :worker_1_port
+create role nondist_mixed_2;
+
+\c - - - :master_port
+GRANT dist_mixed_1, dist_mixed_2, nondist_mixed_1 TO dist_mixed_3, dist_mixed_4, nondist_mixed_2;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_mixed%' ORDER BY 1, 2;
@@ -218,8 +224,9 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
 
 \c - - - :master_port
 set citus.log_remote_commands to on;
+set citus.grep_remote_commands to '%DROP%';
 DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4, nondist_mixed_1, nondist_mixed_2;
-
+set citus.grep_remote_commands to '%DROP%';
 reset citus.log_remote_commands;
 
 
@@ -340,5 +347,3 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 
 DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
 
-\c - - - :worker_2_port
-drop role non_dist_role_1;

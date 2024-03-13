@@ -431,6 +431,10 @@ SELECT master_remove_node('localhost', :worker_2_port);
 GRANT dist_mixed_1, dist_mixed_2, nondist_mixed_1 TO dist_mixed_3, dist_mixed_4, nondist_mixed_2;
 ERROR:  role "nondist_mixed_2" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
+\c - - - :worker_1_port
+create role nondist_mixed_2;
+\c - - - :master_port
+GRANT dist_mixed_1, dist_mixed_2, nondist_mixed_1 TO dist_mixed_3, dist_mixed_4, nondist_mixed_2;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
@@ -438,24 +442,44 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 (1 row)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_mixed%' ORDER BY 1, 2;
- role | member | grantor | admin_option
+      role       |     member      | grantor  | admin_option
 ---------------------------------------------------------------------
-(0 rows)
+ dist_mixed_1    | dist_mixed_3    | postgres | f
+ dist_mixed_1    | dist_mixed_4    | postgres | f
+ dist_mixed_1    | nondist_mixed_2 | postgres | f
+ dist_mixed_2    | dist_mixed_3    | postgres | f
+ dist_mixed_2    | dist_mixed_4    | postgres | f
+ dist_mixed_2    | nondist_mixed_2 | postgres | f
+ nondist_mixed_1 | dist_mixed_3    | postgres | f
+ nondist_mixed_1 | dist_mixed_4    | postgres | f
+ nondist_mixed_1 | nondist_mixed_2 | postgres | f
+(9 rows)
 
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_mixed%' ORDER BY 1;
-    objid
+      objid
 ---------------------------------------------------------------------
  dist_mixed_1
  dist_mixed_2
  dist_mixed_3
  dist_mixed_4
-(4 rows)
+ nondist_mixed_1
+ nondist_mixed_2
+(6 rows)
 
 \c - - - :worker_1_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_mixed%' ORDER BY 1, 2;
- role | member | grantor | admin_option
+      role       |     member      | grantor  | admin_option
 ---------------------------------------------------------------------
-(0 rows)
+ dist_mixed_1    | dist_mixed_3    | postgres | f
+ dist_mixed_1    | dist_mixed_4    | postgres | f
+ dist_mixed_1    | nondist_mixed_2 | postgres | f
+ dist_mixed_2    | dist_mixed_3    | postgres | f
+ dist_mixed_2    | dist_mixed_4    | postgres | f
+ dist_mixed_2    | nondist_mixed_2 | postgres | f
+ nondist_mixed_1 | dist_mixed_3    | postgres | f
+ nondist_mixed_1 | dist_mixed_4    | postgres | f
+ nondist_mixed_1 | nondist_mixed_2 | postgres | f
+(9 rows)
 
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
      rolname
@@ -465,50 +489,44 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
  dist_mixed_3
  dist_mixed_4
  nondist_mixed_1
-(5 rows)
+ nondist_mixed_2
+(6 rows)
 
 \c - - - :worker_2_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_mixed%' ORDER BY 1, 2;
- role | member | grantor | admin_option
+      role       |     member      | grantor  | admin_option
 ---------------------------------------------------------------------
-(0 rows)
+ dist_mixed_1    | dist_mixed_3    | postgres | f
+ dist_mixed_1    | dist_mixed_4    | postgres | f
+ dist_mixed_1    | nondist_mixed_2 | postgres | f
+ dist_mixed_2    | dist_mixed_3    | postgres | f
+ dist_mixed_2    | dist_mixed_4    | postgres | f
+ dist_mixed_2    | nondist_mixed_2 | postgres | f
+ nondist_mixed_1 | dist_mixed_3    | postgres | f
+ nondist_mixed_1 | dist_mixed_4    | postgres | f
+ nondist_mixed_1 | nondist_mixed_2 | postgres | f
+(9 rows)
 
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
-   rolname
+     rolname
 ---------------------------------------------------------------------
  dist_mixed_1
  dist_mixed_2
  dist_mixed_3
  dist_mixed_4
-(4 rows)
+ nondist_mixed_1
+ nondist_mixed_2
+(6 rows)
 
 \c - - - :master_port
 set citus.log_remote_commands to on;
+set citus.grep_remote_commands to '%DROP%';
 DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4, nondist_mixed_1, nondist_mixed_2;
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4, nondist_mixed_1, nondist_mixed_2
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4, nondist_mixed_1, nondist_mixed_2
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set citus.grep_remote_commands to '%DROP%';
 reset citus.log_remote_commands;
 -- test drop multiple roles with non-distributed roles
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist%' ORDER BY 1;
@@ -535,8 +553,7 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
  dist_role_1
  dist_role_2
  non_dist_role_1
- nondist_mixed_1
-(4 rows)
+(3 rows)
 
 \c - - - :master_port
 DROP ROLE dist_role_1, non_dist_role_1, dist_role_2, non_dist_role_2;
@@ -552,10 +569,9 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
 
 \c - - - :worker_1_port
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
-     rolname
+ rolname
 ---------------------------------------------------------------------
- nondist_mixed_1
-(1 row)
+(0 rows)
 
 \c - - - :worker_2_port
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
@@ -782,6 +798,3 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 
 \c - - - :master_port
 DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
-\c - - - :worker_2_port
-drop role non_dist_role_1;
-ERROR:  role "non_dist_role_1" does not exist
