@@ -891,7 +891,7 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
 		GrantRoleStmt *grantRoleStmt = GetGrantRoleStmtFromAuthMemberRecord(membership);
-		if (grantRoleStmt == NULL)
+		if (grantRoleStmt == NULL ||IsReservedName(GetUserNameFromId(membership->roleid, true)))
 		{
 			continue;
 		}
@@ -938,7 +938,7 @@ GenerateGrantRoleStmts()
 
 
 		GrantRoleStmt *grantRoleStmt = GetGrantRoleStmtFromAuthMemberRecord(membership);
-		if (grantRoleStmt == NULL)
+		if (grantRoleStmt == NULL || IsReservedName(GetUserNameFromId(membership->roleid, true)))
 		{
 			continue;
 		}
