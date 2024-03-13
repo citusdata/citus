@@ -146,7 +146,7 @@ select result FROM run_command_on_all_nodes(
 
 --clean all resources
 drop role dist_role1,dist_role2,dist_role3,dist_role4,"dist_role5'_test";
-drop role non_dist_role1,non_dist_role2,non_dist_role_for_mds;
+drop role non_dist_role1,non_dist_role2,non_dist_role_for_mds,non_dist_role_mds_fail;
 
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text= 'non_dist_role1' ORDER BY 1;
 reset citus.enable_create_role_propagation;
