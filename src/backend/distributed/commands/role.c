@@ -68,7 +68,6 @@ static DefElem * makeDefElemBool(char *name, bool value);
 static List * GenerateRoleOptionsList(HeapTuple tuple);
 static List * GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options);
 static List * GenerateGrantRoleStmtsOfRole(Oid roleid);
-static ObjectAddress * GetRoleObjectAddressFromOid(Oid roleOid);
 static GrantRoleStmt * GetGrantRoleStmtFromAuthMemberRecord(Form_pg_auth_members
 															membership);
 static List * GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename);
@@ -970,15 +969,6 @@ GenerateGrantRoleStmts()
 	}
 
 	return commands;
-}
-
-
-static ObjectAddress *
-GetRoleObjectAddressFromOid(Oid roleOid)
-{
-	ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
-	return roleAddress;
 }
 
 
