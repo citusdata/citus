@@ -36,13 +36,13 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 (0 rows)
 
 grant dist_role2 to non_dist_role1 with admin option;
-NOTICE:  not propagating GRANT command to other nodes
-HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
+ERROR:  role "non_dist_role1" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
 grant dist_role3 to "dist_role5'_test" granted by dist_role4;
 grant dist_role2 to "dist_role5'_test" granted by dist_role3;
 grant dist_role2 to dist_role4 granted by non_dist_role1 ;--will not be propagated since grantor is non-distributed
-NOTICE:  not propagating GRANT command to other nodes
-HINT:  Since grantor is not distributed, the GRANT command will not be propagated to other nodes.
+ERROR:  permission denied to grant privileges as role "non_dist_role1"
+DETAIL:  The grantor must have the ADMIN option on role "dist_role2".
 grant dist_role4 to "dist_role5'_test" with admin option;
 --below command propagates the non_dist_role1 since non_dist_role1 is already granted to dist_role1
 --and citus sees granted roles as a dependency and citus propagates the dependent roles
@@ -77,9 +77,9 @@ select result FROM run_command_on_all_nodes(
     ) t
     $$
 );
-                                                                                                                                                                                                                                                                                                                                                                     result
+                                                                                                                                                                                                                                                                                                                       result
 ---------------------------------------------------------------------
- [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role1","role":"non_dist_role1","grantor":"postgres","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role2","grantor":"non_dist_role1","admin_option":false},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
+ [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role1","role":"non_dist_role1","grantor":"postgres","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
  [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
 (2 rows)
 
@@ -101,11 +101,11 @@ select result FROM run_command_on_all_nodes(
     ) t
     $$
 );
-                                                                                                                                                                                                                                                                                                                                                                     result
+                                                                                                                                                                                                                                                                                                                       result
 ---------------------------------------------------------------------
- [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role1","role":"non_dist_role1","grantor":"postgres","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role2","grantor":"non_dist_role1","admin_option":false},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
+ [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role1","role":"non_dist_role1","grantor":"postgres","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
  [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
- [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role1","role":"non_dist_role1","grantor":"postgres","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role2","grantor":"non_dist_role1","admin_option":false},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
+ [{"member":"dist_role1","role":"\"dist_role5'_test\"","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role2","grantor":"postgres","admin_option":true},{"member":"dist_role1","role":"dist_role3","grantor":"dist_role4","admin_option":true},{"member":"dist_role1","role":"dist_role4","grantor":"\"dist_role5'_test\"","admin_option":true},{"member":"dist_role1","role":"non_dist_role1","grantor":"postgres","admin_option":true},{"member":"dist_role3","role":"dist_role2","grantor":"dist_role1","admin_option":true},{"member":"dist_role4","role":"dist_role3","grantor":"postgres","admin_option":true}]
 (3 rows)
 
 --clean all resources

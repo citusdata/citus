@@ -937,28 +937,6 @@ GenerateGrantRoleStmts()
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
-		/* we only propagate the grant if the grantor is
-		 * member and role are distributed since all are required
-		 * to be distributed for the grant to be propagated
-		 */
-
-
-		bool isAuthMemberDistributed = IsAnyObjectDistributed(list_make1(
-																  GetRoleObjectAddressFromOid(
-																	  membership->grantor)))
-									   &&
-									   IsAnyObjectDistributed(list_make1(
-																  GetRoleObjectAddressFromOid(
-																	  membership->member)))
-									   &&
-									   IsAnyObjectDistributed(list_make1(
-																  GetRoleObjectAddressFromOid(
-																	  membership->roleid)));
-		if (!isAuthMemberDistributed)
-		{
-			/* we only need to propagate the grant if the grantor is distributed */
-			continue;
-		}
 
 		GrantRoleStmt *grantRoleStmt = GetGrantRoleStmtFromAuthMemberRecord(membership);
 		if (grantRoleStmt == NULL)
@@ -1009,11 +987,6 @@ GetGrantRoleStmtFromAuthMemberRecord(Form_pg_auth_members membership)
 {
 	ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*roleAddress, AuthIdRelationId, membership->grantor);
-	if (!IsAnyObjectDistributed(list_make1(roleAddress)))
-	{
-		/* we only need to propagate the grant if the grantor is distributed */
-		return NULL;
-	}
 
 	GrantRoleStmt *grantRoleStmt = makeNode(GrantRoleStmt);
 	grantRoleStmt->is_grant = true;
@@ -1392,24 +1365,8 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 	EnsurePropagationToCoordinator();
 
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
-	List *allGranteeRoles = stmt->grantee_roles;
-	List *allGrantedRoles = stmt->granted_roles;
-	RoleSpec *grantor = stmt->grantor;
 
-	DistributedRolesInGrantRoleStmt *distributedRolesInGrantStmt =
-		ExtractDistributedRolesInGrantRoleStmt(stmt);
-
-	if (!distributedRolesInGrantStmt->isGrantRoleStmtValid)
-	{
-		return NIL;
-	}
-
-	stmt->grantee_roles = distributedRolesInGrantStmt->distributedGrantees;
-	stmt->granted_roles = distributedRolesInGrantStmt->distributedGrantedRoles;
 	char *sql = DeparseTreeNode((Node *) stmt);
-	stmt->grantee_roles = allGranteeRoles;
-	stmt->granted_roles = allGrantedRoles;
-	stmt->grantor = grantor;
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								sql,
