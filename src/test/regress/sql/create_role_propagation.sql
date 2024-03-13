@@ -127,8 +127,12 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 create role non_dist_role_1;
 
 \c - - - :master_port
-
+--will be successful since non_dist_role_1 is created on worker_2
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
+
+
 
 SELECT result FROM run_command_on_all_nodes(
   $$
@@ -213,7 +217,11 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
 
 \c - - - :master_port
+set citus.log_remote_commands to on;
 DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4, nondist_mixed_1, nondist_mixed_2;
+
+reset citus.log_remote_commands;
+
 
 -- test drop multiple roles with non-distributed roles
 
@@ -230,6 +238,9 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
 
 \c - - - :worker_1_port
+SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
+
+\c - - - :worker_2_port
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
 \c - - - :master_port
 
@@ -328,3 +339,6 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :master_port
 
 DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
+
+\c - - - :worker_2_port
+drop role non_dist_role_1;

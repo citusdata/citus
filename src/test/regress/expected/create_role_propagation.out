@@ -244,11 +244,23 @@ ERROR:  failure on connection marked as essential: localhost:xxxxx
 \c - - - :worker_2_port
 create role non_dist_role_1;
 \c - - - :master_port
+--will be successful since non_dist_role_1 is created on worker_2
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
+
+SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
+      objid
+---------------------------------------------------------------------
+ dist_role_1
+ dist_role_2
+ dist_role_3
+ dist_role_4
+ non_dist_role_1
+ non_dist_role_4
+(6 rows)
 
 SELECT result FROM run_command_on_all_nodes(
   $$
@@ -471,7 +483,33 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
 (4 rows)
 
 \c - - - :master_port
+set citus.log_remote_commands to on;
 DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4, nondist_mixed_1, nondist_mixed_2;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+reset citus.log_remote_commands;
 -- test drop multiple roles with non-distributed roles
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist%' ORDER BY 1;
       objid
@@ -518,6 +556,12 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
 ---------------------------------------------------------------------
  nondist_mixed_1
 (1 row)
+
+\c - - - :worker_2_port
+SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist%' ORDER BY 1;
+ rolname
+---------------------------------------------------------------------
+(0 rows)
 
 \c - - - :master_port
 -- test alter part of create or alter role
@@ -738,3 +782,6 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 
 \c - - - :master_port
 DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
+\c - - - :worker_2_port
+drop role non_dist_role_1;
+ERROR:  role "non_dist_role_1" does not exist
