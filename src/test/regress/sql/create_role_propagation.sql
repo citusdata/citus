@@ -123,6 +123,13 @@ GRANT dist_role_3 TO dist_role_4 granted by test_admin_role;
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
+\c - - - :worker_2_port
+create role non_dist_role_1;
+
+\c - - - :master_port
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
 SELECT result FROM run_command_on_all_nodes(
   $$
   SELECT json_agg(q.* ORDER BY member) FROM (
