@@ -491,9 +491,9 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing DROP ROLE dist_mixed_1, dist_mixed_2, dist_mixed_3, dist_mixed_4
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
