@@ -41,6 +41,7 @@ test: create_drop_database_propagation_pg16
 test: comment_on_database
 test: comment_on_role
 test: metadata_sync_from_non_maindb
+test: alter_database_from_nonmain_db
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
 test: schema_based_sharding
@@ -63,7 +64,6 @@ test: alter_database_propagation
 
 test: citus_shards
 test: reassign_owned
-test: alter_database_from_nonmain_db
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
