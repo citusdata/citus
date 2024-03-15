@@ -30,10 +30,6 @@ set citus.grep_remote_commands = "%ALTER DATABASE%";
 set citus.enable_create_database_propagation=on;
 alter database altered_database owner to test_owner_non_main_db;
 alter database altered_database owner to CURRENT_USER;
-ALTER DATABASE altered_database REFRESH COLLATION VERSION;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE altered_database REFRESH COLLATION VERSION;', 'postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  version has not changed
 alter database altered_database set default_transaction_read_only = true;
 NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE altered_database SET default_transaction_read_only = ''true''', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

@@ -28,7 +28,6 @@ set citus.grep_remote_commands = "%ALTER DATABASE%";
 set citus.enable_create_database_propagation=on;
 alter database altered_database owner to test_owner_non_main_db;
 alter database altered_database owner to CURRENT_USER;
-ALTER DATABASE altered_database REFRESH COLLATION VERSION;
 alter database altered_database set default_transaction_read_only = true;
 set default_transaction_read_only = false;
 alter database altered_database set default_transaction_read_only from current;

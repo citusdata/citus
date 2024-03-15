@@ -977,6 +977,22 @@ CREATE ROLE local_role_1;
 
 ALTER DATABASE local_database_1 REFRESH COLLATION VERSION;
 
+SET citus.enable_create_database_propagation TO on;
+create database alter_db_from_nonmain_db;
+
+\c alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+ALTER DATABASE alter_db_from_nonmain_db REFRESH COLLATION VERSION;
+
+reset citus.log_remote_commands;
+reset citus.grep_remote_commands;
+
+\c regression
+drop database alter_db_from_nonmain_db;
+
+SET citus.enable_create_database_propagation TO OFF;
+
 REVOKE CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 FROM local_role_1;
 DROP ROLE local_role_1;
 DROP DATABASE local_database_1;
