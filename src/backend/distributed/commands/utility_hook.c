@@ -215,7 +215,9 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_CreatedbStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_AlterDatabaseStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_AlterDatabaseSetStmt, NO_DIST_OBJECT_OPERATION, NULL },
-	{ T_AlterDatabaseRefreshCollStmt, NO_DIST_OBJECT_OPERATION, NULL },
+#if PG_VERSION_NUM >= PG_VERSION_15
+    { T_AlterDatabaseRefreshCollStmt, NO_DIST_OBJECT_OPERATION, NULL },
+#endif
 	{ T_DropdbStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_SecLabelStmt, NO_DIST_OBJECT_OPERATION,
 	  NonMainDbCheckSupportedObjectTypeForSecLabel },
