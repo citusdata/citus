@@ -213,6 +213,8 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_AlterRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_GrantStmt, NO_DIST_OBJECT_OPERATION, NonMainDbCheckSupportedObjectTypeForGrant },
 	{ T_CreatedbStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_AlterDatabaseStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_AlterDatabaseSetStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_DropdbStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_SecLabelStmt, NO_DIST_OBJECT_OPERATION,
 	  NonMainDbCheckSupportedObjectTypeForSecLabel },
