@@ -216,7 +216,7 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_AlterDatabaseStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_AlterDatabaseSetStmt, NO_DIST_OBJECT_OPERATION, NULL },
 #if PG_VERSION_NUM >= PG_VERSION_15
-    { T_AlterDatabaseRefreshCollStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_AlterDatabaseRefreshCollStmt, NO_DIST_OBJECT_OPERATION, NULL },
 #endif
 	{ T_DropdbStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_SecLabelStmt, NO_DIST_OBJECT_OPERATION,
@@ -369,7 +369,7 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 			if (IsA(parsetree, CreatedbStmt) ||
 				IsA(parsetree, DropdbStmt) ||
-				IsA(parsetree, AlterDatabaseStmt)  )
+				IsA(parsetree, AlterDatabaseStmt))
 			{
 				return;
 			}
@@ -1740,10 +1740,14 @@ IsCommandMainDbDdlOperation(Node *parsetree)
 	{
 		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
 		return strcmp(dropdbStmt->dbname, MainDb) == 0;
-	}else if(IsA(parsetree,AlterDatabaseStmt)){
+	}
+	else if (IsA(parsetree, AlterDatabaseStmt))
+	{
 		AlterDatabaseStmt *alterdbStmt = castNode(AlterDatabaseStmt, parsetree);
 		return strcmp(alterdbStmt->dbname, MainDb) == 0;
-	}else if(IsA(parsetree,AlterDatabaseSetStmt)){
+	}
+	else if (IsA(parsetree, AlterDatabaseSetStmt))
+	{
 		AlterDatabaseSetStmt *alterdbSetStmt = castNode(AlterDatabaseSetStmt, parsetree);
 		return strcmp(alterdbSetStmt->dbname, MainDb) == 0;
 	}
