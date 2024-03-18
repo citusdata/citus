@@ -159,6 +159,25 @@ static const NonMainDbDistributeObjectOps Any_DropDatabase = {
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = true
 };
+
+static const NonMainDbDistributeObjectOps Any_AlterDatabase = {
+	.getMarkDistributedParams = NULL,
+	.getUnmarkDistributedParams = NULL,
+	.cannotBeExecutedInTransaction = true
+};
+
+static const NonMainDbDistributeObjectOps Any_AlterDatabaseSet = {
+	.getMarkDistributedParams = NULL,
+	.getUnmarkDistributedParams = NULL,
+	.cannotBeExecutedInTransaction = true
+};
+
+static const NonMainDbDistributeObjectOps Any_AlterDatabaseRefreshColl = {
+	.getMarkDistributedParams = NULL,
+	.getUnmarkDistributedParams = NULL,
+	.cannotBeExecutedInTransaction = false
+};
+
 static const NonMainDbDistributeObjectOps Database_Grant = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
@@ -328,6 +347,35 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 
 			return NULL;
 		}
+
+		case T_AlterDatabaseStmt:
+		{
+			AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, parsetree);
+
+			/*
+			 * We don't try to send the query to the main database if the ALTER
+			 * DATABASE command is for the main database itself, this is a very
+			 * rare case but it's exercised by our test suite.
+			 */
+			if (strcmp(stmt->dbname, MainDb) != 0)
+			{
+				return &Any_AlterDatabase;
+			}
+
+			return NULL;
+		}
+
+		case T_AlterDatabaseSetStmt:
+		{
+			return &Any_AlterDatabaseSet;
+
+		}
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case T_AlterDatabaseRefreshCollStmt:
+		{
+			return &Any_AlterDatabaseRefreshColl;
+		}
+#endif
 
 		case T_GrantStmt:
 		{
