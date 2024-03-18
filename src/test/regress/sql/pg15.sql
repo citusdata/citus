@@ -977,19 +977,6 @@ CREATE ROLE local_role_1;
 
 ALTER DATABASE local_database_1 REFRESH COLLATION VERSION;
 
-SET citus.enable_create_database_propagation TO on;
-create database alter_db_from_nonmain_db_pg15;
-
-\c alter_db_from_nonmain_db_pg15
-set citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%ALTER DATABASE%';
-ALTER DATABASE alter_db_from_nonmain_db_pg15 REFRESH COLLATION VERSION;
-
-reset citus.log_remote_commands;
-reset citus.grep_remote_commands;
-
-\c regression
-drop database alter_db_from_nonmain_db_pg15;
 
 SET citus.enable_create_database_propagation TO OFF;
 
@@ -1005,3 +992,20 @@ SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
 DROP ROLE rls_tenant_1;
 DROP ROLE rls_tenant_2;
+
+-- test refresh collation version on non-main databases
+SET citus.enable_create_database_propagation TO on;
+create database alter_db_from_nonmain_db_pg15;
+
+\c alter_db_from_nonmain_db_pg15
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = '%ALTER DATABASE%';
+ALTER DATABASE alter_db_from_nonmain_db_pg15 REFRESH COLLATION VERSION;
+
+reset citus.log_remote_commands;
+reset citus.grep_remote_commands;
+
+\c regression
+SET citus.enable_create_database_propagation TO on;
+drop database alter_db_from_nonmain_db_pg15;
+reset citus.enable_create_database_propagation;
