@@ -183,7 +183,7 @@ static bool ShouldCheckUndistributeCitusLocalTables(void);
  * Functions to support commands used to manage node-wide objects from non-main
  * databases.
  */
-static bool IsCommandToCreateOrDropMainDB(Node *parsetree);
+static bool IsCommandMainDbDdlOperation(Node *parsetree);
 static void RunPreprocessMainDBCommand(Node *parsetree);
 static void RunPostprocessMainDBCommand(Node *parsetree);
 static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
@@ -213,6 +213,11 @@ static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = 
 	{ T_AlterRoleStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_GrantStmt, NO_DIST_OBJECT_OPERATION, NonMainDbCheckSupportedObjectTypeForGrant },
 	{ T_CreatedbStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_AlterDatabaseStmt, NO_DIST_OBJECT_OPERATION, NULL },
+	{ T_AlterDatabaseSetStmt, NO_DIST_OBJECT_OPERATION, NULL },
+#if PG_VERSION_NUM >= PG_VERSION_15
+	{ T_AlterDatabaseRefreshCollStmt, NO_DIST_OBJECT_OPERATION, NULL },
+#endif
 	{ T_DropdbStmt, NO_DIST_OBJECT_OPERATION, NULL },
 	{ T_SecLabelStmt, NO_DIST_OBJECT_OPERATION,
 	  NonMainDbCheckSupportedObjectTypeForSecLabel },
@@ -358,12 +363,13 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		 * exercised by our test suite.
 		 */
 		if (!IsMainDB &&
-			!IsCommandToCreateOrDropMainDB(parsetree))
+			!IsCommandMainDbDdlOperation(parsetree))
 		{
 			RunPreprocessMainDBCommand(parsetree);
 
 			if (IsA(parsetree, CreatedbStmt) ||
-				IsA(parsetree, DropdbStmt))
+				IsA(parsetree, DropdbStmt) ||
+				IsA(parsetree, AlterDatabaseStmt))
 			{
 				return;
 			}
@@ -1718,12 +1724,12 @@ DropSchemaOrDBInProgress(void)
 
 
 /*
- * IsCommandToCreateOrDropMainDB checks if this query creates or drops the
+ * IsCommandMainDbDdlOperation checks if this query creates, drops or alter the
  * main database, so we can make an exception and not send this query to
  * the main database.
  */
 static bool
-IsCommandToCreateOrDropMainDB(Node *parsetree)
+IsCommandMainDbDdlOperation(Node *parsetree)
 {
 	if (IsA(parsetree, CreatedbStmt))
 	{
@@ -1734,6 +1740,16 @@ IsCommandToCreateOrDropMainDB(Node *parsetree)
 	{
 		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
 		return strcmp(dropdbStmt->dbname, MainDb) == 0;
+	}
+	else if (IsA(parsetree, AlterDatabaseStmt))
+	{
+		AlterDatabaseStmt *alterdbStmt = castNode(AlterDatabaseStmt, parsetree);
+		return strcmp(alterdbStmt->dbname, MainDb) == 0;
+	}
+	else if (IsA(parsetree, AlterDatabaseSetStmt))
+	{
+		AlterDatabaseSetStmt *alterdbSetStmt = castNode(AlterDatabaseSetStmt, parsetree);
+		return strcmp(alterdbSetStmt->dbname, MainDb) == 0;
 	}
 
 	return false;
