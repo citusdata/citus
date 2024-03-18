@@ -492,19 +492,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 bool
 ClusterHasKnownMetadataWorkers()
 {
-	bool workerWithMetadata = false;
-
-	if (!IsCoordinator())
-	{
-		workerWithMetadata = true;
-	}
-
-	if (workerWithMetadata || HasMetadataWorkers())
-	{
-		return true;
-	}
-
-	return false;
+	return !IsCoordinator() || HasMetadataWorkers();
 }
 
 
