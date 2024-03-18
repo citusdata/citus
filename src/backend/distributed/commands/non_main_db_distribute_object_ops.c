@@ -129,47 +129,48 @@ static List * DropRoleStmtGetUnmarkDistributedParams(Node *parsetree);
  * for CreateRoleStmt as Any_CreateRole, we name the struct that implements
  * SecLabelStmt for role objects as Role_SecLabel.
  */
-static const NonMainDbDistributeObjectOps Any_CreateRole = {
-	.getMarkDistributedParams = CreateRoleStmtGetMarkDistributedParams,
-	.getUnmarkDistributedParams = NULL,
-	.cannotBeExecutedInTransaction = false
+static const NonMainDbDistributeObjectOps *operationArray[] = {
+	[T_CreateRoleStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = CreateRoleStmtGetMarkDistributedParams,
+		.getUnmarkDistributedParams = NULL,
+		.cannotBeExecutedInTransaction = false
+	},
+	[T_DropRoleStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = NULL,
+		.getUnmarkDistributedParams = DropRoleStmtGetUnmarkDistributedParams,
+		.cannotBeExecutedInTransaction = false
+	},
+	[T_AlterRoleStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = NULL,
+		.getUnmarkDistributedParams = NULL,
+		.cannotBeExecutedInTransaction = false
+	},
+	[T_GrantRoleStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = NULL,
+		.getUnmarkDistributedParams = NULL,
+		.cannotBeExecutedInTransaction = false
+	},
+	[T_CreatedbStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = NULL,
+		.getUnmarkDistributedParams = NULL,
+		.cannotBeExecutedInTransaction = true
+	},
+	[T_DropdbStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = NULL,
+		.getUnmarkDistributedParams = NULL,
+		.cannotBeExecutedInTransaction = true
+	},
+	[T_GrantStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = NULL,
+		.getUnmarkDistributedParams = NULL,
+		.cannotBeExecutedInTransaction = false
+	},
+	[T_SecLabelStmt] = &(NonMainDbDistributeObjectOps) {
+		.getMarkDistributedParams = NULL,
+		.getUnmarkDistributedParams = NULL,
+		.cannotBeExecutedInTransaction = false
+	},
 };
-static const NonMainDbDistributeObjectOps Any_DropRole = {
-	.getMarkDistributedParams = NULL,
-	.getUnmarkDistributedParams = DropRoleStmtGetUnmarkDistributedParams,
-	.cannotBeExecutedInTransaction = false
-};
-static const NonMainDbDistributeObjectOps Any_AlterRole = {
-	.getMarkDistributedParams = NULL,
-	.getUnmarkDistributedParams = NULL,
-	.cannotBeExecutedInTransaction = false
-};
-static const NonMainDbDistributeObjectOps Any_GrantRole = {
-	.getMarkDistributedParams = NULL,
-	.getUnmarkDistributedParams = NULL,
-	.cannotBeExecutedInTransaction = false
-};
-static const NonMainDbDistributeObjectOps Any_CreateDatabase = {
-	.getMarkDistributedParams = NULL,
-	.getUnmarkDistributedParams = NULL,
-	.cannotBeExecutedInTransaction = true
-};
-static const NonMainDbDistributeObjectOps Any_DropDatabase = {
-	.getMarkDistributedParams = NULL,
-	.getUnmarkDistributedParams = NULL,
-	.cannotBeExecutedInTransaction = true
-};
-static const NonMainDbDistributeObjectOps Database_Grant = {
-	.getMarkDistributedParams = NULL,
-	.getUnmarkDistributedParams = NULL,
-	.cannotBeExecutedInTransaction = false
-};
-static const NonMainDbDistributeObjectOps Role_SecLabel = {
-	.getMarkDistributedParams = NULL,
-	.getUnmarkDistributedParams = NULL,
-	.cannotBeExecutedInTransaction = false
-};
-
 
 /* other static function declarations */
 const NonMainDbDistributeObjectOps * GetNonMainDbDistributeObjectOps(Node *parsetree);
@@ -273,28 +274,16 @@ RunPostprocessNonMainDBCommand(Node *parsetree)
 const NonMainDbDistributeObjectOps *
 GetNonMainDbDistributeObjectOps(Node *parsetree)
 {
+	NodeTag tag = nodeTag(parsetree);
+	if (tag >= lengthof(operationArray))
+	{
+		return NULL;
+	}
+
+	const NonMainDbDistributeObjectOps *ops = operationArray[tag];
+
 	switch (nodeTag(parsetree))
 	{
-		case T_CreateRoleStmt:
-		{
-			return &Any_CreateRole;
-		}
-
-		case T_DropRoleStmt:
-		{
-			return &Any_DropRole;
-		}
-
-		case T_AlterRoleStmt:
-		{
-			return &Any_AlterRole;
-		}
-
-		case T_GrantRoleStmt:
-		{
-			return &Any_GrantRole;
-		}
-
 		case T_CreatedbStmt:
 		{
 			CreatedbStmt *stmt = castNode(CreatedbStmt, parsetree);
@@ -306,7 +295,7 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 			 */
 			if (strcmp(stmt->dbname, MainDb) != 0)
 			{
-				return &Any_CreateDatabase;
+				return ops;
 			}
 
 			return NULL;
@@ -323,7 +312,7 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 			 */
 			if (strcmp(stmt->dbname, MainDb) != 0)
 			{
-				return &Any_DropDatabase;
+				return ops;
 			}
 
 			return NULL;
@@ -337,7 +326,7 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 			{
 				case OBJECT_DATABASE:
 				{
-					return &Database_Grant;
+					return ops;
 				}
 
 				default:
@@ -353,7 +342,7 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 			{
 				case OBJECT_ROLE:
 				{
-					return &Role_SecLabel;
+					return ops;
 				}
 
 				default:
@@ -362,7 +351,7 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 		}
 
 		default:
-			return NULL;
+			return ops;
 	}
 }
 
