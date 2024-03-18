@@ -367,9 +367,21 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 
 		case T_AlterDatabaseSetStmt:
 		{
-			return &Any_AlterDatabaseSet;
+			AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, parsetree);
 
+			/*
+			 * We don't try to send the query to the main database if the ALTER
+			 * DATABASE command is for the main database itself, this is a very
+			 * rare case but it's exercised by our test suite.
+			 */
+			if (strcmp(stmt->dbname, MainDb) != 0)
+			{
+				return &Any_AlterDatabaseSet;
+			}
+
+			return NULL;
 		}
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 		case T_AlterDatabaseRefreshCollStmt:
 		{

@@ -5,9 +5,23 @@ create database altered_database;
 reset citus.enable_create_database_propagation;
 \c regression;
 set citus.enable_create_database_propagation=on;
+
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :worker_1_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :worker_2_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
 \c test_alter_db_from_nonmain_db
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
+
+alter database altered_database set tablespace alter_db_tablespace;
 alter database altered_database rename to altered_database_renamed;
 alter database altered_database_renamed rename to altered_database;
 
@@ -62,3 +76,9 @@ drop database test_alter_db_from_nonmain_db;
 reset citus.enable_create_database_propagation;
 
 drop role test_owner_non_main_db;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  drop tablespace alter_db_tablespace
+  $$
+);
