@@ -172,11 +172,13 @@ static const NonMainDbDistributeObjectOps Any_AlterDatabaseSet = {
 	.cannotBeExecutedInTransaction = true
 };
 
+#if PG_VERSION_NUM >= PG_VERSION_15
 static const NonMainDbDistributeObjectOps Any_AlterDatabaseRefreshColl = {
 	.getMarkDistributedParams = NULL,
 	.getUnmarkDistributedParams = NULL,
 	.cannotBeExecutedInTransaction = false
 };
+#endif
 
 static const NonMainDbDistributeObjectOps Database_Grant = {
 	.getMarkDistributedParams = NULL,
