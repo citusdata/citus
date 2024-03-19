@@ -736,51 +736,15 @@ WorkerFixPartitionShardIndexNamesCommandListForPartitionIndex(Oid partitionIndex
 		partitionSchemaName,
 		partitionName);
 
-	List *partitionShardIntervalList = LoadShardIntervalList(partitionId);
 
-	ShardInterval *partitionShardInterval = NULL;
-	foreach_ptr(partitionShardInterval, partitionShardIntervalList)
-	{
-		/*
-		 * Prepare commands for each shard of current partition
-		 * to fix the index name that corresponds to the
-		 * current parent index name
-		 */
-		uint64 partitionShardId = partitionShardInterval->shardId;
-
-		List *activePlacementList = ActiveShardPlacementList(partitionShardId);
-
-		if ((list_length(activePlacementList) > 0) && (list_length(shardPlacements) > 0))
-		{
-			ShardPlacement *left = (ShardPlacement *) linitial(activePlacementList);
-			ShardPlacement *right = (ShardPlacement *) linitial(shardPlacements);
-
-			if (left->nodeId != right->nodeId)
-			{
-				continue;
-			}
-		}
-
-		/* get qualified partition shard name */
-		char *partitionShardName = pstrdup(partitionName);
-		AppendShardIdToName(&partitionShardName, partitionShardId);
-		char *qualifiedPartitionShardName = quote_qualified_identifier(
-			partitionSchemaName,
-			partitionShardName);
-
-		/* generate the new correct index name */
-		char *newPartitionShardIndexName = pstrdup(partitionIndexName);
-		AppendShardIdToName(&newPartitionShardIndexName, partitionShardId);
-
-		/* create worker_fix_partition_shard_index_names command */
-		StringInfo shardQueryString = makeStringInfo();
-		appendStringInfo(shardQueryString,
-						 "SELECT worker_fix_partition_shard_index_names(%s::regclass, %s, %s)",
-						 quote_literal_cstr(qualifiedParentShardIndexName),
-						 quote_literal_cstr(partitionIndexName),
-						 quote_literal_cstr(qualifiedPartitionName));
-		commandList = lappend(commandList, shardQueryString->data);
-	}
+	/* create worker_fix_partition_shard_index_names command */
+	StringInfo shardQueryString = makeStringInfo();
+	appendStringInfo(shardQueryString,
+					 "SELECT worker_fix_partition_shard_index_names(%s::regclass, %s, %s)",
+					 quote_literal_cstr(qualifiedParentShardIndexName),
+					 quote_literal_cstr(partitionIndexName),
+					 quote_literal_cstr(qualifiedPartitionName));
+	commandList = lappend(commandList, shardQueryString->data);
 
 	return commandList;
 }
