@@ -264,7 +264,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 		bool outerXidIsNull = false;
 		Datum outerXidDatum = 0;
-		if (SearchSysCacheExistsAttName(DistTransactionRelationId(), "outer_xid"))
+		if (EnableVersionChecks || SearchSysCacheExistsAttName(DistTransactionRelationId(), "outer_xid"))
 		{
 			/* Check if the transaction is created by an outer transaction from a non-main database */
 			outerXidDatum = heap_getattr(heapTuple,
