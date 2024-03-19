@@ -11,8 +11,11 @@
  *    commands from non-main databases.
  *
  *    To add support for a new command type, one needs to define a new
- *    NonMainDbDistributeObjectOps object and add it to
- *    GetNonMainDbDistributeObjectOps.
+ *    NonMainDbDistributeObjectOps object within OperationArray. Then, if
+ *    the command type is supported in under special circumstances, this
+ *    can be be implemented in GetNonMainDbDistributeObjectOps. Otherwise,
+ *    that function will yield the operations defined for the command via
+ *    the "default" case of the switch statement.
  *
  *-------------------------------------------------------------------------
  */
@@ -121,15 +124,9 @@ static List * DropRoleStmtGetUnmarkDistributedParams(Node *parsetree);
 
 
 /*
- * NonMainDbDistributeObjectOps for different command types.
- *
- * Naming of these structs are stolen from distribute_object_ops.c. We use
- * "Any" if the command doesn't have any other variations or if the struct
- * implements it for all its variations. For example, while we name the struct
- * for CreateRoleStmt as Any_CreateRole, we name the struct that implements
- * SecLabelStmt for role objects as Role_SecLabel.
+ * OperationArray that holds NonMainDbDistributeObjectOps for different command types.
  */
-static const NonMainDbDistributeObjectOps *operationArray[] = {
+static const NonMainDbDistributeObjectOps * const OperationArray[] = {
 	[T_CreateRoleStmt] = &(NonMainDbDistributeObjectOps) {
 		.getMarkDistributedParams = CreateRoleStmtGetMarkDistributedParams,
 		.getUnmarkDistributedParams = NULL,
@@ -171,6 +168,7 @@ static const NonMainDbDistributeObjectOps *operationArray[] = {
 		.cannotBeExecutedInTransaction = false
 	},
 };
+
 
 /* other static function declarations */
 const NonMainDbDistributeObjectOps * GetNonMainDbDistributeObjectOps(Node *parsetree);
@@ -275,12 +273,12 @@ const NonMainDbDistributeObjectOps *
 GetNonMainDbDistributeObjectOps(Node *parsetree)
 {
 	NodeTag tag = nodeTag(parsetree);
-	if (tag >= lengthof(operationArray))
+	if (tag >= lengthof(OperationArray))
 	{
 		return NULL;
 	}
 
-	const NonMainDbDistributeObjectOps *ops = operationArray[tag];
+	const NonMainDbDistributeObjectOps *ops = OperationArray[tag];
 
 	switch (nodeTag(parsetree))
 	{
