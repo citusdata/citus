@@ -11,14 +11,10 @@
  *    commands from non-main databases.
  *
  *    To add support for a new command type, one needs to define a new
- *    NonMainDbDistributeObjectOps object within OperationArray. Then, if
- *    the command type is supported in under special circumstances, this
- *    can be be implemented in GetNonMainDbDistributeObjectOps. Otherwise,
- *    that function will yield the operations defined for the command via
- *    the "default" case of the switch statement. Finally, if the command
- *    requires marking or unmarking some objects as distributed, the necessary
- *    operations can be implemented in RunPreprocessNonMainDBCommand and
- *    RunPostprocessNonMainDBCommand.
+ *    NonMainDbDistributeObjectOps object within OperationArray. Also, if
+ *    the command requires marking or unmarking some objects as distributed,
+ *    the necessary operations can be implemented in
+ *    RunPreprocessNonMainDBCommand and RunPostprocessNonMainDBCommand.
  *
  *-------------------------------------------------------------------------
  */
@@ -57,45 +53,67 @@
  *   this is set to true, the statement will be executed directly on the main
  *   database because there are no transactional visibility issues for such
  *   commands.
+ *
+ *  checkSupportedObjectType:
+ *   Callback function that checks whether type of the object referred to by
+ *   given statement is supported. Can be NULL if not applicable for the
+ *   statement type.
  */
 typedef struct NonMainDbDistributeObjectOps
 {
 	bool cannotBeExecutedInTransaction;
+	bool (*checkSupportedObjectType)(Node *parsetree);
 } NonMainDbDistributeObjectOps;
 
+
+/*
+ * checkSupportedObjectType callbacks for OperationArray.
+ */
+static bool CreateDbStmtCheckSupportedObjectType(Node *node);
+static bool DropDbStmtCheckSupportedObjectType(Node *node);
+static bool GrantStmtCheckSupportedObjectType(Node *node);
+static bool SecLabelStmtCheckSupportedObjectType(Node *node);
 
 /*
  * OperationArray that holds NonMainDbDistributeObjectOps for different command types.
  */
 static const NonMainDbDistributeObjectOps *const OperationArray[] = {
 	[T_CreateRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false
+		.cannotBeExecutedInTransaction = false,
+		.checkSupportedObjectType = NULL
 	},
 	[T_DropRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false
+		.cannotBeExecutedInTransaction = false,
+		.checkSupportedObjectType = NULL
 	},
 	[T_AlterRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false
+		.cannotBeExecutedInTransaction = false,
+		.checkSupportedObjectType = NULL
 	},
 	[T_GrantRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false
+		.cannotBeExecutedInTransaction = false,
+		.checkSupportedObjectType = NULL
 	},
 	[T_CreatedbStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = true
+		.cannotBeExecutedInTransaction = true,
+		.checkSupportedObjectType = CreateDbStmtCheckSupportedObjectType
 	},
 	[T_DropdbStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = true
+		.cannotBeExecutedInTransaction = true,
+		.checkSupportedObjectType = DropDbStmtCheckSupportedObjectType
 	},
 	[T_GrantStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false
+		.cannotBeExecutedInTransaction = false,
+		.checkSupportedObjectType = GrantStmtCheckSupportedObjectType
 	},
 	[T_SecLabelStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false
+		.cannotBeExecutedInTransaction = false,
+		.checkSupportedObjectType = SecLabelStmtCheckSupportedObjectType
 	},
 };
 
 
-/* static function declarations */
+/* other static function declarations */
 const NonMainDbDistributeObjectOps * GetNonMainDbDistributeObjectOps(Node *parsetree);
 static void CreateRoleStmtMarkDistGloballyOnMainDbs(CreateRoleStmt *createRoleStmt);
 static void DropRoleStmtUnmarkDistOnLocalMainDb(DropRoleStmt *dropRoleStmt);
@@ -198,77 +216,18 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 
 	const NonMainDbDistributeObjectOps *ops = OperationArray[tag];
 
-	switch (nodeTag(parsetree))
+	if (ops == NULL)
 	{
-		case T_CreatedbStmt:
-		{
-			CreatedbStmt *stmt = castNode(CreatedbStmt, parsetree);
-
-			/*
-			 * We don't try to send the query to the main database if the CREATE
-			 * DATABASE command is for the main database itself, this is a very
-			 * rare case but it's exercised by our test suite.
-			 */
-			if (strcmp(stmt->dbname, MainDb) != 0)
-			{
-				return ops;
-			}
-
-			return NULL;
-		}
-
-		case T_DropdbStmt:
-		{
-			DropdbStmt *stmt = castNode(DropdbStmt, parsetree);
-
-			/*
-			 * We don't try to send the query to the main database if the DROP
-			 * DATABASE command is for the main database itself, this is a very
-			 * rare case but it's exercised by our test suite.
-			 */
-			if (strcmp(stmt->dbname, MainDb) != 0)
-			{
-				return ops;
-			}
-
-			return NULL;
-		}
-
-		case T_GrantStmt:
-		{
-			GrantStmt *stmt = castNode(GrantStmt, parsetree);
-
-			switch (stmt->objtype)
-			{
-				case OBJECT_DATABASE:
-				{
-					return ops;
-				}
-
-				default:
-					return NULL;
-			}
-		}
-
-		case T_SecLabelStmt:
-		{
-			SecLabelStmt *stmt = castNode(SecLabelStmt, parsetree);
-
-			switch (stmt->objtype)
-			{
-				case OBJECT_ROLE:
-				{
-					return ops;
-				}
-
-				default:
-					return NULL;
-			}
-		}
-
-		default:
-			return ops;
+		return NULL;
 	}
+
+	if (!ops->checkSupportedObjectType ||
+		ops->checkSupportedObjectType(parsetree))
+	{
+		return ops;
+	}
+
+	return NULL;
 }
 
 
@@ -344,4 +303,49 @@ UnmarkObjectDistributedOnLocalMainDb(uint16 catalogRelId, Oid objectId)
 					 catalogRelId, objectId,
 					 subObjectId, checkObjectExistence);
 	RunCitusMainDBQuery(query->data);
+}
+
+
+/*
+ * checkSupportedObjectTypes callbacks for OperationArray lie below.
+ */
+static bool
+CreateDbStmtCheckSupportedObjectType(Node *node)
+{
+	/*
+	 * We don't try to send the query to the main database if the CREATE
+	 * DATABASE command is for the main database itself, this is a very
+	 * rare case but it's exercised by our test suite.
+	 */
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+	return strcmp(stmt->dbname, MainDb) != 0;
+}
+
+
+static bool
+DropDbStmtCheckSupportedObjectType(Node *node)
+{
+	/*
+	 * We don't try to send the query to the main database if the DROP
+	 * DATABASE command is for the main database itself, this is a very
+	 * rare case but it's exercised by our test suite.
+	 */
+	DropdbStmt *stmt = castNode(DropdbStmt, node);
+	return strcmp(stmt->dbname, MainDb) != 0;
+}
+
+
+static bool
+GrantStmtCheckSupportedObjectType(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	return stmt->objtype == OBJECT_DATABASE;
+}
+
+
+static bool
+SecLabelStmtCheckSupportedObjectType(Node *node)
+{
+	SecLabelStmt *stmt = castNode(SecLabelStmt, node);
+	return stmt->objtype == OBJECT_ROLE;
 }
