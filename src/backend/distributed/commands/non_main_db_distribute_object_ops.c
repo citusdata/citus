@@ -15,7 +15,10 @@
  *    the command type is supported in under special circumstances, this
  *    can be be implemented in GetNonMainDbDistributeObjectOps. Otherwise,
  *    that function will yield the operations defined for the command via
- *    the "default" case of the switch statement.
+ *    the "default" case of the switch statement. Finally, if the command
+ *    requires marking or unmarking some objects as distributed, the necessary
+ *    operations can be implemented in RunPreprocessNonMainDBCommand and
+ *    RunPostprocessNonMainDBCommand.
  *
  *-------------------------------------------------------------------------
  */
@@ -46,81 +49,19 @@
 
 
 /*
- * Structs used to implement getMarkDistributedParams and
- * getUnmarkDistributedParams callbacks for NonMainDbDistributeObjectOps.
- *
- * Main difference between these two is that while
- * MarkDistributedGloballyParams contains the name of the object, the other
- * doesn't. This is because, when marking an object -that is created from a
- * non-main db- as distributed, citus_internal.mark_object_distributed()
- * cannot find its name since the object is not visible to outer transaction
- * (or, read as "the transaction in non-main db").
- */
-typedef struct MarkDistributedGloballyParams
-{
-	char *name;
-	Oid id;
-	uint16 catalogRelId;
-} MarkDistributedGloballyParams;
-
-typedef struct UnmarkDistributedLocallyParams
-{
-	Oid id;
-	uint16 catalogRelId;
-} UnmarkDistributedLocallyParams;
-
-/*
  * NonMainDbDistributeObjectOps contains the necessary callbacks / flags to
  * support node-wide object management commands from non-main databases.
- *
- * getMarkDistributedParams / getUnmarkDistributedParams:
- *   When creating a distributed object, we always have to mark such objects
- *   as "distributed" but while for some object types we can delegate this to
- *   main database, for some others we have to explicitly send a command to
- *   all nodes in this code-path to achieve this. Callers need to implement
- *   getMarkDistributedParams when that is the case.
- *
- *   Similarly when dropping a distributed object, we always have to unmark
- *   the target object as "distributed" and our utility hook on remote nodes
- *   achieve this via UnmarkNodeWideObjectsDistributed() because the commands
- *   that we send to workers are executed via main db. However for the local
- *   node, this is not the case as we're not in the main db. For this reason,
- *   callers need to implement getUnmarkDistributedParams to unmark an object
- *   for local node as well.
- *
- *   We don't expect both of these to be NULL at the same time. However, it's
- *   okay if both of these are NULL.
- *
- *   Finally, while getMarkDistributedParams is expected to return "a list of
- *   objects", this is not the case for getUnmarkDistributedParams. This is
- *   because, while we expect that a drop command might drop multiple objects
- *   at once, we don't expect a create command to create multiple objects at
- *   once.
  *
  *  cannotBeExecutedInTransaction:
  *   Indicates whether the statement cannot be executed in a transaction. If
  *   this is set to true, the statement will be executed directly on the main
  *   database because there are no transactional visibility issues for such
  *   commands.
- *
- *   And when this is true, we don't expect getMarkDistributedParams and
- *   getUnmarkDistributedParams to be implemented.
  */
 typedef struct NonMainDbDistributeObjectOps
 {
-	MarkDistributedGloballyParams * (*getMarkDistributedParams)(Node * parsetree);
-	List * (*getUnmarkDistributedParams)(Node * parsetree);
 	bool cannotBeExecutedInTransaction;
 } NonMainDbDistributeObjectOps;
-
-
-/*
- * getMarkDistributedParams and getUnmarkDistributedParams callbacks for
- * NonMainDbDistributeObjectOps.
- */
-static MarkDistributedGloballyParams * CreateRoleStmtGetMarkDistributedParams(
-	Node *parsetree);
-static List * DropRoleStmtGetUnmarkDistributedParams(Node *parsetree);
 
 
 /*
@@ -128,53 +69,38 @@ static List * DropRoleStmtGetUnmarkDistributedParams(Node *parsetree);
  */
 static const NonMainDbDistributeObjectOps * const OperationArray[] = {
 	[T_CreateRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = CreateRoleStmtGetMarkDistributedParams,
-		.getUnmarkDistributedParams = NULL,
 		.cannotBeExecutedInTransaction = false
 	},
 	[T_DropRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = NULL,
-		.getUnmarkDistributedParams = DropRoleStmtGetUnmarkDistributedParams,
 		.cannotBeExecutedInTransaction = false
 	},
 	[T_AlterRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = NULL,
-		.getUnmarkDistributedParams = NULL,
 		.cannotBeExecutedInTransaction = false
 	},
 	[T_GrantRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = NULL,
-		.getUnmarkDistributedParams = NULL,
 		.cannotBeExecutedInTransaction = false
 	},
 	[T_CreatedbStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = NULL,
-		.getUnmarkDistributedParams = NULL,
 		.cannotBeExecutedInTransaction = true
 	},
 	[T_DropdbStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = NULL,
-		.getUnmarkDistributedParams = NULL,
 		.cannotBeExecutedInTransaction = true
 	},
 	[T_GrantStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = NULL,
-		.getUnmarkDistributedParams = NULL,
 		.cannotBeExecutedInTransaction = false
 	},
 	[T_SecLabelStmt] = &(NonMainDbDistributeObjectOps) {
-		.getMarkDistributedParams = NULL,
-		.getUnmarkDistributedParams = NULL,
 		.cannotBeExecutedInTransaction = false
 	},
 };
 
 
-/* other static function declarations */
+/* static function declarations */
 const NonMainDbDistributeObjectOps * GetNonMainDbDistributeObjectOps(Node *parsetree);
-static void MarkObjectDistributedGloballyOnMainDbs(
-	MarkDistributedGloballyParams *markDistributedParams);
-static void UnmarkObjectsDistributedOnLocalMainDb(List *unmarkDistributedParamsList);
+static void CreateRoleStmtMarkDistGloballyOnMainDbs(CreateRoleStmt *createRoleStmt);
+static void DropRoleStmtUnmarkDistOnLocalMainDb(DropRoleStmt *dropRoleStmt);
+static void MarkObjectDistributedGloballyOnMainDbs(Oid catalogRelId, Oid objectId, char *objectName);
+static void UnmarkObjectDistributedOnLocalMainDb(uint16 catalogRelId, Oid objectId);
 
 
 /*
@@ -227,10 +153,9 @@ RunPreprocessNonMainDBCommand(Node *parsetree)
 					 quote_literal_cstr(CurrentUserName()));
 	RunCitusMainDBQuery(mainDBQuery->data);
 
-	if (ops->getUnmarkDistributedParams)
+	if (IsA(parsetree, DropRoleStmt))
 	{
-		List *unmarkDistributedParamsList = ops->getUnmarkDistributedParams(parsetree);
-		UnmarkObjectsDistributedOnLocalMainDb(unmarkDistributedParamsList);
+		DropRoleStmtUnmarkDistOnLocalMainDb((DropRoleStmt *) parsetree);
 	}
 
 	return false;
@@ -244,22 +169,14 @@ RunPreprocessNonMainDBCommand(Node *parsetree)
 void
 RunPostprocessNonMainDBCommand(Node *parsetree)
 {
-	if (IsMainDB)
+	if (IsMainDB || !GetNonMainDbDistributeObjectOps(parsetree))
 	{
 		return;
 	}
 
-	const NonMainDbDistributeObjectOps *ops = GetNonMainDbDistributeObjectOps(parsetree);
-	if (!ops)
+	if (IsA(parsetree, CreateRoleStmt))
 	{
-		return;
-	}
-
-	if (ops->getMarkDistributedParams)
-	{
-		MarkDistributedGloballyParams *markDistributedParams =
-			ops->getMarkDistributedParams(parsetree);
-		MarkObjectDistributedGloballyOnMainDbs(markDistributedParams);
+		CreateRoleStmtMarkDistGloballyOnMainDbs((CreateRoleStmt *) parsetree);
 	}
 }
 
@@ -355,94 +272,75 @@ GetNonMainDbDistributeObjectOps(Node *parsetree)
 
 
 /*
+ * CreateRoleStmtMarkDistGloballyOnMainDbs marks the role as
+ * distributed on all main databases globally.
+ */
+static void
+CreateRoleStmtMarkDistGloballyOnMainDbs(CreateRoleStmt *createRoleStmt)
+{
+	/* object must exist as we've just created it */
+	bool missingOk = false;
+	Oid roleId = get_role_oid(createRoleStmt->role, missingOk);
+
+	MarkObjectDistributedGloballyOnMainDbs(AuthIdRelationId, roleId,
+										   createRoleStmt->role);
+}
+
+
+/*
+ * DropRoleStmtUnmarkDistOnLocalMainDb unmarks the roles as
+ * distributed on the local main database.
+ */
+static void
+DropRoleStmtUnmarkDistOnLocalMainDb(DropRoleStmt *dropRoleStmt)
+{
+	RoleSpec *roleSpec = NULL;
+	foreach_ptr(roleSpec, dropRoleStmt->roles)
+	{
+		Oid roleOid = get_role_oid(roleSpec->rolename,
+								   dropRoleStmt->missing_ok);
+		if (roleOid == InvalidOid)
+		{
+			continue;
+		}
+
+		UnmarkObjectDistributedOnLocalMainDb(AuthIdRelationId, roleOid);
+	}
+}
+
+
+/*
  * MarkObjectDistributedGloballyOnMainDbs marks an object as
  * distributed on all main databases globally.
  */
 static void
-MarkObjectDistributedGloballyOnMainDbs(
-	MarkDistributedGloballyParams *markDistributedParams)
+MarkObjectDistributedGloballyOnMainDbs(Oid catalogRelId, Oid objectId, char *objectName)
 {
 	StringInfo mainDBQuery = makeStringInfo();
 	appendStringInfo(mainDBQuery,
 					 MARK_OBJECT_DISTRIBUTED,
-					 markDistributedParams->catalogRelId,
-					 quote_literal_cstr(markDistributedParams->name),
-					 markDistributedParams->id,
+					 catalogRelId,
+					 quote_literal_cstr(objectName),
+					 objectId,
 					 quote_literal_cstr(CurrentUserName()));
 	RunCitusMainDBQuery(mainDBQuery->data);
 }
 
 
 /*
- * UnmarkObjectsDistributedOnLocalMainDb unmarks a list of objects as
+ * UnmarkObjectDistributedOnLocalMainDb unmarks an object as
  * distributed on the local main database.
  */
 static void
-UnmarkObjectsDistributedOnLocalMainDb(List *unmarkDistributedParamsList)
+UnmarkObjectDistributedOnLocalMainDb(uint16 catalogRelId, Oid objectId)
 {
-	int subObjectId = 0;
-	char *checkObjectExistence = "false";
+	const int subObjectId = 0;
+	const char *checkObjectExistence = "false";
 
-	UnmarkDistributedLocallyParams *unmarkDistributedParams = NULL;
-	foreach_ptr(unmarkDistributedParams, unmarkDistributedParamsList)
-	{
-		StringInfo query = makeStringInfo();
-		appendStringInfo(query,
-						 UNMARK_OBJECT_DISTRIBUTED,
-						 unmarkDistributedParams->catalogRelId,
-						 unmarkDistributedParams->id,
-						 subObjectId, checkObjectExistence);
-		RunCitusMainDBQuery(query->data);
-	}
-}
-
-
-/*
- * getMarkDistributedParams and getUnmarkDistributedParams callback implementations
- * for NonMainDbDistributeObjectOps start here.
- */
-static MarkDistributedGloballyParams *
-CreateRoleStmtGetMarkDistributedParams(Node *parsetree)
-{
-	CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-	MarkDistributedGloballyParams *params =
-		(MarkDistributedGloballyParams *) palloc(sizeof(MarkDistributedGloballyParams));
-	params->name = stmt->role;
-	params->catalogRelId = AuthIdRelationId;
-
-	/* object must exist as we've just created it */
-	bool missingOk = false;
-	params->id = get_role_oid(stmt->role, missingOk);
-
-	return params;
-}
-
-
-static List *
-DropRoleStmtGetUnmarkDistributedParams(Node *parsetree)
-{
-	DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
-
-	List *paramsList = NIL;
-
-	RoleSpec *roleSpec = NULL;
-	foreach_ptr(roleSpec, stmt->roles)
-	{
-		UnmarkDistributedLocallyParams *params =
-			(UnmarkDistributedLocallyParams *) palloc(
-				sizeof(UnmarkDistributedLocallyParams));
-
-		Oid roleOid = get_role_oid(roleSpec->rolename, stmt->missing_ok);
-		if (roleOid == InvalidOid)
-		{
-			continue;
-		}
-
-		params->id = roleOid;
-		params->catalogRelId = AuthIdRelationId;
-
-		paramsList = lappend(paramsList, params);
-	}
-
-	return paramsList;
+	StringInfo query = makeStringInfo();
+	appendStringInfo(query,
+					 UNMARK_OBJECT_DISTRIBUTED,
+					 catalogRelId, objectId,
+					 subObjectId, checkObjectExistence);
+	RunCitusMainDBQuery(query->data);
 }
