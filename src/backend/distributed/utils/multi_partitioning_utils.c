@@ -13,6 +13,7 @@
 #include "access/htup_details.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
+#include "catalog/namespace.h"
 #include "catalog/partition.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
@@ -26,6 +27,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/regproc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
@@ -233,27 +235,20 @@ worker_fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 {
 	Oid parentShardIndexId = PG_GETARG_OID(0);
 
-	text *partitionShardName = PG_GETARG_TEXT_P(1);
+	text *partitionIndexName = PG_GETARG_TEXT_P(1);
+
+	text *partitionName = PG_GETARG_TEXT_P(2);
 
 	/* resolve partitionShardId from passed in schema and partition shard name */
-	List *partitionShardNameList = textToQualifiedNameList(partitionShardName);
-	RangeVar *partitionShard = makeRangeVarFromNameList(partitionShardNameList);
+	List *partitionNameList = textToQualifiedNameList(partitionName);
+	RangeVar *partition = makeRangeVarFromNameList(partitionNameList);
 
 	/* lock the relation with the lock mode */
 	bool missing_ok = true;
-	Oid partitionShardId = RangeVarGetRelid(partitionShard, NoLock, missing_ok);
-
-	if (!OidIsValid(partitionShardId))
-	{
-		PG_RETURN_VOID();
-	}
+	Oid partitionId = RangeVarGetRelid(partition, NoLock, missing_ok);
 
 	CheckCitusVersion(ERROR);
-	EnsureTableOwner(partitionShardId);
-
-	text *newPartitionShardIndexNameText = PG_GETARG_TEXT_P(2);
-	char *newPartitionShardIndexName = text_to_cstring(
-		newPartitionShardIndexNameText);
+	EnsureTableOwner(partitionId);
 
 	if (!has_subclass(parentShardIndexId))
 	{
@@ -263,12 +258,31 @@ worker_fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 
 	List *partitionShardIndexIds = find_inheritance_children(parentShardIndexId,
 															 ShareRowExclusiveLock);
-	Oid partitionShardIndexId = InvalidOid;
-	foreach_oid(partitionShardIndexId, partitionShardIndexIds)
+
+	List *partitionShardIntervalList = LoadShardIntervalList(partitionId);
+	ShardInterval *partitionShardInterval = NULL;
+	foreach_ptr(partitionShardInterval, partitionShardIntervalList)
 	{
-		if (IndexGetRelation(partitionShardIndexId, false) == partitionShardId)
+		uint64 partitionShardId = partitionShardInterval->shardId;
+
+		char *shardName = ConstructQualifiedShardName(partitionShardInterval);
+		List *names = stringToQualifiedNameList_compat(shardName);
+		RangeVar *partitionShardRangeVar = makeRangeVarFromNameList(names);
+
+		Oid partitionShardOid = RangeVarGetRelid(partitionShardRangeVar, NoLock,
+												 missing_ok);
+
+		Oid partitionShardIndexId = InvalidOid;
+		foreach_oid(partitionShardIndexId, partitionShardIndexIds)
 		{
+			if (IndexGetRelation(partitionShardIndexId, false) != partitionShardOid)
+			{
+				continue;
+			}
+
 			char *partitionShardIndexName = get_rel_name(partitionShardIndexId);
+
+
 			if (ExtractShardIdFromTableName(partitionShardIndexName, missing_ok) ==
 				INVALID_SHARD_ID)
 			{
@@ -279,6 +293,11 @@ worker_fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 				 * which ends in _shardid, hence we maintain naming consistency:
 				 * we can reach this partition shard index by conventional Citus naming
 				 */
+
+				char *newPartitionShardIndexName = pstrdup(text_to_cstring(
+															   partitionIndexName));
+				AppendShardIdToName(&newPartitionShardIndexName, partitionShardId);
+
 				RenameStmt *stmt = makeNode(RenameStmt);
 
 				stmt->renameType = OBJECT_INDEX;
@@ -290,7 +309,6 @@ worker_fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 
 				RenameRelation(stmt);
 			}
-			break;
 		}
 	}
 
@@ -712,6 +730,12 @@ WorkerFixPartitionShardIndexNamesCommandListForPartitionIndex(Oid partitionIndex
 	char *partitionIndexName = get_rel_name(partitionIndexId);
 	char *partitionName = get_rel_name(partitionId);
 	char *partitionSchemaName = get_namespace_name(get_rel_namespace(partitionId));
+
+
+	char *qualifiedPartitionName = quote_qualified_identifier(
+		partitionSchemaName,
+		partitionName);
+
 	List *partitionShardIntervalList = LoadShardIntervalList(partitionId);
 
 	ShardInterval *partitionShardInterval = NULL;
@@ -753,8 +777,8 @@ WorkerFixPartitionShardIndexNamesCommandListForPartitionIndex(Oid partitionIndex
 		appendStringInfo(shardQueryString,
 						 "SELECT worker_fix_partition_shard_index_names(%s::regclass, %s, %s)",
 						 quote_literal_cstr(qualifiedParentShardIndexName),
-						 quote_literal_cstr(qualifiedPartitionShardName),
-						 quote_literal_cstr(newPartitionShardIndexName));
+						 quote_literal_cstr(partitionIndexName),
+						 quote_literal_cstr(qualifiedPartitionName));
 		commandList = lappend(commandList, shardQueryString->data);
 	}
 
