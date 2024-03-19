@@ -27,6 +27,8 @@ grant role4 to "role5'_test" with admin option;
 
 grant role4 to role1 with admin option GRANTED BY "role5'_test";
 
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option, inherit_option,set_option FROM pg_auth_members pa;
+
 grant role4 to role3 with admin option GRANTED BY role1;
 
 grant role3 to role1 with admin option GRANTED BY role4;

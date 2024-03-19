@@ -344,9 +344,25 @@ DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 		{
 			char *objectDescription = getObjectDescription(objectAddress, false);
 
+			// Iterate all objects in the 'dependencies' list, get the object names and create a string
+			ListCell *cell;
+			StringInfo objectNames = makeStringInfo();
+			foreach(cell, dependencies)
+			{
+				ObjectAddress *dependency1 = (ObjectAddress *) lfirst(cell);
+				char *objectName = getObjectDescription(dependency1, false);
+				appendStringInfo(objectNames, "%s\n", objectName);
+			}
+			//to show the circular dependency
+
+
+
+
+
 			StringInfo detailInfo = makeStringInfo();
 			appendStringInfo(detailInfo, "\"%s\" circularly depends itself, resolve "
 										 "circular dependency first", objectDescription);
+			appendStringInfo(detailInfo, "ependencies are:\n%s", objectNames->data);
 
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "Citus can not handle circular dependencies "
