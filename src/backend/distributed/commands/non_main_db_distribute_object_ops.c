@@ -67,7 +67,7 @@ typedef struct NonMainDbDistributeObjectOps
 /*
  * OperationArray that holds NonMainDbDistributeObjectOps for different command types.
  */
-static const NonMainDbDistributeObjectOps * const OperationArray[] = {
+static const NonMainDbDistributeObjectOps *const OperationArray[] = {
 	[T_CreateRoleStmt] = &(NonMainDbDistributeObjectOps) {
 		.cannotBeExecutedInTransaction = false
 	},
@@ -99,7 +99,8 @@ static const NonMainDbDistributeObjectOps * const OperationArray[] = {
 const NonMainDbDistributeObjectOps * GetNonMainDbDistributeObjectOps(Node *parsetree);
 static void CreateRoleStmtMarkDistGloballyOnMainDbs(CreateRoleStmt *createRoleStmt);
 static void DropRoleStmtUnmarkDistOnLocalMainDb(DropRoleStmt *dropRoleStmt);
-static void MarkObjectDistributedGloballyOnMainDbs(Oid catalogRelId, Oid objectId, char *objectName);
+static void MarkObjectDistributedGloballyOnMainDbs(Oid catalogRelId, Oid objectId,
+												   char *objectName);
 static void UnmarkObjectDistributedOnLocalMainDb(uint16 catalogRelId, Oid objectId);
 
 
