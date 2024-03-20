@@ -121,7 +121,7 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
  * AppendColumnNameList converts a list of columns into comma separated string format
  * (colname_1, colname_2, .., colname_n).
  */
-static void
+void
 AppendColumnNameList(StringInfo buf, List *columns)
 {
 	appendStringInfoString(buf, " (");
