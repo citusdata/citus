@@ -36,6 +36,7 @@ typedef struct DistributedTransactionId
 	bool transactionOriginator;
 	uint64 transactionNumber;
 	TimestampTz timestamp;
+	uint64 gpid;
 } DistributedTransactionId;
 
 

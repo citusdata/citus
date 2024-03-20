@@ -167,6 +167,8 @@ CheckForDistributedDeadlocks(void)
 			LogDistributedDeadlockDebugMessage("Distributed deadlock found among the "
 											   "following distributed transactions:");
 
+			Bitmapset *involvedNodes = NULL;
+
 			/*
 			 * We search for the youngest participant for two reasons
 			 * (i) predictable results (ii) cancel the youngest transaction
@@ -203,6 +205,23 @@ CheckForDistributedDeadlocks(void)
 				{
 					youngestAliveTransaction = currentNode;
 				}
+
+				involvedNodes = bms_add_members(involvedNodes,
+												currentNode->blockedOnNodes);
+			}
+
+			/*
+			 * If only a single node is involved in the cycle we rely on the
+			 * local deadlock detection from Postgres. We do this because
+			 * Postgres its local deadlock detection is more advanced than
+			 * Citus its distributed deadlock detection. Postgres deadlock
+			 * detection can sometimes resolve a deadlock without canceling any
+			 * query. It does this by changing the order of processes in the
+			 * lock wait queues.
+			 */
+			if (bms_num_members(involvedNodes))
+			{
+				continue;
 			}
 
 			/* we found the deadlock and its associated proc exists */
@@ -458,24 +477,26 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 
 	HTAB *adjacencyList = hash_create("distributed deadlock detection", 64, &info,
 									  hashFlags);
-
 	for (int edgeIndex = 0; edgeIndex < edgeCount; edgeIndex++)
 	{
 		WaitEdge *edge = &waitGraph->edges[edgeIndex];
 		bool transactionOriginator = false;
 
+
 		DistributedTransactionId waitingId = {
 			edge->waitingNodeId,
 			transactionOriginator,
 			edge->waitingTransactionNum,
-			edge->waitingTransactionStamp
+			edge->waitingTransactionStamp,
+			edge->waitingGPid,
 		};
 
 		DistributedTransactionId blockingId = {
 			edge->blockingNodeId,
 			transactionOriginator,
 			edge->blockingTransactionNum,
-			edge->blockingTransactionStamp
+			edge->blockingTransactionStamp,
+			edge->blockingGPid,
 		};
 
 		TransactionNode *waitingTransaction =
@@ -485,6 +506,8 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 
 		waitingTransaction->waitsFor = lappend(waitingTransaction->waitsFor,
 											   blockingTransaction);
+		waitingTransaction->blockedOnNodes = bms_add_member(
+			waitingTransaction->blockedOnNodes, edge->nodeId);
 	}
 
 	return adjacencyList;
@@ -509,6 +532,7 @@ GetOrCreateTransactionNode(HTAB *adjacencyList, DistributedTransactionId *transa
 	{
 		transactionNode->waitsFor = NIL;
 		transactionNode->initiatorProc = NULL;
+		transactionNode->blockedOnNodes = NULL;
 	}
 
 	return transactionNode;
@@ -529,6 +553,8 @@ DistributedTransactionIdHash(const void *key, Size keysize)
 									   sizeof(int64)));
 	hash = hash_combine(hash, hash_any((unsigned char *) &entry->timestamp,
 									   sizeof(TimestampTz)));
+	hash = hash_combine(hash, hash_any((unsigned char *) &entry->gpid,
+									   sizeof(uint64)));
 
 	return hash;
 }
@@ -547,7 +573,15 @@ DistributedTransactionIdCompare(const void *a, const void *b, Size keysize)
 	DistributedTransactionId *xactIdA = (DistributedTransactionId *) a;
 	DistributedTransactionId *xactIdB = (DistributedTransactionId *) b;
 
-	if (!TimestampDifferenceExceeds(xactIdB->timestamp, xactIdA->timestamp, 0))
+	if (xactIdA->gpid < xactIdB->gpid)
+	{
+		return -1;
+	}
+	else if (xactIdA->gpid < xactIdB->gpid)
+	{
+		return 1;
+	}
+	else if (!TimestampDifferenceExceeds(xactIdB->timestamp, xactIdA->timestamp, 0))
 	{
 		/* ! (B <= A) = A < B */
 		return -1;
@@ -595,11 +629,13 @@ LogCancellingBackend(TransactionNode *transactionNode)
 
 	StringInfo logMessage = makeStringInfo();
 
-	appendStringInfo(logMessage, "Cancelling the following backend "
-								 "to resolve distributed deadlock "
-								 "(transaction number = " UINT64_FORMAT ", pid = %d)",
+	appendStringInfo(logMessage,
+					 "Cancelling the following backend "
+					 "to resolve distributed deadlock "
+					 "(transaction number = " UINT64_FORMAT
+					 ", gpid = " UINT64_FORMAT ")",
 					 transactionNode->transactionId.transactionNumber,
-					 transactionNode->initiatorProc->pid);
+					 transactionNode->transactionId.gpid);
 
 	LogDistributedDeadlockDebugMessage(logMessage->data);
 }
@@ -621,13 +657,18 @@ LogTransactionNode(TransactionNode *transactionNode)
 	DistributedTransactionId *transactionId = &(transactionNode->transactionId);
 
 	appendStringInfo(logMessage,
-					 "[DistributedTransactionId: (%d, " UINT64_FORMAT ", %s)] = ",
+					 "[DistributedTransactionId: (" UINT64_FORMAT ", %d," UINT64_FORMAT
+					 ", %s)] = ",
+					 transactionId->gpid,
 					 transactionId->initiatorNodeIdentifier,
 					 transactionId->transactionNumber,
 					 timestamptz_to_str(transactionId->timestamp));
 
-	appendStringInfo(logMessage, "[WaitsFor transaction numbers: %s]",
+	appendStringInfo(logMessage, "[WaitsFor gpids: %s]",
 					 WaitsForToString(transactionNode->waitsFor));
+
+	uint64 gpid = transactionId->gpid;
+	bool gpidMissingOk = false;
 
 	/* log the backend query if the proc is associated with the transaction */
 	if (transactionNode->initiatorProc != NULL)
@@ -635,6 +676,17 @@ LogTransactionNode(TransactionNode *transactionNode)
 		const char *backendQuery =
 			pgstat_get_backend_current_activity(transactionNode->initiatorProc->pid,
 												false);
+
+		appendStringInfo(logMessage, "[Backend Query: %s]", backendQuery);
+	}
+	else if (
+		gpid &&
+		ExtractNodeIdFromGlobalPID(gpid, gpidMissingOk) == GetLocalNodeId()
+		)
+	{
+		int pid = ExtractProcessIdFromGlobalPID(gpid);
+		const char *backendQuery =
+			pgstat_get_backend_current_activity(pid, false);
 
 		appendStringInfo(logMessage, "[Backend Query: %s]", backendQuery);
 	}
@@ -680,7 +732,7 @@ WaitsForToString(List *waitsFor)
 		}
 
 		appendStringInfo(transactionIdStr, UINT64_FORMAT,
-						 waitingNode->transactionId.transactionNumber);
+						 waitingNode->transactionId.gpid);
 	}
 
 	return transactionIdStr->data;

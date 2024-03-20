@@ -28,6 +28,7 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
+#include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
@@ -46,10 +47,11 @@ typedef struct PROCStack
 } PROCStack;
 
 
-static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex);
+static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex,
+								  WorkerNode *worker);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static void AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result,
-												int rowIndex);
+												int rowIndex, WorkerNode *worker);
 static void ReturnBlockedProcessGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static WaitGraph * BuildLocalWaitGraph(bool onlyDistributedTx);
 static bool IsProcessWaitingForSafeOperations(PGPROC *proc);
@@ -203,7 +205,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	}
 
 	/* receive dump_local_wait_edges results */
-	foreach_ptr(connection, connectionList)
+	forboth_ptr(connection, connectionList, workerNode, workerNodeList)
 	{
 		bool raiseInterrupts = true;
 
@@ -234,11 +236,12 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		{
 			if (onlyDistributedTx)
 			{
-				AddWaitEdgeFromResult(waitGraph, result, rowIndex);
+				AddWaitEdgeFromResult(waitGraph, result, rowIndex, workerNode);
 			}
 			else
 			{
-				AddWaitEdgeFromBlockedProcessResult(waitGraph, result, rowIndex);
+				AddWaitEdgeFromBlockedProcessResult(waitGraph, result, rowIndex,
+													workerNode);
 			}
 		}
 
@@ -255,7 +258,8 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
  * a PGresult.
  */
 static void
-AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
+AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex,
+					  WorkerNode *worker)
 {
 	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
 
@@ -270,6 +274,7 @@ AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
 	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 6);
 	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 7);
 	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 8);
+	waitEdge->nodeId = worker->nodeId;
 }
 
 
@@ -278,7 +283,8 @@ AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
  * is read from a PGresult.
  */
 static void
-AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
+AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result, int rowIndex,
+									WorkerNode *worker)
 {
 	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
 
@@ -293,6 +299,7 @@ AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result, int 
 	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 8);
 	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 9);
 	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 10);
+	waitEdge->nodeId = worker->nodeId;
 }
 
 
@@ -673,9 +680,34 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 	PROCLOCK *waitProcLock = proc->waitProcLock;
 	LOCK *waitLock = waitProcLock->tag.myLock;
 
-	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
-		   waitLock->tag.locktag_type == LOCKTAG_PAGE ||
-		   waitLock->tag.locktag_type == LOCKTAG_SPECULATIVE_TOKEN;
+
+	if (waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
+		waitLock->tag.locktag_type == LOCKTAG_PAGE ||
+		waitLock->tag.locktag_type == LOCKTAG_SPECULATIVE_TOKEN)
+	{
+		return true;
+	}
+# if PG_VERSION_NUM >= PG_VERSION_14
+
+	/*
+	 * We ignore processes that are waiting for a short time, to give the
+	 * regular Postgres deadlock detector a chance to kick in. The Postgres
+	 * deadlock detector is more advanced that the distributed deadlock
+	 * detector from Citus. It is sometimes able to shuffle waiting processes
+	 * around in the wait queue to break lock cycles, which is preferable to
+	 * cancelling transactions.
+	 */
+	TimestampTz waitStart = pg_atomic_read_u64(&proc->waitStart);
+
+	TimestampTz timeoutReachedAt = TimestampTzPlusMilliseconds(
+		waitStart,
+		DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout);
+	if (timestamptz_cmp_internal(GetCurrentTimestamp(), timeoutReachedAt) == 1)
+	{
+		return true;
+	}
+#endif
+	return false;
 }
 
 
