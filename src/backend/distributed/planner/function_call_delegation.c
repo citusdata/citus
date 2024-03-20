@@ -91,6 +91,10 @@ bool InDelegatedFunctionCall = false;
 static bool
 contain_param_walker(Node *node, void *context)
 {
+	if (node == NULL)
+	{
+		return false;
+	}
 	if (IsA(node, Param))
 	{
 		Param *paramNode = (Param *) node;
