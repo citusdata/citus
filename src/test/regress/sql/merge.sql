@@ -1951,10 +1951,93 @@ RESET client_min_messages;
 
 SELECT * FROM target_6785 ORDER BY 1;
 
+-- Get the result from Postgres tables
+CREATE TABLE dest_tab(tid int, val int, ser bigserial, tm timestamp);
+CREATE TABLE src_tab(sid int, val int);
+
+SELECT setval('dest_tab_ser_seq', 1, true);
+INSERT INTO src_tab SELECT i,i FROM generate_series(0,1000)i;
+
+CREATE OR REPLACE FUNCTION src_tab_result()
+RETURNS TABLE (id INT, val INT, bs bigint, tm timestamp) AS
+$$
+BEGIN
+    RETURN QUERY SELECT src_tab.*, nextval('dest_tab_ser_seq'::regclass), now()::timestamp FROM src_tab;
+END;
+$$
+LANGUAGE plpgsql;
+
+MERGE INTO dest_tab t
+USING (SELECT * FROM src_tab_result()) s
+ON (s.id = t.tid)
+    WHEN MATCHED THEN
+	UPDATE SET val = t.val + 1
+    WHEN NOT MATCHED THEN
+	INSERT VALUES(s.id, s.val, s.bs, s.tm);
+
+-- Save the postgres result
+CREATE TABLE postgres_serial AS SELECT MIN(ser), MAX(ser), AVG(ser) FROM dest_tab ;
+
+-- Cleanup the data and reset the sequence
+TRUNCATE dest_tab;
+TRUNCATE src_tab;
+SELECT setval('dest_tab_ser_seq', 1, true);
+
+INSERT INTO src_tab SELECT i,i FROM generate_series(0,1000)i;
+
+-- Now, make them Citus tables
+SELECT create_distributed_table('dest_tab', 'tid');
+SELECT create_distributed_table('src_tab', 'sid', colocate_with => 'dest_tab');
+
+MERGE INTO dest_tab t
+USING (SELECT * FROM src_tab_result()) s
+ON (s.id = t.tid)
+    WHEN MATCHED THEN
+	UPDATE SET val = t.val + 1
+    WHEN NOT MATCHED THEN
+	INSERT VALUES(s.id, s.val, s.bs, s.tm);
+
+-- Compare the sequence value
+SELECT
+    ((SELECT MAX(max) FROM postgres_serial) = (SELECT MAX(ser) FROM dest_tab)
+    AND
+    (SELECT MIN(min) FROM postgres_serial) = (SELECT MIN(ser) FROM dest_tab)
+    AND
+    (SELECT AVG(avg) FROM postgres_serial) = (SELECT AVG(ser) FROM dest_tab)) AS all_equal;
+
+--
+-- Source without a table
+--
+MERGE INTO dest_tab t
+USING (VALUES (1, -1), (2, -1), (3, -1)) as s (sid, val)
+ON t.tid = s.sid
+WHEN MATCHED THEN
+        UPDATE SET val = s.val
+WHEN NOT MATCHED THEN
+        DO NOTHING;
+
+-- Three rows with 'val = -1'
+SELECT COUNT(*) FROM dest_tab where val = -1;
+
 --
 -- Error and Unsupported scenarios
 --
 
+-- Test STABLE function with column reference
+MERGE INTO dest_tab t
+USING (SELECT *, now() as nw FROM src_tab) s
+ON (s.sid = t.tid)
+    WHEN MATCHED THEN
+        UPDATE SET val = t.val + 1
+    WHEN NOT MATCHED THEN
+        INSERT VALUES(s.sid, s.val, 1, nw);
+
+-- Test sequences
+MERGE INTO target_serial sda
+USING (select id, z, nextval('target_serial_d_seq'::regclass) as ser from source_serial) sdn
+ON sda.id = sdn.id
+WHEN NOT matched THEN
+       INSERT (id, z, d) VALUES (id, z, ser);
 
 -- Test explain analyze with repartition
 EXPLAIN ANALYZE
@@ -1965,15 +2048,6 @@ WHEN MATCHED THEN
 	UPDATE SET val1 = s3
 WHEN NOT MATCHED THEN
 	INSERT VALUES(id2, s3);
-
--- Source without a table
-MERGE INTO target_cj t
-USING (VALUES (1, 1), (2, 1), (3, 3)) as s (sid, val)
-ON t.tid = s.sid AND t.tid = 2
-WHEN MATCHED THEN
-        UPDATE SET val = s.val
-WHEN NOT MATCHED THEN
-        DO NOTHING;
 
 -- Incomplete source
 MERGE INTO target_cj t
@@ -2298,8 +2372,8 @@ CREATE TABLE dist_source(id int, val varchar);
 SELECT create_distributed_table('dist_source', 'id', colocate_with => 'none');
 
 MERGE INTO dist_target
-USING (SELECT 100 id) AS source
-ON dist_target.id = source.id AND dist_target.val = 'const'
+USING (SELECT 100 id, 101 val) AS source
+ON dist_target.id = source.val AND dist_target.val = 'const'
 WHEN MATCHED THEN
 UPDATE SET val = 'source'
 WHEN NOT MATCHED THEN

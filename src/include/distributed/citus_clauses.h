@@ -50,5 +50,6 @@ extern Node * PartiallyEvaluateExpression(Node *expression,
 										  coordinatorEvaluationContext);
 extern bool CitusIsVolatileFunction(Node *node);
 extern bool CitusIsMutableFunction(Node *node);
+extern bool IsNextValExpr(Node *node);
 
 #endif /* CITUS_CLAUSES_H */

@@ -19,6 +19,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/planmain.h"
 #include "utils/datum.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -536,4 +537,31 @@ FixFunctionArgumentsWalker(Node *expr, void *context)
 	}
 
 	return expression_tree_walker(expr, FixFunctionArgumentsWalker, NULL);
+}
+
+
+/*
+ * IsNextValExpr checks if the given node either contains a sequence
+ * column or contains nextval() function.
+ */
+bool
+IsNextValExpr(Node *node)
+{
+	/* check if the node contains an identity column */
+	if (IsA(node, NextValueExpr))
+	{
+		return true;
+	}
+
+	/* check if the node contains call to 'nextval' */
+	if (IsA(node, FuncExpr))
+	{
+		FuncExpr *funcExpr = (FuncExpr *) node;
+
+		if (funcExpr->funcid == F_NEXTVAL)
+		{
+			return true;
+		}
+	}
+	return false;
 }

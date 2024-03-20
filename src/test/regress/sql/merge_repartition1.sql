@@ -80,6 +80,15 @@ CREATE OR REPLACE FUNCTION compare_data() RETURNS VOID SET search_path TO merge_
 $$
 LANGUAGE SQL;
 
+CREATE OR REPLACE FUNCTION source_result(table_name text)
+RETURNS TABLE (id int, val int, const int) AS
+$$
+BEGIN
+    RETURN QUERY EXECUTE format('SELECT * FROM %I', table_name);
+END;
+$$
+LANGUAGE plpgsql;
+
 --
 -- Target and source are distributed, and non-colocated
 --
@@ -572,6 +581,37 @@ WHEN MATCHED AND t.id <= 5500 THEN
         UPDATE SET val = s.val + 1
 WHEN MATCHED THEN
         DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+SELECT compare_data();
+
+--
+-- Target is distributed, and source is a function returning rows
+--
+SET client_min_messages TO WARNING;
+SELECT cleanup_data();
+RESET client_min_messages;
+SELECT setup_data();
+SELECT create_distributed_table('citus_target', 'id');
+
+MERGE INTO pg_target t
+USING (SELECT * FROM source_result('pg_source')) s
+ON t.id = s.id
+WHEN MATCHED AND t.id <= 7500 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+	DELETE
+WHEN NOT MATCHED THEN
+        INSERT VALUES(s.id, s.val);
+
+MERGE INTO citus_target t
+USING (SELECT * FROM source_result('citus_source')) s
+ON t.id = s.id
+WHEN MATCHED AND t.id <= 7500 THEN
+        UPDATE SET val = s.val + 1
+WHEN MATCHED THEN
+	DELETE
 WHEN NOT MATCHED THEN
         INSERT VALUES(s.id, s.val);
 
