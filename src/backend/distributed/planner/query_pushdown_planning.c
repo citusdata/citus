@@ -423,38 +423,14 @@ IsOuterJoinExpr(Node *node)
 bool
 SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
 {
-	ListCell *windowClauseCell = NULL;
-	List *windowClauseList = query->windowClause;
-
-	/*
-	 * We need to check each window clause separately if there is a partition by clause
-	 * and if it is partitioned on the distribution column.
-	 */
-	foreach(windowClauseCell, windowClauseList)
-	{
-		WindowClause *windowClause = lfirst(windowClauseCell);
-
-		if (!windowClause->partitionClause)
-		{
-			if (errorDetail)
-			{
-				*errorDetail = makeStringInfo();
-				appendStringInfoString(*errorDetail,
-									   "Window functions without PARTITION BY on distribution "
-									   "column is currently unsupported");
-			}
-			return false;
-		}
-	}
-
 	if (!WindowPartitionOnDistributionColumn(query))
 	{
 		if (errorDetail)
 		{
 			*errorDetail = makeStringInfo();
 			appendStringInfoString(*errorDetail,
-								   "Window functions with PARTITION BY list missing distribution "
-								   "column is currently unsupported");
+								   "Window functions should have a PARTITION BY clause list "
+								   "that contains distribution column");
 		}
 		return false;
 	}
