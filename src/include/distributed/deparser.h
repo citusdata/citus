@@ -121,6 +121,8 @@ extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
 
+extern void AppendColumnNameList(StringInfo buf, List *columns);
+
 /* Common deparser utils */
 
 typedef struct DefElemOptionFormat
