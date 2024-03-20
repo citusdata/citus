@@ -34,6 +34,7 @@
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 #include "utils/xid8.h"
 
 #include "pg_version_constants.h"
@@ -261,11 +262,28 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 			continue;
 		}
 
-		/* Check if the transaction is created by an outer transaction from a non-main database */
 		bool outerXidIsNull = false;
-		Datum outerXidDatum = heap_getattr(heapTuple,
-										   Anum_pg_dist_transaction_outerxid,
-										   tupleDescriptor, &outerXidIsNull);
+		Datum outerXidDatum = 0;
+		if (EnableVersionChecks ||
+			SearchSysCacheExistsAttName(DistTransactionRelationId(), "outer_xid"))
+		{
+			/* Check if the transaction is created by an outer transaction from a non-main database */
+			outerXidDatum = heap_getattr(heapTuple,
+										 Anum_pg_dist_transaction_outerxid,
+										 tupleDescriptor, &outerXidIsNull);
+		}
+		else
+		{
+			/*
+			 * Normally we don't try to recover prepared transactions when the
+			 * binary version doesn't match the sql version. However, we skip
+			 * those checks in regression tests by disabling
+			 * citus.enable_version_checks. And when this is the case, while
+			 * the C code looks for "outer_xid" attribute, pg_dist_transaction
+			 * doesn't yet have it.
+			 */
+			Assert(!EnableVersionChecks);
+		}
 
 		TransactionId outerXid = 0;
 		if (!outerXidIsNull)
