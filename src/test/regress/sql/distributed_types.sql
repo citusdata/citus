@@ -350,6 +350,19 @@ SELECT create_distributed_table('table_text_local_def','id');
 CREATE TYPE pg_temp.temp_type AS (int_field int);
 CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
 
+-- check that dropping a schema that has a type used in a distribution column does not fail
+
+CREATE SCHEMA schema_with_custom_distribution_type;
+SET search_path TO schema_with_custom_distribution_type;
+
+CREATE TYPE my_type AS (int_field int);
+CREATE TABLE tbl (a schema_with_custom_distribution_type.my_type);
+SELECT create_distributed_table('tbl', 'a');
+
+drop schema schema_with_custom_distribution_type cascade;
+
+SET search_path TO type_tests;
+
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
