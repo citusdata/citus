@@ -59,6 +59,7 @@ typedef struct WorkerNode
 
 /* Config variables managed via guc.c */
 extern int MaxWorkerNodesTracked;
+extern int MaxDatabasesPerWorkerNodesTracked;
 extern char *WorkerListFileName;
 extern char *CurrentCluster;
 

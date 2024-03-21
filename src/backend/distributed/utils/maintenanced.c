@@ -49,6 +49,7 @@
 
 #include "distributed/background_jobs.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/connection_management.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -95,6 +96,7 @@ typedef struct MaintenanceDaemonDBData
 
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
+char *MaintenanceManagementDatabase = "";
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int BackgroundTaskQueueCheckInterval = 5000;
@@ -118,7 +120,7 @@ static volatile sig_atomic_t got_SIGHUP = false;
 static volatile sig_atomic_t got_SIGTERM = false;
 
 /* set to true when becoming a maintenance daemon */
-static bool IsMaintenanceDaemon = false;
+bool IsMaintenanceDaemon = false;
 
 static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
