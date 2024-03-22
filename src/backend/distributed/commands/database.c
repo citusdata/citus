@@ -254,7 +254,7 @@ FilterDistributedDatabases(List *databases)
  * IsSetTablespaceStatement returns true if the statement is a SET TABLESPACE statement,
  * false otherwise.
  */
-static bool
+bool
 IsSetTablespaceStatement(AlterDatabaseStmt *stmt)
 {
 	DefElem *def = NULL;
@@ -293,7 +293,11 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	if (!IsSetTablespaceStatement(stmt))
+	{
+		EnsureCoordinator();
+	}
+
 	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
 
 	char *sql = DeparseTreeNode((Node *) stmt);

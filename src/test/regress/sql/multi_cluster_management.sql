@@ -1,3 +1,16 @@
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :worker_1_port
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :worker_2_port
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :master_port
+
 SET citus.next_shard_id TO 1220000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1;

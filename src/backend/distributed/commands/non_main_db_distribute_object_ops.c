@@ -61,7 +61,7 @@
  */
 typedef struct NonMainDbDistributeObjectOps
 {
-	bool cannotBeExecutedInTransaction;
+	bool (*cannotBeExecutedInTransaction)(Node *parsetree);
 	bool (*checkSupportedObjectType)(Node *parsetree);
 } NonMainDbDistributeObjectOps;
 
@@ -73,41 +73,69 @@ static bool CreateDbStmtCheckSupportedObjectType(Node *node);
 static bool DropDbStmtCheckSupportedObjectType(Node *node);
 static bool GrantStmtCheckSupportedObjectType(Node *node);
 static bool SecLabelStmtCheckSupportedObjectType(Node *node);
+static bool AlterDbStmtCheckSupportedObjectType(Node *node);
+static bool AlterDbCanNotBeExecutedInTransaction(Node *node);
+static bool CanNotBeExecutedInTransaction_True(Node *node);
+static bool CanNotBeExecutedInTransaction_False(Node *node);
+static bool AlterDbRenameCheckSupportedObjectType(Node *node);
+static bool AlterDbOwnerCheckSupportedObjectType(Node *node);
 
 /*
  * OperationArray that holds NonMainDbDistributeObjectOps for different command types.
  */
 static const NonMainDbDistributeObjectOps *const OperationArray[] = {
 	[T_CreateRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_DropRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_AlterRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_GrantRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_CreatedbStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = true,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_True,
 		.checkSupportedObjectType = CreateDbStmtCheckSupportedObjectType
 	},
 	[T_DropdbStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = true,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_True,
 		.checkSupportedObjectType = DropDbStmtCheckSupportedObjectType
 	},
+	[T_AlterDatabaseSetStmt] = &(NonMainDbDistributeObjectOps) {
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.checkSupportedObjectType = NULL
+	},
+	[T_AlterDatabaseStmt] = &(NonMainDbDistributeObjectOps) {
+		.cannotBeExecutedInTransaction = AlterDbCanNotBeExecutedInTransaction,
+		.checkSupportedObjectType = AlterDbStmtCheckSupportedObjectType
+	},
+#if PG_VERSION_NUM >= PG_VERSION_15
+	[T_AlterDatabaseRefreshCollStmt] = &(NonMainDbDistributeObjectOps) {
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.checkSupportedObjectType = NULL
+	},
+#endif
+	[T_RenameStmt] = &(NonMainDbDistributeObjectOps) {
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.checkSupportedObjectType = AlterDbRenameCheckSupportedObjectType
+	},
+	[T_AlterOwnerStmt] = &(NonMainDbDistributeObjectOps) {
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.checkSupportedObjectType = AlterDbOwnerCheckSupportedObjectType
+	},
 	[T_GrantStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = GrantStmtCheckSupportedObjectType
 	},
 	[T_SecLabelStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = false,
+		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = SecLabelStmtCheckSupportedObjectType
 	},
 };
@@ -132,6 +160,15 @@ static void UnmarkObjectDistributedOnLocalMainDb(uint16 catalogRelId, Oid object
 bool
 RunPreprocessNonMainDBCommand(Node *parsetree)
 {
+	/* NodeTag tag = nodeTag(parsetree); */
+	/* if ( tag == T_AlterDatabaseSetStmt){ */
+	/* 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, parsetree); */
+	/* 	if (strcmp(stmt->dbname, MainDb) == 0){ */
+	/* 		return false; */
+	/* 	} */
+	/* } */
+
+
 	if (IsMainDB)
 	{
 		return false;
@@ -150,7 +187,7 @@ RunPreprocessNonMainDBCommand(Node *parsetree)
 	 * transactional visibility issues. We directly route them to main database
 	 * so that we only have to consider one code-path for such commands.
 	 */
-	if (ops->cannotBeExecutedInTransaction)
+	if (ops->cannotBeExecutedInTransaction(parsetree))
 	{
 		IsMainDBCommandInXact = false;
 		RunCitusMainDBQuery((char *) queryString);
@@ -336,6 +373,50 @@ DropDbStmtCheckSupportedObjectType(Node *node)
 
 
 static bool
+AlterDbStmtCheckSupportedObjectType(Node *node)
+{
+	/*
+	 * We don't try to send the query to the main database if the ALTER
+	 * DATABASE command is for the main database itself, this is a very
+	 * rare case but it's exercised by our test suite.
+	 */
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	if (!IsSetTablespaceStatement(stmt))
+	{
+		return true;
+	}
+	else
+	{
+		return IsSetTablespaceStatement(stmt) && strcmp(stmt->dbname, MainDb) != 0;
+	}
+}
+
+
+static bool
+AlterDbCanNotBeExecutedInTransaction(Node *node)
+{
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	return IsSetTablespaceStatement(stmt);
+}
+
+
+static bool
+AlterDbRenameCheckSupportedObjectType(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	return stmt->renameType == OBJECT_DATABASE;
+}
+
+
+static bool
+AlterDbOwnerCheckSupportedObjectType(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	return stmt->objectType == OBJECT_DATABASE;
+}
+
+
+static bool
 GrantStmtCheckSupportedObjectType(Node *node)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
@@ -348,4 +429,18 @@ SecLabelStmtCheckSupportedObjectType(Node *node)
 {
 	SecLabelStmt *stmt = castNode(SecLabelStmt, node);
 	return stmt->objtype == OBJECT_ROLE;
+}
+
+
+static bool
+CanNotBeExecutedInTransaction_True(Node *node)
+{
+	return true;
+}
+
+
+static bool
+CanNotBeExecutedInTransaction_False(Node *node)
+{
+	return false;
 }

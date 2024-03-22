@@ -252,8 +252,12 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		 * and if the command is a node-wide object management command that we
 		 * support from non-main databases.
 		 */
+		bool shouldSkipPrevUtilityHook = false;
 
-		bool shouldSkipPrevUtilityHook = RunPreprocessNonMainDBCommand(parsetree);
+		if (EnableDDLPropagation)
+		{
+			shouldSkipPrevUtilityHook = RunPreprocessNonMainDBCommand(parsetree);
+		}
 
 		if (!shouldSkipPrevUtilityHook)
 		{
@@ -264,8 +268,10 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 			PrevProcessUtility(pstmt, queryString, false, context,
 							   params, queryEnv, dest, completionTag);
 		}
-
-		RunPostprocessNonMainDBCommand(parsetree);
+		if (EnableDDLPropagation)
+		{
+			RunPostprocessNonMainDBCommand(parsetree);
+		}
 
 		return;
 	}
