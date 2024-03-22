@@ -160,15 +160,6 @@ static void UnmarkObjectDistributedOnLocalMainDb(uint16 catalogRelId, Oid object
 bool
 RunPreprocessNonMainDBCommand(Node *parsetree)
 {
-	/* NodeTag tag = nodeTag(parsetree); */
-	/* if ( tag == T_AlterDatabaseSetStmt){ */
-	/* 	AlterDatabaseSetStmt *stmt = castNode(AlterDatabaseSetStmt, parsetree); */
-	/* 	if (strcmp(stmt->dbname, MainDb) == 0){ */
-	/* 		return false; */
-	/* 	} */
-	/* } */
-
-
 	if (IsMainDB)
 	{
 		return false;
