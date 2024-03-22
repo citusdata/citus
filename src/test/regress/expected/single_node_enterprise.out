@@ -25,7 +25,6 @@ SELECT pg_reload_conf();
 (1 row)
 
 \c - - - :master_port
-
 CREATE SCHEMA single_node_ent;
 SET search_path TO single_node_ent;
 SET citus.shard_count TO 4;
