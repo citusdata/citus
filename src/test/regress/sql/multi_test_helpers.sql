@@ -1,15 +1,5 @@
 -- File to create functions and helpers needed for subsequent tests
-ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
-SELECT pg_reload_conf();
 
-\c - - - :worker_1_port
-ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
-SELECT pg_reload_conf();
-
-\c - - - :worker_2_port
-ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
-SELECT pg_reload_conf();
-\c - - - :master_port
 -- create a helper function to create objects on each node
 CREATE OR REPLACE FUNCTION run_command_on_master_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
