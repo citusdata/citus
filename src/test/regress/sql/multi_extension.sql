@@ -7,7 +7,18 @@
 -- not done yet.
 --
 -- Upgrade tests verify the objects are added in citus_finish_pg_upgrade()
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
 
+\c - - - :worker_1_port
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :worker_2_port
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :master_port
 SET citus.next_shard_id TO 580000;
 CREATE SCHEMA multi_extension;
 
