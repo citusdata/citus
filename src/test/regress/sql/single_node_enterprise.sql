@@ -1,6 +1,19 @@
 -- we already have lots of tests targeting
 -- single node citus clusters in sql/single_node.sql
 -- in this file, we are testing enterprise features
+
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :worker_1_port
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :worker_2_port
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+
+\c - - - :master_port
 CREATE SCHEMA single_node_ent;
 SET search_path TO single_node_ent;
 SET citus.shard_count TO 4;
