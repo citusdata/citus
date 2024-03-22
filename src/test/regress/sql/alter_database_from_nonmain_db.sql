@@ -1,7 +1,5 @@
 SET citus.superuser TO 'postgres';
 set citus.enable_create_database_propagation=on;
-set citus.log_remote_commands = true;
-set citus.grep_remote_commands = "%CREATE DATABASE%";
 create database test_alter_db_from_nonmain_db;
 create database "altered_database!'2";
 reset citus.enable_create_database_propagation;
@@ -20,11 +18,8 @@ CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
 CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
 
 \c test_alter_db_from_nonmain_db
-set citus.enable_ddl_propagation=true;
 
 set citus.log_remote_commands = true;
-set citus.grep_remote_commands = "%CREATE DATABASE%";
-create database test1;
 
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 
@@ -42,10 +37,8 @@ alter database "altered_database!'2" with
     IS_TEMPLATE false;
 
 \c regression
-set citus.enable_ddl_propagation=true;
 create role test_owner_non_main_db;
 \c test_alter_db_from_nonmain_db
-set citus.enable_ddl_propagation=true;
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 set citus.enable_create_database_propagation=on;
@@ -79,8 +72,6 @@ alter database "altered_database!'2" set lock_timeout to DEFAULT;
 alter database "altered_database!'2" RESET lock_timeout;
 ALTER DATABASE "altered_database!'2" RESET ALL;
 \c regression
-show citus.enable_ddl_propagation;
-set citus.enable_ddl_propagation=true;
 set citus.enable_create_database_propagation=on;
 drop database "altered_database!'2";
 drop database test_alter_db_from_nonmain_db;

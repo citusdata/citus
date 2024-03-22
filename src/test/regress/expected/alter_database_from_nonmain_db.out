@@ -19,29 +19,24 @@ set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" rename to altered_database_renamed;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RENAME TO altered_database_renamed', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database altered_database_renamed rename to "altered_database!'2";
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE altered_database_renamed RENAME TO "altered_database!''2"', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
     CONNECTION LIMIT 1
     IS_TEMPLATE true;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 \c regression
 create role test_owner_non_main_db;
 \c test_alter_db_from_nonmain_db
@@ -49,149 +44,84 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 set citus.enable_create_database_propagation=on;
 alter database "altered_database!'2" owner to test_owner_non_main_db;
-alter database "altered_database!'2" owner to CURRENT_USER;
-alter database "altered_database!'2" set default_transaction_read_only = true;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_read_only = 'true'
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" OWNER TO test_owner_non_main_db;', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
+alter database "altered_database!'2" owner to CURRENT_USER;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" OWNER TO postgres;', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set default_transaction_read_only = true;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_read_only = ''true''', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set default_transaction_read_only = false;
 alter database "altered_database!'2" set default_transaction_read_only from current;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_read_only FROM CURRENT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_read_only FROM CURRENT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set default_transaction_read_only to DEFAULT;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_read_only TO DEFAULT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_read_only TO DEFAULT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" RESET default_transaction_read_only;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET default_transaction_read_only
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET default_transaction_read_only', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" SET TIME ZONE '-7';
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET timezone = '-7'
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET timezone = ''-7''', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set TIME ZONE LOCAL;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET timezone TO DEFAULT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET timezone TO DEFAULT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set TIME ZONE DEFAULT;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET timezone TO DEFAULT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET timezone TO DEFAULT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" RESET TIME ZONE;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET timezone
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET timezone', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" SET TIME ZONE INTERVAL '-08:00' HOUR TO MINUTE;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TIME ZONE INTERVAL '@ 8 hours ago'
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET TIME ZONE INTERVAL ''@ 8 hours ago''', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" RESET TIME ZONE;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET timezone
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET timezone', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set default_transaction_isolation = 'serializable';
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_isolation = 'serializable'
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_isolation = ''serializable''', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 set default_transaction_isolation = 'read committed';
 alter database "altered_database!'2" set default_transaction_isolation from current;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_isolation FROM CURRENT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_isolation FROM CURRENT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set default_transaction_isolation to DEFAULT;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_isolation TO DEFAULT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_isolation TO DEFAULT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" RESET default_transaction_isolation;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET default_transaction_isolation
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET default_transaction_isolation', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set statement_timeout = 1000;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout = 1000
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET statement_timeout = 1000', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 set statement_timeout = 2000;
 alter database "altered_database!'2" set statement_timeout from current;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout FROM CURRENT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET statement_timeout FROM CURRENT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set statement_timeout to DEFAULT;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout TO DEFAULT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET statement_timeout TO DEFAULT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" RESET statement_timeout;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET statement_timeout
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET statement_timeout', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set lock_timeout = 1201.5;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout = 1201.5
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET lock_timeout = 1201.5', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 set lock_timeout = 1202.5;
 alter database "altered_database!'2" set lock_timeout from current;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout FROM CURRENT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET lock_timeout FROM CURRENT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" set lock_timeout to DEFAULT;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout TO DEFAULT
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET lock_timeout TO DEFAULT', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 alter database "altered_database!'2" RESET lock_timeout;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET lock_timeout
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET lock_timeout', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 ALTER DATABASE "altered_database!'2" RESET ALL;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET ALL
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET ALL', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-CONTEXT:  while executing command on localhost:xxxxx
 \c regression
 set citus.enable_create_database_propagation=on;
 drop database "altered_database!'2";
