@@ -1,5 +1,6 @@
 # Split Shard tests.
 # Include tests from 'minimal_schedule' for setup.
+test: enable_ddl_propagation
 test: multi_test_helpers multi_test_helpers_superuser columnar_test_helpers
 test: multi_cluster_management
 test: remove_coordinator_from_metadata
