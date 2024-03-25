@@ -1,5 +1,6 @@
 \c - - - :master_port
 
+show citus.enable_ddl_propagation;
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE the_replicated_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_replicated_table', 'a');

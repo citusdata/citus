@@ -2,6 +2,7 @@
 // so setting the corresponding shard here is useful
 setup
 {
+	show citus.enable_ddl_propagation;
 	SET citus.shard_count TO 2;
 	SET citus.shard_replication_factor TO 1;
 	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102011;
