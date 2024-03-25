@@ -4,9 +4,7 @@ starting permutation: s1-begin s1-commit
 result
 ---------------------------------------------------------------------
 t
-t
-t
-(3 rows)
+(1 row)
 
 step s1-begin:
  BEGIN;
