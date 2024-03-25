@@ -1,3 +1,6 @@
+ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
+SELECT pg_reload_conf();
+ pg_reload_conf
 ---------------------------------------------------------------------
  t
 (1 row)
