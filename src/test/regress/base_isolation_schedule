@@ -3,3 +3,4 @@
 # ----------
 test: isolation_setup
 test: isolation_cluster_management
+test: isolation_enable_ddl_propagation
