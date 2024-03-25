@@ -1,4 +1,3 @@
-test: isolation_enable_ddl_propagation
 test: isolation_setup
 test: isolation_add_remove_node
 test: isolation_update_node
@@ -15,6 +14,7 @@ test: isolation_extension_commands
 # isolation_cluster_management such that tests
 # that come later can be parallelized
 test: isolation_cluster_management
+test: isolation_enable_ddl_propagation
 
 # the following tests depend on the distributed
 # transactionId, so should not be parallelized

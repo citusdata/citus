@@ -1,11 +1,2 @@
-ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
-SELECT pg_reload_conf();
-
-\c - - - :worker_1_port
-ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
-SELECT pg_reload_conf();
-
-\c - - - :worker_2_port
-ALTER SYSTEM SET citus.enable_ddl_propagation = 'true';
-SELECT pg_reload_conf();
-
+SELECT run_command_on_workers('ALTER SYSTEM SET citus.enable_ddl_propagation TO ON');
+SELECT run_command_on_workers('SELECT pg_reload_conf()');
