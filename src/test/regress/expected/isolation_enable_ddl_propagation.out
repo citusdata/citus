@@ -1,0 +1,15 @@
+Parsed test spec with 1 sessions
+
+starting permutation: s1-begin s1-commit
+run_command_on_workers
+---------------------------------------------------------------------
+(localhost,57637,t,t)
+(localhost,57638,t,t)
+(2 rows)
+
+step s1-begin:
+ BEGIN;
+
+step s1-commit:
+ COMMIT;
+

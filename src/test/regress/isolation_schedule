@@ -1,4 +1,5 @@
-test: isolation_setup
+test: isolation_enable_ddl_propagation
+
 test: isolation_add_remove_node
 test: isolation_update_node
 test: isolation_update_node_lock_writes
@@ -7,6 +8,7 @@ test: isolation_add_node_vs_reference_table_operations
 test: isolation_create_table_vs_add_remove_node
 test: isolation_master_update_node
 test: isolation_shouldhaveshards
+test: isolation_setup
 
 test: isolation_extension_commands
 
