@@ -2,15 +2,11 @@ SELECT run_command_on_all_nodes('ALTER SYSTEM SET citus.enable_ddl_propagation T
  run_command_on_all_nodes
 ---------------------------------------------------------------------
  (17,t,"ALTER SYSTEM")
- (16,t,"ALTER SYSTEM")
- (18,t,"ALTER SYSTEM")
-(3 rows)
+(1 rows)
 
 SELECT run_command_on_all_nodes('SELECT pg_reload_conf()');
  run_command_on_all_nodes
 ---------------------------------------------------------------------
  (17,t,t)
- (16,t,t)
- (18,t,t)
-(3 rows)
+(1 rows)
 
