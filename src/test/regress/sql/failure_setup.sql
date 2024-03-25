@@ -1,4 +1,3 @@
-\c - - - :master_port
 SELECT citus.mitmproxy('conn.allow()');
 
 -- add the workers
