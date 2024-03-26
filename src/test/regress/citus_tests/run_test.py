@@ -426,10 +426,16 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
         # below block adds enable_ddl_propagation as a dependency
         # as the first element of extra tests if schedule is not configured
         test_deps = DEPS[test_name]
-        ddl_propagation_test = "isolation_enable_ddl_propagation" if test_name.startswith("isolation") else "enable_ddl_propagation"
+        ddl_propagation_test = (
+            "isolation_enable_ddl_propagation"
+            if test_name.startswith("isolation")
+            else "enable_ddl_propagation"
+        )
 
         if test_deps is not None and test_deps.schedule is None:
-            test_deps.direct_extra_tests = [ddl_propagation_test] + test_deps.direct_extra_tests
+            test_deps.direct_extra_tests = [
+                ddl_propagation_test
+            ] + test_deps.direct_extra_tests
             return test_deps
         else:
             return DEPS[test_name]
