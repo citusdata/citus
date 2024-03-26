@@ -18,13 +18,20 @@ CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
 CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
 
 \c test_alter_db_from_nonmain_db
-
 set citus.log_remote_commands = true;
-
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" rename to altered_database_renamed;
+
+\c test_alter_db_from_nonmain_db - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database altered_database_renamed rename to "altered_database!'2";
 
 alter database "altered_database!'2" with
@@ -38,19 +45,32 @@ alter database "altered_database!'2" with
 
 \c regression
 create role test_owner_non_main_db;
+
 \c test_alter_db_from_nonmain_db
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 set citus.enable_create_database_propagation=on;
 alter database "altered_database!'2" owner to test_owner_non_main_db;
+
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to CURRENT_USER;
 alter database "altered_database!'2" set default_transaction_read_only = true;
 set default_transaction_read_only = false;
+
+\c test_alter_db_from_nonmain_db - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set default_transaction_read_only from current;
 alter database "altered_database!'2" set default_transaction_read_only to DEFAULT;
 alter database "altered_database!'2" RESET default_transaction_read_only;
 alter database "altered_database!'2" SET TIME ZONE '-7';
 alter database "altered_database!'2" set TIME ZONE LOCAL;
+
+\c test_alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set TIME ZONE DEFAULT;
 alter database "altered_database!'2" RESET TIME ZONE;
 alter database "altered_database!'2" SET TIME ZONE INTERVAL '-08:00' HOUR TO MINUTE;
@@ -71,6 +91,7 @@ alter database "altered_database!'2" set lock_timeout from current;
 alter database "altered_database!'2" set lock_timeout to DEFAULT;
 alter database "altered_database!'2" RESET lock_timeout;
 ALTER DATABASE "altered_database!'2" RESET ALL;
+
 \c regression
 set citus.enable_create_database_propagation=on;
 drop database "altered_database!'2";
