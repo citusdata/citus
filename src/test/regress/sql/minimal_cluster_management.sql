@@ -41,4 +41,4 @@ DROP TABLE test_dist;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 30;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 18;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 83;
-show citus.enable_ddl_propagation
+select result from run_command_on_all_nodes($$show citus.enable_ddl_propagation$$);
