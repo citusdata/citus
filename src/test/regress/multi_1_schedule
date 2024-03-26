@@ -22,6 +22,7 @@ test: single_node
 test: relation_access_tracking_single_node
 test: single_node_truncate
 test: multi_cluster_management
+test: enable_ddl_propagation
 
 # below tests are placed right after multi_cluster_management as we do
 # remove/add node operations and we do not want any preexisting objects
