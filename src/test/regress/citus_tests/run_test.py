@@ -422,7 +422,17 @@ def find_test_schedule_and_line(test_name, args):
 
 def test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
-        return DEPS[test_name]
+        # since enable_ddl_propagation is a must to execute tests
+        # below block adds enable_ddl_propagation as a dependency
+        # as the first element of extra tests if schedule is not configured
+        test_deps = DEPS[test_name]
+        ddl_propagation_test = "isolation_enable_ddl_propagation" if test_name.startswith("isolation") else "enable_ddl_propagation"
+
+        if test_deps is not None and test_deps.schedule is None:
+            test_deps.direct_extra_tests = [ddl_propagation_test] + test_deps.direct_extra_tests
+            return test_deps
+        else:
+            return DEPS[test_name]
 
     if "citus_upgrade" in test_schedule:
         return TestDeps(None, citus_upgrade_infra=True)
