@@ -224,6 +224,7 @@ DEPS = {
         ],
         repeatable=False,
     ),
+    "multi_follower_sanity_check": TestDeps("multi_follower_schedule"),
 }
 
 
@@ -324,6 +325,8 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
         "failure"
     ):
         make_recipe = "check-failure-custom-schedule"
+    elif dependencies.schedule == "multi_follower_schedule":
+        make_recipe = "check-follower-cluster"
     else:
         make_recipe = "check-custom-schedule"
 
@@ -359,6 +362,9 @@ def default_base_schedule(test_schedule, args):
 
     if "operations" in test_schedule:
         return "minimal_schedule"
+
+    if "follower" in test_schedule:
+        return "multi_follower_schedule"
 
     if "pg_upgrade" in test_schedule:
         return "minimal_pg_upgrade_schedule"
