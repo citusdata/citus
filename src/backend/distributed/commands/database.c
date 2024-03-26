@@ -292,6 +292,7 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
 	/* Since ALTER TABLE SET TABLESPACE statement is not supported */
 	/* inside a transaction block, we need to send the command to the */
 	/* main database directly to make it work */
