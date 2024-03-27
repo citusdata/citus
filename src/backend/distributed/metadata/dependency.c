@@ -460,6 +460,18 @@ DependencyDefinitionFromPgDepend(ObjectAddress target)
 		dependency->mode = DependencyPgDepend;
 		dependency->data.pg_depend = *pg_depend;
 		dependenyDefinitionList = lappend(dependenyDefinitionList, dependency);
+
+		if (pg_depend->classid == OCLASS_ROLE)
+		{
+			/*
+			 * If the object is a role, we need to add the role's group
+			 * memberships to the dependency list as well. We cannot make the
+			 * role depend on the membership, because the role needs to be
+			 * created before the memberships.
+			 */
+			dependenyDefinitionList = list_concat(dependenyDefinitionList,
+												  GetAuthMemberEntries(pg_depend->objid));
+		}
 	}
 
 	systable_endscan(depScan);
@@ -1539,13 +1551,22 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 	switch (target.classId)
 	{
-		case AuthIdRelationId:
+		case AuthMemRelationId:
 		{
 			/*
-			 * Roles are members of other roles. These relations are not recorded directly
-			 * but can be deduced from pg_auth_members
+			 * Add dependencies for:
+			 * 1. roles in member, roleid, and grantor.
 			 */
-			return ExpandRolesToGroups(target.objectId);
+			List *dependencies = NULL;
+			dependencies = lappend(dependencies, authMember->member);
+			dependencies = lappend(dependencies, authMember->roleid);
+			dependencies = lappend(dependencies, authMember->grantor);
+
+			/*
+			 * 2. AuthMemRelations for the roles in grantor and roleid.
+			 */
+			dependencies = FindAuthMemRelations(authMember->roleid);
+			dependencies = FindAuthMemRelations(authMember->grantor);
 		}
 
 		case ExtensionRelationId:
@@ -1569,6 +1590,8 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 				List *dependencies =
 					CreateObjectAddressDependencyDefList(AuthIdRelationId,
 														 dependentRoleIds);
+				dependencies = list_concat(dependencies, GetAuthMemberEntries(
+											   dependentRoleIds));
 				result = list_concat(result, dependencies);
 			}
 
@@ -1817,18 +1840,6 @@ ExpandRolesToGroups(Oid roleid)
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgAuthMembers, AuthMemMemRoleIndexId,
 													true, NULL, scanKeyCount, scanKey);
-
-	List *roles = NIL;
-	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
-	{
-		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
-
-		DependencyDefinition *definition = palloc0(sizeof(DependencyDefinition));
-		definition->mode = DependencyObjectAddress;
-		ObjectAddressSet(definition->data.address, AuthIdRelationId, membership->roleid);
-
-		roles = lappend(roles, definition);
-	}
 
 	systable_endscan(scanDescriptor);
 	table_close(pgAuthMembers, AccessShareLock);
