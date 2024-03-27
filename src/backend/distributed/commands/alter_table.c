@@ -762,16 +762,17 @@ ConvertTableInternal(TableConversionState *con)
 		postLoadCommands = list_concat(postLoadCommands,
 									   WrapTableDDLCommands(commentDDLCommandsTable));
 		List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(
-											con->relationId);
+			con->relationId);
 		char *columnName = NULL;
 		int columnCount = 0;
 		foreach_ptr(columnName, nonStoredColumnNameList)
 		{
 			List *commentDDLCommandsColumn = GetCommentPropagationCommandsX(
-				con->relationId, RelationRelationId, columnName , OBJECT_COLUMN,
+				con->relationId, RelationRelationId, columnName, OBJECT_COLUMN,
 				con->relationName, ++columnCount);
 			postLoadCommands = list_concat(postLoadCommands,
-				WrapTableDDLCommands(commentDDLCommandsColumn));
+										   WrapTableDDLCommands(
+											   commentDDLCommandsColumn));
 		}
 	}
 

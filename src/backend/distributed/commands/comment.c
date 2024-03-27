@@ -30,8 +30,10 @@ inline List *
 GetCommentPropagationCommands(Oid classOid, Oid objOoid, char *objectName, ObjectType
 							  objectType)
 {
-	return GetCommentPropagationCommandsX(classOid, objOoid, objectName, objectType, NULL, 0);
+	return GetCommentPropagationCommandsX(classOid, objOoid, objectName, objectType, NULL,
+										  0);
 }
+
 
 List *
 GetCommentPropagationCommandsX(Oid classOid, Oid objOoid, char *objectName, ObjectType
@@ -43,8 +45,8 @@ GetCommentPropagationCommandsX(Oid classOid, Oid objOoid, char *objectName, Obje
 
 	char *comment = NULL;
 
-	if((objectType == OBJECT_DATABASE) || (objectType == OBJECT_ROLE) || (objectType ==
-		OBJECT_TABLESPACE))
+	if ((objectType == OBJECT_DATABASE) || (objectType == OBJECT_ROLE) || (objectType ==
+																		   OBJECT_TABLESPACE))
 	{
 		/* Get the comment for the shared object */
 		comment = GetCommentForObject(classOid, objOoid);
