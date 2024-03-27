@@ -22,7 +22,7 @@ extern const char *ObjectTypeNames[];
 extern List * GetCommentPropagationCommands(Oid classOid, Oid oid, char *objectName,
 											ObjectType objectType);
 extern List * GetCommentPropagationCommandsX(Oid classOid, Oid oid, char *objectName,
-											 ObjectType objectType, char *qualifier, 
+											 ObjectType objectType, char *qualifier,
 											 int32 subid);
 extern List * CommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 
