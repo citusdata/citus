@@ -1,0 +1,41 @@
+CREATE SCHEMA comment_on_table_and_column;
+SET search_path TO comment_on_table_and_column;
+create table tbl (a int, b text);
+comment on table tbl is 'table comment';
+comment on column tbl.b is 'column b comment';
+select col_description('tbl'::regclass,0) as table_comment, col_description('tbl'::regclass,1) as column1_comment, col_description('tbl'::regclass,2) as column2_comment;
+ table_comment | column1_comment | column2_comment
+---------------------------------------------------------------------
+ table comment |                 | column b comment
+(1 row)
+
+select create_distributed_table('tbl','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select col_description('tbl'::regclass,0) as table_comment, col_description('tbl'::regclass,1) as column1_comment, col_description('tbl'::regclass,2) as column2_comment;
+ table_comment | column1_comment | column2_comment
+---------------------------------------------------------------------
+ table comment |                 | column b comment
+(1 row)
+
+select undistribute_table('tbl');
+NOTICE:  creating a new table for comment_on_table_and_column.tbl
+NOTICE:  moving the data of comment_on_table_and_column.tbl
+NOTICE:  dropping the old comment_on_table_and_column.tbl
+NOTICE:  renaming the new table to comment_on_table_and_column.tbl
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select col_description('tbl'::regclass,0) as table_comment, col_description('tbl'::regclass,1) as column1_comment, col_description('tbl'::regclass,2) as column2_comment;
+ table_comment | column1_comment | column2_comment
+---------------------------------------------------------------------
+ table comment |                 | column b comment
+(1 row)
+
+DROP SCHEMA comment_on_table_and_column CASCADE;
+NOTICE:  drop cascades to table tbl
