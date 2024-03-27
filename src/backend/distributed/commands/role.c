@@ -491,18 +491,17 @@ GenerateRoleOptionsList(HeapTuple tuple)
 		options = lappend(options, makeDefElem("password", NULL, -1));
 	}
 
-	/* load valid unitl data from the heap tuple, use default of infinity if not set */
+	/* load valid until data from the heap tuple */
 	Datum rolValidUntilDatum = SysCacheGetAttr(AUTHNAME, tuple,
 											   Anum_pg_authid_rolvaliduntil, &isNull);
-	char *rolValidUntil = "infinity";
 	if (!isNull)
 	{
-		rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
-	}
+		char *rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
 
-	Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
-	DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
-	options = lappend(options, validUntilOption);
+		Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
+		DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
+		options = lappend(options, validUntilOption);
+	}
 
 	return options;
 }
