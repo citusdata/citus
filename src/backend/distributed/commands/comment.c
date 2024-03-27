@@ -20,28 +20,47 @@
 #include "utils/fmgroids.h"
 #include "utils/rel.h"
 
+#include "commands/comment.h"
 #include "distributed/comment.h"
 
 static char * GetCommentForObject(Oid classOid, Oid objectOid);
 
 
-List *
+inline List *
 GetCommentPropagationCommands(Oid classOid, Oid objOoid, char *objectName, ObjectType
 							  objectType)
+{
+	return GetCommentPropagationCommandsX(classOid, objOoid, objectName, objectType, NULL, 0);
+}
+
+List *
+GetCommentPropagationCommandsX(Oid classOid, Oid objOoid, char *objectName, ObjectType
+							   objectType, char *qualifier, int32 subid)
 {
 	List *commands = NIL;
 
 	StringInfo commentStmt = makeStringInfo();
 
-	/* Get the comment for the database */
-	char *comment = GetCommentForObject(classOid, objOoid);
+	char *comment = NULL;
+
+	if((objectType == OBJECT_DATABASE) || (objectType == OBJECT_ROLE) || (objectType ==
+		OBJECT_TABLESPACE))
+	{
+		/* Get the comment for the shared object */
+		comment = GetCommentForObject(classOid, objOoid);
+	}
+	else
+	{
+		comment = GetComment(classOid, objOoid, subid);
+	}
+
 	char const *commentObjectType = ObjectTypeNames[objectType];
 
 	/* Create the SQL command to propagate the comment to other nodes */
 	if (comment != NULL)
 	{
 		appendStringInfo(commentStmt, "COMMENT ON %s %s IS %s;", commentObjectType,
-						 quote_identifier(objectName),
+						 quote_qualified_identifier(qualifier, objectName),
 						 quote_literal_cstr(comment));
 	}
 

@@ -69,6 +69,7 @@
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/comment.h"
 
 
 /* Table Conversion Types */
@@ -752,6 +753,27 @@ ConvertTableInternal(TableConversionState *con)
 
 	postLoadCommands = list_concat(postLoadCommands,
 								   WrapTableDDLCommands(alterPublicationCommands));
+
+	if (con->conversionType == UNDISTRIBUTE_TABLE)
+	{
+		List *commentDDLCommandsTable = GetCommentPropagationCommandsX(
+			con->relationId, RelationRelationId, con->relationName, OBJECT_TABLE,
+			NULL, 0);
+		postLoadCommands = list_concat(postLoadCommands,
+									   WrapTableDDLCommands(commentDDLCommandsTable));
+		List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(
+											con->relationId);
+		char *columnName = NULL;
+		int columnCount = 0;
+		foreach_ptr(columnName, nonStoredColumnNameList)
+		{
+			List *commentDDLCommandsColumn = GetCommentPropagationCommandsX(
+				con->relationId, RelationRelationId, columnName , OBJECT_COLUMN,
+				con->relationName, ++columnCount);
+			postLoadCommands = list_concat(postLoadCommands,
+				WrapTableDDLCommands(commentDDLCommandsColumn));
+		}
+	}
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
