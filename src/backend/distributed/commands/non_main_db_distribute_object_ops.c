@@ -378,7 +378,7 @@ AlterDbStmtCheckSupportedObjectType(Node *node)
 	}
 	else
 	{
-		return IsSetTablespaceStatement(stmt) && strcmp(stmt->dbname, MainDb) != 0;
+		return strcmp(stmt->dbname, MainDb) != 0;
 	}
 }
 
