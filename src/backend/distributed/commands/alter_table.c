@@ -47,6 +47,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
@@ -69,7 +70,6 @@
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "distributed/comment.h"
 
 
 /* Table Conversion Types */

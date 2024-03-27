@@ -15,12 +15,12 @@
 #include "access/htup_details.h"
 #include "access/table.h"
 #include "catalog/pg_shdescription.h"
+#include "commands/comment.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/rel.h"
 
-#include "commands/comment.h"
 #include "distributed/comment.h"
 
 static char * GetCommentForObject(Oid classOid, Oid objectOid);
