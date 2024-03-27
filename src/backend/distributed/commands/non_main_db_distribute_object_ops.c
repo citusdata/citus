@@ -74,68 +74,68 @@ static bool DropDbStmtCheckSupportedObjectType(Node *node);
 static bool GrantStmtCheckSupportedObjectType(Node *node);
 static bool SecLabelStmtCheckSupportedObjectType(Node *node);
 static bool AlterDbStmtCheckSupportedObjectType(Node *node);
-static bool AlterDbCanNotBeExecutedInTransaction(Node *node);
-static bool CanNotBeExecutedInTransaction_True(Node *node);
-static bool CanNotBeExecutedInTransaction_False(Node *node);
 static bool AlterDbRenameCheckSupportedObjectType(Node *node);
 static bool AlterDbOwnerCheckSupportedObjectType(Node *node);
+static bool CannotBeExecutedInTransaction_True(Node *node);
+static bool CannotBeExecutedInTransaction_False(Node *node);
+static bool AlterDbCannotBeExecutedInTransaction(Node *node);
 
 /*
  * OperationArray that holds NonMainDbDistributeObjectOps for different command types.
  */
 static const NonMainDbDistributeObjectOps *const OperationArray[] = {
 	[T_CreateRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_DropRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_AlterRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_GrantRoleStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_CreatedbStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_True,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_True,
 		.checkSupportedObjectType = CreateDbStmtCheckSupportedObjectType
 	},
 	[T_DropdbStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_True,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_True,
 		.checkSupportedObjectType = DropDbStmtCheckSupportedObjectType
 	},
 	[T_AlterDatabaseSetStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 	[T_AlterDatabaseStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = AlterDbCanNotBeExecutedInTransaction,
+		.cannotBeExecutedInTransaction = AlterDbCannotBeExecutedInTransaction,
 		.checkSupportedObjectType = AlterDbStmtCheckSupportedObjectType
 	},
 #if PG_VERSION_NUM >= PG_VERSION_15
 	[T_AlterDatabaseRefreshCollStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = NULL
 	},
 #endif
 	[T_RenameStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = AlterDbRenameCheckSupportedObjectType
 	},
 	[T_AlterOwnerStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = AlterDbOwnerCheckSupportedObjectType
 	},
 	[T_GrantStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = GrantStmtCheckSupportedObjectType
 	},
 	[T_SecLabelStmt] = &(NonMainDbDistributeObjectOps) {
-		.cannotBeExecutedInTransaction = CanNotBeExecutedInTransaction_False,
+		.cannotBeExecutedInTransaction = CannotBeExecutedInTransaction_False,
 		.checkSupportedObjectType = SecLabelStmtCheckSupportedObjectType
 	},
 };
@@ -384,14 +384,6 @@ AlterDbStmtCheckSupportedObjectType(Node *node)
 
 
 static bool
-AlterDbCanNotBeExecutedInTransaction(Node *node)
-{
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
-	return IsSetTablespaceStatement(stmt);
-}
-
-
-static bool
 AlterDbRenameCheckSupportedObjectType(Node *node)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -423,15 +415,26 @@ SecLabelStmtCheckSupportedObjectType(Node *node)
 }
 
 
+/*
+ * cannotBeExecutedInTransaction callbacks for OperationArray lie below.
+ */
 static bool
-CanNotBeExecutedInTransaction_True(Node *node)
+CannotBeExecutedInTransaction_True(Node *node)
 {
 	return true;
 }
 
 
 static bool
-CanNotBeExecutedInTransaction_False(Node *node)
+CannotBeExecutedInTransaction_False(Node *node)
 {
 	return false;
+}
+
+
+static bool
+AlterDbCannotBeExecutedInTransaction(Node *node)
+{
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	return IsSetTablespaceStatement(stmt);
 }
