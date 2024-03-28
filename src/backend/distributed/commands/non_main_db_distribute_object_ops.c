@@ -28,6 +28,7 @@
 #include "utils/builtins.h"
 
 #include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -159,7 +160,7 @@ static void UnmarkObjectDistributedOnLocalMainDb(uint16 catalogRelId, Oid object
 bool
 RunPreprocessNonMainDBCommand(Node *parsetree)
 {
-	if (IsMainDB)
+	if (IsMainDB || !EnableDDLPropagation)
 	{
 		return false;
 	}
@@ -215,7 +216,7 @@ RunPreprocessNonMainDBCommand(Node *parsetree)
 void
 RunPostprocessNonMainDBCommand(Node *parsetree)
 {
-	if (IsMainDB || !GetNonMainDbDistributeObjectOps(parsetree))
+	if (IsMainDB || !EnableDDLPropagation || !GetNonMainDbDistributeObjectOps(parsetree))
 	{
 		return;
 	}
