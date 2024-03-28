@@ -1,3 +1,4 @@
+test: enable_ddl_propagation
 test: multi_follower_sanity_check
 test: follower_single_node
 test: multi_follower_select_statements

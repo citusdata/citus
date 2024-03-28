@@ -15,6 +15,7 @@
 # ---
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
+test: enable_ddl_propagation
 test: multi_extension
 test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: single_node
@@ -63,6 +64,7 @@ test: alter_database_propagation
 
 test: citus_shards
 test: reassign_owned
+test: alter_database_from_nonmain_db
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools

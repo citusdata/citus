@@ -256,6 +256,7 @@ extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryStr
 extern List * PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString);
 extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 extern char * CreateDatabaseDDLCommand(Oid dbId);
+extern bool IsSetTablespaceStatement(AlterDatabaseStmt *stmt);
 
 
 /* domain.c - forward declarations */
