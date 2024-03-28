@@ -73,7 +73,6 @@ static bool CreateDbStmtCheckSupportedObjectType(Node *node);
 static bool DropDbStmtCheckSupportedObjectType(Node *node);
 static bool GrantStmtCheckSupportedObjectType(Node *node);
 static bool SecLabelStmtCheckSupportedObjectType(Node *node);
-static bool AlterDbStmtCheckSupportedObjectType(Node *node);
 static bool AlterDbRenameCheckSupportedObjectType(Node *node);
 static bool AlterDbOwnerCheckSupportedObjectType(Node *node);
 static bool CannotBeExecutedInTransaction_True(Node *node);
@@ -114,7 +113,7 @@ static const NonMainDbDistributeObjectOps *const OperationArray[] = {
 	},
 	[T_AlterDatabaseStmt] = &(NonMainDbDistributeObjectOps) {
 		.cannotBeExecutedInTransaction = AlterDbCannotBeExecutedInTransaction,
-		.checkSupportedObjectType = AlterDbStmtCheckSupportedObjectType
+		.checkSupportedObjectType = NULL
 	},
 #if PG_VERSION_NUM >= PG_VERSION_15
 	[T_AlterDatabaseRefreshCollStmt] = &(NonMainDbDistributeObjectOps) {
@@ -360,26 +359,6 @@ DropDbStmtCheckSupportedObjectType(Node *node)
 	 */
 	DropdbStmt *stmt = castNode(DropdbStmt, node);
 	return strcmp(stmt->dbname, MainDb) != 0;
-}
-
-
-static bool
-AlterDbStmtCheckSupportedObjectType(Node *node)
-{
-	/*
-	 * We don't try to send the query to the main database if the ALTER
-	 * DATABASE command is for the main database itself, this is a very
-	 * rare case but it's exercised by our test suite.
-	 */
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
-	if (!IsSetTablespaceStatement(stmt))
-	{
-		return true;
-	}
-	else
-	{
-		return strcmp(stmt->dbname, MainDb) != 0;
-	}
 }
 
 
