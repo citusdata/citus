@@ -25,14 +25,197 @@ set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
 NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-alter database "altered_database!'2" rename to altered_database_renamed;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RENAME TO altered_database_renamed', 'postgres')
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 \c test_alter_db_from_nonmain_db - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
-alter database altered_database_renamed rename to "altered_database!'2";
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE altered_database_renamed RENAME TO "altered_database!''2"', 'postgres')
+alter database "altered_database!'2"  rename to altered_database_renamed;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RENAME TO altered_database_renamed', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
@@ -40,35 +223,50 @@ alter database "altered_database!'2" with
     IS_TEMPLATE false;
 NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  database "altered_database!'2" does not exist
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
-set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
     CONNECTION LIMIT 1
     IS_TEMPLATE true;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  database "altered_database!'2" does not exist
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
+ERROR:  database "altered_database!'2" does not exist
+alter database altered_database_renamed  rename to "altered_database!'2";
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
+NOTICE:  issuing SELECT citus_internal.acquire_citus_advisory_object_class_lock(26, NULL)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-alter database "altered_database!'2" rename to altered_database_renamed;
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RENAME TO altered_database_renamed
+NOTICE:  issuing SELECT citus_internal.acquire_citus_advisory_object_class_lock(26, 'altered_database_renamed')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE "altered_database!'2" RENAME TO altered_database_renamed
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database altered_database_renamed rename to "altered_database!'2";
-NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  database "altered_database_renamed" does not exist
 \c regression
 create role test_owner_non_main_db;
 \c test_alter_db_from_nonmain_db

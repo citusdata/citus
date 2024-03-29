@@ -27,12 +27,64 @@ alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
-alter database "altered_database!'2" rename to altered_database_renamed;
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+
+\c regression - - :master_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+alter database "altered_database!'2" set tablespace "pg_default";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+
+
 
 \c test_alter_db_from_nonmain_db - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
-alter database altered_database_renamed rename to "altered_database!'2";
+alter database "altered_database!'2"  rename to altered_database_renamed;
 
 
 alter database "altered_database!'2" with
@@ -42,7 +94,6 @@ alter database "altered_database!'2" with
 
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
-set citus.grep_remote_commands = "%ALTER DATABASE%";
 
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
@@ -53,7 +104,7 @@ alter database "altered_database!'2" with
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
 
-alter database "altered_database!'2" rename to altered_database_renamed;
+alter database altered_database_renamed  rename to "altered_database!'2";
 
 alter database altered_database_renamed rename to "altered_database!'2";
 
