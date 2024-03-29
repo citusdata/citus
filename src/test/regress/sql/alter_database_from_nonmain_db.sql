@@ -34,6 +34,16 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database altered_database_renamed rename to "altered_database!'2";
 
+
+alter database "altered_database!'2" with
+    ALLOW_CONNECTIONS true
+    CONNECTION LIMIT 0
+    IS_TEMPLATE false;
+
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
     CONNECTION LIMIT 1
@@ -42,6 +52,14 @@ alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
+
+alter database "altered_database!'2" rename to altered_database_renamed;
+
+alter database altered_database_renamed rename to "altered_database!'2";
+
+
+
+
 
 \c regression
 create role test_owner_non_main_db;
@@ -56,8 +74,22 @@ alter database "altered_database!'2" owner to test_owner_non_main_db;
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to CURRENT_USER;
-alter database "altered_database!'2" set default_transaction_read_only = true;
 set default_transaction_read_only = false;
+
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" owner to test_owner_non_main_db;
+set default_transaction_read_only = false;
+
+
+\c regression - - :master_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" owner to CURRENT_USER;
+set default_transaction_read_only = false;
+
+
 
 \c test_alter_db_from_nonmain_db - - :worker_2_port
 set citus.log_remote_commands = true;
@@ -76,6 +108,9 @@ alter database "altered_database!'2" RESET TIME ZONE;
 alter database "altered_database!'2" SET TIME ZONE INTERVAL '-08:00' HOUR TO MINUTE;
 alter database "altered_database!'2" RESET TIME ZONE;
 alter database "altered_database!'2" set default_transaction_isolation = 'serializable';
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 set default_transaction_isolation = 'read committed';
 alter database "altered_database!'2" set default_transaction_isolation from current;
 alter database "altered_database!'2" set default_transaction_isolation to DEFAULT;

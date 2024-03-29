@@ -293,14 +293,9 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	/* Since ALTER DATABASE SET TABLESPACE statement is not supported */
-	/* inside a transaction block, we need to send the command to the */
-	/* main database directly to make it work */
-	if (!IsSetTablespaceStatement(stmt))
-	{
-		EnsureCoordinator();
-	}
 
+	EnsurePropagationToCoordinator();
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(dbAddress));
 	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
@@ -317,12 +312,12 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		 * the transaction block.
 		 */
 		bool warnForPartialFailure = true;
-		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands,
+		return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands,
 											   warnForPartialFailure);
 	}
 	else
 	{
-		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+		return NodeDDLTaskList(REMOTE_NODES, commands);
 	}
 }
 
@@ -353,7 +348,9 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(dbAddress));
+
 	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
@@ -362,7 +359,7 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -395,7 +392,8 @@ PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(dbAddress));
 
 	/*
 	 * Different than other ALTER DATABASE commands, we first acquire a lock
@@ -429,7 +427,8 @@ PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(dbAddress));
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -437,7 +436,7 @@ PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString)
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -465,7 +464,8 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(dbAddress));
 	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, stmt->dbname);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
@@ -474,7 +474,7 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -692,6 +692,31 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 		NontransactionalNodeDDLTaskList(REMOTE_NODES, dropDatabaseCommands,
 										warnForPartialFailure);
 	return dropDatabaseDDLJobList;
+}
+
+List *
+PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
+						   ProcessUtilityContext processUtilityContext){
+	List *addresses = GetObjectAddressListFromParseTree(node, false, false);
+
+	if (!ShouldPropagateAnyObject(addresses))
+	{
+		return NIL;
+	}
+	EnsurePropagationToCoordinator();
+
+	AlterOwnerStmt *stmt = (AlterOwnerStmt *) node;
+	EnsureSequentialMode(stmt->objectType);
+	QualifyTreeNode(node);
+	char *databaseName = strVal((String *) stmt->object);
+	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, databaseName);
+	const char *sql = DeparseTreeNode((Node *) node);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
