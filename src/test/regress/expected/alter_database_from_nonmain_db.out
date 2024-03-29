@@ -35,16 +35,39 @@ alter database altered_database_renamed rename to "altered_database!'2";
 NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE altered_database_renamed RENAME TO "altered_database!''2"', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" with
+    ALLOW_CONNECTIONS true
+    CONNECTION LIMIT 0
+    IS_TEMPLATE false;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
     CONNECTION LIMIT 1
     IS_TEMPLATE true;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" rename to altered_database_renamed;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RENAME TO altered_database_renamed
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RENAME TO altered_database_renamed
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database altered_database_renamed rename to "altered_database!'2";
+NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 \c regression
 create role test_owner_non_main_db;
@@ -61,8 +84,23 @@ set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to CURRENT_USER;
 NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" OWNER TO postgres;', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-alter database "altered_database!'2" set default_transaction_read_only = true;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_read_only = ''true''', 'postgres')
+set default_transaction_read_only = false;
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" owner to test_owner_non_main_db;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO test_owner_non_main_db;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO test_owner_non_main_db;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set default_transaction_read_only = false;
+\c regression - - :master_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" owner to CURRENT_USER;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO postgres;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set default_transaction_read_only = false;
 \c test_alter_db_from_nonmain_db - - :worker_2_port
@@ -101,44 +139,71 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" set default_transaction_isolation = 'serializable';
 NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_isolation = ''serializable''', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 set default_transaction_isolation = 'read committed';
 alter database "altered_database!'2" set default_transaction_isolation from current;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_isolation FROM CURRENT', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_isolation FROM CURRENT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_isolation FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" set default_transaction_isolation to DEFAULT;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_isolation TO DEFAULT', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_isolation TO DEFAULT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET default_transaction_isolation TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" RESET default_transaction_isolation;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET default_transaction_isolation', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET default_transaction_isolation
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET default_transaction_isolation
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" set statement_timeout = 1000;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET statement_timeout = 1000', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout = 1000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout = 1000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set statement_timeout = 2000;
 alter database "altered_database!'2" set statement_timeout from current;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET statement_timeout FROM CURRENT', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout FROM CURRENT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" set statement_timeout to DEFAULT;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET statement_timeout TO DEFAULT', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout TO DEFAULT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" RESET statement_timeout;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET statement_timeout', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET statement_timeout
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET statement_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" set lock_timeout = 1201.5;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET lock_timeout = 1201.5', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout = 1201.5
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout = 1201.5
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set lock_timeout = 1202.5;
 alter database "altered_database!'2" set lock_timeout from current;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET lock_timeout FROM CURRENT', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout FROM CURRENT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout FROM CURRENT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" set lock_timeout to DEFAULT;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET lock_timeout TO DEFAULT', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout TO DEFAULT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET lock_timeout TO DEFAULT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" RESET lock_timeout;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET lock_timeout', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET lock_timeout
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET lock_timeout
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 ALTER DATABASE "altered_database!'2" RESET ALL;
-NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET ALL', 'postgres')
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET ALL
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET ALL
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 \c regression
 set citus.enable_create_database_propagation=on;
