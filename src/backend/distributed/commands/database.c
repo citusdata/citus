@@ -697,7 +697,19 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 List *
 PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext){
+
+	const DistributeObjectOps *ops = GetDistributeObjectOps(node);
+	Assert(ops != NULL);
+
+	if (ops->featureFlag && *ops->featureFlag == false)
+	{
+		/* not propagating when a configured feature flag is turned off by the user */
+		return NIL;
+	}
+
 	List *addresses = GetObjectAddressListFromParseTree(node, false, false);
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
 
 	if (!ShouldPropagateAnyObject(addresses))
 	{

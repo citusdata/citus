@@ -86,6 +86,8 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2"  rename to altered_database_renamed;
 
+alter database altered_database_renamed  rename to "altered_database!'2";
+
 
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
@@ -94,6 +96,7 @@ alter database "altered_database!'2" with
 
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
@@ -104,9 +107,6 @@ alter database "altered_database!'2" with
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
 
-alter database altered_database_renamed  rename to "altered_database!'2";
-
-alter database altered_database_renamed rename to "altered_database!'2";
 
 
 

@@ -217,56 +217,34 @@ set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2"  rename to altered_database_renamed;
 NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RENAME TO altered_database_renamed', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database altered_database_renamed  rename to "altered_database!'2";
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE altered_database_renamed RENAME TO "altered_database!''2"', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
 NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;', 'postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-ERROR:  database "altered_database!'2" does not exist
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
     CONNECTION LIMIT 1
     IS_TEMPLATE true;
-ERROR:  database "altered_database!'2" does not exist
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
-ERROR:  database "altered_database!'2" does not exist
-alter database altered_database_renamed  rename to "altered_database!'2";
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal.acquire_citus_advisory_object_class_lock(26, NULL)
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal.acquire_citus_advisory_object_class_lock(26, 'altered_database_renamed')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER DATABASE altered_database_renamed RENAME TO "altered_database!'2"
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-alter database altered_database_renamed rename to "altered_database!'2";
-ERROR:  database "altered_database_renamed" does not exist
 \c regression
 create role test_owner_non_main_db;
 \c test_alter_db_from_nonmain_db
