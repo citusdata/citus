@@ -694,10 +694,11 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 	return dropDatabaseDDLJobList;
 }
 
+
 List *
 PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
-						   ProcessUtilityContext processUtilityContext){
-
+								 ProcessUtilityContext processUtilityContext)
+{
 	const DistributeObjectOps *ops = GetDistributeObjectOps(node);
 	Assert(ops != NULL);
 
@@ -708,6 +709,7 @@ PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 	}
 
 	List *addresses = GetObjectAddressListFromParseTree(node, false, false);
+
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
 
