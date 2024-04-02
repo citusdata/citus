@@ -182,8 +182,15 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to CURRENT_USER;
 set default_transaction_read_only = false;
-\c regression - - :master_port
 SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+
+set citus.enable_alter_database_owner to off;
+alter database "altered_database!'2" owner to test_owner_non_main_db;
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+alter database "altered_database!'2" owner to CURRENT_USER;
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+reset citus.enable_alter_database_owner;
+
 
 
 \c test_alter_db_from_nonmain_db

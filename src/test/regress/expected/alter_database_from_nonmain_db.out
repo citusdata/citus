@@ -421,7 +421,6 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO postgres;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set default_transaction_read_only = false;
-\c regression - - :master_port
 SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
       node_type       |                                                                                                                                                                                                                               result
 ---------------------------------------------------------------------
@@ -430,6 +429,26 @@ SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER
  worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
+set citus.enable_alter_database_owner to off;
+alter database "altered_database!'2" owner to test_owner_non_main_db;
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                      result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+alter database "altered_database!'2" owner to CURRENT_USER;
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+reset citus.enable_alter_database_owner;
 \c test_alter_db_from_nonmain_db
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
