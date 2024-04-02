@@ -76,6 +76,10 @@ static bool GrantStmtCheckSupportedObjectType(Node *node);
 static bool SecLabelStmtCheckSupportedObjectType(Node *node);
 static bool AlterDbRenameCheckSupportedObjectType(Node *node);
 static bool AlterDbOwnerCheckSupportedObjectType(Node *node);
+
+/*
+ * cannotBeExecutedInTransaction callbacks for OperationArray.
+ */
 static bool CannotBeExecutedInTransaction_True(Node *node);
 static bool CannotBeExecutedInTransaction_False(Node *node);
 static bool AlterDbCannotBeExecutedInTransaction(Node *node);

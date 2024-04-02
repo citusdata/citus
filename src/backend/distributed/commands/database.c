@@ -699,12 +699,8 @@ List *
 PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 								 ProcessUtilityContext processUtilityContext)
 {
-	const DistributeObjectOps *ops = GetDistributeObjectOps(node);
-	Assert(ops != NULL);
-
-	if (ops->featureFlag && *ops->featureFlag == false)
+	if (!EnableAlterDatabaseOwner)
 	{
-		/* not propagating when a configured feature flag is turned off by the user */
 		return NIL;
 	}
 
@@ -717,6 +713,7 @@ PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
 	EnsurePropagationToCoordinator();
 
 	AlterOwnerStmt *stmt = (AlterOwnerStmt *) node;

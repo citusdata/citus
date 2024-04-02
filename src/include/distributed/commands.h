@@ -236,7 +236,6 @@ extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *que
 													 processUtilityContext);
 extern List * PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 											   ProcessUtilityContext processUtilityContext);
-
 extern List * GetDatabaseMetadataSyncCommands(Oid dbOid);
 
 
