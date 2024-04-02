@@ -465,8 +465,8 @@ static bool
 AnyObjectViolatesOwnership(DropStmt *dropStmt)
 {
 	bool hasOwnershipViolation = false;
-	volatile ObjectAddress objectAddress = { 0 };
-	Relation relation = NULL;
+	ObjectAddress objectAddress = { 0 };
+	volatile Relation relation = NULL;
 	ObjectType objectType = dropStmt->removeType;
 	bool missingOk = dropStmt->missing_ok;
 
