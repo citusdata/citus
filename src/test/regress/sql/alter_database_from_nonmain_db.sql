@@ -28,9 +28,26 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
+
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
@@ -42,7 +59,17 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
@@ -56,7 +83,15 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+\c regression - - :worker_2_port
 alter database "altered_database!'2" set tablespace "pg_default";
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
@@ -70,7 +105,9 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 alter database "altered_database!'2" set tablespace "pg_default";
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
@@ -78,21 +115,20 @@ alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
-
-
 
 \c test_alter_db_from_nonmain_db - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2"  rename to altered_database_renamed;
-
 alter database altered_database_renamed  rename to "altered_database!'2";
-
 
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
+
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
@@ -102,15 +138,17 @@ alter database "altered_database!'2" with
     ALLOW_CONNECTIONS false
     CONNECTION LIMIT 1
     IS_TEMPLATE true;
+
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" with
     ALLOW_CONNECTIONS true
     CONNECTION LIMIT 0
     IS_TEMPLATE false;
-
-
-
-
-
 
 \c regression
 create role test_owner_non_main_db;
@@ -120,63 +158,133 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 set citus.enable_create_database_propagation=on;
 alter database "altered_database!'2" owner to test_owner_non_main_db;
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 
 \c test_alter_db_from_nonmain_db - - :worker_1_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to CURRENT_USER;
 set default_transaction_read_only = false;
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 
 \c regression - - :worker_1_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to test_owner_non_main_db;
 set default_transaction_read_only = false;
-
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 
 \c regression - - :master_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to CURRENT_USER;
 set default_transaction_read_only = false;
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 
+
+\c test_alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+
+alter database "altered_database!'2" set default_transaction_read_only to true;
+
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+
+\c test_alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" reset default_transaction_read_only;
+
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
 
 
 \c test_alter_db_from_nonmain_db - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
-alter database "altered_database!'2" set default_transaction_read_only from current;
-alter database "altered_database!'2" set default_transaction_read_only to DEFAULT;
-alter database "altered_database!'2" RESET default_transaction_read_only;
-alter database "altered_database!'2" SET TIME ZONE '-7';
-alter database "altered_database!'2" set TIME ZONE LOCAL;
+alter database "altered_database!'2" set log_duration from current;
+alter database "altered_database!'2" set log_duration to DEFAULT;
+alter database "altered_database!'2" set log_duration = true;
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='log_duration';
 
-\c test_alter_db_from_nonmain_db
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='log_duration';
+
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='log_duration';
+
+\c test_alter_db_from_nonmain_db - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
-alter database "altered_database!'2" set TIME ZONE DEFAULT;
-alter database "altered_database!'2" RESET TIME ZONE;
-alter database "altered_database!'2" SET TIME ZONE INTERVAL '-08:00' HOUR TO MINUTE;
-alter database "altered_database!'2" RESET TIME ZONE;
-alter database "altered_database!'2" set default_transaction_isolation = 'serializable';
+alter database "altered_database!'2" RESET log_duration;
+
+
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='log_duration';
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='log_duration';
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='log_duration';
+
+
+
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
-set default_transaction_isolation = 'read committed';
-alter database "altered_database!'2" set default_transaction_isolation from current;
-alter database "altered_database!'2" set default_transaction_isolation to DEFAULT;
-alter database "altered_database!'2" RESET default_transaction_isolation;
 alter database "altered_database!'2" set statement_timeout = 1000;
-set statement_timeout = 2000;
-alter database "altered_database!'2" set statement_timeout from current;
+
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+
+
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set statement_timeout to DEFAULT;
 alter database "altered_database!'2" RESET statement_timeout;
-alter database "altered_database!'2" set lock_timeout = 1201.5;
-set lock_timeout = 1202.5;
-alter database "altered_database!'2" set lock_timeout from current;
-alter database "altered_database!'2" set lock_timeout to DEFAULT;
-alter database "altered_database!'2" RESET lock_timeout;
-ALTER DATABASE "altered_database!'2" RESET ALL;
+
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
 
 \c regression
 set citus.enable_create_database_propagation=on;
