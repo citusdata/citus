@@ -715,12 +715,14 @@ PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 	}
 
 	EnsurePropagationToCoordinator();
-
+	
 	AlterOwnerStmt *stmt = (AlterOwnerStmt *) node;
-	EnsureSequentialMode(stmt->objectType);
-	QualifyTreeNode(node);
 	char *databaseName = strVal((String *) stmt->object);
 	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, databaseName);
+
+	EnsureSequentialMode(stmt->objectType);
+	QualifyTreeNode(node);
+
 	const char *sql = DeparseTreeNode((Node *) node);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
