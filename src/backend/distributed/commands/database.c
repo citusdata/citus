@@ -715,7 +715,7 @@ PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 	}
 
 	EnsurePropagationToCoordinator();
-	
+
 	AlterOwnerStmt *stmt = (AlterOwnerStmt *) node;
 	char *databaseName = strVal((String *) stmt->object);
 	SerializeDistributedDDLsOnObjectClassObject(OCLASS_DATABASE, databaseName);
