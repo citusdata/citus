@@ -163,7 +163,15 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
-	int64 shardOffset = shardCount == 1 ? colocationId : 0;
+
+	int64 shardOffset = 0;
+	if (shardCount == 1 && shardStorageType == SHARD_STORAGE_TABLE)
+	{
+		/* For single shard distributed tables, use the colocationId to offset
+		 * where the shard is placed.
+		 */
+		shardOffset = colocationId;
+	}
 
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{

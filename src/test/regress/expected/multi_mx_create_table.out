@@ -540,12 +540,6 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
  articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
  articles_hash_mx_1220105                                       | articles_hash_mx                                       | distributed      |          0
  articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
  citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
  citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
  citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
@@ -714,12 +708,6 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
  customer_mx_1220084                                            | customer_mx                                            | reference        |          0
  customer_mx_1220084                                            | customer_mx                                            | reference        |          0
  customer_mx_1220084                                            | customer_mx                                            | reference        |          0
- labs_mx_1220102                                                | labs_mx                                                | distributed      |       8192
- labs_mx_1220102                                                | labs_mx                                                | distributed      |       8192
- labs_mx_1220102                                                | labs_mx                                                | distributed      |       8192
- labs_mx_1220102                                                | labs_mx                                                | distributed      |       8192
- labs_mx_1220102                                                | labs_mx                                                | distributed      |       8192
- labs_mx_1220102                                                | labs_mx                                                | distributed      |       8192
  labs_mx_1220102                                                | labs_mx                                                | distributed      |       8192
  limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |      16384
  limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |      16384
@@ -890,12 +878,6 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
  nation_mx_1220085                                              | nation_mx                                              | reference        |          0
  nation_mx_1220085                                              | nation_mx                                              | reference        |          0
  objects_mx_1220103                                             | objects_mx                                             | distributed      |      16384
- objects_mx_1220103                                             | objects_mx                                             | distributed      |      16384
- objects_mx_1220103                                             | objects_mx                                             | distributed      |      16384
- objects_mx_1220103                                             | objects_mx                                             | distributed      |      16384
- objects_mx_1220103                                             | objects_mx                                             | distributed      |      16384
- objects_mx_1220103                                             | objects_mx                                             | distributed      |      16384
- objects_mx_1220103                                             | objects_mx                                             | distributed      |      16384
  orders_mx_1220068                                              | orders_mx                                              | distributed      |       8192
  orders_mx_1220068                                              | orders_mx                                              | distributed      |       8192
  orders_mx_1220068                                              | orders_mx                                              | distributed      |       8192
@@ -984,7 +966,7 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
-(469 rows)
+(451 rows)
 
 -- Show that altering type name is not supported from worker node
 ALTER TYPE citus_mx_test_schema.order_side_mx RENAME TO temp_order_side_mx;
