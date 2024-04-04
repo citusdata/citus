@@ -54,6 +54,9 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 
+/* Config variables managed via guc */
+bool EnableSingleShardTableMultiNodePlacement = false;
+
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_create_worker_shards);
@@ -165,7 +168,8 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	char shardStorageType = ShardStorageType(distributedTableId);
 
 	int64 shardOffset = 0;
-	if (shardCount == 1 && shardStorageType == SHARD_STORAGE_TABLE)
+	if (EnableSingleShardTableMultiNodePlacement && shardCount == 1
+		&& shardStorageType == SHARD_STORAGE_TABLE)
 	{
 		/* For single shard distributed tables, use the colocationId to offset
 		 * where the shard is placed.

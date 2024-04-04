@@ -86,6 +86,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/pg_dist_shard.h"
 #include "distributed/placement_connection.h"
 #include "distributed/priority.h"
 #include "distributed/query_pushdown_planning.h"
@@ -1457,6 +1458,17 @@ RegisterCitusConfigVariables(void)
 					 "distributed tables"),
 		NULL,
 		&EnableSingleHashRepartitioning,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_single_shard_table_multi_node_placement",
+		gettext_noop("Enables placement of single shard distributed tables in"
+					 " all nodes of the cluster"),
+		NULL,
+		&EnableSingleShardTableMultiNodePlacement,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,

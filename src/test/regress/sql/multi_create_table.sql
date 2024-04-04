@@ -294,6 +294,7 @@ DROP TABLE shard_count_table_3;
 
 -- test shard count 1 placement with colocate none.
 -- create a base table instance
+set citus.enable_single_hash_repartition_joins to on;
 CREATE TABLE shard_count_table_1_inst_1 (a int);
 SELECT create_distributed_table('shard_count_table_1_inst_1', 'a', shard_count:=1, colocate_with:='none');
 
