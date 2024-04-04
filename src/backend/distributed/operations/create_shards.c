@@ -168,8 +168,8 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	char shardStorageType = ShardStorageType(distributedTableId);
 
 	int64 shardOffset = 0;
-	if (EnableSingleShardTableMultiNodePlacement && shardCount == 1
-		&& shardStorageType == SHARD_STORAGE_TABLE)
+	if (EnableSingleShardTableMultiNodePlacement && shardCount == 1 &&
+		shardStorageType == SHARD_STORAGE_TABLE)
 	{
 		/* For single shard distributed tables, use the colocationId to offset
 		 * where the shard is placed.
