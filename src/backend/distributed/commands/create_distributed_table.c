@@ -22,6 +22,7 @@
 #include "catalog/dependency.h"
 #include "catalog/index.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_attrdef.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
@@ -50,6 +51,7 @@
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -1696,52 +1698,39 @@ PropagatePrerequisiteObjectsForDistributedTable(Oid relationId)
 void
 EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId)
 {
-	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
-	citusTableIdList = list_append_unique_oid(citusTableIdList, ownerRelationId);
+	Oid attrDefOid;
+	List *attrDefOids = GetAttrDefsFromSequence(seqOid);
 
-	Oid citusTableId = InvalidOid;
-	foreach_oid(citusTableId, citusTableIdList)
+	foreach_oid(attrDefOid, attrDefOids)
 	{
-		List *seqInfoList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0, DEPENDENCY_AUTO);
+		ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
 
-		SequenceInfo *seqInfo = NULL;
-		foreach_ptr(seqInfo, seqInfoList)
+		/*
+		 * If another distributed table is using the same sequence
+		 * in one of its column defaults, make sure the types of the
+		 * columns match.
+		 *
+		 * We skip non-distributed tables, but we need to check the current
+		 * table as it might reference the same sequence multiple times.
+		 */
+		if (columnAddress.objectId != ownerRelationId &&
+			!IsCitusTable(columnAddress.objectId))
 		{
-			AttrNumber currentAttnum = seqInfo->attributeNumber;
-			Oid currentSeqOid = seqInfo->sequenceOid;
-
-			if (!seqInfo->isNextValDefault)
-			{
-				/*
-				 * If a sequence is not on the nextval, we don't need any check.
-				 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
-				 */
-				continue;
-			}
-
-			/*
-			 * If another distributed table is using the same sequence
-			 * in one of its column defaults, make sure the types of the
-			 * columns match
-			 */
-			if (currentSeqOid == seqOid)
-			{
-				Oid currentAttributeTypId = GetAttributeTypeOid(citusTableId,
-																currentAttnum);
-				if (attributeTypeId != currentAttributeTypId)
-				{
-					char *sequenceName = generate_qualified_relation_name(
-						seqOid);
-					char *citusTableName =
-						generate_qualified_relation_name(citusTableId);
-					ereport(ERROR, (errmsg(
-										"The sequence %s is already used for a different"
-										" type in column %d of the table %s",
-										sequenceName, currentAttnum,
-										citusTableName)));
-				}
-			}
+			continue;
+		}
+		Oid currentAttributeTypId = GetAttributeTypeOid(columnAddress.objectId,
+														columnAddress.objectSubId);
+		if (attributeTypeId != currentAttributeTypId)
+		{
+			char *sequenceName = generate_qualified_relation_name(
+				seqOid);
+			char *citusTableName =
+				generate_qualified_relation_name(columnAddress.objectId);
+			ereport(ERROR, (errmsg(
+								"The sequence %s is already used for a different"
+								" type in column %d of the table %s",
+								sequenceName, columnAddress.objectSubId,
+								citusTableName)));
 		}
 	}
 }

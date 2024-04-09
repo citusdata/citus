@@ -1682,6 +1682,90 @@ GetSequencesFromAttrDef(Oid attrdefOid)
 }
 
 
+#if PG_VERSION_NUM < PG_VERSION_15
+
+/*
+ * Given a pg_attrdef OID, return the relation OID and column number of
+ * the owning column (represented as an ObjectAddress for convenience).
+ *
+ * Returns InvalidObjectAddress if there is no such pg_attrdef entry.
+ */
+ObjectAddress
+GetAttrDefaultColumnAddress(Oid attrdefoid)
+{
+	ObjectAddress result = InvalidObjectAddress;
+	ScanKeyData skey[1];
+	HeapTuple tup;
+
+	Relation attrdef = table_open(AttrDefaultRelationId, AccessShareLock);
+	ScanKeyInit(&skey[0],
+				Anum_pg_attrdef_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(attrdefoid));
+	SysScanDesc scan = systable_beginscan(attrdef, AttrDefaultOidIndexId, true,
+										  NULL, 1, skey);
+
+	if (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_attrdef atdform = (Form_pg_attrdef) GETSTRUCT(tup);
+
+		result.classId = RelationRelationId;
+		result.objectId = atdform->adrelid;
+		result.objectSubId = atdform->adnum;
+	}
+
+	systable_endscan(scan);
+	table_close(attrdef, AccessShareLock);
+
+	return result;
+}
+
+
+#endif
+
+
+/*
+ * GetAttrDefsFromSequence returns a list of attrdef OIDs that have
+ * a dependency on the given sequence
+ */
+List *
+GetAttrDefsFromSequence(Oid seqOid)
+{
+	List *attrDefsResult = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(seqOid));
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, lengthof(key), key);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->classid == AttrDefaultRelationId &&
+			deprec->deptype == DEPENDENCY_NORMAL)
+		{
+			attrDefsResult = lappend_oid(attrDefsResult, deprec->objid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	return attrDefsResult;
+}
+
+
 /*
  * GetDependentFunctionsWithRelation returns the dependent functions for the
  * given relation id.
