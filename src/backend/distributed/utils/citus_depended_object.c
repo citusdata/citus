@@ -480,7 +480,7 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 		Node *object = NULL;
 		foreach_ptr(object, dropStmt->objects)
 		{
-			Relation rel;
+			Relation rel = NULL;
 			objectAddress = get_object_address(objectType, object,
 											   &rel, AccessShareLock, missingOk);
 			relation = rel;
