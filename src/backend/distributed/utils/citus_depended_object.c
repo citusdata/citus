@@ -483,7 +483,13 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 			Relation rel = NULL;
 			objectAddress = get_object_address(objectType, object,
 											   &rel, AccessShareLock, missingOk);
-			relation = rel;
+			/*
+			 * The object relation is qualified with volatile and its value is obtained from
+			 * get_object_address(). Unless we can qualify the corresponding parameter of
+			 * get_object_address() with volatile (this is a function defined in PostgreSQL),
+			 * we cannot get rid of this assignment.
+			 */
+                        relation = rel;
 
 			if (OidIsValid(objectAddress.objectId))
 			{
