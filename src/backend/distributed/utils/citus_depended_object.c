@@ -489,7 +489,7 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 			 * get_object_address() with volatile (this is a function defined in PostgreSQL),
 			 * we cannot get rid of this assignment.
 			 */
-                        relation = rel;
+			relation = rel;
 
 			if (OidIsValid(objectAddress.objectId))
 			{
