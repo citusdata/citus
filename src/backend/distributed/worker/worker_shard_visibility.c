@@ -460,8 +460,19 @@ FilterShardsFromPgclass(Node *node, void *context)
 			MemoryContext originalContext = MemoryContextSwitchTo(queryContext);
 
 			/* add NOT relation_is_a_known_shard(oid) to the security quals of the RTE */
-			rangeTableEntry->securityQuals =
-				list_make1(CreateRelationIsAKnownShardFilter(varno));
+			Node *oldQuals = query->jointree->quals;
+			if (oldQuals)
+			{
+				query->jointree->quals = (Node *) makeBoolExpr(
+					AND_EXPR,
+					list_make2(oldQuals, CreateRelationIsAKnownShardFilter(varno)),
+					-1);
+			}
+			else
+			{
+				query->jointree->quals = (Node *) CreateRelationIsAKnownShardFilter(
+					varno);
+			}
 
 			MemoryContextSwitchTo(originalContext);
 		}
@@ -496,9 +507,9 @@ CreateRelationIsAKnownShardFilter(int pgClassVarno)
 	funcExpr->location = -1;
 	funcExpr->args = list_make1(oidVar);
 
-	BoolExpr *notExpr = makeNode(BoolExpr);
-	notExpr->boolop = NOT_EXPR;
-	notExpr->args = list_make1(funcExpr);
+	BooleanTest *notExpr = makeNode(BooleanTest);
+	notExpr->booltesttype = IS_NOT_TRUE;
+	notExpr->arg = (Expr *) funcExpr;
 	notExpr->location = -1;
 
 	return (Node *) notExpr;
