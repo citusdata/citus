@@ -136,6 +136,7 @@ ObjectAddress GetAttrDefaultColumnAddress(Oid attrdefoid);
 extern List * GetAttrDefsFromSequence(Oid seqOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 											  AttrNumber attnum, char depType);
+extern List * GetDependentRelationsWithSequence(Oid seqId, char depType);
 extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 extern void SetLocalEnableMetadataSync(bool state);
