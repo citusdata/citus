@@ -2946,7 +2946,7 @@ MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion)
 	}
 	else
 	{
-		rightComparisionLimit = strlen(leftVersion);
+		rightComparisionLimit = strlen(rightVersion);
 	}
 
 	/* we can error out early if hypens are not in the same position */

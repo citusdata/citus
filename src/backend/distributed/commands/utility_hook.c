@@ -87,48 +87,6 @@
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
 
-#define EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER \
-	"SELECT citus_internal.execute_command_on_remote_nodes_as_user(%s, %s)"
-#define START_MANAGEMENT_TRANSACTION \
-	"SELECT citus_internal.start_management_transaction('%lu')"
-#define MARK_OBJECT_DISTRIBUTED \
-	"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
-
-/*
- * NonMainDbDistributedStatementInfo is used to determine whether a statement is
- * supported from non-main databases and whether it should be marked as
- * distributed explicitly (*).
- *
- * (*) We always have to mark such objects as "distributed" but while for some
- * object types we can delegate this to main database, for some others we have
- * to explicitly send a command to all nodes in this code-path to achieve this.
- */
-typedef struct NonMainDbDistributedStatementInfo
-{
-	int statementType;
-	bool explicitlyMarkAsDistributed;
-
-	/*
-	 * checkSupportedObjectTypes is a callback function that checks whether
-	 * type of the object referred to by given statement is supported.
-	 *
-	 * Can be NULL if not applicable for the statement type.
-	 */
-	bool (*checkSupportedObjectTypes)(Node *node);
-} NonMainDbDistributedStatementInfo;
-
-/*
- * MarkObjectDistributedParams is used to pass parameters to the
- * MarkObjectDistributedFromNonMainDb function.
- */
-typedef struct MarkObjectDistributedParams
-{
-	char *name;
-	Oid id;
-	uint16 catalogRelId;
-} MarkObjectDistributedParams;
-
-
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_IMMEDIATE;
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
@@ -156,41 +114,6 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
-
-
-/*
- * Functions to support commands used to manage node-wide objects from non-main
- * databases.
- */
-static bool IsCommandToCreateOrDropMainDB(Node *parsetree);
-static void RunPreprocessMainDBCommand(Node *parsetree);
-static void RunPostprocessMainDBCommand(Node *parsetree);
-static bool IsStatementSupportedFromNonMainDb(Node *parsetree);
-static bool StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree);
-static void MarkObjectDistributedFromNonMainDb(Node *parsetree);
-static MarkObjectDistributedParams GetMarkObjectDistributedParams(Node *parsetree);
-
-/*
- * checkSupportedObjectTypes callbacks for
- * NonMainDbDistributedStatementInfo objects.
- */
-static bool NonMainDbCheckSupportedObjectTypeForGrant(Node *node);
-static bool NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node);
-
-
-/*
- * NonMainDbSupportedStatements is an array of statements that are supported
- * from non-main databases.
- */
-ObjectType supportedObjectTypesForGrantStmt[] = { OBJECT_DATABASE };
-static const NonMainDbDistributedStatementInfo NonMainDbSupportedStatements[] = {
-	{ T_GrantRoleStmt, false, NULL },
-	{ T_CreateRoleStmt, true, NULL },
-	{ T_GrantStmt, false, NonMainDbCheckSupportedObjectTypeForGrant },
-	{ T_CreatedbStmt, false, NULL },
-	{ T_DropdbStmt, false, NULL },
-	{ T_SecLabelStmt, false, NonMainDbCheckSupportedObjectTypeForSecLabel },
-};
 
 
 /*
@@ -324,36 +247,25 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 	if (!CitusHasBeenLoaded())
 	{
 		/*
-		 * We always execute CREATE/DROP DATABASE from the main database. There are no
-		 * transactional visibility issues, since these commands are non-transactional.
-		 * And this way we only have to consider one codepath when creating databases.
-		 * We don't try to send the query to the main database if the CREATE/DROP DATABASE
-		 * command is for the main database itself, this is a very rare case but it's
-		 * exercised by our test suite.
+		 * Process the command via RunPreprocessNonMainDBCommand and
+		 * RunPostprocessNonMainDBCommand hooks if we're in a non-main database
+		 * and if the command is a node-wide object management command that we
+		 * support from non-main databases.
 		 */
-		if (!IsMainDB &&
-			!IsCommandToCreateOrDropMainDB(parsetree))
-		{
-			RunPreprocessMainDBCommand(parsetree);
 
-			if (IsA(parsetree, CreatedbStmt) ||
-				IsA(parsetree, DropdbStmt))
-			{
-				return;
-			}
+		bool shouldSkipPrevUtilityHook = RunPreprocessNonMainDBCommand(parsetree);
+
+		if (!shouldSkipPrevUtilityHook)
+		{
+			/*
+			 * Ensure that utility commands do not behave any differently until CREATE
+			 * EXTENSION is invoked.
+			 */
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
 		}
 
-		/*
-		 * Ensure that utility commands do not behave any differently until CREATE
-		 * EXTENSION is invoked.
-		 */
-		PrevProcessUtility(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
-
-		if (!IsMainDB)
-		{
-			RunPostprocessMainDBCommand(parsetree);
-		}
+		RunPostprocessNonMainDBCommand(parsetree);
 
 		return;
 	}
@@ -1688,196 +1600,4 @@ bool
 DropSchemaOrDBInProgress(void)
 {
 	return activeDropSchemaOrDBs > 0;
-}
-
-
-/*
- * IsCommandToCreateOrDropMainDB checks if this query creates or drops the
- * main database, so we can make an exception and not send this query to
- * the main database.
- */
-static bool
-IsCommandToCreateOrDropMainDB(Node *parsetree)
-{
-	if (IsA(parsetree, CreatedbStmt))
-	{
-		CreatedbStmt *createdbStmt = castNode(CreatedbStmt, parsetree);
-		return strcmp(createdbStmt->dbname, MainDb) == 0;
-	}
-	else if (IsA(parsetree, DropdbStmt))
-	{
-		DropdbStmt *dropdbStmt = castNode(DropdbStmt, parsetree);
-		return strcmp(dropdbStmt->dbname, MainDb) == 0;
-	}
-
-	return false;
-}
-
-
-/*
- * RunPreprocessMainDBCommand runs the necessary commands for a query, in main
- * database before query is run on the local node with PrevProcessUtility
- */
-static void
-RunPreprocessMainDBCommand(Node *parsetree)
-{
-	if (!IsStatementSupportedFromNonMainDb(parsetree))
-	{
-		return;
-	}
-
-	char *queryString = DeparseTreeNode(parsetree);
-
-	if (IsA(parsetree, CreatedbStmt) ||
-		IsA(parsetree, DropdbStmt))
-	{
-		IsMainDBCommandInXact = false;
-		RunCitusMainDBQuery((char *) queryString);
-		return;
-	}
-
-	IsMainDBCommandInXact = true;
-
-	StringInfo mainDBQuery = makeStringInfo();
-	appendStringInfo(mainDBQuery,
-					 START_MANAGEMENT_TRANSACTION,
-					 GetCurrentFullTransactionId().value);
-	RunCitusMainDBQuery(mainDBQuery->data);
-	mainDBQuery = makeStringInfo();
-	appendStringInfo(mainDBQuery,
-					 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
-					 quote_literal_cstr(queryString),
-					 quote_literal_cstr(CurrentUserName()));
-	RunCitusMainDBQuery(mainDBQuery->data);
-}
-
-
-/*
- * RunPostprocessMainDBCommand runs the necessary commands for a query, in main
- * database after query is run on the local node with PrevProcessUtility
- */
-static void
-RunPostprocessMainDBCommand(Node *parsetree)
-{
-	if (IsStatementSupportedFromNonMainDb(parsetree) &&
-		StatementRequiresMarkDistributedFromNonMainDb(parsetree))
-	{
-		MarkObjectDistributedFromNonMainDb(parsetree);
-	}
-}
-
-
-/*
- * IsStatementSupportedFromNonMainDb returns true if the statement is supported from a
- * non-main database.
- */
-static bool
-IsStatementSupportedFromNonMainDb(Node *parsetree)
-{
-	NodeTag type = nodeTag(parsetree);
-
-	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
-		 sizeof(NonMainDbSupportedStatements[0]); i++)
-	{
-		if (type != NonMainDbSupportedStatements[i].statementType)
-		{
-			continue;
-		}
-
-		return !NonMainDbSupportedStatements[i].checkSupportedObjectTypes ||
-			   NonMainDbSupportedStatements[i].checkSupportedObjectTypes(parsetree);
-	}
-
-	return false;
-}
-
-
-/*
- * StatementRequiresMarkDistributedFromNonMainDb returns true if the statement should be marked
- * as distributed when executed from a non-main database.
- */
-static bool
-StatementRequiresMarkDistributedFromNonMainDb(Node *parsetree)
-{
-	NodeTag type = nodeTag(parsetree);
-
-	for (int i = 0; i < sizeof(NonMainDbSupportedStatements) /
-		 sizeof(NonMainDbSupportedStatements[0]); i++)
-	{
-		if (type == NonMainDbSupportedStatements[i].statementType)
-		{
-			return NonMainDbSupportedStatements[i].explicitlyMarkAsDistributed;
-		}
-	}
-
-	return false;
-}
-
-
-/*
- * MarkObjectDistributedFromNonMainDb marks the given object as distributed on the
- * non-main database.
- */
-static void
-MarkObjectDistributedFromNonMainDb(Node *parsetree)
-{
-	MarkObjectDistributedParams markObjectDistributedParams =
-		GetMarkObjectDistributedParams(parsetree);
-	StringInfo mainDBQuery = makeStringInfo();
-	appendStringInfo(mainDBQuery,
-					 MARK_OBJECT_DISTRIBUTED,
-					 markObjectDistributedParams.catalogRelId,
-					 quote_literal_cstr(markObjectDistributedParams.name),
-					 markObjectDistributedParams.id,
-					 quote_literal_cstr(CurrentUserName()));
-	RunCitusMainDBQuery(mainDBQuery->data);
-}
-
-
-/*
- * GetMarkObjectDistributedParams returns MarkObjectDistributedParams for the target
- * object of given parsetree.
- */
-static MarkObjectDistributedParams
-GetMarkObjectDistributedParams(Node *parsetree)
-{
-	if (IsA(parsetree, CreateRoleStmt))
-	{
-		CreateRoleStmt *stmt = castNode(CreateRoleStmt, parsetree);
-		MarkObjectDistributedParams info = {
-			.name = stmt->role,
-			.catalogRelId = AuthIdRelationId,
-			.id = get_role_oid(stmt->role, false)
-		};
-
-		return info;
-	}
-
-	/* Add else if branches for other statement types */
-
-	elog(ERROR, "unsupported statement type");
-}
-
-
-/*
- * NonMainDbCheckSupportedObjectTypeForGrant implements checkSupportedObjectTypes
- * callback for GrantStmt.
- */
-static bool
-NonMainDbCheckSupportedObjectTypeForGrant(Node *node)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	return stmt->objtype == OBJECT_DATABASE;
-}
-
-
-/*
- * NonMainDbCheckSupportedObjectTypeForSecLabel implements checkSupportedObjectTypes
- * callback for SecLabel.
- */
-static bool
-NonMainDbCheckSupportedObjectTypeForSecLabel(Node *node)
-{
-	SecLabelStmt *stmt = castNode(SecLabelStmt, node);
-	return stmt->objtype == OBJECT_ROLE;
 }

@@ -384,6 +384,7 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 				Assert(shardCost->cost <= prevShardCost->cost);
 			}
 			totalCost += shardCost->cost;
+			prevShardCost = shardCost;
 		}
 
 		/* Check that utilization field is up to date. */
