@@ -1627,6 +1627,74 @@ GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 
 
 /*
+ * GetDependentDependentRelationsWithSequence returns a list of oids of
+ * relations that have have a dependency on the given sequence.
+ * There are three types of dependencies:
+ * 1. direct auto (owned sequences), created using SERIAL or BIGSERIAL
+ * 2. indirect auto (through an AttrDef), created using DEFAULT nextval('..')
+ * 3. internal, created using GENERATED ALWAYS AS IDENTITY
+ *
+ * Depending on the passed deptype, we return the relations that have the
+ * given type(s):
+ * - DEPENDENCY_AUTO returns both 1 and 2
+ * - DEPENDENCY_INTERNAL returns 3
+ *
+ * The returned list can contain duplicates, as the same relation can have
+ * multiple dependencies on the sequence.
+ */
+List *
+GetDependentRelationsWithSequence(Oid sequenceOid, char depType)
+{
+	List *relations = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(sequenceOid));
+	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
+										  NULL, lengthof(key), key);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (
+			deprec->refclassid == RelationRelationId &&
+			deprec->refobjsubid != 0 &&
+			deprec->deptype == depType)
+		{
+			relations = lappend_oid(relations, deprec->refobjid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	if (depType == DEPENDENCY_AUTO)
+	{
+		Oid attrDefOid;
+		List *attrDefOids = GetAttrDefsFromSequence(sequenceOid);
+
+		foreach_oid(attrDefOid, attrDefOids)
+		{
+			ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
+			relations = lappend_oid(relations, columnAddress.objectId);
+		}
+	}
+
+	return relations;
+}
+
+
+/*
  * GetSequencesFromAttrDef returns a list of sequence OIDs that have
  * dependency with the given attrdefOid in pg_depend
  */
