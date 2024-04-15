@@ -17,6 +17,10 @@ CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
 \set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
 CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
 
+-- Below tests test the ALTER DATABASE command from main and non-main databases
+-- The tests are run on the master and worker nodes to ensure that the command is
+-- executed on all nodes.
+
 \c test_alter_db_from_nonmain_db
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
@@ -38,7 +42,7 @@ alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 
 \c regression - - :master_port
 SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
-\c test_alter_db_from_nonmain_db - - :worker_1_port
+\c test_alter_db_from_nonmain_db - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
@@ -54,22 +58,13 @@ alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 
+-- In the below tests, we test the ALTER DATABASE ..set tablespace command
+-- repeatedly to ensure that the command does not stuck when executed multiple times
+
 \c regression - - :worker_1_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "pg_default";
-alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
-\c regression - - :master_port
-SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
-\c regression - - :worker_1_port
-set citus.log_remote_commands = true;
-set citus.grep_remote_commands = "%ALTER DATABASE%";
-alter database "altered_database!'2" set tablespace "pg_default";
-\c regression - - :master_port
-SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
-\c regression - - :worker_1_port
-set citus.log_remote_commands = true;
-set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
@@ -81,17 +76,8 @@ alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
+
 alter database "altered_database!'2" set tablespace "pg_default";
-alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
-\c regression - - :master_port
-SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
-\c regression - - :worker_2_port
-alter database "altered_database!'2" set tablespace "pg_default";
-\c regression - - :master_port
-SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
-\c regression - - :worker_2_port
-set citus.log_remote_commands = true;
-set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
 alter database "altered_database!'2" set tablespace "pg_default";
 alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
@@ -130,7 +116,7 @@ alter database "altered_database!'2" with
 \c regression - - :master_port
 SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 
-\c regression - - :worker_2_port
+\c regression - - :worker_1_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 
@@ -169,7 +155,7 @@ set default_transaction_read_only = false;
 \c regression - - :master_port
 SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 
-\c regression - - :worker_1_port
+\c regression - - :worker_2_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" owner to test_owner_non_main_db;
@@ -243,7 +229,7 @@ select name,setting from pg_settings
 select name,setting from pg_settings
         where name ='log_duration';
 
-\c test_alter_db_from_nonmain_db - - :worker_2_port
+\c test_alter_db_from_nonmain_db - - :worker_1_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" RESET log_duration;
@@ -277,7 +263,7 @@ select name,setting from pg_settings
         where name ='statement_timeout';
 
 
-\c regression - - :worker_2_port
+\c regression - - :worker_1_port
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" set statement_timeout to DEFAULT;
