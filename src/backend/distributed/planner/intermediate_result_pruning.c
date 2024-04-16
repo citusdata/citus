@@ -12,6 +12,8 @@
  *-------------------------------------------------------------------------
  */
 
+#include "postgres.h"
+
 #include "common/hashfn.h"
 #include "utils/builtins.h"
 

@@ -8,6 +8,8 @@
  *-------------------------------------------------------------------------
  */
 
+#include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "utils/builtins.h"
