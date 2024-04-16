@@ -1093,33 +1093,26 @@ List *
 GetDependentFDWsToExtension(Oid extensionId)
 {
 	List *extensionFDWs = NIL;
-	ScanKeyData key[3];
-	int scanKeyCount = 3;
+	ScanKeyData key[1];
 	HeapTuple tup;
 
 	Relation pgDepend = table_open(DependRelationId, AccessShareLock);
 
 	ScanKeyInit(&key[0],
-				Anum_pg_depend_refclassid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(ExtensionRelationId));
-	ScanKeyInit(&key[1],
-				Anum_pg_depend_refobjid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(extensionId));
-	ScanKeyInit(&key[2],
 				Anum_pg_depend_classid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(ForeignDataWrapperRelationId));
 
-	SysScanDesc scan = systable_beginscan(pgDepend, InvalidOid, false,
-										  NULL, scanKeyCount, key);
+	SysScanDesc scan = systable_beginscan(pgDepend, DependDependerIndexId, true,
+										  NULL, lengthof(key), key);
 
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_depend pgDependEntry = (Form_pg_depend) GETSTRUCT(tup);
 
-		if (pgDependEntry->deptype == DEPENDENCY_EXTENSION)
+		if (pgDependEntry->deptype == DEPENDENCY_EXTENSION &&
+			pgDependEntry->refclassid == ExtensionRelationId &&
+			pgDependEntry->refobjid == extensionId)
 		{
 			extensionFDWs = lappend_oid(extensionFDWs, pgDependEntry->objid);
 		}
