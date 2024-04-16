@@ -10,11 +10,11 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
+#include "catalog/namespace.h"
 #include "commands/defrem.h"
 
-#include "catalog/namespace.h"
+#include "pg_version_constants.h"
+
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"

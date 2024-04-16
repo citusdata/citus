@@ -11,12 +11,12 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "miscadmin.h"
+
 #include "access/nbtree.h"
 #include "access/table.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"
-#include "pg_version_constants.h"
-#include "miscadmin.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
 #include "utils/guc.h"
@@ -25,6 +25,8 @@
 #include "utils/tuplestore.h"
 
 #include "pg_version_compat.h"
+#include "pg_version_constants.h"
+
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"

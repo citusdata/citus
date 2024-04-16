@@ -11,13 +11,15 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
-#include "fmgr.h"
 
-#include "distributed/shared_connection_stats.h"
-#include "distributed/listutils.h"
+#include "fmgr.h"
+#include "miscadmin.h"
+
 #include "nodes/parsenodes.h"
 #include "utils/guc.h"
+
+#include "distributed/listutils.h"
+#include "distributed/shared_connection_stats.h"
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(wake_up_connection_pool_waiters);

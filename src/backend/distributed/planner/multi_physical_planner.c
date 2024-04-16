@@ -11,12 +11,10 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include "pg_version_constants.h"
-
 #include <math.h>
 #include <stdint.h>
+
+#include "postgres.h"
 
 #include "miscadmin.h"
 
@@ -33,39 +31,11 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/sequence.h"
-#include "distributed/backend_data.h"
-#include "distributed/listutils.h"
-#include "distributed/citus_nodefuncs.h"
-#include "distributed/citus_nodes.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_logical_optimizer.h"
-#include "distributed/multi_logical_planner.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/log_utils.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/pg_dist_shard.h"
-#include "distributed/query_pushdown_planning.h"
-#include "distributed/query_utils.h"
-#include "distributed/recursive_planning.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shard_pruning.h"
-#include "distributed/string_utils.h"
-#include "distributed/worker_manager.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/pathnodes.h"
 #include "nodes/print.h"
 #include "optimizer/clauses.h"
-#include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
@@ -83,6 +53,37 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/backend_data.h"
+#include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_nodes.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_logical_planner.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
+#include "distributed/pg_dist_partition.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
+#include "distributed/recursive_planning.h"
+#include "distributed/shard_pruning.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/string_utils.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
 
 /* RepartitionJoinBucketCountPerNode determines bucket amount during repartitions */
 int RepartitionJoinBucketCountPerNode = 4;

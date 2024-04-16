@@ -10,12 +10,13 @@
 
 #include "postgres.h"
 
+#include "utils/elog.h"
+
 #include "distributed/connection_management.h"
 #include "distributed/error_codes.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/worker_log_messages.h"
-#include "utils/elog.h"
 
 
 /*

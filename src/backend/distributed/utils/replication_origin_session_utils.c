@@ -8,11 +8,13 @@
  *-------------------------------------------------------------------------
  */
 
-#include "distributed/replication_origin_session_utils.h"
-#include "distributed/remote_commands.h"
-#include "distributed/metadata_cache.h"
-#include "utils/builtins.h"
 #include "miscadmin.h"
+
+#include "utils/builtins.h"
+
+#include "distributed/metadata_cache.h"
+#include "distributed/remote_commands.h"
+#include "distributed/replication_origin_session_utils.h"
 
 static bool IsRemoteReplicationOriginSessionSetup(MultiConnection *connection);
 

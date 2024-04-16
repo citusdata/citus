@@ -1,16 +1,21 @@
 
-#include "postgres.h"
-#include "miscadmin.h"
-
+#include <math.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <math.h>
+
+#include "postgres.h"
+
+#include "miscadmin.h"
+
+#include "commands/dbcommands.h"
+#include "common/hashfn.h"
+#include "storage/fd.h"
+#include "utils/builtins.h"
+#include "utils/hsearch.h"
+#include "utils/timestamp.h"
 
 #include "pg_version_constants.h"
 
-#include "common/hashfn.h"
-
-#include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
@@ -27,12 +32,8 @@
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/task_execution_utils.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
-#include "storage/fd.h"
-#include "utils/builtins.h"
-#include "utils/hsearch.h"
-#include "utils/timestamp.h"
+#include "distributed/worker_protocol.h"
 
 /* TaskMapKey is used as a key in task hash */
 typedef struct TaskMapKey

@@ -21,6 +21,13 @@
 
 #include "postgres.h"
 
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/pg_list.h"
+#include "optimizer/clauses.h"
+#include "optimizer/optimizer.h"
+#include "parser/parsetree.h"
+
 #include "pg_version_constants.h"
 
 #include "distributed/citus_clauses.h"
@@ -32,17 +39,11 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
-#include "distributed/query_utils.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/version_compat.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/makefuncs.h"
-#include "optimizer/optimizer.h"
-#include "nodes/pg_list.h"
-#include "optimizer/clauses.h"
-#include "parser/parsetree.h"
 
 
 #define INVALID_RELID -1

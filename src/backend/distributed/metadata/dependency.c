@@ -10,8 +10,7 @@
 
 #include "postgres.h"
 
-#include "distributed/commands.h"
-#include "pg_version_constants.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -36,6 +35,13 @@
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "common/hashfn.h"
+#include "utils/fmgroids.h"
+#include "utils/hsearch.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/citus_depended_object.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -46,11 +52,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/version_compat.h"
-#include "miscadmin.h"
-#include "utils/fmgroids.h"
-#include "utils/hsearch.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
 
 /*
  * ObjectAddressCollector keeps track of collected ObjectAddresses. This can be used

@@ -12,6 +12,7 @@
 #define CITUS_FUNCTION_H
 
 #include "postgres.h"
+
 #include "fmgr.h"
 
 

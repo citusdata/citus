@@ -19,6 +19,8 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -26,8 +28,16 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_type.h"
-#include "distributed/commands/utility_hook.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
+#include "utils/lsyscache.h"
+#include "utils/relcache.h"
+#include "utils/ruleutils.h"
+#include "utils/syscache.h"
+
 #include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -37,14 +47,6 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_transaction.h"
-#include "miscadmin.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/fmgrprotos.h"
-#include "utils/lsyscache.h"
-#include "utils/relcache.h"
-#include "utils/ruleutils.h"
-#include "utils/syscache.h"
 
 #define DEFAULT_STATISTICS_TARGET -1
 #define ALTER_INDEX_COLUMN_SET_STATS_COMMAND \

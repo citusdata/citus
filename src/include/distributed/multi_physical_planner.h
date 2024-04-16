@@ -16,21 +16,22 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "c.h"
 
 #include "datatype/timestamp.h"
-#include "distributed/citus_nodes.h"
-#include "distributed/errormessage.h"
-#include "distributed/log_utils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/worker_manager.h"
-#include "distributed/multi_logical_planner.h"
-#include "distributed/distributed_planner.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/array.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_nodes.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_logical_planner.h"
+#include "distributed/worker_manager.h"
 
 
 /* Definitions local to the physical planner */

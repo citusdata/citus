@@ -11,13 +11,14 @@
 
 #include "postgres.h"
 
+#include "lib/stringinfo.h"
+#include "nodes/parsenodes.h"
+#include "utils/builtins.h"
+
 #include "pg_version_compat.h"
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
-#include "lib/stringinfo.h"
-#include "nodes/parsenodes.h"
-#include "utils/builtins.h"
 
 static void AppendDropOwnedStmt(StringInfo buf, DropOwnedStmt *stmt);
 static void AppendRoleList(StringInfo buf, List *roleList);

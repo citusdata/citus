@@ -11,9 +11,10 @@
 #include "postgres.h"
 
 #include "common/hashfn.h"
+#include "utils/hsearch.h"
+
 #include "distributed/citus_safe_lib.h"
 #include "distributed/hash_helpers.h"
-#include "utils/hsearch.h"
 
 
 /*

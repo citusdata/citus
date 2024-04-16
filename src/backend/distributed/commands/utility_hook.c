@@ -25,9 +25,8 @@
  *-------------------------------------------------------------------------
  */
 
-#include "pg_version_constants.h"
-
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "access/attnum.h"
@@ -35,11 +34,25 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
-#include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/tablecmds.h"
+#include "foreign/foreign.h"
+#include "lib/stringinfo.h"
+#include "nodes/makefuncs.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "tcop/utility.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+#include "citus_version.h"
+#include "pg_version_constants.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_depended_object.h"
@@ -48,19 +61,19 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
 #include "distributed/coordinator_protocol.h"
-#include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/deparser.h"
 #include "distributed/executor_util.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
-#include "distributed/multi_logical_replication.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
+#include "distributed/multi_logical_replication.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
@@ -69,17 +82,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
-#include "foreign/foreign.h"
-#include "lib/stringinfo.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
-#include "nodes/makefuncs.h"
-#include "tcop/utility.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/inval.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
 
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */

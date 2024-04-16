@@ -12,9 +12,10 @@
 #ifndef SHARDINTERVAL_UTILS_H_
 #define SHARDINTERVAL_UTILS_H_
 
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata_cache.h"
 #include "nodes/primnodes.h"
+
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 
 #define INVALID_SHARD_INDEX -1
 

@@ -11,11 +11,11 @@
  */
 #include "postgres.h"
 
+#include "utils/datum.h"
 
 #include "distributed/citus_nodefuncs.h"
-#include "distributed/multi_server_executor.h"
 #include "distributed/listutils.h"
-#include "utils/datum.h"
+#include "distributed/multi_server_executor.h"
 
 
 /*

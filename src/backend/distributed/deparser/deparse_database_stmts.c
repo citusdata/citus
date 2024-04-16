@@ -11,16 +11,15 @@
 
 #include "postgres.h"
 
-#include "pg_version_compat.h"
-
 #include "catalog/namespace.h"
+#include "commands/defrem.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 
-#include "distributed/deparser.h"
+#include "pg_version_compat.h"
+
 #include "distributed/citus_ruleutils.h"
-#include "commands/defrem.h"
 #include "distributed/deparser.h"
 #include "distributed/log_utils.h"
 

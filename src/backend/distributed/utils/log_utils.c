@@ -9,16 +9,15 @@
 
 #include "postgres.h"
 
+#include "common/cryptohash.h"
+#include "common/sha2.h"
+#include "utils/builtins.h"
+#include "utils/guc.h"
+
 #include "pg_version_constants.h"
 
-#include "utils/guc.h"
-#include "distributed/log_utils.h"
 #include "distributed/errormessage.h"
-#include "common/sha2.h"
-
-#include "utils/builtins.h"
-
-#include "common/cryptohash.h"
+#include "distributed/log_utils.h"
 
 
 /*

@@ -16,10 +16,12 @@
 #include "postgres.h"
 
 #include "libpq-fe.h"
-
 #include "miscadmin.h"
 
 #include "access/xact.h"
+#include "utils/builtins.h"
+#include "utils/hsearch.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
@@ -32,8 +34,6 @@
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
-#include "utils/builtins.h"
-#include "utils/hsearch.h"
 
 
 #define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u"

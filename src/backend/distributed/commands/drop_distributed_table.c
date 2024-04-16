@@ -9,20 +9,21 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
 
 #include "distributed/colocation_utils.h"
-#include "distributed/commands/utility_hook.h"
 #include "distributed/commands.h"
-#include "distributed/metadata_utility.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_transaction.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
 
 
 /* local function forward declarations */

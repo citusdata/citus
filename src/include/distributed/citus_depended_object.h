@@ -12,9 +12,10 @@
 #ifndef CITUS_DEPENDED_OBJECT_H
 #define CITUS_DEPENDED_OBJECT_H
 
-#include "distributed/commands.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
+
+#include "distributed/commands.h"
 
 extern bool HideCitusDependentObjects;
 

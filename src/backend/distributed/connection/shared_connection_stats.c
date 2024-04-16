@@ -11,18 +11,21 @@
  */
 
 #include "postgres.h"
-#include "pgstat.h"
-
-#include "pg_version_constants.h"
 
 #include "libpq-fe.h"
-
 #include "miscadmin.h"
+#include "pgstat.h"
 
 #include "access/hash.h"
 #include "access/htup_details.h"
 #include "catalog/pg_authid.h"
 #include "commands/dbcommands.h"
+#include "common/hashfn.h"
+#include "storage/ipc.h"
+#include "utils/builtins.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
@@ -32,12 +35,9 @@
 #include "distributed/multi_executor.h"
 #include "distributed/placement_connection.h"
 #include "distributed/shared_connection_stats.h"
-#include "distributed/worker_manager.h"
 #include "distributed/time_constants.h"
 #include "distributed/tuplestore.h"
-#include "utils/builtins.h"
-#include "common/hashfn.h"
-#include "storage/ipc.h"
+#include "distributed/worker_manager.h"
 
 
 #define REMOTE_CONNECTION_STATS_COLUMNS 4

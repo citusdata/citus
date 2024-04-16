@@ -12,8 +12,9 @@
 #ifndef COLOCATION_UTILS_H_
 #define COLOCATION_UTILS_H_
 
-#include "distributed/shardinterval_utils.h"
 #include "nodes/pg_list.h"
+
+#include "distributed/shardinterval_utils.h"
 
 #define INVALID_COLOCATION_ID 0
 

@@ -10,10 +10,11 @@
 #ifndef CITUS_CUSTOM_SCAN_H
 #define CITUS_CUSTOM_SCAN_H
 
-#include "distributed/distributed_planner.h"
-#include "distributed/multi_server_executor.h"
 #include "executor/execdesc.h"
 #include "nodes/plannodes.h"
+
+#include "distributed/distributed_planner.h"
+#include "distributed/multi_server_executor.h"
 
 typedef struct CitusScanState
 {

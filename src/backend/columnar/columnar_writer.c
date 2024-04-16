@@ -16,18 +16,19 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
 #include "safe_lib.h"
 
 #include "access/heapam.h"
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
-#include "miscadmin.h"
-#include "pg_version_compat.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+
+#include "pg_version_compat.h"
 #if PG_VERSION_NUM >= PG_VERSION_16
 #include "storage/relfilelocator.h"
 #include "utils/relfilenumbermap.h"

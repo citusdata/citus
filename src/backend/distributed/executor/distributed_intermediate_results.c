@@ -8,12 +8,11 @@
  *-------------------------------------------------------------------------
  */
 
-#include "pg_version_constants.h"
-
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "port.h"
@@ -21,21 +20,24 @@
 #include "access/htup_details.h"
 #include "access/tupdesc.h"
 #include "catalog/pg_type.h"
+#include "tcop/pquery.h"
+#include "tcop/tcopprot.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/deparse_shard_query.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/transaction_management.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
-#include "tcop/pquery.h"
-#include "tcop/tcopprot.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
 
 
 /*

@@ -14,7 +14,6 @@
 #include "lib/ilist.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
-#include "lib/stringinfo.h"
 #include "nodes/primnodes.h"
 #include "utils/hsearch.h"
 

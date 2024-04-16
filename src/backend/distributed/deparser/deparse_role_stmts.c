@@ -13,15 +13,16 @@
 
 #include "postgres.h"
 
-#include "pg_version_compat.h"
-
 #include "commands/defrem.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
+
+#include "pg_version_compat.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 static void AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt);
 static void AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt);

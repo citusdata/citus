@@ -9,18 +9,11 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "catalog/pg_publication.h"
 #include "catalog/pg_publication_rel.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/worker_create_or_replace.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
@@ -28,6 +21,15 @@
 #include "utils/syscache.h"
 
 #include "pg_version_compat.h"
+
+#include "distributed/commands.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/worker_create_or_replace.h"
 
 
 static CreatePublicationStmt * BuildCreatePublicationStmt(Oid publicationId);

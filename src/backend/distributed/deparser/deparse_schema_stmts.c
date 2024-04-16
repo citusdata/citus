@@ -12,12 +12,13 @@
  */
 #include "postgres.h"
 
-#include "distributed/citus_ruleutils.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 #include "utils/builtins.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 static void AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt);
 static void AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt);

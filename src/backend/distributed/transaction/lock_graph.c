@@ -18,6 +18,11 @@
 #include "miscadmin.h"
 
 #include "access/hash.h"
+#include "storage/proc.h"
+#include "utils/builtins.h"
+#include "utils/hsearch.h"
+#include "utils/timestamp.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
@@ -26,10 +31,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
-#include "storage/proc.h"
-#include "utils/builtins.h"
-#include "utils/hsearch.h"
-#include "utils/timestamp.h"
 
 
 /*

@@ -11,7 +11,9 @@
 #define PLACEMENT_ACCESS_H
 
 #include "postgres.h"
+
 #include "nodes/pg_list.h"
+
 #include "distributed/multi_physical_planner.h"
 
 /* forward declare, to avoid dependency on ShardPlacement definition */
