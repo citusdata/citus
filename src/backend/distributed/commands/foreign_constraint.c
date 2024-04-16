@@ -20,6 +20,7 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_depend.h"
 #include "catalog/pg_type.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -36,6 +37,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/namespace_utils.h"
@@ -1199,6 +1201,114 @@ TableHasExternalForeignKeys(Oid relationId)
 
 
 /*
+ * ForeignConstraintMatchesFlags is a function with logic that's very specific
+ * to GetForeignKeyOids. There's no reason to use it in any other context.
+ */
+static bool
+ForeignConstraintMatchesFlags(Form_pg_constraint constraintForm,
+							  int flags)
+{
+	if (constraintForm->contype != CONSTRAINT_FOREIGN)
+	{
+		return false;
+	}
+
+	bool inheritedConstraint = OidIsValid(constraintForm->conparentid);
+	if (inheritedConstraint)
+	{
+		/*
+		 * We only consider the constraints that are explicitly created on
+		 * the table as we already process the constraints from parent tables
+		 * implicitly when a command is issued
+		 */
+		return false;
+	}
+
+	bool excludeSelfReference = (flags & EXCLUDE_SELF_REFERENCES);
+	bool isSelfReference = (constraintForm->conrelid == constraintForm->confrelid);
+	if (excludeSelfReference && isSelfReference)
+	{
+		return false;
+	}
+
+	Oid otherTableId = InvalidOid;
+	if (flags & INCLUDE_REFERENCING_CONSTRAINTS)
+	{
+		otherTableId = constraintForm->confrelid;
+	}
+	else
+	{
+		otherTableId = constraintForm->conrelid;
+	}
+
+	return IsTableTypeIncluded(otherTableId, flags);
+}
+
+
+/*
+ * GetForeignKeyOidsForReferencedTable returns a list of foreign key OIDs that
+ * reference the relationId and match the given flags.
+ *
+ * This is separated from GetForeignKeyOids because we need to scan pg_depend
+ * instead of pg_constraint directly. The reason for this is that there is no
+ * index on the confrelid of pg_constraint, so searching by that column
+ * requires a seqscan.
+ */
+static List *
+GetForeignKeyOidsForReferencedTable(Oid relationId, int flags)
+{
+	HTAB *foreignKeyOidsSet = CreateSimpleHashSetWithName(
+		Oid, "ReferencingForeignKeyOidsSet");
+	List *foreignKeyOidsList = NIL;
+	ScanKeyData key[2];
+	HeapTuple dependTup;
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, lengthof(key), key);
+	while (HeapTupleIsValid(dependTup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(dependTup);
+
+		if (deprec->classid != ConstraintRelationId ||
+			deprec->deptype != DEPENDENCY_NORMAL ||
+			hash_search(foreignKeyOidsSet, &deprec->objid, HASH_FIND, NULL))
+		{
+			continue;
+		}
+
+
+		HeapTuple constraintTup = SearchSysCache1(CONSTROID, ObjectIdGetDatum(
+													  deprec->objid));
+		if (!HeapTupleIsValid(constraintTup)) /* can happen during DROP TABLE */
+		{
+			continue;
+		}
+
+		Form_pg_constraint constraint = (Form_pg_constraint) GETSTRUCT(constraintTup);
+		if (constraint->confrelid == relationId &&
+			ForeignConstraintMatchesFlags(constraint, flags))
+		{
+			foreignKeyOidsList = lappend_oid(foreignKeyOidsList, constraint->oid);
+			hash_search(foreignKeyOidsSet, &constraint->oid, HASH_ENTER, NULL);
+		}
+		ReleaseSysCache(constraintTup);
+	}
+	systable_endscan(scan);
+	table_close(depRel, AccessShareLock);
+	return foreignKeyOidsList;
+}
+
+
+/*
  * GetForeignKeyOids takes in a relationId, and returns a list of OIDs for
  * foreign constraints that the relation with relationId is involved according
  * to "flags" argument. See ExtractForeignKeyConstraintsMode enum definition
@@ -1207,9 +1317,8 @@ TableHasExternalForeignKeys(Oid relationId)
 List *
 GetForeignKeyOids(Oid relationId, int flags)
 {
-	AttrNumber pgConstraintTargetAttrNumber = InvalidAttrNumber;
-
-	bool extractReferencing = (flags & INCLUDE_REFERENCING_CONSTRAINTS);
+	bool extractReferencing PG_USED_FOR_ASSERTS_ONLY = (flags &
+														INCLUDE_REFERENCING_CONSTRAINTS);
 	bool extractReferenced = (flags & INCLUDE_REFERENCED_CONSTRAINTS);
 
 	/*
@@ -1220,22 +1329,10 @@ GetForeignKeyOids(Oid relationId, int flags)
 	Assert(!(extractReferencing && extractReferenced));
 	Assert(extractReferencing || extractReferenced);
 
-	bool useIndex = false;
-	Oid indexOid = InvalidOid;
-
-	if (extractReferencing)
+	if (extractReferenced)
 	{
-		pgConstraintTargetAttrNumber = Anum_pg_constraint_conrelid;
-
-		useIndex = true;
-		indexOid = ConstraintRelidTypidNameIndexId;
+		return GetForeignKeyOidsForReferencedTable(relationId, flags);
 	}
-	else if (extractReferenced)
-	{
-		pgConstraintTargetAttrNumber = Anum_pg_constraint_confrelid;
-	}
-
-	bool excludeSelfReference = (flags & EXCLUDE_SELF_REFERENCES);
 
 	List *foreignKeyOids = NIL;
 
@@ -1243,62 +1340,22 @@ GetForeignKeyOids(Oid relationId, int flags)
 	int scanKeyCount = 1;
 
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
-	ScanKeyInit(&scanKey[0], pgConstraintTargetAttrNumber,
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
-	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, indexOid, useIndex,
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													ConstraintRelidTypidNameIndexId, true,
 													NULL, scanKeyCount, scanKey);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	HeapTuple heapTuple;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
-		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		if (ForeignConstraintMatchesFlags(constraintForm, flags))
 		{
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
+			foreignKeyOids = lappend_oid(foreignKeyOids, constraintForm->oid);
 		}
-
-		bool inheritedConstraint = OidIsValid(constraintForm->conparentid);
-		if (inheritedConstraint)
-		{
-			/*
-			 * We only consider the constraints that are explicitly created on
-			 * the table as we already process the constraints from parent tables
-			 * implicitly when a command is issued
-			 */
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
-
-		Oid constraintId = constraintForm->oid;
-
-		bool isSelfReference = (constraintForm->conrelid == constraintForm->confrelid);
-		if (excludeSelfReference && isSelfReference)
-		{
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
-
-		Oid otherTableId = InvalidOid;
-		if (extractReferencing)
-		{
-			otherTableId = constraintForm->confrelid;
-		}
-		else if (extractReferenced)
-		{
-			otherTableId = constraintForm->conrelid;
-		}
-
-		if (!IsTableTypeIncluded(otherTableId, flags))
-		{
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
-
-		foreignKeyOids = lappend_oid(foreignKeyOids, constraintId);
-
-		heapTuple = systable_getnext(scanDescriptor);
 	}
 
 	systable_endscan(scanDescriptor);
