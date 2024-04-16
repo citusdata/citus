@@ -83,6 +83,13 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
  test_table
 (1 row)
 
+-- EVen when using subquery and having no existing quals on pg_clcass
+SELECT relname FROM (SELECT relname, relnamespace FROM pg_catalog.pg_class) AS q WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+  relname
+---------------------------------------------------------------------
+ test_table
+(1 row)
+
 commit prepared 'take-aggressive-lock';
 -- now create an index
 \c - - - :master_port

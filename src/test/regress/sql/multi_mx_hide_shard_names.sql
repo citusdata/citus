@@ -50,6 +50,8 @@ prepare transaction 'take-aggressive-lock';
 
 -- shards are hidden when using psql as application_name
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+-- EVen when using subquery and having no existing quals on pg_clcass
+SELECT relname FROM (SELECT relname, relnamespace FROM pg_catalog.pg_class) AS q WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
 commit prepared 'take-aggressive-lock';
 

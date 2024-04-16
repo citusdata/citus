@@ -459,19 +459,20 @@ FilterShardsFromPgclass(Node *node, void *context)
 			/* make sure the expression is in the right memory context */
 			MemoryContext originalContext = MemoryContextSwitchTo(queryContext);
 
-			/* add NOT relation_is_a_known_shard(oid) to the security quals of the RTE */
+
+			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
+			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
 			Node *oldQuals = query->jointree->quals;
 			if (oldQuals)
 			{
 				query->jointree->quals = (Node *) makeBoolExpr(
 					AND_EXPR,
-					list_make2(oldQuals, CreateRelationIsAKnownShardFilter(varno)),
+					list_make2(oldQuals, newQual),
 					-1);
 			}
 			else
 			{
-				query->jointree->quals = (Node *) CreateRelationIsAKnownShardFilter(
-					varno);
+				query->jointree->quals = newQual;
 			}
 
 			MemoryContextSwitchTo(originalContext);
@@ -486,7 +487,13 @@ FilterShardsFromPgclass(Node *node, void *context)
 
 /*
  * CreateRelationIsAKnownShardFilter constructs an expression of the form:
- * NOT pg_catalog.relation_is_a_known_shard(oid)
+ * pg_catalog.relation_is_a_known_shard(oid) IS NOT TRUE
+ *
+ * The difference between "NOT pg_catalog.relation_is_a_known_shard(oid)" and
+ * "pg_catalog.relation_is_a_known_shard(oid) IS NOT TRUE" is that the former
+ * will return FALSE if the function returns NULL, while the second will return
+ * TRUE. This difference is important in the case of outer joins, because this
+ * filter might be applied on an oid that is then NULL.
  */
 static Node *
 CreateRelationIsAKnownShardFilter(int pgClassVarno)
