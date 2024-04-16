@@ -883,7 +883,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 		palloc(totalConnectionCount * sizeof(MultiConnection *));
 	WaitEvent *events = palloc(totalConnectionCount * sizeof(WaitEvent));
 	bool *connectionReady = palloc(totalConnectionCount * sizeof(bool));
-	WaitEventSet *waitEventSet = NULL;
+	WaitEventSet *volatile waitEventSet = NULL;
 
 	/* convert connection list to an array such that we can move items around */
 	MultiConnection *connectionItem = NULL;
