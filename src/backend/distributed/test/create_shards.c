@@ -10,15 +10,17 @@
  *-------------------------------------------------------------------------
  */
 
+#include <string.h>
+
 #include "postgres.h"
+
 #include "c.h"
 #include "fmgr.h"
 
-#include <string.h>
-
-#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
+
+#include "distributed/listutils.h"
 
 
 /* local function forward declarations */

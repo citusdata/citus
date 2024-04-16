@@ -9,11 +9,18 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "catalog/pg_foreign_server.h"
-#include "distributed/commands/utility_hook.h"
+#include "foreign/foreign.h"
+#include "nodes/makefuncs.h"
+#include "nodes/parsenodes.h"
+#include "nodes/primnodes.h"
+#include "utils/builtins.h"
+
 #include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
@@ -21,11 +28,6 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/worker_transaction.h"
-#include "foreign/foreign.h"
-#include "nodes/makefuncs.h"
-#include "nodes/parsenodes.h"
-#include "nodes/primnodes.h"
-#include "utils/builtins.h"
 
 static char * GetForeignServerAlterOwnerCommand(Oid serverId);
 static Node * RecreateForeignServerStmt(Oid serverId);

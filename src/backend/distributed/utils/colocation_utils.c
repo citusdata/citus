@@ -10,6 +10,7 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "access/genam.h"
@@ -19,28 +20,29 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
+#include "storage/lmgr.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/tenant_schema_metadata.h"
-#include "distributed/version_compat.h"
 #include "distributed/utils/array_type.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/rel.h"
 
 
 /* local function forward declarations */

@@ -16,23 +16,26 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "catalog/objectaddress.h"
 #include "catalog/pg_type.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "pg_version_constants.h"
-#include "distributed/version_compat.h"
+#include "mb/pg_wchar.h"
 #include "nodes/value.h"
+#include "parser/parse_type.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/varlena.h"
-#include "mb/pg_wchar.h"
-#include "parser/parse_type.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/citus_safe_lib.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/version_compat.h"
 
 static void ErrorIfCurrentUserCanNotDistributeObject(char *textType,
 													 ObjectType type,

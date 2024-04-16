@@ -8,16 +8,18 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shardsplit_shared_memory.h"
-#include "distributed/worker_shard_visibility.h"
-#include "distributed/worker_protocol.h"
+
+#include "catalog/pg_namespace.h"
+#include "replication/logical.h"
+#include "utils/lsyscache.h"
+#include "utils/typcache.h"
+
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
-#include "replication/logical.h"
-#include "utils/typcache.h"
-#include "utils/lsyscache.h"
-#include "catalog/pg_namespace.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/shardsplit_shared_memory.h"
+#include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgOutputPluginChangeCB;

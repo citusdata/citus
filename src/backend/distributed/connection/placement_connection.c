@@ -11,23 +11,24 @@
 
 #include "postgres.h"
 
+#include "access/hash.h"
+#include "common/hashfn.h"
+#include "utils/hsearch.h"
+#include "utils/memutils.h"
+
 #include "pg_version_constants.h"
 
-#include "access/hash.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
-#include "distributed/distributed_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
-#include "utils/hsearch.h"
-#include "common/hashfn.h"
-#include "utils/memutils.h"
 
 
 /*

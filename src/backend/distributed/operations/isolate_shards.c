@@ -11,11 +11,20 @@
  */
 
 #include "postgres.h"
+
 #include "c.h"
 #include "fmgr.h"
 #include "libpq-fe.h"
 
 #include "catalog/pg_class.h"
+#include "nodes/pg_list.h"
+#include "storage/lock.h"
+#include "utils/builtins.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
+#include "utils/lsyscache.h"
+#include "utils/typcache.h"
+
 #include "distributed/colocation_utils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -25,22 +34,15 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
-#include "distributed/remote_commands.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_split.h"
+#include "distributed/utils/distribution_column_map.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "distributed/version_compat.h"
-#include "distributed/shard_split.h"
-#include "distributed/utils/distribution_column_map.h"
-#include "nodes/pg_list.h"
-#include "storage/lock.h"
-#include "utils/builtins.h"
-#include "utils/elog.h"
-#include "utils/errcodes.h"
-#include "utils/lsyscache.h"
-#include "utils/typcache.h"
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(isolate_tenant_to_new_shard);

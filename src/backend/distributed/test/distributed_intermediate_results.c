@@ -13,12 +13,15 @@
 #include <unistd.h>
 
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 
 #include "catalog/pg_type.h"
+#include "tcop/tcopprot.h"
+
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_results.h"
@@ -26,10 +29,8 @@
 #include "distributed/multi_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
-#include "distributed/listutils.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
-#include "tcop/tcopprot.h"
 
 PG_FUNCTION_INFO_V1(partition_task_list_results);
 PG_FUNCTION_INFO_V1(redistribute_task_list_results);

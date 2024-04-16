@@ -10,30 +10,30 @@
  */
 #include "postgres.h"
 
+#include "catalog/pg_type.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/pathnodes.h"
+#include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
+#include "optimizer/optimizer.h"
+#include "optimizer/pathnode.h"
+#include "optimizer/paths.h"
+#include "parser/parsetree.h"
+
 #include "pg_version_constants.h"
 
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_logical_planner.h"
 #include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_logical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/shard_pruning.h"
-
-#include "catalog/pg_type.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/pg_list.h"
-#include "nodes/primnodes.h"
-#include "nodes/pathnodes.h"
-#include "optimizer/optimizer.h"
-#include "nodes/makefuncs.h"
-#include "optimizer/paths.h"
-#include "parser/parsetree.h"
-#include "optimizer/pathnode.h"
 
 
 static uint32 AttributeEquivalenceId = 1;

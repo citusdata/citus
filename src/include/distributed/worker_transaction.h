@@ -12,9 +12,10 @@
 #ifndef WORKER_TRANSACTION_H
 #define WORKER_TRANSACTION_H
 
+#include "storage/lockdefs.h"
+
 #include "distributed/connection_management.h"
 #include "distributed/worker_manager.h"
-#include "storage/lockdefs.h"
 
 
 /*

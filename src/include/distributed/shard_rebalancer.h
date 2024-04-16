@@ -17,7 +17,9 @@
 #include "postgres.h"
 
 #include "fmgr.h"
+
 #include "nodes/pg_list.h"
+
 #include "distributed/coordinator_protocol.h"
 #include "distributed/worker_manager.h"
 

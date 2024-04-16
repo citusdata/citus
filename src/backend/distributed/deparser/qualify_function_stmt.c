@@ -21,11 +21,12 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
-#include "distributed/deparser.h"
-#include "distributed/version_compat.h"
 #include "parser/parse_func.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
+#include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 
 /* forward declaration for qualify functions */
 static void QualifyFunction(ObjectWithArgs *func, ObjectType type);

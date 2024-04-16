@@ -12,13 +12,15 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
+#include "nodes/nodeFuncs.h"
+#include "optimizer/optimizer.h"
+#include "rewrite/rewriteManip.h"
+
 #include "pg_version_compat.h"
 #include "pg_version_constants.h"
 
 #include "distributed/cte_inline.h"
-#include "nodes/nodeFuncs.h"
-#include "optimizer/optimizer.h"
-#include "rewrite/rewriteManip.h"
 
 typedef struct inline_cte_walker_context
 {

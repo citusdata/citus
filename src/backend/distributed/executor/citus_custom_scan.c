@@ -9,19 +9,30 @@
  */
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "miscadmin.h"
 
 #include "commands/copy.h"
+#include "executor/executor.h"
+#include "nodes/makefuncs.h"
+#include "optimizer/clauses.h"
+#include "optimizer/optimizer.h"
+#include "utils/datum.h"
+#include "utils/lsyscache.h"
+#include "utils/memutils.h"
+#include "utils/rel.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
@@ -30,23 +41,13 @@
 #include "distributed/merge_executor.h"
 #include "distributed/merge_planner.h"
 #include "distributed/multi_executor.h"
-#include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/multi_server_executor.h"
 #include "distributed/query_stats.h"
 #include "distributed/shard_utils.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/function_call_delegation.h"
-#include "executor/executor.h"
-#include "nodes/makefuncs.h"
-#include "optimizer/optimizer.h"
-#include "optimizer/clauses.h"
-#include "utils/lsyscache.h"
-#include "utils/memutils.h"
-#include "utils/rel.h"
-#include "utils/datum.h"
 
 
 extern AllowedDistributionColumn AllowedDistributionColumnValue;

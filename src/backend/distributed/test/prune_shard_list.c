@@ -10,25 +10,15 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
+#include <string.h>
 
-#include "pg_version_constants.h"
+#include "postgres.h"
 
 #include "c.h"
 #include "fmgr.h"
 
-#include <string.h>
-
 #include "access/stratnum.h"
 #include "catalog/pg_type.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/resource_lock.h"
-#include "distributed/shard_pruning.h"
-#include "distributed/utils/array_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/nodes.h"
@@ -37,6 +27,17 @@
 #include "optimizer/clauses.h"
 #include "utils/array.h"
 #include "utils/palloc.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shard_pruning.h"
+#include "distributed/utils/array_type.h"
 
 
 /* local function forward declarations */

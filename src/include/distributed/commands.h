@@ -15,12 +15,13 @@
 
 #include "postgres.h"
 
-#include "distributed/metadata_utility.h"
-#include "utils/rel.h"
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
 #include "tcop/utility.h"
 #include "utils/acl.h"
+#include "utils/rel.h"
+
+#include "distributed/metadata_utility.h"
 
 
 extern bool AddAllLocalTablesToMetadata;

@@ -14,6 +14,7 @@
 #define LOCAL_DISTRIBUTED_JOIN_PLANNER_H
 
 #include "postgres.h"
+
 #include "distributed/recursive_planning.h"
 
 /* managed via guc.c */

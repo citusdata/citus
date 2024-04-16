@@ -12,16 +12,17 @@
  */
 #include "postgres.h"
 
+#include "catalog/namespace.h"
+#include "lib/stringinfo.h"
+#include "nodes/nodes.h"
+#include "utils/builtins.h"
+
 #include "pg_version_constants.h"
 
-#include "catalog/namespace.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
-#include "lib/stringinfo.h"
-#include "nodes/nodes.h"
-#include "utils/builtins.h"
 
 static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);

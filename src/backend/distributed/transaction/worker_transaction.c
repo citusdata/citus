@@ -11,28 +11,30 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "miscadmin.h"
-#include "libpq-fe.h"
-
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "postgres.h"
+
+#include "libpq-fe.h"
+#include "miscadmin.h"
+
 #include "access/xact.h"
+#include "utils/builtins.h"
+#include "utils/memutils.h"
+
 #include "distributed/connection_management.h"
+#include "distributed/jsonbutils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/resource_lock.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/remote_commands.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_transaction.h"
+#include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
-#include "distributed/jsonbutils.h"
-#include "utils/memutils.h"
-#include "utils/builtins.h"
 
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,

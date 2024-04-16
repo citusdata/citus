@@ -10,8 +10,6 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
-
 #include "miscadmin.h"
 
 #include "access/genam.h"
@@ -26,19 +24,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
-#include "citus_version.h"
 #include "commands/extension.h"
-#include "distributed/listutils.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata/pg_dist_object.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
@@ -48,6 +34,21 @@
 #include "utils/lsyscache.h"
 #include "utils/regproc.h"
 #include "utils/rel.h"
+
+#include "citus_version.h"
+#include "pg_version_constants.h"
+
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_transaction.h"
 
 
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);

@@ -19,24 +19,27 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "commands/copy.h"
-#include "catalog/namespace.h"
-#include "parser/parse_relation.h"
-#include "utils/lsyscache.h"
-#include "nodes/makefuncs.h"
-#include "safe_lib.h"
 #include <netinet/in.h> /* for htons */
 
-#include "distributed/transmit.h"
+#include "postgres.h"
+
+#include "safe_lib.h"
+
+#include "catalog/namespace.h"
+#include "commands/copy.h"
+#include "nodes/makefuncs.h"
+#include "parser/parse_relation.h"
+#include "utils/lsyscache.h"
+
 #include "distributed/commands/multi_copy.h"
 #include "distributed/intermediate_results.h"
-#include "distributed/multi_partitioning_utils.h"
 #include "distributed/local_executor.h"
 #include "distributed/local_multi_copy.h"
-#include "distributed/shard_utils.h"
-#include "distributed/version_compat.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/replication_origin_session_utils.h"
+#include "distributed/shard_utils.h"
+#include "distributed/transmit.h"
+#include "distributed/version_compat.h"
 
 /* managed via GUC, default is 512 kB */
 int LocalCopyFlushThresholdByte = 512 * 1024;

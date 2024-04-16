@@ -16,6 +16,12 @@
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "nodes/makefuncs.h"
+#include "nodes/parsenodes.h"
+#include "rewrite/rewriteHandler.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
@@ -24,12 +30,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
-#include "nodes/makefuncs.h"
 #include "distributed/worker_create_or_replace.h"
-#include "nodes/parsenodes.h"
-#include "rewrite/rewriteHandler.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);

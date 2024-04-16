@@ -14,11 +14,13 @@
 #include "postgres.h"
 
 #include "fmgr.h"
+
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
-#include "pg_version_compat.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
+
+#include "pg_version_compat.h"
 #if PG_VERSION_NUM >= PG_VERSION_16
 #include "storage/relfilelocator.h"
 #else

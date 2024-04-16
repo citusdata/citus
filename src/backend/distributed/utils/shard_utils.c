@@ -12,9 +12,11 @@
 #include "postgres.h"
 
 #include "miscadmin.h"
+
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
+
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
