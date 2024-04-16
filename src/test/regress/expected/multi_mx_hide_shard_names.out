@@ -83,6 +83,52 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
  test_table
 (1 row)
 
+-- Even when using subquery and having no existing quals on pg_clcass
+SELECT relname FROM (SELECT relname, relnamespace FROM pg_catalog.pg_class) AS q WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+  relname
+---------------------------------------------------------------------
+ test_table
+(1 row)
+
+-- Check that inserts into pg_class don't add the filter
+EXPLAIN (COSTS OFF) INSERT INTO pg_class VALUES (1);
+     QUERY PLAN
+---------------------------------------------------------------------
+ Insert on pg_class
+   ->  Result
+(2 rows)
+
+-- Unless it's an INSERT SELECT that queries from pg_class;
+EXPLAIN (COSTS OFF) INSERT INTO pg_class SELECT * FROM pg_class;
+                          QUERY PLAN
+---------------------------------------------------------------------
+ Insert on pg_class
+   ->  Seq Scan on pg_class pg_class_1
+         Filter: (relation_is_a_known_shard(oid) IS NOT TRUE)
+(3 rows)
+
+-- Check that query that psql "\d test_table" does gets optimized to an index
+-- scan
+EXPLAIN (COSTS OFF) SELECT c.oid,
+  n.nspname,
+  c.relname
+FROM pg_catalog.pg_class c
+     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname OPERATOR(pg_catalog.~) '^(test_table)$' COLLATE pg_catalog.default
+  AND pg_catalog.pg_table_is_visible(c.oid)
+ORDER BY 2, 3;
+                                                                QUERY PLAN
+---------------------------------------------------------------------
+ Sort
+   Sort Key: n.nspname, c.relname
+   ->  Nested Loop Left Join
+         Join Filter: (n.oid = c.relnamespace)
+         ->  Index Scan using pg_class_relname_nsp_index on pg_class c
+               Index Cond: (relname = 'test_table'::text)
+               Filter: ((relname ~ '^(test_table)$'::text) AND (relation_is_a_known_shard(oid) IS NOT TRUE) AND pg_table_is_visible(oid))
+         ->  Seq Scan on pg_namespace n
+(8 rows)
+
 commit prepared 'take-aggressive-lock';
 -- now create an index
 \c - - - :master_port
