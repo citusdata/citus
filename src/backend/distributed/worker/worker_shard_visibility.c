@@ -54,6 +54,7 @@ static bool ShouldHideShardsInternal(void);
 static bool IsPgBgWorker(void);
 static bool FilterShardsFromPgclass(Node *node, void *context);
 static Node * CreateRelationIsAKnownShardFilter(int pgClassVarno);
+static bool HasRangeTableRef(Node *node, int *varno);
 
 PG_FUNCTION_INFO_V1(citus_table_is_visible);
 PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
@@ -421,8 +422,8 @@ IsPgBgWorker(void)
 
 
 /*
- * FilterShardsFromPgclass adds a NOT relation_is_a_known_shard(oid) filter
- * to the security quals of pg_class RTEs.
+ * FilterShardsFromPgclass adds a "relation_is_a_known_shard(oid) IS NOT TRUE"
+ * filter to the quals of queries that query pg_class.
  */
 static bool
 FilterShardsFromPgclass(Node *node, void *context)
@@ -456,6 +457,17 @@ FilterShardsFromPgclass(Node *node, void *context)
 				continue;
 			}
 
+			/*
+			 * Skip if pg_class is not actually queried. This is possible on
+			 * INSERT statements that insert into pg_class.
+			 */
+			if (!expression_tree_walker((Node *) query->jointree->fromlist,
+										HasRangeTableRef, &varno))
+			{
+				/* the query references pg_class */
+				continue;
+			}
+
 			/* make sure the expression is in the right memory context */
 			MemoryContext originalContext = MemoryContextSwitchTo(queryContext);
 
@@ -482,6 +494,23 @@ FilterShardsFromPgclass(Node *node, void *context)
 	}
 
 	return expression_tree_walker(node, FilterShardsFromPgclass, context);
+}
+
+
+/*
+ * HasRangeTableRef passed to expression_tree_walker to check if a node is a
+ * RangeTblRef of the given varno is present in a fromlist.
+ */
+static bool
+HasRangeTableRef(Node *node, int *varno)
+{
+	if (IsA(node, RangeTblRef))
+	{
+		RangeTblRef *rangeTblRef = (RangeTblRef *) node;
+		return rangeTblRef->rtindex == *varno;
+	}
+
+	return expression_tree_walker(node, HasRangeTableRef, varno);
 }
 
 
