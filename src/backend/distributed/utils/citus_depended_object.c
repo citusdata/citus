@@ -483,6 +483,7 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 			Relation rel = NULL;
 			objectAddress = get_object_address(objectType, object,
 											   &rel, AccessShareLock, missingOk);
+
 			/*
 			 * The object relation is qualified with volatile and its value is obtained from
 			 * get_object_address(). Unless we can qualify the corresponding parameter of
