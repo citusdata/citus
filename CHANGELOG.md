@@ -3,6 +3,10 @@
 * Allows overwriting host name for all inter-node connections by supporting "host"
   parameter in citus.node_conninfo (#7541)
 
+* Changes the order in which the locks are acquired for the target and reference tables,
+  when a modify request is initiated from a worker node that is not the
+  "FirstWorkerNode" (#7542)
+
 * Correctly mark some variables as volatile (#7570)
 
 * Fix performance issue in GetForeignKeyOids on systems with many constraints (#7578)
