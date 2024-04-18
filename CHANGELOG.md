@@ -4,16 +4,8 @@
   parameter in citus.node_conninfo (#7541)
 
 * Changes the order in which the locks are acquired for the target and reference tables,
-  when a modify request is initiated from a worker node that is not the
-  "FirstWorkerNode" (#7542)
-
-* Correctly mark some variables as volatile (#7570)
-
-* Fix performance issue in GetForeignKeyOids on systems with many constraints (#7578)
-
-* Fix performance issue when creating distributed tables and many already exist (#7575)
-
-* Fix performance issue when creating distributed tables if many already exist (#7579)
+  when a modify request is initiated from a worker node that is not the "FirstWorkerNode"
+  (#7542)
 
 * Fix performance issue when distributing a table that depends on an extension (#7574)
 
@@ -21,11 +13,15 @@
 
 * Fixes a crash caused by some form of ALTER TABLE ADD COLUMN statements.
   When adding multiple columns, if one of the ADD COLUMN statements contains a FOREIGN
-  constraint ommitting the referenced columns in the statement, a SEGFAULT occurs. (#7522)
+  constraint omitting the referenced columns in the statement, a SEGFAULT was occurring. (#7522)
 
-* Fixes invalid copy-paste rightComparisonLimit (#7547)
+* Fixes a performance issue when creating distributed tables if many already exist (#7575, #7579)
 
-* Log username in the failed connection message (#7432)
+* Fixes performance issue in when tracking foreign key constraints on systems with many constraints (#7578)
+
+* Fixes some potential bugs by correctly marking some variables as volatile (#7570)
+
+* Logs username in the failed connection message (#7432)
 
 ### citus v11.0.10 (February 15, 2024) ###
 
