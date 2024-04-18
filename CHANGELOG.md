@@ -1,3 +1,28 @@
+### citus v12.1.3 (April 18, 2024) ###
+
+* Allows overwriting host name for all inter-node connections by supporting "host"
+  parameter in citus.node_conninfo (#7541)
+
+* Correctly mark some variables as volatile (#7570)
+
+* Fix performance issue in GetForeignKeyOids on systems with many constraints (#7578)
+
+* Fix performance issue when creating distributed tables and many already exist (#7575)
+
+* Fix performance issue when creating distributed tables if many already exist (#7579)
+
+* Fix performance issue when distributing a table that depends on an extension (#7574)
+
+* Fix performance issue when using "\d tablename" on a server with many tables (#7577)
+
+* Fixes a crash caused by some form of ALTER TABLE ADD COLUMN statements.
+  When adding multiple columns, if one of the ADD COLUMN statements contains a FOREIGN
+  constraint ommitting the referenced columns in the statement, a SEGFAULT occurs. (#7522)
+
+* Fixes invalid copy-paste rightComparisonLimit (#7547)
+
+* Log username in the failed connection message (#7432)
+
 ### citus v11.0.10 (February 15, 2024) ###
 
 * Removes pg_send_cancellation and all references (#7135)
