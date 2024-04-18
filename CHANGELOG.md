@@ -17,7 +17,13 @@
 
 * Fixes a performance issue when creating distributed tables if many already exist (#7575, #7579)
 
+* Fixes bug when hostname in pg_dist_node resolves to multiple IPs (#7377)
+
 * Fixes performance issue in when tracking foreign key constraints on systems with many constraints (#7578)
+
+* Fixes segmentation fault when using CASE WHEN in DO block functions (#7554)
+
+* Fixes undefined behavior in master_disable_node due to argument mismatch (#7492)
 
 * Fixes some potential bugs by correctly marking some variables as volatile (#7570)
 
