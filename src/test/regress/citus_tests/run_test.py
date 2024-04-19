@@ -422,9 +422,12 @@ def find_test_schedule_and_line(test_name, args):
 
 def test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
-        # since enable_ddl_propagation is a must to execute tests
+        # Since enable_ddl_propagation is a must to execute tests,
         # below block adds enable_ddl_propagation as a dependency
-        # as the first element of extra tests if schedule is not configured
+        # as the first element of extra tests if schedule is not
+        # configured. We don't do so if the schedule is confugured
+        # because all base schedules include enable_ddl_propagation
+        # anyway.
         test_deps = DEPS[test_name]
         ddl_propagation_test = (
             "isolation_enable_ddl_propagation"
