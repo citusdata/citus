@@ -177,8 +177,6 @@ alter database "altered_database!'2" owner to CURRENT_USER;
 SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
 reset citus.enable_alter_database_owner;
 
-
-
 \c test_alter_db_from_nonmain_db
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
@@ -234,7 +232,6 @@ set citus.log_remote_commands = true;
 set citus.grep_remote_commands = "%ALTER DATABASE%";
 alter database "altered_database!'2" RESET log_duration;
 
-
 \c "altered_database!'2" - - :master_port
 select name,setting from pg_settings
         where name ='log_duration';
@@ -244,8 +241,6 @@ select name,setting from pg_settings
 \c "altered_database!'2" - - :worker_2_port
 select name,setting from pg_settings
         where name ='log_duration';
-
-
 
 \c regression - - :worker_2_port
 set citus.log_remote_commands = true;
@@ -261,7 +256,6 @@ select name,setting from pg_settings
 \c "altered_database!'2" - - :worker_2_port
 select name,setting from pg_settings
         where name ='statement_timeout';
-
 
 \c regression - - :worker_1_port
 set citus.log_remote_commands = true;
