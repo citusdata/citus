@@ -1127,16 +1127,33 @@ sub RunVanillaTests
     system("mkdir", ("-p", "$pgregressOutputdir/sql")) == 0
             or die "Could not create vanilla sql dir.";
 
-    $exitcode = system("$plainRegress",
-                        ("--dlpath", $dlpath),
-                        ("--inputdir",  $pgregressInputdir),
-                        ("--outputdir",  $pgregressOutputdir),
-                        ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
-                        ("--use-existing"),
-                        ("--host","$host"),
-                        ("--port","$masterPort"),
-                        ("--user","$user"),
-                        ("--dbname", "$dbName"));
+    if ($majorversion >= "16")
+    {
+        $exitcode = system("$plainRegress",
+                            ("--dlpath", $dlpath),
+                            ("--inputdir",  $pgregressInputdir),
+                            ("--outputdir",  $pgregressOutputdir),
+                            ("--expecteddir",  $pgregressOutputdir),
+                            ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
+                            ("--use-existing"),
+                            ("--host","$host"),
+                            ("--port","$masterPort"),
+                            ("--user","$user"),
+                            ("--dbname", "$dbName"));
+    }
+    else
+    {
+        $exitcode = system("$plainRegress",
+                            ("--dlpath", $dlpath),
+                            ("--inputdir",  $pgregressInputdir),
+                            ("--outputdir",  $pgregressOutputdir),
+                            ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
+                            ("--use-existing"),
+                            ("--host","$host"),
+                            ("--port","$masterPort"),
+                            ("--user","$user"),
+                            ("--dbname", "$dbName"));
+    }
 }
 
 if ($useMitmproxy) {
