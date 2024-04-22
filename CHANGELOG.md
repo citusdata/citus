@@ -7,10 +7,10 @@
   reference tables, when a modify request is initiated from a worker
   node that is not the "FirstWorkerNode" (#7542)
 
-* Fixes performance issue when distributing a table that depends on an
+* Fixes a performance issue when distributing a table that depends on an
   extension (#7574)
 
-* Fixes performance issue when using "\d tablename" on a server with
+* Fixes a performance issue when using "\d tablename" on a server with
   many tables (#7577)
 
 * Fixes a crash caused by some form of ALTER TABLE ADD COLUMN
