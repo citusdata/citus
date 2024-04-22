@@ -14,21 +14,21 @@
   many tables (#7577)
 
 * Fixes a crash caused by some form of ALTER TABLE ADD COLUMN
-  statements.When adding multiple columns, if one of the ADD COLUMN
+  statements. When adding multiple columns, if one of the ADD COLUMN
   statements contains a FOREIGN constraint omitting the referenced
   columns in the statement, a SEGFAULT was occurring. (#7522)
 
 * Fixes a performance issue when creating distributed tables if many
   already exist (#7575, #7579)
 
-* Fixes bug when hostname in pg_dist_node resolves to multiple IPs
+* Fixes a bug when hostname in pg_dist_node resolves to multiple IPs
   (#7377)
 
-* Fixes performance issue in when tracking foreign key constraints on
+* Fixes performance issue when tracking foreign key constraints on
   systems with many constraints (#7578)
 
-* Fixes segmentation fault when using CASE WHEN in DO block functions
-  (#7554)
+* Fixes segmentation fault when using CASE WHEN in DO block within
+  functions. (#7554)
 
 * Fixes undefined behavior in master_disable_node due to argument
   mismatch (#7492)
