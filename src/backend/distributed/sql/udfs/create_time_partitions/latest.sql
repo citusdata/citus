@@ -32,18 +32,14 @@ BEGIN
         SELECT *
         FROM get_missing_time_partition_ranges(table_name, partition_interval, end_at, start_from)
     LOOP
-        EXECUTE format('CREATE TABLE %I.%I (LIKE %I INCLUDING DEFAULTS INCLUDING CONSTRAINTS)',
+        EXECUTE format('CREATE TABLE %I.%I PARTITION OF %I.%I FOR VALUES FROM (%L) TO (%L)',
         schema_name_text,
         missing_partition_record.partition_name,
-        table_name_text);
-        EXECUTE format('ALTER TABLE %I.%I ATTACH PARTITION %I.%I FOR VALUES FROM (%L) TO (%L)',
         schema_name_text,
         table_name_text,
-        schema_name_text,
-        missing_partition_record.partition_name,
         missing_partition_record.range_from_value,
         missing_partition_record.range_to_value);
-        RAISE NOTICE 'created partition % for table %', missing_partition_record.partition_name, table_name_text;
+
         partition_created := true;
     END LOOP;
 
