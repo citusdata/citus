@@ -54,3 +54,4 @@ DROP FUNCTION citus_internal.update_relation_colocation(oid, int);
 DROP FUNCTION citus_internal.start_replication_origin_tracking();
 DROP FUNCTION citus_internal.stop_replication_origin_tracking();
 DROP FUNCTION citus_internal.is_replication_origin_tracking_active();
+#include "../udfs/citus_finish_pg_upgrade/12.1-1.sql"

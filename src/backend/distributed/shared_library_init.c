@@ -2968,6 +2968,7 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 			#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
 		"gsslib",
 			#endif
+		"host",
 		"keepalives",
 		"keepalives_count",
 		"keepalives_idle",
