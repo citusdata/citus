@@ -9,6 +9,7 @@ SELECT $definition$
 \gset
 SELECT $deinition$
 ALTER SYSTEM SET citus.recover_2pc_interval TO '5s';
+ALTER SYSTEM SET citus.max_maintenance_shared_pool_size = 10;
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
 SELECT pg_reload_conf();
 $deinition$ AS turn_on_maintenance
@@ -374,6 +375,7 @@ $$;
 SELECT $definition$
        ALTER SYSTEM RESET citus.recover_2pc_interval;
        ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
+       ALTER SYSTEM RESET citus.max_maintenance_shared_pool_size;
        SELECT pg_reload_conf();
 
        DO

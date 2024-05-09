@@ -51,7 +51,8 @@ typedef struct ConnectionStatsSharedData
 	char *sharedConnectionHashTrancheName;
 
 	LWLock sharedConnectionHashLock;
-	ConditionVariable waitersConditionVariable;
+	ConditionVariable regularConnectionWaitersConditionVariable;
+	ConditionVariable maintenanceConnectionWaitersConditionVariable;
 } ConnectionStatsSharedData;
 
 /*
@@ -108,7 +109,8 @@ int MaxSharedPoolSize = 0;
  * Pool size for maintenance connections exclusively
  * "0" or "-1" means do not apply connection throttling
  */
-int MaxMaintenanceSharedPoolSize = 5;
+int MaxMaintenanceSharedPoolSize = -1;
+int MaintenanceConnectionPoolTimeout = 30 * MS_PER_SECOND;
 
 /*
  * Controlled via a GUC, never access directly, use GetLocalSharedPoolSize().
@@ -306,7 +308,7 @@ WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port)
 	{
 		CHECK_FOR_INTERRUPTS();
 
-		WaitForSharedConnection();
+		WaitForSharedConnection(flags);
 	}
 
 	ConditionVariableCancelSleep();
@@ -537,7 +539,7 @@ DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname, int
 	DecrementSharedConnectionCounterInternal(externalFlags, hostname, port, MyDatabaseId);
 
 	UnLockConnectionSharedMemory();
-	WakeupWaiterBackendsForSharedConnection();
+	WakeupWaiterBackendsForSharedConnection(externalFlags);
 }
 
 
@@ -671,9 +673,18 @@ UnLockConnectionSharedMemory(void)
  * this function.
  */
 void
-WakeupWaiterBackendsForSharedConnection(void)
+WakeupWaiterBackendsForSharedConnection(uint32 flags)
 {
-	ConditionVariableBroadcast(&ConnectionStatsSharedState->waitersConditionVariable);
+	if (flags & MAINTENANCE_CONNECTION)
+	{
+		ConditionVariableBroadcast(
+			&ConnectionStatsSharedState->maintenanceConnectionWaitersConditionVariable);
+	}
+	else
+	{
+		ConditionVariableBroadcast(
+			&ConnectionStatsSharedState->regularConnectionWaitersConditionVariable);
+	}
 }
 
 
@@ -684,10 +695,28 @@ WakeupWaiterBackendsForSharedConnection(void)
  * WakeupWaiterBackendsForSharedConnection().
  */
 void
-WaitForSharedConnection(void)
+WaitForSharedConnection(uint32 flags)
 {
-	ConditionVariableSleep(&ConnectionStatsSharedState->waitersConditionVariable,
-						   PG_WAIT_EXTENSION);
+	if (flags & MAINTENANCE_CONNECTION)
+	{
+		bool connectionSlotNotAcquired = ConditionVariableTimedSleep(
+			&ConnectionStatsSharedState->maintenanceConnectionWaitersConditionVariable,
+			MaintenanceConnectionPoolTimeout,
+			PG_WAIT_EXTENSION);
+		if (connectionSlotNotAcquired)
+		{
+			ereport(ERROR, (errmsg("Failed to acquire maintenance connection for %i ms",
+								   MaintenanceConnectionPoolTimeout),
+							errhint(
+								"Try to increase citus.maintenance_connection_pool_timeout")));
+		}
+	}
+	else
+	{
+		ConditionVariableSleep(
+			&ConnectionStatsSharedState->regularConnectionWaitersConditionVariable,
+			PG_WAIT_EXTENSION);
+	}
 }
 
 
@@ -774,7 +803,10 @@ SharedConnectionStatsShmemInit(void)
 		LWLockInitialize(&ConnectionStatsSharedState->sharedConnectionHashLock,
 						 ConnectionStatsSharedState->sharedConnectionHashTrancheId);
 
-		ConditionVariableInit(&ConnectionStatsSharedState->waitersConditionVariable);
+		ConditionVariableInit(
+			&ConnectionStatsSharedState->regularConnectionWaitersConditionVariable);
+		ConditionVariableInit(
+			&ConnectionStatsSharedState->maintenanceConnectionWaitersConditionVariable);
 	}
 
 	/* allocate hash tables */

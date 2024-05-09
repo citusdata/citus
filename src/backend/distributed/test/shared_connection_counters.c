@@ -33,7 +33,8 @@ PG_FUNCTION_INFO_V1(set_max_shared_pool_size);
 Datum
 wake_up_connection_pool_waiters(PG_FUNCTION_ARGS)
 {
-	WakeupWaiterBackendsForSharedConnection();
+	WakeupWaiterBackendsForSharedConnection(0);
+	WakeupWaiterBackendsForSharedConnection(MAINTENANCE_CONNECTION);
 
 	PG_RETURN_VOID();
 }

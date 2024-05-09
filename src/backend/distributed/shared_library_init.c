@@ -1845,6 +1845,19 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.maintenance_connection_pool_timeout",
+		gettext_noop(
+			"Timeout for acquiring a connection from a maintenance shared pool size. "
+			"Applicable only when the maintenance pool is enabled via citus.max_maintenance_shared_pool_size. "
+			"Setting it to 0 or -1 disables the timeout"),
+		NULL,
+		&MaintenanceConnectionPoolTimeout,
+		30 * MS_PER_SECOND, -1, MS_PER_HOUR,
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
 		gettext_noop("Sets the maximum number of connections per worker node used by "
 					 "the adaptive executor to execute a multi-shard command"),
@@ -1975,11 +1988,11 @@ RegisterCitusConfigVariables(void)
 	DefineCustomIntVariable(
 		"citus.max_maintenance_shared_pool_size",
 		gettext_noop("Similar to citus.max_shared_pool_size, but applies to connections "
-					 "for maintenance operations only."
+					 "for maintenance operations only. "
 					 "Setting it to 0 or -1 disables maintenance connection throttling."),
 		NULL,
 		&MaxMaintenanceSharedPoolSize,
-		5, -1, INT_MAX,
+		-1, -1, INT_MAX,
 		PGC_SIGHUP,
 		GUC_SUPERUSER_ONLY,
 		NULL, NULL, NULL);

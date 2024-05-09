@@ -26,13 +26,14 @@ enum SharedPoolCounterMode
 
 extern int MaxSharedPoolSize;
 extern int MaxMaintenanceSharedPoolSize;
+extern int MaintenanceConnectionPoolTimeout;
 extern int LocalSharedPoolSize;
 extern int MaxClientConnections;
 
 
 extern void InitializeSharedConnectionStats(void);
-extern void WaitForSharedConnection(void);
-extern void WakeupWaiterBackendsForSharedConnection(void);
+extern void WaitForSharedConnection(uint32);
+extern void WakeupWaiterBackendsForSharedConnection(uint32);
 extern size_t SharedConnectionStatsShmemSize(void);
 extern void SharedConnectionStatsShmemInit(void);
 extern int GetMaxClientConnections(void);
