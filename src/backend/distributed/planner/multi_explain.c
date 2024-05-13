@@ -808,7 +808,11 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es, ParamListInfo params
 
 		if (params)
 		{
-			ExtractParametersFromParamList(params, &paramTypes, &paramValues, false);
+			/* force evaluation of bound params */
+			params = copyParamList(params);
+
+			ExtractParametersForRemoteExecution(params, &paramTypes,
+												&paramValues);
 		}
 
 		int sendStatus = SendRemoteCommandParams(connection, explainQuery->data,
@@ -1585,15 +1589,6 @@ FetchPlanQueryForExplainAnalyze(const char *queryString, ParamListInfo params)
 {
 	StringInfo fetchQuery = makeStringInfo();
 
-	if (params != NULL)
-	{
-		/*
-		 * Add a dummy CTE to ensure all parameters are referenced, such that their
-		 * types can be resolved.
-		 */
-		appendStringInfo(fetchQuery, "WITH unused AS (%s) ",
-						 ParameterResolutionSubquery(params));
-	}
 
 	appendStringInfoString(fetchQuery,
 						   "SELECT explain_analyze_output, execution_duration "
