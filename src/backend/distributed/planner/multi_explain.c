@@ -1589,6 +1589,16 @@ FetchPlanQueryForExplainAnalyze(const char *queryString, ParamListInfo params)
 {
 	StringInfo fetchQuery = makeStringInfo();
 
+	if (params != NULL)
+	{
+		/*
+		 * Add a dummy CTE to ensure all parameters are referenced, such that their
+		 * types can be resolved.
+		 */
+		appendStringInfo(fetchQuery, "WITH unused AS (%s) ",
+						 ParameterResolutionSubquery(params));
+	}
+
 
 	appendStringInfoString(fetchQuery,
 						   "SELECT explain_analyze_output, execution_duration "
@@ -1613,6 +1623,12 @@ ParameterResolutionSubquery(ParamListInfo params)
 	for (int paramIndex = 0; paramIndex < params->numParams; paramIndex++)
 	{
 		ParamExternData *param = &params->params[paramIndex];
+
+		if (param->ptype == 0)
+		{
+			continue;
+		}
+
 		char *typeName = format_type_extended(param->ptype, -1,
 											  FORMAT_TYPE_FORCE_QUALIFY);
 
