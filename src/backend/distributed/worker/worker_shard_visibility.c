@@ -505,9 +505,9 @@ static bool
 HasRangeTableRef(Node *node, int *varno)
 {
 	if (node == NULL)
-    {
-        return false;
-    }
+	{
+		return false;
+	}
 
 	if (IsA(node, RangeTblRef))
 	{
