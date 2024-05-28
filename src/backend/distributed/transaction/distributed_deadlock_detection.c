@@ -375,7 +375,7 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 
 	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
-		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
+		PGPROC *currentProc = GetPGProcByNumber(backendIndex);
 		BackendData currentBackendData;
 
 		/* we're not interested in processes that are not active or waiting on a lock */
