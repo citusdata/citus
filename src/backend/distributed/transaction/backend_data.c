@@ -395,7 +395,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 		bool showCurrentBackendDetails = showAllBackends;
 		BackendData *currentBackend =
 			&backendManagementShmemData->backends[backendIndex];
-		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
+		PGPROC *currentProc = GetPGProcByNumber(backendIndex);
 
 		/* to work on data after releasing g spinlock to protect against errors */
 		uint64 transactionNumber = 0;
@@ -420,7 +420,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 		}
 
 		Oid databaseId = currentBackend->databaseId;
-		int backendPid = ProcGlobal->allProcs[backendIndex].pid;
+		int backendPid = GetPGProcByNumber(backendIndex)->pid;
 
 		/*
 		 * We prefer to use worker_query instead of distributedCommandOriginator in
@@ -1280,7 +1280,7 @@ ActiveDistributedTransactionNumbers(void)
 	/* build list of starting procs */
 	for (int curBackend = 0; curBackend < MaxBackends; curBackend++)
 	{
-		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
+		PGPROC *currentProc = GetPGProcByNumber(curBackend);
 		BackendData currentBackendData;
 
 		if (currentProc->pid == 0)
