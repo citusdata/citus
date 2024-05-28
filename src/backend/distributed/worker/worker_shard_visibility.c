@@ -504,6 +504,11 @@ FilterShardsFromPgclass(Node *node, void *context)
 static bool
 HasRangeTableRef(Node *node, int *varno)
 {
+	if (node == NULL)
+	{
+		return false;
+	}
+
 	if (IsA(node, RangeTblRef))
 	{
 		RangeTblRef *rangeTblRef = (RangeTblRef *) node;
