@@ -48,7 +48,7 @@ jobs:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
