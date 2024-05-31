@@ -55,7 +55,7 @@ jobs:
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: Check C Style
@@ -100,7 +100,7 @@ jobs:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Expose $PG_MAJOR to Github Env
       run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
       shell: bash
@@ -185,7 +185,7 @@ jobs:
     - params
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
     - name: Run Test
       run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
@@ -218,7 +218,7 @@ jobs:
           - ${{ needs.params.outputs.pg14_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
     - name: Test arbitrary configs
       run: |-
@@ -272,7 +272,7 @@ jobs:
         # sed -i -e 's/deb.debian.org/archive.debian.org/g' -e 's|security.debian.org|archive.debian.org/|g' -e '/stretch-updates/d' /etc/apt/sources.list
         apt update || true
         apt install git -y
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
       with:
         pg_major: "${{ env.old_pg_major }}"
@@ -312,7 +312,7 @@ jobs:
     - params
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
       with:
         skip_installation: true
@@ -356,7 +356,7 @@ jobs:
     needs:
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -374,7 +374,7 @@ jobs:
     needs:
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}

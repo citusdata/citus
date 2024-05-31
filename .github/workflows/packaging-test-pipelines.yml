@@ -18,7 +18,7 @@ jobs:
       pg_versions: ${{ steps.get-postgres-versions.outputs.pg_versions }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2
       - name: Get Postgres Versions
@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set Postgres and python parameters for rpm based distros
         run: |
@@ -125,7 +125,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set pg_config path and python parameters for deb based distros
         run: |
