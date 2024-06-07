@@ -182,14 +182,6 @@ CreateRouterMergePlan(Oid targetRelationId, Query *originalQuery, Query *query,
 		return distributedPlan;
 	}
 
-	Var *insertVar =
-		FetchAndValidateInsertVarIfExists(targetRelationId, originalQuery);
-	if (insertVar &&
-		!IsDistributionColumnInMergeSource((Expr *) insertVar, originalQuery, true))
-	{
-		ereport(ERROR, (errmsg("MERGE INSERT must use the source table "
-							   "distribution column value")));
-	}
 
 	Job *job = RouterJob(originalQuery, plannerRestrictionContext,
 						 &distributedPlan->planningError);
@@ -1123,6 +1115,26 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 								"to evaluate NOT-MATCHED clause, try "
 								"repartitioning")));
 		return deferredError;
+	}
+
+
+	/*
+	 * If execution has reached this point, it indicates that the query can be delegated to the worker.
+	 * However, before proceeding with this delegation, we need to confirm that the user is utilizing
+	 * the distribution column of the source table in the Insert variable.
+	 * If this is not the case, we should refrain from pushing down the query.
+	 */
+
+	Var *insertVar =
+		FetchAndValidateInsertVarIfExists(targetRelationId, query);
+	if (insertVar &&
+		!IsDistributionColumnInMergeSource((Expr *) insertVar, query, true))
+	{
+		ereport(DEBUG1, (errmsg(
+							 "MERGE INSERT must use the source table distribution column value, try repartitioning")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "MERGE INSERT must use the source table "
+							 "distribution column value", NULL, NULL);
 	}
 	return NULL;
 }
