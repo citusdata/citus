@@ -1253,7 +1253,9 @@ WHEN NOT MATCHED THEN
 -- let's verify if we use some other column from source for value of distributed column in target.
 -- it should be inserted to correct shard of target.
 CREATE TABLE source_withdata (id integer, some_number integer);
+CREATE TABLE target_table (id integer, name text);
 SELECT create_distributed_table('source_withdata', 'id');
+SELECT create_distributed_table('target_table', 'id');
 
 INSERT INTO source_withdata (id, some_number) VALUES (1, 3);
 
@@ -1262,15 +1264,48 @@ INSERT INTO source_withdata (id, some_number) VALUES (1, 3);
 select worker_hash(3);
 
 -- it should go to second shard of target as target has 4 shard and hash "-28094569" comes in range of second shard.
-MERGE INTO target_pushdowntest t
+MERGE INTO target_table t
 USING (SELECT id, some_number from source_withdata where id = 1) s
 on t.id = s.some_number 
 WHEN NOT MATCHED THEN
-  INSERT (id)
-  VALUES (s.some_number);
+  INSERT (id, name)
+  VALUES (s.some_number, 'parag');
 
 -- let's verify if data inserted to second shard of target.
-EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM target_pushdowntest;
+EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM target_table;
+
+-- let's verify target data too.
+SELECT * FROM target_table;
+
+
+-- test UPDATE : when source is single sharded and table are colocated
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number 
+WHEN MATCHED THEN
+  UPDATE SET name = 'parag jain';
+
+-- let's verify if data updated properly.
+SELECT * FROM target_table;
+
+-- let's see what happend when we try to update distributed key of target table
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number 
+WHEN MATCHED THEN
+  UPDATE SET id = 1500;
+
+SELECT * FROM target_table;
+
+-- test DELETE : when source is single sharded and table are colocated
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number 
+WHEN MATCHED THEN
+  DELETE;
+
+-- let's verify if data deleted properly.
+SELECT * FROM target_table;
 
 RESET client_min_messages; 
 

@@ -1984,7 +1984,14 @@ DEBUG:  Using column - index:0 from the source list to redistribute
 -- let's verify if we use some other column from source for value of distributed column in target.
 -- it should be inserted to correct shard of target.
 CREATE TABLE source_withdata (id integer, some_number integer);
+CREATE TABLE target_table (id integer, name text);
 SELECT create_distributed_table('source_withdata', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('target_table', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -2000,48 +2007,115 @@ select worker_hash(3);
 (1 row)
 
 -- it should go to second shard of target as target has 4 shard and hash "-28094569" comes in range of second shard.
-MERGE INTO target_pushdowntest t
+MERGE INTO target_table t
 USING (SELECT id, some_number from source_withdata where id = 1) s
 on t.id = s.some_number
 WHEN NOT MATCHED THEN
-  INSERT (id)
-  VALUES (s.some_number);
+  INSERT (id, name)
+  VALUES (s.some_number, 'parag');
 DEBUG:  Sub-query is not pushable, try repartitioning
 DEBUG:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Creating MERGE repartition plan
 DEBUG:  Using column - index:1 from the source list to redistribute
 DEBUG:  Collect source query results on coordinator
 DEBUG:  Create a MERGE task list that needs to be routed
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000068'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.some_number)>
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000069'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.some_number)>
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000070'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.some_number)>
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000071'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.some_number)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000076'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.some_number, 'parag'::text)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000077'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.some_number, 'parag'::text)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000078'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.some_number, 'parag'::text)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000079'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.some_number, 'parag'::text)>
 DEBUG:  Execute MERGE task list
 -- let's verify if data inserted to second shard of target.
-EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM target_pushdowntest;
-                                           QUERY PLAN
+EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM target_table;
+                                    QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
    Task Count: 4
-   Tuple data received from nodes: 4 bytes
+   Tuple data received from nodes: 9 bytes
    Tasks Shown: All
    ->  Task
          Tuple data received from node: 0 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on target_pushdowntest_4000068 target_pushdowntest (actual rows=0 loops=1)
+         ->  Seq Scan on target_table_4000076 target_table (actual rows=0 loops=1)
    ->  Task
-         Tuple data received from node: 4 bytes
+         Tuple data received from node: 9 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on target_pushdowntest_4000069 target_pushdowntest (actual rows=1 loops=1)
-   ->  Task
-         Tuple data received from node: 0 bytes
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on target_pushdowntest_4000070 target_pushdowntest (actual rows=0 loops=1)
+         ->  Seq Scan on target_table_4000077 target_table (actual rows=1 loops=1)
    ->  Task
          Tuple data received from node: 0 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on target_pushdowntest_4000071 target_pushdowntest (actual rows=0 loops=1)
+         ->  Seq Scan on target_table_4000078 target_table (actual rows=0 loops=1)
+   ->  Task
+         Tuple data received from node: 0 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on target_table_4000079 target_table (actual rows=0 loops=1)
 (20 rows)
+
+-- let's verify target data too.
+SELECT * FROM target_table;
+ id | name
+---------------------------------------------------------------------
+  3 | parag
+(1 row)
+
+-- test UPDATE : when source is single sharded and table are colocated
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number
+WHEN MATCHED THEN
+  UPDATE SET name = 'parag jain';
+DEBUG:  Sub-query is not pushable, try repartitioning
+DEBUG:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Using column - index:1 from the source list to redistribute
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000076'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN UPDATE SET name = 'parag jain'::text>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000077'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN UPDATE SET name = 'parag jain'::text>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000078'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN UPDATE SET name = 'parag jain'::text>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000079'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN UPDATE SET name = 'parag jain'::text>
+DEBUG:  Execute MERGE task list
+-- let's verify if data updated properly.
+SELECT * FROM target_table;
+ id |    name
+---------------------------------------------------------------------
+  3 | parag jain
+(1 row)
+
+-- let's see what happend when we try to update distributed key of target table
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number
+WHEN MATCHED THEN
+  UPDATE SET id = 1500;
+ERROR:  updating the distribution column is not allowed in MERGE actions
+SELECT * FROM target_table;
+ id |    name
+---------------------------------------------------------------------
+  3 | parag jain
+(1 row)
+
+-- test DELETE : when source is single sharded and table are colocated
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number
+WHEN MATCHED THEN
+  DELETE;
+DEBUG:  Sub-query is not pushable, try repartitioning
+DEBUG:  MERGE command is only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  Creating MERGE repartition plan
+DEBUG:  Using column - index:1 from the source list to redistribute
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000076'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN DELETE>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000077'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN DELETE>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000078'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN DELETE>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000079'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN MATCHED THEN DELETE>
+DEBUG:  Execute MERGE task list
+-- let's verify if data deleted properly.
+SELECT * FROM target_table;
+ id | name
+---------------------------------------------------------------------
+(0 rows)
 
 RESET client_min_messages;
 -- This will prune shards with restriction information as NOT MATCHED is void
@@ -3100,14 +3174,14 @@ WHEN NOT MATCHED THEN
                                        ->  Limit
                                              ->  Sort
                                                    Sort Key: id2
-                                                   ->  Seq Scan on demo_source_table_4000147 demo_source_table
+                                                   ->  Seq Scan on demo_source_table_4000151 demo_source_table
          ->  Distributed Subplan XXX_2
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  Seq Scan on demo_source_table_4000147 demo_source_table
+                           ->  Seq Scan on demo_source_table_4000151 demo_source_table
          Task Count: 1
          Tasks Shown: All
          ->  Task
@@ -3321,10 +3395,10 @@ DEBUG:  Creating MERGE repartition plan
 DEBUG:  Using column - index:0 from the source list to redistribute
 DEBUG:  Collect source query results on coordinator
 DEBUG:  Create a MERGE task list that needs to be routed
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000159'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000160'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000161'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
-DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000162'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000163'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000164'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000165'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
+DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_6785_xxxxxxx sda USING (SELECT intermediate_result.id, intermediate_result.z, intermediate_result.d FROM read_intermediate_result('merge_into_XXX_4000166'::text, 'binary'::citus_copy_format) intermediate_result(id integer, z integer, d jsonb)) sdn ON ((sda.id OPERATOR(pg_catalog.=) sdn.id) AND (sda.id OPERATOR(pg_catalog.=) 2)) WHEN NOT MATCHED THEN INSERT (id, z) VALUES (sdn.id, 5)>
 DEBUG:  Execute MERGE task list
 RESET client_min_messages;
 SELECT * FROM target_6785 ORDER BY 1;
@@ -4168,7 +4242,7 @@ CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
-NOTICE:  drop cascades to 106 other objects
+NOTICE:  drop cascades to 107 other objects
 DETAIL:  drop cascades to function insert_data()
 drop cascades to table local_local
 drop cascades to table target
@@ -4231,6 +4305,7 @@ drop cascades to function compare_tables()
 drop cascades to table source_pushdowntest
 drop cascades to table target_pushdowntest
 drop cascades to table source_withdata
+drop cascades to table target_table
 drop cascades to view pg_source_view
 drop cascades to view citus_source_view
 drop cascades to table pg_pa_target
@@ -4247,7 +4322,7 @@ drop cascades to table target_set
 drop cascades to table source_set
 drop cascades to table refsource_ref
 drop cascades to table pg_result
-drop cascades to table refsource_ref_4000124
+drop cascades to table refsource_ref_4000128
 drop cascades to table pg_ref
 drop cascades to table local_ref
 drop cascades to table reftarget_local
@@ -4265,8 +4340,7 @@ drop cascades to table source_6785
 drop cascades to table target_6785
 drop cascades to function add_s(integer,integer)
 drop cascades to table pg
-drop cascades to table t1_4000186
-drop cascades to table s1_4000187
+drop cascades to table t1_4000190
+drop cascades to table s1_4000191
 drop cascades to table t1
-drop cascades to table s1
-and 6 other objects (see server log for list)
+and 7 other objects (see server log for list)
