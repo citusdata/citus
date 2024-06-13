@@ -23,6 +23,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.max_adaptive_executor_pool_size TO 1;
 SET client_min_messages = warning;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 13000;
 RESET client_min_messages;
 
 CREATE TABLE source
@@ -1224,7 +1225,7 @@ SET client_min_messages TO DEBUG1;
 
 EXPLAIN MERGE INTO target_pushdowntest t
 USING source_pushdowntest s
-ON t.id = s.id 
+ON t.id = s.id
 WHEN NOT MATCHED THEN
   INSERT (id)
   VALUES (s.id);
@@ -1233,7 +1234,7 @@ WHEN NOT MATCHED THEN
 
 EXPLAIN MERGE INTO target_pushdowntest t
 USING (SELECT * from source_pushdowntest where id = 1) s
-on t.id = s.id 
+on t.id = s.id
 WHEN NOT MATCHED THEN
   INSERT (id)
   VALUES (s.id);
@@ -1244,7 +1245,7 @@ INSERT INTO source_pushdowntest (id) VALUES (3);
 
 EXPLAIN MERGE INTO target_pushdowntest t
 USING (SELECT 1 as somekey, id from source_pushdowntest where id = 1) s
-on t.id = s.somekey 
+on t.id = s.somekey
 WHEN NOT MATCHED THEN
   INSERT (id)
   VALUES (s.somekey);
@@ -1266,7 +1267,7 @@ select worker_hash(3);
 -- it should go to second shard of target as target has 4 shard and hash "-28094569" comes in range of second shard.
 MERGE INTO target_table t
 USING (SELECT id, some_number from source_withdata where id = 1) s
-on t.id = s.some_number 
+on t.id = s.some_number
 WHEN NOT MATCHED THEN
   INSERT (id, name)
   VALUES (s.some_number, 'parag');
@@ -1281,7 +1282,7 @@ SELECT * FROM target_table;
 -- test UPDATE : when source is single sharded and table are colocated
 MERGE INTO target_table t
 USING (SELECT id, some_number from source_withdata where id = 1) s
-on t.id = s.some_number 
+on t.id = s.some_number
 WHEN MATCHED THEN
   UPDATE SET name = 'parag jain';
 
@@ -1291,7 +1292,7 @@ SELECT * FROM target_table;
 -- let's see what happend when we try to update distributed key of target table
 MERGE INTO target_table t
 USING (SELECT id, some_number from source_withdata where id = 1) s
-on t.id = s.some_number 
+on t.id = s.some_number
 WHEN MATCHED THEN
   UPDATE SET id = 1500;
 
@@ -1300,14 +1301,14 @@ SELECT * FROM target_table;
 -- test DELETE : when source is single sharded and table are colocated
 MERGE INTO target_table t
 USING (SELECT id, some_number from source_withdata where id = 1) s
-on t.id = s.some_number 
+on t.id = s.some_number
 WHEN MATCHED THEN
   DELETE;
 
 -- let's verify if data deleted properly.
 SELECT * FROM target_table;
 
-RESET client_min_messages; 
+RESET client_min_messages;
 
 
 
