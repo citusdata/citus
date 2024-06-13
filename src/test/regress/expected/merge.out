@@ -27,6 +27,7 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
         1
 (1 row)
 
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 13000;
 RESET client_min_messages;
 CREATE TABLE source
 (
@@ -1863,8 +1864,8 @@ SELECT create_distributed_table('target_pushdowntest', 'id');
 select colocationid,logicalrelid from pg_dist_partition where logicalrelid = 'source_pushdowntest'::regclass OR logicalrelid = 'target_pushdowntest'::regclass;
  colocationid |    logicalrelid
 ---------------------------------------------------------------------
-      1390004 | source_pushdowntest
-      1390004 | target_pushdowntest
+        13000 | source_pushdowntest
+        13000 | target_pushdowntest
 (2 rows)
 
 SET client_min_messages TO DEBUG1;
