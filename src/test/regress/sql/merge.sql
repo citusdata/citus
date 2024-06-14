@@ -23,7 +23,6 @@ SET citus.shard_replication_factor TO 1;
 SET citus.max_adaptive_executor_pool_size TO 1;
 SET client_min_messages = warning;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 13000;
 RESET client_min_messages;
 
 CREATE TABLE source
@@ -1209,6 +1208,7 @@ ROLLBACK;
 
 
 -- let's create source and target table
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 13000;
 CREATE TABLE source_pushdowntest (id integer);
 CREATE TABLE target_pushdowntest (id integer );
 
@@ -1218,7 +1218,19 @@ SELECT create_distributed_table('target_pushdowntest', 'id');
 
 -- we are doing this operation on single node setup let's figure out colocation id of both tables
 -- both has same colocation id so both are colocated.
-select colocationid,logicalrelid from pg_dist_partition where logicalrelid = 'source_pushdowntest'::regclass OR logicalrelid = 'target_pushdowntest'::regclass;
+WITH colocations AS (
+    SELECT colocationid
+    FROM pg_dist_partition
+    WHERE logicalrelid = 'source_pushdowntest'::regclass
+       OR logicalrelid = 'target_pushdowntest'::regclass
+)
+SELECT 
+    CASE
+        WHEN COUNT(DISTINCT colocationid) = 1 THEN 'Same'
+        ELSE 'Different'
+    END AS colocation_status
+FROM colocations;
+
 
 SET client_min_messages TO DEBUG1;
 -- Test 1 : tables are colocated AND query is multisharded AND Join On distributed column : should push down to workers.
