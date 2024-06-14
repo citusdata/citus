@@ -76,8 +76,11 @@ GRANT ALL ON TABLE lineitem, orders, lineitem, customer, nation, part, supplier 
 
 \c :alice_conninfo
 
+SELECT current_user;
+SET citus.log_remote_commands TO on;
 -- router query (should break because of bad password)
 INSERT INTO customer VALUES (12345, 'name', NULL, 5, 'phone', 123.45, 'segment', 'comment');
+SET citus.log_remote_commands TO off;
 
 -- fix alice's worker1 password ...
 UPDATE pg_dist_authinfo
