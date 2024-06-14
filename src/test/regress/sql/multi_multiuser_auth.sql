@@ -75,7 +75,7 @@ GRANT ALL ON TABLE lineitem, orders, lineitem, customer, nation, part, supplier 
 \c :alice_conninfo
 
 -- router query (should break because of bad password)
-INSERT INTO customer VALUES (12345, 'name', NULL, 5, 'phone', 123.45, 'segment', 'comment');
+INSERT INTO customer VALUES (12345, 'name', 'aaaa', 5, 'phone', 123.45, 'segment', 'comment');
 
 -- fix alice's worker1 password ...
 UPDATE pg_dist_authinfo
