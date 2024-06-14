@@ -1870,7 +1870,8 @@ select colocationid,logicalrelid from pg_dist_partition where logicalrelid = 'so
 
 SET client_min_messages TO DEBUG1;
 -- Test 1 : tables are colocated AND query is multisharded AND Join On distributed column : should push down to workers.
-EXPLAIN MERGE INTO target_pushdowntest t
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
 USING source_pushdowntest s
 ON t.id = s.id
 WHEN NOT MATCHED THEN
@@ -1881,59 +1882,60 @@ DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxx
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING merge_schema.source_pushdowntest_xxxxxxx s ON (t.id OPERATOR(pg_catalog.=) s.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)>
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING merge_schema.source_pushdowntest_xxxxxxx s ON (t.id OPERATOR(pg_catalog.=) s.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)>
 DEBUG:  Creating MERGE router plan
-                                                   QUERY PLAN
+                               QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge on target_pushdowntest_4000068 t  (cost=359.57..860.00 rows=0 width=0)
-               ->  Merge Left Join  (cost=359.57..860.00 rows=32512 width=16)
+         ->  Merge on target_pushdowntest_4000068 t
+               ->  Merge Left Join
                      Merge Cond: (s.id = t.id)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                     ->  Sort
                            Sort Key: s.id
-                           ->  Seq Scan on source_pushdowntest_4000064 s  (cost=0.00..35.50 rows=2550 width=10)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                           ->  Seq Scan on source_pushdowntest_4000064 s
+                     ->  Sort
                            Sort Key: t.id
-                           ->  Seq Scan on target_pushdowntest_4000068 t  (cost=0.00..35.50 rows=2550 width=10)
+                           ->  Seq Scan on target_pushdowntest_4000068 t
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge on target_pushdowntest_4000069 t  (cost=359.57..860.00 rows=0 width=0)
-               ->  Merge Left Join  (cost=359.57..860.00 rows=32512 width=16)
+         ->  Merge on target_pushdowntest_4000069 t
+               ->  Merge Left Join
                      Merge Cond: (s.id = t.id)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                     ->  Sort
                            Sort Key: s.id
-                           ->  Seq Scan on source_pushdowntest_4000065 s  (cost=0.00..35.50 rows=2550 width=10)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                           ->  Seq Scan on source_pushdowntest_4000065 s
+                     ->  Sort
                            Sort Key: t.id
-                           ->  Seq Scan on target_pushdowntest_4000069 t  (cost=0.00..35.50 rows=2550 width=10)
+                           ->  Seq Scan on target_pushdowntest_4000069 t
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge on target_pushdowntest_4000070 t  (cost=359.57..860.00 rows=0 width=0)
-               ->  Merge Left Join  (cost=359.57..860.00 rows=32512 width=16)
+         ->  Merge on target_pushdowntest_4000070 t
+               ->  Merge Left Join
                      Merge Cond: (s.id = t.id)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                     ->  Sort
                            Sort Key: s.id
-                           ->  Seq Scan on source_pushdowntest_4000066 s  (cost=0.00..35.50 rows=2550 width=10)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                           ->  Seq Scan on source_pushdowntest_4000066 s
+                     ->  Sort
                            Sort Key: t.id
-                           ->  Seq Scan on target_pushdowntest_4000070 t  (cost=0.00..35.50 rows=2550 width=10)
+                           ->  Seq Scan on target_pushdowntest_4000070 t
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge on target_pushdowntest_4000071 t  (cost=359.57..860.00 rows=0 width=0)
-               ->  Merge Left Join  (cost=359.57..860.00 rows=32512 width=16)
+         ->  Merge on target_pushdowntest_4000071 t
+               ->  Merge Left Join
                      Merge Cond: (s.id = t.id)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                     ->  Sort
                            Sort Key: s.id
-                           ->  Seq Scan on source_pushdowntest_4000067 s  (cost=0.00..35.50 rows=2550 width=10)
-                     ->  Sort  (cost=179.78..186.16 rows=2550 width=10)
+                           ->  Seq Scan on source_pushdowntest_4000067 s
+                     ->  Sort
                            Sort Key: t.id
-                           ->  Seq Scan on target_pushdowntest_4000071 t  (cost=0.00..35.50 rows=2550 width=10)
+                           ->  Seq Scan on target_pushdowntest_4000071 t
 (47 rows)
 
 -- Test 2 : tables are colocated AND source query is not multisharded : should push down to worker.
-EXPLAIN MERGE INTO target_pushdowntest t
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
 USING (SELECT * from source_pushdowntest where id = 1) s
 on t.id = s.id
 WHEN NOT MATCHED THEN
@@ -1941,25 +1943,26 @@ WHEN NOT MATCHED THEN
   VALUES (s.id);
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING (SELECT source_pushdowntest.id FROM merge_schema.source_pushdowntest_xxxxxxx source_pushdowntest WHERE (source_pushdowntest.id OPERATOR(pg_catalog.=) 1)) s ON (t.id OPERATOR(pg_catalog.=) s.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)>
 DEBUG:  Creating MERGE router plan
-                                                        QUERY PLAN
+                                     QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge on target_pushdowntest_4000068 t  (cost=0.00..85.89 rows=0 width=0)
-               ->  Nested Loop Left Join  (cost=0.00..85.89 rows=169 width=16)
-                     ->  Seq Scan on source_pushdowntest_4000064 source_pushdowntest  (cost=0.00..41.88 rows=13 width=10)
+         ->  Merge on target_pushdowntest_4000068 t
+               ->  Nested Loop Left Join
+                     ->  Seq Scan on source_pushdowntest_4000064 source_pushdowntest
                            Filter: (id = 1)
-                     ->  Materialize  (cost=0.00..41.94 rows=13 width=10)
-                           ->  Seq Scan on target_pushdowntest_4000068 t  (cost=0.00..41.88 rows=13 width=10)
+                     ->  Materialize
+                           ->  Seq Scan on target_pushdowntest_4000068 t
                                  Filter: (id = 1)
 (12 rows)
 
 -- Test 3 : tables are colocated source query is single sharded but not using source distributed column in insertion. let's not pushdown.
 INSERT INTO source_pushdowntest (id) VALUES (3);
-EXPLAIN MERGE INTO target_pushdowntest t
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
 USING (SELECT 1 as somekey, id from source_pushdowntest where id = 1) s
 on t.id = s.somekey
 WHEN NOT MATCHED THEN
@@ -1969,16 +1972,16 @@ DEBUG:  MERGE INSERT must use the source table distribution column value for pus
 DEBUG:  MERGE INSERT must use the source table distribution column value for push down to workers. Otherwise, repartitioning will be applied
 DEBUG:  Creating MERGE repartition plan
 DEBUG:  Using column - index:0 from the source list to redistribute
-                                                    QUERY PLAN
+                                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus MERGE INTO ...)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus MERGE INTO ...)
    MERGE INTO target_pushdowntest method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 1
          Tasks Shown: All
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_pushdowntest_4000064 source_pushdowntest  (cost=0.00..41.88 rows=13 width=8)
+               ->  Seq Scan on source_pushdowntest_4000064 source_pushdowntest
                      Filter: (id = 1)
 (9 rows)
 

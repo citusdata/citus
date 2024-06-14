@@ -1223,7 +1223,8 @@ select colocationid,logicalrelid from pg_dist_partition where logicalrelid = 'so
 SET client_min_messages TO DEBUG1;
 -- Test 1 : tables are colocated AND query is multisharded AND Join On distributed column : should push down to workers.
 
-EXPLAIN MERGE INTO target_pushdowntest t
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
 USING source_pushdowntest s
 ON t.id = s.id
 WHEN NOT MATCHED THEN
@@ -1232,7 +1233,8 @@ WHEN NOT MATCHED THEN
 
 -- Test 2 : tables are colocated AND source query is not multisharded : should push down to worker.
 
-EXPLAIN MERGE INTO target_pushdowntest t
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
 USING (SELECT * from source_pushdowntest where id = 1) s
 on t.id = s.id
 WHEN NOT MATCHED THEN
@@ -1243,7 +1245,8 @@ WHEN NOT MATCHED THEN
 -- Test 3 : tables are colocated source query is single sharded but not using source distributed column in insertion. let's not pushdown.
 INSERT INTO source_pushdowntest (id) VALUES (3);
 
-EXPLAIN MERGE INTO target_pushdowntest t
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
 USING (SELECT 1 as somekey, id from source_pushdowntest where id = 1) s
 on t.id = s.somekey
 WHEN NOT MATCHED THEN
