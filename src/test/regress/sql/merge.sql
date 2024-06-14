@@ -1224,13 +1224,12 @@ WITH colocations AS (
     WHERE logicalrelid = 'source_pushdowntest'::regclass
        OR logicalrelid = 'target_pushdowntest'::regclass
 )
-SELECT 
+SELECT
     CASE
         WHEN COUNT(DISTINCT colocationid) = 1 THEN 'Same'
         ELSE 'Different'
     END AS colocation_status
 FROM colocations;
-
 
 SET client_min_messages TO DEBUG1;
 -- Test 1 : tables are colocated AND query is multisharded AND Join On distributed column : should push down to workers.
@@ -1244,8 +1243,7 @@ WHEN NOT MATCHED THEN
   VALUES (s.id);
 
 -- Test 2 : tables are colocated AND source query is not multisharded : should push down to worker.
-
-EXPLAIN (costs off, timing off, summary off)
+-- DEBUG LOGS show that query is getting pushed down
 MERGE INTO target_pushdowntest t
 USING (SELECT * from source_pushdowntest where id = 1) s
 on t.id = s.id

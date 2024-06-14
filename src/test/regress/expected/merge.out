@@ -1944,7 +1944,7 @@ DEBUG:  Creating MERGE router plan
 (47 rows)
 
 -- Test 2 : tables are colocated AND source query is not multisharded : should push down to worker.
-EXPLAIN (costs off, timing off, summary off)
+-- DEBUG LOGS show that query is getting pushed down
 MERGE INTO target_pushdowntest t
 USING (SELECT * from source_pushdowntest where id = 1) s
 on t.id = s.id
@@ -1953,22 +1953,6 @@ WHEN NOT MATCHED THEN
   VALUES (s.id);
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_pushdowntest_xxxxxxx t USING (SELECT source_pushdowntest.id FROM merge_schema.source_pushdowntest_xxxxxxx source_pushdowntest WHERE (source_pushdowntest.id OPERATOR(pg_catalog.=) 1)) s ON (t.id OPERATOR(pg_catalog.=) s.id) WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)>
 DEBUG:  Creating MERGE router plan
-                                     QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge on target_pushdowntest_4000068 t
-               ->  Nested Loop Left Join
-                     ->  Seq Scan on source_pushdowntest_4000064 source_pushdowntest
-                           Filter: (id = 1)
-                     ->  Materialize
-                           ->  Seq Scan on target_pushdowntest_4000068 t
-                                 Filter: (id = 1)
-(12 rows)
-
 -- Test 3 : tables are colocated source query is single sharded but not using source distributed column in insertion. let's not pushdown.
 INSERT INTO source_pushdowntest (id) VALUES (3);
 EXPLAIN (costs off, timing off, summary off)
