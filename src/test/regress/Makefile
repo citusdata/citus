@@ -146,6 +146,9 @@ check-isolation-custom-schedule-vg: all  $(isolation_test_files)
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
+check-comment-migration: all
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/comment_migration_schedule $(EXTRA_TESTS)
 
 check-empty: all
 	$(pg_regress_multi_check) --load-extension=citus \

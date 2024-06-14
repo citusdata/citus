@@ -1,0 +1,7 @@
+# Tests comment migration during undistribute_table
+test: comment_migration_table
+test: comment_migration_table_joined_tables
+test: comment_migration_table_joined_tables_FK
+test: comment_migration_column
+test: comment_migration_column_joined_tables
+test: comment_migration_column_joined_tables_FK
