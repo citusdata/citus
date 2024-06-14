@@ -1308,6 +1308,20 @@ WHEN MATCHED THEN
 -- let's verify if data deleted properly.
 SELECT * FROM target_table;
 
+--
+DELETE FROM source_withdata;
+DELETE FROM target_table;
+INSERT INTO source VALUES (1,1);
+
+merge into target_table sda
+using source_withdata sdn
+on sda.id = sdn.id AND sda.id = 1
+when not matched then
+  insert (id)
+  values (10000);
+
+SELECT * FROM target_table WHERE id = 10000;
+
 RESET client_min_messages;
 
 
