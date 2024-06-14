@@ -21,13 +21,15 @@ SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND 
 SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port
 \gset
 
+SELECT * from pg_dist_node order by nodeid;
+
 -- alice is a superuser so she can update own password
 CREATE USER alice PASSWORD :'alice_master_pw' SUPERUSER;
 CREATE USER bob   PASSWORD :'bob_master_pw';
 
 -- note we enter a wrong password for Alice to test cache invalidation
 INSERT INTO pg_dist_authinfo (nodeid, rolename, authinfo) VALUES
-(-1,           'alice', 'password=' || :'alice_master_pw'),
+(-1,           'alice', 'password=' || 'wrong_password'),
 (:worker_1_id, 'alice', 'password=' || 'wrong_password'),
 (0,            'alice', 'password=' || :'alice_fallback_pw'),
 (-1,           'bob',   'password=' || :'bob_master_pw'),
