@@ -1965,8 +1965,8 @@ on t.id = s.somekey
 WHEN NOT MATCHED THEN
   INSERT (id)
   VALUES (s.somekey);
-DEBUG:  MERGE INSERT must use the source table distribution column value, try repartitioning
-DEBUG:  MERGE INSERT must use the source table distribution column value
+DEBUG:  MERGE INSERT must use the source table distribution column value for push down to workers. Otherwise, repartitioning will be applied
+DEBUG:  MERGE INSERT must use the source table distribution column value for push down to workers. Otherwise, repartitioning will be applied
 DEBUG:  Creating MERGE repartition plan
 DEBUG:  Using column - index:0 from the source list to redistribute
                                                     QUERY PLAN
@@ -2114,6 +2114,23 @@ DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t US
 DEBUG:  Execute MERGE task list
 -- let's verify if data deleted properly.
 SELECT * FROM target_table;
+ id | name
+---------------------------------------------------------------------
+(0 rows)
+
+--
+DELETE FROM source_withdata;
+DELETE FROM target_table;
+INSERT INTO source VALUES (1,1);
+merge into target_table sda
+using source_withdata sdn
+on sda.id = sdn.id AND sda.id = 1
+when not matched then
+  insert (id)
+  values (10000);
+ERROR:  MERGE INSERT is using unsupported expression type for distribution column
+DETAIL:  Inserting arbitrary values that don't correspond to the joined column values can lead to unpredictable outcomes where rows are incorrectly distributed among different shards
+SELECT * FROM target_table WHERE id = 10000;
  id | name
 ---------------------------------------------------------------------
 (0 rows)
