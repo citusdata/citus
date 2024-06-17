@@ -1206,6 +1206,139 @@ SET citus.log_remote_commands to false;
 SELECT compare_tables();
 ROLLBACK;
 
+
+-- let's create source and target table
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 13000;
+CREATE TABLE source_pushdowntest (id integer);
+CREATE TABLE target_pushdowntest (id integer );
+
+-- let's distribute both table on id field
+SELECT create_distributed_table('source_pushdowntest', 'id');
+SELECT create_distributed_table('target_pushdowntest', 'id');
+
+-- we are doing this operation on single node setup let's figure out colocation id of both tables
+-- both has same colocation id so both are colocated.
+WITH colocations AS (
+    SELECT colocationid
+    FROM pg_dist_partition
+    WHERE logicalrelid = 'source_pushdowntest'::regclass
+       OR logicalrelid = 'target_pushdowntest'::regclass
+)
+SELECT
+    CASE
+        WHEN COUNT(DISTINCT colocationid) = 1 THEN 'Same'
+        ELSE 'Different'
+    END AS colocation_status
+FROM colocations;
+
+SET client_min_messages TO DEBUG1;
+-- Test 1 : tables are colocated AND query is multisharded AND Join On distributed column : should push down to workers.
+
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
+USING source_pushdowntest s
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id)
+  VALUES (s.id);
+
+-- Test 2 : tables are colocated AND source query is not multisharded : should push down to worker.
+-- DEBUG LOGS show that query is getting pushed down
+MERGE INTO target_pushdowntest t
+USING (SELECT * from source_pushdowntest where id = 1) s
+on t.id = s.id
+WHEN NOT MATCHED THEN
+  INSERT (id)
+  VALUES (s.id);
+
+
+-- Test 3 : tables are colocated source query is single sharded but not using source distributed column in insertion. let's not pushdown.
+INSERT INTO source_pushdowntest (id) VALUES (3);
+
+EXPLAIN (costs off, timing off, summary off)
+MERGE INTO target_pushdowntest t
+USING (SELECT 1 as somekey, id from source_pushdowntest where id = 1) s
+on t.id = s.somekey
+WHEN NOT MATCHED THEN
+  INSERT (id)
+  VALUES (s.somekey);
+
+
+-- let's verify if we use some other column from source for value of distributed column in target.
+-- it should be inserted to correct shard of target.
+CREATE TABLE source_withdata (id integer, some_number integer);
+CREATE TABLE target_table (id integer, name text);
+SELECT create_distributed_table('source_withdata', 'id');
+SELECT create_distributed_table('target_table', 'id');
+
+INSERT INTO source_withdata (id, some_number) VALUES (1, 3);
+
+-- we will use some_number column from source_withdata to insert into distributed column of target.
+-- value of some_number is 3 let's verify what shard it should go to.
+select worker_hash(3);
+
+-- it should go to second shard of target as target has 4 shard and hash "-28094569" comes in range of second shard.
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number
+WHEN NOT MATCHED THEN
+  INSERT (id, name)
+  VALUES (s.some_number, 'parag');
+
+-- let's verify if data inserted to second shard of target.
+EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM target_table;
+
+-- let's verify target data too.
+SELECT * FROM target_table;
+
+
+-- test UPDATE : when source is single sharded and table are colocated
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number
+WHEN MATCHED THEN
+  UPDATE SET name = 'parag jain';
+
+-- let's verify if data updated properly.
+SELECT * FROM target_table;
+
+-- let's see what happend when we try to update distributed key of target table
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number
+WHEN MATCHED THEN
+  UPDATE SET id = 1500;
+
+SELECT * FROM target_table;
+
+-- test DELETE : when source is single sharded and table are colocated
+MERGE INTO target_table t
+USING (SELECT id, some_number from source_withdata where id = 1) s
+on t.id = s.some_number
+WHEN MATCHED THEN
+  DELETE;
+
+-- let's verify if data deleted properly.
+SELECT * FROM target_table;
+
+--
+DELETE FROM source_withdata;
+DELETE FROM target_table;
+INSERT INTO source VALUES (1,1);
+
+merge into target_table sda
+using source_withdata sdn
+on sda.id = sdn.id AND sda.id = 1
+when not matched then
+  insert (id)
+  values (10000);
+
+SELECT * FROM target_table WHERE id = 10000;
+
+RESET client_min_messages;
+
+
+
 -- This will prune shards with restriction information as NOT MATCHED is void
 BEGIN;
 SET citus.log_remote_commands to true;
