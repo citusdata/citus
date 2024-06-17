@@ -116,8 +116,7 @@ test: function_with_case_when
 test: clock
 
 # MERGE tests
-test: merge pgmerge
-test: merge_repartition2
+test: merge pgmerge merge_repartition2
 test: merge_repartition1 merge_schema_sharding
 test: merge_partition_tables
 
