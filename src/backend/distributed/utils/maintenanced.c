@@ -1068,8 +1068,8 @@ MaintenanceDaemonShmemExit(int code, Datum arg)
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
 													HASH_REMOVE, NULL);
-	// Workaround for -Werror=unused-variable
-	(void ) myDbData;
+	/* Workaround for -Werror=unused-variable */
+	(void) myDbData;
 	Assert(myDbData->workerPid == MyProcPid);
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 }
