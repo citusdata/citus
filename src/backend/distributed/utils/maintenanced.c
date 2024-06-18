@@ -90,6 +90,7 @@ typedef struct MaintenanceDaemonDBData
 	Oid userOid;
 	pid_t workerPid;
 	bool daemonStarted;
+	bool daemonShuttingDown;
 	bool triggerNodeMetadataSync;
 	Latch *latch; /* pointer to the background worker's latch */
 } MaintenanceDaemonDBData;
@@ -239,6 +240,14 @@ InitializeMaintenanceDaemonBackend(void)
 	if (dbData == NULL)
 	{
 		WarnMaintenanceDaemonNotStarted();
+		LWLockRelease(&MaintenanceDaemonControl->lock);
+		return;
+	}
+
+	if (dbData->daemonShuttingDown)
+	{
+		elog(DEBUG1, "Another maintenance daemon for database %u is shutting down. "
+					 "Aborting current initialization", MyDatabaseId);
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 		return;
 	}
@@ -1058,20 +1067,8 @@ MaintenanceDaemonShmemExit(int code, Datum arg)
 
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
-													HASH_FIND, NULL);
-
-	/* myDbData is NULL after StopMaintenanceDaemon */
-	if (myDbData != NULL)
-	{
-		/*
-		 * Confirm that I am still the registered maintenance daemon before exiting.
-		 */
-		Assert(myDbData->workerPid == MyProcPid);
-
-		myDbData->daemonStarted = false;
-		myDbData->workerPid = 0;
-	}
-
+													HASH_REMOVE, NULL);
+	Assert(myDbData->workerPid == MyProcPid);
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 }
 
@@ -1170,11 +1167,12 @@ StopMaintenanceDaemon(Oid databaseId)
 	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
 		MaintenanceDaemonDBHash,
 		&databaseId,
-		HASH_REMOVE, &found);
+		HASH_FIND, &found);
 
 	if (found)
 	{
 		workerPid = dbData->workerPid;
+		dbData->daemonShuttingDown = true;
 	}
 
 	LWLockRelease(&MaintenanceDaemonControl->lock);
