@@ -147,7 +147,7 @@ SELECT pg_reload_conf();
 -- only with ommitting user.
 CREATE SUBSCRIPTION subs_01 CONNECTION 'host=''localhost'' port=57637'
 PUBLICATION pub_01 WITH (citus_use_authinfo=true);
-ERROR:  could not connect to the publisher: root certificate file "/non/existing/certificate.crt" does not exist
+ERROR:  could not connect to the publisher: connection to server at "localhost" (::1), port 57637 failed: root certificate file "/non/existing/certificate.crt" does not exist
 Either provide the file or change sslmode to disable server certificate verification.
 ALTER SYSTEM RESET citus.node_conninfo;
 SELECT pg_reload_conf();
