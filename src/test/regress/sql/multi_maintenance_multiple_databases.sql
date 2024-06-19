@@ -326,11 +326,6 @@ $$;
 \c - - - :master_port
 
 SELECT $definition$
-       ALTER SYSTEM RESET citus.recover_2pc_interval;
-       ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
-       ALTER SYSTEM RESET citus.max_maintenance_shared_pool_size;
-       SELECT pg_reload_conf();
-
        DO
        $do$
        DECLARE
@@ -452,9 +447,16 @@ SELECT $definition$
        DROP DATABASE db98 WITH (FORCE);
        DROP DATABASE db99 WITH (FORCE);
        DROP DATABASE db100 WITH (FORCE);
-       SELECT count(*)
+
+       SELECT count(*) = 0 as all_databases_dropped
        FROM pg_database
        WHERE datname LIKE 'db%';
+
+       ALTER SYSTEM RESET citus.recover_2pc_interval;
+       ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
+       ALTER SYSTEM RESET citus.max_maintenance_shared_pool_size;
+       SELECT pg_reload_conf();
+
        $definition$ AS cleanup
 \gset
 
