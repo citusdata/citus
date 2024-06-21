@@ -34,8 +34,8 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_rewrite_d.h"
-#include "commands/defrem.h"
 #include "commands/comment.h"
+#include "commands/defrem.h"
 #include "executor/spi.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
@@ -1779,11 +1779,13 @@ CreateMaterializedViewDDLCommand(Oid matViewOid)
 	return query->data;
 }
 
+
 /*
-* MigrateColumnComments migrates distributed table column comments to the target undistributed table columns.
-*/
+ * MigrateColumnComments migrates distributed table column comments to the target undistributed table columns.
+ */
 static void
-MigrateColumnComments(Oid sourceId, Oid targetId){
+MigrateColumnComments(Oid sourceId, Oid targetId)
+{
 	Relation relation = relation_open(sourceId, AccessShareLock);
 	TupleDesc tupleDesc = RelationGetDescr(relation);
 	for (int attrNum = 0; attrNum < tupleDesc->natts; attrNum++)
@@ -1791,23 +1793,27 @@ MigrateColumnComments(Oid sourceId, Oid targetId){
 		Form_pg_attribute attr = TupleDescAttr(tupleDesc, attrNum);
 		if (!attr->attisdropped)
 		{
-			char *columnComment = GetComment(sourceId, RelationRelationId ,attrNum + 1);
+			char *columnComment = GetComment(sourceId, RelationRelationId, attrNum + 1);
 			CreateComments(targetId, RelationRelationId, attrNum + 1, columnComment);
 		}
 	}
 	relation_close(relation, AccessShareLock);
 }
 
+
 /*
  * MigrateTableComment migrates the comment of the source distributed table to the target undistributed table.
-*/
+ */
 static void
-MigrateTableComment(Oid sourceId, Oid targetId){
+MigrateTableComment(Oid sourceId, Oid targetId)
+{
 	char *comment = GetComment(sourceId, RelationRelationId, 0);
-	if(comment != NULL) {
+	if (comment != NULL)
+	{
 		CreateComments(targetId, RelationRelationId, 0, comment);
 	}
 }
+
 
 /*
  * ReplaceTable replaces the source table with the target table.
@@ -1828,7 +1834,6 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 
 	if (!PartitionedTable(sourceId) && !IsForeignTable(sourceId))
 	{
-		
 		if (!suppressNoticeMessages)
 		{
 			ereport(NOTICE, (errmsg("moving the data of %s", qualifiedSourceName)));
@@ -1932,6 +1937,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 					 quote_identifier(sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
 }
+
 
 /*
  * HasAnyGeneratedStoredColumns decides if relation has any columns that we
