@@ -9,27 +9,39 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "fmgr.h"
-#include "miscadmin.h"
-
 #include <string.h>
 #include <sys/statvfs.h>
+
+#include "postgres.h"
+
+#include "fmgr.h"
+#include "miscadmin.h"
 
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_enum.h"
+#include "lib/stringinfo.h"
+#include "nodes/pg_list.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "utils/builtins.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
+#include "utils/lsyscache.h"
+#include "utils/palloc.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
@@ -39,24 +51,13 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_split.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "lib/stringinfo.h"
-#include "nodes/pg_list.h"
-#include "storage/lmgr.h"
-#include "storage/lock.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/elog.h"
-#include "utils/errcodes.h"
-#include "utils/lsyscache.h"
-#include "utils/palloc.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
 
 /* local type declarations */
 
@@ -292,6 +293,17 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+
+	List *referenceTableIdList = NIL;
+
+	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
+	{
+		ereport(ERROR, (errmsg("there are missing reference tables on some nodes"),
+						errhint("Copy reference tables first with "
+								"replicate_reference_tables() or use "
+								"citus_rebalance_start() that will do it automatically."
+								)));
+	}
 
 	int64 shardId = PG_GETARG_INT64(0);
 	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
@@ -592,10 +604,10 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 			 * we do not generate a record at all.
 			 */
-			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-													qualifiedShardName,
-													placement->groupId,
-													CLEANUP_DEFERRED_ON_SUCCESS);
+			InsertCleanupOnSuccessRecordInCurrentTransaction(
+				CLEANUP_OBJECT_SHARD_PLACEMENT,
+				qualifiedShardName,
+				placement->groupId);
 		}
 	}
 }
@@ -622,10 +634,9 @@ InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
 		 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 		 * we do not generate a record at all.
 		 */
-		InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												qualifiedShardName,
-												groupId,
-												CLEANUP_DEFERRED_ON_SUCCESS);
+		InsertCleanupOnSuccessRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+														 qualifiedShardName,
+														 groupId);
 	}
 }
 
@@ -792,7 +803,12 @@ ShardListSizeInBytes(List *shardList, char *workerNodeName, uint32
 
 	/* we skip child tables of a partitioned table if this boolean variable is true */
 	bool optimizePartitionCalculations = true;
+
+	/* we're interested in whole table, not a particular index */
+	Oid indexId = InvalidOid;
+
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(shardList,
+																	  indexId,
 																	  TOTAL_RELATION_SIZE,
 																	  optimizePartitionCalculations);
 
@@ -1376,10 +1392,11 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		/* drop the shard we created on the target, in case of failure */
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-											ConstructQualifiedShardName(shardInterval),
-											GroupForNode(targetNodeName, targetNodePort),
-											CLEANUP_ON_FAILURE);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											  ConstructQualifiedShardName(shardInterval),
+											  GroupForNode(targetNodeName,
+														   targetNodePort),
+											  CLEANUP_ON_FAILURE);
 
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner,
@@ -1449,10 +1466,11 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		/* drop the shard we created on the target, in case of failure */
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-											ConstructQualifiedShardName(shardInterval),
-											GroupForNode(targetNodeName, targetNodePort),
-											CLEANUP_ON_FAILURE);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+											  ConstructQualifiedShardName(shardInterval),
+											  GroupForNode(targetNodeName,
+														   targetNodePort),
+											  CLEANUP_ON_FAILURE);
 
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner, ddlCommandList);
@@ -1939,11 +1957,7 @@ ConstructQualifiedShardName(ShardInterval *shardInterval)
 static List *
 RecreateTableDDLCommandList(Oid relationId)
 {
-	const char *relationName = get_rel_name(relationId);
-	Oid relationSchemaId = get_rel_namespace(relationId);
-	const char *relationSchemaName = get_namespace_name(relationSchemaId);
-	const char *qualifiedRelationName = quote_qualified_identifier(relationSchemaName,
-																   relationName);
+	const char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	StringInfo dropCommand = makeStringInfo();
 
@@ -2033,7 +2047,7 @@ UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 		StringInfo updateCommand = makeStringInfo();
 
 		appendStringInfo(updateCommand,
-						 "SELECT citus_internal_update_placement_metadata(%ld, %d, %d)",
+						 "SELECT citus_internal.update_placement_metadata(%ld, %d, %d)",
 						 colocatedShard->shardId,
 						 sourceGroupId, targetGroupId);
 		SendCommandToWorkersWithMetadata(updateCommand->data);

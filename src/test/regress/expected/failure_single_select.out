@@ -30,14 +30,14 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT.*select_test").kill()');
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
  key |   value
 ---------------------------------------------------------------------
    3 | test data
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
  key |   value
 ---------------------------------------------------------------------
    3 | test data
@@ -54,7 +54,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT.*select_test").kill()');
 BEGIN;
 INSERT INTO select_test VALUES (3, 'more data');
 SELECT * FROM select_test WHERE key = 3;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 COMMIT;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -142,7 +142,7 @@ SELECT * FROM select_test WHERE key = 3;
 
 INSERT INTO select_test VALUES (3, 'even more data');
 SELECT * FROM select_test WHERE key = 3;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 COMMIT;
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT.*pg_prepared_xacts").after(2).kill()');
  mitmproxy
@@ -186,7 +186,7 @@ SELECT * FROM select_test WHERE key = 1;
 (1 row)
 
 SELECT * FROM select_test WHERE key = 1;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- now the same test with query cancellation
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT.*select_test").after(1).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy

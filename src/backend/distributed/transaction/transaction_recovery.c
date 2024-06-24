@@ -12,15 +12,13 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include "distributed/pg_version_constants.h"
-
-#include "miscadmin.h"
-#include "libpq-fe.h"
-
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "postgres.h"
+
+#include "libpq-fe.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -28,6 +26,19 @@
 #include "access/relscan.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
+#include "lib/stringinfo.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "storage/procarray.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/memutils.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+#include "utils/xid8.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
@@ -36,15 +47,8 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_recovery.h"
-#include "distributed/worker_manager.h"
 #include "distributed/version_compat.h"
-#include "lib/stringinfo.h"
-#include "storage/lmgr.h"
-#include "storage/lock.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/memutils.h"
-#include "utils/rel.h"
+#include "distributed/worker_manager.h"
 
 
 /* exports for SQL callable functions */
@@ -81,7 +85,7 @@ recover_prepared_transactions(PG_FUNCTION_ARGS)
  * prepared transaction should be committed.
  */
 void
-LogTransactionRecord(int32 groupId, char *transactionName)
+LogTransactionRecord(int32 groupId, char *transactionName, FullTransactionId outerXid)
 {
 	Datum values[Natts_pg_dist_transaction];
 	bool isNulls[Natts_pg_dist_transaction];
@@ -92,6 +96,7 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 
 	values[Anum_pg_dist_transaction_groupid - 1] = Int32GetDatum(groupId);
 	values[Anum_pg_dist_transaction_gid - 1] = CStringGetTextDatum(transactionName);
+	values[Anum_pg_dist_transaction_outerxid - 1] = FullTransactionIdGetDatum(outerXid);
 
 	/* open transaction relation and insert new tuple */
 	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
@@ -255,6 +260,71 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 			 * aborting or vice-versa.
 			 */
 			continue;
+		}
+
+		bool outerXidIsNull = false;
+		Datum outerXidDatum = 0;
+		if (EnableVersionChecks ||
+			SearchSysCacheExistsAttName(DistTransactionRelationId(), "outer_xid"))
+		{
+			/* Check if the transaction is created by an outer transaction from a non-main database */
+			outerXidDatum = heap_getattr(heapTuple,
+										 Anum_pg_dist_transaction_outerxid,
+										 tupleDescriptor, &outerXidIsNull);
+		}
+		else
+		{
+			/*
+			 * Normally we don't try to recover prepared transactions when the
+			 * binary version doesn't match the sql version. However, we skip
+			 * those checks in regression tests by disabling
+			 * citus.enable_version_checks. And when this is the case, while
+			 * the C code looks for "outer_xid" attribute, pg_dist_transaction
+			 * doesn't yet have it.
+			 */
+			Assert(!EnableVersionChecks);
+		}
+
+		TransactionId outerXid = 0;
+		if (!outerXidIsNull)
+		{
+			FullTransactionId outerFullXid = DatumGetFullTransactionId(outerXidDatum);
+			outerXid = XidFromFullTransactionId(outerFullXid);
+		}
+
+		if (outerXid != 0)
+		{
+			bool outerXactIsInProgress = TransactionIdIsInProgress(outerXid);
+			bool outerXactDidCommit = TransactionIdDidCommit(outerXid);
+			if (outerXactIsInProgress && !outerXactDidCommit)
+			{
+				/*
+				 * The transaction is initiated from an outer transaction and the outer
+				 * transaction is not yet committed, so we should not commit either.
+				 * We remove this transaction from the pendingTransactionSet so it'll
+				 * not be aborted by the loop below.
+				 */
+				hash_search(pendingTransactionSet, transactionName, HASH_REMOVE,
+							&foundPreparedTransactionBeforeCommit);
+				continue;
+			}
+			else if (!outerXactIsInProgress && !outerXactDidCommit)
+			{
+				/*
+				 * Since outer transaction isn't in progress and did not commit we need to
+				 * abort the prepared transaction too. We do this by simply doing the same
+				 * thing we would  do for transactions that are initiated from the main
+				 * database.
+				 */
+				continue;
+			}
+			else
+			{
+				/*
+				 * Outer transaction did commit, so we can try to commit the prepared
+				 * transaction too.
+				 */
+			}
 		}
 
 		/*

@@ -41,23 +41,33 @@ CREATE TABLE ref(groupid int);
 SELECT create_reference_table('ref');
 
 \c - - - :worker_1_port
--- alter role from mx worker isn't allowed when alter role propagation is on
-SET citus.enable_alter_role_propagation TO ON;
-ALTER ROLE reprefuser WITH CREATEROLE;
--- to alter role locally disable alter role propagation first
+-- to alter role locally, disable alter role propagation first
 SET citus.enable_alter_role_propagation TO OFF;
 ALTER ROLE reprefuser WITH CREATEROLE;
-SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
-RESET citus.enable_alter_role_propagation;
 
-\c - - - :worker_2_port
--- show that altering role locally on worker doesn't propagated to other worker
-SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT to_jsonb(q2.*) FROM (
+    SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser'
+  ) q2
+  $$
+) ORDER BY result;
+
+-- alter role from mx worker is allowed
+SET citus.enable_alter_role_propagation TO ON;
+ALTER ROLE reprefuser WITH CREATEROLE;
+
+-- show that altering role locally on worker is propagated to coordinator and to other workers too
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT to_jsonb(q2.*) FROM (
+    SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser'
+  ) q2
+  $$
+) ORDER BY result;
 
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
--- show that altering role locally on worker doesn't propagated to coordinator
-SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
 
 SET citus.log_local_commands TO ON;
 SET client_min_messages TO DEBUG;
@@ -67,7 +77,7 @@ SET client_min_messages TO DEBUG;
 SELECT count(*) FROM ref;
 SELECT count(*) FROM ref;
 
--- test that distributed functions also use local execution
+-- test that distributed functions also use sequential execution
 CREATE OR REPLACE FUNCTION my_group_id()
 RETURNS void
 LANGUAGE plpgsql
@@ -190,5 +200,6 @@ SELECT verify_metadata('localhost', :worker_1_port),
 
 SET client_min_messages TO error;
 DROP SCHEMA mx_add_coordinator CASCADE;
+DROP USER reprefuser;
 SET search_path TO DEFAULT;
 RESET client_min_messages;

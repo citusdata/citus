@@ -9,34 +9,9 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands/multi_copy.h"
-#include "distributed/adaptive_executor.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/distributed_execution_locks.h"
-#include "distributed/insert_select_executor.h"
-#include "distributed/insert_select_planner.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/local_executor.h"
-#include "distributed/merge_planner.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/local_executor.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/recursive_planning.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/repartition_executor.h"
-#include "distributed/resource_lock.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/subplan_execution.h"
-#include "distributed/transaction_management.h"
-#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"
@@ -52,6 +27,32 @@
 #include "utils/portal.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
+
+#include "distributed/adaptive_executor.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands/multi_copy.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/distributed_execution_locks.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/insert_select_executor.h"
+#include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/merge_planner.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
+#include "distributed/recursive_planning.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/repartition_executor.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/subplan_execution.h"
+#include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 
 /* Config variables managed via guc.c */
 bool EnableRepartitionedInsertSelect = true;
@@ -142,15 +143,10 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 										targetRelation->partitionColumn);
 			if (distributionColumnIndex == -1)
 			{
-				char *relationName = get_rel_name(targetRelationId);
-				Oid schemaOid = get_rel_namespace(targetRelationId);
-				char *schemaName = get_namespace_name(schemaOid);
-
 				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 								errmsg(
 									"the partition column of table %s should have a value",
-									quote_qualified_identifier(schemaName,
-															   relationName))));
+									generate_qualified_relation_name(targetRelationId))));
 			}
 
 			TargetEntry *selectPartitionTE = list_nth(selectQuery->targetList,

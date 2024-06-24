@@ -24,20 +24,22 @@
  */
 
 #include "postgres.h"
-#include "access/hash.h"
+
 #include "miscadmin.h"
+
+#include "access/hash.h"
 #include "utils/builtins.h"
-#include "distributed/hash_helpers.h"
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/directed_acyclic_graph_execution.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/task_execution_utils.h"
 #include "distributed/repartition_join_execution.h"
+#include "distributed/task_execution_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_manager.h"

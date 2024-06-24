@@ -18,43 +18,19 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
-#include "funcapi.h"
 
-#include "distributed/pg_version_constants.h"
+#include "funcapi.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
-#include "catalog/pg_aggregate.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
-#include "distributed/citus_depended_object.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/maintenanced.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata/pg_dist_object.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/multi_executor.h"
-#include "distributed/namespace_utils.h"
-#include "distributed/pg_dist_node.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_create_or_replace.h"
-#include "distributed/worker_transaction.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
@@ -63,8 +39,34 @@
 #include "utils/fmgroids.h"
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
-#include "utils/syscache.h"
 #include "utils/regproc.h"
+#include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_depended_object.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/citus_safe_lib.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/maintenanced.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/pg_dist_node.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_create_or_replace.h"
+#include "distributed/worker_transaction.h"
 
 #define DISABLE_LOCAL_CHECK_FUNCTION_BODIES "SET LOCAL check_function_bodies TO off;"
 #define RESET_CHECK_FUNCTION_BODIES "RESET check_function_bodies;"
@@ -883,6 +885,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 
 		char *workerPgDistObjectUpdateCommand =
 			MarkObjectsDistributedCreateCommand(objectAddressList,
+												NIL,
 												distArgumentIndexList,
 												colocationIdList,
 												forceDelegationList);
@@ -978,7 +981,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	char *argmodes = NULL;
 	int insertorderbyat = -1;
 	int argsprinted = 0;
-	int inputargno = 0;
 
 	HeapTuple proctup = SearchSysCache1(PROCOID, funcOid);
 	if (!HeapTupleIsValid(proctup))
@@ -1058,7 +1060,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 			}
 		}
 
-		inputargno++;       /* this is a 1-based counter */
 		if (argsprinted == insertorderbyat)
 		{
 			appendStringInfoString(&buf, " ORDER BY ");

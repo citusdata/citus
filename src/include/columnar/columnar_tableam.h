@@ -1,15 +1,17 @@
 #ifndef COLUMNAR_TABLEAM_H
 #define COLUMNAR_TABLEAM_H
-#include "citus_version.h"
-
 #include "postgres.h"
+
 #include "fmgr.h"
-#include "access/tableam.h"
-#include "access/skey.h"
-#include "nodes/bitmapset.h"
+
 #include "access/heapam.h"
+#include "access/skey.h"
+#include "access/tableam.h"
 #include "catalog/indexing.h"
+#include "nodes/bitmapset.h"
 #include "utils/acl.h"
+
+#include "citus_version.h"
 
 /*
  * Number of valid ItemPointer Offset's for "row number" <> "ItemPointer"

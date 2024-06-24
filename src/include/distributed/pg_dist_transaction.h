@@ -35,9 +35,10 @@ typedef FormData_pg_dist_transaction *Form_pg_dist_transaction;
  *      compiler constants for pg_dist_transaction
  * ----------------
  */
-#define Natts_pg_dist_transaction 2
+#define Natts_pg_dist_transaction 3
 #define Anum_pg_dist_transaction_groupid 1
 #define Anum_pg_dist_transaction_gid 2
+#define Anum_pg_dist_transaction_outerxid 3
 
 
 #endif   /* PG_DIST_TRANSACTION_H */

@@ -12,13 +12,15 @@
  */
 
 #include "postgres.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shardsplit_shared_memory.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/multi_logical_replication.h"
+
+#include "common/hashfn.h"
 #include "storage/ipc.h"
 #include "utils/memutils.h"
-#include "common/hashfn.h"
+
+#include "distributed/citus_safe_lib.h"
+#include "distributed/multi_logical_replication.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/shardsplit_shared_memory.h"
 
 const char *SharedMemoryNameForHandleManagement =
 	"Shared memory handle for shard split";

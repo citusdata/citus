@@ -12,6 +12,7 @@
  */
 
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "miscadmin.h"
 

@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
+
 #include "access/genam.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
@@ -22,7 +24,6 @@
 #include "commands/comment.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
-#include "fmgr.h"
 #include "nodes/makefuncs.h"
 #include "tsearch/ts_cache.h"
 #include "tsearch/ts_public.h"
@@ -786,45 +787,6 @@ AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok, bo
 	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*sequenceAddress, TSDictionaryRelationId, objid);
 	return list_make1(sequenceAddress);
-}
-
-
-/*
- * TextSearchConfigurationCommentObjectAddress resolves the ObjectAddress for the TEXT
- * SEARCH CONFIGURATION on which the comment is placed. Optionally errors if the
- * configuration does not exist based on the missing_ok flag passed in by the caller.
- */
-List *
-TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok, bool
-											isPostprocess)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
-
-	Oid objid = get_ts_config_oid(castNode(List, stmt->object), missing_ok);
-
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TSConfigRelationId, objid);
-	return list_make1(address);
-}
-
-
-/*
- * TextSearchDictCommentObjectAddress resolves the ObjectAddress for the TEXT SEARCH
- * DICTIONARY on which the comment is placed. Optionally errors if the dictionary does not
- * exist based on the missing_ok flag passed in by the caller.
- */
-List *
-TextSearchDictCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Assert(stmt->objtype == OBJECT_TSDICTIONARY);
-
-	Oid objid = get_ts_dict_oid(castNode(List, stmt->object), missing_ok);
-
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TSDictionaryRelationId, objid);
-	return list_make1(address);
 }
 
 

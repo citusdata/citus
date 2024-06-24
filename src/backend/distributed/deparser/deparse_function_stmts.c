@@ -22,10 +22,6 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
@@ -38,8 +34,13 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
-#include "utils/syscache.h"
 #include "utils/regproc.h"
+#include "utils/syscache.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 
 
 /* forward declaration for deparse functions */

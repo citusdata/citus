@@ -14,6 +14,7 @@
 
 #include "nodes/pg_list.h"
 #include "storage/lockdefs.h"
+
 #include "distributed/multi_physical_planner.h"
 
 extern void AcquireExecutorShardLocksForExecution(RowModifyLevel modLevel,

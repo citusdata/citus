@@ -9,23 +9,23 @@
  */
 
 #include "postgres.h"
-#include "pgstat.h"
 
 #include "libpq-fe.h"
+#include "miscadmin.h"
+#include "pgstat.h"
 
+#include "lib/stringinfo.h"
+#include "storage/latch.h"
+#include "utils/builtins.h"
+#include "utils/fmgrprotos.h"
+#include "utils/palloc.h"
+
+#include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
-#include "distributed/errormessage.h"
-#include "distributed/cancel_utils.h"
-#include "lib/stringinfo.h"
-#include "miscadmin.h"
-#include "storage/latch.h"
-#include "utils/builtins.h"
-#include "utils/fmgrprotos.h"
-#include "utils/palloc.h"
 
 
 /*
@@ -246,6 +246,7 @@ ClearResultsIfReady(MultiConnection *connection)
 void
 ReportConnectionError(MultiConnection *connection, int elevel)
 {
+	char *userName = connection->user;
 	char *nodeName = connection->hostname;
 	int nodePort = connection->port;
 	PGconn *pgConn = connection->pgConn;
@@ -264,15 +265,15 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 	if (messageDetail)
 	{
 		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("connection to the remote node %s:%d failed with the "
-								"following error: %s", nodeName, nodePort,
+						 errmsg("connection to the remote node %s@%s:%d failed with the "
+								"following error: %s", userName, nodeName, nodePort,
 								messageDetail)));
 	}
 	else
 	{
 		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("connection to the remote node %s:%d failed",
-								nodeName, nodePort)));
+						 errmsg("connection to the remote node %s@%s:%d failed",
+								userName, nodeName, nodePort)));
 	}
 }
 
@@ -882,7 +883,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 		palloc(totalConnectionCount * sizeof(MultiConnection *));
 	WaitEvent *events = palloc(totalConnectionCount * sizeof(WaitEvent));
 	bool *connectionReady = palloc(totalConnectionCount * sizeof(bool));
-	WaitEventSet *waitEventSet = NULL;
+	WaitEventSet *volatile waitEventSet = NULL;
 
 	/* convert connection list to an array such that we can move items around */
 	MultiConnection *connectionItem = NULL;

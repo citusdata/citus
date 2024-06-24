@@ -107,6 +107,29 @@ step "s3-show-activity"
 	select count(*) from get_all_active_transactions() where process_id IN (SELECT * FROM selected_pid);
 }
 
+step "s3-wait-backend-termination"
+{
+	SET ROLE postgres;
+
+	DO $$
+	DECLARE
+		i int;
+	BEGIN
+		i := 0;
+
+		-- try for 5 sec then timeout
+		WHILE (select count(*) > 0 from get_all_active_transactions() where process_id IN (SELECT * FROM selected_pid))
+		LOOP
+			PERFORM pg_sleep(0.1);
+			i := i + 1;
+			IF i > 50 THEN
+				RAISE EXCEPTION 'Timeout while waiting for backend to terminate';
+			END IF;
+		END LOOP;
+	END;
+	$$;
+}
+
 session "s4"
 
 step "s4-record-pid"
@@ -123,4 +146,4 @@ step "s5-kill"
 
 
 permutation "s1-grant" "s1-begin-insert" "s2-begin-insert" "s3-as-admin" "s3-as-user-1" "s3-as-readonly" "s3-as-monitor" "s1-commit" "s2-commit"
-permutation "s4-record-pid" "s3-show-activity" "s5-kill" "s3-show-activity"
+permutation "s4-record-pid" "s3-show-activity" "s5-kill" "s3-wait-backend-termination"

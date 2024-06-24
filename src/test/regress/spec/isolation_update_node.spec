@@ -3,6 +3,8 @@ setup
     -- revert back to pg_isolation_test_session_is_blocked until the tests are fixed
     SELECT citus_internal.restore_isolation_tester_func();
 
+    ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 22;
+
     SELECT 1 FROM master_add_node('localhost', 57637);
     SELECT 1 FROM master_add_node('localhost', 57638);
 

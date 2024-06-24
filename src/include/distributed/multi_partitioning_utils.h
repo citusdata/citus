@@ -8,8 +8,9 @@
 #define MULTI_PARTITIONING_UTILS_H_
 
 
-#include "distributed/metadata_utility.h"
 #include "nodes/pg_list.h"
+
+#include "distributed/metadata_utility.h"
 
 
 extern bool PartitionedTable(Oid relationId);

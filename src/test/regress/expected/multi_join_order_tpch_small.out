@@ -17,11 +17,11 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Query #3 from the TPC-H decision support benchmark
@@ -49,12 +49,12 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 LOG:  join order: [ "orders" ][ reference join "customer" ][ local partition join "lineitem" ]
-                             QUERY PLAN
+                          QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.revenue DESC, remote_scan.o_orderdate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (4 rows)
 
 -- Query #10 from the TPC-H decision support benchmark
@@ -98,7 +98,7 @@ LOG:  join order: [ "orders" ][ reference join "customer" ][ reference join "nat
    ->  HashAggregate
          Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
          ->  Custom Scan (Citus Adaptive)
-               explain statements for distributed queries are not enabled
+               citus.explain_distributed_queries: false
 (6 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
@@ -133,11 +133,11 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ reference join "part" ]
-                             QUERY PLAN
+                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         explain statements for distributed queries are not enabled
+         citus.explain_distributed_queries: false
 (3 rows)
 
 -- Reset client logging level to its previous value

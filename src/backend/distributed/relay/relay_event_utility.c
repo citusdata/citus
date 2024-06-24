@@ -12,34 +12,28 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "c.h"
-
 #include <stdio.h>
 #include <string.h>
 
+#include "postgres.h"
+
+#include "c.h"
+
 #include "access/genam.h"
-#include "access/heapam.h"
-#include "access/htup_details.h"
 #include "access/hash.h"
+#include "access/heapam.h"
 #include "access/htup.h"
+#include "access/htup_details.h"
 #include "access/skey.h"
 #include "access/stratnum.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/commands.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/relay_utility.h"
-#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
-#include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -52,6 +46,14 @@
 #include "utils/lsyscache.h"
 #include "utils/palloc.h"
 #include "utils/relcache.h"
+
+#include "distributed/citus_safe_lib.h"
+#include "distributed/commands.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/relay_utility.h"
+#include "distributed/version_compat.h"
 
 /* Local functions forward declarations */
 static void RelayEventExtendConstraintAndIndexNames(AlterTableStmt *alterTableStmt,

@@ -8,11 +8,12 @@
  */
 
 #include "postgres.h"
+
 #include "access/hash.h"
-#include "distributed/hash_helpers.h"
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/directed_acyclic_graph_execution.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"

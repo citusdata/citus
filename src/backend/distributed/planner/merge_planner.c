@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 #include "postgres.h"
+
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
@@ -19,6 +20,8 @@
 #include "parser/parsetree.h"
 #include "tcop/tcopprot.h"
 #include "utils/lsyscache.h"
+
+#include "pg_version_constants.h"
 
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
@@ -29,12 +32,11 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node_metadata.h"
-#include "distributed/pg_version_constants.h"
-#include "distributed/query_pushdown_planning.h"
 #include "distributed/query_colocation_checker.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/repartition_executor.h"
-#include "distributed/shared_library_init.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/shared_library_init.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 
@@ -180,14 +182,6 @@ CreateRouterMergePlan(Oid targetRelationId, Query *originalQuery, Query *query,
 		return distributedPlan;
 	}
 
-	Var *insertVar =
-		FetchAndValidateInsertVarIfExists(targetRelationId, originalQuery);
-	if (insertVar &&
-		!IsDistributionColumnInMergeSource((Expr *) insertVar, originalQuery, true))
-	{
-		ereport(ERROR, (errmsg("MERGE INSERT must use the source table "
-							   "distribution column value")));
-	}
 
 	Job *job = RouterJob(originalQuery, plannerRestrictionContext,
 						 &distributedPlan->planningError);
@@ -1121,6 +1115,27 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 								"to evaluate NOT-MATCHED clause, try "
 								"repartitioning")));
 		return deferredError;
+	}
+
+
+	/*
+	 * If execution has reached this point, it indicates that the query can be delegated to the worker.
+	 * However, before proceeding with this delegation, we need to confirm that the user is utilizing
+	 * the distribution column of the source table in the Insert variable.
+	 * If this is not the case, we should refrain from pushing down the query.
+	 * This is just a deffered error which will be handle by caller.
+	 */
+
+	Var *insertVar =
+		FetchAndValidateInsertVarIfExists(targetRelationId, query);
+	if (insertVar &&
+		!IsDistributionColumnInMergeSource((Expr *) insertVar, query, true))
+	{
+		ereport(DEBUG1, (errmsg(
+							 "MERGE INSERT must use the source table distribution column value for push down to workers. Otherwise, repartitioning will be applied")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "MERGE INSERT must use the source table distribution column value for push down to workers. Otherwise, repartitioning will be applied",
+							 NULL, NULL);
 	}
 	return NULL;
 }

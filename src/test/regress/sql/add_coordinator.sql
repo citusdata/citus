@@ -3,8 +3,6 @@
 --
 
 -- node trying to add itself without specifying groupid => 0 should error out
--- first remove the coordinator to for testing master_add_node for coordinator
-SELECT master_remove_node('localhost', :master_port);
 SELECT master_add_node('localhost', :master_port);
 
 SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset

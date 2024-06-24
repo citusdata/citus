@@ -90,7 +90,7 @@ SELECT citus_disable_node('localhost', :worker_2_port);
 
 (1 row)
 
-SELECT public.wait_until_metadata_sync(60000);
+SELECT public.wait_until_metadata_sync(20000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -812,7 +812,7 @@ SELECT citus_disable_node('localhost', 9999);
 
 (1 row)
 
-SELECT public.wait_until_metadata_sync(60000);
+SELECT public.wait_until_metadata_sync(20000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -1258,3 +1258,9 @@ SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHER
  t
 (1 row)
 
+-- Grant all on public schema to public
+--
+-- That's the default on Postgres versions < 15 and we want to
+-- keep permissions compatible accross versions, in regression
+-- tests.
+GRANT ALL ON SCHEMA public TO PUBLIC;

@@ -154,7 +154,8 @@ test: multi_outer_join
 # ---
 test: multi_complex_count_distinct
 test: multi_upsert multi_simple_queries
-test: foreign_key_to_reference_table validate_constraint
+test: foreign_key_to_reference_table
+test: validate_constraint
 
 # ---------
 #  creates hash and range-partitioned tables and performs COPY

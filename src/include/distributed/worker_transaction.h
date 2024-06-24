@@ -12,9 +12,10 @@
 #ifndef WORKER_TRANSACTION_H
 #define WORKER_TRANSACTION_H
 
+#include "storage/lockdefs.h"
+
 #include "distributed/connection_management.h"
 #include "distributed/worker_manager.h"
-#include "storage/lockdefs.h"
 
 
 /*
@@ -30,9 +31,20 @@ typedef enum TargetWorkerSet
 	NON_COORDINATOR_METADATA_NODES,
 
 	/*
+	 * All the active primary nodes in the metadata which have metadata
+	 * except the local node
+	 */
+	REMOTE_METADATA_NODES,
+
+	/*
 	 * All the active primary nodes in the metadata except the coordinator
 	 */
 	NON_COORDINATOR_NODES,
+
+	/*
+	 * All the active primary nodes in the metadata except the local node
+	 */
+	REMOTE_NODES,
 
 	/*
 	 * All active primary nodes in the metadata
@@ -56,6 +68,10 @@ extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet,
 									   const char *nodeUser, const char *command);
 extern void SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);
+extern void SendCommandToRemoteMetadataNodesParams(const char *command,
+												   const char *user, int parameterCount,
+												   const Oid *parameterTypes,
+												   const char *const *parameterValues);
 extern bool SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName,
 															  int32 nodePort,
 															  const char *nodeUser,
@@ -74,6 +90,10 @@ extern bool SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(cons
 extern void SendCommandToWorkersWithMetadata(const char *command);
 extern void SendCommandToWorkersWithMetadataViaSuperUser(const char *command);
 extern void SendCommandListToWorkersWithMetadata(List *commands);
+extern void SendCommandToRemoteNodesWithMetadata(const char *command);
+extern void SendCommandToRemoteNodesWithMetadataViaSuperUser(const char *command);
+extern void SendCommandListToRemoteNodesWithMetadata(List *commands);
+extern void SendBareCommandListToRemoteMetadataNodes(List *commandList);
 extern void SendBareCommandListToMetadataWorkers(List *commandList);
 extern void EnsureNoModificationsHaveBeenDone(void);
 extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,

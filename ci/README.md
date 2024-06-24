@@ -385,3 +385,18 @@ definitions are in alphabetical order.
 ## `print_stack_trace.sh`
 
 This script prints stack traces for failed tests, if they left core files.
+
+## `sort_and_group_includes.sh`
+
+This script checks and fixes issues with include grouping and sorting in C files.
+
+Includes are grouped in the following groups:
+ - System includes (eg. `#include <math>`)
+ - Postgres.h include (eg. `#include "postgres.h"`)
+ - Toplevel postgres includes (includes not in a directory eg. `#include "miscadmin.h`)
+ - Postgres includes in a directory (eg. `#include "catalog/pg_type.h"`)
+ - Toplevel citus includes (includes not in a directory eg. `#include "pg_version_constants.h"`)
+ - Columnar includes (eg. `#include "columnar/columnar.h"`)
+ - Distributed includes (eg. `#include "distributed/maintenanced.h"`)
+
+Within every group the include lines are sorted alphabetically.

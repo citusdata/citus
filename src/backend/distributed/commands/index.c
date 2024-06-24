@@ -10,7 +10,8 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
+#include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -18,32 +19,9 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "catalog/pg_namespace.h"
-#endif
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/deparser.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/listutils.h"
-#include "distributed/local_executor.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/namespace_utils.h"
-#include "distributed/resource_lock.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/relation_utils.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
-#include "miscadmin.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_utilcmd.h"
 #include "storage/lmgr.h"
@@ -52,6 +30,32 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/deparser.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/relation_utils.h"
+#include "distributed/resource_lock.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "catalog/pg_namespace.h"
+#endif
 
 
 /* Local functions forward declarations for helper functions */
@@ -179,6 +183,8 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	if (createIndexStatement->idxname == NULL)
 	{
@@ -487,6 +493,7 @@ GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement, const char *createInd
 	ddlJob->startNewTransaction = createIndexStatement->concurrent;
 	ddlJob->metadataSyncCommand = createIndexCommand;
 	ddlJob->taskList = CreateIndexTaskList(createIndexStatement);
+	ddlJob->warnForPartialFailure = true;
 
 	return ddlJob;
 }
@@ -646,6 +653,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 																	"concurrently");
 			ddlJob->metadataSyncCommand = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
+			ddlJob->warnForPartialFailure = true;
 
 			ddlJobs = list_make1(ddlJob);
 		}
@@ -774,6 +782,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		ddlJob->metadataSyncCommand = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
+		ddlJob->warnForPartialFailure = true;
 
 		ddlJobs = list_make1(ddlJob);
 	}
@@ -938,7 +947,7 @@ CreateIndexTaskList(IndexStmt *indexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransction = indexStmt->concurrent;
+		task->cannotBeExecutedInTransaction = indexStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 
@@ -983,7 +992,7 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransction =
+		task->cannotBeExecutedInTransaction =
 			IsReindexWithParam_compat(reindexStmt, "concurrently");
 
 		taskList = lappend(taskList, task);
@@ -1309,7 +1318,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransction = dropStmt->concurrent;
+		task->cannotBeExecutedInTransaction = dropStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 

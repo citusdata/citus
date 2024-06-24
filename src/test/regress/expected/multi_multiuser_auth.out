@@ -12,19 +12,9 @@
 \set bob_worker_1_pw   triplex-royalty-warranty-stand-cheek
 \set bob_worker_2_pw   omnibus-plectrum-comet-sneezy-ensile
 \set bob_fallback_pw   :bob_worker_1_pw
-SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port;
- worker_1_id
----------------------------------------------------------------------
-          17
-(1 row)
-
+SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port
 \gset
-SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port;
- worker_2_id
----------------------------------------------------------------------
-          35
-(1 row)
-
+SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port
 \gset
 -- alice is a superuser so she can update own password
 CREATE USER alice PASSWORD :'alice_master_pw' SUPERUSER;
@@ -82,7 +72,7 @@ GRANT ALL ON TABLE lineitem, orders, lineitem, customer, nation, part, supplier 
 \c :alice_conninfo
 -- router query (should break because of bad password)
 INSERT INTO customer VALUES (12345, 'name', NULL, 5, 'phone', 123.45, 'segment', 'comment');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  password authentication failed for user "alice"
+ERROR:  connection to the remote node alice@localhost:xxxxx failed with the following error: FATAL:  password authentication failed for user "alice"
 -- fix alice's worker1 password ...
 UPDATE pg_dist_authinfo
 SET authinfo = ('password=' || :'alice_worker_1_pw')

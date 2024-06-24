@@ -76,7 +76,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").kill()');
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancellation on colocated table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").cancel(' || :pid || ')');
  mitmproxy
@@ -94,7 +94,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancellation on colocated table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
  mitmproxy
@@ -131,7 +131,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").kill()');
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancellation on table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").cancel(' || :pid || ')');
  mitmproxy
@@ -149,7 +149,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancellation on table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
  mitmproxy

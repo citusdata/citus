@@ -15,6 +15,7 @@
 #include "c.h"
 
 #include "nodes/pg_list.h"
+
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/shard_cleaner.h"

@@ -10,11 +10,24 @@
  */
 
 #include "postgres.h"
+
 #include "c.h"
 
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "lib/stringinfo.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "parser/parsetree.h"
+#include "storage/lock.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/combine_query_planner.h"
@@ -28,17 +41,6 @@
 #include "distributed/shard_utils.h"
 #include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
-#include "lib/stringinfo.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/nodes.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
-#include "parser/parsetree.h"
-#include "storage/lock.h"
-#include "utils/lsyscache.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
 
 
 static void UpdateTaskQueryString(Query *query, Task *task);

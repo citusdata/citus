@@ -10,6 +10,9 @@
 
 #include "postgres.h"
 
+#include "executor/executor.h"
+#include "utils/datetime.h"
+
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
@@ -19,8 +22,6 @@
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
-#include "executor/executor.h"
-#include "utils/datetime.h"
 
 #define SECOND_TO_MILLI_SECOND 1000
 #define MICRO_TO_MILLI_SECOND 0.001

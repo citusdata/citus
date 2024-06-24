@@ -16,9 +16,9 @@
 \set bob_worker_2_pw   omnibus-plectrum-comet-sneezy-ensile
 \set bob_fallback_pw   :bob_worker_1_pw
 
-SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port;
+SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port
 \gset
-SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port;
+SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port
 \gset
 
 -- alice is a superuser so she can update own password

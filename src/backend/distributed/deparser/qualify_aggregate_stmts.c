@@ -15,9 +15,10 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
-#include "distributed/deparser.h"
 #include "nodes/makefuncs.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/deparser.h"
 
 void
 QualifyDefineAggregateStmt(Node *node)

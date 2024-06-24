@@ -36,7 +36,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------
@@ -99,7 +99,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
@@ -300,7 +300,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg
 ---------------------------------------------------------------------
@@ -361,7 +361,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg
 ---------------------------------------------------------------------
@@ -661,7 +661,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------
@@ -722,7 +722,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------
@@ -1010,7 +1010,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- kill as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).kill()');
  mitmproxy
@@ -1019,7 +1019,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").aft
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 -- cancel as soon as the coordinator after it sends worker_apply_shard_ddl_command 2nd time
 SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").after(2).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy

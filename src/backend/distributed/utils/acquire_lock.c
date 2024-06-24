@@ -22,12 +22,12 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+#include "pgstat.h"
 
 #include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "executor/spi.h"
-#include "miscadmin.h"
-#include "pgstat.h"
 #include "portability/instr_time.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"

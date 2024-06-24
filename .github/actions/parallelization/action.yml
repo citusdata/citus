@@ -1,0 +1,23 @@
+name: 'Parallelization matrix'
+inputs:
+  count:
+    required: false
+    default: 32
+outputs:
+  json:
+    value: ${{ steps.generate_matrix.outputs.json }}
+runs:
+  using: "composite"
+  steps:
+    - name: Generate parallelization matrix
+      id: generate_matrix
+      shell: bash
+      run: |-
+        json_array="{\"include\": ["
+        for ((i = 1; i <= ${{ inputs.count }}; i++)); do
+            json_array+="{\"id\":\"$i\"},"
+        done
+        json_array=${json_array%,}
+        json_array+=" ]}"
+        echo "json=$json_array" >> "$GITHUB_OUTPUT"
+        echo "json=$json_array"

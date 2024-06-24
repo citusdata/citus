@@ -13,10 +13,11 @@
 #define METADATA_SYNC_H
 
 
+#include "nodes/pg_list.h"
+
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "nodes/pg_list.h"
 
 /* managed via guc.c */
 typedef enum
@@ -88,6 +89,7 @@ extern List * NodeMetadataCreateCommands(void);
 extern List * CitusTableMetadataCreateCommandList(Oid relationId);
 extern List * NodeMetadataDropCommands(void);
 extern char * MarkObjectsDistributedCreateCommand(List *addresses,
+												  List *names,
 												  List *distributionArgumentIndexes,
 												  List *colocationIds,
 												  List *forceDelegations);
@@ -107,6 +109,7 @@ extern char * ColocationIdUpdateCommand(Oid relationId, uint32 colocationId);
 extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern List * GrantOnFunctionDDLCommands(Oid functionOid);
+extern List * GrantOnDatabaseDDLCommands(Oid databaseOid);
 extern List * GrantOnForeignServerDDLCommands(Oid serverId);
 extern List * GenerateGrantOnForeignServerQueriesFromAclItem(Oid serverId,
 															 AclItem *aclItem);
@@ -127,8 +130,13 @@ extern List * IdentitySequenceDependencyCommandList(Oid targetRelationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
+#if PG_VERSION_NUM < PG_VERSION_15
+ObjectAddress GetAttrDefaultColumnAddress(Oid attrdefoid);
+#endif
+extern List * GetAttrDefsFromSequence(Oid seqOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 											  AttrNumber attnum, char depType);
+extern List * GetDependentRelationsWithSequence(Oid seqId, char depType);
 extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 extern void SetLocalEnableMetadataSync(bool state);
@@ -186,7 +194,7 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define WORKER_DROP_ALL_SHELL_TABLES \
 	"CALL pg_catalog.worker_drop_all_shell_tables(%s)"
 #define CITUS_INTERNAL_MARK_NODE_NOT_SYNCED \
-	"SELECT citus_internal_mark_node_not_synced(%d, %d)"
+	"SELECT citus_internal.mark_node_not_synced(%d, %d)"
 
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"

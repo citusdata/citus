@@ -18,6 +18,7 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+
 #include "distributed/citus_custom_scan.h"
 
 

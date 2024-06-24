@@ -84,7 +84,7 @@ SELECT citus.mitmproxy('conn.connect_delay(1400)');
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 WARNING:  could not establish connection after 900 ms
-ERROR:  connection to the remote node localhost:xxxxx failed
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy

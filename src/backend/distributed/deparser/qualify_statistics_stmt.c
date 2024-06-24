@@ -16,15 +16,16 @@
 
 #include "catalog/namespace.h"
 #include "catalog/pg_statistic_ext.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
 #include "nodes/parsenodes.h"
 #include "nodes/value.h"
-#include "utils/syscache.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
+#include "utils/syscache.h"
+
+#include "distributed/commands.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 static Oid GetStatsNamespaceOid(Oid statsOid);
 

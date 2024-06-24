@@ -30,7 +30,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").kill()');
 (1 row)
 
 VACUUM vacuum_test;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -38,7 +38,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
 (1 row)
 
 ANALYZE vacuum_test;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
  mitmproxy
@@ -113,7 +113,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").kill()');
 (1 row)
 
 VACUUM vacuum_test, other_vacuum_test;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------

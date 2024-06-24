@@ -25,9 +25,8 @@
  *-------------------------------------------------------------------------
  */
 
-#include "distributed/pg_version_constants.h"
-
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "access/attnum.h"
@@ -35,11 +34,28 @@
 #include "access/htup_details.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
-#include "citus_version.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/tablecmds.h"
+#include "foreign/foreign.h"
+#include "lib/stringinfo.h"
+#include "nodes/makefuncs.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "postmaster/postmaster.h"
+#include "tcop/utility.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+#include "citus_version.h"
+#include "pg_version_constants.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_depended_object.h"
@@ -48,39 +64,28 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
 #include "distributed/coordinator_protocol.h"
-#include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/deparser.h"
 #include "distributed/executor_util.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
-#include "distributed/multi_logical_replication.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
+#include "distributed/multi_logical_replication.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/string_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
-#include "foreign/foreign.h"
-#include "lib/stringinfo.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
-#include "nodes/makefuncs.h"
-#include "tcop/utility.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/inval.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
-
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_IMMEDIATE;
@@ -95,13 +100,13 @@ int UtilityHookLevel = 0;
 
 
 /* Local functions forward declarations for helper functions */
-static void ProcessUtilityInternal(PlannedStmt *pstmt,
-								   const char *queryString,
-								   ProcessUtilityContext context,
-								   ParamListInfo params,
-								   struct QueryEnvironment *queryEnv,
-								   DestReceiver *dest,
-								   QueryCompletion *completionTag);
+static void citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+										 const char *queryString,
+										 ProcessUtilityContext context,
+										 ParamListInfo params,
+										 struct QueryEnvironment *queryEnv,
+										 DestReceiver *dest,
+										 QueryCompletion *completionTag);
 static void set_indexsafe_procflags(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
@@ -109,6 +114,7 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
+
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -130,7 +136,7 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 
 
 /*
- * multi_ProcessUtility is the main entry hook for implementing Citus-specific
+ * citus_ProcessUtility is the main entry hook for implementing Citus-specific
  * utility behavior. Its primary responsibilities are intercepting COPY and DDL
  * commands and augmenting the coordinator's command with corresponding tasks
  * to be run on worker nodes, after suitably ensuring said commands' options
@@ -139,7 +145,7 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
  * TRUNCATE and VACUUM are also supported.
  */
 void
-multi_ProcessUtility(PlannedStmt *pstmt,
+citus_ProcessUtility(PlannedStmt *pstmt,
 					 const char *queryString,
 					 bool readOnlyTree,
 					 ProcessUtilityContext context,
@@ -241,11 +247,25 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (!CitusHasBeenLoaded())
 	{
 		/*
-		 * Ensure that utility commands do not behave any differently until CREATE
-		 * EXTENSION is invoked.
+		 * Process the command via RunPreprocessNonMainDBCommand and
+		 * RunPostprocessNonMainDBCommand hooks if we're in a non-main database
+		 * and if the command is a node-wide object management command that we
+		 * support from non-main databases.
 		 */
-		PrevProcessUtility(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
+
+		bool shouldSkipPrevUtilityHook = RunPreprocessNonMainDBCommand(parsetree);
+
+		if (!shouldSkipPrevUtilityHook)
+		{
+			/*
+			 * Ensure that utility commands do not behave any differently until CREATE
+			 * EXTENSION is invoked.
+			 */
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
+		}
+
+		RunPostprocessNonMainDBCommand(parsetree);
 
 		return;
 	}
@@ -329,8 +349,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
-							   completionTag);
+		citus_ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
+									 completionTag);
 
 		if (UtilityHookLevel == 1)
 		{
@@ -404,7 +424,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 
 /*
- * ProcessUtilityInternal is a helper function for multi_ProcessUtility where majority
+ * citus_ProcessUtilityInternal is a helper function for citus_ProcessUtility where majority
  * of the Citus specific utility statements are handled here. The distinction between
  * both functions is that Citus_ProcessUtility does not handle CALL and DO statements.
  * The reason for the distinction is implemented to be able to find the "top-level" DDL
@@ -412,13 +432,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
  * this goal.
  */
 static void
-ProcessUtilityInternal(PlannedStmt *pstmt,
-					   const char *queryString,
-					   ProcessUtilityContext context,
-					   ParamListInfo params,
-					   struct QueryEnvironment *queryEnv,
-					   DestReceiver *dest,
-					   QueryCompletion *completionTag)
+citus_ProcessUtilityInternal(PlannedStmt *pstmt,
+							 const char *queryString,
+							 ProcessUtilityContext context,
+							 ParamListInfo params,
+							 struct QueryEnvironment *queryEnv,
+							 DestReceiver *dest,
+							 QueryCompletion *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
@@ -694,24 +714,31 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/* inform the user about potential caveats */
-	if (IsA(parsetree, CreatedbStmt))
+	if (IsA(parsetree, CreatedbStmt) && !EnableCreateDatabasePropagation)
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
 			ereport(NOTICE, (errmsg("Citus partially supports CREATE DATABASE for "
 									"distributed databases"),
 							 errdetail("Citus does not propagate CREATE DATABASE "
-									   "command to workers"),
+									   "command to other nodes"),
 							 errhint("You can manually create a database and its "
-									 "extensions on workers.")));
+									 "extensions on other nodes.")));
 		}
 	}
 	else if (IsA(parsetree, CreateRoleStmt) && !EnableCreateRolePropagation)
 	{
-		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to worker"
+		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to other"
 								" nodes"),
-						 errhint("Connect to worker nodes directly to manually create all"
+						 errhint("Connect to other nodes directly to manually create all"
 								 " necessary users and roles.")));
+	}
+	else if (IsA(parsetree, SecLabelStmt) && !EnableAlterRolePropagation)
+	{
+		ereport(NOTICE, (errmsg("not propagating SECURITY LABEL commands to other"
+								" nodes"),
+						 errhint("Connect to other nodes directly to manually assign"
+								 " necessary labels.")));
 	}
 
 	/*
@@ -724,22 +751,13 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/*
-	 * Make sure that dropping the role deletes the pg_dist_object entries. There is a
-	 * separate logic for roles, since roles are not included as dropped objects in the
-	 * drop event trigger. To handle it both on worker and coordinator nodes, it is not
-	 * implemented as a part of process functions but here.
+	 * Make sure that dropping node-wide objects deletes the pg_dist_object
+	 * entries. There is a separate logic for node-wide objects (such as role
+	 * and databases), since they are not included as dropped objects in the
+	 * drop event trigger. To handle it both on worker and coordinator nodes,
+	 * it is not implemented as a part of process functions but here.
 	 */
-	if (IsA(parsetree, DropRoleStmt))
-	{
-		DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
-		List *allDropRoles = stmt->roles;
-
-		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
-		if (list_length(distributedDropRoles) > 0)
-		{
-			UnmarkRolesDistributed(distributedDropRoles);
-		}
-	}
+	UnmarkNodeWideObjectsDistributed(parsetree);
 
 	pstmt->utilityStmt = parsetree;
 
@@ -1106,16 +1124,17 @@ IsDropSchemaOrDB(Node *parsetree)
  * each shard placement and COMMIT/ROLLBACK is handled by
  * CoordinatedTransactionCallback function.
  *
- * The function errors out if the node is not the coordinator or if the DDL is on
- * a partitioned table which has replication factor > 1.
- *
+ * The function errors out if the DDL is on a partitioned table which has replication
+ * factor > 1, or if the the coordinator is not added into metadata and we're on a
+ * worker node because we want to make sure that distributed DDL jobs are executed
+ * on the coordinator node too. See EnsurePropagationToCoordinator() for more details.
  */
 void
 ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
 	bool shouldSyncMetadata = false;
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	ObjectAddress targetObjectAddress = ddlJob->targetObjectAddress;
 
@@ -1139,23 +1158,24 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	{
 		if (shouldSyncMetadata)
 		{
-			SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+			SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 			char *currentSearchPath = CurrentSearchPath();
 
 			/*
-			 * Given that we're relaying the query to the worker nodes directly,
+			 * Given that we're relaying the query to the remote nodes directly,
 			 * we should set the search path exactly the same when necessary.
 			 */
 			if (currentSearchPath != NULL)
 			{
-				SendCommandToWorkersWithMetadata(
+				SendCommandToRemoteNodesWithMetadata(
 					psprintf("SET LOCAL search_path TO %s;", currentSearchPath));
 			}
 
 			if (ddlJob->metadataSyncCommand != NULL)
 			{
-				SendCommandToWorkersWithMetadata((char *) ddlJob->metadataSyncCommand);
+				SendCommandToRemoteNodesWithMetadata(
+					(char *) ddlJob->metadataSyncCommand);
 			}
 		}
 
@@ -1234,7 +1254,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 				char *currentSearchPath = CurrentSearchPath();
 
 				/*
-				 * Given that we're relaying the query to the worker nodes directly,
+				 * Given that we're relaying the query to the remote nodes directly,
 				 * we should set the search path exactly the same when necessary.
 				 */
 				if (currentSearchPath != NULL)
@@ -1246,7 +1266,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 				commandList = lappend(commandList, (char *) ddlJob->metadataSyncCommand);
 
-				SendBareCommandListToMetadataWorkers(commandList);
+				SendBareCommandListToRemoteMetadataNodes(commandList);
 			}
 		}
 		PG_CATCH();
@@ -1269,15 +1289,18 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 						 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
 								 "invalid index, then retry the original command.")));
 			}
-			else
+			else if (ddlJob->warnForPartialFailure)
 			{
 				ereport(WARNING,
 						(errmsg(
-							 "CONCURRENTLY-enabled index commands can fail partially, "
-							 "leaving behind an INVALID index.\n Use DROP INDEX "
-							 "CONCURRENTLY IF EXISTS to remove the invalid index.")));
-				PG_RE_THROW();
+							 "Commands that are not transaction-safe may result in "
+							 "partial failure, potentially leading to an inconsistent "
+							 "state.\nIf the problematic command is a CREATE operation, "
+							 "consider using the 'IF EXISTS' syntax to drop the object,"
+							 "\nif applicable, and then re-attempt the original command.")));
 			}
+
+			PG_RE_THROW();
 		}
 		PG_END_TRY();
 	}
@@ -1386,7 +1409,7 @@ PostStandardProcessUtility(Node *parsetree)
 	 * on the local table first. However, in order to decide whether the
 	 * command leads to an invalidation, we need to check before the command
 	 * is being executed since we read pg_constraint table. Thus, we maintain a
-	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * local flag and do the invalidation after citus_ProcessUtility,
 	 * before ExecuteDistributedDDLJob().
 	 */
 	InvalidateForeignKeyGraphForDDL();
@@ -1486,6 +1509,33 @@ DDLTaskList(Oid relationId, const char *commandString)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * NontransactionalNodeDDLTaskList builds a list of tasks to execute a DDL command on a
+ * given target set of nodes with cannotBeExecutedInTransaction is set to make sure
+ * that task list is executed outside a transaction block.
+ *
+ * Also sets warnForPartialFailure for the returned DDLJobs.
+ */
+List *
+NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
+								bool warnForPartialFailure)
+{
+	List *ddlJobs = NodeDDLTaskList(targets, commands);
+	DDLJob *ddlJob = NULL;
+	foreach_ptr(ddlJob, ddlJobs)
+	{
+		Task *task = NULL;
+		foreach_ptr(task, ddlJob->taskList)
+		{
+			task->cannotBeExecutedInTransaction = true;
+		}
+
+		ddlJob->warnForPartialFailure = warnForPartialFailure;
+	}
+	return ddlJobs;
 }
 
 

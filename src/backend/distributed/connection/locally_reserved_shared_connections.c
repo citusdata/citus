@@ -33,12 +33,15 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
-
 #include "miscadmin.h"
 
 #include "access/hash.h"
 #include "commands/dbcommands.h"
+#include "common/hashfn.h"
+#include "utils/builtins.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/listutils.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/metadata_cache.h"
@@ -47,8 +50,6 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
-#include "utils/builtins.h"
-#include "common/hashfn.h"
 
 
 #define RESERVED_CONNECTION_COLUMNS 4
@@ -302,8 +303,8 @@ EnsureConnectionPossibilityForRemotePrimaryNodes(void)
 	 * seem to cause any problems as none of the placements that we are
 	 * going to access would be on the new node.
 	 */
-	List *primaryNodeList = ActivePrimaryRemoteNodeList(NoLock);
-	EnsureConnectionPossibilityForNodeList(primaryNodeList);
+	List *remoteNodeList = ActivePrimaryRemoteNodeList(NoLock);
+	EnsureConnectionPossibilityForNodeList(remoteNodeList);
 }
 
 

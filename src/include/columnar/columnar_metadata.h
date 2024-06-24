@@ -12,7 +12,17 @@
 #ifndef COLUMNAR_METADATA_H
 #define COLUMNAR_METADATA_H
 
+#include "postgres.h"
+
 #include "pg_version_compat.h"
+#include "pg_version_constants.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "storage/relfilelocator.h"
+#else
+#include "storage/relfilenode.h"
+#endif
+
 
 /*
  * StripeMetadata represents information about a stripe. This information is

@@ -14,12 +14,13 @@
 
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
+
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 /* Local functions forward declarations for helper functions */
 static void AppendCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *stmt);

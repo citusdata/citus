@@ -54,7 +54,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
@@ -109,7 +109,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
@@ -163,7 +163,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  Failed to run worker_split_shard_replication_setup UDF. It should successfully execute  for splitting a shard in a non-blocking way. Please retry.
     RESET client_min_messages;
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
@@ -221,7 +221,7 @@ ERROR:  Failed to run worker_split_shard_replication_setup UDF. It should succes
 (1 row)
 
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
@@ -277,12 +277,12 @@ CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
-          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_xxxxxxx                    |             2 |           0
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_xxxxxxx                    |             2 |           0
@@ -336,7 +336,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
@@ -388,7 +388,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
@@ -455,7 +455,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
@@ -507,7 +507,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
@@ -574,7 +574,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
@@ -627,14 +627,14 @@ WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
@@ -701,7 +701,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
-    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
+    FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name, node_group_id;
  operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)

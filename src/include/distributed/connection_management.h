@@ -13,15 +13,17 @@
 
 #include "postgres.h"
 
-#include "distributed/transaction_management.h"
-#include "distributed/remote_transaction.h"
-#include "lib/ilist.h"
 #include "pg_config.h"
+
+#include "lib/ilist.h"
 #include "portability/instr_time.h"
 #include "storage/latch.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
+
+#include "distributed/remote_transaction.h"
+#include "distributed/transaction_management.h"
 
 /* maximum (textual) lengths of hostname and port */
 #define MAX_NODE_LENGTH 255 /* includes 0 byte */
@@ -58,14 +60,6 @@
  * UINT32_MAX is reserved in pg_dist_node, so we can use it safely.
  */
 #define LOCAL_NODE_ID UINT32_MAX
-
-/*
- * If you want to connect to the current node use `LocalHostName`, which is a GUC, instead
- * of the hardcoded loopback hostname. Only if you really need the loopback hostname use
- * this define.
- */
-#define LOCAL_HOST_NAME "localhost"
-
 
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */

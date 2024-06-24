@@ -8,7 +8,13 @@
  */
 
 #include "postgres.h"
+
+#include "utils/array.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+
 #include "pg_version_compat.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distribution_column.h"
 #include "distributed/intermediate_results.h"
@@ -16,9 +22,6 @@
 #include "distributed/multi_executor.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_shard_copy.h"
-#include "utils/lsyscache.h"
-#include "utils/array.h"
-#include "utils/builtins.h"
 
 PG_FUNCTION_INFO_V1(worker_split_copy);
 

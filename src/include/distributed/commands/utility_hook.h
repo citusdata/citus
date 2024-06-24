@@ -10,12 +10,12 @@
 #ifndef MULTI_UTILITY_H
 #define MULTI_UTILITY_H
 
-#include "distributed/pg_version_constants.h"
-
 #include "postgres.h"
 
-#include "utils/relcache.h"
 #include "tcop/utility.h"
+#include "utils/relcache.h"
+
+#include "pg_version_constants.h"
 
 #include "distributed/coordinator_protocol.h"
 #include "distributed/function_call_delegation.h"
@@ -40,6 +40,7 @@ typedef enum
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
 extern int CreateObjectPropagationMode;
+extern bool EnableCreateDatabasePropagation;
 extern bool EnableCreateTypePropagation;
 extern bool EnableCreateRolePropagation;
 extern bool EnableAlterRolePropagation;
@@ -74,11 +75,20 @@ typedef struct DDLJob
 	const char *metadataSyncCommand;
 
 	List *taskList;            /* worker DDL tasks to execute */
+
+	/*
+	 * Only applicable when any of the tasks cannot be executed in a
+	 * transaction block.
+	 *
+	 * Controls whether to emit a warning within the utility hook in case of a
+	 * failure.
+	 */
+	bool warnForPartialFailure;
 } DDLJob;
 
 extern ProcessUtility_hook_type PrevProcessUtility;
 
-extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
+extern void citus_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 								 bool readOnlyTree,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,
@@ -93,6 +103,8 @@ extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
+extern List * NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
+											  bool warnForPartialFailure);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);

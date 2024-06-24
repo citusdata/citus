@@ -14,6 +14,8 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 SET citus.next_shard_id TO 100800;
+-- Needed because of issue #7306
+SET citus.force_max_query_parallelization TO true;
 -- always try the 1st replica before the 2nd replica.
 SET citus.task_assignment_policy TO 'first-replica';
 --
@@ -86,7 +88,7 @@ CREATE TABLE distributed_result_info AS
   SELECT resultId, nodeport, rowcount, targetShardId, targetShardIndex
   FROM partition_task_list_results('test', $$ SELECT * FROM source_table $$, 'target_table')
           NATURAL JOIN pg_dist_node;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT * FROM distributed_result_info ORDER BY resultId;
        resultid        | nodeport | rowcount | targetshardid | targetshardindex
 ---------------------------------------------------------------------

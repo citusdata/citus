@@ -11,16 +11,18 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "postgres.h"
+
 #include "miscadmin.h"
+
 #include "utils/guc.h"
 #include "utils/rel.h"
 
 #include "citus_version.h"
+
 #include "columnar/columnar.h"
 #include "columnar/columnar_tableam.h"
 

@@ -1,20 +1,20 @@
 #include "postgres.h"
 
-#include "pg_version_compat.h"
+#include "fmgr.h"
 
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
-
 #include "utils/array.h"
+#include "utils/builtins.h"
 #include "utils/json.h"
+#include "utils/lsyscache.h"
+
+#include "pg_version_compat.h"
+
 #include "distributed/jsonbutils.h"
 #include "distributed/metadata_cache.h"
-
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "fmgr.h"
 
 
 /*

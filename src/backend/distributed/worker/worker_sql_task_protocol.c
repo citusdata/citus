@@ -9,20 +9,23 @@
  *-------------------------------------------------------------------------
  */
 
+/* necessary to get S_IRUSR, S_IWUSR definitions on illumos */
+#include <sys/stat.h>
+
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "pgstat.h"
+
+#include "utils/builtins.h"
+#include "utils/memutils.h"
 
 #include "distributed/commands/multi_copy.h"
 #include "distributed/multi_executor.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "utils/builtins.h"
-#include "utils/memutils.h"
 
-/* necessary to get S_IRUSR, S_IWUSR definitions on illumos */
-#include <sys/stat.h>
 
 #define COPY_BUFFER_SIZE (4 * 1024 * 1024)
 
@@ -123,7 +126,6 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	const char *nullPrintCharacter = "\\N";
 
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-	const int fileMode = (S_IRUSR | S_IWUSR);
 
 	/* use the memory context that was in place when the DestReceiver was created */
 	MemoryContext oldContext = MemoryContextSwitchTo(taskFileDest->memoryContext);
@@ -145,8 +147,7 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	taskFileDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(
 														   taskFileDest->filePath,
-														   fileFlags,
-														   fileMode));
+														   fileFlags));
 
 	if (copyOutState->binary)
 	{

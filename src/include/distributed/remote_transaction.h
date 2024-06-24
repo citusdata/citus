@@ -12,8 +12,9 @@
 
 
 #include "libpq-fe.h"
-#include "nodes/pg_list.h"
+
 #include "lib/ilist.h"
+#include "nodes/pg_list.h"
 
 
 /* forward declare, to avoid recursive includes */
@@ -142,5 +143,15 @@ extern void CheckRemoteTransactionsHealth(void);
 extern void CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId);
 extern void CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId);
 extern void CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId);
+
+extern void RunCitusMainDBQuery(char *query);
+extern void CleanCitusMainDBConnection(void);
+
+extern bool IsMainDBCommand;
+extern bool IsMainDB;
+extern char *SuperuserRole;
+extern char *MainDb;
+extern struct MultiConnection *MainDBConnection;
+extern bool IsMainDBCommandInXact;
 
 #endif /* REMOTE_TRANSACTION_H */

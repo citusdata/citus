@@ -15,10 +15,11 @@
 
 #include "catalog/pg_sequence.h"
 #include "commands/sequence.h"
-#include "distributed/coordinator_protocol.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+
+#include "distributed/coordinator_protocol.h"
 
 /* Function declarations for version independent Citus ruleutils wrapper functions */
 extern char * pg_get_extensiondef_string(Oid tableRelationId);

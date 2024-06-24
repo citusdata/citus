@@ -5,34 +5,49 @@
  * Copyright (c) Citus Data, Inc.
  */
 #include "postgres.h"
-#include "miscadmin.h"
+
 #include "funcapi.h"
-#include "utils/plancache.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup.h"
 #include "access/htup_details.h"
 #include "access/skey.h"
-#include "access/skey.h"
 #include "access/tupmacs.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "commands/sequence.h"
+#include "executor/spi.h"
+#include "lib/stringinfo.h"
+#include "postmaster/postmaster.h"
+#include "storage/bufmgr.h"
+#include "storage/fd.h"
+#include "storage/lmgr.h"
+#include "storage/lock.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/plancache.h"
+#include "utils/rel.h"
+#include "utils/relcache.h"
+
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
-#include "distributed/maintenanced.h"
 #include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_utility.h"
+#include "distributed/maintenanced.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_node_metadata.h"
@@ -40,26 +55,12 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
-#include "distributed/multi_partitioning_utils.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/string_utils.h"
-#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
-#include "executor/spi.h"
-#include "lib/stringinfo.h"
-#include "postmaster/postmaster.h"
-#include "storage/bufmgr.h"
-#include "storage/lmgr.h"
-#include "storage/lock.h"
-#include "storage/fd.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/rel.h"
-#include "utils/relcache.h"
 
 #define INVALID_GROUP_ID -1
 
@@ -506,7 +507,13 @@ citus_disable_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	bool synchronousDisableNode = PG_GETARG_BOOL(2);
+
+	bool synchronousDisableNode = 1;
+	Assert(PG_NARGS() == 2 || PG_NARGS() == 3);
+	if (PG_NARGS() == 3)
+	{
+		synchronousDisableNode = PG_GETARG_BOOL(2);
+	}
 
 	char *nodeName = text_to_cstring(nodeNameText);
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
@@ -1691,7 +1698,7 @@ EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid)
 	if (!parentHasExclusiveLock)
 	{
 		ereport(ERROR, (errmsg("lock is not held by the caller. Unexpected caller "
-							   "for citus_internal_mark_node_not_synced")));
+							   "for citus_internal.mark_node_not_synced")));
 	}
 }
 
@@ -1750,6 +1757,10 @@ citus_internal_mark_node_not_synced(PG_FUNCTION_ARGS)
 /*
  * FindWorkerNode searches over the worker nodes and returns the workerNode
  * if it already exists. Else, the function returns NULL.
+ *
+ * NOTE: A special case that this handles is when nodeName and nodePort are set
+ * to LocalHostName and PostPortNumber. In that case we return the primary node
+ * for the local group.
  */
 WorkerNode *
 FindWorkerNode(const char *nodeName, int32 nodePort)
@@ -1770,6 +1781,11 @@ FindWorkerNode(const char *nodeName, int32 nodePort)
 		WorkerNode *workerNode = (WorkerNode *) palloc(sizeof(WorkerNode));
 		*workerNode = *cachedWorkerNode;
 		return workerNode;
+	}
+
+	if (strcmp(LocalHostName, nodeName) == 0 && nodePort == PostPortNumber)
+	{
+		return PrimaryNodeForGroup(GetLocalGroupId(), NULL);
 	}
 
 	return NULL;
@@ -2743,6 +2759,25 @@ EnsureCoordinator(void)
 
 
 /*
+ * EnsurePropagationToCoordinator checks whether the coordinator is added to the
+ * metadata if we're not on the coordinator.
+ *
+ * Given that metadata syncing skips syncing metadata to the coordinator, we need
+ * too make sure that the coordinator is added to the metadata before propagating
+ * a command from a worker. For this reason, today we use this only for the commands
+ * that we support propagating from workers.
+ */
+void
+EnsurePropagationToCoordinator(void)
+{
+	if (!IsCoordinator())
+	{
+		EnsureCoordinatorIsInMetadata();
+	}
+}
+
+
+/*
  * EnsureCoordinatorIsInMetadata checks whether the coordinator is added to the
  * metadata, which is required for many operations.
  */
@@ -2751,11 +2786,23 @@ EnsureCoordinatorIsInMetadata(void)
 {
 	bool isCoordinatorInMetadata = false;
 	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &isCoordinatorInMetadata);
-	if (!isCoordinatorInMetadata)
+	if (isCoordinatorInMetadata)
+	{
+		return;
+	}
+
+	/* be more descriptive when we're not on coordinator */
+	if (IsCoordinator())
 	{
 		ereport(ERROR, (errmsg("coordinator is not added to the metadata"),
 						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
 								"to configure the coordinator hostname")));
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("coordinator is not added to the metadata"),
+						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
+								"on coordinator to configure the coordinator hostname")));
 	}
 }
 

@@ -11,12 +11,13 @@
 #include "postgres.h"
 
 #include "common/hashfn.h"
+#include "nodes/primnodes.h"
+
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/utils/distribution_column_map.h"
-#include "nodes/primnodes.h"
 
 
 /*

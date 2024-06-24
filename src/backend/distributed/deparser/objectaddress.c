@@ -12,11 +12,12 @@
 
 #include "postgres.h"
 
-#include "commands/extension.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_extension_d.h"
+#include "commands/extension.h"
+
+#include "distributed/commands.h"
+#include "distributed/deparser.h"
 
 
 /*

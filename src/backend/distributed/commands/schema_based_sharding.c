@@ -7,27 +7,29 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "access/genam.h"
 #include "catalog/catalog.h"
 #include "catalog/pg_namespace_d.h"
 #include "commands/extension.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_shard_visibility.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
 
 
 /* return value of CreateCitusMoveSchemaParams() */

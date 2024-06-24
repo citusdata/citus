@@ -12,30 +12,47 @@
  */
 
 
-#include "postgres.h"
-#include "libpq-fe.h"
-
 #include <math.h>
 
-#include "distributed/pg_version_constants.h"
+#include "postgres.h"
 
-#include "access/htup_details.h"
+#include "funcapi.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
+
 #include "access/genam.h"
-#include "catalog/pg_type.h"
+#include "access/htup_details.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/sequence.h"
+#include "common/hashfn.h"
+#include "postmaster/postmaster.h"
+#include "storage/lmgr.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/guc_tables.h"
+#include "utils/json.h"
+#include "utils/lsyscache.h"
+#include "utils/memutils.h"
+#include "utils/pg_lsn.h"
+#include "utils/syscache.h"
+#include "utils/varlena.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/argutils.h"
 #include "distributed/background_jobs.h"
-#include "distributed/citus_safe_lib.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/enterprise.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_logical_replication.h"
@@ -45,27 +62,12 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
-#include "distributed/shard_rebalancer.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/tuplestore.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_protocol.h"
-#include "funcapi.h"
-#include "miscadmin.h"
-#include "postmaster/postmaster.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/json.h"
-#include "utils/lsyscache.h"
-#include "utils/memutils.h"
-#include "utils/pg_lsn.h"
-#include "utils/syscache.h"
-#include "common/hashfn.h"
-#include "utils/varlena.h"
-#include "utils/guc_tables.h"
-#include "distributed/commands/utility_hook.h"
 
 /* RebalanceOptions are the options used to control the rebalance algorithm */
 typedef struct RebalanceOptions
@@ -317,7 +319,7 @@ PG_FUNCTION_INFO_V1(citus_rebalance_start);
 PG_FUNCTION_INFO_V1(citus_rebalance_stop);
 PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 
-bool RunningUnderIsolationTest = false;
+bool RunningUnderCitusTestSuite = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
 int RebalancerByDiskSizeBaseCost = 100 * 1024 * 1024;
 bool PropagateSessionSettingsForLoopbackConnection = false;
@@ -382,6 +384,7 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 				Assert(shardCost->cost <= prevShardCost->cost);
 			}
 			totalCost += shardCost->cost;
+			prevShardCost = shardCost;
 		}
 
 		/* Check that utilization field is up to date. */

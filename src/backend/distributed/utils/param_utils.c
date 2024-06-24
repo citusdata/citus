@@ -9,12 +9,13 @@
 
 #include "postgres.h"
 
-#include <nodes/bitmapset.h>
-#include <nodes/nodeFuncs.h>
-#include <nodes/parsenodes.h>
-#include <nodes/params.h>
-#include <nodes/primnodes.h>
-#include <nodes/nodes.h>
+#include "nodes/bitmapset.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/nodes.h"
+#include "nodes/params.h"
+#include "nodes/parsenodes.h"
+#include "nodes/primnodes.h"
+
 #include "distributed/param_utils.h"
 
 /*

@@ -127,7 +127,7 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 (1 row)
 
 SELECT master_drain_node('localhost', :master_port);
-ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ERROR:  connection to the remote node postgres@foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
 CALL citus_cleanup_orphaned_resources();
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
@@ -197,7 +197,7 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 (1 row)
 
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
-ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ERROR:  connection to the remote node postgres@foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -328,8 +328,8 @@ RESET citus.shard_replication_factor;
 -- test some more error handling. We create them later there.
 SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
 ERROR:  role "testrole" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
@@ -681,7 +681,7 @@ FROM (
          FROM pg_dist_shard
          WHERE logicalrelid = 'rebalance_test_table'::regclass
      ) T;
-ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ERROR:  connection to the remote node postgres@foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
 CALL citus_cleanup_orphaned_resources();
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
@@ -731,8 +731,8 @@ ERROR:  target node localhost:xxxxx is not responsive
 \c - - - :worker_1_port
 SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
@@ -745,8 +745,8 @@ ERROR:  source node localhost:xxxxx is not responsive
 \c - - - :worker_2_port
 SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
@@ -2184,6 +2184,27 @@ SELECT citus_add_rebalance_strategy(
         0.1
     );
 ERROR:  default_threshold cannot be smaller than minimum_threshold
+SELECT citus_add_rebalance_strategy(
+        'test_improvement_threshold',
+        'citus_shard_cost_1',
+        'capacity_high_worker_2',
+        'citus_shard_allowed_on_node_true',
+        0.2,
+        0.1,
+        0.3
+    );
+ citus_add_rebalance_strategy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM pg_dist_rebalance_strategy WHERE name='test_improvement_threshold';
+            name            | default_strategy | shard_cost_function | node_capacity_function |  shard_allowed_on_node_function  | default_threshold | minimum_threshold | improvement_threshold
+---------------------------------------------------------------------
+ test_improvement_threshold | f                | citus_shard_cost_1  | capacity_high_worker_2 | citus_shard_allowed_on_node_true |               0.2 |               0.1 |                   0.3
+(1 row)
+
+DELETE FROM pg_catalog.pg_dist_rebalance_strategy WHERE name='test_improvement_threshold';
 -- Make it a data node again
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
  master_set_node_property
@@ -2374,6 +2395,74 @@ SELECT count(*) FROM pg_dist_partition;
      0
 (1 row)
 
+-- verify a system with a new node won't copy distributed table shards without reference tables
+SELECT 1 from master_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE r1 (a int PRIMARY KEY, b int);
+SELECT create_reference_table('r1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE d1 (a int PRIMARY KEY, b int);
+SELECT create_distributed_table('d1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER SEQUENCE pg_dist_groupid_seq RESTART WITH 15;
+SELECT 1 from master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- count the number of placements for the reference table to verify it is not available on
+-- all nodes
+SELECT count(*)
+FROM pg_dist_shard
+JOIN pg_dist_shard_placement USING (shardid)
+WHERE logicalrelid = 'r1'::regclass;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- #7426 We can't move shards to the fresh node before we copy reference tables there.
+-- rebalance_table_shards() will do the copy, but the low-level
+-- citus_move_shard_placement() should raise an error
+SELECT citus_move_shard_placement(pg_dist_shard.shardid, nodename, nodeport, 'localhost', :worker_2_port)
+    FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+    WHERE logicalrelid = 'd1'::regclass AND nodename = 'localhost' AND nodeport = :worker_1_port LIMIT 1;
+ERROR:  there are missing reference tables on some nodes
+SELECT replicate_reference_tables();
+ replicate_reference_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+-- After replication, the move should succeed.
+SELECT citus_move_shard_placement(pg_dist_shard.shardid, nodename, nodeport, 'localhost', :worker_2_port)
+    FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+    WHERE logicalrelid = 'd1'::regclass AND nodename = 'localhost' AND nodeport = :worker_1_port LIMIT 1;
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE d1, r1;
 -- verify a system having only reference tables will copy the reference tables when
 -- executing the rebalancer
 SELECT 1 from master_remove_node('localhost', :worker_2_port);

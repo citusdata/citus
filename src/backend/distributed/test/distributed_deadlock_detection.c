@@ -10,10 +10,15 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "miscadmin.h"
 
 #include "access/hash.h"
+#include "nodes/pg_list.h"
+#include "utils/hsearch.h"
+#include "utils/timestamp.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/hash_helpers.h"
@@ -22,9 +27,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/tuplestore.h"
-#include "nodes/pg_list.h"
-#include "utils/hsearch.h"
-#include "utils/timestamp.h"
 
 
 PG_FUNCTION_INFO_V1(get_adjacency_list_wait_graph);

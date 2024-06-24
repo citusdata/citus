@@ -14,38 +14,40 @@
  */
 
 #include "postgres.h"
+
 #include "c.h"
 #include "miscadmin.h"
 
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "commands/tablecmds.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/commands.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/relay_utility.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/remote_commands.h"
-#include "distributed/resource_lock.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/version_compat.h"
-#include "distributed/local_executor.h"
-#include "distributed/worker_shard_visibility.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/varlena.h"
+
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/relay_utility.h"
+#include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
+#include "distributed/worker_transaction.h"
 
 #define LOCK_RELATION_IF_EXISTS \
 	"SELECT pg_catalog.lock_relation_if_exists(%s, %s);"
@@ -705,13 +707,27 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 	}
 
 	List *replicatedShardList = NIL;
-	if (AnyTableReplicated(shardIntervalList, &replicatedShardList))
-	{
-		if (ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
-		{
-			LockShardListResourcesOnFirstWorker(lockMode, replicatedShardList);
-		}
+	bool anyTableReplicated = AnyTableReplicated(shardIntervalList, &replicatedShardList);
 
+	/*
+	 * Acquire locks on the modified table.
+	 * If the table is replicated, the locks are first acquired on the first worker node then locally.
+	 * But if we're already on the first worker, acquiring on the first worker node and locally are the same operation.
+	 * So we only acquire locally in that case.
+	 */
+	if (anyTableReplicated && ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
+	{
+		LockShardListResourcesOnFirstWorker(lockMode, replicatedShardList);
+	}
+	LockShardListResources(shardIntervalList, lockMode);
+
+	/*
+	 * Next, acquire locks on the reference tables that are referenced by a foreign key if there are any.
+	 * Note that LockReferencedReferenceShardResources() first acquires locks on the first worker,
+	 * then locally.
+	 */
+	if (anyTableReplicated)
+	{
 		ShardInterval *firstShardInterval =
 			(ShardInterval *) linitial(replicatedShardList);
 		if (ReferenceTableShardId(firstShardInterval->shardId))
@@ -726,8 +742,6 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 			LockReferencedReferenceShardResources(firstShardInterval->shardId, lockMode);
 		}
 	}
-
-	LockShardListResources(shardIntervalList, lockMode);
 }
 
 

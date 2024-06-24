@@ -19,3 +19,4 @@ ci/disallow_long_changelog_entries.sh
 ci/normalize_expected.sh
 ci/fix_gitignore.sh
 ci/print_stack_trace.sh
+ci/sort_and_group_includes.sh

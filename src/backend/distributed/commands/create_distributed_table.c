@@ -9,10 +9,8 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
 
-#include "distributed/pg_version_constants.h"
-#include "distributed/commands/utility_hook.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/hash.h"
@@ -24,6 +22,7 @@
 #include "catalog/dependency.h"
 #include "catalog/index.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_attrdef.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
@@ -37,42 +36,6 @@
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
-#include "distributed/commands/multi_copy.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/distributed_execution_locks.h"
-#include "distributed/distribution_column.h"
-#include "distributed/listutils.h"
-#include "distributed/local_executor.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_logical_planner.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/pg_dist_colocation.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/remote_commands.h"
-#include "distributed/replicate_none_dist_table_shard.h"
-#include "distributed/resource_lock.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/shard_rebalancer.h"
-#include "distributed/shard_split.h"
-#include "distributed/shard_transfer.h"
-#include "distributed/shared_library_init.h"
-#include "distributed/shard_rebalancer.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/worker_shard_visibility.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/utils/distribution_column_map.h"
-#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
@@ -88,12 +51,52 @@
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
-#include "utils/inval.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/multi_copy.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparser.h"
+#include "distributed/distributed_execution_locks.h"
+#include "distributed/distribution_column.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_logical_planner.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/pg_dist_colocation.h"
+#include "distributed/pg_dist_partition.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/remote_commands.h"
+#include "distributed/replicate_none_dist_table_shard.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
+#include "distributed/shard_split.h"
+#include "distributed/shard_transfer.h"
+#include "distributed/shared_library_init.h"
+#include "distributed/utils/distribution_column_map.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
+#include "distributed/worker_transaction.h"
 
 
 /* common params that apply to all Citus table types */
@@ -1322,10 +1325,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	{
 		List *partitionList = PartitionList(relationId);
 		Oid partitionRelationId = InvalidOid;
-		Oid namespaceId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(namespaceId);
-		char *relationName = get_rel_name(relationId);
-		char *parentRelationName = quote_qualified_identifier(schemaName, relationName);
+		char *parentRelationName = generate_qualified_relation_name(relationId);
 
 		/*
 		 * when there are many partitions, each call to CreateDistributedTable
@@ -1698,52 +1698,39 @@ PropagatePrerequisiteObjectsForDistributedTable(Oid relationId)
 void
 EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId)
 {
-	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
-	citusTableIdList = list_append_unique_oid(citusTableIdList, ownerRelationId);
+	Oid attrDefOid;
+	List *attrDefOids = GetAttrDefsFromSequence(seqOid);
 
-	Oid citusTableId = InvalidOid;
-	foreach_oid(citusTableId, citusTableIdList)
+	foreach_oid(attrDefOid, attrDefOids)
 	{
-		List *seqInfoList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0, DEPENDENCY_AUTO);
+		ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
 
-		SequenceInfo *seqInfo = NULL;
-		foreach_ptr(seqInfo, seqInfoList)
+		/*
+		 * If another distributed table is using the same sequence
+		 * in one of its column defaults, make sure the types of the
+		 * columns match.
+		 *
+		 * We skip non-distributed tables, but we need to check the current
+		 * table as it might reference the same sequence multiple times.
+		 */
+		if (columnAddress.objectId != ownerRelationId &&
+			!IsCitusTable(columnAddress.objectId))
 		{
-			AttrNumber currentAttnum = seqInfo->attributeNumber;
-			Oid currentSeqOid = seqInfo->sequenceOid;
-
-			if (!seqInfo->isNextValDefault)
-			{
-				/*
-				 * If a sequence is not on the nextval, we don't need any check.
-				 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
-				 */
-				continue;
-			}
-
-			/*
-			 * If another distributed table is using the same sequence
-			 * in one of its column defaults, make sure the types of the
-			 * columns match
-			 */
-			if (currentSeqOid == seqOid)
-			{
-				Oid currentAttributeTypId = GetAttributeTypeOid(citusTableId,
-																currentAttnum);
-				if (attributeTypeId != currentAttributeTypId)
-				{
-					char *sequenceName = generate_qualified_relation_name(
-						seqOid);
-					char *citusTableName =
-						generate_qualified_relation_name(citusTableId);
-					ereport(ERROR, (errmsg(
-										"The sequence %s is already used for a different"
-										" type in column %d of the table %s",
-										sequenceName, currentAttnum,
-										citusTableName)));
-				}
-			}
+			continue;
+		}
+		Oid currentAttributeTypId = GetAttributeTypeOid(columnAddress.objectId,
+														columnAddress.objectSubId);
+		if (attributeTypeId != currentAttributeTypId)
+		{
+			char *sequenceName = generate_qualified_relation_name(
+				seqOid);
+			char *citusTableName =
+				generate_qualified_relation_name(columnAddress.objectId);
+			ereport(ERROR, (errmsg(
+								"The sequence %s is already used for a different"
+								" type in column %d of the table %s",
+								sequenceName, columnAddress.objectSubId,
+								citusTableName)));
 		}
 	}
 }

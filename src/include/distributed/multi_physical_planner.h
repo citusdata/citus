@@ -16,21 +16,22 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
-
 #include "c.h"
 
 #include "datatype/timestamp.h"
-#include "distributed/citus_nodes.h"
-#include "distributed/errormessage.h"
-#include "distributed/log_utils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/worker_manager.h"
-#include "distributed/multi_logical_planner.h"
-#include "distributed/distributed_planner.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/array.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/citus_nodes.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_logical_planner.h"
+#include "distributed/worker_manager.h"
 
 
 /* Definitions local to the physical planner */
@@ -237,8 +238,8 @@ typedef struct Task
 	TaskQuery taskQuery;
 
 	/*
-	 * A task can have multiple queries, in which case queryCount will be > 1. If
-	 * a task has more one query, then taskQuery->queryType == TASK_QUERY_TEXT_LIST.
+	 * A task can have multiple queries, in which case queryCount will be > 1, and
+	 * taskQuery->queryType == TASK_QUERY_TEXT_LIST.
 	 */
 	int queryCount;
 
@@ -289,7 +290,7 @@ typedef struct Task
 
 	/*
 	 * When we evaluate functions and parameters in the query string then
-	 * we should no longer send the list of parameters long with the
+	 * we should no longer send the list of parameters along with the
 	 * query.
 	 */
 	bool parametersInQueryStringResolved;
@@ -329,7 +330,7 @@ typedef struct Task
 	/*
 	 * Vacuum, create/drop/reindex concurrently cannot be executed in a transaction.
 	 */
-	bool cannotBeExecutedInTransction;
+	bool cannotBeExecutedInTransaction;
 
 	Const *partitionKeyValue;
 	int colocationId;

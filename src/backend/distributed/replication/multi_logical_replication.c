@@ -10,61 +10,61 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "miscadmin.h"
-#include "fmgr.h"
-#include "pgstat.h"
-#include "libpq-fe.h"
 
-#include "distributed/pg_version_constants.h"
+#include "fmgr.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
+#include "pgstat.h"
 
 #include "access/genam.h"
-
-#include "postmaster/interrupt.h"
-
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
-#include "commands/dbcommands.h"
-#include "common/hashfn.h"
-#include "catalog/pg_subscription_rel.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
-#include "distributed/adaptive_executor.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/connection_management.h"
-#include "distributed/hash_helpers.h"
-#include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_logical_replication.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/priority.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/remote_commands.h"
-#include "distributed/resource_lock.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/shard_rebalancer.h"
-#include "distributed/shard_transfer.h"
-#include "distributed/version_compat.h"
+#include "catalog/pg_subscription_rel.h"
+#include "commands/dbcommands.h"
+#include "common/hashfn.h"
 #include "nodes/bitmapset.h"
 #include "parser/scansup.h"
+#include "postmaster/interrupt.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"
 #include "storage/lock.h"
-#include "utils/guc.h"
 #include "utils/builtins.h"
-#include "utils/fmgrprotos.h"
 #include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/formatting.h"
+#include "utils/guc.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/pg_lsn.h"
 #include "utils/rel.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/adaptive_executor.h"
+#include "distributed/citus_safe_lib.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_logical_replication.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/priority.h"
+#include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
+#include "distributed/shard_transfer.h"
+#include "distributed/version_compat.h"
 
 #define CURRENT_LOG_POSITION_COMMAND "SELECT pg_current_wal_lsn()"
 
@@ -1143,7 +1143,7 @@ ConflictWithIsolationTestingBeforeCopy(void)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	if (RunningUnderIsolationTest)
+	if (RunningUnderCitusTestSuite)
 	{
 		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
 							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY,
@@ -1177,7 +1177,7 @@ ConflictWithIsolationTestingAfterCopy(void)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	if (RunningUnderIsolationTest)
+	if (RunningUnderCitusTestSuite)
 	{
 		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
 							 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
@@ -1335,10 +1335,10 @@ CreatePublications(MultiConnection *connection,
 
 		WorkerNode *worker = FindWorkerNode(connection->hostname,
 											connection->port);
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_PUBLICATION,
-											entry->name,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_PUBLICATION,
+											  entry->name,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		ExecuteCriticalRemoteCommand(connection, DISABLE_DDL_PROPAGATION);
 		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
@@ -1435,10 +1435,10 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 
 		WorkerNode *worker = FindWorkerNode(sourceConnection->hostname,
 											sourceConnection->port);
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
-											replicationSlot->name,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
+											  replicationSlot->name,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		if (!firstReplicationSlot)
 		{
@@ -1506,10 +1506,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					quote_identifier(GetUserNameFromId(ownerId, false))
 					)));
 
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
-											target->subscriptionOwnerName,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_USER,
+											  target->subscriptionOwnerName,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		StringInfo conninfo = makeStringInfo();
 		appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
@@ -1567,10 +1567,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		pfree(createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand);
 
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SUBSCRIPTION,
-											target->subscriptionName,
-											worker->groupId,
-											CLEANUP_ALWAYS);
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SUBSCRIPTION,
+											  target->subscriptionName,
+											  worker->groupId,
+											  CLEANUP_ALWAYS);
 
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",

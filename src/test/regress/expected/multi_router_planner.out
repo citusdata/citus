@@ -436,7 +436,7 @@ WITH RECURSIVE hierarchy as MATERIALIZED (
 				h.company_id = ce.company_id))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- logically wrong query, query involves different shards
 -- from the same table
 WITH RECURSIVE hierarchy as MATERIALIZED (
@@ -451,7 +451,7 @@ WITH RECURSIVE hierarchy as MATERIALIZED (
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- Test router modifying CTEs
 WITH new_article AS MATERIALIZED(
     INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9) RETURNING *
@@ -2703,10 +2703,10 @@ SET search_path TO multi_router_planner;
 -- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
 INSERT INTO failure_test VALUES (1, 1);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
+ERROR:  connection to the remote node router_user@localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 ROLLBACK;
 INSERT INTO failure_test VALUES (2, 1);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
+ERROR:  connection to the remote node router_user@localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
 		SELECT shardid FROM pg_dist_shard

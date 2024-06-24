@@ -12,16 +12,16 @@
 
 #include "access/transam.h"
 #include "access/xact.h"
+#include "mb/pg_wchar.h"
+#include "postmaster/postmaster.h"
+#include "utils/builtins.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_manager.h"
-
-#include "postmaster/postmaster.h"
-#include "mb/pg_wchar.h"
-#include "utils/builtins.h"
 
 /* stores the string representation of our node connection GUC */
 #ifdef USE_SSL
@@ -123,6 +123,10 @@ AddConnParam(const char *keyword, const char *value)
 						errmsg("ConnParams arrays bound check failed")));
 	}
 
+	/*
+	 * Don't use pstrdup here to avoid being tied to a memory context, we free
+	 * these later using ResetConnParams
+	 */
 	ConnParams.keywords[ConnParams.size] = strdup(keyword);
 	ConnParams.values[ConnParams.size] = strdup(value);
 	ConnParams.size++;
@@ -267,9 +271,24 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	 * We allocate everything in the provided context so as to facilitate using
 	 * pfree on all runtime parameters when connections using these entries are
 	 * invalidated during config reloads.
+	 *
+	 * Also, when "host" is already provided in global parameters, we use hostname
+	 * from the key as "hostaddr" instead of "host" to avoid host name lookup. In
+	 * that case, the value for "host" becomes useful only if the authentication
+	 * method requires it.
 	 */
+	bool gotHostParamFromGlobalParams = false;
+	for (Size paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
+	{
+		if (strcmp(ConnParams.keywords[paramIndex], "host") == 0)
+		{
+			gotHostParamFromGlobalParams = true;
+			break;
+		}
+	}
+
 	const char *runtimeKeywords[] = {
-		"host",
+		gotHostParamFromGlobalParams ? "hostaddr" : "host",
 		"port",
 		"dbname",
 		"user",
@@ -425,11 +444,13 @@ GetConnParam(const char *keyword)
 
 /*
  * GetEffectiveConnKey checks whether there is any pooler configuration for the
- * provided key (host/port combination). The one case where this logic is not
- * applied is for loopback connections originating within the task tracker. If
- * a corresponding row is found in the poolinfo table, a modified (effective)
- * key is returned with the node, port, and dbname overridden, as applicable,
- * otherwise, the original key is returned unmodified.
+ * provided key (host/port combination). If a corresponding row is found in the
+ * poolinfo table, a modified (effective) key is returned with the node, port,
+ * and dbname overridden, as applicable, otherwise, the original key is returned
+ * unmodified.
+ *
+ * In the case of Citus non-main databases we just return the key, since we
+ * would not have access to tables with worker information.
  */
 ConnectionHashKey *
 GetEffectiveConnKey(ConnectionHashKey *key)
@@ -439,12 +460,22 @@ GetEffectiveConnKey(ConnectionHashKey *key)
 	if (!IsTransactionState())
 	{
 		/* we're in the task tracker, so should only see loopback */
-		Assert(strncmp(LOCAL_HOST_NAME, key->hostname, MAX_NODE_LENGTH) == 0 &&
+		Assert(strncmp(LocalHostName, key->hostname, MAX_NODE_LENGTH) == 0 &&
 			   PostPortNumber == key->port);
 		return key;
 	}
 
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * This happens when we connect to main database over localhost
+		 * from some non Citus database.
+		 */
+		return key;
+	}
+
 	WorkerNode *worker = FindWorkerNode(key->hostname, key->port);
+
 	if (worker == NULL)
 	{
 		/* this can be hit when the key references an unknown node */
@@ -505,8 +536,22 @@ char *
 GetAuthinfo(char *hostname, int32 port, char *user)
 {
 	char *authinfo = NULL;
-	bool isLoopback = (strncmp(LOCAL_HOST_NAME, hostname, MAX_NODE_LENGTH) == 0 &&
+	bool isLoopback = (strncmp(LocalHostName, hostname, MAX_NODE_LENGTH) == 0 &&
 					   PostPortNumber == port);
+
+	/*
+	 * Citus will not be loaded when we run a global DDL command from a
+	 * Citus non-main database.
+	 */
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * We don't expect non-main databases to connect to a node other than
+		 * the local one.
+		 */
+		Assert(isLoopback);
+		return "";
+	}
 
 	if (IsTransactionState())
 	{

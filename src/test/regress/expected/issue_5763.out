@@ -28,8 +28,8 @@ DROP USER issue_5763_3;
 -- test non-distributed role
 SET citus.enable_create_role_propagation TO off;
 CREATE USER issue_5763_4 WITH SUPERUSER;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
+HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 \c - issue_5763_4 - :master_port
 set citus.enable_ddl_propagation = off;
 CREATE SCHEMA issue_5763_sc_4;

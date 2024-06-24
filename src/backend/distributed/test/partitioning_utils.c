@@ -10,15 +10,17 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
 #include "fmgr.h"
 
 #include "catalog/pg_type.h"
-#include "distributed/listutils.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/reference_table_utils.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/listutils.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/reference_table_utils.h"
 
 
 PG_FUNCTION_INFO_V1(generate_alter_table_detach_partition_command);

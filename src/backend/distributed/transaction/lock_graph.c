@@ -18,6 +18,11 @@
 #include "miscadmin.h"
 
 #include "access/hash.h"
+#include "storage/proc.h"
+#include "utils/builtins.h"
+#include "utils/hsearch.h"
+#include "utils/timestamp.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
@@ -26,10 +31,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
-#include "storage/proc.h"
-#include "utils/builtins.h"
-#include "utils/hsearch.h"
-#include "utils/timestamp.h"
 
 
 /*
@@ -191,7 +192,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 							 "waiting_node_id, waiting_transaction_num, waiting_transaction_stamp, "
 							 "blocking_global_pid,blocking_pid, blocking_node_id, "
 							 "blocking_transaction_num, blocking_transaction_stamp, blocking_transaction_waiting "
-							 "FROM citus_internal_local_blocked_processes()");
+							 "FROM citus_internal.local_blocked_processes()");
 		}
 
 		int querySent = SendRemoteCommand(connection, queryString->data);
@@ -225,7 +226,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		else if (!onlyDistributedTx && colCount != 11)
 		{
 			ereport(WARNING, (errmsg("unexpected number of columns from "
-									 "citus_internal_local_blocked_processes")));
+									 "citus_internal.local_blocked_processes")));
 			continue;
 		}
 
@@ -558,7 +559,7 @@ BuildLocalWaitGraph(bool onlyDistributedTx)
 	/* build list of starting procs */
 	for (int curBackend = 0; curBackend < totalProcs; curBackend++)
 	{
-		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
+		PGPROC *currentProc = GetPGProcByNumber(curBackend);
 		BackendData currentBackendData;
 
 		if (currentProc->pid == 0)

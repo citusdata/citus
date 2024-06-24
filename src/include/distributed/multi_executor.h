@@ -11,8 +11,8 @@
 #define MULTI_EXECUTOR_H
 
 #include "executor/execdesc.h"
-#include "nodes/parsenodes.h"
 #include "nodes/execnodes.h"
+#include "nodes/parsenodes.h"
 
 #include "distributed/citus_custom_scan.h"
 #include "distributed/multi_physical_planner.h"

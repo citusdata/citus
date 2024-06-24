@@ -82,6 +82,7 @@ the name of the fixture. For example:
 ```python
 def test_some_query(cluster):
     cluster.coordinator.sql("SELECT 1")
+	assert cluster.workers[0].sql_value('SELECT 2') == 2
 ```
 
 If you need a cluster of a specific size you can use the `cluster_factory`

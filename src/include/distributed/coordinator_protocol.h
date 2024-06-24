@@ -13,15 +13,17 @@
 #define COORDINATOR_PROTOCOL_H
 
 #include "postgres.h"
+
 #include "c.h"
 #include "fmgr.h"
 
-#include "distributed/connection_management.h"
-#include "distributed/shardinterval_utils.h"
 #include "nodes/pg_list.h"
-#include "distributed/metadata_utility.h"
 
 #include "columnar/columnar.h"
+
+#include "distributed/connection_management.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/shardinterval_utils.h"
 
 /*
  * In our distributed database, we need a mechanism to make remote procedure

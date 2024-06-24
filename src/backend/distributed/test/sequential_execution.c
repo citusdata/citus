@@ -11,6 +11,7 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 
 #include "distributed/multi_executor.h"

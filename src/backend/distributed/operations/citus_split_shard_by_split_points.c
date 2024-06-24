@@ -10,19 +10,21 @@
  */
 
 #include "postgres.h"
+
 #include "catalog/pg_type.h"
-#include "nodes/pg_list.h"
 #include "lib/stringinfo.h"
+#include "nodes/pg_list.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "distributed/utils/array_type.h"
+
 #include "distributed/colocation_utils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_split.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/utils/distribution_column_map.h"
 
 /* declarations for dynamic loading */

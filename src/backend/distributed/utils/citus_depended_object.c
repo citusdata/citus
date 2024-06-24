@@ -7,6 +7,7 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "catalog/namespace.h"
@@ -14,17 +15,17 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_amop.h"
 #include "catalog/pg_amproc.h"
-#include "catalog/pg_attribute.h"
 #include "catalog/pg_attrdef.h"
-#include "catalog/pg_constraint.h"
+#include "catalog/pg_attribute.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
-#include "catalog/pg_operator.h"
 #include "catalog/pg_opclass.h"
+#include "catalog/pg_operator.h"
 #include "catalog/pg_opfamily.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_rewrite.h"
@@ -35,12 +36,6 @@
 #include "catalog/pg_ts_dict.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
-#include "distributed/citus_depended_object.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/commands.h"
-#include "distributed/listutils.h"
-#include "distributed/log_utils.h"
-#include "distributed/shared_library_init.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -48,6 +43,13 @@
 #include "storage/large_object.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
+#include "distributed/citus_depended_object.h"
+#include "distributed/commands.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/shared_library_init.h"
 
 /*
  * GUC hides any objects, which depends on citus extension, from pg meta class queries,
@@ -463,8 +465,8 @@ static bool
 AnyObjectViolatesOwnership(DropStmt *dropStmt)
 {
 	bool hasOwnershipViolation = false;
-	volatile ObjectAddress objectAddress = { 0 };
-	Relation relation = NULL;
+	ObjectAddress objectAddress = { 0 };
+	volatile Relation relation = NULL;
 	ObjectType objectType = dropStmt->removeType;
 	bool missingOk = dropStmt->missing_ok;
 
@@ -478,8 +480,17 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 		Node *object = NULL;
 		foreach_ptr(object, dropStmt->objects)
 		{
+			Relation rel = NULL;
 			objectAddress = get_object_address(objectType, object,
-											   &relation, AccessShareLock, missingOk);
+											   &rel, AccessShareLock, missingOk);
+
+			/*
+			 * The object relation is qualified with volatile and its value is obtained from
+			 * get_object_address(). Unless we can qualify the corresponding parameter of
+			 * get_object_address() with volatile (this is a function defined in PostgreSQL),
+			 * we cannot get rid of this assignment.
+			 */
+			relation = rel;
 
 			if (OidIsValid(objectAddress.objectId))
 			{

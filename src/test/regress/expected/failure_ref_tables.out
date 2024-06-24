@@ -33,7 +33,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="INSERT").kill()');
 (1 row)
 
 INSERT INTO ref_table VALUES (5, 6);
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT COUNT(*) FROM ref_table WHERE key=5;
  count
 ---------------------------------------------------------------------
@@ -48,7 +48,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
 (1 row)
 
 UPDATE ref_table SET key=7 RETURNING value;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT COUNT(*) FROM ref_table WHERE key=7;
  count
 ---------------------------------------------------------------------
@@ -65,7 +65,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="UPDATE").kill()');
 BEGIN;
 DELETE FROM ref_table WHERE key=5;
 UPDATE ref_table SET key=value;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 COMMIT;
 SELECT COUNT(*) FROM ref_table WHERE key=value;
  count

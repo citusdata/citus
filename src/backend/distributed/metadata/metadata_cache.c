@@ -8,20 +8,17 @@
  */
 
 #include "postgres.h"
-#include "distributed/pg_version_constants.h"
-#include "pg_version_compat.h"
 
-#include "stdint.h"
-#include "postgres.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
+#include "stdint.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/nbtree.h"
-#include "access/xact.h"
 #include "access/sysattr.h"
+#include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
@@ -30,38 +27,10 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
-#include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/trigger.h"
-#include "distributed/backend_data.h"
-#include "distributed/citus_depended_object.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/connection_management.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/multi_executor.h"
-#include "distributed/function_utils.h"
-#include "distributed/listutils.h"
-#include "distributed/foreign_key_relationship.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata/pg_dist_object.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/pg_dist_local_group.h"
-#include "distributed/pg_dist_node_metadata.h"
-#include "distributed/pg_dist_node.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/pg_dist_shard.h"
-#include "distributed/pg_dist_placement.h"
-#include "distributed/shared_library_init.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/utils/function.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_manager.h"
-#include "distributed/worker_protocol.h"
+#include "common/hashfn.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "nodes/memnodes.h"
@@ -74,22 +43,54 @@
 #include "utils/catcache.h"
 #include "utils/datum.h"
 #include "utils/elog.h"
-#include "utils/hsearch.h"
-#include "utils/jsonb.h"
-#include "common/hashfn.h"
-#include "utils/inval.h"
 #include "utils/fmgroids.h"
+#include "utils/hsearch.h"
+#include "utils/inval.h"
+#include "utils/jsonb.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/rel.h"
-#if PG_VERSION_NUM < PG_VERSION_16
-#include "utils/relfilenodemap.h"
-#endif
 #include "utils/relmapper.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
+
+#include "citus_version.h"
+#include "pg_version_compat.h"
+#include "pg_version_constants.h"
+
+#include "distributed/backend_data.h"
+#include "distributed/citus_depended_object.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/connection_management.h"
+#include "distributed/foreign_key_relationship.h"
+#include "distributed/function_utils.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/pg_dist_local_group.h"
+#include "distributed/pg_dist_node.h"
+#include "distributed/pg_dist_node_metadata.h"
+#include "distributed/pg_dist_partition.h"
+#include "distributed/pg_dist_placement.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/remote_commands.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/shared_library_init.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/function.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
+
+#if PG_VERSION_NUM < PG_VERSION_16
+#include "utils/relfilenodemap.h"
+#endif
 
 
 /* user configuration */
@@ -380,7 +381,7 @@ EnsureModificationsCanRun(void)
 
 
 /*
- * EnsureModificationsCanRunOnRelation firsts calls into EnsureModificationsCanRun() and
+ * EnsureModificationsCanRunOnRelation first calls into EnsureModificationsCanRun() and
  * then does one more additional check. The additional check is to give a proper error
  * message if any relation that is modified is replicated, as replicated tables use
  * 2PC and 2PC cannot happen when recovery is in progress.
@@ -521,8 +522,7 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
 
 
 /*
- * HasDistributionKey returs true if given Citus table doesn't have a
- * distribution key.
+ * HasDistributionKey returns true if given Citus table has a distribution key.
  */
 bool
 HasDistributionKey(Oid relationId)
@@ -538,8 +538,8 @@ HasDistributionKey(Oid relationId)
 
 
 /*
- * HasDistributionKey returs true if given cache entry identifies a Citus
- * table that doesn't have a distribution key.
+ * HasDistributionKeyCacheEntry returns true if given cache entry identifies a
+ * Citus table that has a distribution key.
  */
 bool
 HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry)

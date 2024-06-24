@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
@@ -19,22 +20,6 @@
 #include "catalog/pg_enum.h"
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
-#include "distributed/commands/multi_copy.h"
-#include "distributed/connection_management.h"
-#include "distributed/error_codes.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/remote_commands.h"
-#include "distributed/transmit.h"
-#include "distributed/transaction_identifier.h"
-#include "distributed/tuplestore.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/utils/directory.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/primnodes.h"
@@ -44,6 +29,23 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
+
+#include "distributed/commands/multi_copy.h"
+#include "distributed/connection_management.h"
+#include "distributed/error_codes.h"
+#include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/remote_commands.h"
+#include "distributed/transaction_identifier.h"
+#include "distributed/transmit.h"
+#include "distributed/tuplestore.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/directory.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 
 
 static List *CreatedResultsDirectories = NIL;
@@ -293,7 +295,6 @@ PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
 	if (resultDest->writeLocalFile)
 	{
 		const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-		const int fileMode = (S_IRUSR | S_IWUSR);
 
 		/* make sure the directory exists */
 		CreateIntermediateResultsDirectory();
@@ -301,8 +302,7 @@ PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
 		const char *fileName = QueryResultFileName(resultId);
 
 		resultDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(fileName,
-																			 fileFlags,
-																			 fileMode));
+																			 fileFlags));
 	}
 
 	WorkerNode *workerNode = NULL;
@@ -604,7 +604,7 @@ CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
 
-	int makeOK = mkdir(resultDirectory, S_IRWXU);
+	int makeOK = MakePGDirectory(resultDirectory);
 	if (makeOK != 0)
 	{
 		if (errno == EEXIST)
@@ -974,7 +974,6 @@ FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
 
 	StringInfo copyCommand = makeStringInfo();
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-	const int fileMode = (S_IRUSR | S_IWUSR);
 
 	PGconn *pgConn = connection->pgConn;
 	int socket = PQsocket(pgConn);
@@ -996,7 +995,7 @@ FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
 
 	PQclear(result);
 
-	File fileDesc = FileOpenForTransmit(localPath, fileFlags, fileMode);
+	File fileDesc = FileOpenForTransmit(localPath, fileFlags);
 	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
 
 	while (true)

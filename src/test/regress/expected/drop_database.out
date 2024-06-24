@@ -6,14 +6,14 @@ SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 35137400;
 CREATE DATABASE citus_created;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c citus_created
 CREATE EXTENSION citus;
 CREATE DATABASE citus_not_created;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c citus_not_created
 DROP DATABASE citus_created;
 \c regression
@@ -26,14 +26,14 @@ SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 35137400;
 CREATE DATABASE citus_created;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c citus_created
 CREATE EXTENSION citus;
 CREATE DATABASE citus_not_created;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c citus_not_created
 DROP DATABASE citus_created;
 \c regression

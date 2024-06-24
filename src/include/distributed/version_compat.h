@@ -13,20 +13,20 @@
 
 #include "postgres.h"
 
-#include "access/sdir.h"
 #include "access/heapam.h"
-#include "commands/explain.h"
+#include "access/sdir.h"
 #include "catalog/namespace.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/citus_safe_lib.h"
+#include "commands/explain.h"
 #include "executor/tuptable.h"
 #include "nodes/parsenodes.h"
-#include "parser/parse_func.h"
 #include "optimizer/optimizer.h"
-
+#include "parser/parse_func.h"
 #include "tcop/tcopprot.h"
 
 #include "pg_version_compat.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/citus_safe_lib.h"
 
 typedef struct
 {

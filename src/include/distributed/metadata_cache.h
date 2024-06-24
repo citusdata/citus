@@ -14,10 +14,12 @@
 #include "postgres.h"
 
 #include "fmgr.h"
+
+#include "utils/hsearch.h"
+
 #include "distributed/metadata_utility.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_manager.h"
-#include "utils/hsearch.h"
 
 extern bool EnableVersionChecks;
 

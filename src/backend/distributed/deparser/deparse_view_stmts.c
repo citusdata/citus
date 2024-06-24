@@ -13,14 +13,15 @@
 
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 static void AppendDropViewStmt(StringInfo buf, DropStmt *stmt);
 static void AppendViewNameList(StringInfo buf, List *objects);

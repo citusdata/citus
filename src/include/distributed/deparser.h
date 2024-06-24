@@ -15,10 +15,10 @@
 
 #include "postgres.h"
 
-#include "nodes/nodes.h"
-#include "nodes/parsenodes.h"
 #include "catalog/objectaddress.h"
 #include "lib/stringinfo.h"
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
 
 /* forward declarations for format_collate.c */
 /* Control flags for FormatCollateExtended, compatible with format_type_extended */
@@ -121,6 +121,33 @@ extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt);
 extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
 
+extern void AppendColumnNameList(StringInfo buf, List *columns);
+
+/* Common deparser utils */
+
+typedef struct DefElemOptionFormat
+{
+	char *name;
+	char *format;
+	int type;
+} DefElemOptionFormat;
+
+typedef enum OptionFormatType
+{
+	OPTION_FORMAT_STRING,
+	OPTION_FORMAT_LITERAL_CSTR,
+	OPTION_FORMAT_BOOLEAN,
+	OPTION_FORMAT_INTEGER
+} OptionFormatType;
+
+
+extern void DefElemOptionToStatement(StringInfo buf, DefElem *option,
+									 const DefElemOptionFormat *opt_formats,
+									 int opt_formats_len);
+
+/* forward declarations for deparse_comment_stmts.c */
+extern char * DeparseCommentStmt(Node *node);
+
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
@@ -209,6 +236,7 @@ extern void QualifyAlterRoleSetStmt(Node *stmt);
 extern char * DeparseCreateRoleStmt(Node *stmt);
 extern char * DeparseDropRoleStmt(Node *stmt);
 extern char * DeparseGrantRoleStmt(Node *stmt);
+extern char * DeparseReassignOwnedStmt(Node *node);
 
 /* forward declarations for deparse_owned_stmts.c */
 extern char * DeparseDropOwnedStmt(Node *node);
@@ -227,6 +255,9 @@ extern char * DeparseGrantOnDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
 extern char * DeparseAlterDatabaseSetStmt(Node *node);
+extern char * DeparseCreateDatabaseStmt(Node *node);
+extern char * DeparseDropDatabaseStmt(Node *node);
+extern char * DeparseAlterDatabaseRenameStmt(Node *node);
 
 
 /* forward declaration for deparse_publication_stmts.c */
@@ -259,6 +290,9 @@ extern void QualifyRenameTextSearchConfigurationStmt(Node *node);
 extern void QualifyRenameTextSearchDictionaryStmt(Node *node);
 extern void QualifyTextSearchConfigurationCommentStmt(Node *node);
 extern void QualifyTextSearchDictionaryCommentStmt(Node *node);
+
+/* forward declarations for deparse_seclabel_stmts.c */
+extern char * DeparseSecLabelStmt(Node *node);
 
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *node);

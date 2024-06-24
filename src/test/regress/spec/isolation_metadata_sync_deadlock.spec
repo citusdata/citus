@@ -22,6 +22,7 @@ setup
 
 teardown
 {
+  SELECT wait_until_metadata_sync();
   DROP FUNCTION trigger_metadata_sync();
   DROP TABLE deadlock_detection_test;
   DROP TABLE t2;

@@ -25,15 +25,10 @@ SELECT master_remove_node('localhost', :worker_2_port);
 CREATE ROLE create_role_with_everything SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 105 PASSWORD 'strong_password123^' VALID UNTIL '2045-05-05 00:00:00.00+00' IN ROLE create_role, create_group ROLE create_user, create_group_2 ADMIN create_role_2, create_user_2;
 CREATE ROLE create_role_with_nothing NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3 PASSWORD 'weakpassword' VALID UNTIL '2015-05-05 00:00:00.00+00';
 
--- show that creating role from worker node is only allowed when create role
--- propagation is off
+-- show that creating role from worker node is allowed
 \c - - - :worker_1_port
 CREATE ROLE role_on_worker;
-
-BEGIN;
-SET citus.enable_create_role_propagation TO off;
-CREATE ROLE role_on_worker;
-ROLLBACK;
+DROP ROLE role_on_worker;
 
 \c - - - :master_port
 
@@ -80,6 +75,8 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 
 \c - - - :master_port
 
+create role test_admin_role;
+
 -- test grants with distributed and non-distributed roles
 
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -88,6 +85,8 @@ CREATE ROLE dist_role_1 SUPERUSER;
 CREATE ROLE dist_role_2;
 CREATE ROLE dist_role_3;
 CREATE ROLE dist_role_4;
+
+
 
 SET citus.enable_create_role_propagation TO OFF;
 
@@ -98,27 +97,70 @@ CREATE ROLE non_dist_role_4;
 
 SET citus.enable_create_role_propagation TO ON;
 
+
+grant dist_role_3,dist_role_1 to test_admin_role with admin option;
+
 SET ROLE dist_role_1;
 
 GRANT non_dist_role_1 TO non_dist_role_2;
 
 SET citus.enable_create_role_propagation TO OFF;
 
+grant dist_role_1 to non_dist_role_1 with admin option;
 SET ROLE non_dist_role_1;
 
-GRANT dist_role_1 TO dist_role_2;
+GRANT dist_role_1 TO dist_role_2 granted by non_dist_role_1;
 
 RESET ROLE;
 
 SET citus.enable_create_role_propagation TO ON;
 
-GRANT dist_role_3 TO non_dist_role_3;
+
+GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
 GRANT non_dist_role_4 TO dist_role_4;
+GRANT dist_role_3 TO dist_role_4 granted by test_admin_role;
+
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
-SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+  ) q;
+  $$
+);
+
+REVOKE dist_role_3 from dist_role_4 granted by test_admin_role cascade;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
+  ) q;
+  $$
+);
+
+SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1','test_admin_role')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
+
+REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role cascade;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
+  ) q;
+  $$
+);
+
+revoke dist_role_3,dist_role_1 from test_admin_role cascade;
+drop role test_admin_role;
 
 \c - - - :worker_1_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
@@ -277,3 +319,5 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :worker_1_port
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :master_port
+
+DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;

@@ -11,8 +11,10 @@
 #define ERRORMESSAGE_H
 
 #include "c.h"
-#include "distributed/citus_nodes.h"
+
 #include "pg_version_compat.h"
+
+#include "distributed/citus_nodes.h"
 
 
 typedef struct DeferredErrorMessage

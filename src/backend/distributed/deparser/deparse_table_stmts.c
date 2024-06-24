@@ -13,20 +13,20 @@
 
 #include "catalog/heap.h"
 #include "commands/defrem.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/version_compat.h"
+#include "commands/tablecmds.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
-#include "parser/parse_type.h"
 #include "parser/parse_relation.h"
+#include "parser/parse_type.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
 
+#include "distributed/commands.h"
+#include "distributed/deparser.h"
 #include "distributed/namespace_utils.h"
-#include "commands/tablecmds.h"
+#include "distributed/version_compat.h"
 
 static void AppendAlterTableSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt);
@@ -121,7 +121,7 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
  * AppendColumnNameList converts a list of columns into comma separated string format
  * (colname_1, colname_2, .., colname_n).
  */
-static void
+void
 AppendColumnNameList(StringInfo buf, List *columns)
 {
 	appendStringInfoString(buf, " (");

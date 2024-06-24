@@ -11,10 +11,17 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
+
 #include "libpq-fe.h"
+#include "miscadmin.h"
 
 #include "access/xact.h"
+#include "executor/spi.h"
+#include "lib/stringinfo.h"
+#include "postmaster/postmaster.h"
+#include "utils/builtins.h"
+#include "utils/memutils.h"
+
 #include "distributed/connection_management.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/function_utils.h"
@@ -23,13 +30,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
-
 #include "distributed/version_compat.h"
-#include "executor/spi.h"
-#include "lib/stringinfo.h"
-#include "postmaster/postmaster.h"
-#include "utils/builtins.h"
-#include "utils/memutils.h"
 
 
 PG_FUNCTION_INFO_V1(make_external_connection_to_node);

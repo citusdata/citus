@@ -21,13 +21,14 @@
 #include "access/tupdesc.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaddress.h"
+#include "utils/acl.h"
+#include "utils/relcache.h"
+
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/relay_utility.h"
 #include "distributed/worker_manager.h"
-#include "utils/acl.h"
-#include "utils/relcache.h"
 
 
 /* total number of hash tokens (2^32) */
@@ -342,6 +343,7 @@ extern void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char *
 										   int *nodePort);
 extern bool IsDummyPlacement(ShardPlacement *taskPlacement);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
+														Oid indexId,
 														SizeQueryType sizeQueryType,
 														bool optimizePartitionCalculations);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
@@ -384,6 +386,7 @@ extern void EnsureUndistributeTenantTableSafe(Oid relationId, const char *operat
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 extern void UndistributeTables(List *relationIdList);
 
+extern void EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target);
 extern void EnsureAllObjectDependenciesExistOnAllNodes(const List *targets);
 extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
 																   ObjectAddress *

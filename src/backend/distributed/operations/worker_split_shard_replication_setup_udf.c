@@ -9,24 +9,27 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
 #include "miscadmin.h"
-#include "postmaster/postmaster.h"
+
+#include "commands/dbcommands.h"
 #include "common/hashfn.h"
-#include "distributed/distribution_column.h"
-#include "distributed/hash_helpers.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/shard_utils.h"
-#include "distributed/shardsplit_shared_memory.h"
-#include "distributed/connection_management.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/listutils.h"
-#include "distributed/remote_commands.h"
-#include "distributed/tuplestore.h"
-#include "distributed/shardsplit_logical_replication.h"
+#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "commands/dbcommands.h"
+
+#include "distributed/citus_safe_lib.h"
+#include "distributed/connection_management.h"
+#include "distributed/distribution_column.h"
+#include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
+#include "distributed/remote_commands.h"
+#include "distributed/shard_cleaner.h"
+#include "distributed/shard_utils.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/shardsplit_logical_replication.h"
+#include "distributed/shardsplit_shared_memory.h"
+#include "distributed/tuplestore.h"
 
 
 /* declarations for dynamic loading */

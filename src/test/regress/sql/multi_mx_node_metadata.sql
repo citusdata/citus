@@ -14,7 +14,7 @@ SET citus.shard_replication_factor TO 1;
 \set VERBOSITY terse
 
 -- Simulates a readonly node by setting default_transaction_read_only.
-CREATE FUNCTION mark_node_readonly(hostname TEXT, port INTEGER, isreadonly BOOLEAN)
+CREATE OR REPLACE FUNCTION mark_node_readonly(hostname TEXT, port INTEGER, isreadonly BOOLEAN)
     RETURNS TEXT
     LANGUAGE sql
     AS $$
@@ -35,7 +35,7 @@ CREATE OR REPLACE FUNCTION raise_error_in_metadata_sync()
     LANGUAGE C STRICT
     AS 'citus';
 
-CREATE PROCEDURE wait_until_process_count(appname text, target_count int) AS $$
+CREATE OR REPLACE PROCEDURE wait_until_process_count(appname text, target_count int) AS $$
 declare
    counter integer := -1;
 begin
@@ -378,7 +378,22 @@ SELECT trigger_metadata_sync();
 
 SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 
-DROP DATABASE db_to_drop;
+DO $$
+DECLARE
+    i int := 0;
+BEGIN
+  WHILE NOT (SELECT bool_and(success) from run_command_on_all_nodes('DROP DATABASE IF EXISTS db_to_drop'))
+  LOOP
+    BEGIN
+      i := i + 1;
+      IF i > 5 THEN
+          RAISE EXCEPTION 'DROP DATABASE timed out';
+      END IF;
+      PERFORM pg_sleep(1);
+    END;
+  END LOOP;
+END;
+$$;
 
 SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 

@@ -11,6 +11,10 @@
  *
  *-------------------------------------------------------------------------
  */
+#include "postgres.h"
+
+#include "common/hashfn.h"
+#include "utils/builtins.h"
 
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
@@ -20,8 +24,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/query_utils.h"
 #include "distributed/worker_manager.h"
-#include "utils/builtins.h"
-#include "common/hashfn.h"
 
 /* controlled via GUC, used mostly for testing */
 bool LogIntermediateResults = false;

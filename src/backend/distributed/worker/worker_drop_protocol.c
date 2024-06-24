@@ -19,21 +19,22 @@
 #include "catalog/dependency.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/distribution_column.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/distribution_column.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/worker_protocol.h"
 
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 PG_FUNCTION_INFO_V1(worker_drop_shell_table);
@@ -169,14 +170,10 @@ WorkerDropDistributedTable(Oid relationId)
 	 */
 	if (!IsAnyObjectAddressOwnedByExtension(list_make1(distributedTableObject), NULL))
 	{
-		char *relName = get_rel_name(relationId);
-		Oid schemaId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(schemaId);
-
 		StringInfo dropCommand = makeStringInfo();
 		appendStringInfo(dropCommand, "DROP%sTABLE %s CASCADE",
 						 IsForeignTable(relationId) ? " FOREIGN " : " ",
-						 quote_qualified_identifier(schemaName, relName));
+						 generate_qualified_relation_name(relationId));
 
 		Node *dropCommandNode = ParseTreeNode(dropCommand->data);
 

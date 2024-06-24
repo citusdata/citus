@@ -219,8 +219,8 @@ ROLLBACK;
 -- Test the UDFs that we use to convert Citus local tables to single-shard tables and
 -- reference tables.
 
-SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', 1, true);
-SELECT pg_catalog.citus_internal_delete_placement_metadata(1);
+SELECT citus_internal.update_none_dist_table_metadata(1, 't', 1, true);
+SELECT citus_internal.delete_placement_metadata(1);
 
 CREATE ROLE test_user_create_ref_dist WITH LOGIN;
 GRANT ALL ON SCHEMA create_ref_dist_from_citus_local TO test_user_create_ref_dist;
@@ -234,18 +234,18 @@ SET citus.next_placement_id TO 8510000;
 SET citus.shard_replication_factor TO 1;
 SET search_path TO create_ref_dist_from_citus_local;
 
-SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(null, 't', 1, true);
-SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, null, 1, true);
-SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', null, true);
-SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(1, 't', 1, null);
+SELECT citus_internal.update_none_dist_table_metadata(null, 't', 1, true);
+SELECT citus_internal.update_none_dist_table_metadata(1, null, 1, true);
+SELECT citus_internal.update_none_dist_table_metadata(1, 't', null, true);
+SELECT citus_internal.update_none_dist_table_metadata(1, 't', 1, null);
 
-SELECT pg_catalog.citus_internal_delete_placement_metadata(null);
+SELECT citus_internal.delete_placement_metadata(null);
 
 CREATE TABLE udf_test (col_1 int);
 SELECT citus_add_local_table_to_metadata('udf_test');
 
 BEGIN;
-    SELECT pg_catalog.citus_internal_update_none_dist_table_metadata('create_ref_dist_from_citus_local.udf_test'::regclass, 'k', 99999, true);
+    SELECT citus_internal.update_none_dist_table_metadata('create_ref_dist_from_citus_local.udf_test'::regclass, 'k', 99999, true);
 
     SELECT COUNT(*)=1 FROM pg_dist_partition
     WHERE logicalrelid = 'create_ref_dist_from_citus_local.udf_test'::regclass AND repmodel = 'k' AND colocationid = 99999 AND autoconverted = true;
@@ -253,7 +253,7 @@ BEGIN;
     SELECT placementid AS udf_test_placementid FROM pg_dist_shard_placement
     WHERE shardid = get_shard_id_for_distribution_column('create_ref_dist_from_citus_local.udf_test') \gset
 
-    SELECT pg_catalog.citus_internal_delete_placement_metadata(:udf_test_placementid);
+    SELECT citus_internal.delete_placement_metadata(:udf_test_placementid);
 
     SELECT COUNT(*)=0 FROM pg_dist_placement WHERE placementid = :udf_test_placementid;
 ROLLBACK;

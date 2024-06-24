@@ -92,7 +92,7 @@ PG_MAJOR_VERSION = get_pg_major_version()
 OLDEST_SUPPORTED_CITUS_VERSION_MATRIX = {
     14: "10.2.0",
     15: "11.1.5",
-    16: "12.1devel",
+    16: "12.1.1",
 }
 
 OLDEST_SUPPORTED_CITUS_VERSION = OLDEST_SUPPORTED_CITUS_VERSION_MATRIX[PG_MAJOR_VERSION]
@@ -294,6 +294,9 @@ def _run_pg_regress(
         output_dir,
         "--use-existing",
     ]
+    if PG_MAJOR_VERSION >= 16:
+        command.append("--expecteddir")
+        command.append(output_dir)
     if extra_tests != "":
         command.append(extra_tests)
 
@@ -431,6 +434,12 @@ next_port = PORT_LOWER_BOUND
 
 def notice_handler(diag: psycopg.errors.Diagnostic):
     print(f"{diag.severity}: {diag.message_primary}")
+    if diag.message_detail:
+        print(f"DETAIL: {diag.message_detail}")
+    if diag.message_hint:
+        print(f"HINT: {diag.message_hint}")
+    if diag.context:
+        print(f"CONTEXT: {diag.context}")
 
 
 def cleanup_test_leftovers(nodes):
@@ -452,6 +461,9 @@ def cleanup_test_leftovers(nodes):
 
     for node in nodes:
         node.cleanup_schemas()
+
+    for node in nodes:
+        node.cleanup_databases()
 
     for node in nodes:
         node.cleanup_users()
@@ -577,6 +589,14 @@ class QueryRunner(ABC):
         """
         with self.cur(**kwargs) as cur:
             cur.execute(query, params=params)
+
+    def sql_prepared(self, query, params=None, **kwargs):
+        """Run an SQL query, with prepare=True
+
+        This opens a new connection and closes it once the query is done
+        """
+        with self.cur(**kwargs) as cur:
+            cur.execute(query, params=params, prepare=True)
 
     def sql_row(self, query, params=None, allow_empty_result=False, **kwargs):
         """Run an SQL query that returns a single row and returns this row
@@ -753,6 +773,7 @@ class Postgres(QueryRunner):
         self.subscriptions = set()
         self.publications = set()
         self.replication_slots = set()
+        self.databases = set()
         self.schemas = set()
         self.users = set()
 
@@ -993,6 +1014,10 @@ class Postgres(QueryRunner):
             args = sql.SQL("")
         self.sql(sql.SQL("CREATE USER {} {}").format(sql.Identifier(name), args))
 
+    def create_database(self, name):
+        self.databases.add(name)
+        self.sql(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+
     def create_schema(self, name):
         self.schemas.add(name)
         self.sql(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name)))
@@ -1019,6 +1044,12 @@ class Postgres(QueryRunner):
     def cleanup_users(self):
         for user in self.users:
             self.sql(sql.SQL("DROP USER IF EXISTS {}").format(sql.Identifier(user)))
+
+    def cleanup_databases(self):
+        for database in self.databases:
+            self.sql(
+                sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database))
+            )
 
     def cleanup_schemas(self):
         for schema in self.schemas:

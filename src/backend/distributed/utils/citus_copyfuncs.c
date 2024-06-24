@@ -11,11 +11,11 @@
  */
 #include "postgres.h"
 
+#include "utils/datum.h"
 
 #include "distributed/citus_nodefuncs.h"
-#include "distributed/multi_server_executor.h"
 #include "distributed/listutils.h"
-#include "utils/datum.h"
+#include "distributed/multi_server_executor.h"
 
 
 /*
@@ -326,7 +326,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_STRING_FIELD(fetchedExplainAnalyzePlan);
 	COPY_SCALAR_FIELD(fetchedExplainAnalyzeExecutionDuration);
 	COPY_SCALAR_FIELD(isLocalTableModification);
-	COPY_SCALAR_FIELD(cannotBeExecutedInTransction);
+	COPY_SCALAR_FIELD(cannotBeExecutedInTransaction);
 }
 
 

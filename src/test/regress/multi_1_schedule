@@ -27,12 +27,20 @@ test: multi_cluster_management
 test: non_super_user_object_metadata
 test: propagate_foreign_servers
 test: alter_role_propagation
+test: role_command_from_any_node
 test: propagate_extension_commands
 test: escape_extension_name
 test: ref_citus_local_fkeys
 test: alter_database_owner
+test: seclabel
 test: distributed_triggers
 test: create_single_shard_table
+test: create_drop_database_propagation
+test: create_drop_database_propagation_pg15
+test: create_drop_database_propagation_pg16
+test: comment_on_database
+test: comment_on_role
+test: metadata_sync_from_non_maindb
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
 test: schema_based_sharding
@@ -50,8 +58,11 @@ test: multi_metadata_attributes
 
 test: multi_read_from_secondaries
 
-test: grant_on_database_propagation
+test: grant_on_database_propagation grant_on_database_propagation_from_non_maindb
 test: alter_database_propagation
+
+test: citus_shards
+test: reassign_owned
 
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
@@ -160,7 +171,8 @@ test: with_executors with_join with_partitioning with_transactions with_dml
 # Tests around DDL statements run on distributed tables
 # ----------
 test: multi_index_statements
-test: multi_alter_table_statements alter_table_add_column
+test: multi_alter_table_statements
+test: alter_table_add_column
 test: multi_alter_table_add_constraints
 test: multi_alter_table_add_constraints_without_name
 test: multi_alter_table_add_foreign_key_without_name
@@ -199,7 +211,8 @@ test: citus_copy_shard_placement
 # multi_utilities cannot be run in parallel with other tests because it checks
 # global locks
 test: multi_utilities
-test: foreign_key_to_reference_table validate_constraint
+test: foreign_key_to_reference_table
+test: validate_constraint
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 
 test: multi_modifying_xacts
@@ -290,12 +303,14 @@ test: multi_foreign_key_relation_graph
 # Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
 # and rerun some of the tests.
 # --------
+test: remove_coordinator_from_metadata
 test: add_coordinator
 test: replicate_reference_tables_to_coordinator
 test: citus_local_tables
 test: mixed_relkind_tests
 test: multi_row_router_insert create_distributed_table_concurrently
-test: multi_reference_table citus_local_tables_queries
+test: multi_reference_table
+test: citus_local_tables_queries
 test: citus_local_table_triggers
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution

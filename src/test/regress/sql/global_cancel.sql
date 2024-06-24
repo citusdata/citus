@@ -5,9 +5,9 @@ RESET client_min_messages;
 
 -- Kill maintenance daemon so it gets restarted and gets a gpid containing our
 -- nodeid
-SELECT pg_terminate_backend(pid)
+SELECT COUNT(pg_terminate_backend(pid)) >= 0
 FROM pg_stat_activity
-WHERE application_name = 'Citus Maintenance Daemon' \gset
+WHERE application_name = 'Citus Maintenance Daemon';
 
 -- reconnect to make sure we get a session with the gpid containing our nodeid
 \c - - - -
@@ -57,6 +57,8 @@ SELECT pg_terminate_backend(:maintenance_daemon_gpid);
 SELECT pg_cancel_backend(citus_backend_gpid());
 
 \c - postgres - :master_port
+
+DROP USER global_cancel_user;
 
 SET client_min_messages TO DEBUG;
 

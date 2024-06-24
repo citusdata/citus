@@ -8,11 +8,13 @@
  */
 
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "miscadmin.h"
 
-#include "distributed/executor_util.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/executor_util.h"
 
 
 /*

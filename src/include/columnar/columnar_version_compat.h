@@ -12,7 +12,7 @@
 #ifndef COLUMNAR_COMPAT_H
 #define COLUMNAR_COMPAT_H
 
-#include "distributed/pg_version_constants.h"
+#include "pg_version_constants.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 #define ExecARDeleteTriggers_compat(a, b, c, d, e, f) \

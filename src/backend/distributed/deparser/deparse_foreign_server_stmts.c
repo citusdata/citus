@@ -10,13 +10,14 @@
 #include "postgres.h"
 
 #include "commands/defrem.h"
+#include "lib/stringinfo.h"
+#include "nodes/nodes.h"
+#include "utils/builtins.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
-#include "lib/stringinfo.h"
-#include "nodes/nodes.h"
-#include "utils/builtins.h"
 
 static void AppendCreateForeignServerStmt(StringInfo buf, CreateForeignServerStmt *stmt);
 static void AppendAlterForeignServerStmt(StringInfo buf, AlterForeignServerStmt *stmt);

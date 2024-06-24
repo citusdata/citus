@@ -47,7 +47,7 @@ INSERT INTO pg_dist_transaction VALUES (122, 'citus_122_should_do_nothing');
 SELECT recover_prepared_transactions();
 
 -- delete the citus_122_should_do_nothing transaction
-DELETE FROM pg_dist_transaction WHERE gid = 'citus_122_should_do_nothing' RETURNING *;
+DELETE FROM pg_dist_transaction WHERE gid = 'citus_122_should_do_nothing' RETURNING groupid, gid;
 ROLLBACK PREPARED 'citus_122_should_do_nothing';
 
 SELECT count(*) FROM pg_dist_transaction;

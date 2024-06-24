@@ -396,68 +396,6 @@ DeparseAlterTextSearchDictionarySchemaStmt(Node *node)
 
 
 /*
- * DeparseTextSearchConfigurationCommentStmt returns the sql statement representing
- * COMMENT ON TEXT SEARCH CONFIGURATION ... IS ...
- */
-char *
-DeparseTextSearchConfigurationCommentStmt(Node *node)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
-
-	StringInfoData buf = { 0 };
-	initStringInfo(&buf);
-
-	appendStringInfo(&buf, "COMMENT ON TEXT SEARCH CONFIGURATION %s IS ",
-					 NameListToQuotedString(castNode(List, stmt->object)));
-
-	if (stmt->comment == NULL)
-	{
-		appendStringInfoString(&buf, "NULL");
-	}
-	else
-	{
-		appendStringInfoString(&buf, quote_literal_cstr(stmt->comment));
-	}
-
-	appendStringInfoString(&buf, ";");
-
-	return buf.data;
-}
-
-
-/*
- * DeparseTextSearchDictionaryCommentStmt returns the sql statement representing
- * COMMENT ON TEXT SEARCH DICTIONARY ... IS ...
- */
-char *
-DeparseTextSearchDictionaryCommentStmt(Node *node)
-{
-	CommentStmt *stmt = castNode(CommentStmt, node);
-	Assert(stmt->objtype == OBJECT_TSDICTIONARY);
-
-	StringInfoData buf = { 0 };
-	initStringInfo(&buf);
-
-	appendStringInfo(&buf, "COMMENT ON TEXT SEARCH DICTIONARY %s IS ",
-					 NameListToQuotedString(castNode(List, stmt->object)));
-
-	if (stmt->comment == NULL)
-	{
-		appendStringInfoString(&buf, "NULL");
-	}
-	else
-	{
-		appendStringInfoString(&buf, quote_literal_cstr(stmt->comment));
-	}
-
-	appendStringInfoString(&buf, ";");
-
-	return buf.data;
-}
-
-
-/*
  * AppendStringInfoTokentypeList specializes in adding a comma separated list of
  * token_tyoe's to TEXT SEARCH CONFIGURATION commands
  */

@@ -1,6 +1,7 @@
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 test: create_role_propagation
+test: pg16
 test: multi_create_fdw
 test: multi_test_catalog_views
 test: replicated_table_disable_node
@@ -65,7 +66,6 @@ test: pg13 pg12
 test: pg14
 test: pg15
 test: pg15_jsonpath detect_conn_close
-test: pg16
 test: drop_column_partitioned_table
 test: tableam
 
@@ -79,11 +79,12 @@ test: multi_basic_queries cross_join multi_complex_expressions multi_subquery mu
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
 test: sql_procedure multi_function_in_join row_types materialized_view
 test: multi_subquery_in_where_reference_clause adaptive_executor propagate_set_commands geqo
-test: forcedelegation_functions
+test: forcedelegation_functions system_queries
 # this should be run alone as it gets too many clients
 test: join_pushdown
 test: multi_subquery_union multi_subquery_in_where_clause multi_subquery_misc statement_cancel_error_message
-test: multi_agg_distinct multi_limit_clause_approximate multi_outer_join_reference multi_single_relation_subquery multi_prepare_plsql set_role_in_transaction
+test: multi_agg_distinct
+test: multi_limit_clause_approximate multi_outer_join_reference multi_single_relation_subquery multi_prepare_plsql set_role_in_transaction
 test: multi_reference_table multi_select_for_update relation_access_tracking pg13_with_ties
 test: custom_aggregate_support aggregate_support tdigest_aggregate_support
 test: multi_average_expression multi_working_columns multi_having_pushdown having_subquery
@@ -102,17 +103,21 @@ test: multi_dropped_column_aliases foreign_key_restriction_enforcement
 test: binary_protocol
 test: alter_table_set_access_method
 test: alter_distributed_table
-test: issue_5248 issue_5099 issue_5763 issue_6543 issue_6758
+test: issue_5248 issue_5099 issue_5763 issue_6543 issue_6758 issue_7477
 test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes
 test: background_task_queue_monitor
+test: other_databases grant_role_from_non_maindb role_operations_from_non_maindb seclabel_non_maindb
+test: citus_internal_access
+test: function_with_case_when
 
 # Causal clock test
 test: clock
 
 # MERGE tests
-test: merge pgmerge merge_repartition2
+test: merge pgmerge
+test: merge_repartition2
 test: merge_repartition1 merge_schema_sharding
 test: merge_partition_tables
 

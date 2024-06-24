@@ -10,10 +10,16 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
-
+#include "access/xact.h"
 #include "commands/defrem.h"
 #include "commands/vacuum.h"
+#include "postmaster/bgworker_internals.h"
+#include "storage/lmgr.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -24,11 +30,6 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
-#include "storage/lmgr.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "postmaster/bgworker_internals.h"
-#include "access/xact.h"
 
 
 #define VACUUM_PARALLEL_NOTSET -2
@@ -184,7 +185,6 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 								 CitusVacuumParams vacuumParams)
 {
 	int relationIndex = 0;
-	int executedVacuumCount = 0;
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
@@ -197,7 +197,6 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 			/* local execution is not implemented for VACUUM commands */
 			bool localExecutionSupported = false;
 			ExecuteUtilityTaskList(taskList, localExecutionSupported);
-			executedVacuumCount++;
 		}
 		relationIndex++;
 	}
@@ -279,7 +278,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
-		task->cannotBeExecutedInTransction = ((vacuumParams.options) & VACOPT_VACUUM);
+		task->cannotBeExecutedInTransaction = ((vacuumParams.options) & VACOPT_VACUUM);
 
 		taskList = lappend(taskList, task);
 	}
@@ -719,7 +718,7 @@ ExecuteUnqualifiedVacuumTasks(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumPa
 	SetTaskQueryStringList(task, unqualifiedVacuumCommands);
 	task->dependentTaskList = NULL;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
-	task->cannotBeExecutedInTransction = ((vacuumParams.options) & VACOPT_VACUUM);
+	task->cannotBeExecutedInTransaction = ((vacuumParams.options) & VACOPT_VACUUM);
 
 
 	bool hasPeerWorker = false;

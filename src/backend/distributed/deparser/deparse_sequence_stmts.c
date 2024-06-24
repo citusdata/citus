@@ -14,11 +14,12 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
-#include "distributed/deparser.h"
-#include "distributed/version_compat.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 
 
 /* forward declaration for deparse functions */

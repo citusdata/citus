@@ -13,9 +13,10 @@
 
 #include "postgres.h"
 
+#include "utils/builtins.h"
+
 #include "distributed/deparser.h"
 #include "distributed/multi_executor.h"
-#include "utils/builtins.h"
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(deparse_test);

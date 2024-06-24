@@ -17,7 +17,8 @@ extern int Recover2PCInterval;
 
 
 /* Functions declarations for worker transactions */
-extern void LogTransactionRecord(int32 groupId, char *transactionName);
+extern void LogTransactionRecord(int32 groupId, char *transactionName,
+								 FullTransactionId outerXid);
 extern int RecoverTwoPhaseCommits(void);
 extern void DeleteWorkerTransactions(WorkerNode *workerNode);
 

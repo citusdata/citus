@@ -17,12 +17,13 @@
 
 #include "postgres.h"
 
+#include "parser/parse_func.h"
+#include "utils/lsyscache.h"
+
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/version_compat.h"
-#include "parser/parse_func.h"
-#include "utils/lsyscache.h"
 
 
 /*

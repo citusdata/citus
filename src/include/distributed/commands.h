@@ -15,12 +15,13 @@
 
 #include "postgres.h"
 
-#include "distributed/metadata_utility.h"
-#include "utils/rel.h"
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
 #include "tcop/utility.h"
 #include "utils/acl.h"
+#include "utils/rel.h"
+
+#include "distributed/metadata_utility.h"
 
 
 extern bool AddAllLocalTablesToMetadata;
@@ -102,6 +103,10 @@ typedef struct DistributeObjectOps
 #define CITUS_TRUNCATE_TRIGGER_NAME "citus_truncate_trigger"
 
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
+
+/* functions to support node-wide object management commands from non-main dbs */
+extern bool RunPreprocessNonMainDBCommand(Node *parsetree);
+extern void RunPostprocessNonMainDBCommand(Node *parsetree);
 
 /*
  * Flags that can be passed to GetForeignKeyOids to indicate
@@ -229,10 +234,28 @@ extern List * PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);
+extern List * GetDatabaseMetadataSyncCommands(Oid dbOid);
 
 
 extern List * PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
+
+extern List * PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
+										   ProcessUtilityContext processUtilityContext);
+extern List * PostprocessCreateDatabaseStmt(Node *node, const char *queryString);
+extern List * PreprocessDropDatabaseStmt(Node *node, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
+extern List * DropDatabaseStmtObjectAddress(Node *node, bool missingOk,
+											bool isPostprocess);
+extern List * CreateDatabaseStmtObjectAddress(Node *node, bool missingOk,
+											  bool isPostprocess);
+extern List * GenerateGrantDatabaseCommandList(void);
+extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext);
+extern List * PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString);
+extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
+extern char * CreateDatabaseDDLCommand(Oid dbId);
 
 
 /* domain.c - forward declarations */
@@ -427,6 +450,7 @@ extern List * CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok, bool
 /* owned.c -  forward declarations */
 extern List * PreprocessDropOwnedStmt(Node *node, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
+extern List * PostprocessReassignOwnedStmt(Node *node, const char *queryString);
 
 /* policy.c -  forward declarations */
 extern List * CreatePolicyCommands(Oid relationId);
@@ -520,6 +544,11 @@ extern List * AlterSchemaOwnerStmtObjectAddress(Node *node, bool missing_ok,
 												bool isPostprocess);
 extern List * AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok, bool
 												 isPostprocess);
+
+/* seclabel.c - forward declarations*/
+extern List * PostprocessSecLabelStmt(Node *node, const char *queryString);
+extern List * SecLabelStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
+extern void citus_test_object_relabel(const ObjectAddress *object, const char *seclabel);
 
 /* sequence.c - forward declarations */
 extern List * PreprocessAlterSequenceStmt(Node *node, const char *queryString,
@@ -669,11 +698,6 @@ extern List * AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node,
 extern List * AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node,
 															   bool missing_ok, bool
 															   isPostprocess);
-extern List * TextSearchConfigurationCommentObjectAddress(Node *node,
-														  bool missing_ok, bool
-														  isPostprocess);
-extern List * TextSearchDictCommentObjectAddress(Node *node,
-												 bool missing_ok, bool isPostprocess);
 extern List * AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
 															 bool missing_ok, bool
 															 isPostprocess);

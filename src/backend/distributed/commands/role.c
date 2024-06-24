@@ -10,37 +10,21 @@
 
 #include "postgres.h"
 
-#include "pg_version_compat.h"
+#include "miscadmin.h"
 
-#include "distributed/pg_version_constants.h"
-
+#include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
-#include "access/genam.h"
 #include "access/table.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
+#include "catalog/objectaddress.h"
 #include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_db_role_setting.h"
+#include "catalog/pg_shseclabel.h"
 #include "catalog/pg_type.h"
-#include "catalog/objectaddress.h"
 #include "commands/dbcommands.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/multi_executor.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_transaction.h"
-#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
@@ -48,11 +32,29 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
-#include "utils/guc_tables.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "utils/rel.h"
-#include "utils/varlena.h"
 #include "utils/syscache.h"
+#include "utils/varlena.h"
+
+#include "pg_version_compat.h"
+#include "pg_version_constants.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/citus_safe_lib.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_transaction.h"
 
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
@@ -65,6 +67,7 @@ static DefElem * makeDefElemBool(char *name, bool value);
 static List * GenerateRoleOptionsList(HeapTuple tuple);
 static List * GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options);
 static List * GenerateGrantRoleStmtsOfRole(Oid roleid);
+static List * GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename);
 static void EnsureSequentialModeForRoleDDL(void);
 
 static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple,
@@ -78,7 +81,6 @@ static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
 static List * RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
-static bool IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt);
 
 /* controlled via GUC */
 bool EnableCreateRolePropagation = true;
@@ -156,7 +158,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
@@ -185,7 +187,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 								(void *) CreateAlterRoleIfExistsCommand(stmt),
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -231,7 +233,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -240,7 +242,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 								   (void *) sql,
 								   ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
+	return NodeDDLTaskList(REMOTE_NODES, commandList);
 }
 
 
@@ -489,18 +491,17 @@ GenerateRoleOptionsList(HeapTuple tuple)
 		options = lappend(options, makeDefElem("password", NULL, -1));
 	}
 
-	/* load valid unitl data from the heap tuple, use default of infinity if not set */
+	/* load valid until data from the heap tuple */
 	Datum rolValidUntilDatum = SysCacheGetAttr(AUTHNAME, tuple,
 											   Anum_pg_authid_rolvaliduntil, &isNull);
-	char *rolValidUntil = "infinity";
 	if (!isNull)
 	{
-		rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
-	}
+		char *rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
 
-	Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
-	DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
-	options = lappend(options, validUntilOption);
+		Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
+		DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
+		options = lappend(options, validUntilOption);
+	}
 
 	return options;
 }
@@ -515,13 +516,14 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 {
 	HeapTuple roleTuple = SearchSysCache1(AUTHOID, ObjectIdGetDatum(roleOid));
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(roleTuple));
+	char *rolename = pstrdup(NameStr(role->rolname));
 
 	CreateRoleStmt *createRoleStmt = NULL;
 	if (EnableCreateRolePropagation)
 	{
 		createRoleStmt = makeNode(CreateRoleStmt);
 		createRoleStmt->stmt_type = ROLESTMT_ROLE;
-		createRoleStmt->role = pstrdup(NameStr(role->rolname));
+		createRoleStmt->role = rolename;
 		createRoleStmt->options = GenerateRoleOptionsList(roleTuple);
 	}
 
@@ -532,7 +534,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		alterRoleStmt->role = makeNode(RoleSpec);
 		alterRoleStmt->role->roletype = ROLESPEC_CSTRING;
 		alterRoleStmt->role->location = -1;
-		alterRoleStmt->role->rolename = pstrdup(NameStr(role->rolname));
+		alterRoleStmt->role->rolename = rolename;
 		alterRoleStmt->action = 1;
 		alterRoleStmt->options = GenerateRoleOptionsList(roleTuple);
 	}
@@ -544,7 +546,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 	{
 		/* add a worker_create_or_alter_role command if any of them are set */
 		char *createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
-			pstrdup(NameStr(role->rolname)),
+			rolename,
 			createRoleStmt,
 			alterRoleStmt);
 
@@ -566,6 +568,31 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}
+
+		/*
+		 * append SECURITY LABEL ON ROLE commands for this specific user
+		 * When we propagate user creation, we also want to make sure that we propagate
+		 * all the security labels it has been given. For this, we check pg_shseclabel
+		 * for the ROLE entry corresponding to roleOid, and generate the relevant
+		 * SecLabel stmts to be run in the new node.
+		 */
+		List *secLabelOnRoleStmts = GenerateSecLabelOnRoleStmts(roleOid, rolename);
+		stmt = NULL;
+		foreach_ptr(stmt, secLabelOnRoleStmts)
+		{
+			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
+		}
+
+		/*
+		 * append COMMENT ON ROLE commands for this specific user
+		 * When we propagate user creation, we also want to make sure that we propagate
+		 * all the comments it has been given. For this, we check pg_shdescription
+		 * for the ROLE entry corresponding to roleOid, and generate the relevant
+		 * Comment stmts to be run in the new node.
+		 */
+		List *commentStmts = GetCommentPropagationCommands(AuthIdRelationId, roleOid,
+														   rolename, OBJECT_ROLE);
+		completeRoleList = list_concat(completeRoleList, commentStmts);
 	}
 
 	return completeRoleList;
@@ -858,6 +885,14 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
+		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*roleAddress, AuthIdRelationId, membership->grantor);
+		if (!IsAnyObjectDistributed(list_make1(roleAddress)))
+		{
+			/* we only need to propagate the grant if the grantor is distributed */
+			continue;
+		}
+
 		GrantRoleStmt *grantRoleStmt = makeNode(GrantRoleStmt);
 		grantRoleStmt->is_grant = true;
 
@@ -873,13 +908,38 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		granteeRole->rolename = GetUserNameFromId(membership->member, true);
 		grantRoleStmt->grantee_roles = list_make1(granteeRole);
 
-		grantRoleStmt->grantor = NULL;
+		RoleSpec *grantorRole = makeNode(RoleSpec);
+		grantorRole->roletype = ROLESPEC_CSTRING;
+		grantorRole->location = -1;
+		grantorRole->rolename = GetUserNameFromId(membership->grantor, false);
+		grantRoleStmt->grantor = grantorRole;
 
 #if PG_VERSION_NUM >= PG_VERSION_16
+
+		/* inherit option is always included */
+		DefElem *inherit_opt;
+		if (membership->inherit_option)
+		{
+			inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(true), -1);
+		}
+		else
+		{
+			inherit_opt = makeDefElem("inherit", (Node *) makeBoolean(false), -1);
+		}
+		grantRoleStmt->opt = list_make1(inherit_opt);
+
+		/* admin option is false by default, only include true case */
 		if (membership->admin_option)
 		{
-			DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
-			grantRoleStmt->opt = list_make1(opt);
+			DefElem *admin_opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
+			grantRoleStmt->opt = lappend(grantRoleStmt->opt, admin_opt);
+		}
+
+		/* set option is true by default, only include false case */
+		if (!membership->set_option)
+		{
+			DefElem *set_opt = makeDefElem("set", (Node *) makeBoolean(false), -1);
+			grantRoleStmt->opt = lappend(grantRoleStmt->opt, set_opt);
 		}
 #else
 		grantRoleStmt->admin_opt = membership->admin_option;
@@ -892,6 +952,54 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 	table_close(pgAuthMembers, AccessShareLock);
 
 	return stmts;
+}
+
+
+/*
+ * GenerateSecLabelOnRoleStmts generates the SecLabelStmts for the role
+ * whose oid is roleid.
+ */
+static List *
+GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename)
+{
+	List *secLabelStmts = NIL;
+
+	/*
+	 * Note that roles are shared database objects, therefore their
+	 * security labels are stored in pg_shseclabel instead of pg_seclabel.
+	 */
+	Relation pg_shseclabel = table_open(SharedSecLabelRelationId, AccessShareLock);
+	ScanKeyData skey[1];
+	ScanKeyInit(&skey[0], Anum_pg_shseclabel_objoid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(roleid));
+	SysScanDesc scan = systable_beginscan(pg_shseclabel, SharedSecLabelObjectIndexId,
+										  true, NULL, 1, &skey[0]);
+
+	HeapTuple tuple = NULL;
+	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
+	{
+		SecLabelStmt *secLabelStmt = makeNode(SecLabelStmt);
+		secLabelStmt->objtype = OBJECT_ROLE;
+		secLabelStmt->object = (Node *) makeString(pstrdup(rolename));
+
+		Datum datumArray[Natts_pg_shseclabel];
+		bool isNullArray[Natts_pg_shseclabel];
+
+		heap_deform_tuple(tuple, RelationGetDescr(pg_shseclabel), datumArray,
+						  isNullArray);
+
+		secLabelStmt->provider = TextDatumGetCString(
+			datumArray[Anum_pg_shseclabel_provider - 1]);
+		secLabelStmt->label = TextDatumGetCString(
+			datumArray[Anum_pg_shseclabel_label - 1]);
+
+		secLabelStmts = lappend(secLabelStmts, secLabelStmt);
+	}
+
+	systable_endscan(scan);
+	table_close(pg_shseclabel, AccessShareLock);
+
+	return secLabelStmts;
 }
 
 
@@ -910,7 +1018,8 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+
 	EnsureSequentialModeForRoleDDL();
 
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -945,7 +1054,7 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1041,7 +1150,8 @@ PreprocessDropRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
+
 	EnsureSequentialModeForRoleDDL();
 
 
@@ -1053,7 +1163,7 @@ PreprocessDropRoleStmt(Node *node, const char *queryString,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1130,7 +1240,7 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
 	List *allGranteeRoles = stmt->grantee_roles;
@@ -1142,25 +1252,6 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	if (IsGrantRoleWithInheritOrSetOption(stmt))
-	{
-		if (EnableUnsupportedFeatureMessages)
-		{
-			ereport(NOTICE, (errmsg("not propagating GRANT/REVOKE commands with specified"
-									" INHERIT/SET options to worker nodes"),
-							 errhint(
-								 "Connect to worker nodes directly to manually run the same"
-								 " GRANT/REVOKE command after disabling DDL propagation.")));
-		}
-		return NIL;
-	}
-
-	/*
-	 * Postgres don't seem to use the grantor. Even dropping the grantor doesn't
-	 * seem to affect the membership. If this changes, we might need to add grantors
-	 * to the dependency resolution too. For now we just don't propagate it.
-	 */
-	stmt->grantor = NULL;
 	stmt->grantee_roles = distributedGranteeRoles;
 	char *sql = DeparseTreeNode((Node *) stmt);
 	stmt->grantee_roles = allGranteeRoles;
@@ -1170,7 +1261,7 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 								sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -1181,10 +1272,12 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 List *
 PostprocessGrantRoleStmt(Node *node, const char *queryString)
 {
-	if (!EnableCreateRolePropagation || !IsCoordinator() || !ShouldPropagate())
+	if (!EnableCreateRolePropagation || !ShouldPropagate())
 	{
 		return NIL;
 	}
+
+	EnsurePropagationToCoordinator();
 
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
 
@@ -1201,27 +1294,6 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 		}
 	}
 	return NIL;
-}
-
-
-/*
- * IsGrantRoleWithInheritOrSetOption returns true if the given
- * GrantRoleStmt has inherit or set option specified in its options
- */
-static bool
-IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt)
-{
-#if PG_VERSION_NUM >= PG_VERSION_16
-	DefElem *opt = NULL;
-	foreach_ptr(opt, stmt->opt)
-	{
-		if (strcmp(opt->defname, "inherit") == 0 || strcmp(opt->defname, "set") == 0)
-		{
-			return true;
-		}
-	}
-#endif
-	return false;
 }
 
 
@@ -1333,7 +1405,7 @@ PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
 	Assert(stmt->renameType == OBJECT_ROLE);
 
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1341,7 +1413,7 @@ PreprocessAlterRoleRenameStmt(Node *node, const char *queryString,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 

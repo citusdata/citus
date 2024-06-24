@@ -43,7 +43,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -152,7 +152,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -414,7 +414,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE").after(2).kill()');
 (1 row)
 
 TRUNCATE reference_table CASCADE;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -553,7 +553,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -662,7 +662,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE truncate_failure.tes
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -922,7 +922,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -1031,7 +1031,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

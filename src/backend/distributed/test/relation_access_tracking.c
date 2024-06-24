@@ -10,6 +10,7 @@
  */
 
 #include "postgres.h"
+
 #include "c.h"
 #include "fmgr.h"
 

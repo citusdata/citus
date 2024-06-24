@@ -14,22 +14,24 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "miscadmin.h"
-
 #include <unistd.h>
 
+#include "postgres.h"
+
+#include "miscadmin.h"
+
+#include "utils/lsyscache.h"
+
+#include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
-#include "distributed/coordinator_protocol.h"
+#include "distributed/multi_server_executor.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/worker_protocol.h"
-#include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 10; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */

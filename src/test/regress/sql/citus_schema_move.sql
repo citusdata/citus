@@ -147,7 +147,7 @@ SELECT citus_schema_move('s2', 'dummy_node', 1234);
 
 -- assign all tables to regularuser
 RESET ROLE;
-SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY tenantuser TO regularuser; $$);
+REASSIGN OWNED BY tenantuser TO regularuser;
 
 GRANT USAGE ON SCHEMA citus_schema_move TO regularuser;
 

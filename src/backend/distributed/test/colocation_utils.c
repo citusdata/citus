@@ -11,9 +11,11 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 
 #include "catalog/pg_type.h"
+
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"

@@ -18,6 +18,7 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "access/genam.h"
@@ -25,29 +26,30 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_trigger.h"
-#include "distributed/coordinator_protocol.h"
+#include "foreign/foreign.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
+#include "utils/syscache.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata/dependency.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/ruleutils.h"
-#include "utils/syscache.h"
-#include "foreign/foreign.h"
 
 
 /*
@@ -1158,9 +1160,7 @@ DropIdentitiesOnTable(Oid relationId)
 
 		if (attributeForm->attidentity)
 		{
-			char *tableName = get_rel_name(relationId);
-			char *schemaName = get_namespace_name(get_rel_namespace(relationId));
-			char *qualifiedTableName = quote_qualified_identifier(schemaName, tableName);
+			char *qualifiedTableName = generate_qualified_relation_name(relationId);
 
 			StringInfo dropCommand = makeStringInfo();
 
@@ -1220,9 +1220,7 @@ DropViewsOnTable(Oid relationId)
 	Oid viewId = InvalidOid;
 	foreach_oid(viewId, reverseOrderedViews)
 	{
-		char *viewName = get_rel_name(viewId);
-		char *schemaName = get_namespace_name(get_rel_namespace(viewId));
-		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+		char *qualifiedViewName = generate_qualified_relation_name(viewId);
 
 		StringInfo dropCommand = makeStringInfo();
 		appendStringInfo(dropCommand, "DROP %sVIEW IF EXISTS %s",

@@ -12,32 +12,35 @@
 
 #include "access/genam.h"
 #include "access/xact.h"
-#include "citus_version.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension_d.h"
-#include "columnar/columnar.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "foreign/foreign.h"
+#include "nodes/makefuncs.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
+#include "citus_version.h"
+
+#include "columnar/columnar.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/transaction_management.h"
-#include "foreign/foreign.h"
-#include "nodes/makefuncs.h"
-#include "utils/lsyscache.h"
-#include "utils/builtins.h"
-#include "utils/fmgroids.h"
-#include "utils/syscache.h"
 
 
 /* Local functions forward declarations for helper functions */
@@ -773,7 +776,7 @@ PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree)
 		/*create extension citus version xxx*/
 		if (newVersionValue)
 		{
-			char *newVersion = strdup(defGetString(newVersionValue));
+			char *newVersion = pstrdup(defGetString(newVersionValue));
 			versionNumber = GetExtensionVersionNumber(newVersion);
 		}
 
@@ -793,7 +796,7 @@ PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree)
 		Oid citusOid = get_extension_oid("citus", true);
 		if (citusOid != InvalidOid)
 		{
-			char *curCitusVersion = strdup(get_extension_version(citusOid));
+			char *curCitusVersion = pstrdup(get_extension_version(citusOid));
 			int curCitusVersionNum = GetExtensionVersionNumber(curCitusVersion);
 			if (curCitusVersionNum < 1110)
 			{
@@ -888,7 +891,7 @@ PreprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
 	if (newVersionValue)
 	{
 		char *newVersion = defGetString(newVersionValue);
-		double newVersionNumber = GetExtensionVersionNumber(strdup(newVersion));
+		double newVersionNumber = GetExtensionVersionNumber(pstrdup(newVersion));
 
 		/*alter extension citus update to version >= 11.1-1, and no citus_columnar installed */
 		if (newVersionNumber >= 1110 && citusColumnarOid == InvalidOid)
@@ -932,7 +935,7 @@ PostprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
 	if (newVersionValue)
 	{
 		char *newVersion = defGetString(newVersionValue);
-		double newVersionNumber = GetExtensionVersionNumber(strdup(newVersion));
+		double newVersionNumber = GetExtensionVersionNumber(pstrdup(newVersion));
 		if (newVersionNumber >= 1110 && citusColumnarOid != InvalidOid)
 		{
 			/*upgrade citus, after "ALTER EXTENSION citus update to xxx" updates citus_columnar Y to version Z. */
@@ -1090,33 +1093,26 @@ List *
 GetDependentFDWsToExtension(Oid extensionId)
 {
 	List *extensionFDWs = NIL;
-	ScanKeyData key[3];
-	int scanKeyCount = 3;
+	ScanKeyData key[1];
 	HeapTuple tup;
 
 	Relation pgDepend = table_open(DependRelationId, AccessShareLock);
 
 	ScanKeyInit(&key[0],
-				Anum_pg_depend_refclassid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(ExtensionRelationId));
-	ScanKeyInit(&key[1],
-				Anum_pg_depend_refobjid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(extensionId));
-	ScanKeyInit(&key[2],
 				Anum_pg_depend_classid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(ForeignDataWrapperRelationId));
 
-	SysScanDesc scan = systable_beginscan(pgDepend, InvalidOid, false,
-										  NULL, scanKeyCount, key);
+	SysScanDesc scan = systable_beginscan(pgDepend, DependDependerIndexId, true,
+										  NULL, lengthof(key), key);
 
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_depend pgDependEntry = (Form_pg_depend) GETSTRUCT(tup);
 
-		if (pgDependEntry->deptype == DEPENDENCY_EXTENSION)
+		if (pgDependEntry->deptype == DEPENDENCY_EXTENSION &&
+			pgDependEntry->refclassid == ExtensionRelationId &&
+			pgDependEntry->refobjid == extensionId)
 		{
 			extensionFDWs = lappend_oid(extensionFDWs, pgDependEntry->objid);
 		}

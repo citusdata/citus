@@ -90,7 +90,6 @@ my $workerCount = 2;
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
 my $mitmPid = 0;
-my $workerCount = 2;
 
 if ($Config{osname} eq "MSWin32")
 {
@@ -297,10 +296,12 @@ sub generate_hba
 
     open(my $fh, ">", catfile($TMP_CHECKDIR, $nodename, "data", "pg_hba.conf"))
         or die "could not open pg_hba.conf";
-    print $fh "host all         alice,bob localhost      md5\n";
+    print $fh "host all         alice,bob 127.0.0.1/32 md5\n";
+    print $fh "host all         alice,bob ::1/128      md5\n";
     print $fh "host all         all       127.0.0.1/32 trust\n";
     print $fh "host all         all       ::1/128      trust\n";
-    print $fh "host replication postgres  localhost    trust\n";
+    print $fh "host replication postgres  127.0.0.1/32 trust\n";
+    print $fh "host replication postgres  ::1/128      trust\n";
     close $fh;
 }
 
@@ -491,6 +492,8 @@ push(@pgOptions, "citus.stat_statements_track = 'all'");
 push(@pgOptions, "citus.enable_change_data_capture=on");
 push(@pgOptions, "citus.stat_tenants_limit = 2");
 push(@pgOptions, "citus.stat_tenants_track = 'ALL'");
+push(@pgOptions, "citus.main_db = 'regression'");
+push(@pgOptions, "citus.superuser = 'postgres'");
 
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
@@ -509,6 +512,12 @@ if($vanillatest)
 
     # we disable some restrictions for local objects like local views to not break postgres vanilla test behaviour.
     push(@pgOptions, "citus.enforce_object_restrictions_for_local_objects=false");
+}
+else
+{
+	# We currently need this config for isolation tests and security label tests
+	# this option loads a security label provider, which we don't want in vanilla tests
+	push(@pgOptions, "citus.running_under_citus_test_suite=true");
 }
 
 if ($useMitmproxy)
@@ -560,7 +569,6 @@ if($isolationtester)
    push(@pgOptions, "citus.metadata_sync_interval=1000");
    push(@pgOptions, "citus.metadata_sync_retry_interval=100");
    push(@pgOptions, "client_min_messages='warning'"); # pg12 introduced notice showing during isolation tests
-   push(@pgOptions, "citus.running_under_isolation_test=true");
 
    # Disable all features of the maintenance daemon. Otherwise queries might
    # randomly show temporarily as "waiting..." because they are waiting for the
@@ -630,7 +638,7 @@ for my $port (@followerWorkerPorts)
 	}
 }
 
-for my $tablespace ("ts0", "ts1", "ts2")
+for my $tablespace ("ts0", "ts1", "ts2", "ts3", "ts4", "ts5")
 {
 	if (-e catfile($TMP_CHECKDIR, $tablespace))
 	{
@@ -1120,16 +1128,33 @@ sub RunVanillaTests
     system("mkdir", ("-p", "$pgregressOutputdir/sql")) == 0
             or die "Could not create vanilla sql dir.";
 
-    $exitcode = system("$plainRegress",
-                        ("--dlpath", $dlpath),
-                        ("--inputdir",  $pgregressInputdir),
-                        ("--outputdir",  $pgregressOutputdir),
-                        ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
-                        ("--use-existing"),
-                        ("--host","$host"),
-                        ("--port","$masterPort"),
-                        ("--user","$user"),
-                        ("--dbname", "$dbName"));
+    if ($majorversion >= "16")
+    {
+        $exitcode = system("$plainRegress",
+                            ("--dlpath", $dlpath),
+                            ("--inputdir",  $pgregressInputdir),
+                            ("--outputdir",  $pgregressOutputdir),
+                            ("--expecteddir",  $pgregressOutputdir),
+                            ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
+                            ("--use-existing"),
+                            ("--host","$host"),
+                            ("--port","$masterPort"),
+                            ("--user","$user"),
+                            ("--dbname", "$dbName"));
+    }
+    else
+    {
+        $exitcode = system("$plainRegress",
+                            ("--dlpath", $dlpath),
+                            ("--inputdir",  $pgregressInputdir),
+                            ("--outputdir",  $pgregressOutputdir),
+                            ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
+                            ("--use-existing"),
+                            ("--host","$host"),
+                            ("--port","$masterPort"),
+                            ("--user","$user"),
+                            ("--dbname", "$dbName"));
+    }
 }
 
 if ($useMitmproxy) {

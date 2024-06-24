@@ -118,32 +118,43 @@
  *-------------------------------------------------------------------------
  */
 
+#include <math.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "postgres.h"
+
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 
-#include <math.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
+#include "access/htup_details.h"
 #include "access/transam.h"
 #include "access/xact.h"
-#include "access/htup_details.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
+#include "lib/ilist.h"
+#include "portability/instr_time.h"
+#include "storage/fd.h"
+#include "storage/latch.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/memutils.h"
+#include "utils/syscache.h"
+#include "utils/timestamp.h"
+
 #include "distributed/adaptive_executor.h"
+#include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_safe_lib.h"
-#include "distributed/connection_management.h"
 #include "distributed/commands/multi_copy.h"
+#include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
-#include "distributed/executor_util.h"
-#include "distributed/shared_connection_stats.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/executor_util.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -161,21 +172,11 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
-#include "distributed/transaction_management.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/transaction_management.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/backend_data.h"
-#include "lib/ilist.h"
-#include "portability/instr_time.h"
-#include "storage/fd.h"
-#include "storage/latch.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/memutils.h"
-#include "utils/syscache.h"
-#include "utils/timestamp.h"
 
 #define SLOW_START_DISABLED 0
 
@@ -400,7 +401,7 @@ typedef struct WorkerPool
 
 	/*
 	 * Placement executions destined for worker node, but not assigned to any
-	 * connection and not ready to start.
+	 * connection and ready to start.
 	 */
 	dlist_head readyTaskQueue;
 	int readyTaskCount;
@@ -490,8 +491,6 @@ typedef struct WorkerSession
 	bool sessionHasActiveConnection;
 } WorkerSession;
 
-
-struct TaskPlacementExecution;
 
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
@@ -584,7 +583,7 @@ typedef enum TaskPlacementExecutionState
 } TaskPlacementExecutionState;
 
 /*
- * TaskPlacementExecution represents the an execution of a command
+ * TaskPlacementExecution represents the execution of a command
  * on a shard placement.
  */
 typedef struct TaskPlacementExecution
@@ -728,6 +727,11 @@ static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time end
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
+static ExecutionParams * CreateDefaultExecutionParams(RowModifyLevel modLevel,
+													  List *taskList,
+													  TupleDestination *tupleDest,
+													  bool expectResults,
+													  ParamListInfo paramListInfo);
 
 
 /*
@@ -1014,14 +1018,14 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
- * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
- * bind params from executor state, and with defaults for some of the arguments.
+ * CreateDefaultExecutionParams returns execution params based on given (possibly null)
+ * bind params (presumably from executor state) with defaults for some of the arguments.
  */
-uint64
-ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
-									  TupleDestination *tupleDest,
-									  bool expectResults,
-									  ParamListInfo paramListInfo)
+static ExecutionParams *
+CreateDefaultExecutionParams(RowModifyLevel modLevel, List *taskList,
+							 TupleDestination *tupleDest,
+							 bool expectResults,
+							 ParamListInfo paramListInfo)
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool localExecutionSupported = true;
@@ -1035,6 +1039,24 @@ ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
 	executionParams->tupleDestination = tupleDest;
 	executionParams->paramListInfo = paramListInfo;
 
+	return executionParams;
+}
+
+
+/*
+ * ExecuteTaskListIntoTupleDestWithParam is a proxy to ExecuteTaskListExtended() which uses
+ * bind params from executor state, and with defaults for some of the arguments.
+ */
+uint64
+ExecuteTaskListIntoTupleDestWithParam(RowModifyLevel modLevel, List *taskList,
+									  TupleDestination *tupleDest,
+									  bool expectResults,
+									  ParamListInfo paramListInfo)
+{
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
@@ -1048,17 +1070,11 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 							 TupleDestination *tupleDest,
 							 bool expectResults)
 {
-	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	bool localExecutionSupported = true;
-	ExecutionParams *executionParams = CreateBasicExecutionParams(
-		modLevel, taskList, targetPoolSize, localExecutionSupported
-		);
-
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, false);
-	executionParams->expectResults = expectResults;
-	executionParams->tupleDestination = tupleDest;
-
+	ParamListInfo paramListInfo = NULL;
+	ExecutionParams *executionParams = CreateDefaultExecutionParams(modLevel, taskList,
+																	tupleDest,
+																	expectResults,
+																	paramListInfo);
 	return ExecuteTaskListExtended(executionParams);
 }
 
@@ -1907,7 +1923,7 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		/*
 		 * Iterate until all the tasks are finished. Once all the tasks
-		 * are finished, ensure that that all the connection initializations
+		 * are finished, ensure that all the connection initializations
 		 * are also finished. Otherwise, those connections are terminated
 		 * abruptly before they are established (or failed). Instead, we let
 		 * the ConnectionStateMachine() to properly handle them.
@@ -3117,7 +3133,7 @@ ConnectionStateMachine(WorkerSession *session)
 				 *
 				 * We can only retry connection when the remote transaction has
 				 * not started over the connection. Otherwise, we'd have to deal
-				 * with restoring the transaction state, which iis beyond our
+				 * with restoring the transaction state, which is beyond our
 				 * purpose at this time.
 				 */
 				RemoteTransaction *transaction = &connection->remoteTransaction;

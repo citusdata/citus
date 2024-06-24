@@ -14,11 +14,12 @@
 #include "postgres.h"
 
 #include "access/hash.h"
+#include "nodes/pg_list.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
 #include "distributed/transaction_identifier.h"
-#include "nodes/pg_list.h"
 
 typedef struct TransactionNode
 {

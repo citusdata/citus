@@ -15,9 +15,6 @@ PG_MAJOR=${PG_MAJOR:?please provide the postgres major version}
 codename=${VERSION#*(}
 codename=${codename%)*}
 
-# get project from argument
-project="${CIRCLE_PROJECT_REPONAME}"
-
 # we'll do everything with absolute paths
 basedir="$(pwd)"
 
@@ -28,7 +25,7 @@ build_ext() {
   pg_major="$1"
 
   builddir="${basedir}/build-${pg_major}"
-  echo "Beginning build of ${project} for PostgreSQL ${pg_major}..." >&2
+  echo "Beginning build for PostgreSQL ${pg_major}..." >&2
 
   # do everything in a subdirectory to avoid clutter in current directory
   mkdir -p "${builddir}" && cd "${builddir}"

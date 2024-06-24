@@ -11,9 +11,10 @@
 #define TUPLE_DESTINATION_H
 
 #include "access/tupdesc.h"
-#include "distributed/multi_physical_planner.h"
 #include "tcop/dest.h"
 #include "utils/tuplestore.h"
+
+#include "distributed/multi_physical_planner.h"
 
 
 typedef struct TupleDestination TupleDestination;

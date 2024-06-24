@@ -10,41 +10,43 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
+
+#include "commands/dbcommands.h"
 #include "common/hashfn.h"
-#include "nodes/pg_list.h"
-#include "utils/array.h"
-#include "distributed/utils/array_type.h"
 #include "lib/stringinfo.h"
+#include "nodes/pg_list.h"
+#include "postmaster/postmaster.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "distributed/shared_library_init.h"
+
 #include "distributed/adaptive_executor.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/connection_management.h"
-#include "distributed/remote_commands.h"
-#include "distributed/shard_split.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/shard_transfer.h"
-#include "distributed/resource_lock.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
+#include "distributed/shard_split.h"
+#include "distributed/shard_transfer.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/shardsplit_logical_replication.h"
+#include "distributed/shared_library_init.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/distribution_column_map.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/shared_library_init.h"
-#include "distributed/pg_dist_shard.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/utils/distribution_column_map.h"
-#include "commands/dbcommands.h"
-#include "distributed/shardsplit_logical_replication.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/shard_rebalancer.h"
-#include "postmaster/postmaster.h"
 
 /*
  * Entry for map that tracks ShardInterval -> Placement Node
@@ -731,11 +733,11 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 									   workerPlacementNode->workerPort)));
 			}
 
-			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(
-													shardInterval),
-												workerPlacementNode->groupId,
-												CLEANUP_ON_FAILURE);
+			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												  ConstructQualifiedShardName(
+													  shardInterval),
+												  workerPlacementNode->groupId,
+												  CLEANUP_ON_FAILURE);
 
 			/* Create new split child shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1312,7 +1314,7 @@ DropShardListMetadata(List *shardIntervalList)
 		{
 			ListCell *commandCell = NULL;
 
-			/* send the commands one by one (calls citus_internal_delete_shard_metadata internally) */
+			/* send the commands one by one (calls citus_internal.delete_shard_metadata internally) */
 			List *shardMetadataDeleteCommandList = ShardDeleteCommandList(shardInterval);
 			foreach(commandCell, shardMetadataDeleteCommandList)
 			{
@@ -1715,11 +1717,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(
-													shardInterval),
-												workerPlacementNode->groupId,
-												CLEANUP_ALWAYS);
+			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												  ConstructQualifiedShardName(
+													  shardInterval),
+												  workerPlacementNode->groupId,
+												  CLEANUP_ALWAYS);
 
 			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1778,11 +1780,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(
-													shardInterval),
-												sourceWorkerNode->groupId,
-												CLEANUP_ALWAYS);
+			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												  ConstructQualifiedShardName(
+													  shardInterval),
+												  sourceWorkerNode->groupId,
+												  CLEANUP_ALWAYS);
 
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);

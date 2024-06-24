@@ -13,19 +13,20 @@
 #include "access/relation.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/namespace_utils.h"
 #include "lib/stringinfo.h"
+#include "nodes/value.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_collate.h"
 #include "parser/parse_node.h"
 #include "parser/parse_relation.h"
-#include "nodes/value.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/namespace_utils.h"
 
 
 static void AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,

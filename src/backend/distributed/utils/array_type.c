@@ -10,15 +10,18 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
-#include "pg_version_compat.h"
 #include "catalog/pg_type.h"
 #include "nodes/pg_list.h"
-#include "distributed/utils/array_type.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+
+#include "pg_version_compat.h"
+
+#include "distributed/utils/array_type.h"
 
 
 /*

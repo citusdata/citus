@@ -11,16 +11,17 @@
 #include "postgres.h"
 
 #include "catalog/pg_foreign_data_wrapper.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata/distobject.h"
 #include "foreign/foreign.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "utils/syscache.h"
+
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 
 static bool NameListHasFDWOwnedByDistributedExtension(List *FDWNames);
 static ObjectAddress GetObjectAddressByFDWName(char *FDWName, bool missing_ok);

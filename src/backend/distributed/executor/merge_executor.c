@@ -9,7 +9,12 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
+
+#include "nodes/execnodes.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
@@ -22,10 +27,6 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/repartition_executor.h"
 #include "distributed/subplan_execution.h"
-
-#include "nodes/execnodes.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
 
 static void ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState);
 static void ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState);

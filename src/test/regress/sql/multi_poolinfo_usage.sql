@@ -7,9 +7,9 @@
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 20000000;
 
-SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port;
+SELECT nodeid AS worker_1_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_1_port
 \gset
-SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port;
+SELECT nodeid AS worker_2_id FROM pg_dist_node WHERE nodename = 'localhost' AND nodeport = :worker_2_port
 \gset
 
 CREATE TABLE lotsa_connections (id integer, name text);

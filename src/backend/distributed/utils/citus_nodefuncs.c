@@ -10,16 +10,17 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
-
 #include "catalog/pg_type.h"
-#include "distributed/citus_nodes.h"
+
+#include "pg_version_constants.h"
+
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_nodes.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/distributed_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 
@@ -141,7 +142,17 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind, char *fragmentSch
 	fauxFunction->funcexpr = (Node *) fauxFuncExpr;
 
 	/* set the column count to pass ruleutils checks, not used elsewhere */
-	fauxFunction->funccolcount = list_length(rte->eref->colnames);
+	if (rte->relid != 0)
+	{
+		Relation rel = RelationIdGetRelation(rte->relid);
+		fauxFunction->funccolcount = RelationGetNumberOfAttributes(rel);
+		RelationClose(rel);
+	}
+	else
+	{
+		fauxFunction->funccolcount = list_length(rte->eref->colnames);
+	}
+
 	fauxFunction->funccolnames = funcColumnNames;
 	fauxFunction->funccoltypes = funcColumnTypes;
 	fauxFunction->funccoltypmods = funcColumnTypeMods;

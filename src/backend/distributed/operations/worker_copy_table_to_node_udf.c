@@ -15,6 +15,7 @@
 
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"

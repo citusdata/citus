@@ -13,13 +13,14 @@
 #define MULTI_COPY_H
 
 
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/version_compat.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_coerce.h"
 #include "tcop/dest.h"
+
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/version_compat.h"
 
 
 #define INVALID_PARTITION_COLUMN_INDEX -1

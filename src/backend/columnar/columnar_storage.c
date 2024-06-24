@@ -36,11 +36,11 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
 #include "safe_lib.h"
 
 #include "access/generic_xlog.h"
 #include "catalog/storage.h"
-#include "miscadmin.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
 

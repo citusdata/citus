@@ -2,13 +2,6 @@
 -- ADD_COORDINATOR
 --
 -- node trying to add itself without specifying groupid => 0 should error out
--- first remove the coordinator to for testing master_add_node for coordinator
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT master_add_node('localhost', :master_port);
 ERROR:  Node cannot add itself as a worker.
 HINT:  Add the node as a coordinator by using: SELECT citus_set_coordinator_host('localhost', 57636);

@@ -11,36 +11,37 @@
 #include <sys/time.h>
 
 #include "postgres.h"
-#include "miscadmin.h"
+
 #include "fmgr.h"
 #include "funcapi.h"
 #include "libpq-fe.h"
+#include "miscadmin.h"
 
-#include "utils/builtins.h"
-#include "utils/datum.h"
-#include "utils/numeric.h"
-#include "utils/typcache.h"
-#include "nodes/pg_list.h"
 #include "catalog/namespace.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
 #include "executor/spi.h"
+#include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
+#include "storage/s_lock.h"
 #include "storage/shmem.h"
 #include "storage/spin.h"
-#include "storage/s_lock.h"
+#include "utils/builtins.h"
+#include "utils/datum.h"
+#include "utils/numeric.h"
+#include "utils/typcache.h"
 
 #include "distributed/causal_clock.h"
-#include "distributed/listutils.h"
-#include "distributed/lock_graph.h"
-#include "distributed/local_executor.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/remote_commands.h"
-#include "distributed/placement_connection.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
+#include "distributed/local_executor.h"
+#include "distributed/lock_graph.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/placement_connection.h"
+#include "distributed/remote_commands.h"
 
 #define SAVE_AND_PERSIST(c) \
 	do { \
@@ -396,7 +397,7 @@ AdjustClocksToTransactionHighest(List *nodeConnectionList,
 
 	/* Set the clock value on participating worker nodes */
 	appendStringInfo(queryToSend,
-					 "SELECT pg_catalog.citus_internal_adjust_local_clock_to_remote"
+					 "SELECT citus_internal.adjust_local_clock_to_remote"
 					 "('(%lu, %u)'::pg_catalog.cluster_clock);",
 					 transactionClockValue->logical, transactionClockValue->counter);
 

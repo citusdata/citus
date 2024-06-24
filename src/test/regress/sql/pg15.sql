@@ -968,6 +968,19 @@ ORDER BY is_coordinator DESC, result;
 set citus.log_remote_commands = true;
 set citus.grep_remote_commands = '%ALTER DATABASE%';
 alter database regression REFRESH COLLATION VERSION;
+
+SET citus.enable_create_database_propagation TO OFF;
+CREATE DATABASE local_database_1;
+RESET citus.enable_create_database_propagation;
+
+CREATE ROLE local_role_1;
+
+ALTER DATABASE local_database_1 REFRESH COLLATION VERSION;
+
+REVOKE CONNECT, TEMPORARY, CREATE ON DATABASE local_database_1 FROM local_role_1;
+DROP ROLE local_role_1;
+DROP DATABASE local_database_1;
+
 set citus.log_remote_commands = false;
 
 -- Clean up

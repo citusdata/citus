@@ -64,7 +64,7 @@ SELECT recover_prepared_transactions();
 (1 row)
 
 -- delete the citus_122_should_do_nothing transaction
-DELETE FROM pg_dist_transaction WHERE gid = 'citus_122_should_do_nothing' RETURNING *;
+DELETE FROM pg_dist_transaction WHERE gid = 'citus_122_should_do_nothing' RETURNING groupid, gid;
  groupid |             gid
 ---------------------------------------------------------------------
      122 | citus_122_should_do_nothing

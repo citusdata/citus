@@ -11,50 +11,15 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
-#include "distributed/pg_version_constants.h"
-
 #include <stddef.h>
+
+#include "postgres.h"
 
 #include "access/stratnum.h"
 #include "access/xact.h"
 #include "catalog/pg_opfamily.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/citus_clauses.h"
-#include "distributed/citus_nodes.h"
-#include "distributed/citus_nodefuncs.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/distribution_column.h"
-#include "distributed/errormessage.h"
-#include "distributed/executor_util.h"
-#include "distributed/log_utils.h"
-#include "distributed/insert_select_planner.h"
-#include "distributed/intermediate_result_pruning.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/merge_planner.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_logical_planner.h"
-#include "distributed/multi_logical_optimizer.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/listutils.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/query_pushdown_planning.h"
-#include "distributed/query_utils.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/relation_restriction_equivalence.h"
-#include "distributed/relay_utility.h"
-#include "distributed/recursive_planning.h"
-#include "distributed/resource_lock.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shard_pruning.h"
 #include "executor/execdesc.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
@@ -65,12 +30,13 @@
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
 #include "optimizer/joininfo.h"
+#include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
-#include "optimizer/optimizer.h"
+#include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
-#include "parser/parsetree.h"
 #include "parser/parse_oper.h"
+#include "parser/parsetree.h"
 #include "postmaster/postmaster.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
@@ -80,8 +46,42 @@
 #include "utils/rel.h"
 #include "utils/typcache.h"
 
-#include "catalog/pg_proc.h"
-#include "optimizer/planmain.h"
+#include "pg_version_constants.h"
+
+#include "distributed/citus_clauses.h"
+#include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_nodes.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
+#include "distributed/distribution_column.h"
+#include "distributed/errormessage.h"
+#include "distributed/executor_util.h"
+#include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_result_pruning.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
+#include "distributed/merge_planner.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_logical_planner.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
+#include "distributed/multi_server_executor.h"
+#include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
+#include "distributed/recursive_planning.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/relation_restriction_equivalence.h"
+#include "distributed/relay_utility.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shard_pruning.h"
+#include "distributed/shardinterval_utils.h"
 
 /* intermediate value for INSERT processing */
 typedef struct InsertValues
@@ -434,7 +434,7 @@ ExtractSelectRangeTableEntry(Query *query)
  * for the given modification query.
  *
  * The function errors out if the input query is not a
- * modify query (e.g., INSERT, UPDATE or DELETE). So, this
+ * modify query (e.g., INSERT, UPDATE, DELETE or MERGE). So, this
  * function is not expected to be called on SELECT queries.
  */
 Oid
@@ -2271,13 +2271,13 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 
 
 /*
- * RouterQuery runs router pruning logic for SELECT, UPDATE, DELETE, and MERGE queries.
- * If there are shards present and query is routable, all RTEs have been updated
- * to point to the relevant shards in the originalQuery. Also, placementList is
- * filled with the list of worker nodes that has all the required shard placements
- * for the query execution. anchorShardId is set to the first pruned shardId of
- * the given query. Finally, relationShardList is filled with the list of
- * relation-to-shard mappings for the query.
+ * PlanRouterQuery runs router pruning logic for SELECT, UPDATE, DELETE, and
+ * MERGE queries. If there are shards present and query is routable, all RTEs
+ * have been updated to point to the relevant shards in the originalQuery. Also,
+ * placementList is filled with the list of worker nodes that has all the
+ * required shard placements for the query execution. anchorShardId is set to
+ * the first pruned shardId of the given query. Finally, relationShardList is
+ * filled with the list of relation-to-shard mappings for the query.
  *
  * If the given query is not routable, it fills planningError with the related
  * DeferredErrorMessage. The caller can check this error message to see if query
@@ -2324,27 +2324,11 @@ PlanRouterQuery(Query *originalQuery,
 			TargetShardIntervalForFastPathQuery(originalQuery, &isMultiShardQuery,
 												distributionKeyValue,
 												partitionValueConst);
-
-		/*
-		 * This could only happen when there is a parameter on the distribution key.
-		 * We defer error here, later the planner is forced to use a generic plan
-		 * by assigning arbitrarily high cost to the plan.
-		 */
-		if (UpdateOrDeleteOrMergeQuery(originalQuery) && isMultiShardQuery)
-		{
-			planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-										  "Router planner cannot handle multi-shard "
-										  "modify queries", NULL, NULL);
-			return planningError;
-		}
+		Assert(!isMultiShardQuery);
 
 		*prunedShardIntervalListList = shardIntervalList;
-
-		if (!isMultiShardQuery)
-		{
-			ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
-									"query")));
-		}
+		ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
+								"query")));
 	}
 	else
 	{
@@ -2526,7 +2510,7 @@ AllShardsColocated(List *relationShardList)
 			if (currentTableType == RANGE_DISTRIBUTED ||
 				currentTableType == APPEND_DISTRIBUTED)
 			{
-				/* we do not have further strict colocation chceks */
+				/* we do not have further strict colocation checks */
 				continue;
 			}
 		}
@@ -2948,7 +2932,7 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 	}
 
 	/*
-	 * Different resrictions might have different partition columns.
+	 * Different restrictions might have different partition columns.
 	 * We report partition column value if there is only one.
 	 */
 	if (multiplePartitionValuesExist)

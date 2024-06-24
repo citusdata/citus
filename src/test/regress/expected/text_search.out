@@ -374,12 +374,21 @@ SELECT * FROM run_command_on_workers($$ SELECT 'text_search.config3'::regconfig;
 (2 rows)
 
 -- verify they are all removed locally
-SELECT 'text_search.config1'::regconfig;
-ERROR:  text search configuration "text_search.config1" does not exist
-SELECT 'text_search.config2'::regconfig;
-ERROR:  text search configuration "text_search.config2" does not exist
-SELECT 'text_search.config3'::regconfig;
-ERROR:  text search configuration "text_search.config3" does not exist
+SELECT 1 FROM pg_ts_config WHERE cfgname = 'config1' AND cfgnamespace = 'text_search'::regnamespace;
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT 1 FROM pg_ts_config WHERE cfgname = 'config2' AND cfgnamespace = 'text_search'::regnamespace;
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT 1 FROM pg_ts_config WHERE cfgname = 'config3' AND cfgnamespace = 'text_search'::regnamespace;
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
 -- verify that indexes created concurrently that would propagate a TEXT SEARCH CONFIGURATION object
 SET citus.enable_ddl_propagation TO off;
 CREATE TEXT SEARCH CONFIGURATION concurrent_index_config ( PARSER = default );
@@ -434,12 +443,12 @@ $$) ORDER BY 1,2;
 CREATE TEXT SEARCH CONFIGURATION text_search.manually_created_wrongly ( copy = french );
 -- now we expect manually_created_wrongly(citus_backup_XXX) to show up when querying the configurations
 SELECT * FROM run_command_on_workers($$
-    SELECT array_agg(cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_wrongly%';
+    SELECT array_agg(cfgname ORDER BY cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_wrongly%';
 $$) ORDER BY 1,2;
  nodename  | nodeport | success |                               result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | {manually_created_wrongly(citus_backup_0),manually_created_wrongly}
- localhost |    57638 | t       | {manually_created_wrongly(citus_backup_0),manually_created_wrongly}
+ localhost |    57637 | t       | {manually_created_wrongly,manually_created_wrongly(citus_backup_0)}
+ localhost |    57638 | t       | {manually_created_wrongly,manually_created_wrongly(citus_backup_0)}
 (2 rows)
 
 -- verify the objects get reused appropriately when the specification is the same
@@ -458,7 +467,7 @@ CREATE TEXT SEARCH CONFIGURATION text_search.manually_created_correct ( copy = f
 -- now we don't expect manually_created_correct(citus_backup_XXX) to show up when querying the configurations as the
 -- original one is reused
 SELECT * FROM run_command_on_workers($$
-    SELECT array_agg(cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_correct%';
+    SELECT array_agg(cfgname ORDER BY cfgname) FROM pg_ts_config WHERE cfgname LIKE 'manually_created_correct%';
 $$) ORDER BY 1,2;
  nodename  | nodeport | success |           result
 ---------------------------------------------------------------------

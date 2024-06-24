@@ -11,12 +11,14 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-#include "miscadmin.h"
-
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "postgres.h"
+
+#include "miscadmin.h"
+#include "pgstat.h"
 
 #include "access/genam.h"
 #include "access/heapam.h"
@@ -30,57 +32,22 @@
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_database.h"
+#include "catalog/pg_database_d.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
-#include "distributed/argutils.h"
-#include "distributed/backend_data.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/tenant_schema_metadata.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/distribution_column.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/maintenanced.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata/dependency.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/metadata/pg_dist_object.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/pg_dist_colocation.h"
-#include "distributed/pg_dist_node.h"
-#include "distributed/pg_dist_shard.h"
-#include "distributed/pg_dist_schema.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/remote_commands.h"
-#include "distributed/resource_lock.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/utils/function.h"
-#include "distributed/worker_manager.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/version_compat.h"
-#include "distributed/commands/utility_hook.h"
+#include "commands/dbcommands.h"
 #include "executor/spi.h"
 #include "foreign/foreign.h"
-#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
-#include "pgstat.h"
+#include "parser/parse_type.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/postmaster.h"
-#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -88,6 +55,43 @@
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+
+#include "distributed/argutils.h"
+#include "distributed/backend_data.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparser.h"
+#include "distributed/distribution_column.h"
+#include "distributed/listutils.h"
+#include "distributed/maintenanced.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/pg_dist_colocation.h"
+#include "distributed/pg_dist_node.h"
+#include "distributed/pg_dist_schema.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/remote_commands.h"
+#include "distributed/remote_transaction.h"
+#include "distributed/resource_lock.h"
+#include "distributed/tenant_schema_metadata.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/function.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
+#include "distributed/worker_transaction.h"
 
 
 /* managed via a GUC */
@@ -120,6 +124,7 @@ static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
+static List * GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem);
 static List * GenerateGrantOnFunctionQueriesFromAclItem(Oid schemaOid,
 														AclItem *aclItem);
 static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
@@ -134,7 +139,7 @@ static bool ShouldSkipMetadataChecks(void);
 static void EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod,
 										  int colocationId, char replicationModel,
 										  Var *distributionKey);
-static void EnsureCoordinatorInitiatedOperation(void);
+static void EnsureCitusInitiatedOperation(void);
 static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 									  text *shardMinValue,
 									  text *shardMaxValue);
@@ -179,6 +184,7 @@ PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_delete_tenant_schema);
 PG_FUNCTION_INFO_V1(citus_internal_update_none_dist_table_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_database_command);
 
 
 static bool got_SIGTERM = false;
@@ -486,19 +492,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 bool
 ClusterHasKnownMetadataWorkers()
 {
-	bool workerWithMetadata = false;
-
-	if (!IsCoordinator())
-	{
-		workerWithMetadata = true;
-	}
-
-	if (workerWithMetadata || HasMetadataWorkers())
-	{
-		return true;
-	}
-
-	return false;
+	return !IsCoordinator() || HasMetadataWorkers();
 }
 
 
@@ -895,6 +889,7 @@ NodeListIdempotentInsertCommand(List *workerNodeList)
  */
 char *
 MarkObjectsDistributedCreateCommand(List *addresses,
+									List *namesArg,
 									List *distributionArgumentIndexes,
 									List *colocationIds,
 									List *forceDelegations)
@@ -919,9 +914,25 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 		int forceDelegation = list_nth_int(forceDelegations, currentObjectCounter);
 		List *names = NIL;
 		List *args = NIL;
+		char *objectType = NULL;
 
-		char *objectType = getObjectTypeDescription(address, false);
-		getObjectIdentityParts(address, &names, &args, false);
+		if (IsMainDBCommand)
+		{
+			/*
+			 * When we try to distribute an object that's being created in a non Citus
+			 * main database, we cannot find the name, since the object is not visible
+			 * in Citus main database.
+			 * Because of that we need to pass the name to this function.
+			 */
+			names = list_nth(namesArg, currentObjectCounter);
+			bool missingOk = false;
+			objectType = getObjectTypeDescription(address, missingOk);
+		}
+		else
+		{
+			objectType = getObjectTypeDescription(address, false);
+			getObjectIdentityParts(address, &names, &args, IsMainDBCommand);
+		}
 
 		if (!isFirstObject)
 		{
@@ -976,7 +987,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 	appendStringInfo(insertDistributedObjectsCommand, ") ");
 
 	appendStringInfo(insertDistributedObjectsCommand,
-					 "SELECT citus_internal_add_object_metadata("
+					 "SELECT citus_internal.add_object_metadata("
 					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) "
 					 "FROM distributed_object_data;");
 
@@ -1001,7 +1012,7 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Ensure given distributionArgumentIndex and colocationId values are
@@ -1111,7 +1122,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	}
 
 	appendStringInfo(insertDistributionCommand,
-					 "SELECT citus_internal_add_partition_metadata "
+					 "SELECT citus_internal.add_partition_metadata "
 					 "(%s::regclass, '%c', %s, %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
@@ -1153,7 +1164,7 @@ DistributionDeleteMetadataCommand(Oid relationId)
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	appendStringInfo(deleteCommand,
-					 "SELECT pg_catalog.citus_internal_delete_partition_metadata(%s)",
+					 "SELECT citus_internal.delete_partition_metadata(%s)",
 					 quote_literal_cstr(qualifiedRelationName));
 
 	return deleteCommand->data;
@@ -1236,7 +1247,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertPlacementCommand, ") ");
 
 	appendStringInfo(insertPlacementCommand,
-					 "SELECT citus_internal_add_placement_metadata("
+					 "SELECT citus_internal.add_placement_metadata("
 					 "shardid, shardlength, groupid, placementid) "
 					 "FROM placement_data;");
 
@@ -1292,7 +1303,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertShardCommand, ") ");
 
 	appendStringInfo(insertShardCommand,
-					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
+					 "SELECT citus_internal.add_shard_metadata(relationname, shardid, "
 					 "storagetype, shardminvalue, shardmaxvalue) "
 					 "FROM shard_data;");
 
@@ -1331,7 +1342,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 
 	StringInfo deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
-					 "SELECT citus_internal_delete_shard_metadata(%ld);", shardId);
+					 "SELECT citus_internal.delete_shard_metadata(%ld);", shardId);
 
 	return list_make1(deleteShardCommand->data);
 }
@@ -1401,7 +1412,7 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 	StringInfo command = makeStringInfo();
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 	appendStringInfo(command,
-					 "SELECT citus_internal_update_relation_colocation(%s::regclass, %d)",
+					 "SELECT citus_internal.update_relation_colocation(%s::regclass, %d)",
 					 quote_literal_cstr(qualifiedRelationName), colocationId);
 
 	return command->data;
@@ -1627,6 +1638,74 @@ GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 
 
 /*
+ * GetDependentDependentRelationsWithSequence returns a list of oids of
+ * relations that have have a dependency on the given sequence.
+ * There are three types of dependencies:
+ * 1. direct auto (owned sequences), created using SERIAL or BIGSERIAL
+ * 2. indirect auto (through an AttrDef), created using DEFAULT nextval('..')
+ * 3. internal, created using GENERATED ALWAYS AS IDENTITY
+ *
+ * Depending on the passed deptype, we return the relations that have the
+ * given type(s):
+ * - DEPENDENCY_AUTO returns both 1 and 2
+ * - DEPENDENCY_INTERNAL returns 3
+ *
+ * The returned list can contain duplicates, as the same relation can have
+ * multiple dependencies on the sequence.
+ */
+List *
+GetDependentRelationsWithSequence(Oid sequenceOid, char depType)
+{
+	List *relations = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(sequenceOid));
+	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
+										  NULL, lengthof(key), key);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (
+			deprec->refclassid == RelationRelationId &&
+			deprec->refobjsubid != 0 &&
+			deprec->deptype == depType)
+		{
+			relations = lappend_oid(relations, deprec->refobjid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	if (depType == DEPENDENCY_AUTO)
+	{
+		Oid attrDefOid;
+		List *attrDefOids = GetAttrDefsFromSequence(sequenceOid);
+
+		foreach_oid(attrDefOid, attrDefOids)
+		{
+			ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
+			relations = lappend_oid(relations, columnAddress.objectId);
+		}
+	}
+
+	return relations;
+}
+
+
+/*
  * GetSequencesFromAttrDef returns a list of sequence OIDs that have
  * dependency with the given attrdefOid in pg_depend
  */
@@ -1668,6 +1747,90 @@ GetSequencesFromAttrDef(Oid attrdefOid)
 	table_close(depRel, AccessShareLock);
 
 	return sequencesResult;
+}
+
+
+#if PG_VERSION_NUM < PG_VERSION_15
+
+/*
+ * Given a pg_attrdef OID, return the relation OID and column number of
+ * the owning column (represented as an ObjectAddress for convenience).
+ *
+ * Returns InvalidObjectAddress if there is no such pg_attrdef entry.
+ */
+ObjectAddress
+GetAttrDefaultColumnAddress(Oid attrdefoid)
+{
+	ObjectAddress result = InvalidObjectAddress;
+	ScanKeyData skey[1];
+	HeapTuple tup;
+
+	Relation attrdef = table_open(AttrDefaultRelationId, AccessShareLock);
+	ScanKeyInit(&skey[0],
+				Anum_pg_attrdef_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(attrdefoid));
+	SysScanDesc scan = systable_beginscan(attrdef, AttrDefaultOidIndexId, true,
+										  NULL, 1, skey);
+
+	if (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_attrdef atdform = (Form_pg_attrdef) GETSTRUCT(tup);
+
+		result.classId = RelationRelationId;
+		result.objectId = atdform->adrelid;
+		result.objectSubId = atdform->adnum;
+	}
+
+	systable_endscan(scan);
+	table_close(attrdef, AccessShareLock);
+
+	return result;
+}
+
+
+#endif
+
+
+/*
+ * GetAttrDefsFromSequence returns a list of attrdef OIDs that have
+ * a dependency on the given sequence
+ */
+List *
+GetAttrDefsFromSequence(Oid seqOid)
+{
+	List *attrDefsResult = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(seqOid));
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, lengthof(key), key);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->classid == AttrDefaultRelationId &&
+			deprec->deptype == DEPENDENCY_NORMAL)
+		{
+			attrDefsResult = lappend_oid(attrDefsResult, deprec->objid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	return attrDefsResult;
 }
 
 
@@ -2044,6 +2207,92 @@ GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
 
 
 /*
+ * GrantOnDatabaseDDLCommands creates a list of ddl command for replicating the permissions
+ * of roles on databases.
+ */
+List *
+GrantOnDatabaseDDLCommands(Oid databaseOid)
+{
+	HeapTuple databaseTuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(databaseOid));
+	bool isNull = true;
+	Datum aclDatum = SysCacheGetAttr(DATABASEOID, databaseTuple, Anum_pg_database_datacl,
+									 &isNull);
+	if (isNull)
+	{
+		ReleaseSysCache(databaseTuple);
+		return NIL;
+	}
+	Acl *acl = DatumGetAclPCopy(aclDatum);
+	AclItem *aclDat = ACL_DAT(acl);
+	int aclNum = ACL_NUM(acl);
+	List *commands = NIL;
+
+	ReleaseSysCache(databaseTuple);
+
+	for (int i = 0; i < aclNum; i++)
+	{
+		commands = list_concat(commands,
+							   GenerateGrantOnDatabaseFromAclItem(
+								   databaseOid, &aclDat[i]));
+	}
+
+	return commands;
+}
+
+
+/*
+ * GenerateGrantOnDatabaseFromAclItem generates a query string for replicating a users permissions
+ * on a database.
+ */
+List *
+GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
+{
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_DATABASE;
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_DATABASE;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_CONNECT) || (permissions & ACL_CONNECT));
+	Assert(!(grants & ACL_CREATE) || (permissions & ACL_CREATE));
+	Assert(!(grants & ACL_CREATE_TEMP) || (permissions & ACL_CREATE_TEMP));
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	if (permissions & ACL_CONNECT)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "CONNECT",
+										  grants & ACL_CONNECT));
+		queries = lappend(queries, query);
+	}
+	if (permissions & ACL_CREATE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "CREATE",
+										  grants & ACL_CREATE));
+		queries = lappend(queries, query);
+	}
+	if (permissions & ACL_CREATE_TEMP)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_DATABASE, granteeOid, databaseOid,
+										  "TEMPORARY",
+										  grants & ACL_CREATE_TEMP));
+		queries = lappend(queries, query);
+	}
+
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
+}
+
+
+/*
  * GenerateGrantStmtForRights is the function for creating GrantStmt's for all
  * types of objects that are supported. It takes parameters to fill a GrantStmt's
  * fields and returns the GrantStmt.
@@ -2114,6 +2363,11 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 			RangeVar *sequence = makeRangeVar(get_namespace_name(namespaceOid),
 											  get_rel_name(objectId), -1);
 			return list_make1(sequence);
+		}
+
+		case OBJECT_DATABASE:
+		{
+			return list_make1(makeString(get_database_name(objectId)));
 		}
 
 		default:
@@ -3090,7 +3344,7 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (distributionMethod == DISTRIBUTE_BY_NONE && distributionColumnVar != NULL)
 		{
@@ -3206,7 +3460,7 @@ citus_internal_delete_partition_metadata(PG_FUNCTION_ARGS)
 
 	if (!ShouldSkipMetadataChecks())
 	{
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeletePartitionRow(relationId);
@@ -3254,7 +3508,7 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Even if the table owner is a malicious user and the shard metadata is
@@ -3272,19 +3526,13 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * EnsureCoordinatorInitiatedOperation is a helper function which ensures that
- * the execution is initiated by the coordinator on a worker node.
+ * EnsureCitusInitiatedOperation is a helper function which ensures that
+ * the execution is initiated by Citus.
  */
 static void
-EnsureCoordinatorInitiatedOperation(void)
+EnsureCitusInitiatedOperation(void)
 {
-	/*
-	 * We are restricting the operation to only MX workers with the local group id
-	 * check. The other two checks are to ensure that the operation is initiated
-	 * by the coordinator.
-	 */
-	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
-		GetLocalGroupId() == COORDINATOR_GROUP_ID)
+	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("This is an internal Citus function can only be "
@@ -3465,7 +3713,7 @@ citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeleteShardPlacementRow(placementId);
@@ -3513,7 +3761,7 @@ citus_internal_add_placement_metadata_internal(int64 shardId, int64 shardLength,
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/*
 		 * Even if the table owner is a malicious user, as long as the shard placements
@@ -3608,7 +3856,7 @@ citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (!ShardExists(shardId))
 		{
@@ -3672,7 +3920,7 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		if (!ShardExists(shardId))
 		{
@@ -3715,7 +3963,7 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 
 		/* ensure that the table is in pg_dist_partition */
 		char partitionMethod = PartitionMethodViaCatalog(relationId);
@@ -3781,7 +4029,7 @@ citus_internal_add_colocation_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	InsertColocationGroupLocally(colocationId, shardCount, replicationFactor,
@@ -3806,7 +4054,7 @@ citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	DeleteColocationGroupLocally(colocationId);
@@ -3885,11 +4133,75 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 	if (!ShouldSkipMetadataChecks())
 	{
-		EnsureCoordinatorInitiatedOperation();
+		EnsureCitusInitiatedOperation();
 	}
 
 	UpdateNoneDistTableMetadata(relationId, replicationModel,
 								colocationId, autoConverted);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_database_command is an internal UDF to
+ * create a database in an idempotent maner without
+ * transaction block restrictions.
+ */
+Datum
+citus_internal_database_command(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		EnsureCitusInitiatedOperation();
+	}
+
+	PG_ENSURE_ARGNOTNULL(0, "command");
+
+	text *commandText = PG_GETARG_TEXT_P(0);
+	char *command = text_to_cstring(commandText);
+	Node *parseTree = ParseTreeNode(command);
+
+	int saveNestLevel = NewGUCNestLevel();
+
+	set_config_option("citus.enable_ddl_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	set_config_option("citus.enable_create_database_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	/*
+	 * createdb() uses ParseState to report the error position for the
+	 * input command and the position is reported to be 0 when it's provided as NULL.
+	 * We're okay with that because we don't expect this UDF to be called with an incorrect
+	 * DDL command.
+	 */
+	ParseState *pstate = NULL;
+
+	if (IsA(parseTree, CreatedbStmt))
+	{
+		CreatedbStmt *stmt = castNode(CreatedbStmt, parseTree);
+
+		bool missingOk = true;
+		Oid databaseOid = get_database_oid(stmt->dbname, missingOk);
+
+		if (!OidIsValid(databaseOid))
+		{
+			createdb(pstate, (CreatedbStmt *) parseTree);
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("citus_internal.database_command() can only be used "
+							   "for CREATE DATABASE command by Citus.")));
+	}
+
+	/* rollback GUCs to the state before this session */
+	AtEOXact_GUC(true, saveNestLevel);
 
 	PG_RETURN_VOID();
 }
@@ -3925,7 +4237,7 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 	StringInfo insertColocationCommand = makeStringInfo();
 
 	appendStringInfo(insertColocationCommand,
-					 "SELECT pg_catalog.citus_internal_add_colocation_metadata("
+					 "SELECT citus_internal.add_colocation_metadata("
 					 "%d, %d, %d, %s, %s)",
 					 colocationId,
 					 shardCount,
@@ -4037,7 +4349,7 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 	StringInfo deleteColocationCommand = makeStringInfo();
 
 	appendStringInfo(deleteColocationCommand,
-					 "SELECT pg_catalog.citus_internal_delete_colocation_metadata(%d)",
+					 "SELECT citus_internal.delete_colocation_metadata(%d)",
 					 colocationId);
 
 	return deleteColocationCommand->data;
@@ -4053,7 +4365,7 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+					 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 					 RemoteSchemaIdExpressionById(schemaId), colocationId);
 
 	return command->data;
@@ -4069,7 +4381,7 @@ TenantSchemaDeleteCommand(char *schemaName)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 "SELECT citus_internal.delete_tenant_schema(%s)",
 					 RemoteSchemaIdExpressionByName(schemaName));
 
 	return command->data;
@@ -4086,7 +4398,7 @@ UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(%s, '%c', %u, %s)",
+					 "SELECT citus_internal.update_none_dist_table_metadata(%s, '%c', %u, %s)",
 					 RemoteTableIdExpression(relationId), replicationModel, colocationId,
 					 autoConverted ? "true" : "false");
 
@@ -4104,7 +4416,7 @@ AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal_add_placement_metadata(%ld, %ld, %d, %ld)",
+					 "SELECT citus_internal.add_placement_metadata(%ld, %ld, %d, %ld)",
 					 shardId, shardLength, groupId, placementId);
 	return command->data;
 }
@@ -4119,7 +4431,7 @@ DeletePlacementMetadataCommand(uint64 placementId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_placement_metadata(%ld)",
+					 "SELECT citus_internal.delete_placement_metadata(%ld)",
 					 placementId);
 	return command->data;
 }
@@ -4734,7 +5046,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		}
 
 		appendStringInfo(colocationGroupCreateCommand,
-						 ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
+						 ") SELECT citus_internal.add_colocation_metadata("
 						 "colocationid, shardcount, replicationfactor, "
 						 "distributioncolumntype, coalesce(c.oid, 0)) "
 						 "FROM colocation_group_data d LEFT JOIN pg_collation c "
@@ -4785,7 +5097,7 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+						 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
@@ -4994,6 +5306,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 
 		char *workerMetadataUpdateCommand =
 			MarkObjectsDistributedCreateCommand(list_make1(address),
+												NIL,
 												list_make1_int(distributionArgumentIndex),
 												list_make1_int(colocationId),
 												list_make1_int(forceDelegation));

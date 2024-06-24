@@ -7,19 +7,25 @@
 SET citus.next_shard_id TO 1390000;
 -- Tests with invalid relation IDs
 SELECT citus_table_size(1);
-ERROR:  could not compute table size: relation does not exist
+ERROR:  could not compute relation size: relation does not exist
 SELECT citus_relation_size(1);
-ERROR:  could not compute table size: relation does not exist
+ERROR:  could not compute relation size: relation does not exist
 SELECT citus_total_relation_size(1);
-ERROR:  could not compute table size: relation does not exist
+ERROR:  could not compute relation size: relation does not exist
 -- Tests with non-distributed table
-CREATE TABLE non_distributed_table (x int);
+CREATE TABLE non_distributed_table (x int primary key);
 SELECT citus_table_size('non_distributed_table');
 ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
 SELECT citus_relation_size('non_distributed_table');
 ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
 SELECT citus_total_relation_size('non_distributed_table');
 ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
+SELECT citus_table_size('non_distributed_table_pkey');
+ERROR:  cannot calculate the size because table 'non_distributed_table' for index 'non_distributed_table_pkey' is not distributed
+SELECT citus_relation_size('non_distributed_table_pkey');
+ERROR:  cannot calculate the size because table 'non_distributed_table' for index 'non_distributed_table_pkey' is not distributed
+SELECT citus_total_relation_size('non_distributed_table_pkey');
+ERROR:  cannot calculate the size because table 'non_distributed_table' for index 'non_distributed_table_pkey' is not distributed
 DROP TABLE non_distributed_table;
 -- fix broken placements via disabling the node
 SET client_min_messages TO ERROR;
@@ -31,24 +37,70 @@ SELECT replicate_table_shards('lineitem_hash_part', shard_replication_factor:=2,
 
 -- Tests on distributed table with replication factor > 1
 VACUUM (FULL) lineitem_hash_part;
-SELECT citus_table_size('lineitem_hash_part');
- citus_table_size
+SELECT citus_relation_size('lineitem_hash_part') <= citus_table_size('lineitem_hash_part');
+ ?column?
 ---------------------------------------------------------------------
-          3801088
+ t
 (1 row)
 
-SELECT citus_relation_size('lineitem_hash_part');
- citus_relation_size
+SELECT citus_table_size('lineitem_hash_part') <= citus_total_relation_size('lineitem_hash_part');
+ ?column?
 ---------------------------------------------------------------------
-             3801088
+ t
 (1 row)
 
-SELECT citus_total_relation_size('lineitem_hash_part');
- citus_total_relation_size
+SELECT citus_relation_size('lineitem_hash_part') > 0;
+ ?column?
 ---------------------------------------------------------------------
-                   3801088
+ t
 (1 row)
 
+CREATE INDEX lineitem_hash_part_idx ON lineitem_hash_part(l_orderkey);
+VACUUM (FULL) lineitem_hash_part;
+SELECT citus_relation_size('lineitem_hash_part') <= citus_table_size('lineitem_hash_part');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_table_size('lineitem_hash_part') <= citus_total_relation_size('lineitem_hash_part');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_relation_size('lineitem_hash_part') > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_relation_size('lineitem_hash_part_idx') <= citus_table_size('lineitem_hash_part_idx');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_table_size('lineitem_hash_part_idx') <= citus_total_relation_size('lineitem_hash_part_idx');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_relation_size('lineitem_hash_part_idx') > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_total_relation_size('lineitem_hash_part') >=
+       citus_table_size('lineitem_hash_part') + citus_table_size('lineitem_hash_part_idx');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP INDEX lineitem_hash_part_idx;
 VACUUM (FULL) customer_copy_hash;
 -- Tests on distributed tables with streaming replication.
 SELECT citus_table_size('customer_copy_hash');
@@ -72,10 +124,10 @@ SELECT citus_total_relation_size('customer_copy_hash');
 -- Make sure we can get multiple sizes in a single query
 SELECT citus_table_size('customer_copy_hash'),
        citus_table_size('customer_copy_hash'),
-       citus_table_size('supplier');
+       citus_table_size('customer_copy_hash');
  citus_table_size | citus_table_size | citus_table_size
 ---------------------------------------------------------------------
-           548864 |           548864 |           655360
+           548864 |           548864 |           548864
 (1 row)
 
 CREATE INDEX index_1 on customer_copy_hash(c_custkey);
@@ -97,6 +149,24 @@ SELECT citus_total_relation_size('customer_copy_hash');
  citus_total_relation_size
 ---------------------------------------------------------------------
                    2646016
+(1 row)
+
+SELECT citus_table_size('index_1');
+ citus_table_size
+---------------------------------------------------------------------
+          1048576
+(1 row)
+
+SELECT citus_relation_size('index_1');
+ citus_relation_size
+---------------------------------------------------------------------
+             1048576
+(1 row)
+
+SELECT citus_total_relation_size('index_1');
+ citus_total_relation_size
+---------------------------------------------------------------------
+                   1048576
 (1 row)
 
 -- Tests on reference table
@@ -139,6 +209,74 @@ SELECT citus_total_relation_size('supplier');
                     688128
 (1 row)
 
+SELECT citus_table_size('index_2');
+ citus_table_size
+---------------------------------------------------------------------
+           122880
+(1 row)
+
+SELECT citus_relation_size('index_2');
+ citus_relation_size
+---------------------------------------------------------------------
+              122880
+(1 row)
+
+SELECT citus_total_relation_size('index_2');
+ citus_total_relation_size
+---------------------------------------------------------------------
+                    122880
+(1 row)
+
+-- Test on partitioned table
+CREATE TABLE split_me (dist_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
+CREATE INDEX ON split_me(dist_col);
+-- create 2 partitions
+CREATE TABLE m PARTITION OF split_me FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
+CREATE TABLE e PARTITION OF split_me FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+INSERT INTO split_me SELECT 1, '2018-01-01'::timestamp + i * interval '1 day' FROM generate_series(1, 360) i;
+INSERT INTO split_me SELECT 2, '2019-01-01'::timestamp + i * interval '1 day' FROM generate_series(1, 180) i;
+-- before citus
+SELECT citus_relation_size('split_me');
+ERROR:  cannot calculate the size because relation 'split_me' is not distributed
+SELECT citus_relation_size('split_me_dist_col_idx');
+ERROR:  cannot calculate the size because table 'split_me' for index 'split_me_dist_col_idx' is not distributed
+SELECT citus_relation_size('m');
+ERROR:  cannot calculate the size because relation 'm' is not distributed
+SELECT citus_relation_size('m_dist_col_idx');
+ERROR:  cannot calculate the size because table 'm' for index 'm_dist_col_idx' is not distributed
+-- distribute the table(s)
+SELECT create_distributed_table('split_me', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- after citus
+SELECT citus_relation_size('split_me');
+ citus_relation_size
+---------------------------------------------------------------------
+                   0
+(1 row)
+
+SELECT citus_relation_size('split_me_dist_col_idx');
+ citus_relation_size
+---------------------------------------------------------------------
+                   0
+(1 row)
+
+SELECT citus_relation_size('m');
+ citus_relation_size
+---------------------------------------------------------------------
+               32768
+(1 row)
+
+SELECT citus_relation_size('m_dist_col_idx');
+ citus_relation_size
+---------------------------------------------------------------------
+               81920
+(1 row)
+
+DROP TABLE split_me;
 -- Test inside the transaction
 BEGIN;
 ALTER TABLE supplier ALTER COLUMN s_suppkey SET NOT NULL;

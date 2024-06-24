@@ -1,0 +1,154 @@
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SCHEMA failure_non_main_db_2pc;
+SET SEARCH_PATH TO 'failure_non_main_db_2pc';
+CREATE DATABASE other_db1;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+SELECT citus.mitmproxy('conn.onQuery(query="COMMIT PREPARED").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c other_db1
+CREATE USER user_1;
+\c regression
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT nodeid, result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_1'$$) ORDER BY 1;
+ nodeid | result
+---------------------------------------------------------------------
+      0 | user_1
+      1 | user_1
+      2 |
+(3 rows)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             1
+(1 row)
+
+SELECT nodeid, result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_1'$$) ORDER BY 1;
+ nodeid | result
+---------------------------------------------------------------------
+      0 | user_1
+      1 | user_1
+      2 | user_1
+(3 rows)
+
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE USER user_2").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c other_db1
+CREATE USER user_2;
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+while executing command on localhost:xxxxx
+\c regression
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT nodeid, result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_2'$$) ORDER BY 1;
+ nodeid | result
+---------------------------------------------------------------------
+      0 |
+      1 |
+      2 |
+(3 rows)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             0
+(1 row)
+
+SELECT nodeid, result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_2'$$) ORDER BY 1;
+ nodeid | result
+---------------------------------------------------------------------
+      0 |
+      1 |
+      2 |
+(3 rows)
+
+DROP DATABASE other_db1;
+-- user_2 should not exist because the query to create it will fail
+-- but let's make sure we try to drop it just in case
+DROP USER IF EXISTS user_1, user_2;
+NOTICE:  role "user_2" does not exist, skipping
+SELECT citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+CREATE DATABASE other_db2;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+SELECT citus.mitmproxy('conn.onQuery(query="COMMIT PREPARED").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c other_db2
+CREATE USER user_3;
+\c regression
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_3'$$) ORDER BY 1;
+ result
+---------------------------------------------------------------------
+
+ user_3
+ user_3
+(3 rows)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             1
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT rolname FROM pg_roles WHERE rolname::TEXT = 'user_3'$$) ORDER BY 1;
+ result
+---------------------------------------------------------------------
+ user_3
+ user_3
+ user_3
+(3 rows)
+
+DROP DATABASE other_db2;
+DROP USER user_3;
+\c - - - :master_port
+SELECT result FROM  run_command_on_all_nodes($$DELETE FROM pg_dist_node WHERE groupid = 0$$);
+  result
+---------------------------------------------------------------------
+ DELETE 1
+ DELETE 1
+ DELETE 1
+(3 rows)
+
+DROP SCHEMA failure_non_main_db_2pc;

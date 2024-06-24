@@ -285,14 +285,7 @@ SELECT citus_schema_undistribute('tenant1');
 ERROR:  must be owner of schema tenant1
 -- assign all tables to dummyregular except table5
 SET role tenantuser;
-SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY tenantuser TO dummyregular; $$);
-     result
----------------------------------------------------------------------
- REASSIGN OWNED
- REASSIGN OWNED
- REASSIGN OWNED
-(3 rows)
-
+REASSIGN OWNED BY tenantuser TO dummyregular;
 CREATE TABLE tenant1.table5(id int);
 -- table owner check fails the distribution
 SET role dummyregular;
@@ -366,14 +359,7 @@ SELECT result FROM run_command_on_all_nodes($$ SELECT array_agg(logicalrelid ORD
 (3 rows)
 
 RESET role;
-SELECT result FROM run_command_on_all_nodes($$ REASSIGN OWNED BY dummyregular TO tenantuser; $$);
-     result
----------------------------------------------------------------------
- REASSIGN OWNED
- REASSIGN OWNED
- REASSIGN OWNED
-(3 rows)
-
+REASSIGN OWNED BY dummyregular TO tenantuser;
 DROP USER dummyregular;
 CREATE USER dummysuper superuser;
 SET role dummysuper;

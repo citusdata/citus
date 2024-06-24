@@ -34,22 +34,23 @@
  */
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
-
-#include "distributed/distributed_planner.h"
-#include "distributed/insert_select_planner.h"
-#include "distributed/multi_physical_planner.h" /* only to use some utility functions */
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shard_pruning.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "optimizer/optimizer.h"
 #include "tcop/pquery.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/distributed_planner.h"
+#include "distributed/insert_select_planner.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_physical_planner.h" /* only to use some utility functions */
+#include "distributed/multi_router_planner.h"
+#include "distributed/pg_dist_partition.h"
+#include "distributed/shard_pruning.h"
+#include "distributed/shardinterval_utils.h"
 
 bool EnableFastPathRouterPlanner = true;
 
@@ -154,7 +155,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
  * being a fast path router query.
  * The requirements for the fast path query can be listed below:
  *
- *   - SELECT query without CTES, sublinks-subqueries, set operations
+ *   - SELECT/UPDATE/DELETE query without CTES, sublinks-subqueries, set operations
  *   - The query should touch only a single hash distributed or reference table
  *   - The distribution with equality operator should be in the WHERE clause
  *      and it should be ANDed with any other filters. Also, the distribution
@@ -251,7 +252,7 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 
 	/*
 	 * Distribution column must be used in a simple equality match check and it must be
-	 * place at top level conjustion operator. In simple words, we should have
+	 * place at top level conjunction operator. In simple words, we should have
 	 *	    WHERE dist_key = VALUE [AND  ....];
 	 *
 	 *	We're also not allowing any other appearances of the distribution key in the quals.

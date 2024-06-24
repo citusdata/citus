@@ -17,9 +17,10 @@
 
 #include "postgres.h"
 
-#include "distributed/deparser.h"
 #include "nodes/nodes.h"
 #include "utils/guc.h"
+
+#include "distributed/deparser.h"
 
 
 static void QualifyVarSetCurrent(VariableSetStmt *setStmt);

@@ -12,11 +12,13 @@
 
 #include "postgres.h"
 
+#include "pg_version_constants.h"
+
 #include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/pg_version_constants.h"
-#include "distributed/version_compat.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
+#include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 
 static DistributeObjectOps NoDistributeOps = {
 	.deparse = NULL,
@@ -274,6 +276,17 @@ static DistributeObjectOps Any_CreateRole = {
 	.address = CreateRoleStmtObjectAddress,
 	.markDistributed = true,
 };
+
+static DistributeObjectOps Any_ReassignOwned = {
+	.deparse = DeparseReassignOwnedStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessReassignOwnedStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
+
 static DistributeObjectOps Any_DropOwned = {
 	.deparse = DeparseDropOwnedStmt,
 	.qualify = NULL,
@@ -290,6 +303,17 @@ static DistributeObjectOps Any_DropRole = {
 	.postprocess = NULL,
 	.operationType = DIST_OPS_DROP,
 	.address = NULL,
+	.markDistributed = false,
+};
+
+static DistributeObjectOps Role_Comment = {
+	.deparse = DeparseCommentStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Any_CreateForeignServer = {
@@ -372,6 +396,15 @@ static DistributeObjectOps Any_Rename = {
 	.postprocess = NULL,
 	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps Any_SecLabel = {
+	.deparse = DeparseSecLabelStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessSecLabelStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = SecLabelStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Attribute_Rename = {
@@ -466,6 +499,28 @@ static DistributeObjectOps Database_Alter = {
 	.markDistributed = false,
 };
 
+static DistributeObjectOps Database_Create = {
+	.deparse = DeparseCreateDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessCreateDatabaseStmt,
+	.postprocess = PostprocessCreateDatabaseStmt,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_CREATE,
+	.address = CreateDatabaseStmtObjectAddress,
+	.markDistributed = true,
+};
+
+static DistributeObjectOps Database_Drop = {
+	.deparse = DeparseDropDatabaseStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropDatabaseStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_DROP,
+	.address = DropDatabaseStmtObjectAddress,
+	.markDistributed = false,
+};
+
 #if PG_VERSION_NUM >= PG_VERSION_15
 static DistributeObjectOps Database_RefreshColl = {
 	.deparse = DeparseAlterDatabaseRefreshCollStmt,
@@ -490,6 +545,27 @@ static DistributeObjectOps Database_Set = {
 	.markDistributed = false,
 };
 
+static DistributeObjectOps Database_Comment = {
+	.deparse = DeparseCommentStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = NULL,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = CommentObjectAddress,
+	.markDistributed = false,
+};
+
+static DistributeObjectOps Database_Rename = {
+	.deparse = DeparseAlterDatabaseRenameStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseRenameStmt,
+	.postprocess = PostprocessAlterDatabaseRenameStmt,
+	.objectType = OBJECT_DATABASE,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
 
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
@@ -919,13 +995,18 @@ static DistributeObjectOps TextSearchConfig_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Comment = {
-	.deparse = DeparseTextSearchConfigurationCommentStmt,
+	.deparse = DeparseCommentStmt,
+
+	/* TODO: When adding new comment types we should create an abstracted
+	 * qualify function, just like we have an abstract deparse
+	 * and adress function
+	 */
 	.qualify = QualifyTextSearchConfigurationCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSCONFIGURATION,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchConfigurationCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Define = {
@@ -988,13 +1069,13 @@ static DistributeObjectOps TextSearchDict_AlterOwner = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Comment = {
-	.deparse = DeparseTextSearchDictionaryCommentStmt,
+	.deparse = DeparseCommentStmt,
 	.qualify = QualifyTextSearchDictionaryCommentStmt,
 	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_TSDICTIONARY,
 	.operationType = DIST_OPS_ALTER,
-	.address = TextSearchDictCommentObjectAddress,
+	.address = CommentObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Define = {
@@ -1332,6 +1413,16 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterDatabaseStmt:
 		{
 			return &Database_Alter;
+		}
+
+		case T_CreatedbStmt:
+		{
+			return &Database_Create;
+		}
+
+		case T_DropdbStmt:
+		{
+			return &Database_Drop;
 		}
 
 #if PG_VERSION_NUM >= PG_VERSION_15
@@ -1717,6 +1808,16 @@ GetDistributeObjectOps(Node *node)
 					return &TextSearchDict_Comment;
 				}
 
+				case OBJECT_DATABASE:
+				{
+					return &Database_Comment;
+				}
+
+				case OBJECT_ROLE:
+				{
+					return &Role_Comment;
+				}
+
 				default:
 				{
 					return &NoDistributeOps;
@@ -1824,6 +1925,11 @@ GetDistributeObjectOps(Node *node)
 		case T_DropOwnedStmt:
 		{
 			return &Any_DropOwned;
+		}
+
+		case T_ReassignOwnedStmt:
+		{
+			return &Any_ReassignOwned;
 		}
 
 		case T_DropStmt:
@@ -2020,6 +2126,11 @@ GetDistributeObjectOps(Node *node)
 			return &Vacuum_Analyze;
 		}
 
+		case T_SecLabelStmt:
+		{
+			return &Any_SecLabel;
+		}
+
 		case T_RenameStmt:
 		{
 			RenameStmt *stmt = castNode(RenameStmt, node);
@@ -2038,6 +2149,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Rename;
+				}
+
+				case OBJECT_DATABASE:
+				{
+					return &Database_Rename;
 				}
 
 				case OBJECT_DOMAIN:

@@ -1,0 +1,37 @@
+{
+    "image": "ghcr.io/citusdata/citus-devcontainer:main",
+    "runArgs": [
+        "--cap-add=SYS_PTRACE",
+        "--ulimit=core=-1",
+    ],
+    "forwardPorts": [
+        9700
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "eamodio.gitlens",
+                "GitHub.copilot-chat",
+                "GitHub.copilot",
+                "github.vscode-github-actions",
+                "github.vscode-pull-request-github",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vsliveshare.vsliveshare",
+                "rioj7.command-variable",
+            ],
+            "settings": {
+                "files.exclude": {
+                    "**/*.o": true,
+                    "**/.deps/": true,
+                }
+            },
+        }
+    },
+    "mounts": [
+        "type=volume,target=/data",
+        "source=citus-bashhistory,target=/commandhistory,type=volume",
+    ],
+    "updateContentCommand": "./configure",
+    "postCreateCommand": "make -C .devcontainer/",
+}
+

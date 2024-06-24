@@ -10,12 +10,14 @@
  */
 #include "postgres.h"
 
-#include "distributed/commands/utility_hook.h"
-#include "distributed/worker_protocol.h"
 #include "fmgr.h"
+
 #include "tcop/dest.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+
+#include "distributed/commands/utility_hook.h"
+#include "distributed/worker_protocol.h"
 
 PG_FUNCTION_INFO_V1(alter_role_if_exists);
 PG_FUNCTION_INFO_V1(worker_create_or_alter_role);

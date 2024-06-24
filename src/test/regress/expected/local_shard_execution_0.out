@@ -3281,9 +3281,9 @@ SELECT pg_sleep(0.1); -- wait to make sure the config has changed before running
 SET citus.enable_local_execution TO false; -- force a connection to the dummy placements
 -- run queries that use dummy placements for local execution
 SELECT * FROM event_responses WHERE FALSE;
-ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ERROR:  connection to the remote node postgres@foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
 WITH cte_1 AS (SELECT * FROM event_responses LIMIT 1) SELECT count(*) FROM cte_1;
-ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ERROR:  connection to the remote node postgres@foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
  pg_reload_conf

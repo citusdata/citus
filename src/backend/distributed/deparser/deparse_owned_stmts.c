@@ -11,13 +11,14 @@
 
 #include "postgres.h"
 
+#include "lib/stringinfo.h"
+#include "nodes/parsenodes.h"
+#include "utils/builtins.h"
+
 #include "pg_version_compat.h"
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
-#include "lib/stringinfo.h"
-#include "nodes/parsenodes.h"
-#include "utils/builtins.h"
 
 static void AppendDropOwnedStmt(StringInfo buf, DropOwnedStmt *stmt);
 static void AppendRoleList(StringInfo buf, List *roleList);
@@ -70,7 +71,7 @@ AppendRoleList(StringInfo buf, List *roleList)
 	{
 		Node *roleNode = (Node *) lfirst(cell);
 		Assert(IsA(roleNode, RoleSpec) || IsA(roleNode, AccessPriv));
-		char const *rolename = NULL;
+		const char *rolename = NULL;
 		if (IsA(roleNode, RoleSpec))
 		{
 			rolename = RoleSpecString((RoleSpec *) roleNode, true);
@@ -81,4 +82,28 @@ AppendRoleList(StringInfo buf, List *roleList)
 			appendStringInfo(buf, ", ");
 		}
 	}
+}
+
+
+static void
+AppendReassignOwnedStmt(StringInfo buf, ReassignOwnedStmt *stmt)
+{
+	appendStringInfo(buf, "REASSIGN OWNED BY ");
+
+	AppendRoleList(buf, stmt->roles);
+	const char *newRoleName = RoleSpecString(stmt->newrole, true);
+	appendStringInfo(buf, " TO %s", newRoleName);
+}
+
+
+char *
+DeparseReassignOwnedStmt(Node *node)
+{
+	ReassignOwnedStmt *stmt = castNode(ReassignOwnedStmt, node);
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	AppendReassignOwnedStmt(&buf, stmt);
+
+	return buf.data;
 }

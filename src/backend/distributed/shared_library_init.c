@@ -7,11 +7,11 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
 #include <limits.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#include "postgres.h"
 
 /* necessary to get alloca on illumos */
 #ifdef __sun
@@ -20,92 +20,24 @@
 
 #include "fmgr.h"
 #include "miscadmin.h"
-
 #include "safe_lib.h"
 
-#include "catalog/pg_authid.h"
 #include "catalog/objectaccess.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_extension.h"
-#include "citus_version.h"
 #include "commands/explain.h"
 #include "commands/extension.h"
+#include "commands/seclabel.h"
 #include "common/string.h"
 #include "executor/executor.h"
-#include "distributed/backend_data.h"
-#include "distributed/background_jobs.h"
-#include "distributed/causal_clock.h"
-#include "distributed/citus_depended_object.h"
-#include "distributed/citus_nodefuncs.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/commands.h"
-#include "distributed/commands/multi_copy.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/connection_management.h"
-#include "distributed/cte_inline.h"
-#include "distributed/distributed_deadlock_detection.h"
-#include "distributed/errormessage.h"
-#include "distributed/repartition_executor.h"
-#include "distributed/intermediate_result_pruning.h"
-#include "distributed/local_multi_copy.h"
-#include "distributed/local_executor.h"
-#include "distributed/local_distributed_join_planner.h"
-#include "distributed/locally_reserved_shared_connections.h"
-#include "distributed/log_utils.h"
-#include "distributed/maintenanced.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_explain.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/multi_logical_replication.h"
-#include "distributed/multi_logical_optimizer.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/combine_query_planner.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/placement_connection.h"
-#include "distributed/priority.h"
-#include "distributed/query_stats.h"
-#include "distributed/recursive_planning.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/relation_access_tracking.h"
-#include "distributed/replication_origin_session_utils.h"
-#include "distributed/run_from_same_connection.h"
-#include "distributed/shard_cleaner.h"
-#include "distributed/shard_transfer.h"
-#include "distributed/shared_connection_stats.h"
-#include "distributed/shardsplit_shared_memory.h"
-#include "distributed/query_pushdown_planning.h"
-#include "distributed/time_constants.h"
-#include "distributed/query_stats.h"
-#include "distributed/remote_commands.h"
-#include "distributed/shard_rebalancer.h"
-#include "distributed/shared_library_init.h"
-#include "distributed/statistics_collection.h"
-#include "distributed/subplan_execution.h"
-#include "distributed/resource_lock.h"
-#include "distributed/transaction_management.h"
-#include "distributed/transaction_recovery.h"
-#include "distributed/utils/citus_stat_tenants.h"
-#include "distributed/utils/directory.h"
-#include "distributed/worker_log_messages.h"
-#include "distributed/worker_manager.h"
-#include "distributed/worker_protocol.h"
-#include "distributed/worker_shard_visibility.h"
-#include "distributed/adaptive_executor.h"
 #include "libpq/auth.h"
+#include "optimizer/paths.h"
+#include "optimizer/plancat.h"
+#include "optimizer/planner.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
 #include "storage/ipc.h"
-#include "optimizer/planner.h"
-#include "optimizer/plancat.h"
-#include "optimizer/paths.h"
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
@@ -114,7 +46,76 @@
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
+#include "citus_version.h"
+
 #include "columnar/columnar.h"
+
+#include "distributed/adaptive_executor.h"
+#include "distributed/backend_data.h"
+#include "distributed/background_jobs.h"
+#include "distributed/causal_clock.h"
+#include "distributed/citus_depended_object.h"
+#include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_safe_lib.h"
+#include "distributed/combine_query_planner.h"
+#include "distributed/commands.h"
+#include "distributed/commands/multi_copy.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/cte_inline.h"
+#include "distributed/distributed_deadlock_detection.h"
+#include "distributed/distributed_planner.h"
+#include "distributed/errormessage.h"
+#include "distributed/intermediate_result_pruning.h"
+#include "distributed/local_distributed_join_planner.h"
+#include "distributed/local_executor.h"
+#include "distributed/local_multi_copy.h"
+#include "distributed/locally_reserved_shared_connections.h"
+#include "distributed/log_utils.h"
+#include "distributed/maintenanced.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_logical_replication.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
+#include "distributed/multi_server_executor.h"
+#include "distributed/pg_dist_partition.h"
+#include "distributed/placement_connection.h"
+#include "distributed/priority.h"
+#include "distributed/query_pushdown_planning.h"
+#include "distributed/query_stats.h"
+#include "distributed/recursive_planning.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/relation_access_tracking.h"
+#include "distributed/remote_commands.h"
+#include "distributed/remote_transaction.h"
+#include "distributed/repartition_executor.h"
+#include "distributed/replication_origin_session_utils.h"
+#include "distributed/resource_lock.h"
+#include "distributed/run_from_same_connection.h"
+#include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
+#include "distributed/shard_transfer.h"
+#include "distributed/shardsplit_shared_memory.h"
+#include "distributed/shared_connection_stats.h"
+#include "distributed/shared_library_init.h"
+#include "distributed/statistics_collection.h"
+#include "distributed/subplan_execution.h"
+#include "distributed/time_constants.h"
+#include "distributed/transaction_management.h"
+#include "distributed/transaction_recovery.h"
+#include "distributed/utils/citus_stat_tenants.h"
+#include "distributed/utils/directory.h"
+#include "distributed/worker_log_messages.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
@@ -481,6 +482,7 @@ _PG_init(void)
 #endif
 
 	InitializeMaintenanceDaemon();
+	InitializeMaintenanceDaemonForMainDb();
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
@@ -543,7 +545,7 @@ _PG_init(void)
 	 */
 	PrevProcessUtility = (ProcessUtility_hook != NULL) ?
 						 ProcessUtility_hook : standard_ProcessUtility;
-	ProcessUtility_hook = multi_ProcessUtility;
+	ProcessUtility_hook = citus_ProcessUtility;
 
 	/*
 	 * Acquire symbols for columnar functions that citus calls.
@@ -573,6 +575,16 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+
+	/*
+	 * This part is only for SECURITY LABEL tests
+	 * mimicking what an actual security label provider would do
+	 */
+	if (RunningUnderCitusTestSuite)
+	{
+		register_label_provider("citus '!tests_label_provider",
+								citus_test_object_relabel);
+	}
 }
 
 
@@ -883,22 +895,13 @@ DecrementExternalClientBackendCounterAtExit(int code, Datum arg)
 static void
 CreateRequiredDirectories(void)
 {
-	const char *subdirs[] = {
-		"pg_foreign_file",
-		"pg_foreign_file/cached",
-		("base/" PG_JOB_CACHE_DIR)
-	};
+	const char *subdir = ("base/" PG_JOB_CACHE_DIR);
 
-	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
+	if (MakePGDirectory(subdir) != 0 && errno != EEXIST)
 	{
-		int ret = mkdir(subdirs[dirNo], S_IRWXU);
-
-		if (ret != 0 && errno != EEXIST)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not create directory \"%s\": %m",
-								   subdirs[dirNo])));
-		}
+		ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not create directory \"%s\": %m",
+							   subdir)));
 	}
 }
 
@@ -1260,6 +1263,17 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_create_database_propagation",
+		gettext_noop("Enables propagating CREATE DATABASE "
+					 "and DROP DATABASE statements to workers."),
+		NULL,
+		&EnableCreateDatabasePropagation,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1820,6 +1834,16 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.main_db",
+		gettext_noop("Which database is designated as the main_db"),
+		NULL,
+		&MainDb,
+		"",
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
 		gettext_noop("Sets the maximum number of connections per worker node used by "
@@ -2294,13 +2318,14 @@ RegisterCitusConfigVariables(void)
 		WarnIfReplicationModelIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.running_under_isolation_test",
+		"citus.running_under_citus_test_suite",
 		gettext_noop(
 			"Only useful for testing purposes, when set to true, Citus does some "
-			"tricks to implement useful isolation tests with rebalancing. Should "
+			"tricks to implement useful isolation tests with rebalancing. It also "
+			"registers a dummy label provider for SECURITY LABEL tests. Should "
 			"never be set to true on production systems "),
 		gettext_noop("for details of the tricks implemented, refer to the source code"),
-		&RunningUnderIsolationTest,
+		&RunningUnderCitusTestSuite,
 		false,
 		PGC_SUSET,
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
@@ -2536,6 +2561,17 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.superuser",
+		gettext_noop("Name of a superuser role to be used in Citus main database "
+					 "connections"),
+		NULL,
+		&SuperuserRole,
+		"",
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
 		"citus.task_assignment_policy",
@@ -2893,6 +2929,7 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 			#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
 		"gsslib",
 			#endif
+		"host",
 		"keepalives",
 		"keepalives_count",
 		"keepalives_idle",
@@ -3116,6 +3153,8 @@ CitusAuthHook(Port *port, int status)
 	 */
 	InitializeBackendData(port->application_name);
 
+	IsMainDB = (strncmp(MainDb, "", NAMEDATALEN) == 0 ||
+				strncmp(MainDb, port->database_name, NAMEDATALEN) == 0);
 
 	/* let other authentication hooks to kick in first */
 	if (original_client_auth_hook)

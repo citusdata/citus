@@ -658,9 +658,9 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('extension', ARRAY['citus_columnar']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('extension', ARRAY['citus_columnar']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('extension', ARRAY['citus_columnar']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('extension', ARRAY['citus_columnar']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915002, 'fix_idx_names', 'CREATE TABLE fix_idx_names.p2 (dist_col integer NOT NULL, another_col integer, partition_col timestamp without time zone NOT NULL, name text) USING columnar')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -692,25 +692,25 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370001, 's')
+NOTICE:  issuing SELECT citus_internal.add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370001, 's')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370001, 's')
+NOTICE:  issuing SELECT citus_internal.add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370001, 's')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal.add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal.add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH placement_data(shardid, shardlength, groupid, placementid)  AS (VALUES (xxxxxx, xxxxxx, xxxxxx, xxxxxx)) SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+NOTICE:  issuing WITH placement_data(shardid, shardlength, groupid, placementid)  AS (VALUES (xxxxxx, xxxxxx, xxxxxx, xxxxxx)) SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH placement_data(shardid, shardlength, groupid, placementid)  AS (VALUES (xxxxxx, xxxxxx, xxxxxx, xxxxxx)) SELECT citus_internal_add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+NOTICE:  issuing WITH placement_data(shardid, shardlength, groupid, placementid)  AS (VALUES (xxxxxx, xxxxxx, xxxxxx, xxxxxx)) SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('table', ARRAY['fix_idx_names', 'p2']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('table', ARRAY['fix_idx_names', 'p2']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('table', ARRAY['fix_idx_names', 'p2']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('table', ARRAY['fix_idx_names', 'p2']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal.add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

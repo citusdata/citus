@@ -9,18 +9,11 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
 
 #include "catalog/pg_publication.h"
 #include "catalog/pg_publication_rel.h"
-#include "distributed/commands.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_utility.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/metadata/distobject.h"
-#include "distributed/reference_table_utils.h"
-#include "distributed/worker_create_or_replace.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
@@ -28,6 +21,15 @@
 #include "utils/syscache.h"
 
 #include "pg_version_compat.h"
+
+#include "distributed/commands.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/reference_table_utils.h"
+#include "distributed/worker_create_or_replace.h"
 
 
 static CreatePublicationStmt * BuildCreatePublicationStmt(Oid publicationId);
@@ -175,7 +177,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 												PUBLICATION_PART_ROOT :
 												PUBLICATION_PART_LEAF);
 	Oid relationId = InvalidOid;
-	int citusTableCount PG_USED_FOR_ASSERTS_ONLY = 0;
 
 	/* mainly for consistent ordering in test output */
 	relationIds = SortList(relationIds, CompareOids);
@@ -199,11 +200,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 		createPubStmt->tables = lappend(createPubStmt->tables, rangeVar);
 #endif
-
-		if (IsCitusTable(relationId))
-		{
-			citusTableCount++;
-		}
 	}
 
 	/* WITH (publish_via_partition_root = true) option */

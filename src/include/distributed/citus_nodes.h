@@ -92,38 +92,21 @@ CitusNodeTagI(Node *node)
 	return ((CitusNode*)(node))->citus_tag;
 }
 
-/*
- * Postgres's nodes/nodes.h has more information on why we do this.
- */
-#ifdef __GNUC__
 
 /* Citus variant of newNode(), don't use directly. */
-#define CitusNewNode(size, tag) \
-({	CitusNode   *_result; \
-	AssertMacro((size) >= sizeof(CitusNode));		/* need the tag, at least */ \
-	_result = (CitusNode *) palloc0fast(size); \
-	_result->extensible.type = T_ExtensibleNode; \
-	_result->extensible.extnodename = CitusNodeTagNames[tag - CITUS_NODE_TAG_START]; \
-	_result->citus_tag =(int) (tag); \
-	_result; \
-})
+static inline CitusNode *
+CitusNewNode(size_t size, CitusNodeTag tag)
+{
+	CitusNode	   *result;
 
-#else
+	Assert(size >= sizeof(CitusNode));		/* need the ExtensibleNode and the tag, at least */
+	result = (CitusNode *) palloc0(size);
+	result->extensible.type = T_ExtensibleNode;
+	result->extensible.extnodename = CitusNodeTagNames[tag - CITUS_NODE_TAG_START];
+	result->citus_tag = (int) (tag);
 
-extern CitusNode *newCitusNodeMacroHolder;
-
-#define CitusNewNode(size, tag) \
-( \
-	AssertMacro((size) >= sizeof(CitusNode)),		/* need the tag, at least */ \
-	newCitusNodeMacroHolder = (CitusNode *) palloc0fast(size), \
-	newCitusNodeMacroHolder->extensible.type = T_ExtensibleNode, \
-	newCitusNodeMacroHolder->extensible.extnodename = CitusNodeTagNames[tag - CITUS_NODE_TAG_START], \
-	newCitusNodeMacroHolder->citus_tag =(int) (tag), \
-	newCitusNodeMacroHolder \
-)
-
-#endif
-
+	return result;
+}
 
 /*
  * IsA equivalent that compares node tags, including Citus-specific nodes.

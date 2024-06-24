@@ -12,9 +12,11 @@
 #define CITUS_CDC_DECODER_H
 
 #include "postgres.h"
-#include "fmgr.h"
-#include "replication/logical.h"
+
 #include "c.h"
+#include "fmgr.h"
+
+#include "replication/logical.h"
 
 #define InvalidRepOriginId 0
 #define INVALID_SHARD_ID 0

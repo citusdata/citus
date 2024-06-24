@@ -1,0 +1,339 @@
+CREATE SCHEMA other_databases;
+SET search_path TO other_databases;
+SET citus.next_shard_id TO 10231023;
+CREATE DATABASE other_db1;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+\c other_db1
+SHOW citus.main_db;
+ citus.main_db
+---------------------------------------------------------------------
+ regression
+(1 row)
+
+-- check that empty citus.superuser gives error
+SET citus.superuser TO '';
+CREATE USER empty_superuser;
+ERROR:  No superuser role is given for Citus main database connection
+HINT:  Set citus.superuser to a superuser role name
+SET citus.superuser TO 'postgres';
+CREATE USER other_db_user1;
+CREATE USER other_db_user2;
+BEGIN;
+CREATE USER other_db_user3;
+CREATE USER other_db_user4;
+COMMIT;
+BEGIN;
+CREATE USER other_db_user5;
+CREATE USER other_db_user6;
+ROLLBACK;
+BEGIN;
+CREATE USER other_db_user7;
+SELECT 1/0;
+ERROR:  division by zero
+COMMIT;
+CREATE USER other_db_user8;
+\c regression
+SELECT usename FROM pg_user WHERE usename LIKE 'other\_db\_user%' ORDER BY 1;
+    usename
+---------------------------------------------------------------------
+ other_db_user1
+ other_db_user2
+ other_db_user3
+ other_db_user4
+ other_db_user8
+(5 rows)
+
+\c - - - :worker_1_port
+SELECT usename FROM pg_user WHERE usename LIKE 'other\_db\_user%' ORDER BY 1;
+    usename
+---------------------------------------------------------------------
+ other_db_user1
+ other_db_user2
+ other_db_user3
+ other_db_user4
+ other_db_user8
+(5 rows)
+
+\c - - - :master_port
+-- some user creation commands will fail but let's make sure we try to drop them just in case
+DROP USER IF EXISTS other_db_user1, other_db_user2, other_db_user3, other_db_user4, other_db_user5, other_db_user6, other_db_user7, other_db_user8;
+NOTICE:  role "other_db_user5" does not exist, skipping
+NOTICE:  role "other_db_user6" does not exist, skipping
+NOTICE:  role "other_db_user7" does not exist, skipping
+-- Make sure non-superuser roles cannot use internal GUCs
+-- but they can still create a role
+CREATE USER nonsuperuser CREATEROLE;
+GRANT ALL ON SCHEMA citus_internal TO nonsuperuser;
+SET ROLE nonsuperuser;
+SELECT citus_internal.execute_command_on_remote_nodes_as_user($$SELECT 'dangerous query'$$, 'postgres');
+ERROR:  permission denied for function execute_command_on_remote_nodes_as_user
+\c other_db1
+SET citus.local_hostname TO '127.0.0.1';
+SET ROLE nonsuperuser;
+-- Make sure that we don't try to access pg_dist_node.
+-- Otherwise, we would get the following error:
+--   ERROR:  cache lookup failed for pg_dist_node, called too early?
+CREATE USER other_db_user9;
+RESET ROLE;
+RESET citus.local_hostname;
+RESET ROLE;
+\c regression
+SELECT usename FROM pg_user WHERE usename LIKE 'other\_db\_user%' ORDER BY 1;
+    usename
+---------------------------------------------------------------------
+ other_db_user9
+(1 row)
+
+\c - - - :worker_1_port
+SELECT usename FROM pg_user WHERE usename LIKE 'other\_db\_user%' ORDER BY 1;
+    usename
+---------------------------------------------------------------------
+ other_db_user9
+(1 row)
+
+\c - - - :master_port
+REVOKE ALL ON SCHEMA citus_internal FROM nonsuperuser;
+DROP USER other_db_user9, nonsuperuser;
+-- test from a worker
+\c - - - :worker_1_port
+CREATE DATABASE worker_other_db;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+\c worker_other_db
+CREATE USER worker_user1;
+BEGIN;
+CREATE USER worker_user2;
+COMMIT;
+BEGIN;
+CREATE USER worker_user3;
+ROLLBACK;
+\c regression
+SELECT usename FROM pg_user WHERE usename LIKE 'worker\_user%' ORDER BY 1;
+   usename
+---------------------------------------------------------------------
+ worker_user1
+ worker_user2
+(2 rows)
+
+\c - - - :master_port
+SELECT usename FROM pg_user WHERE usename LIKE 'worker\_user%' ORDER BY 1;
+   usename
+---------------------------------------------------------------------
+ worker_user1
+ worker_user2
+(2 rows)
+
+-- some user creation commands will fail but let's make sure we try to drop them just in case
+DROP USER IF EXISTS worker_user1, worker_user2, worker_user3;
+NOTICE:  role "worker_user3" does not exist, skipping
+-- test creating and dropping a database from a Citus non-main database
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+\c other_db1
+CREATE DATABASE other_db3;
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db3') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                       result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "other_db3", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "other_db3", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "other_db3", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c other_db1
+DROP DATABASE other_db3;
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db3') ORDER BY node_type;
+      node_type       |                                                              result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c worker_other_db - - :worker_1_port
+CREATE DATABASE other_db4;
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db4') ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                       result
+---------------------------------------------------------------------
+ coordinator (remote) | {"database_properties": {"datacl": null, "datname": "other_db4", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (local)  | {"database_properties": {"datacl": null, "datname": "other_db4", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "other_db4", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c worker_other_db
+DROP DATABASE other_db4;
+\c regression
+SELECT * FROM public.check_database_on_all_nodes('other_db4') ORDER BY node_type;
+      node_type       |                                                              result
+---------------------------------------------------------------------
+ coordinator (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+DROP DATABASE worker_other_db;
+CREATE DATABASE other_db5;
+-- disable create database propagation for the next test
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+\c other_db5 - - :worker_2_port
+-- locally create a database
+CREATE DATABASE local_db;
+\c regression - - -
+-- re-enable create database propagation
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+\c other_db5 - - :master_port
+-- Test a scenario where create database fails because the database
+-- already exists on another node and we don't crash etc.
+CREATE DATABASE local_db;
+ERROR:  database "local_db" already exists
+CONTEXT:  while executing command on localhost:xxxxx
+while executing command on localhost:xxxxx
+\c regression - - -
+SELECT * FROM public.check_database_on_all_nodes('local_db') ORDER BY node_type, result;
+      node_type       |                                                                                                                                                                                                                       result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "local_db", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c - - - :worker_2_port
+-- locally drop the database for cleanup purposes
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP DATABASE local_db;
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO true$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :master_port
+DROP DATABASE other_db5;
+SELECT result FROM run_command_on_all_nodes($$ALTER SYSTEM SET citus.enable_create_database_propagation TO false$$);
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$SELECT pg_reload_conf()$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP SCHEMA other_databases;
+DROP DATABASE other_db1;

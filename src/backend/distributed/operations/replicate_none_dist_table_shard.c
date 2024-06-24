@@ -10,7 +10,9 @@
  */
 
 #include "postgres.h"
+
 #include "miscadmin.h"
+
 #include "nodes/pg_list.h"
 
 #include "distributed/adaptive_executor.h"

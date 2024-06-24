@@ -8,23 +8,26 @@
  *-------------------------------------------------------------------------
  */
 
-#include "libpq-fe.h"
 #include "postgres.h"
+
+#include "libpq-fe.h"
+
 #include "commands/copy.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_relation.h"
-#include "utils/lsyscache.h"
 #include "utils/builtins.h"
-#include "distributed/remote_commands.h"
-#include "distributed/worker_shard_copy.h"
+#include "utils/lsyscache.h"
+
 #include "distributed/commands/multi_copy.h"
-#include "distributed/local_multi_copy.h"
-#include "distributed/worker_manager.h"
 #include "distributed/connection_management.h"
-#include "distributed/relation_utils.h"
-#include "distributed/version_compat.h"
 #include "distributed/local_executor.h"
+#include "distributed/local_multi_copy.h"
+#include "distributed/relation_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/replication_origin_session_utils.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_shard_copy.h"
 
 /*
  * LocalCopyBuffer is used in copy callback to return the copied rows.

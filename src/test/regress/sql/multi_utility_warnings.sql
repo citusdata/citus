@@ -6,3 +6,4 @@
 -- databases.
 
 CREATE DATABASE new_database;
+DROP DATABASE new_database;

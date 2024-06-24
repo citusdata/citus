@@ -12,11 +12,10 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
-
+#include "nodes/pathnodes.h"
 #include "nodes/plannodes.h"
 
-#include "nodes/pathnodes.h"
+#include "pg_version_constants.h"
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
@@ -105,7 +104,7 @@ typedef struct FastPathRestrictionContext
 	 * Set to true when distKey = Param; in the queryTree
 	 */
 	bool distributionKeyHasParam;
-}FastPathRestrictionContext;
+} FastPathRestrictionContext;
 
 typedef struct PlannerRestrictionContext
 {

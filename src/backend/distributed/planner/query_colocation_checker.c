@@ -21,25 +21,25 @@
 
 #include "postgres.h"
 
-#include "distributed/pg_version_constants.h"
-
 #include "access/relation.h"
-#include "distributed/multi_logical_planner.h"
-#include "distributed/query_colocation_checker.h"
-#include "distributed/pg_dist_partition.h"
-#include "distributed/relation_restriction_equivalence.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_logical_planner.h" /* only to access utility functions */
-
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "parser/parsetree.h"
-#include "distributed/listutils.h"
-#include "parser/parse_relation.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
+#include "parser/parse_relation.h"
+#include "parser/parsetree.h"
 #include "utils/rel.h"
+
+#include "pg_version_constants.h"
+
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_logical_planner.h"
+#include "distributed/multi_logical_planner.h" /* only to access utility functions */
+#include "distributed/pg_dist_partition.h"
+#include "distributed/query_colocation_checker.h"
+#include "distributed/relation_restriction_equivalence.h"
 
 
 static RangeTblEntry * AnchorRte(Query *subquery);
@@ -433,7 +433,7 @@ CreateTargetEntryForColumn(Form_pg_attribute attributeTuple, Index rteIndex,
 				attributeTuple->atttypmod, attributeTuple->attcollation, 0);
 	TargetEntry *targetEntry =
 		makeTargetEntry((Expr *) targetColumn, resno,
-						strdup(attributeTuple->attname.data), false);
+						pstrdup(attributeTuple->attname.data), false);
 	return targetEntry;
 }
 
@@ -449,7 +449,7 @@ CreateTargetEntryForNullCol(Form_pg_attribute attributeTuple, int resno)
 											attributeTuple->attcollation);
 	char *resName = attributeTuple->attname.data;
 	TargetEntry *targetEntry =
-		makeTargetEntry(nullExpr, resno, strdup(resName), false);
+		makeTargetEntry(nullExpr, resno, pstrdup(resName), false);
 	return targetEntry;
 }
 

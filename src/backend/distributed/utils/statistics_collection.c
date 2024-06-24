@@ -10,9 +10,11 @@
 
 #include "postgres.h"
 
-#include "citus_version.h"
 #include "fmgr.h"
+
 #include "utils/uuid.h"
+
+#include "citus_version.h"
 
 #if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
@@ -28,18 +30,19 @@ PG_FUNCTION_INFO_V1(citus_server_id);
 #include <sys/utsname.h>
 
 #include "access/xact.h"
+#include "lib/stringinfo.h"
+#include "utils/builtins.h"
+#include "utils/fmgrprotos.h"
+#include "utils/json.h"
+#include "utils/jsonb.h"
+
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/statistics_collection.h"
-#include "distributed/worker_manager.h"
 #include "distributed/version_compat.h"
-#include "lib/stringinfo.h"
-#include "utils/builtins.h"
-#include "utils/json.h"
-#include "utils/jsonb.h"
-#include "utils/fmgrprotos.h"
+#include "distributed/worker_manager.h"
 
 static size_t StatisticsCallback(char *contents, size_t size, size_t count,
 								 void *userData);

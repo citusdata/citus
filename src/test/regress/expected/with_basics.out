@@ -664,14 +664,14 @@ WITH RECURSIVE basic_recursive(x) AS (
     SELECT user_id + 1 FROM users_table JOIN basic_recursive ON (user_id = x) WHERE user_id < 100
 )
 SELECT sum(x) FROM basic_recursive;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 WITH RECURSIVE basic_recursive AS (
     SELECT -1 as user_id, '2017-11-22 20:16:16.614779'::timestamp, -1, -1, -1, -1
   UNION ALL
     SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
 )
 SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- basic_recursive in FROM should error out
 SELECT
   *
@@ -682,7 +682,7 @@ FROM
       SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1) cte_rec;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- basic_recursive in WHERE with UNION ALL
 SELECT
   *
@@ -696,7 +696,7 @@ WHERE
       SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1);
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- one recursive one regular CTE should error out
 WITH RECURSIVE basic_recursive(x) AS(
     VALUES (1)
@@ -707,7 +707,7 @@ basic AS (
     SELECT count(user_id) FROM users_table
 )
 SELECT x FROM basic, basic_recursive;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- one recursive one regular which SELECTs from the recursive CTE under a simple SELECT
 WITH RECURSIVE basic_recursive(x) AS(
     VALUES (1)
@@ -718,7 +718,7 @@ basic AS (
     SELECT count(x) FROM basic_recursive
 )
 SELECT * FROM basic;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- recursive CTE in a NESTED manner
 WITH regular_cte AS (
   WITH regular_2 AS (
@@ -732,7 +732,7 @@ WITH regular_cte AS (
   SELECT * FROM regular_2
 )
 SELECT * FROM regular_cte;
-ERROR:  recursive CTEs are not supported in distributed queries
+ERROR:  recursive CTEs are only supported when they contain a filter on the distribution column
 -- CTEs should work with VIEWs as well
 CREATE VIEW basic_view AS
 SELECT * FROM users_table;

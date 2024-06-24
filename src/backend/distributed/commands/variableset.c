@@ -9,21 +9,23 @@
  */
 
 #include "postgres.h"
+
 #include "c.h"
 
 #include "common/string.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/resource_lock.h"
-#include "distributed/transaction_management.h"
-#include "distributed/version_compat.h"
+#include "lib/ilist.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "lib/ilist.h"
 #include "utils/varlena.h"
+
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
+#include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 
 /*
  * ShouldPropagateSetCommand determines whether a SET or RESET command should be

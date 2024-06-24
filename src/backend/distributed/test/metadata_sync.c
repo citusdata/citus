@@ -10,10 +10,17 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
 #include "c.h"
 #include "fmgr.h"
+#include "miscadmin.h"
 
 #include "catalog/pg_type.h"
+#include "postmaster/postmaster.h"
+#include "storage/latch.h"
+#include "utils/array.h"
+#include "utils/builtins.h"
+
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
@@ -22,11 +29,6 @@
 #include "distributed/remote_commands.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_manager.h"
-#include "postmaster/postmaster.h"
-#include "miscadmin.h"
-#include "storage/latch.h"
-#include "utils/array.h"
-#include "utils/builtins.h"
 
 
 /* declarations for dynamic loading */
@@ -48,6 +50,13 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	 * so we are using first primary worker node just for test purposes.
 	 */
 	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
+	if (dummyWorkerNode == NULL)
+	{
+		ereport(ERROR, (errmsg("no worker nodes found"),
+						errdetail("Function activate_node_snapshot is meant to be "
+								  "used when running tests on a multi-node cluster "
+								  "with workers.")));
+	}
 
 	/*
 	 * Create MetadataSyncContext which is used throughout nodes' activation.
@@ -91,6 +100,28 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 
 
 /*
+ * IsMetadataSynced checks the workers to see if all workers with metadata are
+ * synced.
+ */
+static bool
+IsMetadataSynced(void)
+{
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
+	{
+		if (workerNode->hasMetadata && !workerNode->metadataSynced)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
  * wait_until_metadata_sync waits until the maintenance daemon does a metadata
  * sync, or times out.
  */
@@ -99,19 +130,10 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 {
 	uint32 timeout = PG_GETARG_UINT32(0);
 
-	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
-	bool waitNotifications = false;
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
-	{
-		/* if already has metadata, no need to do it again */
-		if (workerNode->hasMetadata && !workerNode->metadataSynced)
-		{
-			waitNotifications = true;
-			break;
-		}
-	}
+	/* First we start listening. */
+	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
+													LocalHostName, PostPortNumber);
+	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
 
 	/*
 	 * If all the metadata nodes have already been synced, we should not wait.
@@ -119,14 +141,11 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 	 * the notification and we'd wait unnecessarily here. Worse, the test outputs
 	 * might be inconsistent across executions due to the warning.
 	 */
-	if (!waitNotifications)
+	if (IsMetadataSynced())
 	{
+		CloseConnection(connection);
 		PG_RETURN_VOID();
 	}
-
-	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
-													LOCAL_HOST_NAME, PostPortNumber);
-	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
 
 	int waitFlags = WL_SOCKET_READABLE | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 	int waitResult = WaitLatchOrSocket(NULL, waitFlags, PQsocket(connection->pgConn),
@@ -139,7 +158,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 	{
 		ClearResults(connection, true);
 	}
-	else if (waitResult & WL_TIMEOUT)
+	else if (waitResult & WL_TIMEOUT && !IsMetadataSynced())
 	{
 		elog(WARNING, "waiting for metadata sync timed out");
 	}

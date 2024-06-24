@@ -8,10 +8,10 @@
  * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
+#include "distributed/coordinator_protocol.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/executor_util.h"
 #include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"

@@ -14,7 +14,6 @@
 #include "lib/ilist.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
-#include "lib/stringinfo.h"
 #include "nodes/primnodes.h"
 #include "utils/hsearch.h"
 
@@ -164,7 +163,7 @@ extern bool MaybeExecutingUDF(void);
 extern void TrackPropagatedObject(const ObjectAddress *objectAddress);
 extern void TrackPropagatedTableAndSequences(Oid relationId);
 extern void ResetPropagatedObjects(void);
-extern bool HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress);
+extern bool HasAnyObjectInPropagatedObjects(List *objectList);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);

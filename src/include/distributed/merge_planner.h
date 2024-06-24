@@ -15,6 +15,7 @@
 #include "c.h"
 
 #include "nodes/parsenodes.h"
+
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
 #include "distributed/multi_physical_planner.h"

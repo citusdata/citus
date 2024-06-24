@@ -13,15 +13,16 @@
 
 #include "postgres.h"
 
-#include "pg_version_compat.h"
-
 #include "commands/defrem.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/deparser.h"
-#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
+
+#include "pg_version_compat.h"
+
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 static void AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt);
 static void AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt);
@@ -410,6 +411,16 @@ AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 				appendStringInfo(buf, "ADMIN OPTION FOR ");
 				break;
 			}
+			else if (strcmp(opt->defname, "inherit") == 0)
+			{
+				appendStringInfo(buf, "INHERIT OPTION FOR ");
+				break;
+			}
+			else if (strcmp(opt->defname, "set") == 0)
+			{
+				appendStringInfo(buf, "SET OPTION FOR ");
+				break;
+			}
 		}
 	}
 #else
@@ -427,16 +438,29 @@ AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 	if (stmt->is_grant)
 	{
 #if PG_VERSION_NUM >= PG_VERSION_16
+		int opt_count = 0;
 		DefElem *opt = NULL;
 		foreach_ptr(opt, stmt->opt)
 		{
-			bool admin_option = false;
 			char *optval = defGetString(opt);
-			if (strcmp(opt->defname, "admin") == 0 &&
-				parse_bool(optval, &admin_option) && admin_option)
+			bool option_value = false;
+			if (parse_bool(optval, &option_value))
 			{
-				appendStringInfo(buf, " WITH ADMIN OPTION");
-				break;
+				opt_count++;
+				char *prefix = opt_count > 1 ? "," : " WITH";
+				if (strcmp(opt->defname, "inherit") == 0)
+				{
+					appendStringInfo(buf, "%s INHERIT %s", prefix, option_value ? "TRUE" :
+									 "FALSE");
+				}
+				else if (strcmp(opt->defname, "admin") == 0 && option_value)
+				{
+					appendStringInfo(buf, "%s ADMIN OPTION", prefix);
+				}
+				else if (strcmp(opt->defname, "set") == 0 && !option_value)
+				{
+					appendStringInfo(buf, "%s SET FALSE", prefix);
+				}
 			}
 		}
 #else
@@ -464,7 +488,6 @@ AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
 	AppendGrantWithAdminOption(buf, stmt);
 	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
 	AppendGrantRestrictAndCascadeForRoleSpec(buf, stmt->behavior, stmt->is_grant);
-	AppendGrantedByInGrantForRoleSpec(buf, stmt->grantor, stmt->is_grant);
 	appendStringInfo(buf, ";");
 }
 

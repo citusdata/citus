@@ -10,12 +10,14 @@
  */
 
 #include "postgres.h"
+
 #include "fmgr.h"
 #include "miscadmin.h"
 
 #include "commands/defrem.h"
-#include "distributed/utils/function.h"
 #include "utils/lsyscache.h"
+
+#include "distributed/utils/function.h"
 
 
 /*

@@ -125,7 +125,6 @@ DEPS = {
     "multi_mx_create_table": TestDeps(
         None,
         [
-            "multi_test_helpers_superuser",
             "multi_mx_node_metadata",
             "multi_cluster_management",
             "multi_mx_function_table_reference",
@@ -136,22 +135,13 @@ DEPS = {
     ),
     "alter_role_propagation": TestDeps("minimal_schedule"),
     "background_rebalance": TestDeps(
-        None,
-        [
-            "multi_test_helpers",
-            "multi_cluster_management",
-        ],
-        worker_count=3,
+        None, ["multi_test_helpers", "multi_cluster_management"], worker_count=3
     ),
     "background_rebalance_parallel": TestDeps(
-        None,
-        [
-            "multi_test_helpers",
-            "multi_cluster_management",
-        ],
-        worker_count=6,
+        None, ["multi_test_helpers", "multi_cluster_management"], worker_count=6
     ),
     "function_propagation": TestDeps("minimal_schedule"),
+    "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_modifying_xacts": TestDeps("minimal_schedule"),
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
@@ -163,17 +153,77 @@ DEPS = {
     "isolation_extension_commands": TestDeps(
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
+    "isolation_update_node": TestDeps(
+        None, ["isolation_setup", "isolation_add_remove_node"]
+    ),
     "schema_based_sharding": TestDeps("minimal_schedule"),
     "multi_sequence_default": TestDeps(
-        None,
-        [
-            "multi_test_helpers",
-            "multi_cluster_management",
-            "multi_table_ddl",
-        ],
+        None, ["multi_test_helpers", "multi_cluster_management", "multi_table_ddl"]
     ),
     "grant_on_schema_propagation": TestDeps("minimal_schedule"),
     "propagate_extension_commands": TestDeps("minimal_schedule"),
+    "multi_size_queries": TestDeps("base_schedule", ["multi_copy"]),
+    "multi_mx_node_metadata": TestDeps(
+        None, ["multi_extension", "multi_test_helpers", "multi_test_helpers_superuser"]
+    ),
+    "multi_mx_function_table_reference": TestDeps(
+        None,
+        ["multi_cluster_management", "remove_coordinator_from_metadata"],
+        # because it queries node group id and it changes as we add / remove nodes
+        repeatable=False,
+    ),
+    "multi_mx_add_coordinator": TestDeps(
+        None,
+        [
+            "multi_cluster_management",
+            "remove_coordinator_from_metadata",
+            "multi_mx_function_table_reference",
+        ],
+    ),
+    "metadata_sync_helpers": TestDeps(
+        None, ["multi_mx_node_metadata", "multi_cluster_management"]
+    ),
+    "multi_utilities": TestDeps("minimal_schedule", ["multi_data_types"]),
+    "multi_tenant_isolation_nonblocking": TestDeps(
+        "minimal_schedule", ["multi_data_types", "remove_coordinator_from_metadata"]
+    ),
+    "remove_non_default_nodes": TestDeps(
+        None, ["multi_mx_node_metadata", "multi_cluster_management"], repeatable=False
+    ),
+    "citus_split_shard_columnar_partitioned": TestDeps(
+        "minimal_schedule", ["remove_coordinator_from_metadata"]
+    ),
+    "add_coordinator": TestDeps(
+        "minimal_schedule", ["remove_coordinator_from_metadata"], repeatable=False
+    ),
+    "multi_multiuser_auth": TestDeps(
+        "minimal_schedule",
+        ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
+        repeatable=False,
+    ),
+    "multi_prepare_plsql": TestDeps("base_schedule"),
+    "pg15": TestDeps("base_schedule"),
+    "foreign_key_to_reference_shard_rebalance": TestDeps(
+        "minimal_schedule", ["remove_coordinator_from_metadata"]
+    ),
+    "limit_intermediate_size": TestDeps("base_schedule"),
+    "columnar_drop": TestDeps(
+        "minimal_schedule",
+        ["columnar_create", "columnar_load"],
+        repeatable=False,
+    ),
+    "multi_metadata_sync": TestDeps(
+        None,
+        [
+            "multi_sequence_default",
+            "alter_database_propagation",
+            "alter_role_propagation",
+            "grant_on_schema_propagation",
+            "multi_test_catalog_views",
+            "multi_drop_extension",
+        ],
+        repeatable=False,
+    ),
 }
 
 
@@ -266,9 +316,13 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
     worker_count = needed_worker_count(test_name, dependencies)
 
     # find suitable make recipe
-    if dependencies.schedule == "base_isolation_schedule" or "isolation" in test_name:
+    if dependencies.schedule == "base_isolation_schedule" or test_name.startswith(
+        "isolation"
+    ):
         make_recipe = "check-isolation-custom-schedule"
-    elif dependencies.schedule == "failure_base_schedule" or "failure" in test_name:
+    elif dependencies.schedule == "failure_base_schedule" or test_name.startswith(
+        "failure"
+    ):
         make_recipe = "check-failure-custom-schedule"
     else:
         make_recipe = "check-custom-schedule"
@@ -381,10 +435,7 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
         if "upgrade_columnar_before" not in before_tests:
             before_tests.append("upgrade_columnar_before")
 
-        return TestDeps(
-            default_base_schedule(test_schedule, args),
-            before_tests,
-        )
+        return TestDeps(default_base_schedule(test_schedule, args), before_tests)
 
     # before_ tests leave stuff around on purpose for the after tests. So they
     # are not repeatable by definition.
