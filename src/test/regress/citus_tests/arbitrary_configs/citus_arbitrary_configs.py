@@ -34,7 +34,7 @@ testResults = {}
 parallel_thread_amount = 1
 
 
-def _run_pg_regress_on_port(config, port, schedule_name, extra_tests=""):
+def _run_pg_regress_on_port(config, port, schedule_name, user, extra_tests=""):
     return common.run_pg_regress_without_exit(
         config.bindir,
         config.pg_srcdir,
@@ -42,7 +42,7 @@ def _run_pg_regress_on_port(config, port, schedule_name, extra_tests=""):
         schedule_name,
         config.output_dir,
         config.input_dir,
-        config.user,
+        user,
         extra_tests,
     )
 
@@ -54,12 +54,11 @@ def run_for_config(config, lock, sql_schedule_name):
     common.initialize_citus_cluster(
         config.bindir, config.datadir, config.settings, config
     )
-    if config.user == cfg.REGULAR_USER_NAME:
-        common.create_role(
-            config.bindir,
-            config.node_name_to_ports.values(),
-            config.user,
-        )
+    common.create_role(
+        config.bindir,
+        config.node_name_to_ports.values(),
+        cfg.REGULAR_USER_NAME,
+    )
 
     copy_copy_modified_binary(config.datadir)
     copy_test_files(config)
@@ -91,20 +90,25 @@ def run_for_config(config, lock, sql_schedule_name):
         )
 
     exitCode |= _run_pg_regress_on_port(
-        config, config.coordinator_port(), cfg.CREATE_SCHEDULE
+        config, config.coordinator_port(), cfg.CREATE_SCHEDULE, config.owner_role
     )
     common.save_regression_diff("create", config.output_dir)
 
     extra_tests = os.getenv("EXTRA_TESTS", "")
     if config.is_mx and config.worker_amount > 0:
         exitCode |= _run_pg_regress_on_port(
-            config, config.random_port(), sql_schedule_name, extra_tests=extra_tests
+            config,
+            config.random_port(),
+            sql_schedule_name,
+            config.user,
+            extra_tests=extra_tests,
         )
     else:
         exitCode |= _run_pg_regress_on_port(
             config,
             config.coordinator_port(),
             sql_schedule_name,
+            config.user,
             extra_tests=extra_tests,
         )
 
