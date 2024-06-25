@@ -738,7 +738,6 @@ ConvertTableInternal(TableConversionState *con)
 															  includeIndexes,
 															  includeReplicaIdentity);
 	List *justBeforeDropCommands = NIL;
-	List *attachPartitionCommands = NIL;
 
 	List *createViewCommands = GetViewCreationCommandsOfTable(con->relationId);
 
@@ -963,18 +962,6 @@ ConvertTableInternal(TableConversionState *con)
 							  "citus_per_partition_context",
 							  ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(citusPerPartitionContext);
-
-	char *attachPartitionCommand = NULL;
-	foreach_ptr(attachPartitionCommand, attachPartitionCommands)
-	{
-		MemoryContextReset(citusPerPartitionContext);
-
-		Node *parseTree = ParseTreeNode(attachPartitionCommand);
-
-		ProcessUtilityParseTree(parseTree, attachPartitionCommand,
-								PROCESS_UTILITY_QUERY,
-								NULL, None_Receiver, NULL);
-	}
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextDelete(citusPerPartitionContext);
