@@ -823,7 +823,7 @@ class Postgres(QueryRunner):
             # of our tests
             pgconf.write("max_logical_replication_workers = 50\n")
             pgconf.write("max_wal_senders = 50\n")
-            pgconf.write("max_worker_processes = 50\n")
+            pgconf.write("max_worker_processes = 150\n")
             pgconf.write("max_replication_slots = 50\n")
 
             # We need to make the log go to stderr so that the tests can

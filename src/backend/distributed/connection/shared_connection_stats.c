@@ -708,7 +708,9 @@ WaitForSharedConnection(uint32 flags)
 			ereport(ERROR, (errmsg("Failed to acquire maintenance connection for %i ms",
 								   MaintenanceConnectionPoolTimeout),
 							errhint(
-								"Try to increase citus.maintenance_connection_pool_timeout")));
+								"Try increasing citus.max_maintenance_shared_pool_size or "
+								"citus.maintenance_connection_pool_timeout"
+								)));
 		}
 	}
 	else
