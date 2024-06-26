@@ -2404,7 +2404,7 @@ read it as "cost".
 The way the general algorithm works is fairly straightforward. It starts by
 creating an in-memory representation of the cluster, and then it tries to
 improve that in-memory representation by making theoretical moves. So to be
-clear the algorithm doesn't actually do andy shard group moves, it only does
+clear the algorithm doesn't actually do any shard group moves, it only does
 those moves to its in-memory representation. The way it determines what
 theoretical moves to make is as follows (updating utilization of in-memory
 nodes after every move):
@@ -2427,7 +2427,7 @@ nodes after every move):
    nodes like this, we are done (we cannot get a better balance).
 
 
-Ofcourse the devil is in the details though.
+Of course, the devil is in the details though.
 
 ### When is the balance better?
 
@@ -2449,7 +2449,7 @@ moving a shard. This is usually not a huge problem in practice though.
 
 ### Thresholds
 
-The algorithm is full of thresholds, the main reason these exists is because
+The algorithm is full of thresholds, the main reason these exist is because
 moving shards around isn't free.
 
 - `threshold`: Used to determine if the cluster is in a good enough state. For
