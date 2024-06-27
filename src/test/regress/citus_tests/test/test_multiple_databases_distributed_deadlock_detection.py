@@ -25,7 +25,7 @@ async def test_multiple_databases_distributed_deadlock_detection(cluster):
     for db_name in db_names:
         nodes = cluster.workers + [cluster.coordinator]
         for node in nodes:
-            node.sql(f"CREATE DATABASE {db_name}")
+            node.create_database(f"{db_name}")
             with node.cur(dbname=db_name) as node_cursor:
                 node_cursor.execute("CREATE EXTENSION citus;")
                 if node == cluster.coordinator:
