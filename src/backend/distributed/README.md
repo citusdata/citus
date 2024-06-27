@@ -2390,7 +2390,7 @@ Cost and capacity are vague on purpose, this way users can choose their own
 way to determine cost of a shard group, but **in practice "cost" is usually
 disk size** (because `by_disk_size` is the default rebalance strategy).
 Capacity is almost always set to 1, because almost all Citus clusters are
-homogenous (they contain the same nodes, except for maybe the coordinator). The
+homogeneous (they contain the same nodes, except for maybe the coordinator). The
 main usage for "Is a shard group allowed on a certain node?" is to be able to pin a
 specific shard group to a specific node.
 
@@ -2432,7 +2432,7 @@ Of course, the devil is in the details though.
 ### When is the balance better?
 
 The main way to determine if the balance is better is by comparing the
-utilization of node A and B, before and ofter the move and seeing if they are
+utilization of node A and B, before and after the move and seeing if they are
 net closer to the average utilization of the nodes in the cluster. The easiest
 way to explain this is with a simple example:
 
@@ -2459,8 +2459,8 @@ moving shards around isn't free.
   this threshold is that these small differences in utilization are not
   necessarily problematic and might very well resolve automatically over time. For example, consider a scenario in which
   one shard gets mostly written in during the weekend, while another one during
-  the week. Moving shards on monday and that you then have to move back on
-  friday is not very helpful given the overhead of moving data around.
+  the week. Moving shards on Monday and that you then have to move back on
+  Friday is not very helpful given the overhead of moving data around.
 - `improvement_threshold`: This is used in cases where a shard group move from
   node A to B swaps which node now has the highest utilization (so afterwards B
   will have higher utilization than A). As described above this can still
@@ -2572,7 +2572,7 @@ the full rebalance, and each of its tasks are separate shard group moves.
 
 ### Parallel background task execution
 
-A big benefit of the bacground task infrastructure is that it can execute tasks
+A big benefit of the background task infrastructure is that it can execute tasks
 and jobs in parallel. This can make rebalancing go much faster especially in
 clusters with many nodes. To ensure that we're not doing too many tasks in
 parallel though we have a few ways to limit concurrency:
