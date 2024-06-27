@@ -2368,12 +2368,12 @@ necessary to change one of them to add a feature/fix a bug.
 
 The rebalancing algorithm tries to find an optimal placement of shard groups
 across nodes. This is not an easy job, because this is a [co-NP-complete
-problem](https://en.wikipedia.org/wiki/Knapsack_problem). So instead going for
+problem](https://en.wikipedia.org/wiki/Knapsack_problem). So instead of going for
 the fully optimal solution it uses a greedy approach to reach a local
-optimimum, which so far has proved effective in getting to a pretty optimal
+optimum, which so far has proved effective in getting to a pretty optimal
 solution.
 
-Eventhough it won't result in the perfect balance, the  greedy aproach has two
+Even though it won't result in the perfect balance, the  greedy approach has two
 important practical benefits over a perfect solution:
 1. It's relatively easy to understand why the algorithm decided on a certain move.
 2. Every move makes the balance better. So if the rebalance is cancelled midway
@@ -2395,7 +2395,7 @@ main usage for "Is a shard group allowed on a certain node?" is to be able to pi
 specific shard group to a specific node.
 
 There is one last definition that you should know to understand the algorithm
-and that is "utilization". Utilization is total cost of all shard groups
+and that is "utilization". Utilization is the total cost of all shard groups
 divided by capacity. In practice this means that utilization is almost always
 the same as cost because as explained above capacity is almost always 1. So if
 you see "utilization" in the algorithm, for all intents and purposes you can
@@ -2457,7 +2457,7 @@ moving shards around isn't free.
   most 10% above or 10% below the average utilization then no moves are
   necessary anymore (i.e. the nodes are balanced enough). The main reason for
   this threshold is that these small differences in utilization are not
-  necessarily problematic and might very well resolve automatically over time
+  necessarily problematic and might very well resolve automatically over time. For example, consider a scenario in which
   one shard gets mostly written in during the weekend, while another one during
   the week. Moving shards on monday and that you then have to move back on
   friday is not very helpful given the overhead of moving data around.
@@ -2577,7 +2577,7 @@ and jobs in parallel. This can make rebalancing go much faster especially in
 clusters with many nodes. To ensure that we're not doing too many tasks in
 parallel though we have a few ways to limit concurrency:
 
-1. Tasks can depend on eachother. This makes sure that one task doesn't start
+1. Tasks can depend on each other. This makes sure that one task doesn't start
    before all the ones that it depends on have finished.
 2. The maximum number of parallel tasks being executed at the same time can be
    limited using `citus.max_background_task_executors`. The default for
