@@ -1056,7 +1056,9 @@ class Postgres(QueryRunner):
     def cleanup_databases(self):
         for database in self.databases:
             self.sql(
-                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(database))
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database)
+                )
             )
 
     def cleanup_schemas(self):
