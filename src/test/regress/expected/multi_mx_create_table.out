@@ -416,6 +416,23 @@ SELECT create_distributed_table('company_employees_mx', 'company_id');
 
 (1 row)
 
+CREATE TABLE articles_single_shard_hash_mx_partition_inst1 (LIKE articles_single_shard_hash_mx);
+CREATE TABLE articles_single_shard_hash_mx_partition_inst2 (LIKE articles_single_shard_hash_mx);
+SET citus.shard_count TO 1;
+SET citus.enable_single_shard_table_multi_node_placement to on;
+SELECT create_distributed_table('articles_single_shard_hash_mx_partition_inst1', 'author_id', colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('articles_single_shard_hash_mx_partition_inst2', 'author_id', colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+set citus.enable_single_shard_table_multi_node_placement to off;
 WITH shard_counts AS (
 	SELECT logicalrelid, count(*) AS shard_count FROM pg_dist_shard GROUP BY logicalrelid
 	)
@@ -447,7 +464,9 @@ ORDER BY colocationid, logicalrelid;
  labs_mx                                                |      1220007 |           1 | h          | s
  objects_mx                                             |      1220007 |           1 | h          | s
  articles_single_shard_hash_mx                          |      1220007 |           1 | h          | s
-(23 rows)
+ articles_single_shard_hash_mx_partition_inst1          |      1220008 |           1 | h          | s
+ articles_single_shard_hash_mx_partition_inst2          |      1220009 |           1 | h          | s
+(25 rows)
 
 -- check the citus_tables view
 SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
@@ -458,6 +477,8 @@ ORDER BY table_name::text;
  app_analytics_events_mx                                | distributed      | app_id              |           4 | postgres
  articles_hash_mx                                       | distributed      | author_id           |           2 | postgres
  articles_single_shard_hash_mx                          | distributed      | author_id           |           1 | postgres
+ articles_single_shard_hash_mx_partition_inst1          | distributed      | author_id           |           1 | postgres
+ articles_single_shard_hash_mx_partition_inst2          | distributed      | author_id           |           1 | postgres
  citus_mx_test_schema.nation_hash                       | distributed      | n_nationkey         |          16 | postgres
  citus_mx_test_schema.nation_hash_collation_search_path | distributed      | n_nationkey         |           4 | postgres
  citus_mx_test_schema.nation_hash_composite_types       | distributed      | n_nationkey         |           4 | postgres
@@ -478,7 +499,7 @@ ORDER BY table_name::text;
  part_mx                                                | reference        | <none>              |           1 | postgres
  researchers_mx                                         | distributed      | lab_id              |           2 | postgres
  supplier_mx                                            | reference        | <none>              |           1 | postgres
-(23 rows)
+(25 rows)
 
 \c - - - :worker_1_port
 SET client_min_messages TO WARNING;
@@ -490,6 +511,8 @@ ORDER BY table_name::text;
  app_analytics_events_mx                                | distributed      | app_id              |           4 | postgres
  articles_hash_mx                                       | distributed      | author_id           |           2 | postgres
  articles_single_shard_hash_mx                          | distributed      | author_id           |           1 | postgres
+ articles_single_shard_hash_mx_partition_inst1          | distributed      | author_id           |           1 | postgres
+ articles_single_shard_hash_mx_partition_inst2          | distributed      | author_id           |           1 | postgres
  citus_mx_test_schema.nation_hash                       | distributed      | n_nationkey         |          16 | postgres
  citus_mx_test_schema.nation_hash_collation_search_path | distributed      | n_nationkey         |           4 | postgres
  citus_mx_test_schema.nation_hash_composite_types       | distributed      | n_nationkey         |           4 | postgres
@@ -510,7 +533,7 @@ ORDER BY table_name::text;
  part_mx                                                | reference        | <none>              |           1 | postgres
  researchers_mx                                         | distributed      | lab_id              |           2 | postgres
  supplier_mx                                            | reference        | <none>              |           1 | postgres
-(23 rows)
+(25 rows)
 
 SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;
                            shard_name                           |                       table_name                       | citus_table_type | shard_size
@@ -546,6 +569,14 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
  articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
  articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
  articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst1_1220111          | articles_single_shard_hash_mx_partition_inst1          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst1_1220111          | articles_single_shard_hash_mx_partition_inst1          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst1_1220111          | articles_single_shard_hash_mx_partition_inst1          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst1_1220111          | articles_single_shard_hash_mx_partition_inst1          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst1_1220111          | articles_single_shard_hash_mx_partition_inst1          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst1_1220111          | articles_single_shard_hash_mx_partition_inst1          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst1_1220111          | articles_single_shard_hash_mx_partition_inst1          | distributed      |          0
+ articles_single_shard_hash_mx_partition_inst2_1220112          | articles_single_shard_hash_mx_partition_inst2          | distributed      |          0
  citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
  citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
  citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
@@ -984,7 +1015,7 @@ SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards OR
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
  supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
-(469 rows)
+(477 rows)
 
 -- Show that altering type name is not supported from worker node
 ALTER TYPE citus_mx_test_schema.order_side_mx RENAME TO temp_order_side_mx;
