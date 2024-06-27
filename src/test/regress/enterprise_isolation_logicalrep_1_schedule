@@ -1,3 +1,4 @@
+test: isolation_enable_ddl_propagation
 test: isolation_setup
 
 # tests that change node metadata should precede
