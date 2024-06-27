@@ -38,7 +38,7 @@ else
 citus_prove_installcheck = @echo "TAP tests not enabled when postgres was compiled"
 endif
 
-installcheck:
+check-cdc:
 	$(citus_prove_installcheck)
 
 clean distclean maintainer-clean:
