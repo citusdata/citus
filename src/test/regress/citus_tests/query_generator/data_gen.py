@@ -17,7 +17,10 @@ def getTableData():
         dataGenerationSql += "\n"
 
         # generate null rows
-        if not table.citusType == CitusType.DISTRIBUTED:
+        if table.citusType not in (
+            CitusType.HASH_DISTRIBUTED,
+            CitusType.SINGLE_SHARD_DISTRIBUTED,
+        ):
             targetNullRows = int(table.rowCount * table.nullRate)
             dataGenerationSql += _genNullData(table.name, targetNullRows)
             dataGenerationSql += "\n"
@@ -32,51 +35,23 @@ def getTableData():
 
 def _genOverlappingData(tableName, startVal, rowCount):
     """returns string to fill table with [startVal,startVal+rowCount] range of integers"""
-    dataGenerationSql = ""
-    dataGenerationSql += "INSERT INTO " + tableName
-    dataGenerationSql += (
-        " SELECT i FROM generate_series("
-        + str(startVal)
-        + ","
-        + str(startVal + rowCount)
-        + ") i;"
-    )
-    return dataGenerationSql
+    return f"INSERT INTO {tableName} SELECT i FROM generate_series({startVal}, {startVal + rowCount}) i;"
 
 
 def _genNullData(tableName, nullCount):
     """returns string to fill table with NULLs"""
-    dataGenerationSql = ""
-    dataGenerationSql += "INSERT INTO " + tableName
-    dataGenerationSql += (
-        " SELECT NULL FROM generate_series(0," + str(nullCount) + ") i;"
+    return (
+        f"INSERT INTO {tableName} SELECT NULL FROM generate_series(0, {nullCount}) i;"
     )
-    return dataGenerationSql
 
 
 def _genDupData(tableName, dupRowCount):
     """returns string to fill table with duplicate integers which are fetched from given table"""
-    dataGenerationSql = ""
-    dataGenerationSql += "INSERT INTO " + tableName
-    dataGenerationSql += (
-        " SELECT * FROM "
-        + tableName
-        + " ORDER BY "
-        + getConfig().commonColName
-        + " LIMIT "
-        + str(dupRowCount)
-        + ";"
-    )
-    return dataGenerationSql
+    return f"INSERT INTO {tableName} SELECT * FROM {tableName} ORDER BY {getConfig().commonColName} LIMIT {dupRowCount};"
 
 
 def _genNonOverlappingData(tableName, startVal, tableIdx):
     """returns string to fill table with different integers for given table"""
     startVal = startVal + tableIdx * 20
     endVal = startVal + 20
-    dataGenerationSql = ""
-    dataGenerationSql += "INSERT INTO " + tableName
-    dataGenerationSql += (
-        " SELECT i FROM generate_series(" + str(startVal) + "," + str(endVal) + ") i;"
-    )
-    return dataGenerationSql
+    return f"INSERT INTO {tableName} SELECT i FROM generate_series({startVal}, {endVal}) i;"

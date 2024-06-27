@@ -73,6 +73,8 @@ def removeFailedQueryOutputFromFiles(distQueryOutFile, localQueryOutFile):
     acceptableErrors = [
         "ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",
         "ERROR:  recursive complex joins are only supported when all distributed tables are co-located and joined on their distribution columns",
+        "ERROR:  cannot push down this subquery",
+        "ERROR:  cannot perform a lateral outer join when a distributed subquery references complex subqueries, CTEs or local tables",
     ]
     failedDistQueryIds = findFailedQueriesFromFile(distQueryOutFile, acceptableErrors)
     removeFailedQueryOutputFromFile(distQueryOutFile, failedDistQueryIds)

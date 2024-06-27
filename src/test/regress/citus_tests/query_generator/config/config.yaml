@@ -2,6 +2,8 @@ interactiveMode: false
 queryCount: 250
 queryOutFile: queries.sql
 ddlOutFile: ddls.sql
+repartitionJoin: true
+singleRepartitionJoin: false
 semiAntiJoin: true
 cartesianProduct: false
 limit: true
@@ -26,7 +28,7 @@ commonColName: id
 targetTables:
   - Table:
       name: dist
-      citusType: DISTRIBUTED
+      citusType: HASH_DISTRIBUTED
       maxAllowedUseOnQuery: 10
       rowCount: 10
       nullRate: 0.1
@@ -36,6 +38,19 @@ targetTables:
           name: id
           type: int
       distinctCopyCount: 2
+  - Table:
+      name: single_dist
+      citusType: SINGLE_SHARD_DISTRIBUTED
+      maxAllowedUseOnQuery: 10
+      rowCount: 10
+      nullRate: 0.1
+      duplicateRate: 0.1
+      columns:
+        - Column:
+          name: id
+          type: int
+      distinctCopyCount: 2
+      colocateWith: none
   - Table:
       name: ref
       citusType: REFERENCE

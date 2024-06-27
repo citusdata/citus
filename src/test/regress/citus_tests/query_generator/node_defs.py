@@ -22,9 +22,10 @@ class RestrictOp(Enum):
 
 
 class CitusType(Enum):
-    DISTRIBUTED = 1
-    REFERENCE = 2
-    POSTGRES = 3
+    HASH_DISTRIBUTED = 1
+    SINGLE_SHARD_DISTRIBUTED = 2
+    REFERENCE = 3
+    POSTGRES = 4
 
 
 class Table:
@@ -38,6 +39,7 @@ class Table:
         duplicateRate,
         columns,
         distinctCopyCount,
+        colocateWith,
     ):
         self.name = name
         self.citusType = citusType
@@ -47,6 +49,7 @@ class Table:
         self.duplicateRate = duplicateRate
         self.columns = columns
         self.distinctCopyCount = distinctCopyCount
+        self.colocateWith = colocateWith
 
 
 class Column:
