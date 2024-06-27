@@ -461,8 +461,8 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
 			currentConnectionsCount = workerNodeConnectionEntry->regularConnectionsCount;
 		}
 
-		bool remoteNodeLimitExceeded = currentConnectionsCount + 1 >
-									   currentConnectionsLimit;
+		bool currentConnectionsLimitExceeded = currentConnectionsCount + 1 >
+											   currentConnectionsLimit;
 
 		/*
 		 * For local nodes, solely relying on citus.max_shared_pool_size or
@@ -476,11 +476,11 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
 		 * a reasonable pace. The latter limit typically kicks in when the database
 		 * is issued lots of concurrent sessions at the same time, such as benchmarks.
 		 */
-		bool localNodeLimitExceeded =
+		bool localNodeConnectionsLimitExceeded =
 			connectionToLocalNode &&
 			(GetLocalSharedPoolSize() == DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES ||
-			 GetExternalClientBackendCount() + 1 > currentConnectionsLimit);
-		if (remoteNodeLimitExceeded || localNodeLimitExceeded)
+			 GetExternalClientBackendCount() + 1 > GetLocalSharedPoolSize());
+		if (currentConnectionsLimitExceeded || localNodeConnectionsLimitExceeded)
 		{
 			connectionSlotAvailable = false;
 		}
@@ -502,9 +502,10 @@ IncrementSharedConnectionCounterInternal(uint32 externalFlags,
 	if (IsLoggableLevel(DEBUG4))
 	{
 		ereport(DEBUG4, errmsg(
-					"Incrementing connection counter. "
+					"Incrementing %s connection counter. "
 					"Current regular connections: %i, maintenance connections: %i. "
 					"Connection slot to %s:%i database %i is %s",
+					maintenanceConnection ? "maintenance" : "regular",
 					workerNodeConnectionEntry->regularConnectionsCount,
 					workerNodeConnectionEntry->maintenanceConnectionsCount,
 					hostname,
@@ -568,7 +569,8 @@ DecrementSharedConnectionCounterInternal(uint32 externalFlags,
 	Assert(workerNodeConnectionEntry->regularConnectionsCount > 0 ||
 		   workerNodeConnectionEntry->maintenanceConnectionsCount > 0);
 
-	if (externalFlags & MAINTENANCE_CONNECTION)
+	bool maintenanceConnection = externalFlags & MAINTENANCE_CONNECTION;
+	if (maintenanceConnection)
 	{
 		workerNodeConnectionEntry->maintenanceConnectionsCount -= 1;
 	}
@@ -580,9 +582,10 @@ DecrementSharedConnectionCounterInternal(uint32 externalFlags,
 	if (IsLoggableLevel(DEBUG4))
 	{
 		ereport(DEBUG4, errmsg(
-					"Decrementing connection counter. "
+					"Decrementing %s connection counter. "
 					"Current regular connections: %i, maintenance connections: %i. "
 					"Connection slot to %s:%i database %i is released",
+					maintenanceConnection ? "maintenance" : "regular",
 					workerNodeConnectionEntry->regularConnectionsCount,
 					workerNodeConnectionEntry->maintenanceConnectionsCount,
 					hostname,

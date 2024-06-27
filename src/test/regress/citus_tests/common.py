@@ -977,6 +977,14 @@ class Postgres(QueryRunner):
         for config in configs:
             self.sql(f"alter system set {config}")
 
+    def reset_configuration(self, *configs):
+        """Reset specific Postgres settings using ALTER SYSTEM RESET
+        NOTE: after configuring a call to reload or restart is needed for the
+        settings to become effective.
+        """
+        for config in configs:
+            self.sql(f"alter system reset {config}")
+
     def log_handle(self):
         """Returns the opened logfile at the current end of the log
 
