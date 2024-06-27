@@ -174,6 +174,14 @@ typedef enum TenantOperation
 	TENANT_SET_SCHEMA,
 } TenantOperation;
 
+typedef struct DistributedRolesInGrantRoleStmt
+{
+	List *distributedGrantees;
+	List *distributedGrantedRoles;
+	RoleSpec *grantor;
+	bool isGrantRoleStmtValid;
+} DistributedRolesInGrantRoleStmt;
+
 #define TOTAL_TENANT_OPERATION 5
 extern const char *TenantOperationNames[TOTAL_TENANT_OPERATION];
 
@@ -519,7 +527,7 @@ extern List * PreprocessDropRoleStmt(Node *stmt, const char *queryString,
 extern List * PreprocessGrantRoleStmt(Node *stmt, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
 extern List * PostprocessGrantRoleStmt(Node *stmt, const char *queryString);
-extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
+extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid, bool fetchGrantStatements);
 extern List * CreateRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 										  isPostprocess);
 
@@ -527,7 +535,11 @@ extern List * RenameRoleStmtObjectAddress(Node *stmt, bool missing_ok, bool
 										  isPostprocess);
 
 extern void UnmarkRolesDistributed(List *roles);
+extern List * FilterDistributedGrantedRoles(List *roles);
 extern List * FilterDistributedRoles(List *roles);
+extern DistributedRolesInGrantRoleStmt * ExtractDistributedRolesInGrantRoleStmt(
+	GrantRoleStmt *stmt);
+extern List * GenerateGrantRoleStmts(void);
 
 /* schema.c - forward declarations */
 extern List * PostprocessCreateSchemaStmt(Node *node, const char *queryString);
