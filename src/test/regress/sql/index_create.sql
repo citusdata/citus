@@ -1,5 +1,6 @@
 CREATE SCHEMA index_create;
 SET search_path TO index_create;
+GRANT ALL ON SCHEMA index_create TO regularuser;
 
 CREATE TABLE test_tbl (a INT NOT NULL PRIMARY KEY, b text, c BIGINT);
 CREATE UNIQUE INDEX CONCURRENTLY a_index ON test_tbl (a);
