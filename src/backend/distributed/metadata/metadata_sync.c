@@ -5167,6 +5167,11 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
 		SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
 	}
+
+	List *grantRoleCommands = GenerateGrantRoleStmts();
+	SendOrCollectCommandListToActivatedNodes(context, grantRoleCommands);
+
+
 	MemoryContextSwitchTo(oldContext);
 
 	if (!MetadataSyncCollectsCommands(context))
