@@ -578,6 +578,68 @@ DETAIL:  "type temp_type" will be created only locally
 CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
 WARNING:  "type temp_enum" has dependency on unsupported object "schema pg_temp_xxx"
 DETAIL:  "type temp_enum" will be created only locally
+-- verify that dropping a type which is used in the distribution column
+-- of a distributed table fails
+-- create a custom type...
+CREATE TYPE my_type AS (
+    i integer,
+    i2 integer
+);
+CREATE FUNCTION equal_my_type_function(my_type, my_type) RETURNS boolean
+LANGUAGE 'internal'
+AS 'record_eq'
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+-- ... use that function to create a custom equality operator...
+CREATE OPERATOR = (
+   LEFTARG = my_type,
+   RIGHTARG = my_type,
+   PROCEDURE = equal_my_type_function,
+   HASHES
+);
+-- ... create a test HASH function. Though it is a poor hash function,
+-- it is acceptable for our tests
+CREATE FUNCTION my_type_hash(my_type) RETURNS int
+AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+-- ... and create a custom operator family for hash indexes...
+CREATE OPERATOR FAMILY cats_op_fam USING hash;
+-- We need to define a default operator classes for my_type
+-- that uses HASH
+CREATE OPERATOR CLASS cats_op_fam_class
+DEFAULT FOR TYPE my_type USING HASH AS
+OPERATOR 1 = (my_type, my_type),
+FUNCTION 1 my_type_hash(my_type);
+CREATE TABLE tbl (a my_type);
+SELECT create_distributed_table('tbl', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TYPE my_type CASCADE;
+ERROR:  Can't drop type "type_tests.my_type" because it is used in the partition column "a" of Citus table "tbl"
+ALTER TABLE tbl DROP COLUMN a;
+ERROR:  cannot execute ALTER TABLE command involving partition column
+SELECT undistribute_table('tbl');
+NOTICE:  creating a new table for type_tests.tbl
+NOTICE:  moving the data of type_tests.tbl
+NOTICE:  dropping the old type_tests.tbl
+NOTICE:  renaming the new table to type_tests.tbl
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TYPE my_type CASCADE;
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to function equal_my_type_function(my_type,my_type)
+drop cascades to operator =(my_type,my_type)
+drop cascades to function my_type_hash(my_type)
+drop cascades to operator class cats_op_fam_class for access method hash
+drop cascades to column a of table tbl
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
