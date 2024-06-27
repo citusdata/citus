@@ -1,6 +1,5 @@
 import asyncio
 
-import psycopg
 import pytest
 from psycopg.errors import DeadlockDetected
 
