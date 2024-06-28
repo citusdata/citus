@@ -89,8 +89,8 @@ async def test_multiple_databases_distributed_deadlock_detection(cluster):
 
             await asyncio.wait_for(run_deadlocked_queries(), 300)
 
-        await first_connection.commit()
-        await second_connection.commit()
+        await first_connection.rollback()
+        await second_connection.rollback()
 
     async def enable_maintenance_when_deadlocks_ready():
         """Function to enable maintenance daemons, when all the expected deadlock queries are ready"""
@@ -147,8 +147,3 @@ async def test_multiple_databases_distributed_deadlock_detection(cluster):
             )
             too_many_clients_errors_count = cursor.fetchone()[0]
             assert too_many_clients_errors_count == 0
-
-    for db_name in db_names:
-        cluster.coordinator.sql(
-            "DROP TABLE public.deadlock_detection_test", dbname=db_name
-        )
