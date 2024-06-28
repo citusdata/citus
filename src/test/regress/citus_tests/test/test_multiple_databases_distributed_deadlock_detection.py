@@ -147,3 +147,8 @@ async def test_multiple_databases_distributed_deadlock_detection(cluster):
             )
             too_many_clients_errors_count = cursor.fetchone()[0]
             assert too_many_clients_errors_count == 0
+
+    for db_name in db_names:
+        cluster.coordinator.sql(
+            "DROP TABLE public.deadlock_detection_test", dbname=db_name
+        )
