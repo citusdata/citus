@@ -1026,6 +1026,15 @@ class Postgres(QueryRunner):
         self.databases.add(name)
         self.sql(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
 
+    def drop_database(self, name):
+        self.sql("DROP EXTENSION IF EXISTS citus CASCADE", dbname=name)
+        self.sql(
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                sql.Identifier(name)
+            )
+        )
+        self.databases.remove(name)
+
     def create_schema(self, name):
         self.schemas.add(name)
         self.sql(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name)))
@@ -1055,11 +1064,13 @@ class Postgres(QueryRunner):
 
     def cleanup_databases(self):
         for database in self.databases:
+            self.sql("DROP EXTENSION IF EXISTS citus CASCADE", dbname=database)
             self.sql(
                 sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
                     sql.Identifier(database)
                 )
             )
+        self.databases.clear()
 
     def cleanup_schemas(self):
         for schema in self.schemas:
