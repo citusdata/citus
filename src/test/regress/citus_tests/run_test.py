@@ -241,7 +241,8 @@ def run_python_test(test_name, args):
         "pytest",
         "pytest",
         "--numprocesses",
-        "auto",
+        # Tests may be heavy, so limit the concurrency
+        "2",
         "--count",
         str(args["repeat"]),
         str(test_path),

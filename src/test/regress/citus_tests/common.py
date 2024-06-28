@@ -823,7 +823,7 @@ class Postgres(QueryRunner):
             # of our tests
             pgconf.write("max_logical_replication_workers = 50\n")
             pgconf.write("max_wal_senders = 50\n")
-            pgconf.write("max_worker_processes = 50\n")
+            pgconf.write("max_worker_processes = 150\n")
             pgconf.write("max_replication_slots = 50\n")
 
             # We need to make the log go to stderr so that the tests can
@@ -846,6 +846,8 @@ class Postgres(QueryRunner):
             # happened
             pgconf.write("restart_after_crash = off\n")
 
+            # prevent tests from hanging
+            pgconf.write("statement_timeout= '5min'\n")
         os.truncate(self.hba_path, 0)
         self.ssl_access("all", "trust")
         self.nossl_access("all", "trust")
@@ -977,6 +979,14 @@ class Postgres(QueryRunner):
         for config in configs:
             self.sql(f"alter system set {config}")
 
+    def reset_configuration(self, *configs):
+        """Reset specific Postgres settings using ALTER SYSTEM RESET
+        NOTE: after configuring a call to reload or restart is needed for the
+        settings to become effective.
+        """
+        for config in configs:
+            self.sql(f"alter system reset {config}")
+
     def log_handle(self):
         """Returns the opened logfile at the current end of the log
 
@@ -1018,6 +1028,15 @@ class Postgres(QueryRunner):
         self.databases.add(name)
         self.sql(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
 
+    def drop_database(self, name):
+        self.sql("DROP EXTENSION IF EXISTS citus CASCADE", dbname=name)
+        self.sql(
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                sql.Identifier(name)
+            )
+        )
+        self.databases.remove(name)
+
     def create_schema(self, name):
         self.schemas.add(name)
         self.sql(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name)))
@@ -1047,9 +1066,13 @@ class Postgres(QueryRunner):
 
     def cleanup_databases(self):
         for database in self.databases:
+            self.sql("DROP EXTENSION IF EXISTS citus CASCADE", dbname=database)
             self.sql(
-                sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database))
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database)
+                )
             )
+        self.databases.clear()
 
     def cleanup_schemas(self):
         for schema in self.schemas:

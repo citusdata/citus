@@ -12,6 +12,8 @@
 #ifndef MAINTENANCED_H
 #define MAINTENANCED_H
 
+#include "commands/dbcommands.h"
+
 /* collect statistics every 24 hours */
 #define STATS_COLLECTION_TIMEOUT_MILLIS (24 * 60 * 60 * 1000)
 

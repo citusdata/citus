@@ -77,6 +77,7 @@ INSERT INTO select_test VALUES (3, 'even more data');
 SELECT * FROM select_test WHERE key = 3;
 COMMIT;
 
+-- Maintenance connections are not cached
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT.*pg_prepared_xacts").after(2).kill()');
 SELECT recover_prepared_transactions();
 SELECT recover_prepared_transactions();
