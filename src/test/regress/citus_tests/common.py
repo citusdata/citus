@@ -846,6 +846,8 @@ class Postgres(QueryRunner):
             # happened
             pgconf.write("restart_after_crash = off\n")
 
+            # prevent tests from hanging
+            pgconf.write("statement_timeout= '5min'\n")
         os.truncate(self.hba_path, 0)
         self.ssl_access("all", "trust")
         self.nossl_access("all", "trust")
