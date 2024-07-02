@@ -1293,7 +1293,31 @@ ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
 ALTER SYSTEM RESET citus.local_shared_pool_size;
 SELECT pg_reload_conf();
 
+/*
+ * test for the citus.local_shared_pool_size value when a regular user & superuser are querying it.
+ */
+ALTER SYSTEM SET citus.max_client_connections TO 80;
+ALTER SYSTEM SET citus.local_shared_pool_size TO 0;
+SELECT pg_reload_conf();
 
+CREATE ROLE user_1 WITH LOGIN;
+GRANT pg_read_all_settings TO user_1;
+SET ROLE user_1;
+
+/* should output 80, as this is the citus.max_client_connections value and a regular user is querying it. */
+SHOW citus.local_shared_pool_size;
+
+SET ROLE postgres;
+
+/* should output 100, as this is the postgresql default for max_connections and the superuser is querying it. */
+SHOW citus.local_shared_pool_size;
+
+DROP ROLE user_1;
+
+ALTER SYSTEM RESET citus.max_client_connections;
+ALTER SYSTEM RESET max_connections;
+ALTER SYSTEM RESET citus.local_shared_pool_size;
+SELECT pg_reload_conf();
 
 -- suppress notices
 SET client_min_messages TO error;

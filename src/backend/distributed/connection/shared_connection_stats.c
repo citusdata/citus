@@ -238,7 +238,7 @@ GetLocalSharedPoolSize(void)
 {
 	if (LocalSharedPoolSize == ADJUST_POOLSIZE_AUTOMATICALLY)
 	{
-		return GetMaxClientConnections() * 0.5;
+		return GetMaxClientConnections();
 	}
 
 	return LocalSharedPoolSize;
