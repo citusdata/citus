@@ -2561,6 +2561,45 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+/*
+ * test for the citus.local_shared_pool_size value when a regular user & superuser are querying it.
+ */
+ALTER SYSTEM SET citus.max_client_connections TO 80;
+ALTER SYSTEM SET citus.local_shared_pool_size TO 0;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE ROLE user_1 WITH LOGIN;
+GRANT pg_read_all_settings TO user_1;
+SET ROLE user_1;
+/* should output 80, as this is the citus.max_client_connections value and a regular user is querying it. */
+SHOW citus.local_shared_pool_size;
+ citus.local_shared_pool_size
+---------------------------------------------------------------------
+ 80
+(1 row)
+
+SET ROLE postgres;
+/* should output 100, as this is the postgresql default for max_connections and the superuser is querying it. */
+SHOW citus.local_shared_pool_size;
+ citus.local_shared_pool_size
+---------------------------------------------------------------------
+ 100
+(1 row)
+
+DROP ROLE user_1;
+ALTER SYSTEM RESET citus.max_client_connections;
+ALTER SYSTEM RESET max_connections;
+ALTER SYSTEM RESET citus.local_shared_pool_size;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- suppress notices
 SET client_min_messages TO error;
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
