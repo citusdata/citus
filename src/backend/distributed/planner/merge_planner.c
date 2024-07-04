@@ -1271,7 +1271,6 @@ ValidateAndReturnVarIfSupported(Node *entryExpr)
  * ON clause and verifies if there is a join, either left or right, with
  * the distribution column of the given target. Once a match is found, it
  * returns the index of that match in the source's target list.
- * 
  */
 static int
 SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
@@ -1280,8 +1279,8 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 	if (IsCitusTableType(targetRelation->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
 		ereport(ERROR, (errmsg("MERGE operation across distributed schemas "
-				"or with a row-based distributed table is "
-				"not yet supported")));
+							   "or with a row-based distributed table is "
+							   "not yet supported")));
 	}
 
 	/* Get all the Join conditions from the ON clause */
