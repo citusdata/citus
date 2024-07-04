@@ -1272,8 +1272,6 @@ ValidateAndReturnVarIfSupported(Node *entryExpr)
  * the distribution column of the given target. Once a match is found, it
  * returns the index of that match in the source's target list.
  * 
- *  In the case of SINGLE_SHARD_DISTRIBUTED, there is no distribution key available for the target, which prevents repartitioning. 
- *  Therefore, return -1 to signal the caller to utilize the Pull to coordinator approach.
  */
 static int
 SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
@@ -1282,8 +1280,8 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 	if (IsCitusTableType(targetRelation->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
 		ereport(ERROR, (errmsg("MERGE operation across distributed schemas "
-						"or with a row-based distributed table is "
-						"not yet supported")));		
+				"or with a row-based distributed table is "
+				"not yet supported")));
 	}
 
 	/* Get all the Join conditions from the ON clause */
