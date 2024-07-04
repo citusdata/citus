@@ -1005,12 +1005,18 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 	List *localTablesList = NIL;
 	RangeTblEntry *rangeTableEntry = NULL;
 
+	bool areAllDistTablesSingleSharded = true;
 	foreach_ptr(rangeTableEntry, rangeTableList)
 	{
 		Oid relationId = rangeTableEntry->relid;
 
 		if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 		{
+			if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
+			{
+				areAllDistTablesSingleSharded = false;
+			}
+
 			distTablesList = lappend(distTablesList, rangeTableEntry);
 		}
 		else if (IsCitusTableType(relationId, REFERENCE_TABLE))
@@ -1061,6 +1067,12 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 	/* Ensure all distributed tables are indeed co-located */
 	if (!AllDistributedRelationsInRTEListColocated(distTablesList))
 	{
+		/* All distributed tables are colocated and single sharded so we can push down to workers  */
+		if (areAllDistTablesSingleSharded)
+		{
+			return NULL;
+		}
+
 		ereport(DEBUG1, (errmsg("Distributed tables are not co-located, try "
 								"repartitioning")));
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
