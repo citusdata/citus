@@ -1281,7 +1281,9 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 {
 	if (IsCitusTableType(targetRelation->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		return -1;
+		ereport(ERROR, (errmsg("MERGE operation across distributed schemas "
+						"or with a row-based distributed table is "
+						"not yet supported")));		
 	}
 
 	/* Get all the Join conditions from the ON clause */
