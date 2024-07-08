@@ -302,7 +302,7 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 
 	NullableDatum lastShardSplitPoint = { 0, true /*isnull*/ };
 	Datum shardSplitPoint;
-	foreach_int(shardSplitPoint, shardSplitPointsList)
+	foreach_declared_int(shardSplitPoint, shardSplitPointsList)
 	{
 		int32 shardSplitPointValue = DatumGetInt32(shardSplitPoint);
 
@@ -399,7 +399,7 @@ GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList)
 {
 	List *workersForPlacementList = NIL;
 	int32 nodeId;
-	foreach_int(nodeId, nodeIdsForPlacementList)
+	foreach_declared_int(nodeId, nodeIdsForPlacementList)
 	{
 		uint32 nodeIdValue = (uint32) nodeId;
 		WorkerNode *workerNode = LookupNodeByNodeId(nodeIdValue);
@@ -464,7 +464,7 @@ SplitShard(SplitMode splitMode,
 	/* sort the tables to avoid deadlocks */
 	colocatedTableList = SortList(colocatedTableList, CompareOids);
 	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
 		/*
 		 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
@@ -694,7 +694,7 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 	 * Iterate over all the shards in the shard group.
 	 */
 	List *shardIntervalList = NIL;
-	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
@@ -778,7 +778,7 @@ CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 	/*
 	 * Iterate over all the shards in the shard group.
 	 */
-	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
@@ -1029,7 +1029,7 @@ CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
 	List *shardGroupSplitIntervalListList = NIL;
 
 	ShardInterval *shardToSplitInterval = NULL;
-	foreach_ptr(shardToSplitInterval, sourceColocatedShardIntervalList)
+	foreach_declared_ptr(shardToSplitInterval, sourceColocatedShardIntervalList)
 	{
 		List *shardSplitIntervalList = NIL;
 		CreateSplitIntervalsForShard(shardToSplitInterval, splitPointsForShard,
@@ -1121,7 +1121,7 @@ UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 									   uint32 colocationId)
 {
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, colocatedShardList)
+	foreach_declared_ptr(shardInterval, colocatedShardList)
 	{
 		Oid relationId = shardInterval->relationId;
 		Var *distributionColumn = GetDistributionColumnFromMap(distributionColumnMap,
@@ -1162,7 +1162,7 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 	/*
 	 * Iterate over all the shards in the shard group.
 	 */
-	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		/*
 		 * Iterate on split shards list for a given shard and insert metadata.
@@ -1195,7 +1195,7 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 	/* send commands to synced nodes one by one */
 	List *splitOffShardMetadataCommandList = ShardListInsertCommand(syncedShardList);
 	char *command = NULL;
-	foreach_ptr(command, splitOffShardMetadataCommandList)
+	foreach_declared_ptr(command, splitOffShardMetadataCommandList)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
@@ -1216,7 +1216,7 @@ CreatePartitioningHierarchyForBlockingSplit(List *shardGroupSplitIntervalListLis
 	/*
 	 * Iterate over all the shards in the shard group.
 	 */
-	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
@@ -1255,7 +1255,7 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 	/*
 	 * Iterate over all the shards in the shard group.
 	 */
-	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
@@ -1281,7 +1281,7 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 												referenceTableForeignConstraintList);
 
 			char *constraintCommand = NULL;
-			foreach_ptr(constraintCommand, constraintCommandList)
+			foreach_declared_ptr(constraintCommand, constraintCommandList)
 			{
 				SendCommandToWorker(
 					workerPlacementNode->workerName,
@@ -1685,7 +1685,7 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 		}
 
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, sourceColocatedShardIntervalList)
+		foreach_declared_ptr(shardInterval, sourceColocatedShardIntervalList)
 		{
 			/* Populate list of commands necessary to create shard interval on destination */
 			List *splitShardCreationCommandList = GetPreLoadTableCreationCommands(
@@ -1739,7 +1739,7 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 	 * If the target shard was created on source node as placement, skip it (See Note 2 from function description).
 	 */
 	List *shardIntervalList = NULL;
-	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
 		workerPlacementNode = NULL;
@@ -1818,7 +1818,7 @@ CreateWorkerForPlacementSet(List *workersForPlacementList)
 											  hashFlags);
 
 	WorkerNode *workerForPlacement = NULL;
-	foreach_ptr(workerForPlacement, workersForPlacementList)
+	foreach_declared_ptr(workerForPlacement, workersForPlacementList)
 	{
 		void *hashKey = (void *) workerForPlacement;
 		hash_search(workerForPlacementSet, hashKey, HASH_ENTER, NULL);

@@ -337,7 +337,7 @@ FindTargetRelationOid(Relation sourceShardRelation,
 												 shardSplitInfo->distributedTableOid);
 
 	shardSplitInfo = NULL;
-	foreach_ptr(shardSplitInfo, entry->shardSplitInfoList)
+	foreach_declared_ptr(shardSplitInfo, entry->shardSplitInfoList)
 	{
 		if (shardSplitInfo->shardMinValue <= hashValue &&
 			shardSplitInfo->shardMaxValue >= hashValue)

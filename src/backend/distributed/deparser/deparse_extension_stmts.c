@@ -40,7 +40,7 @@ DefElem *
 GetExtensionOption(List *extensionOptions, const char *defname)
 {
 	DefElem *defElement = NULL;
-	foreach_ptr(defElement, extensionOptions)
+	foreach_declared_ptr(defElement, extensionOptions)
 	{
 		if (IsA(defElement, DefElem) &&
 			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)
@@ -112,7 +112,7 @@ AppendCreateExtensionStmtOptions(StringInfo buf, List *options)
 
 	/* Add the options to the statement */
 	DefElem *defElem = NULL;
-	foreach_ptr(defElem, options)
+	foreach_declared_ptr(defElem, options)
 	{
 		if (strcmp(defElem->defname, "schema") == 0)
 		{
@@ -181,7 +181,7 @@ AppendAlterExtensionStmt(StringInfo buf, AlterExtensionStmt *alterExtensionStmt)
 	 * the options.
 	 */
 	DefElem *option = NULL;
-	foreach_ptr(option, optionsList)
+	foreach_declared_ptr(option, optionsList)
 	{
 		if (strcmp(option->defname, "new_version") == 0)
 		{

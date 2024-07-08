@@ -200,7 +200,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	 * each placement insertion.
 	 */
 	uint64 *shardIdPtr;
-	foreach_ptr(shardIdPtr, insertedShardIds)
+	foreach_declared_ptr(shardIdPtr, insertedShardIds)
 	{
 		List *placementsForShard = ShardPlacementList(*shardIdPtr);
 		insertedShardPlacements = list_concat(insertedShardPlacements,
@@ -258,7 +258,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	char targetShardStorageType = ShardStorageType(targetRelationId);
 
 	ShardInterval *sourceShardInterval = NULL;
-	foreach_ptr(sourceShardInterval, sourceShardIntervalList)
+	foreach_declared_ptr(sourceShardInterval, sourceShardIntervalList)
 	{
 		uint64 sourceShardId = sourceShardInterval->shardId;
 		uint64 *newShardIdPtr = (uint64 *) palloc0(sizeof(uint64));
@@ -286,7 +286,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 					   shardMinValueText, shardMaxValueText);
 
 		ShardPlacement *sourcePlacement = NULL;
-		foreach_ptr(sourcePlacement, sourceShardPlacementList)
+		foreach_declared_ptr(sourcePlacement, sourceShardPlacementList)
 		{
 			int32 groupId = sourcePlacement->groupId;
 			const uint64 shardSize = 0;
@@ -304,7 +304,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	 * each placement insertion.
 	 */
 	uint64 *shardIdPtr;
-	foreach_ptr(shardIdPtr, insertedShardIds)
+	foreach_declared_ptr(shardIdPtr, insertedShardIds)
 	{
 		List *placementsForShard = ShardPlacementList(*shardIdPtr);
 		insertedShardPlacements = list_concat(insertedShardPlacements,

@@ -70,7 +70,7 @@ DeparseCreateDomainStmt(Node *node)
 	}
 
 	Constraint *constraint = NULL;
-	foreach_ptr(constraint, stmt->constraints)
+	foreach_declared_ptr(constraint, stmt->constraints)
 	{
 		AppendConstraint(&buf, constraint, stmt->domainname, stmt->typeName);
 	}
@@ -117,7 +117,7 @@ DeparseDropDomainStmt(Node *node)
 
 	TypeName *domainName = NULL;
 	bool first = true;
-	foreach_ptr(domainName, stmt->objects)
+	foreach_declared_ptr(domainName, stmt->objects)
 	{
 		if (!first)
 		{

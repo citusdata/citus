@@ -493,7 +493,7 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 	{
 		Task *task = NULL;
 		uint64 totalReceivedTupleDataForAllTasks = 0;
-		foreach_ptr(task, taskList)
+		foreach_declared_ptr(task, taskList)
 		{
 			totalReceivedTupleDataForAllTasks += TaskReceivedTupleData(task);
 		}
@@ -671,7 +671,7 @@ ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
 	}
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es, params);
 		remoteExplainList = lappend(remoteExplainList, remoteExplain);
@@ -1398,7 +1398,7 @@ void
 ResetExplainAnalyzeData(List *taskList)
 {
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (task->fetchedExplainAnalyzePlan != NULL)
 		{
@@ -1461,7 +1461,7 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 	List *explainAnalyzeTaskList = NIL;
 	Task *originalTask = NULL;
 
-	foreach_ptr(originalTask, originalTaskList)
+	foreach_declared_ptr(originalTask, originalTaskList)
 	{
 		if (originalTask->queryCount != 1)
 		{

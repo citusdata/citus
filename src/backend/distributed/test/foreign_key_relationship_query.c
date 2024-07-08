@@ -205,7 +205,7 @@ get_foreign_key_connected_relations(PG_FUNCTION_ARGS)
 
 	Oid connectedRelationId;
 	List *fkeyConnectedRelationIdList = GetForeignKeyConnectedRelationIdList(relationId);
-	foreach_oid(connectedRelationId, fkeyConnectedRelationIdList)
+	foreach_declared_oid(connectedRelationId, fkeyConnectedRelationIdList)
 	{
 		Datum values[GET_FKEY_CONNECTED_RELATIONS_COLUMNS];
 		bool nulls[GET_FKEY_CONNECTED_RELATIONS_COLUMNS];

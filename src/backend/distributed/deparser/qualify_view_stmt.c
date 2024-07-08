@@ -31,7 +31,7 @@ QualifyDropViewStmt(Node *node)
 	List *qualifiedViewNames = NIL;
 
 	List *possiblyQualifiedViewName = NULL;
-	foreach_ptr(possiblyQualifiedViewName, stmt->objects)
+	foreach_declared_ptr(possiblyQualifiedViewName, stmt->objects)
 	{
 		char *viewName = NULL;
 		char *schemaName = NULL;

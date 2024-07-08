@@ -253,7 +253,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 													  ALLOCSET_DEFAULT_SIZES);
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		MemoryContext oldContext = MemoryContextSwitchTo(loopContext);
 
@@ -304,7 +304,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			LOCKMODE lockMode = GetQueryLockMode(jobQuery);
 
 			Oid relationId = InvalidOid;
-			foreach_oid(relationId, localPlan->relationOids)
+			foreach_declared_oid(relationId, localPlan->relationOids)
 			{
 				LockRelationOid(relationId, lockMode);
 			}
@@ -393,7 +393,7 @@ SetColocationIdAndPartitionKeyValueForTasks(List *taskList, Job *workerJob)
 	if (workerJob->colocationId != INVALID_COLOCATION_ID)
 	{
 		Task *task = NULL;
-		foreach_ptr(task, taskList)
+		foreach_declared_ptr(task, taskList)
 		{
 			task->colocationId = workerJob->colocationId;
 			task->partitionKeyValue = workerJob->partitionKeyValue;
@@ -412,7 +412,7 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tuple
 {
 	char *queryString = NULL;
 	uint64 totalProcessedRows = 0;
-	foreach_ptr(queryString, queryStrings)
+	foreach_declared_ptr(queryString, queryStrings)
 	{
 		Query *shardQuery = ParseQueryString(queryString,
 											 NULL,
@@ -490,7 +490,7 @@ ExecuteUtilityCommand(const char *taskQueryCommand)
 	List *parseTreeList = pg_parse_query(taskQueryCommand);
 	RawStmt *taskRawStmt = NULL;
 
-	foreach_ptr(taskRawStmt, parseTreeList)
+	foreach_declared_ptr(taskRawStmt, parseTreeList)
 	{
 		Node *taskRawParseTree = taskRawStmt->stmt;
 
@@ -580,7 +580,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 	*localTaskList = NIL;
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		List *localTaskPlacementList = NULL;
 		List *remoteTaskPlacementList = NULL;
@@ -645,7 +645,7 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
 	*remoteTaskPlacementList = NIL;
 
 	ShardPlacement *taskPlacement = NULL;
-	foreach_ptr(taskPlacement, taskPlacementList)
+	foreach_declared_ptr(taskPlacement, taskPlacementList)
 	{
 		if (taskPlacement->groupId == localGroupId)
 		{
@@ -817,7 +817,7 @@ RecordNonDistTableAccessesForTask(Task *task)
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
 	ShardPlacementAccess *placementAccess = NULL;
-	foreach_ptr(placementAccess, placementAccessList)
+	foreach_declared_ptr(placementAccess, placementAccessList)
 	{
 		uint64 placementAccessShardId = placementAccess->placement->shardId;
 		if (placementAccessShardId == INVALID_SHARD_ID)
@@ -968,7 +968,7 @@ AnyTaskAccessesLocalNode(List *taskList)
 {
 	Task *task = NULL;
 
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (TaskAccessesLocalNode(task))
 		{
@@ -990,7 +990,7 @@ TaskAccessesLocalNode(Task *task)
 	int32 localGroupId = GetLocalGroupId();
 
 	ShardPlacement *taskPlacement = NULL;
-	foreach_ptr(taskPlacement, task->taskPlacementList)
+	foreach_declared_ptr(taskPlacement, task->taskPlacementList)
 	{
 		if (taskPlacement->groupId == localGroupId)
 		{

@@ -259,7 +259,7 @@ DropOrphanedResourcesForCleanup()
 	int failedResourceCountForCleanup = 0;
 	CleanupRecord *record = NULL;
 
-	foreach_ptr(record, cleanupRecordList)
+	foreach_declared_ptr(record, cleanupRecordList)
 	{
 		if (!PrimaryNodeForGroup(record->nodeGroupId, NULL))
 		{
@@ -369,7 +369,7 @@ FinalizeOperationNeedingCleanupOnSuccess(const char *operationName)
 	int failedShardCountOnComplete = 0;
 
 	CleanupRecord *record = NULL;
-	foreach_ptr(record, currentOperationRecordList)
+	foreach_declared_ptr(record, currentOperationRecordList)
 	{
 		if (record->policy == CLEANUP_ALWAYS)
 		{
@@ -932,7 +932,7 @@ TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePo
 	bool executeCommand = true;
 
 	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
+	foreach_declared_ptr(commandString, commandList)
 	{
 		/*
 		 * Cannot use SendOptionalCommandListToWorkerOutsideTransactionWithConnection()

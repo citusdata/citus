@@ -1547,7 +1547,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 
 	/* extract the column names from the final targetlist*/
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, customScan->scan.plan.targetlist)
+	foreach_declared_ptr(targetEntry, customScan->scan.plan.targetlist)
 	{
 		String *columnName = makeString(targetEntry->resname);
 		columnNameList = lappend(columnNameList, columnName);
@@ -1588,7 +1588,7 @@ makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist)
 
 	/* build a targetlist to read from the custom scan output */
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, existingTargetlist)
+	foreach_declared_ptr(targetEntry, existingTargetlist)
 	{
 		Assert(IsA(targetEntry, TargetEntry));
 
@@ -1638,7 +1638,7 @@ makeTargetListFromCustomScanList(List *custom_scan_tlist)
 	List *targetList = NIL;
 	TargetEntry *targetEntry = NULL;
 	int resno = 1;
-	foreach_ptr(targetEntry, custom_scan_tlist)
+	foreach_declared_ptr(targetEntry, custom_scan_tlist)
 	{
 		/*
 		 * INDEX_VAR is used to reference back to the TargetEntry in custom_scan_tlist by
@@ -2107,7 +2107,7 @@ TranslatedVars(PlannerInfo *root, int relationIndex)
 		{
 			/* postgres deletes translated_vars, hence we deep copy them here */
 			Node *targetNode = NULL;
-			foreach_ptr(targetNode, targetAppendRelInfo->translated_vars)
+			foreach_declared_ptr(targetNode, targetAppendRelInfo->translated_vars)
 			{
 				translatedVars =
 					lappend(translatedVars, copyObject(targetNode));
@@ -2128,7 +2128,7 @@ FindTargetAppendRelInfo(PlannerInfo *root, int relationRteIndex)
 	AppendRelInfo *appendRelInfo = NULL;
 
 	/* iterate on the queries that are part of UNION ALL subselects */
-	foreach_ptr(appendRelInfo, root->append_rel_list)
+	foreach_declared_ptr(appendRelInfo, root->append_rel_list)
 	{
 		/*
 		 * We're only interested in the child rel that is equal to the
@@ -2451,7 +2451,7 @@ TranslatedVarsForRteIdentity(int rteIdentity)
 		currentPlannerRestrictionContext->relationRestrictionContext->
 		relationRestrictionList;
 	RelationRestriction *relationRestriction = NULL;
-	foreach_ptr(relationRestriction, relationRestrictionList)
+	foreach_declared_ptr(relationRestriction, relationRestrictionList)
 	{
 		if (GetRTEIdentity(relationRestriction->rte) == rteIdentity)
 		{
@@ -2621,7 +2621,7 @@ GetRTEListProperties(List *rangeTableList)
 	RTEListProperties *rteListProperties = palloc0(sizeof(RTEListProperties));
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		if (rangeTableEntry->rtekind != RTE_RELATION)
 		{
@@ -2714,7 +2714,7 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 	static bool DistributedForeignTableWarningPrompted = false;
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		if (DistributedForeignTableWarningPrompted)
 		{

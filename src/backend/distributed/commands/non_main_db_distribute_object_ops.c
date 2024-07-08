@@ -255,7 +255,7 @@ static void
 DropRoleStmtUnmarkDistOnLocalMainDb(DropRoleStmt *dropRoleStmt)
 {
 	RoleSpec *roleSpec = NULL;
-	foreach_ptr(roleSpec, dropRoleStmt->roles)
+	foreach_declared_ptr(roleSpec, dropRoleStmt->roles)
 	{
 		Oid roleOid = get_role_oid(roleSpec->rolename,
 								   dropRoleStmt->missing_ok);

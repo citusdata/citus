@@ -216,7 +216,7 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 	appendStringInfoString(buf, " (");
 
 	String *statType = NULL;
-	foreach_ptr(statType, stmt->stat_types)
+	foreach_declared_ptr(statType, stmt->stat_types)
 	{
 		appendStringInfoString(buf, strVal(statType));
 
@@ -235,7 +235,7 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 {
 	StatsElem *column = NULL;
 
-	foreach_ptr(column, stmt->exprs)
+	foreach_declared_ptr(column, stmt->exprs)
 	{
 		if (!column->name)
 		{

@@ -46,7 +46,7 @@ QualifyDropTextSearchConfigurationStmt(Node *node)
 	List *qualifiedObjects = NIL;
 	List *objName = NIL;
 
-	foreach_ptr(objName, stmt->objects)
+	foreach_declared_ptr(objName, stmt->objects)
 	{
 		char *schemaName = NULL;
 		char *tsconfigName = NULL;
@@ -87,7 +87,7 @@ QualifyDropTextSearchDictionaryStmt(Node *node)
 	List *qualifiedObjects = NIL;
 	List *objName = NIL;
 
-	foreach_ptr(objName, stmt->objects)
+	foreach_declared_ptr(objName, stmt->objects)
 	{
 		char *schemaName = NULL;
 		char *tsdictName = NULL;
@@ -141,7 +141,7 @@ QualifyAlterTextSearchConfigurationStmt(Node *node)
 	bool useNewDicts = false;
 	List *dicts = NULL;
 	List *dictName = NIL;
-	foreach_ptr(dictName, stmt->dicts)
+	foreach_declared_ptr(dictName, stmt->dicts)
 	{
 		DeconstructQualifiedName(dictName, &schemaName, &objName);
 

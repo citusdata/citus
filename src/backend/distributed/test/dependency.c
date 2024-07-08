@@ -50,7 +50,7 @@ citus_get_all_dependencies_for_object(PG_FUNCTION_ARGS)
 
 	List *dependencies = GetAllSupportedDependenciesForObject(&address);
 	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		Datum values[3];
 		bool isNulls[3];
@@ -95,7 +95,7 @@ citus_get_dependencies_for_object(PG_FUNCTION_ARGS)
 
 	List *dependencies = GetDependenciesForObject(&address);
 	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		Datum values[3];
 		bool isNulls[3];

@@ -375,7 +375,7 @@ static void
 ErrorIfMergeHasUnsupportedTables(Oid targetRelationId, List *rangeTableList)
 {
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		Oid relationId = rangeTableEntry->relid;
 
@@ -734,7 +734,7 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 	}
 
 	MergeAction *action = NULL;
-	foreach_ptr(action, mergeQuery->mergeActionList)
+	foreach_declared_ptr(action, mergeQuery->mergeActionList)
 	{
 		if (FindNodeMatchingCheckFunction((Node *) action, IsNodeSubquery))
 		{
@@ -763,7 +763,7 @@ ConvertCteRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte)
 	 * Presently, CTEs are only permitted within the USING clause, and thus,
 	 * we search for the corresponding one
 	 */
-	foreach_ptr(candidateCte, mergeQuery->cteList)
+	foreach_declared_ptr(candidateCte, mergeQuery->cteList)
 	{
 		if (strcmp(candidateCte->ctename, sourceRte->ctename) == 0)
 		{
@@ -1018,7 +1018,7 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 	List *localTablesList = NIL;
 	RangeTblEntry *rangeTableEntry = NULL;
 
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		Oid relationId = rangeTableEntry->relid;
 
@@ -1224,7 +1224,7 @@ ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *orig
 	 * within itself. Check each INSERT/UPDATE/DELETE individually.
 	 */
 	MergeAction *action = NULL;
-	foreach_ptr(action, originalQuery->mergeActionList)
+	foreach_declared_ptr(action, originalQuery->mergeActionList)
 	{
 		Assert(originalQuery->returningList == NULL);
 		deferredError = MergeQualAndTargetListFunctionsSupported(targetRelationId,
@@ -1472,7 +1472,7 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 	bool foundDistributionColumn = false;
 	MergeAction *action = NULL;
 	uint32 targetRangeTableIndex = query->resultRelation;
-	foreach_ptr(action, query->mergeActionList)
+	foreach_declared_ptr(action, query->mergeActionList)
 	{
 		/* Skip MATCHED clause as INSERTS are not allowed in it */
 		if (action->matched)
@@ -1502,7 +1502,7 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 			PartitionColumn(targetRelationId, targetRangeTableIndex);
 
 		TargetEntry *targetEntry = NULL;
-		foreach_ptr(targetEntry, action->targetList)
+		foreach_declared_ptr(targetEntry, action->targetList)
 		{
 			AttrNumber originalAttrNo = targetEntry->resno;
 

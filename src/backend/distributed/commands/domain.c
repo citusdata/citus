@@ -210,7 +210,7 @@ MakeCollateClauseFromOid(Oid collationOid)
 	getObjectIdentityParts(&collateAddress, &objName, &objArgs, false);
 
 	char *name = NULL;
-	foreach_ptr(name, objName)
+	foreach_declared_ptr(name, objName)
 	{
 		collateClause->collname = lappend(collateClause->collname, makeString(name));
 	}

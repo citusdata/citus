@@ -146,7 +146,7 @@ TraceWorkerSplitCopyUdf(char *sourceShardToCopySchemaName,
 	int index = 1;
 	int splitWayCount = list_length(splitCopyInfoList);
 	SplitCopyInfo *splitCopyInfo = NULL;
-	foreach_ptr(splitCopyInfo, splitCopyInfoList)
+	foreach_declared_ptr(splitCopyInfo, splitCopyInfoList)
 	{
 		char *shardNameCopy = pstrdup(sourceShardToCopyPrefix);
 		AppendShardIdToName(&shardNameCopy, splitCopyInfo->destinationShardId);
@@ -236,7 +236,7 @@ BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray,
 
 	SplitCopyInfo *splitCopyInfo = NULL;
 	int index = 0;
-	foreach_ptr(splitCopyInfo, splitCopyInfoList)
+	foreach_declared_ptr(splitCopyInfo, splitCopyInfoList)
 	{
 		minValues[index] = splitCopyInfo->destinationShardMinHashValue;
 		maxValues[index] = splitCopyInfo->destinationShardMaxHashValue;
@@ -269,7 +269,7 @@ CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplit
 	SplitCopyInfo *splitCopyInfo = NULL;
 	int index = 0;
 	char *sourceShardNamePrefix = get_rel_name(shardIntervalToSplitCopy->relationId);
-	foreach_ptr(splitCopyInfo, splitCopyInfoList)
+	foreach_declared_ptr(splitCopyInfo, splitCopyInfoList)
 	{
 		Oid destinationShardSchemaOid = get_rel_namespace(
 			shardIntervalToSplitCopy->relationId);

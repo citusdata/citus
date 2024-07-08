@@ -207,7 +207,7 @@ GetUniqueDependenciesList(List *objectAddressesList)
 	InitObjectAddressCollector(&objectAddressCollector);
 
 	ObjectAddress *objectAddress = NULL;
-	foreach_ptr(objectAddress, objectAddressesList)
+	foreach_declared_ptr(objectAddress, objectAddressesList)
 	{
 		if (IsObjectAddressCollected(*objectAddress, &objectAddressCollector))
 		{
@@ -334,7 +334,7 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 	InitObjectAddressCollector(&collector);
 
 	ObjectAddress *objectAddress = NULL;
-	foreach_ptr(objectAddress, objectAddressList)
+	foreach_declared_ptr(objectAddress, objectAddressList)
 	{
 		if (IsObjectAddressCollected(*objectAddress, &collector))
 		{
@@ -403,7 +403,7 @@ RecurseObjectDependencies(ObjectAddress target, expandFn expand, followFn follow
 
 	/* iterate all entries and recurse depth first */
 	DependencyDefinition *dependencyDefinition = NULL;
-	foreach_ptr(dependencyDefinition, dependenyDefinitionList)
+	foreach_declared_ptr(dependencyDefinition, dependenyDefinitionList)
 	{
 		if (follow == NULL || !follow(collector, dependencyDefinition))
 		{
@@ -869,7 +869,7 @@ bool
 ErrorOrWarnIfAnyObjectHasUnsupportedDependency(List *objectAddresses)
 {
 	ObjectAddress *objectAddress = NULL;
-	foreach_ptr(objectAddress, objectAddresses)
+	foreach_declared_ptr(objectAddress, objectAddresses)
 	{
 		if (ErrorOrWarnIfObjectHasUnsupportedDependency(objectAddress))
 		{
@@ -962,7 +962,7 @@ DeferErrorIfAnyObjectHasUnsupportedDependency(const List *objectAddresses)
 {
 	DeferredErrorMessage *deferredErrorMessage = NULL;
 	ObjectAddress *objectAddress = NULL;
-	foreach_ptr(objectAddress, objectAddresses)
+	foreach_declared_ptr(objectAddress, objectAddresses)
 	{
 		deferredErrorMessage = DeferErrorIfHasUnsupportedDependency(objectAddress);
 		if (deferredErrorMessage)
@@ -995,7 +995,7 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		return NULL;
 	}
 
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		/*
 		 * Objects with the id smaller than FirstNormalObjectId should be created within
@@ -1172,7 +1172,7 @@ IsAnyObjectAddressOwnedByExtension(const List *targets,
 								   ObjectAddress *extensionAddress)
 {
 	ObjectAddress *target = NULL;
-	foreach_ptr(target, targets)
+	foreach_declared_ptr(target, targets)
 	{
 		if (IsObjectAddressOwnedByExtension(target, extensionAddress))
 		{
@@ -1563,7 +1563,7 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			List *FDWOids = GetDependentFDWsToExtension(extensionId);
 
 			Oid FDWOid = InvalidOid;
-			foreach_oid(FDWOid, FDWOids)
+			foreach_declared_oid(FDWOid, FDWOids)
 			{
 				List *dependentRoleIds = GetDependentRoleIdsFDW(FDWOid);
 				List *dependencies =
@@ -1849,7 +1849,7 @@ GetViewRuleReferenceDependencyList(Oid viewId)
 	List *nonInternalDependenciesOfDependingRules = NIL;
 
 	HeapTuple depTup = NULL;
-	foreach_ptr(depTup, dependencyTupleList)
+	foreach_declared_ptr(depTup, dependencyTupleList)
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
 
@@ -1872,7 +1872,7 @@ GetViewRuleReferenceDependencyList(Oid viewId)
 			List *ruleDependencies = DependencyDefinitionFromPgDepend(ruleAddress);
 
 			DependencyDefinition *dependencyDef = NULL;
-			foreach_ptr(dependencyDef, ruleDependencies)
+			foreach_declared_ptr(dependencyDef, ruleDependencies)
 			{
 				/*
 				 * Follow all dependencies of the internally dependent rule dependencies
@@ -1907,7 +1907,7 @@ GetRelationSequenceDependencyList(Oid relationId)
 
 	List *seqIdList = NIL;
 	SequenceInfo *seqInfo = NULL;
-	foreach_ptr(seqInfo, seqInfoList)
+	foreach_declared_ptr(seqInfo, seqInfoList)
 	{
 		seqIdList = lappend_oid(seqIdList, seqInfo->sequenceOid);
 	}
@@ -1980,7 +1980,7 @@ GetRelationTriggerFunctionDependencyList(Oid relationId)
 
 	List *triggerIdList = GetExplicitTriggerIdList(relationId);
 	Oid triggerId = InvalidOid;
-	foreach_oid(triggerId, triggerIdList)
+	foreach_declared_oid(triggerId, triggerIdList)
 	{
 		Oid functionId = GetTriggerFunctionId(triggerId);
 		DependencyDefinition *dependency =
@@ -2005,7 +2005,7 @@ GetPublicationRelationsDependencyList(Oid publicationId)
 
 	Oid relationId = InvalidOid;
 
-	foreach_oid(relationId, allRelationIds)
+	foreach_declared_oid(relationId, allRelationIds)
 	{
 		if (!IsCitusTable(relationId))
 		{
@@ -2087,7 +2087,7 @@ CreateObjectAddressDependencyDefList(Oid classId, List *objectIdList)
 {
 	List *dependencyList = NIL;
 	Oid objectId = InvalidOid;
-	foreach_oid(objectId, objectIdList)
+	foreach_declared_oid(objectId, objectIdList)
 	{
 		DependencyDefinition *dependency =
 			CreateObjectAddressDependencyDef(classId, objectId);
@@ -2161,7 +2161,7 @@ BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap)
 																	 targetObjectId);
 
 	HeapTuple depTup = NULL;
-	foreach_ptr(depTup, dependencyTupleList)
+	foreach_declared_ptr(depTup, dependencyTupleList)
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
 
@@ -2240,7 +2240,7 @@ GetDependingViews(Oid relationId)
 	foreach_ptr_append(node, nodeQueue)
 	{
 		ViewDependencyNode *dependingNode = NULL;
-		foreach_ptr(dependingNode, node->dependingNodes)
+		foreach_declared_ptr(dependingNode, node->dependingNodes)
 		{
 			ObjectAddress relationAddress = { 0 };
 			ObjectAddressSet(relationAddress, RelationRelationId, dependingNode->id);

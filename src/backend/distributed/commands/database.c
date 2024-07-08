@@ -235,7 +235,7 @@ FilterDistributedDatabases(List *databases)
 {
 	List *distributedDatabases = NIL;
 	String *databaseName = NULL;
-	foreach_ptr(databaseName, databases)
+	foreach_declared_ptr(databaseName, databases)
 	{
 		bool missingOk = true;
 		ObjectAddress *dbAddress =
@@ -258,7 +258,7 @@ static bool
 IsSetTablespaceStatement(AlterDatabaseStmt *stmt)
 {
 	DefElem *def = NULL;
-	foreach_ptr(def, stmt->options)
+	foreach_declared_ptr(def, stmt->options)
 	{
 		if (strcmp(def->defname, "tablespace") == 0)
 		{
@@ -510,7 +510,7 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 	List *remoteNodes = TargetWorkerSetNodeList(ALL_SHARD_NODES, RowShareLock);
 	WorkerNode *remoteNode = NULL;
-	foreach_ptr(remoteNode, remoteNodes)
+	foreach_declared_ptr(remoteNode, remoteNodes)
 	{
 		InsertCleanupRecordOutsideTransaction(
 			CLEANUP_OBJECT_DATABASE,
@@ -733,7 +733,7 @@ void
 EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt)
 {
 	DefElem *option = NULL;
-	foreach_ptr(option, stmt->options)
+	foreach_declared_ptr(option, stmt->options)
 	{
 		if (strcmp(option->defname, "oid") == 0)
 		{

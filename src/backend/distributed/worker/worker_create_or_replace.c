@@ -85,7 +85,7 @@ WrapCreateOrReplaceList(List *sqls)
 	appendStringInfoString(&textArrayLitteral, "ARRAY[");
 	const char *sql = NULL;
 	bool first = true;
-	foreach_ptr(sql, sqls)
+	foreach_declared_ptr(sql, sqls)
 	{
 		if (!first)
 		{
@@ -251,7 +251,7 @@ WorkerCreateOrReplaceObject(List *sqlStatements)
 
 	/* apply all statement locally */
 	char *sqlStatement = NULL;
-	foreach_ptr(sqlStatement, sqlStatements)
+	foreach_declared_ptr(sqlStatement, sqlStatements)
 	{
 		parseTree = ParseTreeNode(sqlStatement);
 		ProcessUtilityParseTree(parseTree, sqlStatement, PROCESS_UTILITY_QUERY, NULL,

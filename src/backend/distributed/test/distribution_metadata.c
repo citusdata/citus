@@ -74,7 +74,7 @@ load_shard_id_array(PG_FUNCTION_ARGS)
 	Datum *shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		Datum shardIdDatum = Int64GetDatum(shardInterval->shardId);
 
@@ -144,7 +144,7 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 	Datum *placementDatumArray = palloc0(placementCount * sizeof(Datum));
 
 	ShardPlacement *placement = NULL;
-	foreach_ptr(placement, placementList)
+	foreach_declared_ptr(placement, placementList)
 	{
 		appendStringInfo(placementInfo, "%s:%d", placement->nodeName,
 						 placement->nodePort);
@@ -263,14 +263,14 @@ relation_count_in_query(PG_FUNCTION_ARGS)
 	List *parseTreeList = pg_parse_query(queryStringChar);
 
 	Node *parsetree = NULL;
-	foreach_ptr(parsetree, parseTreeList)
+	foreach_declared_ptr(parsetree, parseTreeList)
 	{
 		List *queryTreeList = pg_analyze_and_rewrite_fixedparams((RawStmt *) parsetree,
 																 queryStringChar,
 																 NULL, 0, NULL);
 
 		Query *query = NULL;
-		foreach_ptr(query, queryTreeList)
+		foreach_declared_ptr(query, queryTreeList)
 		{
 			List *rangeTableList = NIL;
 

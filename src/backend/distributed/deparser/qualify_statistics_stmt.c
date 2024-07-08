@@ -73,7 +73,7 @@ QualifyDropStatisticsStmt(Node *node)
 
 	List *objectNameListWithSchema = NIL;
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	foreach_declared_ptr(objectNameList, dropStatisticsStmt->objects)
 	{
 		RangeVar *stat = makeRangeVarFromNameList(objectNameList);
 

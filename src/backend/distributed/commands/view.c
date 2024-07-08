@@ -69,7 +69,7 @@ ViewHasDistributedRelationDependency(ObjectAddress *viewObjectAddress)
 	List *dependencies = GetAllDependenciesForObject(viewObjectAddress);
 	ObjectAddress *dependency = NULL;
 
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		if (dependency->classId == RelationRelationId && IsAnyObjectDistributed(
 				list_make1(dependency)))
@@ -304,7 +304,7 @@ DropViewStmtObjectAddress(Node *stmt, bool missing_ok, bool isPostprocess)
 	List *objectAddresses = NIL;
 
 	List *possiblyQualifiedViewName = NULL;
-	foreach_ptr(possiblyQualifiedViewName, dropStmt->objects)
+	foreach_declared_ptr(possiblyQualifiedViewName, dropStmt->objects)
 	{
 		RangeVar *viewRangeVar = makeRangeVarFromNameList(possiblyQualifiedViewName);
 		Oid viewOid = RangeVarGetRelid(viewRangeVar, AccessShareLock,
@@ -332,7 +332,7 @@ FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok)
 	List *distributedViewNames = NIL;
 
 	List *possiblyQualifiedViewName = NULL;
-	foreach_ptr(possiblyQualifiedViewName, viewNamesList)
+	foreach_declared_ptr(possiblyQualifiedViewName, viewNamesList)
 	{
 		char *viewName = NULL;
 		char *schemaName = NULL;
