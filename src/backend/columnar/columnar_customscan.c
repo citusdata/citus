@@ -1925,11 +1925,6 @@ ColumnarScan_EndCustomScan(CustomScanState *node)
 	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
 
 	/*
-	 * Free the exprcontext
-	 */
-	ExecFreeExprContext(&node->ss.ps);
-
-	/*
 	 * clean out the tuple table
 	 */
 	if (node->ss.ps.ps_ResultTupleSlot)
