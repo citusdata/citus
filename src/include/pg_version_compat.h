@@ -57,6 +57,9 @@ typedef int ObjectClass;
 #define OCLASS_AM AccessMethodRelationId
 #define OCLASS_TSTEMPLATE TSTemplateRelationId
 
+#define Anum_pg_collation_colliculocale Anum_pg_collation_colllocale
+#define Anum_pg_database_daticulocale Anum_pg_database_datlocale
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
