@@ -13,6 +13,52 @@
 
 #include "pg_version_constants.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+#include "catalog/pg_am.h"
+#include "catalog/pg_auth_members.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_class.h"
+#include "catalog/pg_collation.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_database.h"
+#include "catalog/pg_extension.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_parameter_acl.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_publication.h"
+#include "catalog/pg_tablespace.h"
+#include "catalog/pg_transform.h"
+#include "catalog/pg_ts_config.h"
+#include "catalog/pg_ts_dict.h"
+#include "catalog/pg_ts_template.h"
+#include "catalog/pg_type.h"
+
+typedef int ObjectClass;
+#define getObjectClass(a) a->classId
+#define LAST_OCLASS TransformRelationId
+#define OCLASS_ROLE AuthIdRelationId
+#define OCLASS_DATABASE DatabaseRelationId
+#define OCLASS_TBLSPACE TableSpaceRelationId
+#define OCLASS_PARAMETER_ACL ParameterAclRelationId
+#define OCLASS_ROLE_MEMBERSHIP AuthMemRelationId
+#define OCLASS_CLASS RelationRelationId
+#define OCLASS_COLLATION CollationRelationId
+#define OCLASS_CONSTRAINT ConstraintRelationId
+#define OCLASS_PROC ProcedureRelationId
+#define OCLASS_PUBLICATION PublicationRelationId
+#define OCLASS_SCHEMA NamespaceRelationId
+#define OCLASS_TSCONFIG TSConfigRelationId
+#define OCLASS_TSDICT TSDictionaryRelationId
+#define OCLASS_TYPE TypeRelationId
+#define OCLASS_EXTENSION ExtensionRelationId
+#define OCLASS_FOREIGN_SERVER ForeignServerRelationId
+#define OCLASS_AM AccessMethodRelationId
+#define OCLASS_TSTEMPLATE TSTemplateRelationId
+
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_16
 
 #include "utils/guc_tables.h"
