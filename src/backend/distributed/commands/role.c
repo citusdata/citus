@@ -71,7 +71,9 @@ static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple,
 										   TupleDesc DbRoleSettingDescription);
 static char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
 											   TupleDesc DbRoleSettingDescription);
+#if PG_VERSION_NUM < PG_VERSION_17
 static Node * makeStringConst(char *str, int location);
+#endif
 static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
@@ -949,6 +951,8 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 }
 
 
+#if PG_VERSION_NUM < PG_VERSION_17
+
 /*
  * makeStringConst creates a Const Node that stores a given string
  *
@@ -970,6 +974,9 @@ makeStringConst(char *str, int location)
 
 	return (Node *) n;
 }
+
+
+#endif
 
 
 /*
