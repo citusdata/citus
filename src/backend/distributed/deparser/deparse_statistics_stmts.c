@@ -177,8 +177,9 @@ AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 static void
 AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt)
 {
-	appendStringInfo(buf, "ALTER STATISTICS %s SET STATISTICS %d", NameListToQuotedString(
-						 stmt->defnames), stmt->stxstattarget);
+	appendStringInfo(buf, "ALTER STATISTICS %s SET STATISTICS %d",
+					 NameListToQuotedString(stmt->defnames),
+					 getIntStxstattarget_compat(stmt->stxstattarget));
 }
 
 

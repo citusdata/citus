@@ -83,6 +83,21 @@ getAttstattarget_compat(HeapTuple attTuple)
 }
 
 
+#include "catalog/pg_statistic_ext.h"
+
+static inline int16
+getStxstattarget_compat(HeapTuple tup)
+{
+	bool isnull;
+	Datum dat = SysCacheGetAttr(STATEXTOID, tup,
+								Anum_pg_statistic_ext_stxstattarget, &isnull);
+	return (isnull ? -1 : DatumGetInt16(dat));
+}
+
+
+#define getAlterStatsStxstattarget_compat(a) ((Node *) makeInteger(a))
+#define getIntStxstattarget_compat(a) (intVal(a))
+
 #else
 
 #include "access/htup_details.h"
@@ -92,6 +107,17 @@ getAttstattarget_compat(HeapTuple attTuple)
 	return ((Form_pg_attribute) GETSTRUCT(attTuple))->attstattarget;
 }
 
+
+#include "catalog/pg_statistic_ext.h"
+static inline int32
+getStxstattarget_compat(HeapTuple tup)
+{
+	return ((Form_pg_statistic_ext) GETSTRUCT(tup))->stxstattarget;
+}
+
+
+#define getAlterStatsStxstattarget_compat(a) (a)
+#define getIntStxstattarget_compat(a) (a)
 
 #endif
 
