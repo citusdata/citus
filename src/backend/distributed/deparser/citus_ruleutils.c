@@ -738,7 +738,12 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 			 * If the user changed the column's statistics target, create
 			 * alter statement and add statement to a list for later processing.
 			 */
-			if (attributeForm->attstattarget >= 0)
+			HeapTuple tp = SearchSysCache2(ATTNUM,
+										   ObjectIdGetDatum(tableRelationId),
+										   Int16GetDatum(attributeForm->attnum));
+			int32 targetAttstattarget = getAttstattarget_compat(tp);
+			ReleaseSysCache(tp);
+			if (targetAttstattarget >= 0)
 			{
 				StringInfoData statement = { NULL, 0, 0, 0 };
 				initStringInfo(&statement);
@@ -746,7 +751,7 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 				appendStringInfo(&statement, "ALTER COLUMN %s ",
 								 quote_identifier(attributeName));
 				appendStringInfo(&statement, "SET STATISTICS %d",
-								 attributeForm->attstattarget);
+								 targetAttstattarget);
 
 				columnOptionList = lappend(columnOptionList, statement.data);
 			}
