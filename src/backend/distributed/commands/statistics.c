@@ -774,9 +774,10 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 	}
 
 	Form_pg_statistic_ext statisticsForm = (Form_pg_statistic_ext) GETSTRUCT(tup);
+	int16 currentStxstattarget = getStxstattarget_compat(tup);
 	ReleaseSysCache(tup);
 
-	if (statisticsForm->stxstattarget == -1)
+	if (currentStxstattarget == -1)
 	{
 		return NULL;
 	}
@@ -786,7 +787,8 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 	char *schemaName = get_namespace_name(statisticsForm->stxnamespace);
 	char *statName = NameStr(statisticsForm->stxname);
 
-	alterStatsStmt->stxstattarget = statisticsForm->stxstattarget;
+	alterStatsStmt->stxstattarget = getAlterStatsStxstattarget_compat(
+		currentStxstattarget);
 	alterStatsStmt->defnames = list_make2(makeString(schemaName), makeString(statName));
 
 	return DeparseAlterStatisticsStmt((Node *) alterStatsStmt);
