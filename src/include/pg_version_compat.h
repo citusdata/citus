@@ -60,6 +60,16 @@ typedef int ObjectClass;
 #define Anum_pg_collation_colliculocale Anum_pg_collation_colllocale
 #define Anum_pg_database_daticulocale Anum_pg_database_datlocale
 
+#include "commands/tablecmds.h"
+
+static inline void
+RangeVarCallbackOwnsTable(const RangeVar *relation,
+						  Oid relId, Oid oldRelId, void *arg)
+{
+	return RangeVarCallbackMaintainsTable(relation, relId, oldRelId, arg);
+}
+
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
