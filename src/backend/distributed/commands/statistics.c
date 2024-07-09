@@ -651,14 +651,15 @@ GetAlterIndexStatisticsCommands(Oid indexOid)
 		}
 
 		Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(attTuple);
-		if (targetAttr->attstattarget != DEFAULT_STATISTICS_TARGET)
+		int32 targetAttstattarget = getAttstattarget_compat(attTuple);
+		if (targetAttstattarget != DEFAULT_STATISTICS_TARGET)
 		{
 			char *indexNameWithSchema = generate_qualified_relation_name(indexOid);
 
 			char *command =
 				GenerateAlterIndexColumnSetStatsCommand(indexNameWithSchema,
 														targetAttr->attnum,
-														targetAttr->attstattarget);
+														targetAttstattarget);
 
 			alterIndexStatisticsCommandList =
 				lappend(alterIndexStatisticsCommandList,

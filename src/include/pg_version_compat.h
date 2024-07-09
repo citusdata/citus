@@ -70,6 +70,29 @@ RangeVarCallbackOwnsTable(const RangeVar *relation,
 }
 
 
+#include "catalog/pg_attribute.h"
+#include "utils/syscache.h"
+
+static inline int32
+getAttstattarget_compat(HeapTuple attTuple)
+{
+	bool isnull;
+	Datum dat = SysCacheGetAttr(ATTNUM, attTuple,
+								Anum_pg_attribute_attstattarget, &isnull);
+	return (isnull ? -1 : DatumGetInt16(dat));
+}
+
+
+#else
+
+#include "access/htup_details.h"
+static inline int32
+getAttstattarget_compat(HeapTuple attTuple)
+{
+	return ((Form_pg_attribute) GETSTRUCT(attTuple))->attstattarget;
+}
+
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
