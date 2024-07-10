@@ -24,14 +24,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Initialize parameters
     outputs:
-      build_image_name: "citus/extbuilder"
-      test_image_name: "citus/exttester"
-      citusupgrade_image_name: "citus/citusupgradetester"
-      fail_test_image_name: "citus/failtester"
-      pgupgrade_image_name: "citus/pgupgradetester"
-      style_checker_image_name: "citus/stylechecker"
+      build_image_name: "ghcr.io/citusdata/extbuilder"
+      test_image_name: "ghcr.io/citusdata/exttester"
+      citusupgrade_image_name: "ghcr.io/citusdata/citusupgradetester"
+      fail_test_image_name: "ghcr.io/citusdata/failtester"
+      pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
+      style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      image_suffix: "-v390dab3"
+      image_suffix: "-dev-1699dc3"
       pg14_version: '{ "major": "14", "full": "14.11" }'
       pg15_version: '{ "major": "15", "full": "15.6" }'
       pg16_version: '{ "major": "16", "full": "16.2" }'
