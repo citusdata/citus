@@ -70,7 +70,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3.5.0
 
       - name: Set Postgres and python parameters for rpm based distros
         run: |
