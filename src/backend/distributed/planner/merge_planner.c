@@ -1475,7 +1475,7 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 	foreach_declared_ptr(action, query->mergeActionList)
 	{
 		/* Skip MATCHED clause as INSERTS are not allowed in it */
-		if (action->matched)
+		if (matched_compat(action))
 		{
 			continue;
 		}
