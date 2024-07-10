@@ -101,6 +101,9 @@ getStxstattarget_compat(HeapTuple tup)
 #define WaitEventSetTracker_compat CurrentResourceOwner
 
 #define identitySequenceRelation_compat(a) (a)
+
+#define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
+
 #else
 
 #include "access/htup_details.h"
@@ -125,6 +128,8 @@ getStxstattarget_compat(HeapTuple tup)
 #define WaitEventSetTracker_compat CurrentMemoryContext
 
 #define identitySequenceRelation_compat(a) (RelationGetRelid(a))
+
+#define matched_compat(a) (a->matched)
 
 #endif
 
