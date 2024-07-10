@@ -33,7 +33,7 @@
 #include "storage/spin.h"
 #include "utils/timestamp.h"
 
-#include "pg_version_constants.h"
+#include "pg_version_compat.h"
 
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
@@ -700,7 +700,7 @@ InitializeBackendData(const char *applicationName)
 
 	uint64 gpid = ExtractGlobalPID(applicationName);
 
-	MyBackendData = &backendManagementShmemData->backends[MyProc->pgprocno];
+	MyBackendData = &backendManagementShmemData->backends[getProcNo_compat(MyProc)];
 
 	Assert(MyBackendData);
 
@@ -1174,11 +1174,11 @@ CurrentDistributedTransactionNumber(void)
 void
 GetBackendDataForProc(PGPROC *proc, BackendData *result)
 {
-	int pgprocno = proc->pgprocno;
+	int pgprocno = getProcNo_compat(proc);
 
 	if (proc->lockGroupLeader != NULL)
 	{
-		pgprocno = proc->lockGroupLeader->pgprocno;
+		pgprocno = getProcNo_compat(proc->lockGroupLeader);
 	}
 
 	BackendData *backendData = &backendManagementShmemData->backends[pgprocno];
@@ -1198,7 +1198,8 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 void
 CancelTransactionDueToDeadlock(PGPROC *proc)
 {
-	BackendData *backendData = &backendManagementShmemData->backends[proc->pgprocno];
+	BackendData *backendData = &backendManagementShmemData->backends[getProcNo_compat(
+																		 proc)];
 
 	/* backend might not have used citus yet and thus not initialized backend data */
 	if (!backendData)
@@ -1330,7 +1331,7 @@ ActiveDistributedTransactionNumbers(void)
 LocalTransactionId
 GetMyProcLocalTransactionId(void)
 {
-	return MyProc->lxid;
+	return getLxid_compat(MyProc);
 }
 
 

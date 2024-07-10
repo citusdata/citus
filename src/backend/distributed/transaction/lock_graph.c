@@ -23,6 +23,8 @@
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
 
+#include "pg_version_compat.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
@@ -993,7 +995,7 @@ AllocWaitEdge(WaitGraph *waitGraph)
 static void
 AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 {
-	if (remaining->procAdded[proc->pgprocno])
+	if (remaining->procAdded[getProcNo_compat(proc)])
 	{
 		return;
 	}
@@ -1001,7 +1003,7 @@ AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 	Assert(remaining->procCount < TotalProcCount());
 
 	remaining->procs[remaining->procCount++] = proc;
-	remaining->procAdded[proc->pgprocno] = true;
+	remaining->procAdded[getProcNo_compat(proc)] = true;
 }
 
 

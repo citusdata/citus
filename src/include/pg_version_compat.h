@@ -108,6 +108,9 @@ getStxstattarget_compat(HeapTuple tup)
 									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
 																  i, j, k)
 
+#define getProcNo_compat(a) (a->vxid.procNumber)
+#define getLxid_compat(a) (a->vxid.lxid)
+
 #else
 
 #include "access/htup_details.h"
@@ -138,6 +141,9 @@ getStxstattarget_compat(HeapTuple tup)
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
 									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
 																  i, k)
+
+#define getProcNo_compat(a) (a->pgprocno)
+#define getLxid_compat(a) (a->lxid)
 
 #endif
 
