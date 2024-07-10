@@ -100,6 +100,7 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define WaitEventSetTracker_compat CurrentResourceOwner
 
+#define identitySequenceRelation_compat(a) (a)
 #else
 
 #include "access/htup_details.h"
@@ -122,6 +123,8 @@ getStxstattarget_compat(HeapTuple tup)
 #define getIntStxstattarget_compat(a) (a)
 
 #define WaitEventSetTracker_compat CurrentMemoryContext
+
+#define identitySequenceRelation_compat(a) (RelationGetRelid(a))
 
 #endif
 

@@ -395,7 +395,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 			if (attributeForm->attidentity && includeIdentityDefaults)
 			{
 				bool missing_ok = false;
-				Oid seqOid = getIdentitySequence(RelationGetRelid(relation),
+				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(
+													 relation),
 												 attributeForm->attnum, missing_ok);
 
 				if (includeIdentityDefaults == INCLUDE_IDENTITY)
