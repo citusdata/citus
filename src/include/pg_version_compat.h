@@ -98,6 +98,8 @@ getStxstattarget_compat(HeapTuple tup)
 #define getAlterStatsStxstattarget_compat(a) ((Node *) makeInteger(a))
 #define getIntStxstattarget_compat(a) (intVal(a))
 
+#define WaitEventSetTracker_compat CurrentResourceOwner
+
 #else
 
 #include "access/htup_details.h"
@@ -118,6 +120,8 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define getAlterStatsStxstattarget_compat(a) (a)
 #define getIntStxstattarget_compat(a) (a)
+
+#define WaitEventSetTracker_compat CurrentMemoryContext
 
 #endif
 

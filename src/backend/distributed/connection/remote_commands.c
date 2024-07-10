@@ -1130,7 +1130,7 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 
 	/* allocate pending connections + 2 for the signal latch and postmaster death */
 	/* (CreateWaitEventSet makes room for pgwin32_signal_event automatically) */
-	WaitEventSet *waitEventSet = CreateWaitEventSet(CurrentMemoryContext,
+	WaitEventSet *waitEventSet = CreateWaitEventSet(WaitEventSetTracker_compat,
 													pendingConnectionCount + 2);
 
 	for (int connectionIndex = 0; connectionIndex < pendingConnectionCount;

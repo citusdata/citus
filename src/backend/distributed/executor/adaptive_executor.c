@@ -4740,7 +4740,7 @@ BuildWaitEventSet(List *sessionList)
 	int eventSetSize = GetEventSetSize(sessionList);
 
 	WaitEventSet *waitEventSet =
-		CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
+		CreateWaitEventSet(WaitEventSetTracker_compat, eventSetSize);
 
 	WorkerSession *session = NULL;
 	foreach_declared_ptr(session, sessionList)
