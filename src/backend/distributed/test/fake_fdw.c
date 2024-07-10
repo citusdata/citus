@@ -29,7 +29,7 @@
 #include "optimizer/restrictinfo.h"
 #include "utils/palloc.h"
 
-#include "pg_version_constants.h"
+#include "pg_version_compat.h"
 
 /* local function forward declarations */
 static void FakeGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
@@ -91,9 +91,11 @@ FakeGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 	Cost startup_cost = 0;
 	Cost total_cost = startup_cost + baserel->rows;
 
-	add_path(baserel, (Path *) create_foreignscan_path(root, baserel, NULL, baserel->rows,
-													   startup_cost, total_cost, NIL,
-													   NULL, NULL, NIL));
+	add_path(baserel, (Path *) create_foreignscan_path_compat(root, baserel, NULL,
+															  baserel->rows,
+															  startup_cost, total_cost,
+															  NIL,
+															  NULL, NULL, NIL, NIL));
 }
 
 

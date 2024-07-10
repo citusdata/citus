@@ -104,6 +104,10 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
 
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
+									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
+																  i, j, k)
+
 #else
 
 #include "access/htup_details.h"
@@ -130,6 +134,10 @@ getStxstattarget_compat(HeapTuple tup)
 #define identitySequenceRelation_compat(a) (RelationGetRelid(a))
 
 #define matched_compat(a) (a->matched)
+
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
+									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
+																  i, k)
 
 #endif
 
