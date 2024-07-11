@@ -36,8 +36,6 @@ cd "${installdir}"
 
 find . -type f -print >"${builddir}/files.lst"
 
-cd "${builddir}"
-
 tar cvf "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
 mv "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" "${base}/install-pg${pg_version}-citus${citus_version}.tar"
 
