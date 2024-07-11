@@ -31,7 +31,7 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "ghcr.io/citusdata/sqlsnapshot"
+      sql_snapshot_pg_version: "16.2"
       image_suffix: "-dev-5c0f4e6"
       pg14_version: '{ "major": "14", "full": "14.11" }'
       pg15_version: '{ "major": "15", "full": "15.6" }'
