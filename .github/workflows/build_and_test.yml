@@ -401,8 +401,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: "codeclimate"
-          path: "codeclimate"
+          path: codeclimate
+          pattern: codeclimate-*
+          merge-multiple: true
       - name: Upload coverage results to Code Climate
         run: |-
           cc-test-reporter sum-coverage codeclimate/*.json -o total.json
