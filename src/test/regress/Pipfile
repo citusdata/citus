@@ -5,7 +5,7 @@ verify_ssl = true
 
 [packages]
 mitmproxy = {editable = true, ref = "main", git = "https://github.com/citusdata/mitmproxy.git"}
-construct = "==2.9.45"
+construct = "*"
 docopt = "==0.6.2"
 cryptography = ">=41.0.4"
 pytest = "*"
