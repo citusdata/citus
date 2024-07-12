@@ -1,3 +1,7 @@
+### citus v12.1.4 (May 28, 2024) ###
+
+* Adds null check for node in HasRangeTableRef (#7604)
+
 ### citus v12.1.3 (April 18, 2024) ###
 
 * Allows overwriting host name for all inter-node connections by
