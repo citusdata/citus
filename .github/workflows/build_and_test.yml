@@ -387,7 +387,7 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: pg${{ fromJson(needs.params.outputs.pg14_version).major }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
     if: always()
