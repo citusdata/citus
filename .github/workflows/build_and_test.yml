@@ -284,6 +284,8 @@ jobs:
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: arbitrary_config_logs_pg_${{ matrix.pg_version }}_${{ matrix.parallel }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
@@ -335,6 +337,8 @@ jobs:
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade_logs
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
@@ -529,4 +533,5 @@ jobs:
         done
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
+      # TODO this section also needs a with.folder based on the matrix
       if: always()
