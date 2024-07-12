@@ -285,11 +285,11 @@ jobs:
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
       with:
-        folder: arbitrary_config_logs_pg_${{ matrix.pg_version }}_${{ matrix.parallel }}
+        folder: arbitrary_config_logs_pg_${{ fromJson(matrix.pg_version).major }}_${{ matrix.parallel }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_arbitrary_configs_${{ matrix.parallel }}
+        flags: ${{ fromJson(matrix.pg_version).major }}_arbitrary_configs_${{ matrix.parallel }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
