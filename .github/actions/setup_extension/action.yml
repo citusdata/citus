@@ -17,7 +17,7 @@ runs:
           echo "PG_MAJOR=${{ inputs.pg_major }}" >> $GITHUB_ENV
         fi
     shell: bash
-  - uses: actions/download-artifact@v3.0.1
+  - uses: actions/download-artifact@v4
     with:
       name: build-${{ env.PG_MAJOR }}
   - name: Install Extension
