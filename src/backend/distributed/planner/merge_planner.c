@@ -243,18 +243,26 @@ CreateNonPushableMergePlan(Oid targetRelationId, uint64 planId, Query *originalQ
 
 	CitusTableCacheEntry *targetRelation = GetCitusTableCacheEntry(targetRelationId);
 
-	bool repartitioned = IsSupportedRedistributionTarget(targetRelationId);
 
-	if(repartitioned)
+	if (IsCitusTableType(targetRelation->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
 		/*
-		* Get the index of the column in the source query that will be utilized
-		* to repartition the source rows, ensuring colocation with the target
-		*/
+		 * if target table is SINGLE_SHARD_DISTRIBUTED let's set this to invalid -1
+		 * so later in execution phase we don't rely on this value and try to find single shard of target instead.
+		 */
+		distributedPlan->sourceResultRepartitionColumnIndex = -1;
+	}
+	else
+	{
+		/*
+		 * Get the index of the column in the source query that will be utilized
+		 * to repartition the source rows, ensuring colocation with the target
+		 */
+
 		distributedPlan->sourceResultRepartitionColumnIndex =
 			SourceResultPartitionColumnIndex(mergeQuery,
-											sourceQuery->targetList,
-											targetRelation);
+											 sourceQuery->targetList,
+											 targetRelation);
 	}
 
 	/*
@@ -267,9 +275,11 @@ CreateNonPushableMergePlan(Oid targetRelationId, uint64 planId, Query *originalQ
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 	PlannedStmt *sourceRowsPlan = pg_plan_query(sourceQueryCopy, NULL, cursorOptions,
 												boundParams);
-	repartitioned = repartitioned && IsRedistributablePlan(sourceRowsPlan->planTree);
+	bool isRepartitionAllowed = IsRedistributablePlan(sourceRowsPlan->planTree) &&
+								IsSupportedRedistributionTarget(targetRelationId);
+
 	/* If plan is distributed, no work at the coordinator */
-	if (repartitioned)
+	if (isRepartitionAllowed)
 	{
 		distributedPlan->modifyWithSelectMethod = MODIFY_WITH_SELECT_REPARTITION;
 	}
@@ -1276,13 +1286,6 @@ static int
 SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 								 CitusTableCacheEntry *targetRelation)
 {
-	if (IsCitusTableType(targetRelation->relationId, SINGLE_SHARD_DISTRIBUTED))
-	{
-		ereport(ERROR, (errmsg("MERGE operation across distributed schemas "
-							   "or with a row-based distributed table is "
-							   "not yet supported")));
-	}
-
 	/* Get all the Join conditions from the ON clause */
 	List *mergeJoinConditionList = WhereClauseList(mergeQuery->jointree);
 	Var *targetColumn = targetRelation->partitionColumn;
