@@ -43,7 +43,7 @@ SELECT create_distributed_table('target', null, colocate_with=>'none');
 INSERT INTO source (id, doc) VALUES (1, '{"a" : 1}'), (1, '{"a" : 2}');
 
 -- insert
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -54,7 +54,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- update
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -65,7 +65,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -91,7 +91,7 @@ SELECT create_distributed_table('target', 'id');
 INSERT INTO source (id, doc) VALUES (1, '{"a" : 1}'), (1, '{"a" : 2}');
 
 -- insert
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -102,7 +102,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- update
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -113,7 +113,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -140,7 +140,7 @@ SELECT create_distributed_table('target', null);
 INSERT INTO source (id, doc) VALUES (1, '{"a" : 1}'), (1, '{"a" : 2}');
 
 -- insert
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -151,7 +151,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- update
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -162,7 +162,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -187,7 +187,7 @@ SELECT create_distributed_table('target', 'id');
 INSERT INTO source (id, doc) VALUES (1, '{"a" : 1}'), (1, '{"a" : 2}');
 
 -- insert
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -198,7 +198,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- update
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -209,7 +209,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -235,7 +235,7 @@ SELECT create_distributed_table('target', 'id', colocate_with=>'source');
 INSERT INTO source (id, doc) VALUES (1, '{"a" : 1}'), (1, '{"a" : 2}');
 
 -- insert
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -246,7 +246,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- update
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -257,7 +257,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -283,7 +283,7 @@ SELECT create_distributed_table('target', null, colocate_with=>'source');
 INSERT INTO source (id, doc) VALUES (1, '{"a" : 1}'), (1, '{"a" : 2}');
 
 -- insert
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -294,7 +294,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- update
-MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id) AND src.doc = target.doc
 WHEN MATCHED THEN
 UPDATE SET doc = '{"b" : 1}'
@@ -305,7 +305,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src 
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 

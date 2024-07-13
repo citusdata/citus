@@ -81,19 +81,19 @@ SELECT * FROM target;
 (2 rows)
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
-                                         QUERY PLAN
+                           QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus MERGE INTO ...)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus MERGE INTO ...)
    MERGE INTO target method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 1
          Tasks Shown: All
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000000 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000000 source
 (8 rows)
 
 DROP TABLE IF EXISTS source;
@@ -151,19 +151,19 @@ SELECT * FROM target;
 (2 rows)
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
-                                         QUERY PLAN
+                           QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus MERGE INTO ...)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus MERGE INTO ...)
    MERGE INTO target method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 1
          Tasks Shown: All
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000002 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000002 source
 (8 rows)
 
 DROP TABLE IF EXISTS source;
@@ -221,28 +221,28 @@ SELECT * FROM target;
 (2 rows)
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
-                                         QUERY PLAN
+                           QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus MERGE INTO ...)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus MERGE INTO ...)
    MERGE INTO target method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=40)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: All
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000007 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000007 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000008 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000008 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000009 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000009 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000010 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000010 source
 (17 rows)
 
 DROP TABLE IF EXISTS source;
@@ -300,28 +300,28 @@ SELECT * FROM target;
 (2 rows)
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
-                                         QUERY PLAN
+                           QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus MERGE INTO ...)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus MERGE INTO ...)
    MERGE INTO target method: repartition
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=40)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: All
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000012 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000012 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000013 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000013 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000014 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000014 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000015 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000015 source
 (17 rows)
 
 DROP TABLE IF EXISTS source;
@@ -379,28 +379,28 @@ SELECT * FROM target;
 (2 rows)
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
-                                         QUERY PLAN
+                           QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus MERGE INTO ...)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus MERGE INTO ...)
    MERGE INTO target method: repartition
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=40)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: All
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000020 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000020 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000021 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000021 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000022 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000022 source
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on source_4000023 source  (cost=0.00..22.00 rows=1200 width=40)
+               ->  Seq Scan on source_4000023 source
 (17 rows)
 
 DROP TABLE IF EXISTS source;
@@ -458,21 +458,21 @@ SELECT * FROM target;
 (2 rows)
 
 -- Explain
-EXPLAIN MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
-                                             QUERY PLAN
+                           QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge on target_4000029 target  (cost=0.00..137.01 rows=0 width=0)
-               ->  Nested Loop  (cost=0.00..137.01 rows=7200 width=6)
-                     ->  Seq Scan on source_4000028 source  (cost=0.00..22.00 rows=1200 width=0)
-                     ->  Materialize  (cost=0.00..25.03 rows=6 width=6)
-                           ->  Seq Scan on target_4000029 target  (cost=0.00..25.00 rows=6 width=6)
+         ->  Merge on target_4000029 target
+               ->  Nested Loop
+                     ->  Seq Scan on source_4000028 source
+                     ->  Materialize
+                           ->  Seq Scan on target_4000029 target
                                  Filter: ('2'::bigint = id)
 (11 rows)
 
