@@ -7,15 +7,15 @@ SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \endif
 
 -- MERGE command performs a join from data_source to target_table_name
-DROP SCHEMA IF EXISTS merge_schema CASCADE;
+DROP SCHEMA IF EXISTS merge_vcore_schema CASCADE;
 --MERGE INTO target
 --USING source
 --WHEN NOT MATCHED
 --WHEN MATCHED AND <condition>
 --WHEN MATCHED
 
-CREATE SCHEMA merge_schema;
-SET search_path TO merge_schema;
+CREATE SCHEMA merge_vcore_schema;
+SET search_path TO merge_vcore_schema;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 4000000;
 SET citus.explain_all_tasks TO true;
@@ -311,3 +311,4 @@ WHEN MATCHED THEN DO NOTHING;
 
 DROP TABLE IF EXISTS source;
 DROP TABLE IF EXISTS target;
+DROP SCHEMA IF EXISTS merge_vcore_schema CASCADE;
