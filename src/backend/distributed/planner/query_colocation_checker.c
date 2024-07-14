@@ -331,7 +331,6 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
 	List *targetList = NIL;
-	int varAttrNo = 1;
 
 	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
 	{
@@ -362,7 +361,7 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 		else
 		{
 			TargetEntry *targetEntry =
-				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, varAttrNo++,
+				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, attrNum,
 										   resNo);
 			targetList = lappend(targetList, targetEntry);
 		}
