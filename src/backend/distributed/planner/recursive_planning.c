@@ -1767,8 +1767,10 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 {
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
 												  perminfo);
+	bool isMergeQuery = false;
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
-																requiredAttrNumbers);
+																requiredAttrNumbers,
+																isMergeQuery);
 
 	List *restrictionList =
 		GetRestrictInfoListForRelation(rangeTableEntry,
