@@ -1767,8 +1767,11 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 {
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
 												  perminfo);
+
+	bool isMergeQuery = false;
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
-																requiredAttrNumbers);
+																requiredAttrNumbers,
+																isMergeQuery);
 
 	List *restrictionList =
 		GetRestrictInfoListForRelation(rangeTableEntry,
@@ -2109,7 +2112,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -2159,7 +2161,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{

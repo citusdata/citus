@@ -38,6 +38,7 @@ extern bool SubqueryColocated(Query *subquery, ColocatedJoinChecker *context);
 extern Query * WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
 										   List *requiredAttributes,
 										   RTEPermissionInfo *perminfo);
-extern List * CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes);
+extern List * CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes,
+											 bool isMergeQuery);
 
 #endif /* QUERY_COLOCATION_CHECKER_H */
