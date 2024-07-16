@@ -98,14 +98,26 @@ WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b;
 DEBUG:  Distributed tables are not co-located, try repartitioning
 DEBUG:  For MERGE command, all the distributed tables must be colocated
 DEBUG:  Creating MERGE repartition plan
-ERROR:  MERGE operation across distributed schemas or with a row-based distributed table is not yet supported
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c2_t1 ON (citus_table_alias.a OPERATOR(pg_catalog.=) nullkey_c2_t1.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b>
+DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c2_t1 ON (citus_table_alias.a OPERATOR(pg_catalog.=) nullkey_c2_t1.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b
+DEBUG:  Execute MERGE task list
 MERGE INTO schema_shard_table1.nullkey_c1_t1 USING nullkey_c2_t1 ON (schema_shard_table1.nullkey_c1_t1.a = nullkey_c2_t1.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c2_t1.a, nullkey_c2_t1.b);
 DEBUG:  Distributed tables are not co-located, try repartitioning
 DEBUG:  For MERGE command, all the distributed tables must be colocated
 DEBUG:  Creating MERGE repartition plan
-ERROR:  MERGE operation across distributed schemas or with a row-based distributed table is not yet supported
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c2_t1 ON (citus_table_alias.a OPERATOR(pg_catalog.=) nullkey_c2_t1.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c2_t1.a, nullkey_c2_t1.b)>
+DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) nullkey_c2_t1 ON (citus_table_alias.a OPERATOR(pg_catalog.=) nullkey_c2_t1.a) WHEN MATCHED THEN UPDATE SET b = nullkey_c2_t1.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (nullkey_c2_t1.a, nullkey_c2_t1.b)
+DEBUG:  Execute MERGE task list
 -- with a distributed table
 SET search_path TO schema_shard_table1;
 MERGE INTO nullkey_c1_t1 USING schema_shard_table.distributed_table ON (nullkey_c1_t1.a = schema_shard_table.distributed_table.a)
@@ -114,7 +126,12 @@ WHEN NOT MATCHED THEN INSERT VALUES (schema_shard_table.distributed_table.a, sch
 DEBUG:  Distributed tables are not co-located, try repartitioning
 DEBUG:  For MERGE command, all the distributed tables must be colocated
 DEBUG:  Creating MERGE repartition plan
-ERROR:  MERGE operation across distributed schemas or with a row-based distributed table is not yet supported
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) distributed_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) distributed_table.a) WHEN MATCHED THEN UPDATE SET b = distributed_table.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (distributed_table.a, distributed_table.b)>
+DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) distributed_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) distributed_table.a) WHEN MATCHED THEN UPDATE SET b = distributed_table.b WHEN NOT MATCHED THEN INSERT (a, b) VALUES (distributed_table.a, distributed_table.b)
+DEBUG:  Execute MERGE task list
 MERGE INTO schema_shard_table.distributed_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = schema_shard_table.distributed_table.a)
 WHEN MATCHED THEN DELETE
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
@@ -163,7 +180,13 @@ WHEN MATCHED THEN UPDATE SET b = schema_shard_table.reference_table.b;
 DEBUG:  A mix of distributed and reference table, try repartitioning
 DEBUG:  A mix of distributed and reference table, routable query is not possible
 DEBUG:  Creating MERGE repartition plan
-ERROR:  MERGE operation across distributed schemas or with a row-based distributed table is not yet supported
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) reference_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) reference_table.a) WHEN MATCHED THEN UPDATE SET b = reference_table.b>
+DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) reference_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) reference_table.a) WHEN MATCHED THEN UPDATE SET b = reference_table.b
+DEBUG:  Execute MERGE task list
 MERGE INTO schema_shard_table.reference_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = schema_shard_table.reference_table.a)
 WHEN MATCHED THEN UPDATE SET b = nullkey_c1_t1.b
 WHEN NOT MATCHED THEN INSERT VALUES (nullkey_c1_t1.a, nullkey_c1_t1.b);
@@ -174,7 +197,13 @@ WHEN MATCHED THEN UPDATE SET b = schema_shard_table.citus_local_table.b;
 DEBUG:  A mix of distributed and local table, try repartitioning
 DEBUG:  A mix of distributed and citus-local table, routable query is not possible
 DEBUG:  Creating MERGE repartition plan
-ERROR:  MERGE operation across distributed schemas or with a row-based distributed table is not yet supported
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) citus_local_table.a) WHEN MATCHED THEN UPDATE SET b = citus_local_table.b>
+DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) citus_local_table.a) WHEN MATCHED THEN UPDATE SET b = citus_local_table.b
+DEBUG:  Execute MERGE task list
 MERGE INTO schema_shard_table.citus_local_table USING nullkey_c1_t1 ON (nullkey_c1_t1.a = schema_shard_table.citus_local_table.a)
 WHEN MATCHED THEN DELETE;
 DEBUG:  A mix of distributed and local table, try repartitioning
@@ -210,7 +239,12 @@ WHEN MATCHED THEN UPDATE SET b = cte.b;
 DEBUG:  Distributed tables are not co-located, try repartitioning
 DEBUG:  For MERGE command, all the distributed tables must be colocated
 DEBUG:  Creating MERGE repartition plan
-ERROR:  MERGE operation across distributed schemas or with a row-based distributed table is not yet supported
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte ON (citus_table_alias.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
+DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte ON (citus_table_alias.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b
+DEBUG:  Execute MERGE task list
 WITH cte AS materialized (
     SELECT * FROM schema_shard_table.distributed_table
 )
@@ -219,7 +253,12 @@ WHEN MATCHED THEN UPDATE SET b = cte.b;
 DEBUG:  Distributed tables are not co-located, try repartitioning
 DEBUG:  For MERGE command, all the distributed tables must be colocated
 DEBUG:  Creating MERGE repartition plan
-ERROR:  MERGE operation across distributed schemas or with a row-based distributed table is not yet supported
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Collect source query results on coordinator
+DEBUG:  Create a MERGE task list that needs to be routed
+DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte ON (citus_table_alias.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b>
+DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte ON (citus_table_alias.a OPERATOR(pg_catalog.=) cte.a) WHEN MATCHED THEN UPDATE SET b = cte.b
+DEBUG:  Execute MERGE task list
 SET client_min_messages TO WARNING;
 DROP SCHEMA schema_shard_table1 CASCADE;
 DROP SCHEMA schema_shard_table2 CASCADE;

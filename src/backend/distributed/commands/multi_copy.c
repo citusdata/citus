@@ -2568,7 +2568,7 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 	 * Find the shard interval and id for the partition column value for
 	 * non-reference tables.
 	 *
-	 * For reference table, this function blindly returns the tables single
+	 * For reference table, and single shard distributed table this function blindly returns the tables single
 	 * shard.
 	 */
 	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue, cacheEntry);
