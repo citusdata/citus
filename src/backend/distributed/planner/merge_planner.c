@@ -857,11 +857,8 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 	/* set the FROM expression to the subquery */
 	newRangeTableRef->rtindex = SINGLE_RTE_INDEX;
 	sourceResultsQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
-
-	bool isMergeQuery = true;
-	sourceResultsQuery->targetList =
-		CreateAllTargetListForRelation(sourceRte->relid, requiredAttributes,
-									   isMergeQuery);
+	sourceResultsQuery->targetList = CreateAllTargetListForRelation(sourceRte->relid,
+																	requiredAttributes);
 	List *restrictionList =
 		GetRestrictInfoListForRelation(sourceRte, plannerRestrictionContext);
 	List *copyRestrictionList = copyObject(restrictionList);
