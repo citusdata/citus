@@ -1,3 +1,11 @@
+### citus v12.1.5 (July 17, 2024) ###
+
+* Adds support for MERGE commands with single shard distributed target tables
+  (#7643)
+
+* Fixes an error with MERGE commands when insert value does not have source
+  distribution column (#7627)
+
 ### citus v12.1.4 (May 28, 2024) ###
 
 * Adds null check for node in HasRangeTableRef (#7604)
