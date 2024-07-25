@@ -488,8 +488,13 @@ static char *generate_function_name(Oid funcid, int nargs,
 static List *get_insert_column_names_list(List *targetList, StringInfo buf, deparse_context *context, RangeTblEntry *rte);
 static void get_json_path_spec(Node *path_spec, deparse_context *context,
 							   bool showimplicit);
-static void get_json_table_columns(TableFunc *tf, deparse_context *context,
+static void get_json_table_columns(TableFunc *tf, JsonTablePathScan *scan,
+								   deparse_context *context,
 								   bool showimplicit);
+static void get_json_table_nested_columns(TableFunc *tf, JsonTablePlan *plan,
+										  deparse_context *context,
+										  bool showimplicit,
+										  bool needcomma);
 
 #define only_marker(rte)  ((rte)->inh ? "" : "ONLY ")
 
@@ -8392,10 +8397,43 @@ get_xmltable(TableFunc *tf, deparse_context *context, bool showimplicit)
 }
 
 /*
+ * get_json_nested_columns - Parse back nested JSON_TABLE columns
+ */
+static void
+get_json_table_nested_columns(TableFunc *tf, JsonTablePlan *plan,
+							  deparse_context *context, bool showimplicit,
+							  bool needcomma)
+{
+	if (IsA(plan, JsonTablePathScan))
+	{
+		JsonTablePathScan *scan = castNode(JsonTablePathScan, plan);
+
+		if (needcomma)
+			appendStringInfoChar(context->buf, ',');
+
+		appendStringInfoChar(context->buf, ' ');
+		appendContextKeyword(context, "NESTED PATH ", 0, 0, 0);
+		get_const_expr(scan->path->value, context, -1);
+		appendStringInfo(context->buf, " AS %s", quote_identifier(scan->path->name));
+		get_json_table_columns(tf, scan, context, showimplicit);
+	}
+	else if (IsA(plan, JsonTableSiblingJoin))
+	{
+		JsonTableSiblingJoin *join = (JsonTableSiblingJoin *) plan;
+
+		get_json_table_nested_columns(tf, join->lplan, context, showimplicit,
+									  needcomma);
+		get_json_table_nested_columns(tf, join->rplan, context, showimplicit,
+									  true);
+	}
+}
+
+/*
  * get_json_table_columns - Parse back JSON_TABLE columns
  */
 static void
-get_json_table_columns(TableFunc *tf, deparse_context *context,
+get_json_table_columns(TableFunc *tf, JsonTablePathScan *scan,
+					   deparse_context *context,
 					   bool showimplicit)
 {
 	StringInfo	buf = context->buf;
@@ -8428,7 +8466,16 @@ get_json_table_columns(TableFunc *tf, deparse_context *context,
 		typmod = lfirst_int(lc_coltypmod);
 		colexpr = castNode(JsonExpr, lfirst(lc_colvalexpr));
 
-		if (colnum > 0)
+		/* Skip columns that don't belong to this scan. */
+		if (scan->colMin < 0 || colnum < scan->colMin)
+		{
+			colnum++;
+			continue;
+		}
+		if (colnum > scan->colMax)
+			break;
+
+		if (colnum > scan->colMin)
 			appendStringInfoString(buf, ", ");
 
 		colnum++;
@@ -8475,6 +8522,10 @@ get_json_table_columns(TableFunc *tf, deparse_context *context,
 
 		get_json_expr_options(colexpr, context, default_behavior);
 	}
+
+	if (scan->child)
+		get_json_table_nested_columns(tf, scan->child, context, showimplicit,
+									  scan->colMin >= 0);
 
 	if (PRETTY_INDENT(context))
 		context->indentLevel -= PRETTYINDENT_VAR;
@@ -8539,7 +8590,8 @@ get_json_table(TableFunc *tf, deparse_context *context, bool showimplicit)
 			context->indentLevel -= PRETTYINDENT_VAR;
 	}
 
-	get_json_table_columns(tf, context, showimplicit);
+	get_json_table_columns(tf, castNode(JsonTablePathScan, tf->plan), context,
+						   showimplicit);
 
 	if (jexpr->on_error->btype != JSON_BEHAVIOR_EMPTY)
 		get_json_behavior(jexpr->on_error, context, "ERROR");
