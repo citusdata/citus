@@ -40,6 +40,15 @@ worker_copy_table_to_node(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	uint32_t targetNodeId = PG_GETARG_INT32(1);
 
+	if (IsCitusTable(relationId))
+	{
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("table %s is a Citus table, only copies of "
+							   "shards or regular postgres tables are supported",
+							   qualifiedRelationName)));
+	}
+
 	Oid schemaOid = get_rel_namespace(relationId);
 	char *relationSchemaName = get_namespace_name(schemaOid);
 	char *relationName = get_rel_name(relationId);
