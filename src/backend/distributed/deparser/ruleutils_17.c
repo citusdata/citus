@@ -9692,6 +9692,24 @@ get_range_partbound_string(List *bound_datums)
 }
 
 /*
+ * get_list_partvalue_string
+ *		A C string representation of one list partition value
+ */
+char *
+get_list_partvalue_string(Const *val)
+{
+	deparse_context context;
+	StringInfo	buf = makeStringInfo();
+
+	memset(&context, 0, sizeof(deparse_context));
+	context.buf = buf;
+
+	get_const_expr(val, &context, -1);
+
+	return buf->data;
+}
+
+/*
  * Collect a list of OIDs of all sequences owned by the specified relation,
  * and column if specified.  If deptype is not zero, then only find sequences
  * with the specified dependency type.
