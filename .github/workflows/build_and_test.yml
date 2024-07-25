@@ -32,11 +32,12 @@ jobs:
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
       sql_snapshot_pg_version: "16.3"
-      image_suffix: "-v13fd57c"
+      image_suffix: "-dev-16d4616"
       pg14_version: '{ "major": "14", "full": "14.12" }'
       pg15_version: '{ "major": "15", "full": "15.7" }'
       pg16_version: '{ "major": "16", "full": "16.3" }'
-      upgrade_pg_versions: "14.12-15.7-16.3"
+      pg17_version: '{ "major": "17", "full": "17beta2" }'
+      upgrade_pg_versions: "14.12-15.7-16.3-17beta2"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
@@ -113,6 +114,7 @@ jobs:
           - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
+          - ${{ needs.params.outputs.pg17_version }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
