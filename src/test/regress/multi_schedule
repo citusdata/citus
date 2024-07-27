@@ -111,6 +111,7 @@ test: background_task_queue_monitor
 test: other_databases grant_role_from_non_maindb role_operations_from_non_maindb seclabel_non_maindb
 test: citus_internal_access
 test: function_with_case_when
+test: non_super_user_create_existing_extension
 
 # Causal clock test
 test: clock

@@ -938,11 +938,14 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (ops && ops->markDistributed)
 		{
 			List *addresses = GetObjectAddressListFromParseTree(parsetree, false, true);
-			ObjectAddress *address = NULL;
-			foreach_ptr(address, addresses)
+			if (!IsAnyObjectDistributed(addresses))
 			{
-				MarkObjectDistributed(address);
-				TrackPropagatedObject(address);
+				ObjectAddress *address = NULL;
+				foreach_ptr(address, addresses)
+				{
+					MarkObjectDistributed(address);
+					TrackPropagatedObject(address);
+				}
 			}
 		}
 	}
