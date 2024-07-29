@@ -2256,7 +2256,9 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 									"Specify SET ACCESS METHOD before storage parameters, or use separate ALTER TABLE commands.")));
 			}
 
-			destIsColumnar = (strcmp(alterTableCmd->name, COLUMNAR_AM_NAME) == 0);
+			destIsColumnar = (strcmp(alterTableCmd->name ? alterTableCmd->name :
+									 default_table_access_method,
+									 COLUMNAR_AM_NAME) == 0);
 
 			if (srcIsColumnar && !destIsColumnar)
 			{
