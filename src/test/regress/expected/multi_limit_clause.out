@@ -561,6 +561,23 @@ DEBUG:  push down of limit count: ALL
  12000
 (1 row)
 
+-- check if we push the right limit when both offset and limit are given
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET 1 LIMIT 3;
+DEBUG:  push down of limit count: 4
+ l_orderkey
+---------------------------------------------------------------------
+          1
+          1
+          1
+(3 rows)
+
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET null LIMIT 1;
+DEBUG:  push down of limit count: 1
+ l_orderkey
+---------------------------------------------------------------------
+          1
+(1 row)
+
 SET client_min_messages TO NOTICE;
 -- non constants should not push down
 CREATE OR REPLACE FUNCTION my_limit()

@@ -231,6 +231,11 @@ SELECT count(*) FROM lineitem LIMIT null;
 
 SELECT count(*) FROM lineitem OFFSET 0 LIMIT null;
 
+-- check if we push the right limit when both offset and limit are given
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET 1 LIMIT 3;
+
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET null LIMIT 1;
+
 SET client_min_messages TO NOTICE;
 
 -- non constants should not push down
