@@ -51,9 +51,32 @@ SELECT result FROM run_command_on_all_nodes('
 
 (3 rows)
 
-SELECT result FROM run_command_on_all_nodes('
-    SELECT colliculocale FROM pg_collation WHERE collname = ''german_phonebook_test'';
-');
+-- PG17 renamed colliculocale to colllocale
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/f696c0cd5f299f1b51e214efc55a22a782cc175d
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
+\gset
+\if :server_version_ge_17
+SELECT '$$' ||
+       'SELECT colllocale FROM pg_collation WHERE collname = ''german_phonebook_test'';'
+       || '$$'
+    AS worker_query_1 \gset
+SELECT '$$' ||
+       'SELECT colllocale FROM pg_collation WHERE collname = ''default_provider'';'
+       || '$$'
+    AS worker_query_2 \gset
+\else
+SELECT '$$' ||
+       'SELECT colliculocale FROM pg_collation WHERE collname = ''german_phonebook_test'';'
+       || '$$'
+    AS worker_query_1 \gset
+SELECT '$$' ||
+       'SELECT colliculocale FROM pg_collation WHERE collname = ''default_provider'';'
+       || '$$'
+    AS worker_query_2 \gset
+\endif
+SELECT result FROM run_command_on_all_nodes(:worker_query_1);
      result
 ---------------------------------------------------------------------
  de-u-co-phonebk
@@ -83,9 +106,7 @@ SELECT result FROM run_command_on_all_nodes('
  POSIX
 (3 rows)
 
-SELECT result FROM run_command_on_all_nodes('
-    SELECT colliculocale FROM pg_collation WHERE collname = ''default_provider'';
-');
+SELECT result FROM run_command_on_all_nodes(:worker_query_2);
  result
 ---------------------------------------------------------------------
 
