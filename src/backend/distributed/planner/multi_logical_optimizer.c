@@ -4762,7 +4762,6 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 			workerLimitCount = workerLimitCount + workerOffsetCount;
 			workerLimitNode = (Node *) MakeIntegerConstInt64(workerLimitCount);
 		}
-		
 	}
 
 	/* display debug message on limit push down */
@@ -4770,7 +4769,7 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 	{
 		Const *workerLimitConst = (Const *) workerLimitNode;
 		if (!workerLimitConst->constisnull)
-		{	
+		{
 			int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
 
 			ereport(DEBUG1, (errmsg("push down of limit count: " INT64_FORMAT,
