@@ -330,14 +330,14 @@ SELECT create_distributed_table('test_collation_rules', 'a');
 (1 row)
 
 INSERT INTO test_collation_rules VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
-SELECT collname, collprovider, colliculocale, collicurules
+SELECT collname, collprovider, collicurules
 FROM pg_collation
 WHERE collname like '%_rule%'
 ORDER BY 1;
-   collname   | collprovider | colliculocale | collicurules
+   collname   | collprovider | collicurules
 ---------------------------------------------------------------------
- default_rule | i            | und           |
- special_rule | i            | und           | &a < g
+ default_rule | i            |
+ special_rule | i            | &a < g
 (2 rows)
 
 SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
@@ -364,14 +364,14 @@ SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
 
 \c - - - :worker_1_port
 SET search_path TO pg16;
-SELECT collname, collprovider, colliculocale, collicurules
+SELECT collname, collprovider, collicurules
 FROM pg_collation
 WHERE collname like '%_rule%'
 ORDER BY 1;
-   collname   | collprovider | colliculocale | collicurules
+   collname   | collprovider | collicurules
 ---------------------------------------------------------------------
- default_rule | i            | und           |
- special_rule | i            | und           | &a < g
+ default_rule | i            |
+ special_rule | i            | &a < g
 (2 rows)
 
 SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
