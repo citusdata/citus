@@ -114,15 +114,15 @@ class GeneratorContext:
     def randomCteName(self):
         """returns a randomly selected cte name"""
         randCteRef = random.randint(0, self.currentCteCount - 1)
-        return " cte_" + str(randCteRef)
+        return f" cte_{randCteRef}"
 
     def curAlias(self):
         """returns current alias name to be used for the current table"""
-        return " table_" + str(self.totalRteCount)
+        return f" table_{self.totalRteCount}"
 
     def curCteAlias(self):
         """returns current alias name to be used for the current cte"""
-        return " cte_" + str(self.currentCteCount)
+        return f" cte_{self.currentCteCount}"
 
     def hasAnyCte(self):
         """returns if context has any cte"""
@@ -153,7 +153,7 @@ class GeneratorContext:
         # do not enforce per table rte limit if we are inside cte
         if self.insideCte:
             rteName = random.choice(getAllTableNames())
-            return " " + rteName + " "
+            return f" {rteName} "
 
         while True:
             # keep trying to find random table by eliminating the ones which hit table limit
@@ -173,7 +173,7 @@ class GeneratorContext:
 
         # increment rte count for the table name
         self.perTableRtes[rteName] += 1
-        return " " + rteName + " "
+        return f" {rteName} "
 
 
 def newQuery():
@@ -206,8 +206,7 @@ def _genQuery(genCtx):
         and not genCtx.usedAvg
     ):
         genCtx.usedAvg = True
-        query += "SELECT "
-        query += "count(*), avg(avgsub." + getConfig().commonColName + ") FROM "
+        query += f"SELECT count(*), avg(avgsub.{getConfig().commonColName}) FROM "
         query += _genSubqueryRte(genCtx)
         query += " AS avgsub"
     else:
@@ -226,35 +225,24 @@ def _genQuery(genCtx):
 
 def _genOrderBy(genCtx):
     # 'ORDER BY' DistColName
-    query = ""
-    query += " ORDER BY "
-    query += getConfig().commonColName + " "
-    return query
+    return f" ORDER BY {getConfig().commonColName} "
 
 
 def _genLimit(genCtx):
     # 'LIMIT' 'random()'
-    query = ""
-    query += " LIMIT "
     (fromVal, toVal) = getConfig().limitRange
-    query += str(random.randint(fromVal, toVal))
-    return query
+    return f" LIMIT {random.randint(fromVal, toVal)}"
 
 
 def _genSelectExpr(genCtx):
     # 'SELECT' 'curAlias()' '.' DistColName
-    query = ""
-    query += " SELECT "
     commonColName = getConfig().commonColName
-    query += genCtx.curAlias() + "." + commonColName + " "
-
-    return query
+    return f" SELECT {genCtx.curAlias()}.{commonColName} "
 
 
 def _genFromExpr(genCtx):
     # 'FROM' (Rte JoinList JoinOp Rte Using || RteList) ['WHERE' 'nextRandomAlias()' '.' DistColName RestrictExpr]
-    query = ""
-    query += " FROM "
+    query = " FROM "
 
     if shouldSelectThatBranch():
         query += _genRte(genCtx)
@@ -267,8 +255,7 @@ def _genFromExpr(genCtx):
 
     alias = genCtx.removeLastAlias()
     if shouldSelectThatBranch():
-        query += " WHERE "
-        query += alias + "." + getConfig().commonColName
+        query += f" WHERE {alias}.{getConfig().commonColName}"
         query += _genRestrictExpr(genCtx)
     return query
 
@@ -353,9 +340,7 @@ def _genJoinList(genCtx):
 
 def _genUsing(genCtx):
     # 'USING' '(' DistColName ')'
-    query = ""
-    query += " USING (" + getConfig().commonColName + " ) "
-    return query
+    return f" USING ({getConfig().commonColName}) "
 
 
 def _genRte(genCtx):
@@ -392,7 +377,7 @@ def _genRte(genCtx):
         query += _genCteRte(genCtx)
     elif rteType == RTEType.VALUES:
         query += _genValuesRte(genCtx)
-        modifiedAlias = alias + "(" + getConfig().commonColName + ") "
+        modifiedAlias = f"{alias}({getConfig().commonColName}) "
     else:
         raise BaseException("unknown RTE type")
 
@@ -428,7 +413,5 @@ def _genCteRte(genCtx):
 
 def _genValuesRte(genCtx):
     # '( VALUES(random()) )'
-    query = ""
     (fromVal, toVal) = getConfig().dataRange
-    query += " ( VALUES(" + str(random.randint(fromVal, toVal)) + " ) ) "
-    return query
+    return f" ( VALUES({random.randint(fromVal, toVal)}) ) "

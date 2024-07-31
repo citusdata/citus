@@ -55,8 +55,15 @@ def _fileMode(ddls, data):
     )
     with open(fileName, "w") as f:
         # enable repartition joins due to https://github.com/citusdata/citus/issues/6865
-        enableRepartitionJoinCommand = "SET citus.enable_repartition_joins TO on;\n"
-        queryLines = [enableRepartitionJoinCommand]
+        queryLines = []
+        if getConfig().repartitionJoin:
+            enableRepartitionJoinCommand = "SET citus.enable_repartition_joins TO on;\n"
+            queryLines.append(enableRepartitionJoinCommand)
+        if getConfig().singleRepartitionJoin:
+            singleRepartitionJoinCommand = (
+                "SET citus.enable_single_hash_repartition_joins TO on;\n"
+            )
+            queryLines.append(singleRepartitionJoinCommand)
         queryId = 1
         for _ in range(queryCount):
             query = newQuery()
