@@ -325,13 +325,14 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
  * as a NULL column.
  */
 List *
-CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
+CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes, bool
+							   isMergeQuery)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
 	List *targetList = NIL;
-	int varAttrNo = 1;
+	int colAppendIdx = 1;
 
 	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
 	{
@@ -361,8 +362,9 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 		}
 		else
 		{
+			int varAttNum = isMergeQuery ? attrNum : colAppendIdx++;
 			TargetEntry *targetEntry =
-				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, varAttrNo++,
+				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, varAttNum,
 										   resNo);
 			targetList = lappend(targetList, targetEntry);
 		}
