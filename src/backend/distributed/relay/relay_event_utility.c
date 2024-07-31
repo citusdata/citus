@@ -150,7 +150,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			AppendShardIdToName(relationName, shardId);
 
 			AlterTableCmd *command = NULL;
-			foreach_ptr(command, commandList)
+			foreach_declared_ptr(command, commandList)
 			{
 				if (command->subtype == AT_AddConstraint)
 				{
@@ -162,7 +162,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				{
 					ColumnDef *columnDefinition = (ColumnDef *) command->def;
 					Constraint *constraint = NULL;
-					foreach_ptr(constraint, columnDefinition->constraints)
+					foreach_declared_ptr(constraint, columnDefinition->constraints)
 					{
 						RelayEventExtendConstraintAndIndexNames(alterTableStmt,
 																constraint, shardId);
@@ -385,7 +385,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				List *shardStatisticsList = NIL;
 				List *objectNameList = NULL;
-				foreach_ptr(objectNameList, dropStmt->objects)
+				foreach_declared_ptr(objectNameList, dropStmt->objects)
 				{
 					RangeVar *stat = makeRangeVarFromNameList(objectNameList);
 
@@ -415,7 +415,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				grantStmt->objtype == OBJECT_TABLE)
 			{
 				RangeVar *relation = NULL;
-				foreach_ptr(relation, grantStmt->objects)
+				foreach_declared_ptr(relation, grantStmt->objects)
 				{
 					char **relationName = &(relation->relname);
 					char **relationSchemaName = &(relation->schemaname);
@@ -673,7 +673,7 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 			List *commandList = alterTableStmt->cmds;
 
 			AlterTableCmd *command = NULL;
-			foreach_ptr(command, commandList)
+			foreach_declared_ptr(command, commandList)
 			{
 				char **referencedTableName = NULL;
 				char **relationSchemaName = NULL;
@@ -693,7 +693,7 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 					List *columnConstraints = columnDefinition->constraints;
 
 					Constraint *constraint = NULL;
-					foreach_ptr(constraint, columnConstraints)
+					foreach_declared_ptr(constraint, columnConstraints)
 					{
 						if (constraint->contype == CONSTR_FOREIGN)
 						{

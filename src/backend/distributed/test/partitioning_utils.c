@@ -85,7 +85,7 @@ print_partitions(PG_FUNCTION_ARGS)
 	partitionList = SortList(partitionList, CompareOids);
 
 	Oid partitionOid = InvalidOid;
-	foreach_oid(partitionOid, partitionList)
+	foreach_declared_oid(partitionOid, partitionList)
 	{
 		/* at least one table is already added, add comma */
 		if (resultRelationNames->len > 0)

@@ -93,7 +93,7 @@ get_colocated_table_array(PG_FUNCTION_ARGS)
 	int colocatedTableIndex = 0;
 
 	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
 		Datum colocatedTableDatum = ObjectIdGetDatum(colocatedTableId);
 

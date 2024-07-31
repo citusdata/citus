@@ -33,7 +33,7 @@ SaveBeginCommandProperties(TransactionStmt *transactionStmt)
 	 *
 	 * While BEGIN can be quite frequent it will rarely have options set.
 	 */
-	foreach_ptr(item, transactionStmt->options)
+	foreach_declared_ptr(item, transactionStmt->options)
 	{
 		A_Const *constant = (A_Const *) item->arg;
 

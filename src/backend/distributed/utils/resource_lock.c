@@ -299,7 +299,7 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		int64 shardId = shardInterval->shardId;
 
@@ -388,7 +388,7 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 	appendStringInfo(lockCommand, "SELECT lock_shard_metadata(%d, ARRAY[", lockmode);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		int64 shardId = shardInterval->shardId;
 
@@ -529,7 +529,7 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMo
 	}
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		LockShardDistributionMetadata(shardInterval->shardId, lockMode);
 	}
@@ -573,7 +573,7 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 	}
 
 	ShardInterval *referencedShardInterval = NULL;
-	foreach_ptr(referencedShardInterval, referencedShardIntervalList)
+	foreach_declared_ptr(referencedShardInterval, referencedShardIntervalList)
 	{
 		LockShardResource(referencedShardInterval->shardId, lockMode);
 	}
@@ -590,7 +590,7 @@ GetSortedReferenceShardIntervals(List *relationList)
 	List *shardIntervalList = NIL;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationList)
+	foreach_declared_oid(relationId, relationList)
 	{
 		if (!IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
@@ -652,7 +652,7 @@ LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		int64 shardId = shardInterval->shardId;
 
@@ -673,7 +673,7 @@ LockShardsInPlacementListMetadata(List *shardPlacementList, LOCKMODE lockMode)
 		SortList(shardPlacementList, CompareShardPlacementsByShardId);
 
 	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacementList)
+	foreach_declared_ptr(placement, shardPlacementList)
 	{
 		int64 shardId = placement->shardId;
 
@@ -760,7 +760,7 @@ AnyTableReplicated(List *shardIntervalList, List **replicatedShardIntervalList)
 	List *localList = NIL;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		int64 shardId = shardInterval->shardId;
 
@@ -797,7 +797,7 @@ LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		int64 shardId = shardInterval->shardId;
 
@@ -820,7 +820,7 @@ LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 
 	List *shardIntervalList = NIL;
 	RelationShard *relationShard = NULL;
-	foreach_ptr(relationShard, relationShardList)
+	foreach_declared_ptr(relationShard, relationShardList)
 	{
 		uint64 shardId = relationShard->shardId;
 
@@ -846,7 +846,7 @@ LockParentShardResourceIfPartition(List *shardIntervalList, LOCKMODE lockMode)
 	List *parentShardIntervalList = NIL;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		Oid relationId = shardInterval->relationId;
 
@@ -1092,7 +1092,7 @@ static bool
 LockRelationRecordListMember(List *lockRelationRecordList, Oid relationId)
 {
 	LockRelationRecord *record = NULL;
-	foreach_ptr(record, lockRelationRecordList)
+	foreach_declared_ptr(record, lockRelationRecordList)
 	{
 		if (record->relationId == relationId)
 		{
@@ -1131,7 +1131,7 @@ ConcatLockRelationRecordList(List *lockRelationRecordList, List *relationOidList
 	List *constructedList = NIL;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationOidList)
+	foreach_declared_oid(relationId, relationOidList)
 	{
 		if (!LockRelationRecordListMember(lockRelationRecordList, relationId))
 		{
@@ -1178,7 +1178,7 @@ AcquireDistributedLockOnRelations_Internal(List *lockRelationRecordList,
 
 	int lockedRelations = 0;
 	LockRelationRecord *lockRelationRecord;
-	foreach_ptr(lockRelationRecord, lockRelationRecordList)
+	foreach_declared_ptr(lockRelationRecord, lockRelationRecordList)
 	{
 		Oid relationId = lockRelationRecord->relationId;
 		bool lockDescendants = lockRelationRecord->inh;
@@ -1251,7 +1251,7 @@ AcquireDistributedLockOnRelations_Internal(List *lockRelationRecordList,
 
 	WorkerNode *workerNode = NULL;
 	const char *currentUser = CurrentUserName();
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		/* if local node is one of the targets, acquire the lock locally */
 		if (workerNode->groupId == localGroupId)
@@ -1294,7 +1294,7 @@ AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 
 	bool nowait = (configs & DIST_LOCK_NOWAIT) > 0;
 
 	RangeVar *rangeVar = NULL;
-	foreach_ptr(rangeVar, relationList)
+	foreach_declared_ptr(rangeVar, relationList)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 

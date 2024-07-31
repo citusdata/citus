@@ -880,7 +880,7 @@ ReadChunkGroupNextRow(ChunkGroupReadState *chunkGroupReadState, Datum *columnVal
 	memset(columnNulls, true, sizeof(bool) * chunkGroupReadState->columnCount);
 
 	int attno;
-	foreach_int(attno, chunkGroupReadState->projectedColumnList)
+	foreach_declared_int(attno, chunkGroupReadState->projectedColumnList)
 	{
 		const ChunkData *chunkGroupData = chunkGroupReadState->chunkGroupData;
 		const int rowIndex = chunkGroupReadState->currentRow;
@@ -1489,7 +1489,7 @@ ProjectedColumnMask(uint32 columnCount, List *projectedColumnList)
 	bool *projectedColumnMask = palloc0(columnCount * sizeof(bool));
 	int attno;
 
-	foreach_int(attno, projectedColumnList)
+	foreach_declared_int(attno, projectedColumnList)
 	{
 		/* attno is 1-indexed; projectedColumnMask is 0-indexed */
 		int columnIndex = attno - 1;

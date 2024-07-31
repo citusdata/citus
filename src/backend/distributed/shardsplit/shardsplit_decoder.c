@@ -14,6 +14,8 @@
 #include "utils/lsyscache.h"
 #include "utils/typcache.h"
 
+#include "pg_version_constants.h"
+
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/shardinterval_utils.h"
@@ -180,6 +182,43 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	}
 
 	Oid targetRelationOid = InvalidOid;
+
+#if PG_VERSION_NUM >= PG_VERSION_17
+	switch (change->action)
+	{
+		case REORDER_BUFFER_CHANGE_INSERT:
+		{
+			HeapTuple newTuple = change->data.tp.newtuple;
+			targetRelationOid = FindTargetRelationOid(relation, newTuple,
+													  replicationSlotName);
+			break;
+		}
+
+		/* updating non-partition column value */
+		case REORDER_BUFFER_CHANGE_UPDATE:
+		{
+			HeapTuple newTuple = change->data.tp.newtuple;
+			targetRelationOid = FindTargetRelationOid(relation, newTuple,
+													  replicationSlotName);
+			break;
+		}
+
+		case REORDER_BUFFER_CHANGE_DELETE:
+		{
+			HeapTuple oldTuple = change->data.tp.oldtuple;
+			targetRelationOid = FindTargetRelationOid(relation, oldTuple,
+													  replicationSlotName);
+
+			break;
+		}
+
+		/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
+		default:
+			ereport(ERROR, errmsg(
+						"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
+						change->action));
+	}
+#else
 	switch (change->action)
 	{
 		case REORDER_BUFFER_CHANGE_INSERT:
@@ -214,6 +253,7 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 						"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
 						change->action));
 	}
+#endif
 
 	/* Current replication slot is not responsible for handling the change */
 	if (targetRelationOid == InvalidOid)
@@ -231,6 +271,62 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	TupleDesc targetRelationDesc = RelationGetDescr(targetRelation);
 	if (sourceRelationDesc->natts > targetRelationDesc->natts)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_17
+		switch (change->action)
+		{
+			case REORDER_BUFFER_CHANGE_INSERT:
+			{
+				HeapTuple sourceRelationNewTuple = change->data.tp.newtuple;
+				HeapTuple targetRelationNewTuple = GetTupleForTargetSchema(
+					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.newtuple = targetRelationNewTuple;
+				break;
+			}
+
+			case REORDER_BUFFER_CHANGE_UPDATE:
+			{
+				HeapTuple sourceRelationNewTuple = change->data.tp.newtuple;
+				HeapTuple targetRelationNewTuple = GetTupleForTargetSchema(
+					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.newtuple = targetRelationNewTuple;
+
+				/*
+				 * Format oldtuple according to the target relation. If the column values of replica
+				 * identiy change, then the old tuple is non-null and needs to be formatted according
+				 * to the target relation schema.
+				 */
+				if (change->data.tp.oldtuple != NULL)
+				{
+					HeapTuple sourceRelationOldTuple = change->data.tp.oldtuple;
+					HeapTuple targetRelationOldTuple = GetTupleForTargetSchema(
+						sourceRelationOldTuple,
+						sourceRelationDesc,
+						targetRelationDesc);
+
+					change->data.tp.oldtuple = targetRelationOldTuple;
+				}
+				break;
+			}
+
+			case REORDER_BUFFER_CHANGE_DELETE:
+			{
+				HeapTuple sourceRelationOldTuple = change->data.tp.oldtuple;
+				HeapTuple targetRelationOldTuple = GetTupleForTargetSchema(
+					sourceRelationOldTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.oldtuple = targetRelationOldTuple;
+				break;
+			}
+
+			/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
+			default:
+				ereport(ERROR, errmsg(
+							"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
+							change->action));
+		}
+#else
 		switch (change->action)
 		{
 			case REORDER_BUFFER_CHANGE_INSERT:
@@ -285,6 +381,7 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 							"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
 							change->action));
 		}
+#endif
 	}
 
 	pgOutputPluginChangeCB(ctx, txn, targetRelation, change);
@@ -337,7 +434,7 @@ FindTargetRelationOid(Relation sourceShardRelation,
 												 shardSplitInfo->distributedTableOid);
 
 	shardSplitInfo = NULL;
-	foreach_ptr(shardSplitInfo, entry->shardSplitInfoList)
+	foreach_declared_ptr(shardSplitInfo, entry->shardSplitInfoList)
 	{
 		if (shardSplitInfo->shardMinValue <= hashValue &&
 			shardSplitInfo->shardMaxValue >= hashValue)

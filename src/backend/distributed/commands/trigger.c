@@ -81,7 +81,7 @@ GetExplicitTriggerCommandList(Oid relationId)
 	List *triggerIdList = GetExplicitTriggerIdList(relationId);
 
 	Oid triggerId = InvalidOid;
-	foreach_oid(triggerId, triggerIdList)
+	foreach_declared_oid(triggerId, triggerIdList)
 	{
 		bool prettyOutput = false;
 		Datum commandText = DirectFunctionCall2(pg_get_triggerdef_ext,
@@ -742,7 +742,7 @@ ErrorIfRelationHasUnsupportedTrigger(Oid relationId)
 	List *relationTriggerList = GetExplicitTriggerIdList(relationId);
 
 	Oid triggerId = InvalidOid;
-	foreach_oid(triggerId, relationTriggerList)
+	foreach_declared_oid(triggerId, relationTriggerList)
 	{
 		ObjectAddress triggerObjectAddress = InvalidObjectAddress;
 		ObjectAddressSet(triggerObjectAddress, TriggerRelationId, triggerId);

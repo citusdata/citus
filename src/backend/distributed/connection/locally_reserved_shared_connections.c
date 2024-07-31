@@ -360,7 +360,7 @@ EnsureConnectionPossibilityForNodeList(List *nodeList)
 	nodeList = SortList(nodeList, CompareWorkerNodes);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, nodeList)
+	foreach_declared_ptr(workerNode, nodeList)
 	{
 		bool waitForConnection = true;
 		EnsureConnectionPossibilityForNode(workerNode, waitForConnection);

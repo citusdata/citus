@@ -259,7 +259,7 @@ worker_fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 	List *partitionShardIndexIds = find_inheritance_children(parentShardIndexId,
 															 ShareRowExclusiveLock);
 	Oid partitionShardIndexId = InvalidOid;
-	foreach_oid(partitionShardIndexId, partitionShardIndexIds)
+	foreach_declared_oid(partitionShardIndexId, partitionShardIndexIds)
 	{
 		if (IndexGetRelation(partitionShardIndexId, false) == partitionShardId)
 		{
@@ -372,7 +372,7 @@ CreateFixPartitionConstraintsTaskList(Oid relationId)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 
@@ -458,7 +458,7 @@ WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
 	char *quotedShardName = quote_qualified_identifier(schemaName, shardRelationName);
 
 	char *constraintName = NULL;
-	foreach_ptr(constraintName, checkConstraintList)
+	foreach_declared_ptr(constraintName, checkConstraintList)
 	{
 		StringInfo shardQueryString = makeStringInfo();
 		appendStringInfo(shardQueryString,
@@ -543,7 +543,7 @@ CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
 	else
 	{
 		Oid partitionId = InvalidOid;
-		foreach_oid(partitionId, partitionList)
+		foreach_declared_oid(partitionId, partitionList)
 		{
 			List *partitionShardIntervalList = LoadShardIntervalList(partitionId);
 			LockShardListMetadata(partitionShardIntervalList, ShareLock);
@@ -563,7 +563,7 @@ CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
 	int taskId = 1;
 
 	ShardInterval *parentShardInterval = NULL;
-	foreach_ptr(parentShardInterval, parentShardIntervalList)
+	foreach_declared_ptr(parentShardInterval, parentShardIntervalList)
 	{
 		uint64 parentShardId = parentShardInterval->shardId;
 
@@ -615,7 +615,7 @@ WorkerFixPartitionShardIndexNamesCommandList(uint64 parentShardId,
 {
 	List *commandList = NIL;
 	Oid parentIndexId = InvalidOid;
-	foreach_oid(parentIndexId, parentIndexIdList)
+	foreach_declared_oid(parentIndexId, parentIndexIdList)
 	{
 		if (!has_subclass(parentIndexId))
 		{
@@ -666,7 +666,7 @@ WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(
 
 	bool addAllPartitions = (partitionRelationId == InvalidOid);
 	Oid partitionIndexId = InvalidOid;
-	foreach_oid(partitionIndexId, partitionIndexIds)
+	foreach_declared_oid(partitionIndexId, partitionIndexIds)
 	{
 		Oid partitionId = IndexGetRelation(partitionIndexId, false);
 		if (addAllPartitions || partitionId == partitionRelationId)
@@ -701,7 +701,7 @@ WorkerFixPartitionShardIndexNamesCommandListForPartitionIndex(Oid partitionIndex
 	List *partitionShardIntervalList = LoadShardIntervalList(partitionId);
 
 	ShardInterval *partitionShardInterval = NULL;
-	foreach_ptr(partitionShardInterval, partitionShardIntervalList)
+	foreach_declared_ptr(partitionShardInterval, partitionShardIntervalList)
 	{
 		/*
 		 * Prepare commands for each shard of current partition
@@ -1044,7 +1044,7 @@ PartitionWithLongestNameRelationId(Oid parentRelationId)
 	List *partitionList = PartitionList(parentRelationId);
 
 	Oid partitionRelationId = InvalidOid;
-	foreach_oid(partitionRelationId, partitionList)
+	foreach_declared_oid(partitionRelationId, partitionList)
 	{
 		char *partitionName = get_rel_name(partitionRelationId);
 		int partitionNameLength = strnlen(partitionName, NAMEDATALEN);
@@ -1130,7 +1130,7 @@ GenerateDetachPartitionCommandRelationIdList(List *relationIds)
 {
 	List *detachPartitionCommands = NIL;
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIds)
+	foreach_declared_oid(relationId, relationIds)
 	{
 		Assert(PartitionTable(relationId));
 		char *detachCommand = GenerateDetachPartitionCommand(relationId);
@@ -1246,7 +1246,7 @@ GenerateAttachPartitionCommandRelationIdList(List *relationIds)
 {
 	List *attachPartitionCommands = NIL;
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIds)
+	foreach_declared_oid(relationId, relationIds)
 	{
 		char *attachCommand = GenerateAlterTableAttachPartitionCommand(relationId);
 		attachPartitionCommands = lappend(attachPartitionCommands, attachCommand);
@@ -1318,7 +1318,7 @@ ListShardsUnderParentRelation(Oid relationId)
 		List *partitionList = PartitionList(relationId);
 		Oid partitionRelationId = InvalidOid;
 
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			List *childShardList = ListShardsUnderParentRelation(partitionRelationId);
 			shardList = list_concat(shardList, childShardList);

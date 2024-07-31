@@ -286,7 +286,7 @@ void
 DetachFromDSMSegments(List *dsmSegmentList)
 {
 	dsm_segment *dsmSegment = NULL;
-	foreach_ptr(dsmSegment, dsmSegmentList)
+	foreach_declared_ptr(dsmSegment, dsmSegmentList)
 	{
 		dsm_detach(dsmSegment);
 	}

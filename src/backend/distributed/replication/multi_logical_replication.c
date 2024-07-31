@@ -282,7 +282,7 @@ CreateGroupedLogicalRepTargetsHash(List *logicalRepTargetList)
 {
 	HTAB *logicalRepTargetsHash = CreateSimpleHash(uint32, GroupedLogicalRepTargets);
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		bool found = false;
 		GroupedLogicalRepTargets *groupedLogicalRepTargets =
@@ -413,7 +413,7 @@ CreateShardMovePublicationInfoHash(WorkerNode *targetNode, List *shardIntervals)
 {
 	HTAB *publicationInfoHash = CreateSimpleHash(NodeAndOwner, PublicationInfo);
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervals)
+	foreach_declared_ptr(shardInterval, shardIntervals)
 	{
 		NodeAndOwner key;
 		key.nodeId = targetNode->nodeId;
@@ -474,7 +474,7 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 	}
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		NodeAndOwner key;
 		key.nodeId = nodeId;
@@ -552,7 +552,7 @@ void
 CreateReplicaIdentities(List *logicalRepTargetList)
 {
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		MultiConnection *superuserConnection = target->superuserConnection;
 		CreateReplicaIdentitiesOnNode(
@@ -576,7 +576,7 @@ CreateReplicaIdentitiesOnNode(List *shardList, char *nodeName, int32 nodePort)
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	ShardInterval *shardInterval;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		Oid relationId = shardInterval->relationId;
@@ -725,10 +725,10 @@ ExecuteCreateIndexCommands(List *logicalRepTargetList)
 {
 	List *taskList = NIL;
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, target->newShards)
+		foreach_declared_ptr(shardInterval, target->newShards)
 		{
 			Oid relationId = shardInterval->relationId;
 
@@ -787,10 +787,10 @@ ExecuteCreateConstraintsBackedByIndexCommands(List *logicalRepTargetList)
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, target->newShards)
+		foreach_declared_ptr(shardInterval, target->newShards)
 		{
 			Oid relationId = shardInterval->relationId;
 
@@ -873,10 +873,10 @@ ExecuteClusterOnCommands(List *logicalRepTargetList)
 {
 	List *taskList = NIL;
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, target->newShards)
+		foreach_declared_ptr(shardInterval, target->newShards)
 		{
 			Oid relationId = shardInterval->relationId;
 
@@ -925,10 +925,10 @@ ExecuteCreateIndexStatisticsCommands(List *logicalRepTargetList)
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, target->newShards)
+		foreach_declared_ptr(shardInterval, target->newShards)
 		{
 			Oid relationId = shardInterval->relationId;
 
@@ -983,10 +983,10 @@ ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList)
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, target->newShards)
+		foreach_declared_ptr(shardInterval, target->newShards)
 		{
 			Oid relationId = shardInterval->relationId;
 
@@ -1042,10 +1042,10 @@ CreatePartitioningHierarchy(List *logicalRepTargetList)
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, target->newShards)
+		foreach_declared_ptr(shardInterval, target->newShards)
 		{
 			if (PartitionTable(shardInterval->relationId))
 			{
@@ -1100,14 +1100,14 @@ CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList)
 	 * Iterate over all the shards in the shard group.
 	 */
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
 
 		/*
 		 * Iterate on split shards list for a given shard and create constraints.
 		 */
-		foreach_ptr(shardInterval, target->newShards)
+		foreach_declared_ptr(shardInterval, target->newShards)
 		{
 			List *commandList = CopyShardForeignConstraintCommandList(
 				shardInterval);
@@ -1320,7 +1320,7 @@ CreatePublications(MultiConnection *connection,
 						 quote_identifier(entry->name));
 
 		ShardInterval *shard = NULL;
-		foreach_ptr(shard, entry->shardIntervals)
+		foreach_declared_ptr(shard, entry->shardIntervals)
 		{
 			char *shardName = ConstructQualifiedShardName(shard);
 
@@ -1429,7 +1429,7 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 	ReplicationSlotInfo *firstReplicationSlot = NULL;
 	char *snapshot = NULL;
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ReplicationSlotInfo *replicationSlot = target->replicationSlot;
 
@@ -1481,7 +1481,7 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					List *logicalRepTargetList)
 {
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		int ownerId = target->tableOwnerId;
 
@@ -1603,7 +1603,7 @@ void
 EnableSubscriptions(List *logicalRepTargetList)
 {
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s ENABLE",
@@ -1737,7 +1737,7 @@ CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 		groupedLogicalRepTargets->superuserConnection = superuserConnection;
 
 		LogicalRepTarget *target = NULL;
-		foreach_ptr(target, groupedLogicalRepTargets->logicalRepTargetList)
+		foreach_declared_ptr(target, groupedLogicalRepTargets->logicalRepTargetList)
 		{
 			target->superuserConnection = superuserConnection;
 		}
@@ -1774,7 +1774,7 @@ SubscriptionNamesValueList(List *logicalRepTargetList)
 	bool first = true;
 
 	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
+	foreach_declared_ptr(target, logicalRepTargetList)
 	{
 		if (!first)
 		{

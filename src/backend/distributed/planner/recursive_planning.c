@@ -1736,7 +1736,7 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 	ExtractSublinkWalker(node, &sublinks);
 
 	SubLink *sublink;
-	foreach_ptr(sublink, sublinks)
+	foreach_declared_ptr(sublink, sublinks)
 	{
 		if (ContainsReferencesToOuterQuery(castNode(Query, sublink->subselect)))
 		{
@@ -1894,7 +1894,7 @@ GenerateRequiredColNamesFromTargetList(List *targetList)
 {
 	TargetEntry *entry = NULL;
 	List *innerSubqueryColNames = NIL;
-	foreach_ptr(entry, targetList)
+	foreach_declared_ptr(entry, targetList)
 	{
 		if (IsA(entry->expr, Var))
 		{
@@ -1921,7 +1921,7 @@ UpdateVarNosInNode(Node *node, Index newVarNo)
 	List *varList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |
 									PVC_RECURSE_PLACEHOLDERS);
 	Var *var = NULL;
-	foreach_ptr(var, varList)
+	foreach_declared_ptr(var, varList)
 	{
 		var->varno = newVarNo;
 	}
@@ -1958,7 +1958,7 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 	bool containsDistributedTable = false;
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
 														  IsDistributedOrReferenceTableRTE))

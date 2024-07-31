@@ -55,7 +55,7 @@ QualifyPublicationObjects(List *publicationObjects)
 {
 	PublicationObjSpec *publicationObject = NULL;
 
-	foreach_ptr(publicationObject, publicationObjects)
+	foreach_declared_ptr(publicationObject, publicationObjects)
 	{
 		if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE)
 		{
@@ -78,7 +78,7 @@ QualifyTables(List *tables)
 {
 	RangeVar *rangeVar = NULL;
 
-	foreach_ptr(rangeVar, tables)
+	foreach_declared_ptr(rangeVar, tables)
 	{
 		QualifyPublicationRangeVar(rangeVar);
 	}

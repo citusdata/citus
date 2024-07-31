@@ -47,7 +47,7 @@ DeparseTreeNodes(List *stmts)
 {
 	List *sqls = NIL;
 	Node *stmt = NULL;
-	foreach_ptr(stmt, stmts)
+	foreach_declared_ptr(stmt, stmts)
 	{
 		sqls = lappend(sqls, DeparseTreeNode(stmt));
 	}

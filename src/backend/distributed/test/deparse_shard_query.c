@@ -49,14 +49,14 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 	List *parseTreeList = pg_parse_query(queryStringChar);
 
 	Node *parsetree = NULL;
-	foreach_ptr(parsetree, parseTreeList)
+	foreach_declared_ptr(parsetree, parseTreeList)
 	{
 		List *queryTreeList = pg_analyze_and_rewrite_fixedparams((RawStmt *) parsetree,
 																 queryStringChar,
 																 NULL, 0, NULL);
 
 		Query *query = NULL;
-		foreach_ptr(query, queryTreeList)
+		foreach_declared_ptr(query, queryTreeList)
 		{
 			StringInfo buffer = makeStringInfo();
 

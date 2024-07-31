@@ -59,7 +59,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	UseCoordinatedTransaction();
 
 	DistributedSubPlan *subPlan = NULL;
-	foreach_ptr(subPlan, subPlanList)
+	foreach_declared_ptr(subPlan, subPlanList)
 	{
 		PlannedStmt *plannedStmt = subPlan->plan;
 		uint32 subPlanId = subPlan->subPlanId;

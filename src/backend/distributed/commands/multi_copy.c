@@ -1957,7 +1957,7 @@ ShardIntervalListHasLocalPlacements(List *shardIntervalList)
 {
 	int32 localGroupId = GetLocalGroupId();
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		if (ActiveShardPlacementOnGroup(localGroupId, shardInterval->shardId) != NULL)
 		{
@@ -2452,7 +2452,7 @@ ProcessAppendToShardOption(Oid relationId, CopyStmt *copyStatement)
 	bool appendToShardSet = false;
 
 	DefElem *defel = NULL;
-	foreach_ptr(defel, copyStatement->options)
+	foreach_declared_ptr(defel, copyStatement->options)
 	{
 		if (strncmp(defel->defname, APPEND_TO_SHARD_OPTION, NAMEDATALEN) == 0)
 		{

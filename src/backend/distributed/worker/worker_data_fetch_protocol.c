@@ -170,7 +170,8 @@ worker_adjust_identity_column_seq_ranges(PG_FUNCTION_ARGS)
 
 		if (attributeForm->attidentity)
 		{
-			Oid sequenceOid = getIdentitySequence(tableRelationId,
+			Oid sequenceOid = getIdentitySequence(identitySequenceRelation_compat(
+													  tableRelation),
 												  attributeForm->attnum,
 												  missingSequenceOk);
 
@@ -377,7 +378,7 @@ check_log_statement(List *statementList)
 
 	/* else we have to inspect the statement(s) to see whether to log */
 	Node *statement = NULL;
-	foreach_ptr(statement, statementList)
+	foreach_declared_ptr(statement, statementList)
 	{
 		if (GetCommandLogLevel(statement) <= log_statement)
 		{
@@ -480,7 +481,7 @@ void
 SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 {
 	DefElem *defElem = NULL;
-	foreach_ptr(defElem, statement->options)
+	foreach_declared_ptr(defElem, statement->options)
 	{
 		if (strcmp(defElem->defname, name) == 0)
 		{

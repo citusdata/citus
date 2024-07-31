@@ -395,7 +395,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 			if (attributeForm->attidentity && includeIdentityDefaults)
 			{
 				bool missing_ok = false;
-				Oid seqOid = getIdentitySequence(RelationGetRelid(relation),
+				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(
+													 relation),
 												 attributeForm->attnum, missing_ok);
 
 				if (includeIdentityDefaults == INCLUDE_IDENTITY)
@@ -738,7 +739,12 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 			 * If the user changed the column's statistics target, create
 			 * alter statement and add statement to a list for later processing.
 			 */
-			if (attributeForm->attstattarget >= 0)
+			HeapTuple tp = SearchSysCache2(ATTNUM,
+										   ObjectIdGetDatum(tableRelationId),
+										   Int16GetDatum(attributeForm->attnum));
+			int32 targetAttstattarget = getAttstattarget_compat(tp);
+			ReleaseSysCache(tp);
+			if (targetAttstattarget >= 0)
 			{
 				StringInfoData statement = { NULL, 0, 0, 0 };
 				initStringInfo(&statement);
@@ -746,7 +752,7 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 				appendStringInfo(&statement, "ALTER COLUMN %s ",
 								 quote_identifier(attributeName));
 				appendStringInfo(&statement, "SET STATISTICS %d",
-								 attributeForm->attstattarget);
+								 targetAttstattarget);
 
 				columnOptionList = lappend(columnOptionList, statement.data);
 			}
@@ -938,7 +944,7 @@ bool
 IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
 {
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, param) == 0)
 		{
@@ -963,7 +969,7 @@ AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
 
 	char *tableSpaceName = NULL;
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, "tablespace") == 0)
 		{

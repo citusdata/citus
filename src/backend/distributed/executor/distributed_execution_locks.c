@@ -198,7 +198,7 @@ AcquireExecutorShardLocksForExecution(RowModifyLevel modLevel, List *taskList)
 	List *requiresConsistentSnapshotRelationShardList = NIL;
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		ShardInterval *anchorShardInterval = LoadShardInterval(task->anchorShardId);
 		anchorShardIntervalList = lappend(anchorShardIntervalList, anchorShardInterval);
@@ -344,7 +344,7 @@ AcquireMetadataLocks(List *taskList)
 	 */
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		LockShardDistributionMetadata(task->anchorShardId, ShareLock);
 	}
@@ -379,7 +379,7 @@ AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 	 * them.
 	 */
 	RelationRowLock *relationRowLock = NULL;
-	foreach_ptr(relationRowLock, relationRowLockList)
+	foreach_declared_ptr(relationRowLock, relationRowLockList)
 	{
 		LockClauseStrength rowLockStrength = relationRowLock->rowLockStrength;
 		Oid relationId = relationRowLock->relationId;
@@ -412,7 +412,7 @@ void
 LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (PartitionedTable(relationId))
 		{
@@ -437,7 +437,7 @@ LockPartitionRelations(Oid relationId, LOCKMODE lockMode)
 	 */
 	List *partitionList = PartitionList(relationId);
 	Oid partitionRelationId = InvalidOid;
-	foreach_oid(partitionRelationId, partitionList)
+	foreach_declared_oid(partitionRelationId, partitionList)
 	{
 		LockRelationOid(partitionRelationId, lockMode);
 	}

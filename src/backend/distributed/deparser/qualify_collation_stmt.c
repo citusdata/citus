@@ -83,7 +83,7 @@ QualifyDropCollationStmt(Node *node)
 	List *names = NIL;
 	List *name = NIL;
 
-	foreach_ptr(name, stmt->objects)
+	foreach_declared_ptr(name, stmt->objects)
 	{
 		names = lappend(names, QualifyCollationName(name));
 	}

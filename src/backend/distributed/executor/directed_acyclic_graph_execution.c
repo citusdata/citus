@@ -94,7 +94,7 @@ FindExecutableTasks(List *allTasks, HTAB *completedTasks)
 	List *curTasks = NIL;
 
 	Task *task = NULL;
-	foreach_ptr(task, allTasks)
+	foreach_declared_ptr(task, allTasks)
 	{
 		if (IsAllDependencyCompleted(task, completedTasks) &&
 			!IsTaskAlreadyCompleted(task, completedTasks))
@@ -118,7 +118,7 @@ RemoveMergeTasks(List *taskList)
 	List *prunedTaskList = NIL;
 	Task *task = NULL;
 
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (task->taskType != MERGE_TASK)
 		{
@@ -139,7 +139,7 @@ AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks)
 	bool found;
 
 	Task *task = NULL;
-	foreach_ptr(task, curCompletedTasks)
+	foreach_declared_ptr(task, curCompletedTasks)
 	{
 		TaskHashKey taskKey = { task->jobId, task->taskId };
 		hash_search(completedTasks, &taskKey, HASH_ENTER, &found);
@@ -172,7 +172,7 @@ IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
 	bool found = false;
 
 	Task *task = NULL;
-	foreach_ptr(task, targetTask->dependentTaskList)
+	foreach_declared_ptr(task, targetTask->dependentTaskList)
 	{
 		TaskHashKey taskKey = { task->jobId, task->taskId };
 

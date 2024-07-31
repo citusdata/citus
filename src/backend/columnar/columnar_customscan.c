@@ -363,7 +363,7 @@ ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 
 		/* disable index-only scan */
 		IndexOptInfo *indexOptInfo = NULL;
-		foreach_ptr(indexOptInfo, rel->indexlist)
+		foreach_declared_ptr(indexOptInfo, rel->indexlist)
 		{
 			memset(indexOptInfo->canreturn, false, indexOptInfo->ncolumns * sizeof(bool));
 		}
@@ -381,7 +381,7 @@ RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate)
 	List *filteredPathList = NIL;
 
 	Path *path = NULL;
-	foreach_ptr(path, rel->pathlist)
+	foreach_declared_ptr(path, rel->pathlist)
 	{
 		if (!removePathPredicate(path))
 		{
@@ -428,7 +428,7 @@ static void
 CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 {
 	Path *path = NULL;
-	foreach_ptr(path, rel->pathlist)
+	foreach_declared_ptr(path, rel->pathlist)
 	{
 		if (IsA(path, IndexPath))
 		{
@@ -783,7 +783,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 		List *pushdownableArgs = NIL;
 
 		Node *boolExprArg = NULL;
-		foreach_ptr(boolExprArg, boolExpr->args)
+		foreach_declared_ptr(boolExprArg, boolExpr->args)
 		{
 			Expr *pushdownableArg = ExtractPushdownClause(root, rel,
 														  (Node *) boolExprArg);
@@ -1550,7 +1550,7 @@ ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRe
 	uint32 maxColumnCount = 0;
 	uint64 totalStripeSize = 0;
 	StripeMetadata *stripeMetadata = NULL;
-	foreach_ptr(stripeMetadata, stripeList)
+	foreach_declared_ptr(stripeMetadata, stripeList)
 	{
 		totalStripeSize += stripeMetadata->dataLength;
 		maxColumnCount = Max(maxColumnCount, stripeMetadata->columnCount);
@@ -1923,11 +1923,6 @@ ColumnarScan_EndCustomScan(CustomScanState *node)
 	 * get information from node
 	 */
 	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
-
-	/*
-	 * Free the exprcontext
-	 */
-	ExecFreeExprContext(&node->ss.ps);
 
 	/*
 	 * clean out the tuple table

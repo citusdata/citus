@@ -851,7 +851,7 @@ ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 	bool containsRemoteCitusLocalTable = false;
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
 		{
@@ -982,7 +982,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		ContainsLocalTableDistributedTableJoin(queryTree->rtable);
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
@@ -1744,7 +1744,7 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 	}
 
 	ModifyRoute *modifyRoute = NULL;
-	foreach_ptr(modifyRoute, modifyRouteList)
+	foreach_declared_ptr(modifyRoute, modifyRouteList)
 	{
 		Task *modifyTask = CreateTask(MODIFY_TASK);
 		modifyTask->anchorShardId = modifyRoute->shardId;
@@ -2137,7 +2137,7 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 		/* assume ErrorIfQueryHasUnroutableModifyingCTE checked query already */
 
 		CommonTableExpr *cte = NULL;
-		foreach_ptr(cte, query->cteList)
+		foreach_declared_ptr(cte, query->cteList)
 		{
 			Query *cteQuery = (Query *) cte->ctequery;
 
@@ -2466,7 +2466,7 @@ AllShardsColocated(List *relationShardList)
 	int colocationId = -1;
 	CitusTableType tableType = ANY_CITUS_TABLE_TYPE;
 
-	foreach_ptr(relationShard, relationShardList)
+	foreach_declared_ptr(relationShard, relationShardList)
 	{
 		Oid relationId = relationShard->relationId;
 		uint64 shardId = relationShard->shardId;
@@ -2591,7 +2591,7 @@ CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shard
 			 * If there is a local table, we only allow the local placement to
 			 * be used. If there is none, we disallow the query.
 			 */
-			foreach_ptr(taskPlacement, shardPlacementList)
+			foreach_declared_ptr(taskPlacement, shardPlacementList)
 			{
 				if (taskPlacement->groupId == GetLocalGroupId())
 				{
@@ -3008,7 +3008,7 @@ PlacementsForWorkersContainingAllShards(List *shardIntervalListList)
 	List *currentPlacementList = NIL;
 	List *shardIntervalList = NIL;
 
-	foreach_ptr(shardIntervalList, shardIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardIntervalListList)
 	{
 		if (shardIntervalList == NIL)
 		{
@@ -3907,7 +3907,7 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 	char replicationModel = 0;
 
 	CommonTableExpr *cte = NULL;
-	foreach_ptr(cte, queryTree->cteList)
+	foreach_declared_ptr(cte, queryTree->cteList)
 	{
 		Query *cteQuery = (Query *) cte->ctequery;
 

@@ -128,13 +128,13 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 	pfree(shardPlacementJsonArray);
 
 	/* map workerTestInfoList to a list of its WorkerNodes */
-	foreach_ptr(workerTestInfo, context.workerTestInfoList)
+	foreach_declared_ptr(workerTestInfo, context.workerTestInfoList)
 	{
 		workerNodeList = lappend(workerNodeList, workerTestInfo->node);
 	}
 
 	/* map shardPlacementTestInfoList to a list of list of its ShardPlacements */
-	foreach_ptr(shardPlacementTestInfo, context.shardPlacementTestInfoList)
+	foreach_declared_ptr(shardPlacementTestInfo, context.shardPlacementTestInfoList)
 	{
 		if (shardPlacementTestInfo->nextColocationGroup)
 		{
@@ -197,7 +197,7 @@ ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *voidContext)
 	RebalancePlacementContext *context = voidContext;
 	WorkerTestInfo *workerTestInfo = NULL;
 	uint64 *disallowedShardIdPtr = NULL;
-	foreach_ptr(workerTestInfo, context->workerTestInfoList)
+	foreach_declared_ptr(workerTestInfo, context->workerTestInfoList)
 	{
 		if (workerTestInfo->node == workerNode)
 		{
@@ -206,7 +206,7 @@ ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *voidContext)
 	}
 	Assert(workerTestInfo != NULL);
 
-	foreach_ptr(disallowedShardIdPtr, workerTestInfo->disallowedShardIds)
+	foreach_declared_ptr(disallowedShardIdPtr, workerTestInfo->disallowedShardIds)
 	{
 		if (shardId == *disallowedShardIdPtr)
 		{
@@ -226,7 +226,7 @@ NodeCapacity(WorkerNode *workerNode, void *voidContext)
 {
 	RebalancePlacementContext *context = voidContext;
 	WorkerTestInfo *workerTestInfo = NULL;
-	foreach_ptr(workerTestInfo, context->workerTestInfoList)
+	foreach_declared_ptr(workerTestInfo, context->workerTestInfoList)
 	{
 		if (workerTestInfo->node == workerNode)
 		{
@@ -251,7 +251,7 @@ GetShardCost(uint64 shardId, void *voidContext)
 	shardCost.shardId = shardId;
 
 	ShardPlacementTestInfo *shardPlacementTestInfo = NULL;
-	foreach_ptr(shardPlacementTestInfo, context->shardPlacementTestInfoList)
+	foreach_declared_ptr(shardPlacementTestInfo, context->shardPlacementTestInfoList)
 	{
 		if (shardPlacementTestInfo->placement->shardId == shardId)
 		{
@@ -300,12 +300,12 @@ shard_placement_replication_array(PG_FUNCTION_ARGS)
 	pfree(workerNodeJsonArray);
 	pfree(shardPlacementJsonArray);
 
-	foreach_ptr(workerTestInfo, workerTestInfoList)
+	foreach_declared_ptr(workerTestInfo, workerTestInfoList)
 	{
 		workerNodeList = lappend(workerNodeList, workerTestInfo->node);
 	}
 
-	foreach_ptr(shardPlacementTestInfo, shardPlacementTestInfoList)
+	foreach_declared_ptr(shardPlacementTestInfo, shardPlacementTestInfoList)
 	{
 		shardPlacementList = lappend(shardPlacementList,
 									 shardPlacementTestInfo->placement);

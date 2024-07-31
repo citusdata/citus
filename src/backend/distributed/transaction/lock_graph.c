@@ -23,6 +23,8 @@
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
 
+#include "pg_version_compat.h"
+
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
@@ -149,7 +151,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -172,7 +174,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 
 	/* send commands in parallel */
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		StringInfo queryString = makeStringInfo();
 
@@ -203,7 +205,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	}
 
 	/* receive dump_local_wait_edges results */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		bool raiseInterrupts = true;
 
@@ -993,7 +995,7 @@ AllocWaitEdge(WaitGraph *waitGraph)
 static void
 AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 {
-	if (remaining->procAdded[proc->pgprocno])
+	if (remaining->procAdded[getProcNo_compat(proc)])
 	{
 		return;
 	}
@@ -1001,7 +1003,7 @@ AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 	Assert(remaining->procCount < TotalProcCount());
 
 	remaining->procs[remaining->procCount++] = proc;
-	remaining->procAdded[proc->pgprocno] = true;
+	remaining->procAdded[getProcNo_compat(proc)] = true;
 }
 
 

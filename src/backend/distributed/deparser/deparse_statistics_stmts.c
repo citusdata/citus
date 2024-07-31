@@ -177,8 +177,9 @@ AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 static void
 AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt)
 {
-	appendStringInfo(buf, "ALTER STATISTICS %s SET STATISTICS %d", NameListToQuotedString(
-						 stmt->defnames), stmt->stxstattarget);
+	appendStringInfo(buf, "ALTER STATISTICS %s SET STATISTICS %d",
+					 NameListToQuotedString(stmt->defnames),
+					 getIntStxstattarget_compat(stmt->stxstattarget));
 }
 
 
@@ -216,7 +217,7 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 	appendStringInfoString(buf, " (");
 
 	String *statType = NULL;
-	foreach_ptr(statType, stmt->stat_types)
+	foreach_declared_ptr(statType, stmt->stat_types)
 	{
 		appendStringInfoString(buf, strVal(statType));
 
@@ -235,7 +236,7 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 {
 	StatsElem *column = NULL;
 
-	foreach_ptr(column, stmt->exprs)
+	foreach_declared_ptr(column, stmt->exprs)
 	{
 		if (!column->name)
 		{

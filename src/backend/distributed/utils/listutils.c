@@ -43,7 +43,7 @@ SortList(List *pointerList, int (*comparisonFunction)(const void *, const void *
 	void **array = (void **) palloc0(arraySize * sizeof(void *));
 
 	void *pointer = NULL;
-	foreach_ptr(pointer, pointerList)
+	foreach_declared_ptr(pointer, pointerList)
 	{
 		array[arrayIndex] = pointer;
 
@@ -82,7 +82,7 @@ PointerArrayFromList(List *pointerList)
 	int pointerIndex = 0;
 
 	void *pointer = NULL;
-	foreach_ptr(pointer, pointerList)
+	foreach_declared_ptr(pointer, pointerList)
 	{
 		pointerArray[pointerIndex] = pointer;
 		pointerIndex += 1;
@@ -130,7 +130,7 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	HTAB *itemSet = hash_create("ListToHashSet", capacity, &info, flags);
 
 	void *item = NULL;
-	foreach_ptr(item, itemList)
+	foreach_declared_ptr(item, itemList)
 	{
 		bool foundInSet = false;
 
@@ -188,7 +188,7 @@ StringJoinParams(List *stringList, char delimiter, char *prefix, char *postfix)
 
 	const char *command = NULL;
 	int curIndex = 0;
-	foreach_ptr(command, stringList)
+	foreach_declared_ptr(command, stringList)
 	{
 		if (curIndex > 0)
 		{
@@ -219,7 +219,7 @@ ListTake(List *pointerList, int size)
 	int listIndex = 0;
 
 	void *pointer = NULL;
-	foreach_ptr(pointer, pointerList)
+	foreach_declared_ptr(pointer, pointerList)
 	{
 		result = lappend(result, pointer);
 		listIndex++;
@@ -279,7 +279,7 @@ list_filter_oid(List *list, bool (*keepElement)(Oid element))
 {
 	List *result = NIL;
 	Oid element = InvalidOid;
-	foreach_oid(element, list)
+	foreach_declared_oid(element, list)
 	{
 		if (keepElement(element))
 		{

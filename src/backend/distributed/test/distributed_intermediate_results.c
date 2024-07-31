@@ -90,7 +90,7 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	DistributedResultFragment *fragment = NULL;
-	foreach_ptr(fragment, fragmentList)
+	foreach_declared_ptr(fragment, fragmentList)
 	{
 		bool columnNulls[5] = { 0 };
 		Datum columnValues[5] = {
@@ -169,7 +169,7 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 
 		const char *resultId = NULL;
 		int resultIdIndex = 0;
-		foreach_ptr(resultId, sortedResultIds)
+		foreach_declared_ptr(resultId, sortedResultIds)
 		{
 			resultIdValues[resultIdIndex++] = CStringGetTextDatum(resultId);
 		}

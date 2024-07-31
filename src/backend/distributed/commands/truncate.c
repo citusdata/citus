@@ -135,7 +135,7 @@ TruncateTaskList(Oid relationId)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		char *shardRelationName = pstrdup(relationName);
@@ -264,7 +264,7 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 {
 	List *relationList = truncateStatement->relations;
 	RangeVar *rangeVar = NULL;
-	foreach_ptr(rangeVar, relationList)
+	foreach_declared_ptr(rangeVar, relationList)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
@@ -294,7 +294,7 @@ static void
 EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement)
 {
 	RangeVar *rangeVar = NULL;
-	foreach_ptr(rangeVar, truncateStatement->relations)
+	foreach_declared_ptr(rangeVar, truncateStatement->relations)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
@@ -322,7 +322,7 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 	bool failOK = false;
 
 	RangeVar *rangeVar = NULL;
-	foreach_ptr(rangeVar, relationList)
+	foreach_declared_ptr(rangeVar, relationList)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
 

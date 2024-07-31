@@ -190,7 +190,7 @@ GetRelationshipNodesForFKeyConnectedRelations(
 	{
 		List *allNeighboursList = GetAllNeighboursList(currentNode);
 		ForeignConstraintRelationshipNode *neighbourNode = NULL;
-		foreach_ptr(neighbourNode, allNeighboursList)
+		foreach_declared_ptr(neighbourNode, allNeighboursList)
 		{
 			Oid neighbourRelationId = neighbourNode->relationId;
 			if (OidVisited(oidVisitedMap, neighbourRelationId))
@@ -437,7 +437,7 @@ GetConnectedListHelper(ForeignConstraintRelationshipNode *node, bool isReferenci
 
 		List *neighbourList = GetNeighbourList(currentNode, isReferencing);
 		ForeignConstraintRelationshipNode *neighbourNode = NULL;
-		foreach_ptr(neighbourNode, neighbourList)
+		foreach_declared_ptr(neighbourNode, neighbourList)
 		{
 			Oid neighbourRelationId = neighbourNode->relationId;
 			if (!OidVisited(oidVisitedMap, neighbourRelationId))
@@ -508,7 +508,7 @@ GetRelationIdsFromRelationshipNodeList(List *fKeyRelationshipNodeList)
 	List *relationIdList = NIL;
 
 	ForeignConstraintRelationshipNode *fKeyRelationshipNode = NULL;
-	foreach_ptr(fKeyRelationshipNode, fKeyRelationshipNodeList)
+	foreach_declared_ptr(fKeyRelationshipNode, fKeyRelationshipNodeList)
 	{
 		Oid relationId = fKeyRelationshipNode->relationId;
 		relationIdList = lappend_oid(relationIdList, relationId);
@@ -561,7 +561,7 @@ PopulateAdjacencyLists(void)
 	frelEdgeList = SortList(frelEdgeList, CompareForeignConstraintRelationshipEdges);
 
 	ForeignConstraintRelationshipEdge *currentFConstraintRelationshipEdge = NULL;
-	foreach_ptr(currentFConstraintRelationshipEdge, frelEdgeList)
+	foreach_declared_ptr(currentFConstraintRelationshipEdge, frelEdgeList)
 	{
 		/* we just saw this edge, no need to add it twice */
 		if (currentFConstraintRelationshipEdge->referencingRelationOID ==

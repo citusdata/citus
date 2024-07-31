@@ -591,13 +591,15 @@ CREATE OR REPLACE FUNCTION check_database_on_all_nodes(p_database_name text)
 RETURNS TABLE (node_type text, result text)
 AS $func$
 DECLARE
-  pg_ge_15_options text := '';
+  pg_ge_15_17_options text := '';
   pg_ge_16_options text := '';
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'datlocprovider') THEN
-    pg_ge_15_options := ', daticulocale, datcollversion, datlocprovider';
+  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'daticulocale') THEN
+    pg_ge_15_17_options := ', daticulocale, datcollversion, datlocprovider';
+  ELSIF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'datlocale') THEN
+    pg_ge_15_17_options := ', datlocale as daticulocale, datcollversion, datlocprovider';
   ELSE
-    pg_ge_15_options := $$, null as daticulocale, null as datcollversion, 'c' as datlocprovider$$;
+    pg_ge_15_17_options := $$, null as daticulocale, null as datcollversion, 'c' as datlocprovider$$;
   END IF;
 
   IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'daticurules') THEN
@@ -627,7 +629,7 @@ BEGIN
                             pg_encoding_to_char(pd.encoding) as encoding,
                             datistemplate, datallowconn, datconnlimit, datacl,
                             pt.spcname AS tablespace, datcollate, datctype
-                            %2$s -- >= pg15 options
+                            %2$s -- >= pg15 & pg17 options
                             %3$s -- >= pg16 options
                         FROM pg_database pd
                         JOIN pg_authid pa ON pd.datdba = pa.oid
@@ -646,7 +648,7 @@ BEGIN
                 ) AS stale_pg_dist_object_record_for_a_db_exists
             ) q
             $$,
-            p_database_name, pg_ge_15_options, pg_ge_16_options
+            p_database_name, pg_ge_15_17_options, pg_ge_16_options
         )
     ) q2
     JOIN pg_dist_node USING (nodeid);

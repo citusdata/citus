@@ -421,7 +421,7 @@ GetFirstPrimaryWorkerNode(void)
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 	WorkerNode *firstWorkerNode = NULL;
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		if (firstWorkerNode == NULL ||
 			CompareWorkerNodes(&workerNode, &firstWorkerNode) < 0)

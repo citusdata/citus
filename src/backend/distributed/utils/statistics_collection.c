@@ -184,7 +184,7 @@ DistributedTablesSize(List *distTableOids)
 	uint64 totalSize = 0;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, distTableOids)
+	foreach_declared_oid(relationId, distTableOids)
 	{
 		/*
 		 * Relations can get dropped after getting the Oid list and before we

@@ -373,6 +373,21 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		BufferUsage bufusage_start,
 					bufusage;
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+		MemoryContextCounters mem_counters;
+		MemoryContext planner_ctx = NULL;
+		MemoryContext saved_ctx = NULL;
+
+		if (es->memory)
+		{
+			/* copy paste from postgres code */
+			planner_ctx = AllocSetContextCreate(CurrentMemoryContext,
+												"explain analyze planner context",
+												ALLOCSET_DEFAULT_SIZES);
+			saved_ctx = MemoryContextSwitchTo(planner_ctx);
+		}
+#endif
+
 		if (es->buffers)
 		{
 			bufusage_start = pgBufferUsage;
@@ -430,8 +445,20 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+		if (es->memory)
+		{
+			MemoryContextSwitchTo(saved_ctx);
+			MemoryContextMemConsumed(planner_ctx, &mem_counters);
+		}
+
+		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration,
+					   (es->buffers ? &bufusage : NULL),
+					   (es->memory ? &mem_counters : NULL));
+#else
 		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration,
 					   (es->buffers ? &bufusage : NULL));
+#endif
 
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
 		ExplainCloseGroup("Subplan", NULL, true, es);
@@ -493,7 +520,7 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 	{
 		Task *task = NULL;
 		uint64 totalReceivedTupleDataForAllTasks = 0;
-		foreach_ptr(task, taskList)
+		foreach_declared_ptr(task, taskList)
 		{
 			totalReceivedTupleDataForAllTasks += TaskReceivedTupleData(task);
 		}
@@ -671,7 +698,7 @@ ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
 	}
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es, params);
 		remoteExplainList = lappend(remoteExplainList, remoteExplain);
@@ -1251,6 +1278,21 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	BufferUsage bufusage_start,
 				bufusage;
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+	MemoryContextCounters mem_counters;
+	MemoryContext planner_ctx = NULL;
+	MemoryContext saved_ctx = NULL;
+
+	if (es->memory)
+	{
+		/* copy paste from postgres code */
+		planner_ctx = AllocSetContextCreate(CurrentMemoryContext,
+											"explain analyze planner context",
+											ALLOCSET_DEFAULT_SIZES);
+		saved_ctx = MemoryContextSwitchTo(planner_ctx);
+	}
+#endif
+
 	if (es->buffers)
 	{
 		bufusage_start = pgBufferUsage;
@@ -1284,9 +1326,23 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+	if (es->memory)
+	{
+		MemoryContextSwitchTo(saved_ctx);
+		MemoryContextMemConsumed(planner_ctx, &mem_counters);
+	}
+
+	/* run it (if needed) and produce output */
+	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
+				   &planduration, (es->buffers ? &bufusage : NULL),
+				   (es->memory ? &mem_counters : NULL));
+#else
+
 	/* run it (if needed) and produce output */
 	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
 				   &planduration, (es->buffers ? &bufusage : NULL));
+#endif
 }
 
 
@@ -1398,7 +1454,7 @@ void
 ResetExplainAnalyzeData(List *taskList)
 {
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (task->fetchedExplainAnalyzePlan != NULL)
 		{
@@ -1461,7 +1517,7 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 	List *explainAnalyzeTaskList = NIL;
 	Task *originalTask = NULL;
 
-	foreach_ptr(originalTask, originalTaskList)
+	foreach_declared_ptr(originalTask, originalTaskList)
 	{
 		if (originalTask->queryCount != 1)
 		{
@@ -1699,6 +1755,21 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		BufferUsage bufusage_start,
 			    bufusage;
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+		MemoryContextCounters mem_counters;
+		MemoryContext planner_ctx = NULL;
+		MemoryContext saved_ctx = NULL;
+
+		if (es->memory)
+		{
+			/* copy paste from postgres code */
+			planner_ctx = AllocSetContextCreate(CurrentMemoryContext,
+												"explain analyze planner context",
+												ALLOCSET_DEFAULT_SIZES);
+			saved_ctx = MemoryContextSwitchTo(planner_ctx);
+		}
+#endif
+
 		if (es->buffers)
 			bufusage_start = pgBufferUsage;
 		INSTR_TIME_SET_CURRENT(planstart);
@@ -1716,9 +1787,21 @@ ExplainOneQuery(Query *query, int cursorOptions,
 			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 		}
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+		if (es->memory)
+		{
+			MemoryContextSwitchTo(saved_ctx);
+			MemoryContextMemConsumed(planner_ctx, &mem_counters);
+		}
+		/* run it (if needed) and produce output */
+		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
+					   &planduration, (es->buffers ? &bufusage : NULL),
+					   (es->memory ? &mem_counters : NULL));
+#else
 		/* run it (if needed) and produce output */
 		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
 					   &planduration, (es->buffers ? &bufusage : NULL));
+#endif
 	}
 }
 

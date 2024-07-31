@@ -1516,7 +1516,7 @@ ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *targetAppendRelI
 	int targetParentIndex = targetAppendRelInfo->parent_relid;
 	Bitmapset *parent_ids = NULL;
 	AppendRelInfo *appendRelInfo = NULL;
-	foreach_ptr(appendRelInfo, appendRelList)
+	foreach_declared_ptr(appendRelInfo, appendRelList)
 	{
 		int curParentIndex = appendRelInfo->parent_relid;
 		if (curParentIndex <= targetParentIndex)
@@ -1962,7 +1962,7 @@ AllDistributedRelationsInRestrictionContextColocated(
 	List *relationIdList = NIL;
 
 	/* check whether all relations exists in the main restriction list */
-	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
+	foreach_declared_ptr(relationRestriction, restrictionContext->relationRestrictionList)
 	{
 		relationIdList = lappend_oid(relationIdList, relationRestriction->relationId);
 	}
@@ -1981,7 +1981,7 @@ AllDistributedRelationsInRTEListColocated(List *rangeTableEntryList)
 	RangeTblEntry *rangeTableEntry = NULL;
 	List *relationIdList = NIL;
 
-	foreach_ptr(rangeTableEntry, rangeTableEntryList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableEntryList)
 	{
 		relationIdList = lappend_oid(relationIdList, rangeTableEntry->relid);
 	}
@@ -2000,7 +2000,7 @@ AllDistributedRelationsInListColocated(List *relationList)
 	int initialColocationId = INVALID_COLOCATION_ID;
 	Oid relationId = InvalidOid;
 
-	foreach_oid(relationId, relationList)
+	foreach_declared_oid(relationId, relationList)
 	{
 		if (!IsCitusTable(relationId))
 		{
@@ -2155,7 +2155,7 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 
 	List *restrictExprList = NIL;
 	RestrictInfo *restrictInfo = NULL;
-	foreach_ptr(restrictInfo, baseRestrictInfo)
+	foreach_declared_ptr(restrictInfo, baseRestrictInfo)
 	{
 		Expr *restrictionClause = restrictInfo->clause;
 
@@ -2199,7 +2199,7 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		Expr *copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
 		List *varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
 		Var *column = NULL;
-		foreach_ptr(column, varClauses)
+		foreach_declared_ptr(column, varClauses)
 		{
 			column->varno = SINGLE_RTE_INDEX;
 			column->varnosyn = SINGLE_RTE_INDEX;

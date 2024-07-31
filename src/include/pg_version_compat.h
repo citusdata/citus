@@ -13,6 +13,142 @@
 
 #include "pg_version_constants.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+#include "catalog/pg_am.h"
+#include "catalog/pg_auth_members.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_class.h"
+#include "catalog/pg_collation.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_database.h"
+#include "catalog/pg_extension.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_parameter_acl.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_publication.h"
+#include "catalog/pg_tablespace.h"
+#include "catalog/pg_transform.h"
+#include "catalog/pg_ts_config.h"
+#include "catalog/pg_ts_dict.h"
+#include "catalog/pg_ts_template.h"
+#include "catalog/pg_type.h"
+
+typedef int ObjectClass;
+#define getObjectClass(a) a->classId
+#define LAST_OCLASS TransformRelationId
+#define OCLASS_ROLE AuthIdRelationId
+#define OCLASS_DATABASE DatabaseRelationId
+#define OCLASS_TBLSPACE TableSpaceRelationId
+#define OCLASS_PARAMETER_ACL ParameterAclRelationId
+#define OCLASS_ROLE_MEMBERSHIP AuthMemRelationId
+#define OCLASS_CLASS RelationRelationId
+#define OCLASS_COLLATION CollationRelationId
+#define OCLASS_CONSTRAINT ConstraintRelationId
+#define OCLASS_PROC ProcedureRelationId
+#define OCLASS_PUBLICATION PublicationRelationId
+#define OCLASS_SCHEMA NamespaceRelationId
+#define OCLASS_TSCONFIG TSConfigRelationId
+#define OCLASS_TSDICT TSDictionaryRelationId
+#define OCLASS_TYPE TypeRelationId
+#define OCLASS_EXTENSION ExtensionRelationId
+#define OCLASS_FOREIGN_SERVER ForeignServerRelationId
+#define OCLASS_AM AccessMethodRelationId
+#define OCLASS_TSTEMPLATE TSTemplateRelationId
+
+#define Anum_pg_collation_colliculocale Anum_pg_collation_colllocale
+#define Anum_pg_database_daticulocale Anum_pg_database_datlocale
+
+#include "commands/tablecmds.h"
+
+static inline void
+RangeVarCallbackOwnsTable(const RangeVar *relation,
+						  Oid relId, Oid oldRelId, void *arg)
+{
+	return RangeVarCallbackMaintainsTable(relation, relId, oldRelId, arg);
+}
+
+
+#include "catalog/pg_attribute.h"
+#include "utils/syscache.h"
+
+static inline int32
+getAttstattarget_compat(HeapTuple attTuple)
+{
+	bool isnull;
+	Datum dat = SysCacheGetAttr(ATTNUM, attTuple,
+								Anum_pg_attribute_attstattarget, &isnull);
+	return (isnull ? -1 : DatumGetInt16(dat));
+}
+
+
+#include "catalog/pg_statistic_ext.h"
+
+static inline int16
+getStxstattarget_compat(HeapTuple tup)
+{
+	bool isnull;
+	Datum dat = SysCacheGetAttr(STATEXTOID, tup,
+								Anum_pg_statistic_ext_stxstattarget, &isnull);
+	return (isnull ? -1 : DatumGetInt16(dat));
+}
+
+
+#define getAlterStatsStxstattarget_compat(a) ((Node *) makeInteger(a))
+#define getIntStxstattarget_compat(a) (intVal(a))
+
+#define WaitEventSetTracker_compat CurrentResourceOwner
+
+#define identitySequenceRelation_compat(a) (a)
+
+#define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
+
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
+									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
+																  i, j, k)
+
+#define getProcNo_compat(a) (a->vxid.procNumber)
+#define getLxid_compat(a) (a->vxid.lxid)
+
+#else
+
+#include "access/htup_details.h"
+static inline int32
+getAttstattarget_compat(HeapTuple attTuple)
+{
+	return ((Form_pg_attribute) GETSTRUCT(attTuple))->attstattarget;
+}
+
+
+#include "catalog/pg_statistic_ext.h"
+static inline int32
+getStxstattarget_compat(HeapTuple tup)
+{
+	return ((Form_pg_statistic_ext) GETSTRUCT(tup))->stxstattarget;
+}
+
+
+#define getAlterStatsStxstattarget_compat(a) (a)
+#define getIntStxstattarget_compat(a) (a)
+
+#define WaitEventSetTracker_compat CurrentMemoryContext
+
+#define identitySequenceRelation_compat(a) (RelationGetRelid(a))
+
+#define matched_compat(a) (a->matched)
+
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
+									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
+																  i, k)
+
+#define getProcNo_compat(a) (a->pgprocno)
+#define getLxid_compat(a) (a->lxid)
+
+#define COLLPROVIDER_BUILTIN 'b'
+
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_16
 
 #include "utils/guc_tables.h"

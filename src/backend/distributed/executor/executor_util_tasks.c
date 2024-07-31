@@ -163,7 +163,7 @@ bool
 TaskListCannotBeExecutedInTransaction(List *taskList)
 {
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (task->cannotBeExecutedInTransaction)
 		{
@@ -190,7 +190,7 @@ SelectForUpdateOnReferenceTable(List *taskList)
 
 	Task *task = (Task *) linitial(taskList);
 	RelationRowLock *relationRowLock = NULL;
-	foreach_ptr(relationRowLock, task->relationRowLockList)
+	foreach_declared_ptr(relationRowLock, task->relationRowLockList)
 	{
 		Oid relationId = relationRowLock->relationId;
 
@@ -239,7 +239,7 @@ bool
 ModifiedTableReplicated(List *taskList)
 {
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		int64 shardId = task->anchorShardId;
 

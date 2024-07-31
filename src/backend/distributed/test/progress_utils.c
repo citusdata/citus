@@ -95,7 +95,7 @@ show_progress(PG_FUNCTION_ARGS)
 	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
 
 	ProgressMonitorData *monitor = NULL;
-	foreach_ptr(monitor, monitorList)
+	foreach_declared_ptr(monitor, monitorList)
 	{
 		uint64 *steps = ProgressMonitorSteps(monitor);
 
