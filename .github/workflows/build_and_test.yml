@@ -48,7 +48,7 @@ jobs:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
@@ -125,7 +125,7 @@ jobs:
     - name: Build
       run: "./ci/build-citus.sh"
       shell: bash
-    - uses: actions/upload-artifact@v3.1.1
+    - uses: actions/upload-artifact@v4
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
@@ -284,10 +284,12 @@ jobs:
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: arbitrary_config_logs_pg_${{ fromJson(matrix.pg_version).major }}_${{ matrix.parallel }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ fromJson(matrix.pg_version).major }}_arbitrary_configs_${{ matrix.parallel }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
@@ -335,6 +337,8 @@ jobs:
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade_logs
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
@@ -383,7 +387,7 @@ jobs:
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: pg${{ fromJson(needs.params.outputs.pg14_version).major }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
     if: always()
@@ -399,10 +403,11 @@ jobs:
       - test-citus-upgrade
       - test-pg-upgrade
     steps:
-      - uses: actions/download-artifact@v3.0.1
+      - uses: actions/download-artifact@v4
         with:
-          name: "codeclimate"
-          path: "codeclimate"
+          path: codeclimate
+          pattern: codeclimate-*
+          merge-multiple: true
       - name: Upload coverage results to Code Climate
         run: |-
           cc-test-reporter sum-coverage codeclimate/*.json -o total.json
@@ -528,4 +533,5 @@ jobs:
         done
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
+      # TODO this section also needs a with.folder based on the matrix
       if: always()
