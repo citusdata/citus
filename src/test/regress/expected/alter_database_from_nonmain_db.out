@@ -1,0 +1,607 @@
+SET citus.superuser TO 'postgres';
+set citus.enable_create_database_propagation=on;
+create database test_alter_db_from_nonmain_db;
+create database "altered_database!'2";
+reset citus.enable_create_database_propagation;
+\c regression;
+set citus.enable_create_database_propagation=on;
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
+\c - - - :worker_1_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
+\c - - - :worker_2_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE "ts-needs\!escape2" LOCATION :'alter_db_tablespace';
+-- Below tests test the ALTER DATABASE command from main and non-main databases
+-- The tests are run on the master and worker nodes to ensure that the command is
+-- executed on all nodes.
+\c test_alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c test_alter_db_from_nonmain_db - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                            result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- In the below tests, we test the ALTER DATABASE ..set tablespace command
+-- repeatedly to ensure that the command does not stuck when executed multiple times
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                            result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "pg_default";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE pg_default
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set tablespace "ts-needs\!escape2";
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET TABLESPACE "ts-needs\!escape2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c test_alter_db_from_nonmain_db - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2"  rename to altered_database_renamed;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RENAME TO altered_database_renamed', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database altered_database_renamed  rename to "altered_database!'2";
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE altered_database_renamed RENAME TO "altered_database!''2"', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" with
+    ALLOW_CONNECTIONS true
+    CONNECTION LIMIT 0
+    IS_TEMPLATE false;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" with
+    ALLOW_CONNECTIONS false
+    CONNECTION LIMIT 1
+    IS_TEMPLATE true;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS false CONNECTION LIMIT 1 IS_TEMPLATE true;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": false, "datconnlimit": 1, "daticulocale": null, "datistemplate": true, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": false, "datconnlimit": 1, "daticulocale": null, "datistemplate": true, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": false, "datconnlimit": 1, "daticulocale": null, "datistemplate": true, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" with
+    ALLOW_CONNECTIONS true
+    CONNECTION LIMIT 0
+    IS_TEMPLATE false;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" WITH ALLOW_CONNECTIONS true CONNECTION LIMIT 0 IS_TEMPLATE false;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression
+create role test_owner_non_main_db;
+\c test_alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+set citus.enable_create_database_propagation=on;
+alter database "altered_database!'2" owner to test_owner_non_main_db;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" OWNER TO test_owner_non_main_db;', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                      result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" owner to CURRENT_USER;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" OWNER TO postgres;', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set default_transaction_read_only = false;
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" owner to test_owner_non_main_db;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO test_owner_non_main_db;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO test_owner_non_main_db;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set default_transaction_read_only = false;
+\c regression - - :master_port
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                      result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c regression - - :master_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" owner to CURRENT_USER;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+set default_transaction_read_only = false;
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+set citus.enable_alter_database_owner to off;
+alter database "altered_database!'2" owner to test_owner_non_main_db;
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                                      result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "test_owner_non_main_db", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+alter database "altered_database!'2" owner to CURRENT_USER;
+SELECT * FROM public.check_database_on_all_nodes($$altered_database!''2$$) ORDER BY node_type;
+      node_type       |                                                                                                                                                                                                                               result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "altered_database!'2", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "ts-needs\\!escape2", "daticurules": null, "datallowconn": true, "datconnlimit": 0, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+reset citus.enable_alter_database_owner;
+\c test_alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set default_transaction_read_only to true;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET default_transaction_read_only = ''true''', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+             name              | setting
+---------------------------------------------------------------------
+ default_transaction_read_only | on
+(1 row)
+
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+             name              | setting
+---------------------------------------------------------------------
+ default_transaction_read_only | on
+(1 row)
+
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+             name              | setting
+---------------------------------------------------------------------
+ default_transaction_read_only | on
+(1 row)
+
+\c test_alter_db_from_nonmain_db
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" reset default_transaction_read_only;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET default_transaction_read_only', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+             name              | setting
+---------------------------------------------------------------------
+ default_transaction_read_only | off
+(1 row)
+
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+             name              | setting
+---------------------------------------------------------------------
+ default_transaction_read_only | off
+(1 row)
+
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='default_transaction_read_only';
+             name              | setting
+---------------------------------------------------------------------
+ default_transaction_read_only | off
+(1 row)
+
+\c test_alter_db_from_nonmain_db - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set log_duration from current;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET log_duration FROM CURRENT', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set log_duration to DEFAULT;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET log_duration TO DEFAULT', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" set log_duration = true;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" SET log_duration = ''true''', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='log_duration';
+     name     | setting
+---------------------------------------------------------------------
+ log_duration | on
+(1 row)
+
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='log_duration';
+     name     | setting
+---------------------------------------------------------------------
+ log_duration | on
+(1 row)
+
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='log_duration';
+     name     | setting
+---------------------------------------------------------------------
+ log_duration | on
+(1 row)
+
+\c test_alter_db_from_nonmain_db - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" RESET log_duration;
+NOTICE:  issuing SELECT citus_internal.execute_command_on_remote_nodes_as_user('ALTER DATABASE "altered_database!''2" RESET log_duration', 'postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='log_duration';
+     name     | setting
+---------------------------------------------------------------------
+ log_duration | off
+(1 row)
+
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='log_duration';
+     name     | setting
+---------------------------------------------------------------------
+ log_duration | off
+(1 row)
+
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='log_duration';
+     name     | setting
+---------------------------------------------------------------------
+ log_duration | off
+(1 row)
+
+\c regression - - :worker_2_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set statement_timeout = 1000;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout = 1000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout = 1000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+       name        | setting
+---------------------------------------------------------------------
+ statement_timeout | 1000
+(1 row)
+
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+       name        | setting
+---------------------------------------------------------------------
+ statement_timeout | 1000
+(1 row)
+
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+       name        | setting
+---------------------------------------------------------------------
+ statement_timeout | 1000
+(1 row)
+
+\c regression - - :worker_1_port
+set citus.log_remote_commands = true;
+set citus.grep_remote_commands = "%ALTER DATABASE%";
+alter database "altered_database!'2" set statement_timeout to DEFAULT;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout TO DEFAULT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" SET statement_timeout TO DEFAULT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+alter database "altered_database!'2" RESET statement_timeout;
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET statement_timeout
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE "altered_database!'2" RESET statement_timeout
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+\c "altered_database!'2" - - :master_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+       name        | setting
+---------------------------------------------------------------------
+ statement_timeout | 0
+(1 row)
+
+\c "altered_database!'2" - - :worker_1_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+       name        | setting
+---------------------------------------------------------------------
+ statement_timeout | 0
+(1 row)
+
+\c "altered_database!'2" - - :worker_2_port
+select name,setting from pg_settings
+        where name ='statement_timeout';
+       name        | setting
+---------------------------------------------------------------------
+ statement_timeout | 0
+(1 row)
+
+\c regression
+set citus.enable_create_database_propagation=on;
+drop database "altered_database!'2";
+drop database test_alter_db_from_nonmain_db;
+reset citus.enable_create_database_propagation;
+drop role test_owner_non_main_db;
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  drop tablespace "ts-needs\!escape2"
+  $$
+);
+     result
+---------------------------------------------------------------------
+ DROP TABLESPACE
+ DROP TABLESPACE
+ DROP TABLESPACE
+(3 rows)
+

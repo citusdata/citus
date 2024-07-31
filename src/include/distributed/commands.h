@@ -234,6 +234,8 @@ extern List * PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 extern List * PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);
+extern List * PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
+											   ProcessUtilityContext processUtilityContext);
 extern List * GetDatabaseMetadataSyncCommands(Oid dbOid);
 
 
@@ -256,6 +258,7 @@ extern List * PreprocessAlterDatabaseRenameStmt(Node *node, const char *queryStr
 extern List * PostprocessAlterDatabaseRenameStmt(Node *node, const char *queryString);
 extern void EnsureSupportedCreateDatabaseCommand(CreatedbStmt *stmt);
 extern char * CreateDatabaseDDLCommand(Oid dbId);
+extern bool IsSetTablespaceStatement(AlterDatabaseStmt *stmt);
 
 
 /* domain.c - forward declarations */

@@ -69,3 +69,20 @@ DROP TABLE test_dist;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 30;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 18;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 83;
+-- enable ddl propagation in all nodes
+SELECT result from  run_command_on_all_nodes('ALTER SYSTEM SET citus.enable_ddl_propagation TO ON');
+    result
+---------------------------------------------------------------------
+ ALTER SYSTEM
+ ALTER SYSTEM
+ ALTER SYSTEM
+(3 rows)
+
+SELECT result from  run_command_on_all_nodes('SELECT pg_reload_conf()');
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
