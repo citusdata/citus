@@ -4753,11 +4753,14 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 	if (workerLimitNode != NULL && limitOffset != NULL)
 	{
 		Const *workerLimitConst = (Const *) workerLimitNode;
+
+		/* Only update the worker limit if the const is not null.*/
 		if (!workerLimitConst->constisnull)
 		{
-			/* Only update the worker limit if the const is not null.*/
 			Const *workerOffsetConst = (Const *) limitOffset;
 			int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
+
+			/* If the offset is null, it defaults to 0 when cast to int64. */
 			int64 workerOffsetCount = DatumGetInt64(workerOffsetConst->constvalue);
 			workerLimitCount = workerLimitCount + workerOffsetCount;
 			workerLimitNode = (Node *) MakeIntegerConstInt64(workerLimitCount);

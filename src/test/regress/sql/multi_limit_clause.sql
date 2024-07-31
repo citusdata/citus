@@ -236,6 +236,11 @@ SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET 
 
 SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET null LIMIT 1;
 
+-- check if we can correctly push the limit when it is all
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 2 LIMIT all;
+
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 2 OFFSET 2 LIMIT all;
+
 SET client_min_messages TO NOTICE;
 
 -- non constants should not push down
