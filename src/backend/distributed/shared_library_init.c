@@ -1845,6 +1845,19 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.maintenance_connection_pool_timeout",
+		gettext_noop(
+			"Timeout for acquiring a connection from a maintenance shared pool size. "
+			"Applicable only when the maintenance pool is enabled via citus.max_maintenance_shared_pool_size. "
+			"Setting it to 0 or -1 disables the timeout"),
+		NULL,
+		&MaintenanceConnectionPoolTimeout,
+		30 * MS_PER_SECOND, -1, MS_PER_HOUR,
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
 		gettext_noop("Sets the maximum number of connections per worker node used by "
 					 "the adaptive executor to execute a multi-shard command"),
@@ -1934,6 +1947,20 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_databases_per_worker_tracked",
+		gettext_noop("Sets the amount of databases per worker tracked."),
+		gettext_noop(
+			"This configuration value complements the citus.max_worker_nodes_tracked."
+			"It should be used when there are more then one database with Citus in cluster,"
+			"and, effectively, limits the size of the hash table with connections per worker + database."
+			"Currently, it does not affect the connection management logic and serves only statistical purposes."),
+		&MaxDatabasesPerWorkerNodesTracked,
+		1, 1, INT_MAX,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_high_priority_background_processes",
 		gettext_noop("Sets the maximum number of background processes "
 					 "that can have their CPU priority increased at the same "
@@ -1956,6 +1983,18 @@ RegisterCitusConfigVariables(void)
 		1048576, -1, MAX_KILOBYTES,
 		PGC_USERSET,
 		GUC_UNIT_KB | GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_maintenance_shared_pool_size",
+		gettext_noop("Similar to citus.max_shared_pool_size, but applies to connections "
+					 "for maintenance operations only. "
+					 "Setting it to 0 or -1 disables maintenance connection throttling."),
+		NULL,
+		&MaxMaintenanceSharedPoolSize,
+		-1, -1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(

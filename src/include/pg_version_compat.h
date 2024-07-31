@@ -48,8 +48,6 @@ get_guc_variables_compat(int *gucCount)
 
 #define pgstat_fetch_stat_local_beentry(a) pgstat_get_local_beentry_by_index(a)
 
-#define have_createdb_privilege() have_createdb_privilege()
-
 #else
 
 #include "miscadmin.h"
