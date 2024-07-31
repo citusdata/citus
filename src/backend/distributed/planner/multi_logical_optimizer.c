@@ -4753,22 +4753,35 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 	if (workerLimitNode != NULL && limitOffset != NULL)
 	{
 		Const *workerLimitConst = (Const *) workerLimitNode;
-		Const *workerOffsetConst = (Const *) limitOffset;
-		int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
-		int64 workerOffsetCount = DatumGetInt64(workerOffsetConst->constvalue);
 
-		workerLimitCount = workerLimitCount + workerOffsetCount;
-		workerLimitNode = (Node *) MakeIntegerConstInt64(workerLimitCount);
+		/* Only update the worker limit if the const is not null.*/
+		if (!workerLimitConst->constisnull)
+		{
+			Const *workerOffsetConst = (Const *) limitOffset;
+			int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
+
+			/* If the offset is null, it defaults to 0 when cast to int64. */
+			int64 workerOffsetCount = DatumGetInt64(workerOffsetConst->constvalue);
+			workerLimitCount = workerLimitCount + workerOffsetCount;
+			workerLimitNode = (Node *) MakeIntegerConstInt64(workerLimitCount);
+		}
 	}
 
 	/* display debug message on limit push down */
 	if (workerLimitNode != NULL)
 	{
 		Const *workerLimitConst = (Const *) workerLimitNode;
-		int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
+		if (!workerLimitConst->constisnull)
+		{
+			int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
 
-		ereport(DEBUG1, (errmsg("push down of limit count: " INT64_FORMAT,
-								workerLimitCount)));
+			ereport(DEBUG1, (errmsg("push down of limit count: " INT64_FORMAT,
+									workerLimitCount)));
+		}
+		else
+		{
+			ereport(DEBUG1, (errmsg("push down of limit count: ALL")));
+		}
 	}
 
 	return workerLimitNode;
