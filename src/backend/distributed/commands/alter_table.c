@@ -34,6 +34,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_rewrite_d.h"
+#include "commands/comment.h"
 #include "commands/defrem.h"
 #include "executor/spi.h"
 #include "nodes/pg_list.h"
@@ -844,7 +845,6 @@ ConvertTableInternal(TableConversionState *con)
 				 */
 				.cascadeViaForeignKeys = false
 			};
-
 			TableConversionReturn *partitionReturn = con->function(&partitionParam);
 			if (cascadeOption == CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED)
 			{
@@ -1032,7 +1032,6 @@ ConvertTableInternal(TableConversionState *con)
 
 	/* increment command counter so that next command can see the new table */
 	CommandCounterIncrement();
-
 	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 
 	InTableTypeConversionFunctionCall = false;
@@ -1782,6 +1781,41 @@ CreateMaterializedViewDDLCommand(Oid matViewOid)
 
 
 /*
+ * MigrateColumnComments migrates distributed table column comments to the target undistributed table columns.
+ */
+static void
+MigrateColumnComments(Oid sourceId, Oid targetId)
+{
+	Relation relation = relation_open(sourceId, AccessShareLock);
+	TupleDesc tupleDesc = RelationGetDescr(relation);
+	for (int attrNum = 0; attrNum < tupleDesc->natts; attrNum++)
+	{
+		Form_pg_attribute attr = TupleDescAttr(tupleDesc, attrNum);
+		if (!attr->attisdropped)
+		{
+			char *columnComment = GetComment(sourceId, RelationRelationId, attrNum + 1);
+			CreateComments(targetId, RelationRelationId, attrNum + 1, columnComment);
+		}
+	}
+	relation_close(relation, AccessShareLock);
+}
+
+
+/*
+ * MigrateTableComment migrates the comment of the source distributed table to the target undistributed table.
+ */
+static void
+MigrateTableComment(Oid sourceId, Oid targetId)
+{
+	char *comment = GetComment(sourceId, RelationRelationId, 0);
+	if (comment != NULL)
+	{
+		CreateComments(targetId, RelationRelationId, 0, comment);
+	}
+}
+
+
+/*
  * ReplaceTable replaces the source table with the target table.
  * It moves all the rows of the source table to target table with INSERT SELECT.
  * Changes the dependencies of the sequences owned by source table to target table.
@@ -1796,7 +1830,6 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	char *sourceName = get_rel_name(sourceId);
 	char *qualifiedSourceName = generate_qualified_relation_name(sourceId);
 	char *qualifiedTargetName = generate_qualified_relation_name(targetId);
-
 	StringInfo query = makeStringInfo();
 
 	if (!PartitionedTable(sourceId) && !IsForeignTable(sourceId))
@@ -1814,6 +1847,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 			 */
 			appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
 							 qualifiedTargetName, qualifiedSourceName);
+			MigrateColumnComments(sourceId, targetId);
 		}
 		else
 		{
@@ -1833,6 +1867,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		}
 
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
+		MigrateColumnComments(sourceId, targetId);
 	}
 
 	/*
@@ -1882,6 +1917,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		ereport(NOTICE, (errmsg("dropping the old %s", qualifiedSourceName)));
 	}
+
+	MigrateTableComment(sourceId, targetId);
 
 	resetStringInfo(query);
 	appendStringInfo(query, "DROP %sTABLE %s CASCADE",
