@@ -132,6 +132,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	char *schemaName = get_namespace_name(collnamespace);
 	*quotedCollationName = quote_qualified_identifier(schemaName, collname);
 	const char *providerString =
+		collprovider == COLLPROVIDER_BUILTIN ? "builtin" :
 		collprovider == COLLPROVIDER_DEFAULT ? "default" :
 		collprovider == COLLPROVIDER_ICU ? "icu" :
 		collprovider == COLLPROVIDER_LIBC ? "libc" : NULL;
