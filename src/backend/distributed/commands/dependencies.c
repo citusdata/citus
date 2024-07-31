@@ -44,7 +44,8 @@ static int ObjectAddressComparator(const void *a, const void *b);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static void EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 												   RequiredObjectSet requiredObjectSet);
-static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
+static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency, bool
+											 fetchGrantStatements);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
 
@@ -164,7 +165,7 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	ObjectAddress *object = NULL;
 	foreach_ptr(object, objectsToBeCreated)
 	{
-		List *dependencyCommands = GetDependencyCreateDDLCommands(object);
+		List *dependencyCommands = GetDependencyCreateDDLCommands(object, true);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
 
 		/* create a new list with objects that actually created commands */
@@ -432,7 +433,7 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
 		 * in nodes, but we utilize logic it follows to choose the objects that could
 		 * be distributed
 		 */
-		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
+		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency, true);
 
 		/* create a new list with dependencies that actually created commands */
 		if (list_length(dependencyCommands) > 0)
@@ -465,7 +466,7 @@ DropTableIfExistsCommand(Oid relationId)
  * commands to execute on a worker to create the object.
  */
 static List *
-GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
+GetDependencyCreateDDLCommands(const ObjectAddress *dependency, bool fetchGrantStatements)
 {
 	switch (getObjectClass(dependency))
 	{
@@ -605,7 +606,8 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 		case OCLASS_ROLE:
 		{
-			return GenerateCreateOrAlterRoleCommand(dependency->objectId);
+			return GenerateCreateOrAlterRoleCommand(dependency->objectId,
+													fetchGrantStatements);
 		}
 
 		case OCLASS_SCHEMA:
@@ -680,15 +682,16 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 List *
 GetAllDependencyCreateDDLCommands(const List *dependencies)
 {
-	List *commands = NIL;
+	List *ddlCommands = NIL;
 
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
-		commands = list_concat(commands, GetDependencyCreateDDLCommands(dependency));
+		ddlCommands = list_concat(ddlCommands, GetDependencyCreateDDLCommands(dependency,
+																			  false));
 	}
 
-	return commands;
+	return ddlCommands;
 }
 
 
