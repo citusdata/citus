@@ -75,11 +75,11 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 
 \c - - - :master_port
 
-create role test_admin_role;
-
 -- test grants with distributed and non-distributed roles
 
 SELECT master_remove_node('localhost', :worker_2_port);
+
+create role test_admin_role;
 
 CREATE ROLE dist_role_1 SUPERUSER;
 CREATE ROLE dist_role_2;
