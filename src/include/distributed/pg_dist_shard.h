@@ -59,5 +59,6 @@ typedef FormData_pg_dist_shard *Form_pg_dist_shard;
 #define SHARD_STORAGE_TABLE 't'
 #define SHARD_STORAGE_VIRTUAL 'v'
 
+extern bool EnableSingleShardTableMultiNodePlacement;
 
 #endif   /* PG_DIST_SHARD_H */

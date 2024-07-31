@@ -466,3 +466,52 @@ select create_reference_table('temp_table');
 ERROR:  cannot distribute a temporary table
 DROP TABLE temp_table;
 DROP TABLE shard_count_table_3;
+-- test shard count 1 placement with colocate none.
+-- create a base table instance
+set citus.enable_single_shard_table_multi_node_placement to on;
+CREATE TABLE shard_count_table_1_inst_1 (a int);
+SELECT create_distributed_table('shard_count_table_1_inst_1', 'a', shard_count:=1, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- create another table with similar requirements
+CREATE TABLE shard_count_table_1_inst_2 (a int);
+SELECT create_distributed_table('shard_count_table_1_inst_2', 'a', shard_count:=1, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Now check placement:
+SELECT (SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_count_table_1_inst_1'::regclass) != (SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_count_table_1_inst_2'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- double check shard counts
+SELECT (SELECT shard_count FROM citus_tables WHERE table_name = 'shard_count_table_1_inst_1'::regclass) = (SELECT shard_count FROM citus_tables WHERE table_name = 'shard_count_table_1_inst_2'::regclass);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT shard_count = 1 FROM citus_tables WHERE table_name = 'shard_count_table_1_inst_1'::regclass;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- check placement: These should be placed on different workers.
+SELECT nodename || ':' || nodeport AS inst_1_node_endpoint FROM citus_shards WHERE table_name = 'shard_count_table_1_inst_1'::regclass \gset
+SELECT nodename || ':' || nodeport AS inst_2_node_endpoint FROM citus_shards WHERE table_name = 'shard_count_table_1_inst_2'::regclass \gset
+SELECT :'inst_1_node_endpoint', :'inst_2_node_endpoint', :'inst_1_node_endpoint' = :'inst_2_node_endpoint';
+    ?column?     |    ?column?     | ?column?
+---------------------------------------------------------------------
+ localhost:xxxxx | localhost:xxxxx | f
+(1 row)
+
+DROP TABLE shard_count_table_1_inst_1;
+DROP TABLE shard_count_table_1_inst_2;

@@ -774,15 +774,64 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	ORDER BY 1,2 LIMIT 3;
-DEBUG:  Creating router plan
-DEBUG:  query has a single distribution column value: 10
- first_author | second_word_count
----------------------------------------------------------------------
-           10 |             19519
-           10 |             19519
-           10 |             19519
-(3 rows)
-
+DEBUG:  found no worker with all shard placements
+DEBUG:  push down of limit count: 3
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 0 and 4
+DEBUG:  join prunable for task partitionId 0 and 5
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 1 and 4
+DEBUG:  join prunable for task partitionId 1 and 5
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 2 and 4
+DEBUG:  join prunable for task partitionId 2 and 5
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  join prunable for task partitionId 3 and 4
+DEBUG:  join prunable for task partitionId 3 and 5
+DEBUG:  join prunable for task partitionId 4 and 0
+DEBUG:  join prunable for task partitionId 4 and 1
+DEBUG:  join prunable for task partitionId 4 and 2
+DEBUG:  join prunable for task partitionId 4 and 3
+DEBUG:  join prunable for task partitionId 4 and 5
+DEBUG:  join prunable for task partitionId 5 and 0
+DEBUG:  join prunable for task partitionId 5 and 1
+DEBUG:  join prunable for task partitionId 5 and 2
+DEBUG:  join prunable for task partitionId 5 and 3
+DEBUG:  join prunable for task partitionId 5 and 4
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 2
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 4
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 14
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 17
+DETAIL:  Creating dependency on merge taskId 12
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 SET citus.enable_non_colocated_router_query_pushdown TO OFF;
 -- but this is not the case otherwise
 SELECT a.author_id as first_author, b.word_count as second_word_count
