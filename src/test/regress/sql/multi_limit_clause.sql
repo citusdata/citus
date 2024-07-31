@@ -222,6 +222,25 @@ SELECT
 	ORDER BY 2 DESC, 1
 	LIMIT 5;
 
+-- check if we can correctly push the limit when it is null
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey LIMIT null;
+
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET 1 LIMIT null;
+
+SELECT count(*) FROM lineitem LIMIT null;
+
+SELECT count(*) FROM lineitem OFFSET 0 LIMIT null;
+
+-- check if we push the right limit when both offset and limit are given
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET 1 LIMIT 3;
+
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 3 ORDER BY l_orderkey OFFSET null LIMIT 1;
+
+-- check if we can correctly push the limit when it is all
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 2 LIMIT all;
+
+SELECT l_orderkey FROM lineitem WHERE l_orderkey < 2 OFFSET 2 LIMIT all;
+
 SET client_min_messages TO NOTICE;
 
 -- non constants should not push down
