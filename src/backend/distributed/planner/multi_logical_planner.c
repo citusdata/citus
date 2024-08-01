@@ -1414,7 +1414,7 @@ IsJoinClause(Node *clause)
 	}
 	Var *initialVar = castNode(Var, linitial(varList));
 
-	foreach_ptr(var, varList)
+	foreach_declared_ptr(var, varList)
 	{
 		if (var->varno != initialVar->varno)
 		{

@@ -154,7 +154,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 	Assert(dropTableStatement->removeType == OBJECT_TABLE);
 
 	List *tableNameList = NULL;
-	foreach_ptr(tableNameList, dropTableStatement->objects)
+	foreach_declared_ptr(tableNameList, dropTableStatement->objects)
 	{
 		RangeVar *tableRangeVar = makeRangeVarFromNameList(tableNameList);
 		bool missingOK = true;
@@ -202,7 +202,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		Oid partitionRelationId = InvalidOid;
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			char *detachPartitionCommand =
 				GenerateDetachPartitionCommand(partitionRelationId);
@@ -263,7 +263,7 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 			}
 
 			RangeVar *parentRelation = NULL;
-			foreach_ptr(parentRelation, createStatement->inhRelations)
+			foreach_declared_ptr(parentRelation, createStatement->inhRelations)
 			{
 				Oid parentRelationId = RangeVarGetRelid(parentRelation, NoLock,
 														missingOk);
@@ -480,7 +480,7 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 {
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *alterTableCommand = NULL;
-	foreach_ptr(alterTableCommand, commandList)
+	foreach_declared_ptr(alterTableCommand, commandList)
 	{
 		if (alterTableCommand->subtype == AT_AttachPartition)
 		{
@@ -792,7 +792,7 @@ ChooseForeignKeyConstraintNameAddition(List *columnNames)
 
 	String *columnNameString = NULL;
 
-	foreach_ptr(columnNameString, columnNames)
+	foreach_declared_ptr(columnNameString, columnNames)
 	{
 		const char *name = strVal(columnNameString);
 
@@ -1314,7 +1314,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	AlterTableCmd *newCmd = makeNode(AlterTableCmd);
 
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -1418,7 +1418,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			List *columnConstraints = columnDefinition->constraints;
 
 			Constraint *constraint = NULL;
-			foreach_ptr(constraint, columnConstraints)
+			foreach_declared_ptr(constraint, columnConstraints)
 			{
 				if (constraint->contype == CONSTR_FOREIGN)
 				{
@@ -1442,7 +1442,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				deparseAT = true;
 
 				constraint = NULL;
-				foreach_ptr(constraint, columnConstraints)
+				foreach_declared_ptr(constraint, columnConstraints)
 				{
 					if (ConstrTypeCitusCanDefaultName(constraint->contype))
 					{
@@ -1467,7 +1467,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			 */
 			constraint = NULL;
 			int constraintIdx = 0;
-			foreach_ptr(constraint, columnConstraints)
+			foreach_declared_ptr(constraint, columnConstraints)
 			{
 				if (constraint->contype == CONSTR_DEFAULT)
 				{
@@ -1696,7 +1696,7 @@ DeparserSupportsAlterTableAddColumn(AlterTableStmt *alterTableStatement,
 	{
 		ColumnDef *columnDefinition = (ColumnDef *) addColumnSubCommand->def;
 		Constraint *constraint = NULL;
-		foreach_ptr(constraint, columnDefinition->constraints)
+		foreach_declared_ptr(constraint, columnDefinition->constraints)
 		{
 			if (constraint->contype == CONSTR_CHECK)
 			{
@@ -1792,7 +1792,7 @@ static bool
 RelationIdListContainsCitusTableType(List *relationIdList, CitusTableType citusTableType)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (IsCitusTableType(relationId, citusTableType))
 		{
@@ -1812,7 +1812,7 @@ static bool
 RelationIdListContainsPostgresTable(List *relationIdList)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (OidIsValid(relationId) && !IsCitusTable(relationId))
 		{
@@ -1851,7 +1851,7 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 	 * change in below loop due to CreateCitusLocalTable.
 	 */
 	RangeVar *relationRangeVar;
-	foreach_ptr(relationRangeVar, relationRangeVarList)
+	foreach_declared_ptr(relationRangeVar, relationRangeVarList)
 	{
 		List *commandList = alterTableStatement->cmds;
 		LOCKMODE lockMode = AlterTableGetLockLevel(commandList);
@@ -1979,7 +1979,7 @@ RangeVarListHasLocalRelationConvertedByUser(List *relationRangeVarList,
 											AlterTableStmt *alterTableStatement)
 {
 	RangeVar *relationRangeVar;
-	foreach_ptr(relationRangeVar, relationRangeVarList)
+	foreach_declared_ptr(relationRangeVar, relationRangeVarList)
 	{
 		/*
 		 * Here we iterate the relation list, and if at least one of the relations
@@ -2076,7 +2076,7 @@ GetAlterTableAddFKeyConstraintList(AlterTableStmt *alterTableStatement)
 
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		List *commandForeignKeyConstraintList =
 			GetAlterTableCommandFKeyConstraintList(command);
@@ -2116,7 +2116,7 @@ GetAlterTableCommandFKeyConstraintList(AlterTableCmd *command)
 		List *columnConstraints = columnDefinition->constraints;
 
 		Constraint *constraint = NULL;
-		foreach_ptr(constraint, columnConstraints)
+		foreach_declared_ptr(constraint, columnConstraints)
 		{
 			if (constraint->contype == CONSTR_FOREIGN)
 			{
@@ -2139,7 +2139,7 @@ GetRangeVarListFromFKeyConstraintList(List *fKeyConstraintList)
 	List *rightRelationRangeVarList = NIL;
 
 	Constraint *fKeyConstraint = NULL;
-	foreach_ptr(fKeyConstraint, fKeyConstraintList)
+	foreach_declared_ptr(fKeyConstraint, fKeyConstraintList)
 	{
 		RangeVar *rightRelationRangeVar = fKeyConstraint->pktable;
 		rightRelationRangeVarList = lappend(rightRelationRangeVarList,
@@ -2160,7 +2160,7 @@ GetRelationIdListFromRangeVarList(List *rangeVarList, LOCKMODE lockMode, bool mi
 	List *relationIdList = NIL;
 
 	RangeVar *rangeVar = NULL;
-	foreach_ptr(rangeVar, rangeVarList)
+	foreach_declared_ptr(rangeVar, rangeVarList)
 	{
 		Oid rightRelationId = RangeVarGetRelid(rangeVar, lockMode, missingOk);
 		relationIdList = lappend_oid(relationIdList, rightRelationId);
@@ -2234,7 +2234,7 @@ AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement)
 	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, alterTableStatement->cmds)
+	foreach_declared_ptr(command, alterTableStatement->cmds)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -2296,7 +2296,7 @@ AnyForeignKeyDependsOnIndex(Oid indexId)
 		GetPgDependTuplesForDependingObjects(dependentObjectClassId, dependentObjectId);
 
 	HeapTuple dependencyTuple = NULL;
-	foreach_ptr(dependencyTuple, dependencyTupleList)
+	foreach_declared_ptr(dependencyTuple, dependencyTupleList)
 	{
 		Form_pg_depend dependencyForm = (Form_pg_depend) GETSTRUCT(dependencyTuple);
 		Oid dependingClassId = dependencyForm->classid;
@@ -2484,7 +2484,7 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement,
 	 * shards anyway.
 	 */
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, alterTableStatement->cmds)
+	foreach_declared_ptr(command, alterTableStatement->cmds)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -2565,7 +2565,7 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 	/* then check if any of subcommands drop partition column.*/
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 		if (alterTableType == AT_DropColumn)
@@ -2634,7 +2634,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -2670,7 +2670,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			}
 
 			Constraint *constraint = NULL;
-			foreach_ptr(constraint, columnConstraints)
+			foreach_declared_ptr(constraint, columnConstraints)
 			{
 				if (constraint->conname == NULL &&
 					(constraint->contype == CONSTR_PRIMARY ||
@@ -2690,7 +2690,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			 * that sequence is supported
 			 */
 			constraint = NULL;
-			foreach_ptr(constraint, columnConstraints)
+			foreach_declared_ptr(constraint, columnConstraints)
 			{
 				if (constraint->contype == CONSTR_DEFAULT)
 				{
@@ -2802,7 +2802,7 @@ FixAlterTableStmtIndexNames(AlterTableStmt *alterTableStatement)
 
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -3165,7 +3165,7 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 	List *indexOidList = RelationGetIndexList(relation);
 
 	Oid indexOid = InvalidOid;
-	foreach_oid(indexOid, indexOidList)
+	foreach_declared_oid(indexOid, indexOidList)
 	{
 		Relation indexDesc = index_open(indexOid, RowExclusiveLock);
 		bool hasDistributionColumn = false;
@@ -3310,7 +3310,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 	/* error out if any of the subcommands are unsupported */
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -3385,7 +3385,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 
 					Constraint *columnConstraint = NULL;
-					foreach_ptr(columnConstraint, column->constraints)
+					foreach_declared_ptr(columnConstraint, column->constraints)
 					{
 						if (columnConstraint->contype == CONSTR_IDENTITY)
 						{
@@ -3417,7 +3417,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					List *columnConstraints = column->constraints;
 
 					Constraint *constraint = NULL;
-					foreach_ptr(constraint, columnConstraints)
+					foreach_declared_ptr(constraint, columnConstraints)
 					{
 						if (constraint->contype == CONSTR_DEFAULT)
 						{
@@ -3770,7 +3770,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 		List *columnConstraints = columnDefinition->constraints;
 
 		Constraint *constraint = NULL;
-		foreach_ptr(constraint, columnConstraints)
+		foreach_declared_ptr(constraint, columnConstraints)
 		{
 			if (constraint->contype == CONSTR_FOREIGN)
 			{
@@ -3970,10 +3970,10 @@ SetInterShardDDLTaskPlacementList(Task *task, ShardInterval *leftShardInterval,
 	List *intersectedPlacementList = NIL;
 
 	ShardPlacement *leftShardPlacement = NULL;
-	foreach_ptr(leftShardPlacement, leftShardPlacementList)
+	foreach_declared_ptr(leftShardPlacement, leftShardPlacementList)
 	{
 		ShardPlacement *rightShardPlacement = NULL;
-		foreach_ptr(rightShardPlacement, rightShardPlacementList)
+		foreach_declared_ptr(rightShardPlacement, rightShardPlacementList)
 		{
 			if (leftShardPlacement->nodeId == rightShardPlacement->nodeId)
 			{

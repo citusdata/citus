@@ -174,7 +174,7 @@ static void
 AppendBasicAlterDatabaseOptions(StringInfo buf, AlterDatabaseStmt *stmt)
 {
 	DefElem *def = NULL;
-	foreach_ptr(def, stmt->options)
+	foreach_declared_ptr(def, stmt->options)
 	{
 		DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
 									 alterDatabaseOptionFormats));
@@ -290,7 +290,7 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 					 quote_identifier(stmt->dbname));
 
 	DefElem *option = NULL;
-	foreach_ptr(option, stmt->options)
+	foreach_declared_ptr(option, stmt->options)
 	{
 		DefElemOptionToStatement(buf, option, createDatabaseOptionFormats,
 								 lengthof(createDatabaseOptionFormats));

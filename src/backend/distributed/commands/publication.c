@@ -158,7 +158,7 @@ BuildCreatePublicationStmt(Oid publicationId)
 	List *schemaIds = GetPublicationSchemas(publicationId);
 	Oid schemaId = InvalidOid;
 
-	foreach_oid(schemaId, schemaIds)
+	foreach_declared_oid(schemaId, schemaIds)
 	{
 		char *schemaName = get_namespace_name(schemaId);
 
@@ -181,7 +181,7 @@ BuildCreatePublicationStmt(Oid publicationId)
 	/* mainly for consistent ordering in test output */
 	relationIds = SortList(relationIds, CompareOids);
 
-	foreach_oid(relationId, relationIds)
+	foreach_declared_oid(relationId, relationIds)
 	{
 #if (PG_VERSION_NUM >= PG_VERSION_15)
 		bool tableOnly = false;
@@ -414,7 +414,7 @@ GetAlterPublicationDDLCommandsForTable(Oid relationId, bool isAdd)
 	List *publicationIds = GetRelationPublications(relationId);
 	Oid publicationId = InvalidOid;
 
-	foreach_oid(publicationId, publicationIds)
+	foreach_declared_oid(publicationId, publicationIds)
 	{
 		char *command = GetAlterPublicationTableDDLCommand(publicationId,
 														   relationId, isAdd);

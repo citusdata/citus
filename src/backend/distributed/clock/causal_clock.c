@@ -328,7 +328,7 @@ GetHighestClockInTransaction(List *nodeConnectionList)
 {
 	MultiConnection *connection = NULL;
 
-	foreach_ptr(connection, nodeConnectionList)
+	foreach_declared_ptr(connection, nodeConnectionList)
 	{
 		int querySent =
 			SendRemoteCommand(connection, "SELECT citus_get_node_clock();");
@@ -349,7 +349,7 @@ GetHighestClockInTransaction(List *nodeConnectionList)
 							globalClockValue->counter)));
 
 	/* fetch the results and pick the highest clock value of all the nodes */
-	foreach_ptr(connection, nodeConnectionList)
+	foreach_declared_ptr(connection, nodeConnectionList)
 	{
 		bool raiseInterrupts = true;
 

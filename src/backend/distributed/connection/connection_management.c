@@ -866,7 +866,8 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 		*waitCount = 0;
 	}
 
-	WaitEventSet *waitEventSet = CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
+	WaitEventSet *waitEventSet = CreateWaitEventSet(WaitEventSetTracker_compat,
+													eventSetSize);
 	EnsureReleaseResource((MemoryContextCallbackFunction) (&FreeWaitEventSet),
 						  waitEventSet);
 
@@ -879,7 +880,7 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 	numEventsAdded += 2;
 
 	MultiConnectionPollState *connectionState = NULL;
-	foreach_ptr(connectionState, connections)
+	foreach_declared_ptr(connectionState, connections)
 	{
 		if (numEventsAdded >= eventSetSize)
 		{
@@ -961,7 +962,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 	int waitCount = 0;
 
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, multiConnectionList)
+	foreach_declared_ptr(connection, multiConnectionList)
 	{
 		MultiConnectionPollState *connectionState =
 			palloc0(sizeof(MultiConnectionPollState));
@@ -1160,7 +1161,7 @@ static void
 CloseNotReadyMultiConnectionStates(List *connectionStates)
 {
 	MultiConnectionPollState *connectionState = NULL;
-	foreach_ptr(connectionState, connectionStates)
+	foreach_declared_ptr(connectionState, connectionStates)
 	{
 		MultiConnection *connection = connectionState->connection;
 

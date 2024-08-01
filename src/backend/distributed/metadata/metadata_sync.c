@@ -307,7 +307,7 @@ CreateDependingViewsOnWorkers(Oid relationId)
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	Oid viewOid = InvalidOid;
-	foreach_oid(viewOid, views)
+	foreach_declared_oid(viewOid, views)
 	{
 		if (!ShouldMarkRelationDistributed(viewOid))
 		{
@@ -347,7 +347,7 @@ AddTableToPublications(Oid relationId)
 
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
-	foreach_oid(publicationId, publicationIds)
+	foreach_declared_oid(publicationId, publicationIds)
 	{
 		ObjectAddress *publicationAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*publicationAddress, PublicationRelationId, publicationId);
@@ -818,7 +818,7 @@ NodeListInsertCommand(List *workerNodeList)
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
@@ -946,7 +946,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 
 		char *name = NULL;
 		bool firstInNameLoop = true;
-		foreach_ptr(name, names)
+		foreach_declared_ptr(name, names)
 		{
 			if (!firstInNameLoop)
 			{
@@ -961,7 +961,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 
 		char *arg;
 		bool firstInArgLoop = true;
-		foreach_ptr(arg, args)
+		foreach_declared_ptr(arg, args)
 		{
 			if (!firstInArgLoop)
 			{
@@ -1217,13 +1217,13 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	ShardInterval *shardInterval = NULL;
 	bool firstPlacementProcessed = false;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		List *shardPlacementList = ActiveShardPlacementList(shardId);
 
 		ShardPlacement *placement = NULL;
-		foreach_ptr(placement, shardPlacementList)
+		foreach_declared_ptr(placement, shardPlacementList)
 		{
 			if (firstPlacementProcessed)
 			{
@@ -1257,7 +1257,7 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "WITH shard_data(relationname, shardid, storagetype, "
 					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
 
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		Oid distributedRelationId = shardInterval->relationId;
@@ -1694,7 +1694,7 @@ GetDependentRelationsWithSequence(Oid sequenceOid, char depType)
 		Oid attrDefOid;
 		List *attrDefOids = GetAttrDefsFromSequence(sequenceOid);
 
-		foreach_oid(attrDefOid, attrDefOids)
+		foreach_declared_oid(attrDefOid, attrDefOids)
 		{
 			ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
 			relations = lappend_oid(relations, columnAddress.objectId);
@@ -1890,7 +1890,7 @@ GetDependentFunctionsWithRelation(Oid relationId)
 	table_close(depRel, AccessShareLock);
 
 	ObjectAddress *referencingObject = NULL;
-	foreach_ptr(referencingObject, referencingObjects)
+	foreach_declared_ptr(referencingObject, referencingObjects)
 	{
 		functionOids = list_concat(functionOids,
 								   GetFunctionDependenciesForObjects(referencingObject));
@@ -2771,7 +2771,7 @@ HasMetadataWorkers(void)
 	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		if (workerNode->hasMetadata)
 		{
@@ -2804,7 +2804,7 @@ CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	const char *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
@@ -2857,14 +2857,14 @@ CreateShellTableOnWorkers(Oid relationId)
 														  creatingShellTableOnRemoteNode);
 
 	TableDDLCommand *tableDDLCommand = NULL;
-	foreach_ptr(tableDDLCommand, tableDDLCommands)
+	foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
 	{
 		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
 		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
 	}
 
 	const char *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
@@ -2888,7 +2888,7 @@ CreateTableMetadataOnWorkers(Oid relationId)
 
 	/* send the commands one by one */
 	const char *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
@@ -2912,7 +2912,7 @@ DetachPartitionCommandList(void)
 
 	/* we iterate over all distributed partitioned tables and DETACH their partitions */
 	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
+	foreach_declared_ptr(cacheEntry, distributedTableList)
 	{
 		if (!PartitionedTable(cacheEntry->relationId))
 		{
@@ -2976,7 +2976,7 @@ SyncNodeMetadataToNodesOptional(void)
 	List *syncedWorkerList = NIL;
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
+	foreach_declared_ptr(workerNode, workerList)
 	{
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
@@ -2996,7 +2996,7 @@ SyncNodeMetadataToNodesOptional(void)
 		}
 	}
 
-	foreach_ptr(workerNode, syncedWorkerList)
+	foreach_declared_ptr(workerNode, syncedWorkerList)
 	{
 		SetWorkerColumnOptional(workerNode, Anum_pg_dist_node_metadatasynced,
 								BoolGetDatum(true));
@@ -3041,7 +3041,7 @@ SyncNodeMetadataToNodes(void)
 
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
+	foreach_declared_ptr(workerNode, workerList)
 	{
 		if (workerNode->hasMetadata)
 		{
@@ -3280,7 +3280,7 @@ ShouldInitiateMetadataSync(bool *lockFailure)
 
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
+	foreach_declared_ptr(workerNode, workerList)
 	{
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
@@ -3638,7 +3638,7 @@ EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 			GetFunctionInfo(intervalTypeId, BTREE_AM_OID, BTORDER_PROC);
 
 		HeapTuple shardTuple = NULL;
-		foreach_ptr(shardTuple, distShardTupleList)
+		foreach_declared_ptr(shardTuple, distShardTupleList)
 		{
 			ShardInterval *shardInterval =
 				TupleToShardInterval(shardTuple, distShardTupleDesc,
@@ -3934,7 +3934,7 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 
 	List *shardPlacementList = ShardPlacementList(shardId);
 	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, shardPlacementList)
+	foreach_declared_ptr(shardPlacement, shardPlacementList)
 	{
 		DeleteShardPlacementRow(shardPlacement->placementId);
 	}
@@ -4503,7 +4503,7 @@ SetMetadataSyncNodesFromNodeList(MetadataSyncContext *context, List *nodeList)
 	List *activatedWorkerNodeList = NIL;
 
 	WorkerNode *node = NULL;
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		if (NodeIsPrimary(node))
 		{
@@ -4538,7 +4538,7 @@ EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context)
 	/* establish bare connections to activated worker nodes */
 	List *bareConnectionList = NIL;
 	WorkerNode *node = NULL;
-	foreach_ptr(node, context->activatedWorkerNodeList)
+	foreach_declared_ptr(node, context->activatedWorkerNodeList)
 	{
 		MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
 																	node->workerName,
@@ -5147,7 +5147,7 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 														  ALLOCSET_DEFAULT_SIZES);
 	MemoryContextSwitchTo(commandsContext);
 	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		if (!MetadataSyncCollectsCommands(context))
 		{

@@ -138,7 +138,7 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 		int varno = 0;
 		RangeTblEntry *rangeTableEntry = NULL;
 
-		foreach_ptr(rangeTableEntry, query->rtable)
+		foreach_declared_ptr(rangeTableEntry, query->rtable)
 		{
 			varno++;
 
@@ -376,7 +376,7 @@ DistOpsValidityState(Node *node, const DistributeObjectOps *ops)
 		bool isPostprocess = false;
 		List *objectAddresses = ops->address(node, missingOk, isPostprocess);
 		ObjectAddress *objectAddress = NULL;
-		foreach_ptr(objectAddress, objectAddresses)
+		foreach_declared_ptr(objectAddress, objectAddresses)
 		{
 			if (OidIsValid(objectAddress->objectId))
 			{
@@ -478,7 +478,7 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 	PG_TRY();
 	{
 		Node *object = NULL;
-		foreach_ptr(object, dropStmt->objects)
+		foreach_declared_ptr(object, dropStmt->objects)
 		{
 			Relation rel = NULL;
 			objectAddress = get_object_address(objectType, object,

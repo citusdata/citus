@@ -414,7 +414,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	/* pull up collect nodes and merge duplicate collects */
 	List *collectNodeList = FindNodesOfType(logicalPlanNode, T_MultiCollect);
 	MultiCollect *collectNode = NULL;
-	foreach_ptr(collectNode, collectNodeList)
+	foreach_declared_ptr(collectNode, collectNodeList)
 	{
 		PullUpCollectLoop(collectNode);
 	}
@@ -436,7 +436,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 
 	List *tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
 	MultiTable *tableNode = NULL;
-	foreach_ptr(tableNode, tableNodeList)
+	foreach_declared_ptr(tableNode, tableNodeList)
 	{
 		if (tableNode->relationId == SUBQUERY_RELATION_ID)
 		{
@@ -542,7 +542,7 @@ OrSelectClauseList(List *selectClauseList)
 	List *orSelectClauseList = NIL;
 
 	Node *selectClause = NULL;
-	foreach_ptr(selectClause, selectClauseList)
+	foreach_declared_ptr(selectClause, selectClauseList)
 	{
 		bool orClause = is_orclause(selectClause);
 		if (orClause)
@@ -968,7 +968,7 @@ SelectClauseTableIdList(List *selectClauseList)
 	List *tableIdList = NIL;
 
 	Node *selectClause = NULL;
-	foreach_ptr(selectClause, selectClauseList)
+	foreach_declared_ptr(selectClause, selectClauseList)
 	{
 		List *selectColumnList = pull_var_clause_default(selectClause);
 
@@ -1077,7 +1077,7 @@ TableIdListColumns(List *tableIdList, List *columnList)
 	List *tableColumnList = NIL;
 
 	Var *column = NULL;
-	foreach_ptr(column, columnList)
+	foreach_declared_ptr(column, columnList)
 	{
 		int columnTableId = (int) column->varno;
 
@@ -1103,7 +1103,7 @@ TableIdListSelectClauses(List *tableIdList, List *selectClauseList)
 	List *tableSelectClauseList = NIL;
 
 	Node *selectClause = NULL;
-	foreach_ptr(selectClause, selectClauseList)
+	foreach_declared_ptr(selectClause, selectClauseList)
 	{
 		List *selectColumnList = pull_var_clause_default(selectClause);
 		if (list_length(selectColumnList) == 0)
@@ -1425,7 +1425,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 	/* iterate over original target entries */
 	TargetEntry *originalTargetEntry = NULL;
-	foreach_ptr(originalTargetEntry, targetEntryList)
+	foreach_declared_ptr(originalTargetEntry, targetEntryList)
 	{
 		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
 		Expr *originalExpression = originalTargetEntry->expr;
@@ -1598,7 +1598,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
 
 		TargetEntry *targetEntry;
-		foreach_ptr(targetEntry, aggregate->args)
+		foreach_declared_ptr(targetEntry, aggregate->args)
 		{
 			targetEntry->expr = (Expr *)
 								makeVar(masterTableId, walkerContext->columnId,
@@ -1611,7 +1611,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		aggregate->aggdirectargs = NIL;
 		Expr *directarg;
-		foreach_ptr(directarg, originalAggregate->aggdirectargs)
+		foreach_declared_ptr(directarg, originalAggregate->aggdirectargs)
 		{
 			/*
 			 * Need to replace nodes that contain any Vars with Vars referring
@@ -1662,7 +1662,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		/* determine unique vars that were placed in target list by worker */
 		Var *column = NULL;
-		foreach_ptr(column, varList)
+		foreach_declared_ptr(column, varList)
 		{
 			uniqueVarList = list_append_unique(uniqueVarList, copyObject(column));
 		}
@@ -1672,12 +1672,12 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 * worker query target entry column index.
 		 */
 		Var *columnToUpdate = NULL;
-		foreach_ptr(columnToUpdate, varList)
+		foreach_declared_ptr(columnToUpdate, varList)
 		{
 			int columnIndex = 0;
 
 			Var *currentVar = NULL;
-			foreach_ptr(currentVar, uniqueVarList)
+			foreach_declared_ptr(currentVar, uniqueVarList)
 			{
 				if (equal(columnToUpdate, currentVar))
 				{
@@ -2526,7 +2526,7 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 
 	/* iterate over original target entries */
 	TargetEntry *originalTargetEntry = NULL;
-	foreach_ptr(originalTargetEntry, targetEntryList)
+	foreach_declared_ptr(originalTargetEntry, targetEntryList)
 	{
 		Expr *originalExpression = originalTargetEntry->expr;
 		List *newExpressionList = NIL;
@@ -2733,7 +2733,7 @@ ProcessWindowFunctionPullUpForWorkerQuery(List *windowClause,
 		List *columnList = pull_var_clause_default((Node *) windowClause);
 
 		Expr *newExpression = NULL;
-		foreach_ptr(newExpression, columnList)
+		foreach_declared_ptr(newExpression, columnList)
 		{
 			TargetEntry *newTargetEntry = makeNode(TargetEntry);
 
@@ -2823,7 +2823,7 @@ bool
 TargetListHasAggregates(List *targetEntryList)
 {
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, targetEntryList)
+	foreach_declared_ptr(targetEntry, targetEntryList)
 	{
 		Expr *targetExpr = targetEntry->expr;
 		bool hasAggregates = contain_aggs_of_level((Node *) targetExpr, 0);
@@ -2867,7 +2867,7 @@ ExpandWorkerTargetEntry(List *expressionList, TargetEntry *originalTargetEntry,
 {
 	/* now create target entries for each new expression */
 	Expr *newExpression = NULL;
-	foreach_ptr(newExpression, expressionList)
+	foreach_declared_ptr(newExpression, expressionList)
 	{
 		/* generate and add the new target entry to the target list */
 		TargetEntry *newTargetEntry =
@@ -2904,7 +2904,7 @@ GetNextSortGroupRef(List *targetEntryList)
 
 	/* find max of sort group ref index */
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, targetEntryList)
+	foreach_declared_ptr(targetEntry, targetEntryList)
 	{
 		if (targetEntry->ressortgroupref > nextSortGroupRefIndex)
 		{
@@ -3060,13 +3060,13 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	if (walkerContext->extendedOpNodeProperties->pullUpIntermediateRows)
 	{
 		TargetEntry *targetEntry;
-		foreach_ptr(targetEntry, originalAggregate->args)
+		foreach_declared_ptr(targetEntry, originalAggregate->args)
 		{
 			workerAggregateList = lappend(workerAggregateList, targetEntry->expr);
 		}
 
 		Expr *directarg;
-		foreach_ptr(directarg, originalAggregate->aggdirectargs)
+		foreach_declared_ptr(directarg, originalAggregate->aggdirectargs)
 		{
 			/*
 			 * The worker aggregation should execute any node that contains any
@@ -3099,7 +3099,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		List *columnList = pull_var_clause_default((Node *) aggregate);
 
 		Var *column = NULL;
-		foreach_ptr(column, columnList)
+		foreach_declared_ptr(column, columnList)
 		{
 			workerAggregateList = list_append_unique(workerAggregateList, column);
 		}
@@ -3326,7 +3326,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 				rowExpr->colnames = NIL;
 
 				TargetEntry *arg = NULL;
-				foreach_ptr(arg, originalAggregate->args)
+				foreach_declared_ptr(arg, originalAggregate->args)
 				{
 					rowExpr->args = lappend(rowExpr->args, copyObject(arg->expr));
 				}
@@ -3830,7 +3830,7 @@ HasNonDistributableAggregates(MultiNode *logicalPlanNode)
 								 pull_var_clause(havingQual, PVC_INCLUDE_AGGREGATES));
 
 	Node *expression = NULL;
-	foreach_ptr(expression, expressionList)
+	foreach_declared_ptr(expression, expressionList)
 	{
 		/* only consider aggregate expressions */
 		if (!IsA(expression, Aggref))
@@ -3936,7 +3936,7 @@ DeferErrorIfHasNonDistributableAggregates(MultiNode *logicalPlanNode)
 								 pull_var_clause(havingQual, PVC_INCLUDE_AGGREGATES));
 
 	Node *expression = NULL;
-	foreach_ptr(expression, expressionList)
+	foreach_declared_ptr(expression, expressionList)
 	{
 		/* only consider aggregate expressions */
 		if (!IsA(expression, Aggref))
@@ -4079,7 +4079,7 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 		List *columnList = pull_var_clause_default(aggregateArgument);
 
 		Var *column = NULL;
-		foreach_ptr(column, columnList)
+		foreach_declared_ptr(column, columnList)
 		{
 			if (column->varattno <= 0)
 			{
@@ -4095,7 +4095,7 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 		List *multiTableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
 
 		MultiTable *multiTable = NULL;
-		foreach_ptr(multiTable, multiTableNodeList)
+		foreach_declared_ptr(multiTable, multiTableNodeList)
 		{
 			if (multiTable->relationId == SUBQUERY_RELATION_ID ||
 				multiTable->relationId == SUBQUERY_PUSHDOWN_RELATION_ID)
@@ -4251,7 +4251,7 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 	bool distinctSupported = true;
 
 	MultiTable *tableNode = NULL;
-	foreach_ptr(tableNode, tableNodeList)
+	foreach_declared_ptr(tableNode, tableNodeList)
 	{
 		Oid relationId = tableNode->relationId;
 		bool tableDistinctSupported = false;
@@ -4327,7 +4327,7 @@ GroupedByColumn(List *groupClauseList, List *targetList, Var *column)
 	}
 
 	SortGroupClause *groupClause = NULL;
-	foreach_ptr(groupClause, groupClauseList)
+	foreach_declared_ptr(groupClause, groupClauseList)
 	{
 		TargetEntry *groupTargetEntry = get_sortgroupclause_tle(groupClause, targetList);
 
@@ -4359,7 +4359,7 @@ SubqueryMultiTableList(MultiNode *multiNode)
 	List *multiTableNodeList = FindNodesOfType(multiNode, T_MultiTable);
 
 	MultiTable *multiTable = NULL;
-	foreach_ptr(multiTable, multiTableNodeList)
+	foreach_declared_ptr(multiTable, multiTableNodeList)
 	{
 		Query *subquery = multiTable->subquery;
 
@@ -4383,7 +4383,7 @@ GroupTargetEntryList(List *groupClauseList, List *targetEntryList)
 	List *groupTargetEntryList = NIL;
 
 	SortGroupClause *groupClause = NULL;
-	foreach_ptr(groupClause, groupClauseList)
+	foreach_declared_ptr(groupClause, groupClauseList)
 	{
 		TargetEntry *groupTargetEntry =
 			get_sortgroupclause_tle(groupClause, targetEntryList);
@@ -4585,7 +4585,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		}
 
 		CommonTableExpr *candidateCte = NULL;
-		foreach_ptr(candidateCte, cteList)
+		foreach_declared_ptr(candidateCte, cteList)
 		{
 			if (strcmp(candidateCte->ctename, rangeTableEntry->ctename) == 0)
 			{
@@ -4891,7 +4891,7 @@ HasOrderByAggregate(List *sortClauseList, List *targetList)
 	bool hasOrderByAggregate = false;
 
 	SortGroupClause *sortClause = NULL;
-	foreach_ptr(sortClause, sortClauseList)
+	foreach_declared_ptr(sortClause, sortClauseList)
 	{
 		Node *sortExpression = get_sortgroupclause_expr(sortClause, targetList);
 
@@ -4917,7 +4917,7 @@ HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList)
 	bool hasOrderByNonCommutativeAggregate = false;
 
 	SortGroupClause *sortClause = NULL;
-	foreach_ptr(sortClause, sortClauseList)
+	foreach_declared_ptr(sortClause, sortClauseList)
 	{
 		Node *sortExpression = get_sortgroupclause_expr(sortClause, targetList);
 
@@ -4957,7 +4957,7 @@ HasOrderByComplexExpression(List *sortClauseList, List *targetList)
 	bool hasOrderByComplexExpression = false;
 
 	SortGroupClause *sortClause = NULL;
-	foreach_ptr(sortClause, sortClauseList)
+	foreach_declared_ptr(sortClause, sortClauseList)
 	{
 		Node *sortExpression = get_sortgroupclause_expr(sortClause, targetList);
 
@@ -4999,7 +4999,7 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
 	Oid hllTypeId = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
 
 	SortGroupClause *sortClause = NULL;
-	foreach_ptr(sortClause, sortClauseList)
+	foreach_declared_ptr(sortClause, sortClauseList)
 	{
 		Node *sortExpression = get_sortgroupclause_expr(sortClause, targetList);
 
@@ -5083,12 +5083,12 @@ IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses)
 	}
 
 	SortGroupClause *groupClause = NULL;
-	foreach_ptr(groupClause, groupClauses)
+	foreach_declared_ptr(groupClause, groupClauses)
 	{
 		bool isFound = false;
 
 		SortGroupClause *distinctClause = NULL;
-		foreach_ptr(distinctClause, distinctClauses)
+		foreach_declared_ptr(distinctClause, distinctClauses)
 		{
 			if (groupClause->tleSortGroupRef == distinctClause->tleSortGroupRef)
 			{

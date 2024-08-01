@@ -74,7 +74,7 @@ SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *nodeUser
 
 	/* run commands serially */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -147,7 +147,7 @@ void
 SendCommandListToWorkersWithMetadata(List *commands)
 {
 	char *command = NULL;
-	foreach_ptr(command, commands)
+	foreach_declared_ptr(command, commands)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
@@ -193,7 +193,7 @@ void
 SendCommandListToRemoteNodesWithMetadata(List *commands)
 {
 	char *command = NULL;
-	foreach_ptr(command, commands)
+	foreach_declared_ptr(command, commands)
 	{
 		SendCommandToRemoteNodesWithMetadata(command);
 	}
@@ -253,7 +253,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	List *result = NIL;
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES ||
 			 targetWorkerSet == REMOTE_METADATA_NODES ||
@@ -314,7 +314,7 @@ SendBareCommandListToMetadataNodesInternal(List *commandList,
 
 	/* run commands serially */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -327,7 +327,7 @@ SendBareCommandListToMetadataNodesInternal(List *commandList,
 
 		/* iterate over the commands and execute them in the same connection */
 		const char *commandString = NULL;
-		foreach_ptr(commandString, commandList)
+		foreach_declared_ptr(commandString, commandList)
 		{
 			ExecuteCriticalRemoteCommand(workerConnection, commandString);
 		}
@@ -380,7 +380,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -408,7 +408,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 
 	/* send commands in parallel */
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		int querySent = SendRemoteCommandParams(connection, command, parameterCount,
 												parameterTypes, parameterValues, false);
@@ -419,7 +419,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	}
 
 	/* get results */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		PGresult *result = GetRemoteCommandResult(connection, true);
 		if (!IsResponseOK(result))
@@ -490,7 +490,7 @@ SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *workerC
 
 	/* iterate over the commands and execute them in the same connection */
 	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
+	foreach_declared_ptr(commandString, commandList)
 	{
 		ExecuteCriticalRemoteCommand(workerConnection, commandString);
 	}
@@ -531,7 +531,7 @@ SendCommandListToWorkerListWithBareConnections(List *workerConnectionList,
 
 	/* send commands in parallel */
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, workerConnectionList)
+	foreach_declared_ptr(connection, workerConnectionList)
 	{
 		int querySent = SendRemoteCommand(connection, stringToSend);
 		if (querySent == 0)
@@ -541,7 +541,7 @@ SendCommandListToWorkerListWithBareConnections(List *workerConnectionList,
 	}
 
 	bool failOnError = true;
-	foreach_ptr(connection, workerConnectionList)
+	foreach_declared_ptr(connection, workerConnectionList)
 	{
 		ClearResults(connection, failOnError);
 	}
@@ -571,7 +571,7 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
 	List *connectionList = NIL;
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -608,7 +608,7 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
 	/* send commands in parallel */
 	bool failOnError = true;
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		int querySent = SendRemoteCommand(connection, stringToSend);
 		if (querySent == 0)
@@ -617,7 +617,7 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
 		}
 	}
 
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		ClearResults(connection, failOnError);
 	}
@@ -646,7 +646,7 @@ SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 	/* iterate over the commands and execute them in the same connection */
 	bool failed = false;
 	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
+	foreach_declared_ptr(commandString, commandList)
 	{
 		if (ExecuteOptionalRemoteCommand(workerConnection, commandString, NULL) != 0)
 		{
@@ -722,7 +722,7 @@ SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(const char *node
 
 	/* iterate over the commands and execute them in the same connection */
 	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
+	foreach_declared_ptr(commandString, commandList)
 	{
 		if (ExecuteOptionalRemoteCommand(workerConnection, commandString, NULL) !=
 			RESPONSE_OKAY)
@@ -757,7 +757,7 @@ static void
 ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 {
 	WorkerNode *metadataNode = NULL;
-	foreach_ptr(metadataNode, metadataNodeList)
+	foreach_declared_ptr(metadataNode, metadataNodeList)
 	{
 		Assert(metadataNode->hasMetadata);
 

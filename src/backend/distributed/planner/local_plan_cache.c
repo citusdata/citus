@@ -244,7 +244,7 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 
 	int32 localGroupId = GetLocalGroupId();
 
-	foreach_ptr(localPlannedStatement, cachedPlanList)
+	foreach_declared_ptr(localPlannedStatement, cachedPlanList)
 	{
 		if (localPlannedStatement->shardId == task->anchorShardId &&
 			localPlannedStatement->localGroupId == localGroupId)

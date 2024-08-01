@@ -1424,8 +1424,13 @@ ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode, int timeout,
 
 
 static bool
-columnar_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
+columnar_scan_analyze_next_block(TableScanDesc scan,
+#if PG_VERSION_NUM >= PG_VERSION_17
+								 ReadStream *stream)
+#else
+								 BlockNumber blockno,
 								 BufferAccessStrategy bstrategy)
+#endif
 {
 	/*
 	 * Our access method is not pages based, i.e. tuples are not confined
@@ -3083,7 +3088,7 @@ DefElem *
 GetExtensionOption(List *extensionOptions, const char *defname)
 {
 	DefElem *defElement = NULL;
-	foreach_ptr(defElement, extensionOptions)
+	foreach_declared_ptr(defElement, extensionOptions)
 	{
 		if (IsA(defElement, DefElem) &&
 			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)

@@ -118,7 +118,7 @@ AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,
 		 * Check whether there are objects to propagate, mainly to know whether
 		 * we should include "FOR".
 		 */
-		foreach_ptr(publicationObject, stmt->pubobjects)
+		foreach_declared_ptr(publicationObject, stmt->pubobjects)
 		{
 			if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE)
 			{
@@ -156,7 +156,7 @@ AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,
 		 * Check whether there are tables to propagate, mainly to know whether
 		 * we should include "FOR".
 		 */
-		foreach_ptr(rangeVar, stmt->tables)
+		foreach_declared_ptr(rangeVar, stmt->tables)
 		{
 			if (includeLocalTables || IsCitusTableRangeVar(rangeVar, NoLock, false))
 			{
@@ -198,7 +198,7 @@ AppendPublicationObjects(StringInfo buf, List *publicationObjects,
 	PublicationObjSpec *publicationObject = NULL;
 	bool appendedObject = false;
 
-	foreach_ptr(publicationObject, publicationObjects)
+	foreach_declared_ptr(publicationObject, publicationObjects)
 	{
 		if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE)
 		{
@@ -334,7 +334,7 @@ AppendTables(StringInfo buf, List *tables, bool includeLocalTables)
 	RangeVar *rangeVar = NULL;
 	bool appendedObject = false;
 
-	foreach_ptr(rangeVar, tables)
+	foreach_declared_ptr(rangeVar, tables)
 	{
 		if (!includeLocalTables &&
 			!IsCitusTableRangeVar(rangeVar, NoLock, false))

@@ -987,7 +987,7 @@ MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 
 	List *commandList = NIL;
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, context->activatedWorkerNodeList)
+	foreach_declared_ptr(workerNode, context->activatedWorkerNodeList)
 	{
 		/*
 		 * We need to prevent self deadlock when we access pg_dist_node using separate
@@ -1020,7 +1020,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 		List *updatedActivatedNodeList = NIL;
 
 		WorkerNode *node = NULL;
-		foreach_ptr(node, context->activatedWorkerNodeList)
+		foreach_declared_ptr(node, context->activatedWorkerNodeList)
 		{
 			node = SetWorkerColumnLocalOnly(node, Anum_pg_dist_node_isactive,
 											BoolGetDatum(true));
@@ -1039,7 +1039,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 	if (!localOnly && EnableMetadataSync)
 	{
 		WorkerNode *node = NULL;
-		foreach_ptr(node, context->activatedWorkerNodeList)
+		foreach_declared_ptr(node, context->activatedWorkerNodeList)
 		{
 			SetNodeStateViaMetadataContext(context, node, BoolGetDatum(true));
 		}
@@ -1844,7 +1844,7 @@ FindNodeAnyClusterByNodeId(uint32 nodeId)
 	List *nodeList = ReadDistNode(includeNodesFromOtherClusters);
 	WorkerNode *node = NULL;
 
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		if (node->nodeId == nodeId)
 		{
@@ -1866,7 +1866,7 @@ FindNodeWithNodeId(int nodeId, bool missingOk)
 	List *nodeList = ActiveReadableNodeList();
 	WorkerNode *node = NULL;
 
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		if (node->nodeId == nodeId)
 		{
@@ -1894,7 +1894,7 @@ FindCoordinatorNodeId()
 	List *nodeList = ReadDistNode(includeNodesFromOtherClusters);
 	WorkerNode *node = NULL;
 
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		if (NodeIsCoordinator(node))
 		{
@@ -2024,7 +2024,7 @@ ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode)
 	shardPlacements = SortList(shardPlacements, CompareGroupShardPlacements);
 
 	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacements)
+	foreach_declared_ptr(placement, shardPlacements)
 	{
 		if (!PlacementHasActivePlacementOnAnotherGroup(placement))
 		{
@@ -2060,7 +2060,7 @@ PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement *sourcePlacement)
 
 	bool foundActivePlacementOnAnotherGroup = false;
 	ShardPlacement *activePlacement = NULL;
-	foreach_ptr(activePlacement, activePlacementList)
+	foreach_declared_ptr(activePlacement, activePlacementList)
 	{
 		if (activePlacement->groupId != sourcePlacement->groupId)
 		{
@@ -2411,7 +2411,7 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 
 	/* open connections in parallel */
 	WorkerNode *worker = NULL;
-	foreach_ptr(worker, workerNodeList)
+	foreach_declared_ptr(worker, workerNodeList)
 	{
 		bool success = SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 			worker->workerName, worker->workerPort,
@@ -3144,7 +3144,7 @@ static void
 ErrorIfAnyNodeNotExist(List *nodeList)
 {
 	WorkerNode *node = NULL;
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		/*
 		 * First, locally mark the node is active, if everything goes well,
@@ -3193,7 +3193,7 @@ static void
 SendDeletionCommandsForReplicatedTablePlacements(MetadataSyncContext *context)
 {
 	WorkerNode *node = NULL;
-	foreach_ptr(node, context->activatedWorkerNodeList)
+	foreach_declared_ptr(node, context->activatedWorkerNodeList)
 	{
 		if (!node->isActive)
 		{
