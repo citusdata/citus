@@ -1,7 +1,7 @@
 DO $proc$
 BEGIN
 -- PG16 has its own any_value, so only create it pre PG16.
-IF substring(current_Setting('server_version'), '\d+')::int < 16 THEN
+IF substring(current_Setting('server_version'), '[0-9]+')::int < 16 THEN
     EXECUTE $$
 
 CREATE OR REPLACE FUNCTION pg_catalog.any_value_agg ( anyelement, anyelement )

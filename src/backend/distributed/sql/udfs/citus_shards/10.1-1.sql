@@ -23,7 +23,7 @@ JOIN
 ON
    pg_dist_partition.logicalrelid = pg_dist_shard.logicalrelid
 LEFT JOIN
-   (SELECT (regexp_matches(table_name,'_(\d+)$'))[1]::int as shard_id, max(size) as size from citus_shard_sizes() GROUP BY shard_id) as shard_sizes
+   (SELECT (regexp_matches(table_name,'_([0-9]+)$'))[1]::int as shard_id, max(size) as size from citus_shard_sizes() GROUP BY shard_id) as shard_sizes
 ON
     pg_dist_shard.shardid = shard_sizes.shard_id
 WHERE

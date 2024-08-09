@@ -15,7 +15,7 @@ BEGIN
 
 -- when postgres is version 12 or above we need to create the tableam. If the tableam
 -- exist we assume all objects have been created.
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+IF substring(current_Setting('server_version'), '[0-9]+')::int >= 12 THEN
 IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'columnar') THEN
 
 #include "../columnar_handler/10.0-1.sql"

@@ -10,7 +10,7 @@ DECLARE
 BEGIN
 
 
-    IF substring(current_Setting('server_version'), '\d+')::int >= 14 THEN
+    IF substring(current_Setting('server_version'), '[0-9]+')::int >= 14 THEN
     EXECUTE $cmd$
         -- disable propagation to prevent EnsureCoordinator errors
         -- the aggregate created here does not depend on Citus extension (yet)

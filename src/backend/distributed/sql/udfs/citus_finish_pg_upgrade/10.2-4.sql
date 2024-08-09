@@ -10,7 +10,7 @@ DECLARE
 BEGIN
 
 
-    IF substring(current_Setting('server_version'), '\d+')::int >= 14 THEN
+    IF substring(current_Setting('server_version'), '[0-9]+')::int >= 14 THEN
     EXECUTE $cmd$
         CREATE AGGREGATE array_cat_agg(anycompatiblearray) (SFUNC = array_cat, STYPE = anycompatiblearray);
         COMMENT ON AGGREGATE array_cat_agg(anycompatiblearray)
