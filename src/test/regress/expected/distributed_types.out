@@ -444,6 +444,7 @@ HINT:  Use the column name to insert or update the composite type as a single va
 UPDATE domain_indirection_test SET domain_array[0].if2 = (SELECT 5);
 ERROR:  inserting or modifying composite type fields is not supported
 HINT:  Use the column name to insert or update the composite type as a single value
+HINT:  Use the column name to insert or update the composite type as a single value
 -- below are supported as we don't do any field indirection
 INSERT INTO field_indirection_test_2 (ct2_col, int_col, ct1_col)
 VALUES ('(1, "text1", 2)', 3, '(4, 5)'), ('(6, "text2", 7)', 8, '(9, 10)');

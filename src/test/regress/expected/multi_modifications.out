@@ -330,6 +330,12 @@ UPDATE limit_orders SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURN
  246 | GM     |        30 | Mon Jul 02 16:32:15 2007 | buy  |         999
 (1 row)
 
+UPDATE limit_orders SET (kind, limit_price) = (SELECT 'buy'::order_side, 999) WHERE id = 246 RETURNING *;
+ id  | symbol | bidder_id |        placed_at         | kind | limit_price
+---------------------------------------------------------------------
+ 246 | GM     |        30 | Mon Jul 02 16:32:15 2007 | buy  |         999
+(1 row)
+
 -- Test that on unique contraint violations, we fail fast
 \set VERBOSITY terse
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
@@ -434,6 +440,8 @@ UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 						  bidders.name = 'Bernie Madoff';
 -- should succeed with a CTE
 WITH deleted_orders AS (INSERT INTO limit_orders VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
+UPDATE limit_orders SET symbol = 'GM';
+WITH deleted_orders AS (INSERT INTO limit_orders SELECT 400, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43)
 UPDATE limit_orders SET symbol = 'GM';
 SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
  symbol | bidder_id
@@ -927,6 +935,17 @@ SELECT * FROM summary_table ORDER BY id;
   2 |       400 | 450.0000000000000000 |       |
 (2 rows)
 
+--- TODO this one is a silent corruption:
+-- UPDATE summary_table SET (average_value, min_value) =
+-- 	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
+-- WHERE id = 2;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques
+---------------------------------------------------------------------
+  1 |           | 200.0000000000000000 |       |
+  2 |       400 | 450.0000000000000000 |       |
+(2 rows)
+
 UPDATE summary_table SET min_value = 100
 	WHERE id IN (SELECT id FROM raw_table WHERE id = 1 and value > 100) AND id = 1;
 SELECT * FROM summary_table ORDER BY id;
@@ -1096,6 +1115,17 @@ ERROR:  cannot perform select on a distributed table and modify a reference tabl
 UPDATE reference_summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM reference_raw_table WHERE id = 2)
 WHERE id = 2;
+SELECT * FROM reference_summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques
+---------------------------------------------------------------------
+  1 |           | 200.0000000000000000 |       |
+  2 |       400 | 450.0000000000000000 |       |
+(2 rows)
+
+--- TODO this one is a silent corruption:
+-- UPDATE reference_summary_table SET (average_value, min_value) =
+-- 	(SELECT avg(value), min(value) FROM reference_raw_table WHERE id = 2)
+-- WHERE id = 2;
 SELECT * FROM reference_summary_table ORDER BY id;
  id | min_value |    average_value     | count | uniques
 ---------------------------------------------------------------------

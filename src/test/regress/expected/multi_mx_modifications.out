@@ -91,6 +91,8 @@ SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are unsupported
 INSERT INTO limit_orders_mx VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
 								 'sell', 0.58);
+INSERT INTO limit_orders_mx SELECT random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
+								 'sell', 0.58;
 -- values for other columns are totally fine
 INSERT INTO limit_orders_mx VALUES (2036, 'GOOG', 5634, now(), 'buy', random());
 -- commands with mutable functions in their quals
@@ -103,6 +105,22 @@ DELETE FROM limit_orders_mx WHERE id = 246 AND placed_at = current_timestamp::ti
 INSERT INTO limit_orders_mx VALUES (2037, 'GOOG', 5634, now(), 'buy', random()),
                                    (2038, 'GOOG', 5634, now(), 'buy', random()),
                                    (2039, 'GOOG', 5634, now(), 'buy', random());
+SELECT count(distinct placed_at) FROM limit_orders_mx WHERE id BETWEEN 2037 AND 2039;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+INSERT INTO limit_orders_mx SELECT * FROM (VALUES
+                                   (2040, 'GOOG', 5634, now(), 'buy'::citus_mx_test_schema.order_side_mx, random()),
+                                   (2041, 'GOOG', 5634, now(), 'buy'::citus_mx_test_schema.order_side_mx, random()),
+                                   (2042, 'GOOG', 5634, now(), 'buy'::citus_mx_test_schema.order_side_mx, random()));
+SELECT count(distinct placed_at) FROM limit_orders_mx WHERE id BETWEEN 2040 AND 2042;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 -- connect back to the other node
 \c - - - :worker_1_port
 -- commands containing a CTE are supported
@@ -216,8 +234,11 @@ INSERT INTO limit_orders_mx VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sel
 ERROR:  duplicate key value violates unique constraint "limit_orders_mx_pkey_1220093"
 -- multi shard update is supported
 UPDATE limit_orders_mx SET limit_price = 0.00;
+UPDATE limit_orders_mx SET limit_price = (SELECT 0.00);
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders_mx SET id = 0 WHERE id = 246;
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE limit_orders_mx SET id = (SELECT 0) WHERE id = 246;
 ERROR:  modifying the partition value of rows is not allowed
 -- UPDATEs with a FROM clause are unsupported
 UPDATE limit_orders_mx SET limit_price = 0.00 FROM bidders
