@@ -469,6 +469,9 @@ static void get_tablesample_def(TableSampleClause *tablesample,
 					deparse_context *context);
 static void get_opclass_name(Oid opclass, Oid actual_datatype,
 				 StringInfo buf);
+static bool is_update_set_with_multiple_columns(List *targetList);
+static List *processTargetsIndirection(List *targetList);
+static AttrNumber extract_paramid_from_funcexpr(FuncExpr *func);
 static Node *processIndirection(Node *node, deparse_context *context);
 static void printSubscripts(SubscriptingRef *aref, deparse_context *context);
 static char *get_relation_name(Oid relid);
@@ -3545,6 +3548,9 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 			}
 		}
 	}
+	if (is_update_set_with_multiple_columns(targetList))
+		targetList = processTargetsIndirection(targetList);
+
 	next_ma_cell = list_head(ma_sublinks);
 	cur_ma_sublink = NULL;
 	remaining_ma_columns = 0;
@@ -8605,6 +8611,153 @@ get_opclass_name(Oid opclass, Oid actual_datatype,
 		}
 	}
 	ReleaseSysCache(ht_opc);
+}
+
+/*
+ * helper function to evaluate if we are in an SET (...)
+ * Caller is responsible to check the command type (UPDATE)
+ */
+static bool is_update_set_with_multiple_columns(List *targetList)
+{
+	ListCell *lc;
+	foreach(lc, targetList) {
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+		Node       *expr;
+
+		if (tle->resjunk)
+			continue;
+
+		expr = strip_implicit_coercions((Node *) tle->expr);
+
+		if (expr && IsA(expr, Param) &&
+			((Param *) expr)->paramkind == PARAM_MULTIEXPR)
+		{
+			return true;
+		}
+	}
+
+	// No multi-column set expression found
+	return false;
+}
+
+/*
+ * processTargetsIndirection - reorder targets list (from indirection)
+ *
+ * We don't change anything but the order the target list.
+ * The purpose here is to be able to deparse a query tree as if it was
+ * provided by the PostgreSQL parser, not the rewriter (which is the one
+ * received by the planner hook).
+ *
+ * It's required only for UPDATE SET (MULTIEXPR) queries, other candidates
+ * are not supported by Citus.
+ *
+ * Returns the new target list, reordered.
+*/
+static List *processTargetsIndirection(List *targetList)
+{
+	int         nAssignableCols;
+	int         targetListPosition;
+	bool        sawJunk = false;
+	List       *newTargetList = NIL;
+	ListCell   *lc;
+
+	/* Count non-junk columns and ensure they precede junk columns */
+	nAssignableCols = 0;
+	foreach(lc, targetList)
+	{
+		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+
+		if (tle->resjunk)
+		{
+			sawJunk = true;
+		}
+		else
+		{
+			if (sawJunk)
+				elog(ERROR, "Subplan target list is out of order");
+
+			nAssignableCols++;
+		}
+	}
+
+	/* If no assignable columns, return the original target list */
+	if (nAssignableCols == 0)
+		return targetList;
+
+	/* Reorder the target list */
+	/* we start from 1 */
+	targetListPosition = 1;
+	while (nAssignableCols > 0)
+	{
+		nAssignableCols--;
+
+		foreach(lc, targetList)
+		{
+			TargetEntry *tle = lfirst_node(TargetEntry, lc);
+
+			if (IsA(tle->expr, FuncExpr))
+			{
+				FuncExpr *funcexpr = (FuncExpr *) tle->expr;
+				AttrNumber attnum = extract_paramid_from_funcexpr(funcexpr);
+
+				if (attnum == targetListPosition)
+				{
+					ereport(DEBUG1, (errmsg("Adding FuncExpr resno: %d", tle->resno)));
+					newTargetList = lappend(newTargetList, tle);
+					targetListPosition++;
+					break;
+				}
+			}
+			else if (IsA(tle->expr, Param))
+			{
+				Param *param = (Param *) tle->expr;
+				AttrNumber attnum = param->paramid;
+
+				if (attnum == targetListPosition)
+				{
+					newTargetList = lappend(newTargetList, tle);
+					targetListPosition++;
+					break;
+				}
+			}
+		}
+	}
+
+	// TODO add check about what we did here ?
+
+	/* Append any remaining junk columns */
+	foreach(lc, targetList)
+	{
+		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+		if (tle->resjunk)
+			newTargetList = lappend(newTargetList, tle);
+	}
+
+	return newTargetList;
+}
+
+/* Function to extract paramid from a FuncExpr node */
+static AttrNumber extract_paramid_from_funcexpr(FuncExpr *func)
+{
+	AttrNumber  targetAttnum = InvalidAttrNumber;
+	ListCell   *lc;
+
+	/* Iterate through the arguments of the FuncExpr */
+	foreach(lc, func->args)
+	{
+		Node *arg = (Node *) lfirst(lc);
+
+		/* Check if the argument is a PARAM node */
+		if (IsA(arg, Param))
+		{
+			Param *param = (Param *) arg;
+			targetAttnum = param->paramid;
+
+			break;  // Exit loop once we find the PARAM node
+		}
+	}
+
+	return targetAttnum;
 }
 
 /*
