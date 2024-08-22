@@ -37,13 +37,25 @@ With the Citus cluster running you can connect to the coordinator in the first t
 
 ### Debugging in the VS code
 
-1. Start Debugging: Press F5 to start debugging. You'll be prompted to select the running PostgreSQL process to attach the debugger to. Typically, if you're executing a psql command, you'll want to attach to a process named something like:
-```
-postgres: citus citus [local] idle
-```
-2. Set Breakpoints and Debug: Once the debugger attaches to the correct process, you can set breakpoints within the code. From here, you'll be able to step through the code execution, inspect variables, and fully debug the PostgreSQL instance running within the devcontainer.
+1. Start Debugging: Press F5 in VS Code to start debugging. When prompted, you'll need to attach the debugger to the appropriate PostgreSQL process.
 
-This setup provides a seamless way to troubleshoot and optimize the Citus extension by taking advantage of the integrated debugging features in VS Code.
+2. Identify the Process: If you're running a psql command, take note of the PID that appears in your psql prompt. For example:
+```
+[local] citus@citus:9700 (PID: 5436)=#
+```
+This PID (5436 in this case) indicates the process that you should attach the debugger to.
+If you are uncertain about which process to attach, you can list all running PostgreSQL processes using the following command:
+```
+ps aux | grep postgres
+```
+
+Look for the process associated with the PID you noted. For example:
+```
+citus      5436  0.0  0.0  0  0 ?        S    14:00   0:00 postgres: citus citus
+```
+4. Attach the Debugger: Once you've identified the correct PID, select that process when prompted in VS Code to attach the debugger. You should now be able to debug the PostgreSQL session tied to the psql command.
+
+5. Set Breakpoints and Debug: With the debugger attached, you can set breakpoints within the code. This allows you to step through the code execution, inspect variables, and fully debug the PostgreSQL instance running in your container.
 
 ### Getting and building
 
