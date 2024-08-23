@@ -35,6 +35,28 @@ To get citus installed from source we run `make install -s` in the first termina
 
 With the Citus cluster running you can connect to the coordinator in the first terminal via `psql -p9700`. Because the coordinator is the most common entrypoint the `PGPORT` environment is set accordingly, so a simple `psql` will connect directly to the coordinator.
 
+### Debugging in the VS code
+
+1. Start Debugging: Press F5 in VS Code to start debugging. When prompted, you'll need to attach the debugger to the appropriate PostgreSQL process.
+
+2. Identify the Process: If you're running a psql command, take note of the PID that appears in your psql prompt. For example:
+```
+[local] citus@citus:9700 (PID: 5436)=#
+```
+This PID (5436 in this case) indicates the process that you should attach the debugger to.
+If you are uncertain about which process to attach, you can list all running PostgreSQL processes using the following command:
+```
+ps aux | grep postgres
+```
+
+Look for the process associated with the PID you noted. For example:
+```
+citus      5436  0.0  0.0  0  0 ?        S    14:00   0:00 postgres: citus citus
+```
+4. Attach the Debugger: Once you've identified the correct PID, select that process when prompted in VS Code to attach the debugger. You should now be able to debug the PostgreSQL session tied to the psql command.
+
+5. Set Breakpoints and Debug: With the debugger attached, you can set breakpoints within the code. This allows you to step through the code execution, inspect variables, and fully debug the PostgreSQL instance running in your container.
+
 ### Getting and building
 
 [PostgreSQL documentation](https://www.postgresql.org/support/versioning/) has a
