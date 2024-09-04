@@ -217,6 +217,9 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 		EnsureTransactionalMetadataSyncMode();
 	}
 
+	/* prevent concurrent modification */
+	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
+
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
 													  &isCoordinatorInMetadata);
