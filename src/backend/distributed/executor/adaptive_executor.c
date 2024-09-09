@@ -769,16 +769,51 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 /*
  * AdaptiveExecutor is called via CitusExecScan on the
  * first call of CitusExecScan. The function fills the tupleStore
- * of the input scanScate.
+ * of the input scanState.
  */
 TupleTableSlot *
 AdaptiveExecutor(CitusScanState *scanState)
 {
+	/* Log entry into the function */
+	elog(DEBUG1, "Entering AdaptiveExecutor");
+
 	TupleTableSlot *resultSlot = NULL;
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
+
+	/* Log details about the distributed plan */
+	if (distributedPlan != NULL)
+	{
+		elog(DEBUG1, "Distributed plan modLevel: %d", distributedPlan->modLevel);
+	}
+	else
+	{
+		elog(DEBUG1, "Distributed plan is NULL");
+	}
+
+	/* Log details about paramListInfo */
+	if (paramListInfo != NULL)
+	{
+		elog(DEBUG1, "paramListInfo is populated with %d parameters", paramListInfo->numParams);
+
+		/* Log each parameter */
+		for (int i = 0; i < paramListInfo->numParams; i++)
+		{
+			ParamExternData *param = &paramListInfo->params[i];
+			elog(DEBUG1, "Parameter %d: ptype = %d, isnull = %d", 
+				i + 1, param->ptype, param->isnull);
+			if (!param->isnull)
+			{
+				elog(DEBUG1, "Parameter %d: value = %ld", i + 1, param->value);
+			}
+		}
+	}
+	else
+	{
+		elog(DEBUG1, "paramListInfo is NULL");
+	}
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
@@ -846,16 +881,53 @@ AdaptiveExecutor(CitusScanState *scanState)
 		distributedPlan->modLevel, taskList, excludeFromXact);
 
 	/*
-	 * In some rare cases, we have prepared statements that pass a parameter
-	 * and never used in the query, mark such parameters' type as Invalid(0),
-	 * which will be used later in ExtractParametersFromParamList() to map them
-	 * to a generic datatype. Skip for dynamic parameters.
-	 */
+	* In some rare cases, we have prepared statements that pass a parameter
+	* and never used in the query, mark such parameters' type as Invalid(0),
+	* which will be used later in ExtractParametersFromParamList() to map them
+	* to a generic datatype. Skip for dynamic parameters.
+	*/
 	if (paramListInfo && !paramListInfo->paramFetch)
 	{
+		/* Copy the ParamListInfo for safety */
 		paramListInfo = copyParamList(paramListInfo);
+
+		/* Mark any unreferenced parameters */
 		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
+
+		/* Debug: Log the parameters before proceeding */
+		elog(DEBUG1, "paramListInfo: number of parameters = %d", paramListInfo->numParams);
+
+		/* Log details of each parameter */
+		for (int i = 0; i < paramListInfo->numParams; i++)
+		{
+			ParamExternData *param = &paramListInfo->params[i];
+			elog(DEBUG1, "Parameter %d: ptype = %d, isnull = %d", 
+				i + 1, param->ptype, param->isnull);
+			if (!param->isnull)
+			{
+				elog(DEBUG1, "Parameter %d: value = %ld", i + 1, param->value);
+			}
+		}
 	}
+	else
+	{
+		/* If paramListInfo is NULL or paramFetch is true, log that information */
+		if (paramListInfo == NULL)
+		{
+			elog(DEBUG1, "paramListInfo is NULL");
+		}
+		else if (paramListInfo->paramFetch)
+		{
+			elog(DEBUG1, "paramListInfo uses dynamic parameter fetching");
+		}
+	}
+
+	/* Log the parameters before creating the distributed execution */
+	elog(DEBUG1, "Creating DistributedExecution with modLevel: %d, taskList size: %d",
+		distributedPlan->modLevel, list_length(taskList));
+
+	elog(DEBUG1, "Target pool size: %d, Local execution supported: %d", 
+		targetPoolSize, localExecutionSupported);
 
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
@@ -866,6 +938,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 		&xactProperties,
 		jobIdList,
 		localExecutionSupported);
+
+
+	
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -917,6 +992,13 @@ AdaptiveExecutor(CitusScanState *scanState)
 static void
 RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
+	/* Log entry into the function */
+    elog(DEBUG1, "Entering RunLocalExecution");
+
+    /* Log scan state and execution details */
+    elog(DEBUG1, "ScanState: distributedPlan type: %d", nodeTag(scanState->distributedPlan));
+    elog(DEBUG1, "Local task list length: %d", list_length(execution->localTaskList));
+
 	EState *estate = ScanStateGetExecutorState(scanState);
 	bool isUtilityCommand = false;
 	uint64 rowsProcessed = ExecuteLocalTaskListExtended(execution->localTaskList,
@@ -1085,51 +1167,82 @@ ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
 uint64
 ExecuteTaskListExtended(ExecutionParams *executionParams)
 {
+	/* Log task list length */
+	elog(DEBUG1, "Starting ExecuteTaskListExtended, number of tasks: %d", list_length(executionParams->taskList));
+
 	/* if there are no tasks to execute, we can return early */
 	if (list_length(executionParams->taskList) == 0)
 	{
+		elog(DEBUG1, "No tasks to execute, returning early");
 		return 0;
 	}
 
 	uint64 locallyProcessedRows = 0;
-
 	TupleDestination *defaultTupleDest = executionParams->tupleDestination;
+
+	/* Log connection type */
+	elog(DEBUG1, "MultiShardConnectionType: %d", MultiShardConnectionType);
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
+		elog(DEBUG1, "Switching to sequential connection mode");
 		executionParams->targetPoolSize = 1;
 	}
 
-	DistributedExecution *execution =
-		CreateDistributedExecution(
-			executionParams->modLevel, executionParams->taskList,
-			executionParams->paramListInfo, executionParams->targetPoolSize,
-			defaultTupleDest, &executionParams->xactProperties,
-			executionParams->jobIdList, executionParams->localExecutionSupported);
+	/* Log before creating distributed execution */
+	elog(DEBUG1, "Creating distributed execution for task list");
 
-	/*
-	 * If current transaction accessed local placements and task list includes
-	 * tasks that should be executed locally (accessing any of the local placements),
-	 * then we should error out as it would cause inconsistencies across the
-	 * remote connection and local execution.
-	 */
+	DistributedExecution *execution = CreateDistributedExecution(
+		executionParams->modLevel, executionParams->taskList,
+		executionParams->paramListInfo, executionParams->targetPoolSize,
+		defaultTupleDest, &executionParams->xactProperties,
+		executionParams->jobIdList, executionParams->localExecutionSupported);
+
+	/* Log details of created execution */
+	elog(DEBUG1, "DistributedExecution created: %d tasks, local execution supported: %d",
+		 list_length(execution->remoteTaskList), execution->localExecutionSupported);
+
+	/* Ensure local execution state is compatible */
 	EnsureCompatibleLocalExecutionState(execution->remoteTaskList);
 
-	/* run the remote execution */
+	/* Log before running distributed execution */
+	elog(DEBUG1, "Starting distributed execution");
+
+	/* Start the distributed execution */
 	StartDistributedExecution(execution);
+
+	/* Log after StartDistributedExecution */
+	elog(DEBUG1, "StartDistributedExecution completed");
+
+	/* Run the distributed execution */
 	RunDistributedExecution(execution);
+
+	/* Log after RunDistributedExecution */
+	elog(DEBUG1, "RunDistributedExecution completed");
+
+	/* Finish the distributed execution */
 	FinishDistributedExecution(execution);
 
-	/* now, switch back to the local execution */
+	/* Log after FinishDistributedExecution */
+	elog(DEBUG1, "FinishDistributedExecution completed");
+
+	/* Log that the entire distributed execution process is complete */
+elog(DEBUG1, "Distributed execution completed");
+
+
+	/* Log before running local execution */
 	if (executionParams->isUtilityCommand)
 	{
+		elog(DEBUG1, "Running local utility task list");
 		locallyProcessedRows += ExecuteLocalUtilityTaskList(execution->localTaskList);
 	}
 	else
 	{
-		locallyProcessedRows += ExecuteLocalTaskList(execution->localTaskList,
-													 defaultTupleDest);
+		elog(DEBUG1, "Running local task list");
+		locallyProcessedRows += ExecuteLocalTaskList(execution->localTaskList, defaultTupleDest);
 	}
+
+	elog(DEBUG1, "Task execution completed, total rows processed: %lu", execution->rowsProcessed + locallyProcessedRows);
 
 	return execution->rowsProcessed + locallyProcessedRows;
 }
@@ -1897,10 +2010,17 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 void
 RunDistributedExecution(DistributedExecution *execution)
 {
+	elog(DEBUG1, "Starting RunDistributedExecution with %d unfinished tasks", execution->unfinishedTaskCount);
+
+	/* Assign tasks to connections or worker pool */
 	AssignTasksToConnectionsOrWorkerPool(execution);
+	elog(DEBUG1, "Assigned tasks to connections or worker pool");
 
 	PG_TRY();
 	{
+		/* Log before stepping state machines */
+		elog(DEBUG1, "Stepping state machines for all sessions");
+
 		/* Preemptively step state machines in case of immediate errors */
 		WorkerSession *session = NULL;
 		foreach_declared_ptr(session, execution->sessionList)
@@ -1913,23 +2033,9 @@ RunDistributedExecution(DistributedExecution *execution)
 		/* always (re)build the wait event set the first time */
 		execution->rebuildWaitEventSet = true;
 
-		/*
-		 * Iterate until all the tasks are finished. Once all the tasks
-		 * are finished, ensure that all the connection initializations
-		 * are also finished. Otherwise, those connections are terminated
-		 * abruptly before they are established (or failed). Instead, we let
-		 * the ConnectionStateMachine() to properly handle them.
-		 *
-		 * Note that we could have the connections that are not established
-		 * as a side effect of slow-start algorithm. At the time the algorithm
-		 * decides to establish new connections, the execution might have tasks
-		 * to finish. But, the execution might finish before the new connections
-		 * are established.
-		 *
-		 * Note that the rules explained above could be overriden by any
-		 * cancellation to the query. In that case, we terminate the execution
-		 * irrespective of the current status of the tasks or the connections.
-		 */
+		elog(DEBUG1, "Entering task/event loop with unfinishedTaskCount: %d", execution->unfinishedTaskCount);
+
+		/* Iterate until all the tasks are finished */
 		while (!cancellationReceived &&
 			   (execution->unfinishedTaskCount > 0 ||
 				HasIncompleteConnectionEstablishment(execution)))
@@ -1943,14 +2049,13 @@ RunDistributedExecution(DistributedExecution *execution)
 			bool skipWaitEvents = false;
 			if (execution->remoteTaskList == NIL)
 			{
-				/*
-				 * All the tasks are failed over to the local execution, no need
-				 * to wait for any connection activity.
-				 */
+				/* Log when all tasks have failed over to local execution */
+				elog(DEBUG1, "All tasks failed over to local execution");
 				continue;
 			}
 			else if (execution->rebuildWaitEventSet)
 			{
+				elog(DEBUG1, "Rebuilding wait event set");
 				RebuildWaitEventSet(execution);
 
 				skipWaitEvents =
@@ -1958,6 +2063,7 @@ RunDistributedExecution(DistributedExecution *execution)
 			}
 			else if (execution->waitFlagsChanged)
 			{
+				elog(DEBUG1, "Rebuilding wait event set flags");
 				RebuildWaitEventSetFlags(execution->waitEventSet, execution->sessionList);
 				execution->waitFlagsChanged = false;
 
@@ -1967,35 +2073,35 @@ RunDistributedExecution(DistributedExecution *execution)
 
 			if (skipWaitEvents)
 			{
-				/*
-				 * Some operation on the wait event set is failed, retry
-				 * as we already removed the problematic connections.
-				 */
+				elog(DEBUG1, "Skipping wait events due to failure, retrying");
 				execution->rebuildWaitEventSet = true;
 
 				continue;
 			}
 
-			/* wait for I/O events */
+			/* Log before waiting for I/O events */
 			long timeout = NextEventTimeout(execution);
+
 			int eventCount =
 				WaitEventSetWait(execution->waitEventSet, timeout, execution->events,
 								 execution->eventSetSize, WAIT_EVENT_CLIENT_READ);
+
 
 			ProcessWaitEvents(execution, execution->events, eventCount,
 							  &cancellationReceived);
 		}
 
-		FreeExecutionWaitEvents(execution);
+		elog(DEBUG1, "Finished task/event loop, cleaning up");
 
+		/* Clean up after distributed execution */
+		FreeExecutionWaitEvents(execution);
 		CleanUpSessions(execution);
 	}
 	PG_CATCH();
 	{
-		/*
-		 * We can still recover from error using ROLLBACK TO SAVEPOINT,
-		 * unclaim all connections to allow that.
-		 */
+		/* Log in case of errors */
+		elog(DEBUG1, "Error occurred, unclaiming all session connections");
+
 		UnclaimAllSessionConnections(execution->sessionList);
 
 		FreeExecutionWaitEvents(execution);
@@ -2004,6 +2110,7 @@ RunDistributedExecution(DistributedExecution *execution)
 	}
 	PG_END_TRY();
 }
+
 
 
 /*
@@ -3904,10 +4011,6 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 }
 
 
-/*
- * SendNextQuery sends the next query for placementExecution on the given
- * session.
- */
 static bool
 SendNextQuery(TaskPlacementExecution *placementExecution,
 			  WorkerSession *session)
@@ -3923,8 +4026,26 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	int querySent = 0;
 	uint32 queryIndex = placementExecution->queryIndex;
 
+	elog(DEBUG1, "Sending next query: queryIndex = %d, task->queryCount = %d", queryIndex, task->queryCount);
+
 	Assert(queryIndex < task->queryCount);
 	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
+
+	elog(DEBUG1, "Query to be sent: %s", queryString);
+
+	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
+	{
+		elog(DEBUG1, "ParamListInfo is not null and parameters not resolved");
+	}
+	else if (paramListInfo == NULL)
+	{
+		elog(DEBUG1, "ParamListInfo is NULL");
+	}
+	else
+	{
+		elog(DEBUG1, "Task parameters are already resolved");
+	}
+
 
 	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
@@ -3932,17 +4053,35 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 		Oid *parameterTypes = NULL;
 		const char **parameterValues = NULL;
 
+		elog(DEBUG1, "ParamListInfo is not null, parameterCount: %d", parameterCount);
+
 		/* force evaluation of bound params */
 		paramListInfo = copyParamList(paramListInfo);
 
+		/* Log the start of parameter extraction */
+		elog(DEBUG1, "Extracting parameters for remote execution");
+
 		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
 											&parameterValues);
+
+		/* Log extracted parameter values and types */
+		for (int i = 0; i < parameterCount; i++)
+		{
+			elog(DEBUG1, "Parameter %d: Type = %d, Value = %s", i + 1, parameterTypes[i], parameterValues[i]);
+		}
+
+		/* Send the remote command with parameters */
 		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
 											parameterTypes, parameterValues,
 											binaryResults);
+
+		elog(DEBUG1, "Query sent with parameters, result = %d", querySent);
 	}
 	else
 	{
+		/* If no parameters, send the query without params */
+		elog(DEBUG1, "Sending query without parameters");
+
 		/*
 		 * We only need to use SendRemoteCommandParams when we desire
 		 * binaryResults. One downside of SendRemoteCommandParams is that it

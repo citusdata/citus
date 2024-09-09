@@ -48,6 +48,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
+#include "miscadmin.h"  // for elog functions
 
 
 /* global variable tracking whether we are in a delegated procedure call */
@@ -62,6 +63,32 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 {
 	FuncExpr *funcExpr = callStmt->funcexpr;
 	Oid functionId = funcExpr->funcid;
+
+    /* Log the function ID being called */
+    elog(DEBUG1, "Calling distributed procedure with functionId: %u", functionId);
+
+    /* Log additional details from CallStmt */
+    if (callStmt->funcexpr != NULL)
+    {
+        elog(DEBUG1, "Function expression type: %d", nodeTag(callStmt->funcexpr));
+    }
+
+	if (funcExpr->args != NIL)
+	{
+		ListCell *lc;
+		int argIndex = 0;
+		foreach(lc, funcExpr->args)
+		{
+			Node *arg = (Node *) lfirst(lc);
+			elog(DEBUG1, "Argument %d: NodeTag: %d", argIndex, nodeTag(arg));
+			argIndex++;
+		}
+	}
+	else
+	{
+		elog(DEBUG1, "No arguments in the function expression");
+	}
+
 
 	DistObjectCacheEntry *procedure = LookupDistObjectCacheEntry(ProcedureRelationId,
 																 functionId, 0);
@@ -167,6 +194,7 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 
 	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) callStmt));
 	{
+		elog(DEBUG1, "Generated CALL statement: %s", callCommand->data);
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
 		TupleTableSlot *slot = MakeSingleTupleTableSlot(tupleDesc,
@@ -195,18 +223,92 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 		};
 
 		EnableWorkerMessagePropagation();
+		elog(DEBUG1, "Worker message propagation enabled");
 
 		bool localExecutionSupported = true;
+		elog(DEBUG1, "Local execution supported: %d", localExecutionSupported);
+
+		/* Log task details */
+		elog(DEBUG1, "Creating execution params for task");
+
+		/* Create execution parameters */
 		ExecutionParams *executionParams = CreateBasicExecutionParams(
 			ROW_MODIFY_NONE, list_make1(task), MaxAdaptiveExecutorPoolSize,
 			localExecutionSupported
-			);
-		executionParams->tupleDestination = CreateTupleStoreTupleDest(tupleStore,
-																	  tupleDesc);
+		);
+
+
+		// Create a ParamListInfo structure
+		List *argList = funcExpr->args;  // Extract arguments from the function expression
+		int paramCount = list_length(argList);  // Get the number of arguments
+		ParamListInfo paramListInfo = makeParamList(paramCount);  // Create ParamListInfo structure
+
+		// Loop through the argument list and populate ParamListInfo
+		int paramIndex = 0;
+		ListCell *argCell;
+		foreach(argCell, argList)
+		{
+			Node *argNode = (Node *) lfirst(argCell);
+
+			if (IsA(argNode, Const))
+			{
+				Const *constArg = (Const *) argNode;
+				paramListInfo->params[paramIndex].ptype = constArg->consttype;  // Set parameter type
+				paramListInfo->params[paramIndex].value = constArg->constvalue; // Set parameter value
+				paramListInfo->params[paramIndex].isnull = constArg->constisnull;  // Set if the parameter is null
+			}
+			else if (IsA(argNode, Param))
+			{
+				Param *paramArg = (Param *) argNode;
+
+				// Set the parameter type
+				paramListInfo->params[paramIndex].ptype = paramArg->paramtype;
+
+				// Fetch the value of the parameter if necessary
+				if (paramListInfo->paramFetch != NULL)
+				{
+					ParamExternData paramData;
+					paramListInfo->paramFetch(paramListInfo, paramArg->paramid, true, &paramData);
+
+					paramListInfo->params[paramIndex].value = paramData.value;
+					paramListInfo->params[paramIndex].isnull = paramData.isnull;
+
+					// Log fetched value and type
+					elog(DEBUG1, "Fetched dynamic parameter: paramIndex: %d, paramType: %d, paramValue: %d", 
+						paramIndex, paramListInfo->params[paramIndex].ptype, DatumGetInt32(paramListInfo->params[paramIndex].value));
+				}
+				else
+				{
+					// Handle the case where paramFetch is NULL
+					elog(ERROR, "Could not fetch value for parameter: %d", paramArg->paramid);
+				}
+			}
+
+			// Log populated parameters
+			elog(DEBUG1, "Populating ParamListInfo, paramIndex: %d, paramType: %d, paramValue: %d", 
+				paramIndex, paramListInfo->params[paramIndex].ptype, DatumGetInt32(paramListInfo->params[paramIndex].value));
+
+			paramIndex++;
+		}
+
+
+		
+		/* Set tuple destination and execution properties */
+		executionParams->tupleDestination = CreateTupleStoreTupleDest(tupleStore, tupleDesc);
 		executionParams->expectResults = expectResults;
 		executionParams->xactProperties = xactProperties;
 		executionParams->isUtilityCommand = true;
+		executionParams->paramListInfo = paramListInfo;
+
+		/* Log before executing task list */
+		elog(DEBUG1, "Executing task list with ExecuteTaskListExtended");
+
+		/* Execute the task list */
 		ExecuteTaskListExtended(executionParams);
+
+		/* Log after task execution */
+		elog(DEBUG1, "Task list execution completed");
+
 
 		DisableWorkerMessagePropagation();
 
