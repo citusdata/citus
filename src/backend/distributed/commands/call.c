@@ -89,6 +89,33 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 		elog(DEBUG1, "No arguments in the function expression");
 	}
 
+	ListCell *argCell1;
+    int argIndex1 = 0;
+
+    /* Iterate over the arguments and log them */
+    foreach(argCell1, callStmt->funcexpr->args)
+    {
+    	Node *argNode = (Node *) lfirst(argCell1);
+    
+		// Check if the node is valid
+		if (argNode != NULL)
+		{
+			// Use nodeToString() to convert the node into a string representation for debugging
+			char *argStr = nodeToString(argNode);
+			
+			// Log the argument index and its string representation
+			elog(DEBUG1, "Argument %d: %s", argIndex1, argStr);
+			
+			// Free the string memory after logging (it's a good practice to avoid memory leaks)
+			pfree(argStr);
+		}
+		else
+		{
+			elog(DEBUG1, "Argument %d: (null)", argIndex1);
+		}
+        argIndex1++;
+    }
+
 
 	DistObjectCacheEntry *procedure = LookupDistObjectCacheEntry(ProcedureRelationId,
 																 functionId, 0);
@@ -236,7 +263,30 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 			ROW_MODIFY_NONE, list_make1(task), MaxAdaptiveExecutorPoolSize,
 			localExecutionSupported
 		);
-
+		
+		const char* NodeTagToString(NodeTag tag)
+		{
+			switch (tag)
+			{
+				case T_Var: return "Var";
+				case T_Const: return "Const";
+				case T_Param: return "Param";
+				case T_FuncExpr: return "FuncExpr";
+				case T_OpExpr: return "OpExpr";
+				case T_BoolExpr: return "BoolExpr";
+				case T_Aggref: return "Aggref";
+				case T_WindowFunc: return "WindowFunc";
+				case T_SubLink: return "SubLink";
+				case T_CoalesceExpr: return "CoalesceExpr";
+				case T_CaseExpr: return "CaseExpr";
+				case T_NullTest: return "NullTest";
+				case T_CollateExpr: return "CollateExpr";
+				case T_FieldSelect: return "FieldSelect";
+				case T_FieldStore: return "FieldStore";
+				case T_SubPlan: return "SubPlan";
+				default: return "Unknown";
+			}
+		}
 
 		// Create a ParamListInfo structure
 		List *argList = funcExpr->args;  // Extract arguments from the function expression
@@ -250,12 +300,22 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 		{
 			Node *argNode = (Node *) lfirst(argCell);
 
+			// Log the type of the argument
+			NodeTag nodeType = nodeTag(argNode);
+			elog(DEBUG1, "Processing argument at index %d of type: %s", paramIndex, NodeTagToString(nodeType));
+
+
 			if (IsA(argNode, Const))
 			{
 				Const *constArg = (Const *) argNode;
 				paramListInfo->params[paramIndex].ptype = constArg->consttype;  // Set parameter type
 				paramListInfo->params[paramIndex].value = constArg->constvalue; // Set parameter value
 				paramListInfo->params[paramIndex].isnull = constArg->constisnull;  // Set if the parameter is null
+
+				// Log the constant parameter's type, value, and null status
+        		elog(DEBUG1, "Populating ParamListInfo with constant parameter: paramIndex: %d, paramType: %d, isNull: %s",
+					paramIndex, paramListInfo->params[paramIndex].ptype,
+					constArg->constisnull ? "true" : "false");
 			}
 			else if (IsA(argNode, Param))
 			{
@@ -270,6 +330,11 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 					ParamExternData paramData;
 					paramListInfo->paramFetch(paramListInfo, paramArg->paramid, true, &paramData);
 
+					// Log the fetched parameter details
+					elog(DEBUG1, "paramFetch for paramId: %d returned value: %d, type: %d, isNull: %s", 
+						paramArg->paramid, DatumGetInt32(paramData.value), paramData.ptype, 
+						paramData.isnull ? "true" : "false");
+
 					paramListInfo->params[paramIndex].value = paramData.value;
 					paramListInfo->params[paramIndex].isnull = paramData.isnull;
 
@@ -280,13 +345,68 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 				else
 				{
 					// Handle the case where paramFetch is NULL
-					elog(ERROR, "Could not fetch value for parameter: %d", paramArg->paramid);
+					elog(DEBUG1, "Could not fetch value for parameter: %d", paramArg->paramid);
 				}
+			}
+			else if (IsA(argNode, FuncExpr))
+			{
+				// FuncExpr *funcExpr = (FuncExpr *) argNode;
+
+				// Log function expression details
+				elog(DEBUG1, "Processing function expression: funcid: %d", funcExpr->funcid);
+
+				// Iterate through the arguments of the function expression
+				ListCell *funcArgCell;
+				foreach(funcArgCell, funcExpr->args)
+				{
+					Node *funcArgNode = (Node *) lfirst(funcArgCell);
+
+					// Check if the argument is a Param or Const
+					if (IsA(funcArgNode, Param))
+					{
+						Param *paramArg = (Param *) funcArgNode;
+
+						// Fetch the parameter value (same as your param-fetch logic)
+						ParamExternData paramData;
+						paramListInfo->paramFetch(paramListInfo, paramArg->paramid, true, &paramData);
+
+						// Populate ParamListInfo with fetched param
+						paramListInfo->params[paramIndex].ptype = paramArg->paramtype;
+						paramListInfo->params[paramIndex].value = paramData.value;
+						paramListInfo->params[paramIndex].isnull = paramData.isnull;
+
+						// Log fetched parameter details
+						elog(DEBUG1, "Populating ParamListInfo with fetched parameter: paramIndex: %d, paramType: %d, paramValue: %d",
+							paramIndex, paramListInfo->params[paramIndex].ptype, DatumGetInt32(paramListInfo->params[paramIndex].value));
+					}
+					else if (IsA(funcArgNode, Const))
+					{
+						Const *constArg = (Const *) funcArgNode;
+
+						// Handle Const values within the function expression
+						paramListInfo->params[paramIndex].ptype = constArg->consttype;
+						paramListInfo->params[paramIndex].value = constArg->constvalue;
+						paramListInfo->params[paramIndex].isnull = constArg->constisnull;
+
+						// Log constant parameter
+						elog(DEBUG1, "Populating ParamListInfo with constant parameter inside function expression: paramIndex: %d, paramType: %d",
+							paramIndex, paramListInfo->params[paramIndex].ptype);
+					}
+					else
+					{
+						elog(DEBUG1, "Unsupported argument type in function expression at paramIndex: %d", paramIndex);
+					}
+				}
+			}
+			else
+			{
+				// Handle other cases if necessary
+				elog(DEBUG1, "Unsupported argument type at paramIndex: %d", paramIndex);
 			}
 
 			// Log populated parameters
-			elog(DEBUG1, "Populating ParamListInfo, paramIndex: %d, paramType: %d, paramValue: %d", 
-				paramIndex, paramListInfo->params[paramIndex].ptype, DatumGetInt32(paramListInfo->params[paramIndex].value));
+			// elog(DEBUG1, "Populating ParamListInfo, paramIndex: %d, paramType: %d, paramValue: %d", 
+			// 	paramIndex, paramListInfo->params[paramIndex].ptype, DatumGetInt32(paramListInfo->params[paramIndex].value));
 
 			paramIndex++;
 		}
