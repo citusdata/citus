@@ -45,6 +45,8 @@ ExtractParametersFromParamList(ParamListInfo paramListInfo,
 {
 	int parameterCount = paramListInfo->numParams;
 
+	elog(DEBUG1, "Extracting %d parameters from ParamListInfo", parameterCount);
+
 	*parameterTypes = (Oid *) palloc0(parameterCount * sizeof(Oid));
 	*parameterValues = (const char **) palloc0(parameterCount * sizeof(char *));
 
@@ -55,49 +57,48 @@ ExtractParametersFromParamList(ParamListInfo paramListInfo,
 		Oid typeOutputFunctionId = InvalidOid;
 		bool variableLengthType = false;
 
+		/* Log parameter type */
+		elog(DEBUG1, "Processing parameter %d, type: %d", parameterIndex + 1, parameterData->ptype);
+
 		/*
 		 * Use 0 for data types where the oid values can be different on
-		 * the coordinator and worker nodes. Therefore, the worker nodes can
-		 * infer the correct oid.
+		 * the coordinator and worker nodes.
 		 */
 		if (parameterData->ptype >= FirstNormalObjectId && !useOriginalCustomTypeOids)
 		{
 			(*parameterTypes)[parameterIndex] = 0;
+			elog(DEBUG1, "Using default OID (0) for parameter %d", parameterIndex + 1);
 		}
 		else
 		{
 			(*parameterTypes)[parameterIndex] = parameterData->ptype;
 		}
 
-		/*
-		 * If the parameter is not referenced / used (ptype == 0) and
-		 * would otherwise have errored out inside standard_planner()),
-		 * don't pass a value to the remote side, and pass text oid to prevent
-		 * undetermined data type errors on workers.
-		 */
+		/* Handle unreferenced parameter */
 		if (parameterData->ptype == 0)
 		{
 			(*parameterValues)[parameterIndex] = NULL;
 			(*parameterTypes)[parameterIndex] = TEXTOID;
 
+			elog(DEBUG1, "Parameter %d has ptype 0, setting TEXTOID", parameterIndex + 1);
 			continue;
 		}
 
-		/*
-		 * If the parameter is NULL then we preserve its type, but
-		 * don't need to evaluate its value.
-		 */
+		/* Handle NULL parameter */
 		if (parameterData->isnull)
 		{
 			(*parameterValues)[parameterIndex] = NULL;
-
+			elog(DEBUG1, "Parameter %d is NULL", parameterIndex + 1);
 			continue;
 		}
 
-		getTypeOutputInfo(parameterData->ptype, &typeOutputFunctionId,
-						  &variableLengthType);
+		/* Log the type output function */
+		getTypeOutputInfo(parameterData->ptype, &typeOutputFunctionId, &variableLengthType);
+		elog(DEBUG1, "Type output function ID for parameter %d: %u", parameterIndex + 1, typeOutputFunctionId);
 
-		(*parameterValues)[parameterIndex] = OidOutputFunctionCall(typeOutputFunctionId,
-																   parameterData->value);
+		/* Log the parameter value */
+		(*parameterValues)[parameterIndex] = OidOutputFunctionCall(typeOutputFunctionId, parameterData->value);
+		elog(DEBUG1, "Parameter %d value after output function call: %s", parameterIndex + 1, (*parameterValues)[parameterIndex]);
 	}
 }
+

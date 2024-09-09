@@ -273,6 +273,13 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 	{
 		CallStmt *callStmt = (CallStmt *) parsetree;
 
+		/* Log the entire parsetree as a string */
+		elog(DEBUG1, "Parse Tree: %s", nodeToString(parsetree));
+
+		/* Log other information as before */
+		elog(DEBUG1, "Processing CallStmt for procedure");
+		elog(DEBUG1, "Procedure context: %d", context);
+
 		/*
 		 * If the procedure is distributed and we are using MX then we have the
 		 * possibility of calling it on the worker. If the data is located on
