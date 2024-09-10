@@ -83,7 +83,6 @@ static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 							 localCopyOutState);
 static void ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest);
-static List * CreateCopyOptions(bool isBinaryCopy);
 static StringInfo ConstructShardTruncateStatement(
 	List *destinationShardFullyQualifiedName);
 
@@ -549,33 +548,12 @@ WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
 
 
 /*
- * CreateCopyOptions creates the options list for the COPY command.
- */
-static List *
-CreateCopyOptions(bool isBinaryCopy)
-{
-	List *options = NIL;
-
-	/* If binary format is used, add the binary format option */
-	if (isBinaryCopy)
-	{
-		DefElem *binaryFormatOption = makeDefElem("format", (Node *) makeString("binary"),
-												  -1);
-		options = lappend(options, binaryFormatOption);
-	}
-
-	return options;
-}
-
-
-/*
  * LocalCopyToShard performs local copy for the given destination shard.
  */
 static void
 LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState)
 {
 	bool isBinaryCopy = localCopyOutState->binary;
-
 	if (isBinaryCopy)
 	{
 		AppendCopyBinaryFooters(localCopyOutState);
@@ -588,38 +566,40 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 	 */
 	LocalCopyBuffer = localCopyOutState->fe_msgbuf;
 
-	/* Extract schema and relation names */
 	char *destinationShardSchemaName = linitial(
 		copyDest->destinationShardFullyQualifiedName);
 	char *destinationShardRelationName = lsecond(
 		copyDest->destinationShardFullyQualifiedName);
 
-	/* Get OIDs for schema and shard */
-	Oid destinationSchemaOid = get_namespace_oid(destinationShardSchemaName, false);
+	Oid destinationSchemaOid = get_namespace_oid(destinationShardSchemaName,
+												 false /* missing_ok */);
 	Oid destinationShardOid = get_relname_relid(destinationShardRelationName,
 												destinationSchemaOid);
 
-	/* Create options list for COPY command */
-	List *options = CreateCopyOptions(isBinaryCopy);
+	DefElem *binaryFormatOption = NULL;
+	if (isBinaryCopy)
+	{
+		binaryFormatOption = makeDefElem("format", (Node *) makeString("binary"), -1);
+	}
 
-	/* Open the shard relation */
 	Relation shard = table_open(destinationShardOid, RowExclusiveLock);
+	ParseState *pState = make_parsestate(NULL /* parentParseState */);
+	(void) addRangeTableEntryForRelation(pState, shard, AccessShareLock,
+										 NULL /* alias */, false /* inh */,
+										 false /* inFromCl */);
 
-	/* Create and configure parse state */
-	ParseState *pState = make_parsestate(NULL);
-	(void) addRangeTableEntryForRelation(pState, shard, AccessShareLock, NULL, false,
-										 false);
-
-	/* Begin and execute the COPY FROM operation */
-	CopyFromState cstate = BeginCopyFrom(pState, shard, NULL, NULL, false,
-										 ReadFromLocalBufferCallback, NULL, options);
+	List *options = (isBinaryCopy) ? list_make1(binaryFormatOption) : NULL;
+	CopyFromState cstate = BeginCopyFrom(pState, shard,
+										 NULL /* whereClause */,
+										 NULL /* fileName */,
+										 false /* is_program */,
+										 ReadFromLocalBufferCallback,
+										 NULL /* attlist (NULL is all columns) */,
+										 options);
 	CopyFrom(cstate);
 	EndCopyFrom(cstate);
-
-	/* Reset the local copy buffer */
 	resetStringInfo(localCopyOutState->fe_msgbuf);
 
-	/* Close the shard relation and free parse state */
 	table_close(shard, NoLock);
 	free_parsestate(pState);
 }
