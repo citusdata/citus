@@ -556,10 +556,6 @@ CreateCopyOptions(bool isBinaryCopy)
 {
 	List *options = NIL;
 
-	/* Add the FREEZE option */
-	DefElem *freezeOption = makeDefElem("freeze", (Node *) makeInteger(true), -1);
-	options = lappend(options, freezeOption);
-
 	/* If binary format is used, add the binary format option */
 	if (isBinaryCopy)
 	{
