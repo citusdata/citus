@@ -45,8 +45,6 @@
 static RangeTblEntry * AnchorRte(Query *subquery);
 static List * UnionRelationRestrictionLists(List *firstRelationList,
 											List *secondRelationList);
-static List * CreateFilteredTargetListForRelation(Oid relationId,
-												  List *requiredAttributes);
 static List * CreateDummyTargetList(Oid relationId, List *requiredAttributes);
 static TargetEntry * CreateTargetEntryForColumn(Form_pg_attribute attributeTuple, Index
 												rteIndex,
@@ -325,14 +323,13 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
  * as a NULL column.
  */
 List *
-CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes, bool
-							   isMergeQuery)
+CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
 	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
 	List *targetList = NIL;
-	int colAppendIdx = 1;
+	int varAttrNo = 1;
 
 	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
 	{
@@ -362,9 +359,8 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes, bool
 		}
 		else
 		{
-			int varAttNum = isMergeQuery ? attrNum : colAppendIdx++;
 			TargetEntry *targetEntry =
-				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, varAttNum,
+				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, varAttrNo++,
 										   resNo);
 			targetList = lappend(targetList, targetEntry);
 		}
@@ -380,7 +376,7 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes, bool
  * only the required columns of the given relation. If there is not required
  * columns then a dummy NULL column is put as the only entry.
  */
-static List *
+List *
 CreateFilteredTargetListForRelation(Oid relationId, List *requiredAttributes)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
