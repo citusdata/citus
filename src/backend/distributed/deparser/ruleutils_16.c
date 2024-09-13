@@ -2565,9 +2565,21 @@ get_basic_select_query(Query *query, deparse_context *context,
 			{
 				SortGroupClause *srt = (SortGroupClause *) lfirst(l);
 
-				appendStringInfoString(buf, sep);
-				get_rule_sortgroupclause(srt->tleSortGroupRef, query->targetList,
-										 false, context);
+				/* Patch: Ensure the correct target list is used without alias swapping */
+				TargetEntry *tle = get_sortgroupclause_tle(srt, query->targetList);
+
+				/* Ensure the attribute names are preserved */
+				if (tle && tle->resname != NULL)
+				{
+					appendStringInfoString(buf, sep);
+					appendStringInfoString(buf, quote_identifier(tle->resname));
+				}
+				else
+				{
+					/* Fallback to the default behavior */
+					get_rule_sortgroupclause(srt->tleSortGroupRef, query->targetList, false, context);
+				}
+
 				sep = ", ";
 			}
 			appendStringInfoChar(buf, ')');
