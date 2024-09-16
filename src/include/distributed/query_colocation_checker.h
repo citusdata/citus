@@ -39,5 +39,7 @@ extern Query * WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
 										   List *requiredAttributes,
 										   RTEPermissionInfo *perminfo);
 extern List * CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes);
+extern List * CreateFilteredTargetListForRelation(Oid relationId,
+												  List *requiredAttributes);
 
 #endif /* QUERY_COLOCATION_CHECKER_H */

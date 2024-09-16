@@ -312,6 +312,90 @@ WHEN MATCHED THEN DO NOTHING;
 DROP TABLE IF EXISTS source;
 DROP TABLE IF EXISTS target;
 
+
+-- Bug Fix Test as part of this PR
+-- Test 1
+CREATE TABLE source (
+    id int,
+    age int,
+    salary int
+);
+
+CREATE TABLE target (
+    id int,
+    age int,
+    salary int
+);
+
+SELECT create_distributed_table('source', 'id', colocate_with=>'none');
+SELECT create_distributed_table('target', 'id', colocate_with=>'none');
+
+INSERT INTO source (id, age, salary) VALUES  (1,30, 100000);
+
+MERGE INTO ONLY target USING source ON (source.id = target.id)
+WHEN NOT MATCHED THEN
+INSERT (id, salary) VALUES (source.id, source.salary);
+
+SELECT * FROM TARGET;
+DROP TABLE IF EXISTS source;
+DROP TABLE IF EXISTS target;
+
+
+-- Test 2
+CREATE TABLE source (
+    id int,
+    age int,
+    salary int
+);
+
+CREATE TABLE target (
+    id int,
+    age int,
+    salary int
+);
+
+SELECT create_distributed_table('source', 'id', colocate_with=>'none');
+SELECT create_distributed_table('target', 'id', colocate_with=>'none');
+
+INSERT INTO source (id, age, salary) VALUES  (1,30, 100000);
+
+MERGE INTO ONLY target USING source ON (source.id = target.id)
+WHEN NOT MATCHED THEN
+INSERT (salary, id) VALUES (source.salary, source.id);
+
+SELECT * FROM TARGET;
+DROP TABLE IF EXISTS source;
+DROP TABLE IF EXISTS target;
+
+
+-- Test 3
+CREATE TABLE source (
+    id int,
+    age int,
+    salary int
+);
+
+CREATE TABLE target (
+    id int,
+    age int,
+    salary int
+);
+
+SELECT create_distributed_table('source', 'id', colocate_with=>'none');
+SELECT create_distributed_table('target', 'id', colocate_with=>'none');
+
+INSERT INTO source (id, age, salary) VALUES  (1,30, 100000);
+
+MERGE INTO ONLY target USING source ON (source.id = target.id)
+WHEN NOT MATCHED THEN
+INSERT (salary, id, age) VALUES (source.age, source.id, source.salary);
+
+SELECT * FROM TARGET;
+DROP TABLE IF EXISTS source;
+DROP TABLE IF EXISTS target;
+
+
+
 DROP SCHEMA IF EXISTS merge_vcore_schema CASCADE;
 
 
