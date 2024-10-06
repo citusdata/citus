@@ -63,7 +63,7 @@ NoneDistTableReplicateCoordinatorPlacement(Oid noneDistTableId,
 	/* insert new placements to pg_dist_placement */
 	List *insertedPlacementList = NIL;
 	WorkerNode *targetNode = NULL;
-	foreach_ptr(targetNode, targetNodeList)
+	foreach_declared_ptr(targetNode, targetNodeList)
 	{
 		ShardPlacement *shardPlacement =
 			InsertShardPlacementRowGlobally(shardId, GetNextPlacementId(),
@@ -215,7 +215,7 @@ CreateForeignKeysFromReferenceTablesOnShards(Oid noneDistTableId)
 	List *taskList = NIL;
 
 	char *command = NULL;
-	foreach_ptr(command, ddlCommandList)
+	foreach_declared_ptr(command, ddlCommandList)
 	{
 		List *commandTaskList = InterShardDDLTaskList(
 			ForeignConstraintGetReferencingTableId(command),

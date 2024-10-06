@@ -417,7 +417,7 @@ UndistributeTables(List *relationIdList)
 	 */
 	List *originalForeignKeyRecreationCommands = NIL;
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		List *fkeyCommandsForRelation =
 			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
@@ -803,7 +803,7 @@ ConvertTableInternal(TableConversionState *con)
 		List *partitionList = PartitionList(con->relationId);
 
 		Oid partitionRelationId = InvalidOid;
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			char *tableQualifiedName = generate_qualified_relation_name(
 				partitionRelationId);
@@ -876,7 +876,7 @@ ConvertTableInternal(TableConversionState *con)
 	}
 
 	TableDDLCommand *tableCreationCommand = NULL;
-	foreach_ptr(tableCreationCommand, preLoadCommands)
+	foreach_declared_ptr(tableCreationCommand, preLoadCommands)
 	{
 		Assert(CitusIsA(tableCreationCommand, TableDDLCommand));
 
@@ -950,7 +950,7 @@ ConvertTableInternal(TableConversionState *con)
 				 con->suppressNoticeMessages);
 
 	TableDDLCommand *tableConstructionCommand = NULL;
-	foreach_ptr(tableConstructionCommand, postLoadCommands)
+	foreach_declared_ptr(tableConstructionCommand, postLoadCommands)
 	{
 		Assert(CitusIsA(tableConstructionCommand, TableDDLCommand));
 		char *tableConstructionSQL = GetTableDDLCommand(tableConstructionCommand);
@@ -968,7 +968,7 @@ ConvertTableInternal(TableConversionState *con)
 	MemoryContext oldContext = MemoryContextSwitchTo(citusPerPartitionContext);
 
 	char *attachPartitionCommand = NULL;
-	foreach_ptr(attachPartitionCommand, attachPartitionCommands)
+	foreach_declared_ptr(attachPartitionCommand, attachPartitionCommands)
 	{
 		MemoryContextReset(citusPerPartitionContext);
 
@@ -993,7 +993,7 @@ ConvertTableInternal(TableConversionState *con)
 
 		/* For now we only support cascade to colocation for alter_distributed_table UDF */
 		Assert(con->conversionType == ALTER_DISTRIBUTED_TABLE);
-		foreach_oid(colocatedTableId, con->colocatedTableList)
+		foreach_declared_oid(colocatedTableId, con->colocatedTableList)
 		{
 			if (colocatedTableId == con->relationId)
 			{
@@ -1023,7 +1023,7 @@ ConvertTableInternal(TableConversionState *con)
 		if (con->cascadeToColocated != CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED)
 		{
 			char *foreignKeyCommand = NULL;
-			foreach_ptr(foreignKeyCommand, foreignKeyCommands)
+			foreach_declared_ptr(foreignKeyCommand, foreignKeyCommands)
 			{
 				ExecuteQueryViaSPI(foreignKeyCommand, SPI_OK_UTILITY);
 			}
@@ -1059,7 +1059,7 @@ CopyTableConversionReturnIntoCurrentContext(TableConversionReturn *tableConversi
 		tableConversionReturnCopy = palloc0(sizeof(TableConversionReturn));
 		List *copyForeignKeyCommands = NIL;
 		char *foreignKeyCommand = NULL;
-		foreach_ptr(foreignKeyCommand, tableConversionReturn->foreignKeyCommands)
+		foreach_declared_ptr(foreignKeyCommand, tableConversionReturn->foreignKeyCommands)
 		{
 			char *copyForeignKeyCommand = MemoryContextStrdup(CurrentMemoryContext,
 															  foreignKeyCommand);
@@ -1134,7 +1134,7 @@ DropIndexesNotSupportedByColumnar(Oid relationId, bool suppressNoticeMessages)
 	RelationClose(columnarRelation);
 
 	Oid indexId = InvalidOid;
-	foreach_oid(indexId, indexIdList)
+	foreach_declared_oid(indexId, indexIdList)
 	{
 		char *indexAmName = GetIndexAccessMethodName(indexId);
 		if (extern_ColumnarSupportsIndexAM(indexAmName))
@@ -1394,7 +1394,7 @@ CreateTableConversion(TableConversionParameters *params)
 		 * since they will be handled separately.
 		 */
 		Oid colocatedTableId = InvalidOid;
-		foreach_oid(colocatedTableId, colocatedTableList)
+		foreach_declared_oid(colocatedTableId, colocatedTableList)
 		{
 			if (PartitionTable(colocatedTableId))
 			{
@@ -1610,7 +1610,7 @@ DoesCascadeDropUnsupportedObject(Oid classId, Oid objectId, HTAB *nodeMap)
 																	 targetObjectId);
 
 	HeapTuple depTup = NULL;
-	foreach_ptr(depTup, dependencyTupleList)
+	foreach_declared_ptr(depTup, dependencyTupleList)
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
 
@@ -1650,7 +1650,7 @@ GetViewCreationCommandsOfTable(Oid relationId)
 	List *commands = NIL;
 
 	Oid viewOid = InvalidOid;
-	foreach_oid(viewOid, views)
+	foreach_declared_oid(viewOid, views)
 	{
 		StringInfo query = makeStringInfo();
 
@@ -1688,7 +1688,7 @@ WrapTableDDLCommands(List *commandStrings)
 	List *tableDDLCommands = NIL;
 
 	char *command = NULL;
-	foreach_ptr(command, commandStrings)
+	foreach_declared_ptr(command, commandStrings)
 	{
 		tableDDLCommands = lappend(tableDDLCommands, makeTableDDLCommandString(command));
 	}
@@ -1851,7 +1851,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	 */
 	List *ownedSequences = getOwnedSequences_internal(sourceId, 0, DEPENDENCY_AUTO);
 	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, ownedSequences)
+	foreach_declared_oid(sequenceOid, ownedSequences)
 	{
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
@@ -1887,7 +1887,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	}
 
 	char *justBeforeDropCommand = NULL;
-	foreach_ptr(justBeforeDropCommand, justBeforeDropCommands)
+	foreach_declared_ptr(justBeforeDropCommand, justBeforeDropCommands)
 	{
 		ExecuteQueryViaSPI(justBeforeDropCommand, SPI_OK_UTILITY);
 	}
@@ -2003,7 +2003,7 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 		Oid colocatedTableOid = InvalidOid;
 		text *colocateWithText = cstring_to_text(con->colocateWith);
 		Oid colocateWithTableOid = ResolveRelationId(colocateWithText, false);
-		foreach_oid(colocatedTableOid, con->colocatedTableList)
+		foreach_declared_oid(colocatedTableOid, con->colocatedTableList)
 		{
 			if (colocateWithTableOid == colocatedTableOid)
 			{
@@ -2235,7 +2235,7 @@ WillRecreateForeignKeyToReferenceTable(Oid relationId,
 	{
 		List *colocatedTableList = ColocatedTableList(relationId);
 		Oid colocatedTableOid = InvalidOid;
-		foreach_oid(colocatedTableOid, colocatedTableList)
+		foreach_declared_oid(colocatedTableOid, colocatedTableList)
 		{
 			if (HasForeignKeyToReferenceTable(colocatedTableOid))
 			{
@@ -2263,7 +2263,7 @@ WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId)
 	List *foreignKeys = list_concat(referencingForeingKeys, referencedForeignKeys);
 
 	Oid foreignKeyOid = InvalidOid;
-	foreach_oid(foreignKeyOid, foreignKeys)
+	foreach_declared_oid(foreignKeyOid, foreignKeys)
 	{
 		ereport(WARNING, (errmsg("foreign key %s will be dropped",
 								 get_constraint_name(foreignKeyOid))));

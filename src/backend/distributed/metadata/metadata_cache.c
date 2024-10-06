@@ -919,7 +919,7 @@ CitusTableList(void)
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, citusTableIdList)
+	foreach_declared_oid(relationId, citusTableIdList)
 	{
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
@@ -1890,7 +1890,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 								   sizeof(int));
 
 		HeapTuple shardTuple = NULL;
-		foreach_ptr(shardTuple, distShardTupleList)
+		foreach_declared_ptr(shardTuple, distShardTupleList)
 		{
 			ShardInterval *shardInterval = TupleToShardInterval(shardTuple,
 																distShardTupleDesc,
@@ -2028,7 +2028,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		GroupShardPlacement *placementArray = palloc0(numberOfPlacements *
 													  sizeof(GroupShardPlacement));
 		GroupShardPlacement *srcPlacement = NULL;
-		foreach_ptr(srcPlacement, placementList)
+		foreach_declared_ptr(srcPlacement, placementList)
 		{
 			placementArray[placementOffset] = *srcPlacement;
 			placementOffset++;
@@ -4332,7 +4332,7 @@ InitializeWorkerNodeCache(void)
 
 	/* iterate over the worker node list */
 	WorkerNode *currentNode = NULL;
-	foreach_ptr(currentNode, workerNodeList)
+	foreach_declared_ptr(currentNode, workerNodeList)
 	{
 		bool handleFound = false;
 
@@ -4509,7 +4509,7 @@ GetLocalNodeId(void)
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		if (workerNode->groupId == localGroupId &&
 			workerNode->isActive)
@@ -5097,7 +5097,7 @@ CitusTableCacheFlushInvalidatedEntries()
 	if (DistTableCacheHash != NULL && DistTableCacheExpired != NIL)
 	{
 		CitusTableCacheEntry *cacheEntry = NULL;
-		foreach_ptr(cacheEntry, DistTableCacheExpired)
+		foreach_declared_ptr(cacheEntry, DistTableCacheExpired)
 		{
 			ResetCitusTableCacheEntry(cacheEntry);
 		}

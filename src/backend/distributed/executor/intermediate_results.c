@@ -308,7 +308,7 @@ PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
 	}
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, initialNodeList)
+	foreach_declared_ptr(workerNode, initialNodeList)
 	{
 		int flags = 0;
 
@@ -328,7 +328,7 @@ PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
 	RemoteTransactionsBeginIfNecessary(connectionList);
 
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		StringInfo copyCommand = ConstructCopyResultStatement(resultId);
 
@@ -339,7 +339,7 @@ PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
 		}
 	}
 
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		bool raiseInterrupts = true;
 
@@ -518,7 +518,7 @@ static void
 BroadcastCopyData(StringInfo dataBuffer, List *connectionList)
 {
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		SendCopyDataOverConnection(dataBuffer, connection);
 	}
@@ -714,7 +714,7 @@ void
 RemoveIntermediateResultsDirectories(void)
 {
 	char *directoryElement = NULL;
-	foreach_ptr(directoryElement, CreatedResultsDirectories)
+	foreach_declared_ptr(directoryElement, CreatedResultsDirectories)
 	{
 		/*
 		 * The shared directory is renamed before deleting it. Otherwise it

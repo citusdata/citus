@@ -154,7 +154,7 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
 
 	/* Check if parent is already added */
 	ShardInterval *existingShardInterval = NULL;
-	foreach_ptr(existingShardInterval, publicationInfo->shardIntervals)
+	foreach_declared_ptr(existingShardInterval, publicationInfo->shardIntervals)
 	{
 		if (existingShardInterval->shardId == shardInterval->shardId)
 		{
@@ -204,7 +204,7 @@ PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
 	}
 
 	List *shardIntervalList = NIL;
-	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	foreach_declared_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
@@ -256,7 +256,7 @@ CreateLogicalRepTarget(Oid tableOwnerId, uint32 nodeId,
 	 * table owner and node.
 	 */
 	ReplicationSlotInfo *replicationSlot = NULL;
-	foreach_ptr(replicationSlot, replicationSlotInfoList)
+	foreach_declared_ptr(replicationSlot, replicationSlotInfoList)
 	{
 		if (nodeId == replicationSlot->targetNodeId &&
 			tableOwnerId == replicationSlot->tableOwnerId)

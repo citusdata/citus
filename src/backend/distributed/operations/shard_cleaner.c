@@ -264,7 +264,7 @@ DropOrphanedResourcesForCleanup()
 	int failedResourceCountForCleanup = 0;
 	CleanupRecord *record = NULL;
 
-	foreach_ptr(record, cleanupRecordList)
+	foreach_declared_ptr(record, cleanupRecordList)
 	{
 		if (!PrimaryNodeForGroup(record->nodeGroupId, NULL))
 		{
@@ -374,7 +374,7 @@ FinalizeOperationNeedingCleanupOnSuccess(const char *operationName)
 	int failedShardCountOnComplete = 0;
 
 	CleanupRecord *record = NULL;
-	foreach_ptr(record, currentOperationRecordList)
+	foreach_declared_ptr(record, currentOperationRecordList)
 	{
 		if (record->policy == CLEANUP_ALWAYS)
 		{

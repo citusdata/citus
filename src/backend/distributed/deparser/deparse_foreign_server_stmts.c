@@ -176,7 +176,7 @@ AppendAlterForeignServerOptions(StringInfo buf, AlterForeignServerStmt *stmt)
 
 	DefElemAction action = DEFELEM_UNSPEC;
 	DefElem *def = NULL;
-	foreach_ptr(def, stmt->options)
+	foreach_declared_ptr(def, stmt->options)
 	{
 		if (def->defaction != DEFELEM_UNSPEC)
 		{
@@ -242,7 +242,7 @@ static void
 AppendServerNames(StringInfo buf, DropStmt *stmt)
 {
 	String *serverValue = NULL;
-	foreach_ptr(serverValue, stmt->objects)
+	foreach_declared_ptr(serverValue, stmt->objects)
 	{
 		const char *serverString = quote_identifier(strVal(serverValue));
 		appendStringInfo(buf, "%s", serverString);

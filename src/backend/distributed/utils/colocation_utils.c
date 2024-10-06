@@ -204,7 +204,7 @@ get_colocated_shard_array(PG_FUNCTION_ARGS)
 	int colocatedShardIndex = 0;
 
 	ShardInterval *colocatedShardInterval = NULL;
-	foreach_ptr(colocatedShardInterval, colocatedShardList)
+	foreach_declared_ptr(colocatedShardInterval, colocatedShardList)
 	{
 		uint64 colocatedShardId = colocatedShardInterval->shardId;
 
@@ -1065,7 +1065,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	Assert(shardIntervalIndex >= 0);
 
 	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
 		CitusTableCacheEntry *colocatedTableCacheEntry =
 			GetCitusTableCacheEntry(colocatedTableId);
@@ -1131,7 +1131,7 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
 	Assert(shardIntervalIndex >= 0);
 
 	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
 		if (PartitionTable(colocatedTableId))
 		{

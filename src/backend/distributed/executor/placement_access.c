@@ -126,7 +126,7 @@ BuildPlacementAccessList(int32 groupId, List *relationShardList,
 	List *placementAccessList = NIL;
 
 	RelationShard *relationShard = NULL;
-	foreach_ptr(relationShard, relationShardList)
+	foreach_declared_ptr(relationShard, relationShardList)
 	{
 		ShardPlacement *placement = ActiveShardPlacementOnGroup(groupId,
 																relationShard->shardId);

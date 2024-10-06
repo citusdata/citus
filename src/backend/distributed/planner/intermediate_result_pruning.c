@@ -277,7 +277,7 @@ AppendAllWorkerNodes(IntermediateResultsHashEntry *entry)
 	List *workerNodeList = ActiveReadableNodeList();
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		entry->nodeIdList =
 			list_append_unique_int(entry->nodeIdList, workerNode->nodeId);
@@ -421,7 +421,7 @@ LogIntermediateResultMulticastSummary(IntermediateResultsHashEntry *entry,
 		}
 
 		WorkerNode *workerNode = NULL;
-		foreach_ptr(workerNode, workerNodeList)
+		foreach_declared_ptr(workerNode, workerNodeList)
 		{
 			elog(logLevel, "Subplan %s will be sent to %s:%d", resultId,
 				 workerNode->workerName, workerNode->workerPort);

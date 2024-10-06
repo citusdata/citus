@@ -645,7 +645,7 @@ GetPreLoadTableCreationCommands(Oid relationId,
 	if (tableACLList != NIL)
 	{
 		char *tableACLCommand = NULL;
-		foreach_ptr(tableACLCommand, tableACLList)
+		foreach_declared_ptr(tableACLCommand, tableACLList)
 		{
 			tableDDLEventList = lappend(tableDDLEventList,
 										makeTableDDLCommandString(tableACLCommand));
@@ -822,7 +822,7 @@ GetTableRowLevelSecurityCommands(Oid relationId)
 	List *rowLevelSecurityEnableCommands = pg_get_row_level_security_commands(relationId);
 
 	char *rowLevelSecurityCommand = NULL;
-	foreach_ptr(rowLevelSecurityCommand, rowLevelSecurityEnableCommands)
+	foreach_declared_ptr(rowLevelSecurityCommand, rowLevelSecurityEnableCommands)
 	{
 		rowLevelSecurityCommandList = lappend(
 			rowLevelSecurityCommandList,

@@ -149,7 +149,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -172,7 +172,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 
 	/* send commands in parallel */
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		StringInfo queryString = makeStringInfo();
 
@@ -203,7 +203,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	}
 
 	/* receive dump_local_wait_edges results */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		bool raiseInterrupts = true;
 

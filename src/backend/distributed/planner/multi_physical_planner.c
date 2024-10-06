@@ -895,7 +895,7 @@ WrapUngroupedVarsInAnyValueAggregate(Node *expression, List *groupClauseList,
 		 * subexpression equality check.
 		 */
 		TargetEntry *targetEntry = NULL;
-		foreach_ptr(targetEntry, context.groupByTargetEntryList)
+		foreach_declared_ptr(targetEntry, context.groupByTargetEntryList)
 		{
 			if (!IsA(targetEntry->expr, Var))
 			{
@@ -953,7 +953,7 @@ AddAnyValueAggregates(Node *node, AddAnyValueAggregatesContext *context)
 		 * Check whether this Var appears in the GROUP BY.
 		 */
 		TargetEntry *groupByTargetEntry = NULL;
-		foreach_ptr(groupByTargetEntry, context->groupByTargetEntryList)
+		foreach_declared_ptr(groupByTargetEntry, context->groupByTargetEntryList)
 		{
 			if (!IsA(groupByTargetEntry->expr, Var))
 			{
@@ -996,7 +996,7 @@ AddAnyValueAggregates(Node *node, AddAnyValueAggregatesContext *context)
 		 * Otherwise, continue to descend into subexpressions.
 		 */
 		TargetEntry *groupByTargetEntry = NULL;
-		foreach_ptr(groupByTargetEntry, context->groupByTargetEntryList)
+		foreach_declared_ptr(groupByTargetEntry, context->groupByTargetEntryList)
 		{
 			if (equal(node, groupByTargetEntry->expr))
 			{
@@ -1192,7 +1192,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 			List *funcCollations = NIL;
 
 			TargetEntry *targetEntry = NULL;
-			foreach_ptr(targetEntry, dependentTargetList)
+			foreach_declared_ptr(targetEntry, dependentTargetList)
 			{
 				Node *expr = (Node *) targetEntry->expr;
 
@@ -2237,7 +2237,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 
 		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, prunedShardList)
+		foreach_declared_ptr(shardInterval, prunedShardList)
 		{
 			int shardIndex = shardInterval->shardIndex;
 
@@ -2305,7 +2305,7 @@ static bool
 IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction)
 {
 	RestrictInfo *joinInfo = NULL;
-	foreach_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
+	foreach_declared_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
 	{
 		if (joinInfo->outer_relids == NULL)
 		{
@@ -3473,7 +3473,7 @@ FetchEqualityAttrNumsForList(List *nodeList)
 	List *attributeNums = NIL;
 	Node *node = NULL;
 	bool hasAtLeastOneEquality = false;
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		List *fetchedEqualityAttrNums =
 			FetchEqualityAttrNumsForRTE(node);
@@ -3531,7 +3531,7 @@ FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr)
 	List *attributeNums = NIL;
 	bool hasEquality = true;
 	Node *arg = NULL;
-	foreach_ptr(arg, boolExpr->args)
+	foreach_declared_ptr(arg, boolExpr->args)
 	{
 		List *attributeNumsInSubExpression = FetchEqualityAttrNumsForRTE(arg);
 		if (boolExpr->boolop == AND_EXPR)
@@ -3622,7 +3622,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 		 * tables and this new one.
 		 */
 		Node *nextJoinClause = NULL;
-		foreach_ptr(nextJoinClause, nextJoinClauseList)
+		foreach_declared_ptr(nextJoinClause, nextJoinClauseList)
 		{
 			if (!NodeIsEqualsOpExpr(nextJoinClause))
 			{
@@ -4183,7 +4183,7 @@ FetchTaskResultNameList(List *mapOutputFetchTaskList)
 	List *resultNameList = NIL;
 	Task *mapOutputFetchTask = NULL;
 
-	foreach_ptr(mapOutputFetchTask, mapOutputFetchTaskList)
+	foreach_declared_ptr(mapOutputFetchTask, mapOutputFetchTaskList)
 	{
 		Task *mapTask = linitial(mapOutputFetchTask->dependentTaskList);
 		int partitionId = mapOutputFetchTask->partitionId;
@@ -4344,7 +4344,7 @@ PartitionColumnIndex(Var *targetVar, List *targetList)
 {
 	TargetEntry *targetEntry = NULL;
 	int resNo = 1;
-	foreach_ptr(targetEntry, targetList)
+	foreach_declared_ptr(targetEntry, targetList)
 	{
 		if (IsA(targetEntry->expr, Var))
 		{
@@ -4571,7 +4571,7 @@ RowModifyLevelForQuery(Query *query)
 		{
 			/* skip checking for INSERT as those CTEs are recursively planned */
 			CommonTableExpr *cte = NULL;
-			foreach_ptr(cte, query->cteList)
+			foreach_declared_ptr(cte, query->cteList)
 			{
 				Query *cteQuery = (Query *) cte->ctequery;
 

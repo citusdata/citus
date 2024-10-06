@@ -224,7 +224,7 @@ PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList)
 	Datum *shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		Datum shardIdDatum = Int64GetDatum(shardInterval->shardId);
 

@@ -3083,7 +3083,7 @@ DefElem *
 GetExtensionOption(List *extensionOptions, const char *defname)
 {
 	DefElem *defElement = NULL;
-	foreach_ptr(defElement, extensionOptions)
+	foreach_declared_ptr(defElement, extensionOptions)
 	{
 		if (IsA(defElement, DefElem) &&
 			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)

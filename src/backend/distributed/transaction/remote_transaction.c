@@ -100,7 +100,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	transaction->lastQueuedSubXact = TopSubTransactionId;
 
 	SubXactContext *subXactState = NULL;
-	foreach_ptr(subXactState, activeSubXacts)
+	foreach_declared_ptr(subXactState, activeSubXacts)
 	{
 		/* append SET LOCAL state from when SAVEPOINT was encountered... */
 		if (subXactState->setLocalCmds != NULL)
@@ -311,13 +311,13 @@ RemoteTransactionListBegin(List *connectionList)
 	MultiConnection *connection = NULL;
 
 	/* send BEGIN to all nodes */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		StartRemoteTransactionBegin(connection);
 	}
 
 	/* wait for BEGIN to finish on all nodes */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		FinishRemoteTransactionBegin(connection);
 	}
@@ -724,7 +724,7 @@ RemoteTransactionsBeginIfNecessary(List *connectionList)
 	}
 
 	/* issue BEGIN to all connections needing it */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
@@ -748,7 +748,7 @@ RemoteTransactionsBeginIfNecessary(List *connectionList)
 	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* get result of all the BEGINs */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 

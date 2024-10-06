@@ -86,7 +86,7 @@ AppendDefElemList(StringInfo buf, List *defelems, char *objectName)
 {
 	DefElem *defelem = NULL;
 	bool first = true;
-	foreach_ptr(defelem, defelems)
+	foreach_declared_ptr(defelem, defelems)
 	{
 		if (!first)
 		{
@@ -133,7 +133,7 @@ DeparseDropTextSearchConfigurationStmt(Node *node)
 	appendStringInfoString(&buf, "DROP TEXT SEARCH CONFIGURATION ");
 	List *nameList = NIL;
 	bool first = true;
-	foreach_ptr(nameList, stmt->objects)
+	foreach_declared_ptr(nameList, stmt->objects)
 	{
 		if (!first)
 		{
@@ -171,7 +171,7 @@ DeparseDropTextSearchDictionaryStmt(Node *node)
 	appendStringInfoString(&buf, "DROP TEXT SEARCH DICTIONARY ");
 	List *nameList = NIL;
 	bool first = true;
-	foreach_ptr(nameList, stmt->objects)
+	foreach_declared_ptr(nameList, stmt->objects)
 	{
 		if (!first)
 		{
@@ -466,7 +466,7 @@ AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes)
 {
 	String *tokentype = NULL;
 	bool first = true;
-	foreach_ptr(tokentype, tokentypes)
+	foreach_declared_ptr(tokentype, tokentypes)
 	{
 		if (nodeTag(tokentype) != T_String)
 		{
@@ -494,7 +494,7 @@ AppendStringInfoDictnames(StringInfo buf, List *dicts)
 {
 	List *dictNames = NIL;
 	bool first = true;
-	foreach_ptr(dictNames, dicts)
+	foreach_declared_ptr(dictNames, dicts)
 	{
 		if (!first)
 		{

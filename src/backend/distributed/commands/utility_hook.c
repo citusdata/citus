@@ -436,7 +436,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			bool analyze = false;
 
 			DefElem *option = NULL;
-			foreach_ptr(option, explainStmt->options)
+			foreach_declared_ptr(option, explainStmt->options)
 			{
 				if (strcmp(option->defname, "analyze") == 0)
 				{
@@ -677,7 +677,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	{
 		AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
 		AlterTableCmd *command = NULL;
-		foreach_ptr(command, alterTableStmt->cmds)
+		foreach_declared_ptr(command, alterTableStmt->cmds)
 		{
 			AlterTableType alterTableType = command->subtype;
 
@@ -876,7 +876,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		}
 
 		DDLJob *ddlJob = NULL;
-		foreach_ptr(ddlJob, ddlJobs)
+		foreach_declared_ptr(ddlJob, ddlJobs)
 		{
 			ExecuteDistributedDDLJob(ddlJob);
 		}
@@ -936,7 +936,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		{
 			List *addresses = GetObjectAddressListFromParseTree(parsetree, false, true);
 			ObjectAddress *address = NULL;
-			foreach_ptr(address, addresses)
+			foreach_declared_ptr(address, addresses)
 			{
 				MarkObjectDistributed(address);
 				TrackPropagatedObject(address);
@@ -959,7 +959,7 @@ UndistributeDisconnectedCitusLocalTables(void)
 	citusLocalTableIdList = SortList(citusLocalTableIdList, CompareOids);
 
 	Oid citusLocalTableId = InvalidOid;
-	foreach_oid(citusLocalTableId, citusLocalTableIdList)
+	foreach_declared_oid(citusLocalTableId, citusLocalTableIdList)
 	{
 		/* acquire ShareRowExclusiveLock to prevent concurrent foreign key creation */
 		LOCKMODE lockMode = ShareRowExclusiveLock;
@@ -1341,7 +1341,7 @@ CurrentSearchPath(void)
 	bool schemaAdded = false;
 
 	Oid searchPathOid = InvalidOid;
-	foreach_oid(searchPathOid, searchPathList)
+	foreach_declared_oid(searchPathOid, searchPathList)
 	{
 		char *schemaName = get_namespace_name(searchPathOid);
 
@@ -1475,7 +1475,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		StringInfo applyCommand = makeStringInfo();
@@ -1529,7 +1529,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 		SetTaskQueryStringList(task, commands);
 
 		WorkerNode *workerNode = NULL;
-		foreach_ptr(workerNode, workerNodes)
+		foreach_declared_ptr(workerNode, workerNodes)
 		{
 			ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
 			targetPlacement->nodeName = workerNode->workerName;

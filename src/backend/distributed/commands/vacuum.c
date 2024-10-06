@@ -135,7 +135,7 @@ VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
 	List *relationIdList = NIL;
 
 	RangeVar *vacuumRelation = NULL;
-	foreach_ptr(vacuumRelation, vacuumRelationList)
+	foreach_declared_ptr(vacuumRelation, vacuumRelationList)
 	{
 		/*
 		 * If skip_locked option is enabled, we are skipping that relation
@@ -164,7 +164,7 @@ static bool
 IsDistributedVacuumStmt(List *vacuumRelationIdList)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, vacuumRelationIdList)
+	foreach_declared_oid(relationId, vacuumRelationIdList)
 	{
 		if (OidIsValid(relationId) && IsCitusTable(relationId))
 		{
@@ -188,7 +188,7 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 	int executedVacuumCount = 0;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (IsCitusTable(relationId))
 		{
@@ -254,7 +254,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		char *shardRelationName = pstrdup(relationName);
@@ -475,7 +475,7 @@ DeparseVacuumColumnNames(List *columnNameList)
 	appendStringInfoString(columnNames, " (");
 
 	String *columnName = NULL;
-	foreach_ptr(columnName, columnNameList)
+	foreach_declared_ptr(columnName, columnNameList)
 	{
 		appendStringInfo(columnNames, "%s,", strVal(columnName));
 	}
@@ -510,7 +510,7 @@ ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
 	List *vacuumList = NIL;
 
 	VacuumRelation *vacuumRelation = NULL;
-	foreach_ptr(vacuumRelation, vacuumStmt->rels)
+	foreach_declared_ptr(vacuumRelation, vacuumStmt->rels)
 	{
 		vacuumList = lappend(vacuumList, vacuumRelation->relation);
 	}
@@ -554,7 +554,7 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 
 	/* Parse options list */
 	DefElem *opt = NULL;
-	foreach_ptr(opt, vacstmt->options)
+	foreach_declared_ptr(opt, vacstmt->options)
 	{
 		/* Parse common options for VACUUM and ANALYZE */
 		if (strcmp(opt->defname, "verbose") == 0)
@@ -727,7 +727,7 @@ ExecuteUnqualifiedVacuumTasks(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumPa
 	int32 localNodeGroupId = GetLocalGroupId();
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodes)
+	foreach_declared_ptr(workerNode, workerNodes)
 	{
 		if (workerNode->groupId != localNodeGroupId)
 		{

@@ -1118,7 +1118,7 @@ TrackPropagatedTableAndSequences(Oid relationId)
 	/* track its sequences */
 	List *ownedSeqIdList = getOwnedSequences(relationId);
 	Oid ownedSeqId = InvalidOid;
-	foreach_oid(ownedSeqId, ownedSeqIdList)
+	foreach_declared_oid(ownedSeqId, ownedSeqIdList)
 	{
 		ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
@@ -1147,7 +1147,7 @@ HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
 {
 	List *dependencyList = GetAllSupportedDependenciesForObject(objectAddress);
 	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencyList)
+	foreach_declared_ptr(dependency, dependencyList)
 	{
 		/* first search in root transaction */
 		if (DependencyInPropagatedObjectsHash(PropagatedObjectsInTx, dependency))
@@ -1161,7 +1161,7 @@ HasAnyDependencyInPropagatedObjects(const ObjectAddress *objectAddress)
 			continue;
 		}
 		SubXactContext *state = NULL;
-		foreach_ptr(state, activeSubXactContexts)
+		foreach_declared_ptr(state, activeSubXactContexts)
 		{
 			if (DependencyInPropagatedObjectsHash(state->propagatedObjects, dependency))
 			{

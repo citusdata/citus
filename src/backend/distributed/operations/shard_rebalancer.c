@@ -357,7 +357,7 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 
 	Assert(state != NULL);
 	Assert(list_length(state->fillStateListAsc) == list_length(state->fillStateListDesc));
-	foreach_ptr(fillState, state->fillStateListAsc)
+	foreach_declared_ptr(fillState, state->fillStateListAsc)
 	{
 		float4 totalCost = 0;
 		ShardCost *shardCost = NULL;
@@ -376,7 +376,7 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 			   fillState);
 
 
-		foreach_ptr(shardCost, fillState->shardCostListDesc)
+		foreach_declared_ptr(shardCost, fillState->shardCostListDesc)
 		{
 			if (prevShardCost != NULL)
 			{
@@ -520,7 +520,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 	List *activeWorkerList = SortedActiveWorkers();
 	int shardAllowedNodeCount = 0;
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, activeWorkerList)
+	foreach_declared_ptr(workerNode, activeWorkerList)
 	{
 		if (workerNode->shouldHaveShards)
 		{
@@ -539,7 +539,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 	List *unbalancedShards = NIL;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, options->relationIdList)
+	foreach_declared_oid(relationId, options->relationIdList)
 	{
 		List *shardPlacementList = FullShardPlacementList(relationId,
 														  options->excludedShardArray);
@@ -1335,7 +1335,7 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 													 &segmentList);
 
 	ProgressMonitorData *monitor = NULL;
-	foreach_ptr(monitor, rebalanceMonitorList)
+	foreach_declared_ptr(monitor, rebalanceMonitorList)
 	{
 		PlacementUpdateEventProgress *placementUpdateEvents = ProgressMonitorSteps(
 			monitor);
@@ -1846,7 +1846,7 @@ NonColocatedDistRelationIdList(void)
 
 	HTAB *alreadySelectedColocationIds = hash_create("RebalanceColocationIdSet",
 													 capacity, &info, flags);
-	foreach_oid(tableId, allCitusTablesList)
+	foreach_declared_oid(tableId, allCitusTablesList)
 	{
 		bool foundInSet = false;
 		CitusTableCacheEntry *citusTableCacheEntry = GetCitusTableCacheEntry(
@@ -1912,7 +1912,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 		 * is required for logical replication to replicate UPDATE and DELETE commands.
 		 */
 		PlacementUpdateEvent *placementUpdate = NULL;
-		foreach_ptr(placementUpdate, placementUpdateList)
+		foreach_declared_ptr(placementUpdate, placementUpdateList)
 		{
 			Oid relationId = RelationIdForShard(placementUpdate->shardId);
 			List *colocatedTableList = ColocatedTableList(relationId);
@@ -1947,7 +1947,7 @@ static void
 ErrorOnConcurrentRebalance(RebalanceOptions *options)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, options->relationIdList)
+	foreach_declared_oid(relationId, options->relationIdList)
 	{
 		/* this provides the legacy error when the lock can't be acquired */
 		AcquireRebalanceColocationLock(relationId, options->operationName);
@@ -2038,7 +2038,7 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 	if (found)
 	{
 		int64 *taskId = NULL;
-		foreach_ptr(taskId, shardMoveSourceNodeHashEntry->taskIds)
+		foreach_declared_ptr(taskId, shardMoveSourceNodeHashEntry->taskIds)
 		{
 			hash_search(dependsList, taskId, HASH_ENTER, NULL);
 		}
@@ -2122,13 +2122,13 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	const char shardTransferMode = LookupShardTransferMode(shardReplicationModeOid);
 	List *colocatedTableList = NIL;
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, options->relationIdList)
+	foreach_declared_oid(relationId, options->relationIdList)
 	{
 		colocatedTableList = list_concat(colocatedTableList,
 										 ColocatedTableList(relationId));
 	}
 	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
 		EnsureTableOwner(colocatedTableId);
 	}
@@ -2150,7 +2150,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		 * is required for logical replication to replicate UPDATE and DELETE commands.
 		 */
 		PlacementUpdateEvent *placementUpdate = NULL;
-		foreach_ptr(placementUpdate, placementUpdateList)
+		foreach_declared_ptr(placementUpdate, placementUpdateList)
 		{
 			relationId = RelationIdForShard(placementUpdate->shardId);
 			List *colocatedTables = ColocatedTableList(relationId);
@@ -2203,7 +2203,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 	ShardMoveDependencies shardMoveDependencies = InitializeShardMoveDependencies();
 
-	foreach_ptr(move, placementUpdateList)
+	foreach_declared_ptr(move, placementUpdateList)
 	{
 		resetStringInfo(&buf);
 
@@ -2360,7 +2360,7 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command)
 		List *setCommands = GetSetCommandListForNewConnections();
 		char *setCommand = NULL;
 
-		foreach_ptr(setCommand, setCommands)
+		foreach_declared_ptr(setCommand, setCommands)
 		{
 			commandList = lappend(commandList, setCommand);
 		}
@@ -2428,14 +2428,14 @@ RebalancePlacementUpdates(List *workerNodeList, List *activeShardPlacementListLi
 	List *shardPlacementList = NIL;
 	List *placementUpdateList = NIL;
 
-	foreach_ptr(shardPlacementList, activeShardPlacementListList)
+	foreach_declared_ptr(shardPlacementList, activeShardPlacementListList)
 	{
 		state = InitRebalanceState(workerNodeList, shardPlacementList,
 								   functions);
 		rebalanceStates = lappend(rebalanceStates, state);
 	}
 
-	foreach_ptr(state, rebalanceStates)
+	foreach_declared_ptr(state, rebalanceStates)
 	{
 		state->placementUpdateList = placementUpdateList;
 		MoveShardsAwayFromDisallowedNodes(state);
@@ -2444,7 +2444,7 @@ RebalancePlacementUpdates(List *workerNodeList, List *activeShardPlacementListLi
 
 	if (!drainOnly)
 	{
-		foreach_ptr(state, rebalanceStates)
+		foreach_declared_ptr(state, rebalanceStates)
 		{
 			state->placementUpdateList = placementUpdateList;
 
@@ -2476,13 +2476,13 @@ RebalancePlacementUpdates(List *workerNodeList, List *activeShardPlacementListLi
 		}
 	}
 
-	foreach_ptr(state, rebalanceStates)
+	foreach_declared_ptr(state, rebalanceStates)
 	{
 		hash_destroy(state->placementsHash);
 	}
 
 	int64 ignoredMoves = 0;
-	foreach_ptr(state, rebalanceStates)
+	foreach_declared_ptr(state, rebalanceStates)
 	{
 		ignoredMoves += state->ignoredMoves;
 	}
@@ -2537,7 +2537,7 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 	state->placementsHash = ShardPlacementsListToHash(shardPlacementList);
 
 	/* create empty fill state for all of the worker nodes */
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		NodeFillState *fillState = palloc0(sizeof(NodeFillState));
 		fillState->node = workerNode;
@@ -2620,7 +2620,7 @@ FindFillStateForPlacement(RebalanceState *state, ShardPlacement *placement)
 	NodeFillState *fillState = NULL;
 
 	/* Find the correct fill state to add the placement to and do that */
-	foreach_ptr(fillState, state->fillStateListAsc)
+	foreach_declared_ptr(fillState, state->fillStateListAsc)
 	{
 		if (IsPlacementOnWorkerNode(placement, fillState->node))
 		{
@@ -2732,7 +2732,7 @@ MoveShardsAwayFromDisallowedNodes(RebalanceState *state)
 											  CompareDisallowedPlacementDesc);
 
 	/* Move shards off of nodes they are not allowed on */
-	foreach_ptr(disallowedPlacement, state->disallowedPlacementList)
+	foreach_declared_ptr(disallowedPlacement, state->disallowedPlacementList)
 	{
 		NodeFillState *targetFillState = FindAllowedTargetFillState(
 			state, disallowedPlacement->shardCost->shardId);
@@ -2787,7 +2787,7 @@ static NodeFillState *
 FindAllowedTargetFillState(RebalanceState *state, uint64 shardId)
 {
 	NodeFillState *targetFillState = NULL;
-	foreach_ptr(targetFillState, state->fillStateListAsc)
+	foreach_declared_ptr(targetFillState, state->fillStateListAsc)
 	{
 		bool hasShard = PlacementsHashFind(
 			state->placementsHash,
@@ -2913,7 +2913,7 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 	 * find a source node for the move, starting at the node with the highest
 	 * utilization
 	 */
-	foreach_ptr(sourceFillState, state->fillStateListDesc)
+	foreach_declared_ptr(sourceFillState, state->fillStateListDesc)
 	{
 		/* Don't move shards away from nodes that are already too empty, we're
 		 * done searching */
@@ -2924,7 +2924,7 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 
 		/* find a target node for the move, starting at the node with the
 		 * lowest utilization */
-		foreach_ptr(targetFillState, state->fillStateListAsc)
+		foreach_declared_ptr(targetFillState, state->fillStateListAsc)
 		{
 			ShardCost *shardCost = NULL;
 
@@ -2947,7 +2947,7 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 
 			/* find a shardcost that can be moved between between nodes that
 			 * makes the cost distribution more equal */
-			foreach_ptr(shardCost, sourceFillState->shardCostListDesc)
+			foreach_declared_ptr(shardCost, sourceFillState->shardCostListDesc)
 			{
 				bool targetHasShard = PlacementsHashFind(state->placementsHash,
 														 shardCost->shardId,

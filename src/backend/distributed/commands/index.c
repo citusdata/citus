@@ -334,7 +334,7 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 
 	List *indexIdList = RelationGetIndexList(relation);
 	Oid indexId = InvalidOid;
-	foreach_oid(indexId, indexIdList)
+	foreach_declared_oid(indexId, indexIdList)
 	{
 		HeapTuple indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexId));
 		if (!HeapTupleIsValid(indexTuple))
@@ -703,7 +703,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 
 	/* check if any of the indexes being dropped belong to a distributed table */
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, dropIndexStatement->objects)
+	foreach_declared_ptr(objectNameList, dropIndexStatement->objects)
 	{
 		struct DropRelationCallbackState state;
 		uint32 rvrFlags = RVR_MISSING_OK;
@@ -874,7 +874,7 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 	/* error out if any of the subcommands are unsupported */
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -926,7 +926,7 @@ CreateIndexTaskList(IndexStmt *indexStmt)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 
@@ -971,7 +971,7 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 
@@ -1220,7 +1220,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		Var *partitionKey = DistPartitionKeyOrError(relationId);
 		List *indexParameterList = createIndexStatement->indexParams;
 		IndexElem *indexElement = NULL;
-		foreach_ptr(indexElement, indexParameterList)
+		foreach_declared_ptr(indexElement, indexParameterList)
 		{
 			const char *columnName = indexElement->name;
 
@@ -1289,7 +1289,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		char *shardIndexName = pstrdup(indexName);

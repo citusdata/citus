@@ -367,7 +367,7 @@ RecordRelationParallelSelectAccessForTask(Task *task)
 	List *relationShardList = task->relationShardList;
 
 	RelationShard *relationShard = NULL;
-	foreach_ptr(relationShard, relationShardList)
+	foreach_declared_ptr(relationShard, relationShardList)
 	{
 		Oid currentRelationId = relationShard->relationId;
 
@@ -412,7 +412,7 @@ RecordRelationParallelModifyAccessForTask(Task *task)
 	{
 		relationShardList = task->relationShardList;
 		RelationShard *relationShard = NULL;
-		foreach_ptr(relationShard, relationShardList)
+		foreach_declared_ptr(relationShard, relationShardList)
 		{
 			Oid currentRelationId = relationShard->relationId;
 
@@ -446,7 +446,7 @@ RecordRelationParallelDDLAccessForTask(Task *task)
 	Oid lastRelationId = InvalidOid;
 
 	RelationShard *relationShard = NULL;
-	foreach_ptr(relationShard, relationShardList)
+	foreach_declared_ptr(relationShard, relationShardList)
 	{
 		Oid currentRelationId = relationShard->relationId;
 
@@ -534,7 +534,7 @@ RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementA
 		List *partitionList = PartitionList(relationId);
 
 		Oid partitionOid = InvalidOid;
-		foreach_oid(partitionOid, partitionList)
+		foreach_declared_oid(partitionOid, partitionList)
 		{
 			/* recursively record all relation accesses of its partitions */
 			RecordParallelRelationAccess(partitionOid, placementAccess);
@@ -926,7 +926,7 @@ HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccess
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	Oid referencedRelation = InvalidOid;
-	foreach_oid(referencedRelation, cacheEntry->referencedRelationsViaForeignKey)
+	foreach_declared_oid(referencedRelation, cacheEntry->referencedRelationsViaForeignKey)
 	{
 		/*
 		 * We're only interested in foreign keys to reference tables and citus
@@ -997,7 +997,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 	Assert(!IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE));
 
 	Oid referencingRelation = InvalidOid;
-	foreach_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)
+	foreach_declared_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)
 	{
 		/*
 		 * We're only interested in foreign keys to reference tables from
