@@ -382,7 +382,7 @@ ShouldHideShardsInternal(void)
 	}
 
 	char *appNamePrefix = NULL;
-	foreach_ptr(appNamePrefix, prefixList)
+	foreach_declared_ptr(appNamePrefix, prefixList)
 	{
 		/* never hide shards when one of the prefixes is * */
 		if (strcmp(appNamePrefix, "*") == 0)
@@ -446,7 +446,7 @@ FilterShardsFromPgclass(Node *node, void *context)
 		int varno = 0;
 		RangeTblEntry *rangeTableEntry = NULL;
 
-		foreach_ptr(rangeTableEntry, query->rtable)
+		foreach_declared_ptr(rangeTableEntry, query->rtable)
 		{
 			varno++;
 

@@ -239,7 +239,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			 * on shards with connections.
 			 */
 			Task *task = NULL;
-			foreach_ptr(task, taskList)
+			foreach_declared_ptr(task, taskList)
 			{
 				uint64 shardId = task->anchorShardId;
 				bool shardModified = false;
@@ -376,7 +376,7 @@ BuildColumnNameListFromTargetList(Oid targetRelationId, List *insertTargetList)
 
 	/* build the list of column names for the COPY statement */
 	TargetEntry *insertTargetEntry = NULL;
-	foreach_ptr(insertTargetEntry, insertTargetList)
+	foreach_declared_ptr(insertTargetEntry, insertTargetList)
 	{
 		columnNameList = lappend(columnNameList, insertTargetEntry->resname);
 	}
@@ -397,7 +397,7 @@ PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 	int partitionColumnIndex = 0;
 
 	const char *columnName = NULL;
-	foreach_ptr(columnName, columnNameList)
+	foreach_declared_ptr(columnName, columnNameList)
 	{
 		AttrNumber attrNumber = get_attnum(relationId, columnName);
 
@@ -423,7 +423,7 @@ DistributionColumnIndex(List *insertTargetList, Var *distributionColumn)
 {
 	TargetEntry *insertTargetEntry = NULL;
 	int targetEntryIndex = 0;
-	foreach_ptr(insertTargetEntry, insertTargetList)
+	foreach_declared_ptr(insertTargetEntry, insertTargetList)
 	{
 		if (insertTargetEntry->resno == distributionColumn->varattno)
 		{
@@ -447,7 +447,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 	StringInfo projectedColumnsString = makeStringInfo();
 	int entryIndex = 0;
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, projectedTargetEntries)
+	foreach_declared_ptr(targetEntry, projectedTargetEntries)
 	{
 		if (entryIndex != 0)
 		{
@@ -462,7 +462,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 	}
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		StringInfo wrappedQuery = makeStringInfo();
 		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",

@@ -938,7 +938,7 @@ bool
 IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
 {
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, param) == 0)
 		{
@@ -963,7 +963,7 @@ AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
 
 	char *tableSpaceName = NULL;
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, "tablespace") == 0)
 		{

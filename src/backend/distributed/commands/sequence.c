@@ -123,7 +123,7 @@ static bool
 OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId)
 {
 	DefElem *defElem = NULL;
-	foreach_ptr(defElem, optionList)
+	foreach_declared_ptr(defElem, optionList)
 	{
 		if (strcmp(defElem->defname, "owned_by") == 0)
 		{
@@ -202,7 +202,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 		}
 
 		Oid ownedSequenceId = InvalidOid;
-		foreach_oid(ownedSequenceId, columnOwnedSequences)
+		foreach_declared_oid(ownedSequenceId, columnOwnedSequences)
 		{
 			/*
 			 * A column might have multiple sequences one via OWNED BY one another
@@ -288,7 +288,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	 */
 	List *deletingSequencesList = stmt->objects;
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, deletingSequencesList)
+	foreach_declared_ptr(objectNameList, deletingSequencesList)
 	{
 		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
 
@@ -322,7 +322,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 
 	/* remove the entries for the distributed objects on dropping */
 	ObjectAddress *address = NULL;
-	foreach_ptr(address, distributedSequenceAddresses)
+	foreach_declared_ptr(address, distributedSequenceAddresses)
 	{
 		UnmarkObjectDistributed(address);
 	}
@@ -356,7 +356,7 @@ SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok, bool isPostprocess)
 
 	List *droppingSequencesList = dropSeqStmt->objects;
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, droppingSequencesList)
+	foreach_declared_ptr(objectNameList, droppingSequencesList)
 	{
 		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
 
@@ -476,7 +476,7 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	{
 		List *options = stmt->options;
 		DefElem *defel = NULL;
-		foreach_ptr(defel, options)
+		foreach_declared_ptr(defel, options)
 		{
 			if (strcmp(defel->defname, "as") == 0)
 			{
@@ -511,7 +511,7 @@ SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress, char depTyp
 	Oid relationId;
 	List *relations = GetDependentRelationsWithSequence(sequenceAddress->objectId,
 														depType);
-	foreach_oid(relationId, relations)
+	foreach_declared_oid(relationId, relations)
 	{
 		if (IsCitusTable(relationId))
 		{
@@ -930,7 +930,7 @@ PostprocessGrantOnSequenceStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 
 	RangeVar *sequence = NULL;
-	foreach_ptr(sequence, distributedSequences)
+	foreach_declared_ptr(sequence, distributedSequences)
 	{
 		ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
 		Oid sequenceOid = RangeVarGetRelid(sequence, NoLock, false);
@@ -1014,7 +1014,7 @@ FilterDistributedSequences(GrantStmt *stmt)
 		/* iterate over all namespace names provided to get their oid's */
 		List *namespaceOidList = NIL;
 		String *namespaceValue = NULL;
-		foreach_ptr(namespaceValue, stmt->objects)
+		foreach_declared_ptr(namespaceValue, stmt->objects)
 		{
 			char *nspname = strVal(namespaceValue);
 			bool missing_ok = false;
@@ -1028,7 +1028,7 @@ FilterDistributedSequences(GrantStmt *stmt)
 		 */
 		List *distributedSequenceList = DistributedSequenceList();
 		ObjectAddress *sequenceAddress = NULL;
-		foreach_ptr(sequenceAddress, distributedSequenceList)
+		foreach_declared_ptr(sequenceAddress, distributedSequenceList)
 		{
 			Oid namespaceOid = get_rel_namespace(sequenceAddress->objectId);
 
@@ -1052,7 +1052,7 @@ FilterDistributedSequences(GrantStmt *stmt)
 	{
 		bool missing_ok = false;
 		RangeVar *sequenceRangeVar = NULL;
-		foreach_ptr(sequenceRangeVar, stmt->objects)
+		foreach_declared_ptr(sequenceRangeVar, stmt->objects)
 		{
 			Oid sequenceOid = RangeVarGetRelid(sequenceRangeVar, NoLock, missing_ok);
 			ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));

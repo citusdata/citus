@@ -168,7 +168,7 @@ GetPartitionRelationIds(List *relationIdList)
 	List *partitionRelationIdList = NIL;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (PartitionTable(relationId))
 		{
@@ -189,7 +189,7 @@ LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode)
 {
 	Oid relationId;
 	relationIdList = SortList(relationIdList, CompareOids);
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		LockRelationOid(relationId, lockMode);
 	}
@@ -207,7 +207,7 @@ static void
 ErrorIfConvertingMultiLevelPartitionedTable(List *relationIdList)
 {
 	Oid relationId;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (PartitionedTable(relationId) && PartitionTable(relationId))
 		{
@@ -236,7 +236,7 @@ void
 ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (!PartitionTable(relationId))
 		{
@@ -300,7 +300,7 @@ bool
 RelationIdListHasReferenceTable(List *relationIdList)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
@@ -322,7 +322,7 @@ GetFKeyCreationCommandsForRelationIdList(List *relationIdList)
 	List *fKeyCreationCommands = NIL;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		List *relationFKeyCreationCommands =
 			GetReferencingForeignConstaintCommands(relationId);
@@ -342,7 +342,7 @@ static void
 DropRelationIdListForeignKeys(List *relationIdList, int fKeyFlags)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		DropRelationForeignKeys(relationId, fKeyFlags);
 	}
@@ -399,7 +399,7 @@ GetRelationDropFkeyCommands(Oid relationId, int fKeyFlags)
 	List *relationFKeyIdList = GetForeignKeyOids(relationId, fKeyFlags);
 
 	Oid foreignKeyId;
-	foreach_oid(foreignKeyId, relationFKeyIdList)
+	foreach_declared_oid(foreignKeyId, relationFKeyIdList)
 	{
 		char *dropFkeyCascadeCommand = GetDropFkeyCascadeCommand(foreignKeyId);
 		dropFkeyCascadeCommandList = lappend(dropFkeyCascadeCommandList,
@@ -450,7 +450,7 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 										 cascadeOperationType)
 {
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		/*
 		 * The reason behind skipping certain table types in below loop is
@@ -531,7 +531,7 @@ ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *utilityCommandL
 	PG_TRY();
 	{
 		char *utilityCommand = NULL;
-		foreach_ptr(utilityCommand, utilityCommandList)
+		foreach_declared_ptr(utilityCommand, utilityCommandList)
 		{
 			/*
 			 * CREATE MATERIALIZED VIEW commands need to be parsed/transformed,
@@ -569,7 +569,7 @@ void
 ExecuteAndLogUtilityCommandList(List *utilityCommandList)
 {
 	char *utilityCommand = NULL;
-	foreach_ptr(utilityCommand, utilityCommandList)
+	foreach_declared_ptr(utilityCommand, utilityCommandList)
 	{
 		ExecuteAndLogUtilityCommand(utilityCommand);
 	}
@@ -597,7 +597,7 @@ void
 ExecuteForeignKeyCreateCommandList(List *ddlCommandList, bool skip_validation)
 {
 	char *ddlCommand = NULL;
-	foreach_ptr(ddlCommand, ddlCommandList)
+	foreach_declared_ptr(ddlCommand, ddlCommandList)
 	{
 		ExecuteForeignKeyCreateCommand(ddlCommand, skip_validation);
 	}

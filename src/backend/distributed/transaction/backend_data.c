@@ -267,7 +267,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -289,7 +289,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 
 	/* send commands in parallel */
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		int querySent = SendRemoteCommand(connection, queryToSend->data);
 		if (querySent == 0)
@@ -299,7 +299,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	}
 
 	/* receive query results */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		bool raiseInterrupts = true;
 		Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];

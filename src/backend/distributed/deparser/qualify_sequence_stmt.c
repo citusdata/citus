@@ -148,7 +148,7 @@ QualifyDropSequenceStmt(Node *node)
 
 	List *objectNameListWithSchema = NIL;
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, stmt->objects)
+	foreach_declared_ptr(objectNameList, stmt->objects)
 	{
 		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
 
@@ -192,7 +192,7 @@ QualifyGrantOnSequenceStmt(Node *node)
 	}
 	List *qualifiedSequenceRangeVars = NIL;
 	RangeVar *sequenceRangeVar = NULL;
-	foreach_ptr(sequenceRangeVar, stmt->objects)
+	foreach_declared_ptr(sequenceRangeVar, stmt->objects)
 	{
 		if (sequenceRangeVar->schemaname == NULL)
 		{
