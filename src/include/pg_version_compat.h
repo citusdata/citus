@@ -57,9 +57,6 @@ typedef int ObjectClass;
 #define OCLASS_AM AccessMethodRelationId
 #define OCLASS_TSTEMPLATE TSTemplateRelationId
 
-#define Anum_pg_collation_colliculocale Anum_pg_collation_colllocale
-#define Anum_pg_database_daticulocale Anum_pg_database_datlocale
-
 #include "commands/tablecmds.h"
 
 static inline void
@@ -112,6 +109,8 @@ getStxstattarget_compat(HeapTuple tup)
 #define getLxid_compat(a) (a->vxid.lxid)
 
 #else
+
+#define Anum_pg_collation_colllocale Anum_pg_collation_colliculocale
 
 #include "access/htup_details.h"
 static inline int32
