@@ -431,7 +431,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 	int poolSize = 1;
 
 	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, shardPlacements)
+	foreach_declared_ptr(shardPlacement, shardPlacements)
 	{
 		uint64 shardId = shardPlacement->shardId;
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
@@ -516,7 +516,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 
 	/* all foregin key constraint relations */
 	Oid fkeyRelationid = InvalidOid;
-	foreach_oid(fkeyRelationid, allForeignKeyRelations)
+	foreach_declared_oid(fkeyRelationid, allForeignKeyRelations)
 	{
 		uint64 fkeyShardId = INVALID_SHARD_ID;
 
@@ -590,7 +590,7 @@ WorkerCreateShardCommandList(Oid relationId, uint64 shardId,
 	char *schemaName = get_namespace_name(schemaId);
 
 	TableDDLCommand *ddlCommand = NULL;
-	foreach_ptr(ddlCommand, ddlCommandList)
+	foreach_declared_ptr(ddlCommand, ddlCommandList)
 	{
 		Assert(CitusIsA(ddlCommand, TableDDLCommand));
 		char *applyDDLCommand = GetShardedTableDDLCommand(ddlCommand, shardId,
@@ -645,7 +645,7 @@ UpdateShardStatistics(int64 shardId)
 
 	/* get shard's statistics from a shard placement */
 	ShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacementList)
+	foreach_declared_ptr(placement, shardPlacementList)
 	{
 		statsOK = WorkerShardStats(placement, relationId, shardQualifiedName,
 								   &shardSize);
@@ -713,7 +713,7 @@ ReceiveAndUpdateShardsSizes(List *connectionList)
 																	  "oid visited hash set");
 
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
@@ -809,7 +809,7 @@ UpdateShardSize(uint64 shardId, ShardInterval *shardInterval, Oid relationId,
 	ShardPlacement *placement = NULL;
 
 	/* update metadata for each shard placement */
-	foreach_ptr(placement, shardPlacementList)
+	foreach_declared_ptr(placement, shardPlacementList)
 	{
 		uint64 placementId = placement->placementId;
 		int32 groupId = placement->groupId;

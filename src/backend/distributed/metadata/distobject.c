@@ -433,7 +433,7 @@ bool
 IsAnyObjectDistributed(const List *addresses)
 {
 	ObjectAddress *address = NULL;
-	foreach_ptr(address, addresses)
+	foreach_declared_ptr(address, addresses)
 	{
 		if (IsObjectDistributed(address))
 		{

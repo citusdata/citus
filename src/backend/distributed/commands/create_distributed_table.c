@@ -834,7 +834,7 @@ HashSplitPointsForShardList(List *shardList)
 	List *splitPointList = NIL;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		int32 shardMaxValue = DatumGetInt32(shardInterval->maxValue);
 
@@ -890,7 +890,7 @@ WorkerNodesForShardList(List *shardList)
 	List *nodeIdList = NIL;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		WorkerNode *workerNode = ActiveShardPlacementWorkerNode(shardInterval->shardId);
 		nodeIdList = lappend_int(nodeIdList, workerNode->nodeId);
@@ -1340,7 +1340,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 								  ALLOCSET_DEFAULT_SIZES);
 		MemoryContext oldContext = MemoryContextSwitchTo(citusPartitionContext);
 
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			MemoryContextReset(citusPartitionContext);
 
@@ -1554,7 +1554,7 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 		MemoryContext oldContext = MemoryContextSwitchTo(citusPartitionContext);
 
 		Oid partitionRelationId = InvalidOid;
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			MemoryContextReset(citusPartitionContext);
 
@@ -1704,7 +1704,7 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId
 	Oid attrDefOid;
 	List *attrDefOids = GetAttrDefsFromSequence(seqOid);
 
-	foreach_oid(attrDefOid, attrDefOids)
+	foreach_declared_oid(attrDefOid, attrDefOids)
 	{
 		ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
 
@@ -1786,7 +1786,7 @@ static void
 EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 {
 	SequenceInfo *seqInfo = NULL;
-	foreach_ptr(seqInfo, seqInfoList)
+	foreach_declared_ptr(seqInfo, seqInfoList)
 	{
 		if (!seqInfo->isNextValDefault)
 		{

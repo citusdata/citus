@@ -158,7 +158,7 @@ citus_job_cancel(PG_FUNCTION_ARGS)
 
 	/* send cancellation to any running backends */
 	int pid = 0;
-	foreach_int(pid, pids)
+	foreach_declared_int(pid, pids)
 	{
 		Datum pidDatum = Int32GetDatum(pid);
 		Datum signalSuccessDatum = DirectFunctionCall1(pg_cancel_backend, pidDatum);
@@ -891,7 +891,7 @@ IncrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
 		int node;
 
 		/* first check whether we have reached the limit for any of the nodes */
-		foreach_int(node, task->nodesInvolved)
+		foreach_declared_int(node, task->nodesInvolved)
 		{
 			bool found;
 			ParallelTasksPerNodeEntry *hashEntry = hash_search(
@@ -908,7 +908,7 @@ IncrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
 		}
 
 		/* then, increment the parallel task count per each node */
-		foreach_int(node, task->nodesInvolved)
+		foreach_declared_int(node, task->nodesInvolved)
 		{
 			ParallelTasksPerNodeEntry *hashEntry = hash_search(
 				ParallelTasksPerNode, &(node), HASH_FIND, NULL);
@@ -934,7 +934,7 @@ DecrementParallelTaskCountForNodesInvolved(BackgroundTask *task)
 	if (task->nodesInvolved)
 	{
 		int node;
-		foreach_int(node, task->nodesInvolved)
+		foreach_declared_int(node, task->nodesInvolved)
 		{
 			ParallelTasksPerNodeEntry *hashEntry = hash_search(ParallelTasksPerNode,
 															   &(node),
@@ -1278,7 +1278,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		/* iterate over all handle entries and monitor each task's output */
 		BackgroundExecutorHashEntry *handleEntry = NULL;
-		foreach_ptr(handleEntry, runningTaskEntries)
+		foreach_declared_ptr(handleEntry, runningTaskEntries)
 		{
 			/* create task execution context and assign it to queueMonitorExecutionContext */
 			TaskExecutionContext taskExecutionContext = {
@@ -1916,7 +1916,7 @@ ExecuteSqlString(const char *sql)
 	 * analysis on the next one, since there may be interdependencies.
 	 */
 	RawStmt *parsetree = NULL;
-	foreach_ptr(parsetree, raw_parsetree_list)
+	foreach_declared_ptr(parsetree, raw_parsetree_list)
 	{
 		/*
 		 * We don't allow transaction-control commands like COMMIT and ABORT

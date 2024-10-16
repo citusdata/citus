@@ -359,7 +359,7 @@ AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 	if (!stmt->is_grant)
 	{
 		DefElem *opt = NULL;
-		foreach_ptr(opt, stmt->opt)
+		foreach_declared_ptr(opt, stmt->opt)
 		{
 			if (strcmp(opt->defname, "admin") == 0)
 			{
@@ -384,7 +384,7 @@ AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 	{
 #if PG_VERSION_NUM >= PG_VERSION_16
 		DefElem *opt = NULL;
-		foreach_ptr(opt, stmt->opt)
+		foreach_declared_ptr(opt, stmt->opt)
 		{
 			bool admin_option = false;
 			char *optval = defGetString(opt);

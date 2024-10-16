@@ -258,7 +258,7 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 	 * on shards with connections.
 	 */
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		uint64 shardId = task->anchorShardId;
 		bool shardModified = false;

@@ -152,7 +152,7 @@ AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt)
 	}
 
 	String *schemaValue = NULL;
-	foreach_ptr(schemaValue, stmt->objects)
+	foreach_declared_ptr(schemaValue, stmt->objects)
 	{
 		const char *schemaString = quote_identifier(strVal(schemaValue));
 		appendStringInfo(buf, "%s", schemaString);

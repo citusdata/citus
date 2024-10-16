@@ -78,7 +78,7 @@ CitusSetTag(Node *node, int tag)
 	do { \
 		char *curString = NULL; \
 		List *newList = NIL; \
-		foreach_ptr(curString, from->fldname) { \
+		foreach_declared_ptr(curString, from->fldname) { \
 			char *newString = curString ? pstrdup(curString) : (char *) NULL; \
 			newList = lappend(newList, newString); \
 		} \

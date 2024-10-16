@@ -298,7 +298,7 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ShardSplitInfo *splitShardInfo = NULL;
-		foreach_ptr(splitShardInfo, shardSplitInfoList)
+		foreach_declared_ptr(splitShardInfo, shardSplitInfoList)
 		{
 			shardSplitInfoSMHeader->splitInfoArray[splitInfoIndex] = *splitShardInfo;
 			strcpy_s(shardSplitInfoSMHeader->splitInfoArray[splitInfoIndex].slotName,

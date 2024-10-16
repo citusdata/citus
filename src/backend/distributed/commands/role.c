@@ -161,7 +161,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
 	DefElem *option = NULL;
-	foreach_ptr(option, stmt->options)
+	foreach_declared_ptr(option, stmt->options)
 	{
 		if (strcasecmp(option->defname, "password") == 0)
 		{
@@ -562,7 +562,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 	{
 		List *grantRoleStmts = GenerateGrantRoleStmtsOfRole(roleOid);
 		Node *stmt = NULL;
-		foreach_ptr(stmt, grantRoleStmts)
+		foreach_declared_ptr(stmt, grantRoleStmts)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}
@@ -760,7 +760,7 @@ MakeSetStatementArguments(char *configurationName, char *configurationValue)
 				}
 
 				char *configuration = NULL;
-				foreach_ptr(configuration, configurationList)
+				foreach_declared_ptr(configuration, configurationList)
 				{
 					Node *arg = makeStringConst(configuration, -1);
 					args = lappend(args, arg);
@@ -796,7 +796,7 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
 	List *stmts = NIL;
 
 	DefElem *option = NULL;
-	foreach_ptr(option, options)
+	foreach_declared_ptr(option, options)
 	{
 		if (strcmp(option->defname, "adminmembers") != 0 &&
 			strcmp(option->defname, "rolemembers") != 0 &&
@@ -938,7 +938,7 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 
 	/* deparse all grant statements and add them to the commands list */
 	Node *stmt = NULL;
-	foreach_ptr(stmt, grantRoleStmts)
+	foreach_declared_ptr(stmt, grantRoleStmts)
 	{
 		commands = lappend(commands, DeparseTreeNode(stmt));
 	}
@@ -1064,7 +1064,7 @@ void
 UnmarkRolesDistributed(List *roles)
 {
 	Node *roleNode = NULL;
-	foreach_ptr(roleNode, roles)
+	foreach_declared_ptr(roleNode, roles)
 	{
 		RoleSpec *role = castNode(RoleSpec, roleNode);
 		ObjectAddress roleAddress = { 0 };
@@ -1094,7 +1094,7 @@ FilterDistributedRoles(List *roles)
 {
 	List *distributedRoles = NIL;
 	Node *roleNode = NULL;
-	foreach_ptr(roleNode, roles)
+	foreach_declared_ptr(roleNode, roles)
 	{
 		RoleSpec *role = castNode(RoleSpec, roleNode);
 		Oid roleOid = get_rolespec_oid(role, true);
@@ -1189,7 +1189,7 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
 
 	RoleSpec *role = NULL;
-	foreach_ptr(role, stmt->grantee_roles)
+	foreach_declared_ptr(role, stmt->grantee_roles)
 	{
 		Oid roleOid = get_rolespec_oid(role, false);
 		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
@@ -1213,7 +1213,7 @@ IsGrantRoleWithInheritOrSetOption(GrantRoleStmt *stmt)
 {
 #if PG_VERSION_NUM >= PG_VERSION_16
 	DefElem *opt = NULL;
-	foreach_ptr(opt, stmt->opt)
+	foreach_declared_ptr(opt, stmt->opt)
 	{
 		if (strcmp(opt->defname, "inherit") == 0 || strcmp(opt->defname, "set") == 0)
 		{

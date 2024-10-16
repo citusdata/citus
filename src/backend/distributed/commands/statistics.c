@@ -184,7 +184,7 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 	List *ddlJobs = NIL;
 	List *processedStatsOids = NIL;
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	foreach_declared_ptr(objectNameList, dropStatisticsStmt->objects)
 	{
 		Oid statsOid = get_statistics_object_oid(objectNameList,
 												 dropStatisticsStmt->missing_ok);
@@ -234,7 +234,7 @@ DropStatisticsObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	List *objectAddresses = NIL;
 
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	foreach_declared_ptr(objectNameList, dropStatisticsStmt->objects)
 	{
 		Oid statsOid = get_statistics_object_oid(objectNameList,
 												 dropStatisticsStmt->missing_ok);
@@ -535,7 +535,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	int saveNestLevel = PushEmptySearchPath();
 
 	Oid statisticsId = InvalidOid;
-	foreach_oid(statisticsId, statisticsIdList)
+	foreach_declared_oid(statisticsId, statisticsIdList)
 	{
 		/* we need create commands for already created stats before distribution */
 		Datum commandText = DirectFunctionCall1(pg_get_statisticsobjdef,
@@ -606,7 +606,7 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 	RelationClose(relation);
 
 	Oid statsId = InvalidOid;
-	foreach_oid(statsId, statsIdList)
+	foreach_declared_oid(statsId, statsIdList)
 	{
 		HeapTuple heapTuple = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsId));
 		if (!HeapTupleIsValid(heapTuple))

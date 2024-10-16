@@ -2805,7 +2805,7 @@ ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource sou
 	}
 
 	char *appNamePrefix = NULL;
-	foreach_ptr(appNamePrefix, prefixList)
+	foreach_declared_ptr(appNamePrefix, prefixList)
 	{
 		int prefixLength = strlen(appNamePrefix);
 		if (prefixLength >= NAMEDATALEN)

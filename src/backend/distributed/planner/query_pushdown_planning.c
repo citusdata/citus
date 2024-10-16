@@ -1187,7 +1187,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 	ExtractRangeTableIndexWalker((Node *) queryTree->jointree,
 								 &joinTreeTableIndexList);
 
-	foreach_int(joinTreeTableIndex, joinTreeTableIndexList)
+	foreach_declared_int(joinTreeTableIndex, joinTreeTableIndexList)
 	{
 		/*
 		 * Join tree's range table index starts from 1 in the query tree. But,
@@ -2010,7 +2010,7 @@ CreateSubqueryTargetListAndAdjustVars(List *columnList)
 	Var *column = NULL;
 	List *subqueryTargetEntryList = NIL;
 
-	foreach_ptr(column, columnList)
+	foreach_declared_ptr(column, columnList)
 	{
 		/*
 		 * To avoid adding the same column multiple times, we first check whether there
@@ -2064,7 +2064,7 @@ static AttrNumber
 FindResnoForVarInTargetList(List *targetList, int varno, int varattno)
 {
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, targetList)
+	foreach_declared_ptr(targetEntry, targetList)
 	{
 		if (!IsA(targetEntry->expr, Var))
 		{
@@ -2127,7 +2127,7 @@ PartitionColumnForPushedDownSubquery(Query *query)
 	List *targetEntryList = query->targetList;
 
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, targetEntryList)
+	foreach_declared_ptr(targetEntry, targetEntryList)
 	{
 		if (targetEntry->resjunk)
 		{

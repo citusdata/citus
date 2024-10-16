@@ -124,7 +124,7 @@ RecoverTwoPhaseCommits(void)
 
 	List *workerList = ActivePrimaryNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
+	foreach_declared_ptr(workerNode, workerList)
 	{
 		recoveredTransactionCount += RecoverWorkerTransactions(workerNode);
 	}

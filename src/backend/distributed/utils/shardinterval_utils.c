@@ -472,7 +472,7 @@ SingleReplicatedTable(Oid relationId)
 
 	List *shardIntervalList = LoadShardList(relationId);
 	uint64 *shardIdPointer = NULL;
-	foreach_ptr(shardIdPointer, shardIntervalList)
+	foreach_declared_ptr(shardIdPointer, shardIntervalList)
 	{
 		uint64 shardId = *shardIdPointer;
 		shardPlacementList = ShardPlacementListSortedByWorker(shardId);

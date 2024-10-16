@@ -415,7 +415,7 @@ OpenConnectionToNodes(List *workerNodeList)
 {
 	List *connectionList = NIL;
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -439,7 +439,7 @@ GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds)
 {
 	List *shardStatisticsQueryList = NIL;
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		char *shardStatisticsQuery =
 			GenerateAllShardStatisticsQueryForNode(workerNode, citusTableIds);
@@ -460,7 +460,7 @@ ReceiveShardIdAndSizeResults(List *connectionList, Tuplestorestate *tupleStore,
 							 TupleDesc tupleDescriptor)
 {
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		bool raiseInterrupts = true;
 		Datum values[SHARD_SIZES_COLUMN_COUNT];
@@ -551,7 +551,7 @@ DistributedTableSize(Oid relationId, SizeQueryType sizeQueryType, bool failOnErr
 
 	List *workerNodeList = ActiveReadableNodeList();
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		uint64 relationSizeOnNode = 0;
 
@@ -754,7 +754,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	List *nonPartitionedShardNames = NIL;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		if (optimizePartitionCalculations && PartitionTable(shardInterval->relationId))
 		{
@@ -829,7 +829,7 @@ GenerateSizeQueryForRelationNameList(List *quotedShardNames, char *sizeFunction)
 
 	bool addComma = false;
 	char *quotedShardName = NULL;
-	foreach_ptr(quotedShardName, quotedShardNames)
+	foreach_declared_ptr(quotedShardName, quotedShardNames)
 	{
 		if (addComma)
 		{
@@ -930,7 +930,7 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 	appendStringInfoString(allShardStatisticsQuery, " FROM (VALUES ");
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, citusTableIds)
+	foreach_declared_oid(relationId, citusTableIds)
 	{
 		/*
 		 * Ensure the table still exists by trying to acquire a lock on it
@@ -977,7 +977,7 @@ GenerateShardIdNameValuesForShardList(List *shardIntervalList, bool firstValue)
 	StringInfo selectQuery = makeStringInfo();
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		if (!firstValue)
 		{
@@ -1096,7 +1096,7 @@ TableShardReplicationFactor(Oid relationId)
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 
@@ -1187,7 +1187,7 @@ LoadUnsortedShardIntervalListViaCatalog(Oid relationId)
 						&intervalTypeMod);
 
 	HeapTuple distShardTuple = NULL;
-	foreach_ptr(distShardTuple, distShardTuples)
+	foreach_declared_ptr(distShardTuple, distShardTuples)
 	{
 		ShardInterval *interval = TupleToShardInterval(distShardTuple,
 													   distShardTupleDesc,
@@ -1436,7 +1436,7 @@ FilterShardPlacementList(List *shardPlacementList, bool (*filter)(ShardPlacement
 	List *filteredShardPlacementList = NIL;
 	ShardPlacement *shardPlacement = NULL;
 
-	foreach_ptr(shardPlacement, shardPlacementList)
+	foreach_declared_ptr(shardPlacement, shardPlacementList)
 	{
 		if (filter(shardPlacement))
 		{
@@ -1460,7 +1460,7 @@ FilterActiveShardPlacementListByNode(List *shardPlacementList, WorkerNode *worke
 	List *filteredShardPlacementList = NIL;
 	ShardPlacement *shardPlacement = NULL;
 
-	foreach_ptr(shardPlacement, activeShardPlacementList)
+	foreach_declared_ptr(shardPlacement, activeShardPlacementList)
 	{
 		if (IsPlacementOnWorkerNode(shardPlacement, workerNode))
 		{
@@ -1484,7 +1484,7 @@ ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId)
 
 	List *activePlacementList = ActiveShardPlacementList(shardId);
 	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, activePlacementList)
+	foreach_declared_ptr(shardPlacement, activePlacementList)
 	{
 		if (shardPlacement->groupId == groupId)
 		{
@@ -3280,7 +3280,7 @@ ResetRunningBackgroundTasks(void)
 
 		/* there are tasks that need to release their lock before we can continue */
 		int64 *taskId = NULL;
-		foreach_ptr(taskId, taskIdsToWait)
+		foreach_declared_ptr(taskId, taskIdsToWait)
 		{
 			LOCKTAG locktag = { 0 };
 			SET_LOCKTAG_BACKGROUND_TASK(locktag, *taskId);

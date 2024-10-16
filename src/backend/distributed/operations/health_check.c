@@ -119,11 +119,11 @@ StoreAllConnectivityChecks(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 	/*
 	 * We iterate over the workerNodeList twice, for source and target worker nodes. This
-	 * operation is safe for foreach_ptr macro, as long as we use different variables for
+	 * operation is safe for foreach_declared_ptr macro, as long as we use different variables for
 	 * each iteration.
 	 */
 	WorkerNode *sourceWorkerNode = NULL;
-	foreach_ptr(sourceWorkerNode, workerNodeList)
+	foreach_declared_ptr(sourceWorkerNode, workerNodeList)
 	{
 		const char *sourceNodeName = sourceWorkerNode->workerName;
 		const int sourceNodePort = sourceWorkerNode->workerPort;
@@ -135,7 +135,7 @@ StoreAllConnectivityChecks(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		/* the second iteration over workerNodeList for the target worker nodes. */
 		WorkerNode *targetWorkerNode = NULL;
-		foreach_ptr(targetWorkerNode, workerNodeList)
+		foreach_declared_ptr(targetWorkerNode, workerNodeList)
 		{
 			const char *targetNodeName = targetWorkerNode->workerName;
 			const int targetNodePort = targetWorkerNode->workerPort;

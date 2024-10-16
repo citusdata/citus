@@ -250,12 +250,12 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	bool shouldExecuteTasksLocally = ShouldExecuteTasksLocally(dropTaskList);
 
 	Task *task = NULL;
-	foreach_ptr(task, dropTaskList)
+	foreach_declared_ptr(task, dropTaskList)
 	{
 		uint64 shardId = task->anchorShardId;
 
 		ShardPlacement *shardPlacement = NULL;
-		foreach_ptr(shardPlacement, task->taskPlacementList)
+		foreach_declared_ptr(shardPlacement, task->taskPlacementList)
 		{
 			uint64 shardPlacementId = shardPlacement->placementId;
 			int32 shardPlacementGroupId = shardPlacement->groupId;
@@ -350,7 +350,7 @@ DropTaskList(Oid relationId, char *schemaName, char *relationName,
 	int taskId = 1;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, deletableShardIntervalList)
+	foreach_declared_ptr(shardInterval, deletableShardIntervalList)
 	{
 		Assert(shardInterval->relationId == relationId);
 

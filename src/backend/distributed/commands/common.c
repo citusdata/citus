@@ -235,7 +235,7 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 	List *distributedObjects = NIL;
 	List *distributedObjectAddresses = NIL;
 	Node *object = NULL;
-	foreach_ptr(object, stmt->objects)
+	foreach_declared_ptr(object, stmt->objects)
 	{
 		/* TODO understand if the lock should be sth else */
 		Relation rel = NULL; /* not used, but required to pass to get_object_address */
@@ -267,7 +267,7 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 	 * remove the entries for the distributed objects on dropping
 	 */
 	ObjectAddress *address = NULL;
-	foreach_ptr(address, distributedObjectAddresses)
+	foreach_declared_ptr(address, distributedObjectAddresses)
 	{
 		UnmarkObjectDistributed(address);
 	}
@@ -303,7 +303,7 @@ DropTextSearchDictObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	List *objectAddresses = NIL;
 
 	List *objNameList = NIL;
-	foreach_ptr(objNameList, stmt->objects)
+	foreach_declared_ptr(objNameList, stmt->objects)
 	{
 		Oid tsdictOid = get_ts_dict_oid(objNameList, missing_ok);
 
@@ -328,7 +328,7 @@ DropTextSearchConfigObjectAddress(Node *node, bool missing_ok, bool isPostproces
 	List *objectAddresses = NIL;
 
 	List *objNameList = NIL;
-	foreach_ptr(objNameList, stmt->objects)
+	foreach_declared_ptr(objNameList, stmt->objects)
 	{
 		Oid tsconfigOid = get_ts_config_oid(objNameList, missing_ok);
 
