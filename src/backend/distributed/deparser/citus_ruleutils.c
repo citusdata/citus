@@ -739,11 +739,17 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 			 * If the user changed the column's statistics target, create
 			 * alter statement and add statement to a list for later processing.
 			 */
-			HeapTuple tp = SearchSysCache2(ATTNUM,
-										   ObjectIdGetDatum(tableRelationId),
-										   Int16GetDatum(attributeForm->attnum));
-			int32 targetAttstattarget = getAttstattarget_compat(tp);
-			ReleaseSysCache(tp);
+			HeapTuple atttuple = SearchSysCache2(ATTNUM,
+												 ObjectIdGetDatum(tableRelationId),
+												 Int16GetDatum(attributeForm->attnum));
+			if (!HeapTupleIsValid(atttuple))
+			{
+				elog(ERROR, "cache lookup failed for attribute %d of relation %u",
+					 attributeForm->attnum, tableRelationId);
+			}
+
+			int32 targetAttstattarget = getAttstattarget_compat(atttuple);
+			ReleaseSysCache(atttuple);
 			if (targetAttstattarget >= 0)
 			{
 				StringInfoData statement = { NULL, 0, 0, 0 };
