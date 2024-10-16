@@ -997,7 +997,8 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 	Assert(!IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE));
 
 	Oid referencingRelation = InvalidOid;
-	foreach_declared_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)
+	foreach_declared_oid(referencingRelation,
+						 cacheEntry->referencingRelationsViaForeignKey)
 	{
 		/*
 		 * We're only interested in foreign keys to reference tables from
