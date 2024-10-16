@@ -70,7 +70,7 @@ RangeVarCallbackOwnsTable(const RangeVar *relation,
 #include "catalog/pg_attribute.h"
 #include "utils/syscache.h"
 
-static inline int32
+static inline int
 getAttstattarget_compat(HeapTuple attTuple)
 {
 	bool isnull;
@@ -82,7 +82,7 @@ getAttstattarget_compat(HeapTuple attTuple)
 
 #include "catalog/pg_statistic_ext.h"
 
-static inline int16
+static inline int
 getStxstattarget_compat(HeapTuple tup)
 {
 	bool isnull;
@@ -113,7 +113,7 @@ getStxstattarget_compat(HeapTuple tup)
 #define Anum_pg_collation_colllocale Anum_pg_collation_colliculocale
 
 #include "access/htup_details.h"
-static inline int32
+static inline int
 getAttstattarget_compat(HeapTuple attTuple)
 {
 	return ((Form_pg_attribute) GETSTRUCT(attTuple))->attstattarget;
@@ -121,7 +121,7 @@ getAttstattarget_compat(HeapTuple attTuple)
 
 
 #include "catalog/pg_statistic_ext.h"
-static inline int32
+static inline int
 getStxstattarget_compat(HeapTuple tup)
 {
 	return ((Form_pg_statistic_ext) GETSTRUCT(tup))->stxstattarget;
