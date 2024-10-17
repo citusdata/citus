@@ -866,7 +866,8 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 		*waitCount = 0;
 	}
 
-	WaitEventSet *waitEventSet = CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
+	WaitEventSet *waitEventSet = CreateWaitEventSet(WaitEventSetTracker_compat,
+													eventSetSize);
 	EnsureReleaseResource((MemoryContextCallbackFunction) (&FreeWaitEventSet),
 						  waitEventSet);
 

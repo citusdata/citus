@@ -547,7 +547,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	List *sortClauseList = NIL;
 	Node *limitCount = NULL;
 	Node *limitOffset = NULL;
-	LimitOption limitOption = LIMIT_OPTION_DEFAULT;
+	LimitOption limitOption = LIMIT_OPTION_COUNT;
 	Node *havingQual = NULL;
 	bool hasDistinctOn = false;
 	List *distinctClause = NIL;

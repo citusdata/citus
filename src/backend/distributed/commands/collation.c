@@ -77,7 +77,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	 * ICU-related field. Only the libc-related fields or the ICU-related field
 	 * is set, never both.
 	 */
-	char *colliculocale;
+	char *colllocale;
 	bool isnull;
 
 	Datum datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_collcollate,
@@ -101,17 +101,17 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 		collctype = NULL;
 	}
 
-	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_colliculocale, &isnull);
+	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_colllocale, &isnull);
 	if (!isnull)
 	{
-		colliculocale = TextDatumGetCString(datum);
+		colllocale = TextDatumGetCString(datum);
 	}
 	else
 	{
-		colliculocale = NULL;
+		colllocale = NULL;
 	}
 
-	Assert((collcollate && collctype) || colliculocale);
+	Assert((collcollate && collctype) || colllocale);
 #else
 
 	/*
@@ -147,12 +147,12 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 					 *quotedCollationName, providerString);
 
 #if PG_VERSION_NUM >= PG_VERSION_15
-	if (colliculocale)
+	if (colllocale)
 	{
 		appendStringInfo(&collationNameDef,
 						 ", locale = %s",
-						 quote_literal_cstr(colliculocale));
-		pfree(colliculocale);
+						 quote_literal_cstr(colllocale));
+		pfree(colllocale);
 	}
 	else
 	{
