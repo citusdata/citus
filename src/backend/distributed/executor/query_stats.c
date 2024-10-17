@@ -759,9 +759,6 @@ citus_query_stats(PG_FUNCTION_ARGS)
 
 	LWLockRelease(queryStats->lock);
 
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupstore);
-
 	return (Datum) 0;
 }
 

@@ -170,7 +170,8 @@ worker_adjust_identity_column_seq_ranges(PG_FUNCTION_ARGS)
 
 		if (attributeForm->attidentity)
 		{
-			Oid sequenceOid = getIdentitySequence(tableRelationId,
+			Oid sequenceOid = getIdentitySequence(identitySequenceRelation_compat(
+													  tableRelation),
 												  attributeForm->attnum,
 												  missingSequenceOk);
 
