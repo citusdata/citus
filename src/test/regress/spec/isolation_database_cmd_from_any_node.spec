@@ -1,7 +1,7 @@
 setup
 {
-    -- OCLASS for database changed in PG 16 from 25 to 26
-    SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS value INTO oclass_database;
+    -- Set oclass_database value based on PostgreSQL version: 25 for < 16, 26 for version 16, and 1262 for version >= 17
+    SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 WHEN substring(version(), '\d+')::integer = 16 THEN 26 ELSE 1262 END AS value INTO oclass_database;
 
     SELECT 1 FROM citus_add_node('localhost', 57636, 0);
 }
