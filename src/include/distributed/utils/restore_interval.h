@@ -3,8 +3,6 @@
  * distributed/utils/restore_interval.h
  *	  Subroutines related to the save checkpoint by time.
  *
- * Copyright (c) DataGile.ru
- *
  *-------------------------------------------------------------------------
  */
 

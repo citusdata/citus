@@ -3,8 +3,6 @@
  * util/restore_interval.c
  *	  Subroutines related to the periodic sync save checkpoint.
  *
- * Copyright (c) DataGile.ru
- *
  *-------------------------------------------------------------------------
  */
 
