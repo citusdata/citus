@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "c.h"
@@ -67,8 +68,8 @@ void
 send_sql_restorepoint_cmd(Datum main_arg)
 {
 	StringInfoData sql;
-	struct pg_tm* tt;
 	pg_time_t t = time(NULL);
+	struct tm * tt = localtime(&t);
 	Oid databaseOid = DatumGetObjectId(main_arg);
 	Oid extensionOwner = InvalidOid;
 	int spiStatus;
@@ -153,10 +154,9 @@ SendRestorePointCmd(Oid DatabaseId, Oid UserOid)
 
 void CheckRestoreInterval(Oid databaseId, Oid userOid)
 {
-	struct pg_tm* tt;
 	time_t t = time(NULL);
+	struct tm * tt = localtime(&t);
 
-	tt = pg_localtime(&t, log_timezone);
 
 	if (tt->tm_min > 0) {
 		is_first_inday  = true;
