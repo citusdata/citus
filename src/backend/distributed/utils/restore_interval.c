@@ -20,7 +20,6 @@
 
 #include "miscadmin.h"
 #include "pgstat.h"
-#include "pgtime.h"
 
 #include "commands/dbcommands.h"
 #include "distributed/listutils.h"
@@ -41,8 +40,6 @@
 #include "utils/backend_status.h"
 #include "utils/builtins.h"
 
-
-#define TYPE_CSTRING 2275
 
 char *RestorePointInterval = NULL;
 char *RestorePointIntervalName = NULL;

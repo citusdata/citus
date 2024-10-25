@@ -2694,7 +2694,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets the prefix of pointname for the periodic recovery cluster point"),
 		NULL,
 		&RestorePointIntervalName,
-		false,
+		NULL,
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
