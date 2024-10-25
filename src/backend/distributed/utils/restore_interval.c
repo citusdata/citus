@@ -74,8 +74,6 @@ send_sql_restorepoint_cmd(Datum main_arg)
 	Oid extensionOwner = InvalidOid;
 	int spiStatus;
 
-	tt = pg_localtime(&t, log_timezone);
-
 	initStringInfo(&sql);
 	if (RestorePointIntervalName != NULL)
 		appendStringInfo(&sql,"SELECT citus_create_restore_point('%s_%02d.%02d_%02d:00')",
