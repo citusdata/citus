@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "catalog/namespace.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 
@@ -54,7 +55,22 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 	{
 		case OBJECT_ROLE:
 		{
-			appendStringInfo(buf, "ROLE %s ", quote_identifier(strVal(stmt->object)));
+			String *role_name = strVal(stmt->object);
+			appendStringInfo(buf, "ROLE %s ", quote_identifier(role_name));
+			break;
+		}
+
+		case OBJECT_TABLE:
+		{
+			List *names = (List *) stmt->object;
+			appendStringInfo(buf, "TABLE %s ", NameListToQuotedString(names));
+			break;
+		}
+
+		case OBJECT_COLUMN:
+		{
+			List *names = (List *) stmt->object;
+			appendStringInfo(buf, "COLUMN %s ", NameListToQuotedString(names));
 			break;
 		}
 
