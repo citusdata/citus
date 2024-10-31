@@ -567,6 +567,37 @@ IsAnyObjectDistributed(const List *addresses)
 
 
 /*
+ * IsAnyObjectDistributedIgnoreObjectSubId determines if any of the given
+ * addresses are distributed, using IsObjectDistributed(). It disregards
+ * the object sub-id field of an address, so this is saved and restored
+ * before and after each call to IsObjectDistributed(). It is used in
+ * situations where an address by sub object id is not distributed, but
+ * the same address by object id is distributed; for example, the address
+ * of a column of a distributed table.
+ */
+bool
+IsAnyObjectDistributedIgnoreObjectSubId(const List *addresses)
+{
+	ObjectAddress *address = NULL;
+	bool isDistributed = false;
+	foreach_ptr(address, addresses)
+	{
+		int32 savedObjectSubId = address->objectSubId;
+		address->objectSubId = 0;
+		isDistributed = IsObjectDistributed(address);
+		address->objectSubId = savedObjectSubId;
+
+		if (isDistributed)
+		{
+			break;
+		}
+	}
+
+	return isDistributed;
+}
+
+
+/*
  * GetDistributedObjectAddressList returns a list of ObjectAddresses that contains all
  * distributed objects as marked in pg_dist_object
  */

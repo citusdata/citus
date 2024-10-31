@@ -22,9 +22,9 @@
 
 /*
  * PostprocessSecLabelStmt prepares the commands that need to be run on all workers to assign
- * security labels on distributed objects, currently supporting just Role objects.
- * It also ensures that all object dependencies exist on all
- * nodes for the object in the SecLabelStmt.
+ * security labels on distributed objects, currently supporting just Role, Table and Column
+ * objects. It also ensures that all object dependencies exist on all nodes for the object
+ * in the SecLabelStmt.
  */
 List *
 PostprocessSecLabelStmt(Node *node, const char *queryString)
@@ -37,12 +37,14 @@ PostprocessSecLabelStmt(Node *node, const char *queryString)
 	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
 
 	List *objectAddresses = GetObjectAddressListFromParseTree(node, false, true);
-	if (!IsAnyObjectDistributed(objectAddresses))
+	if (!IsAnyObjectDistributedIgnoreObjectSubId(objectAddresses))
 	{
 		return NIL;
 	}
 
-	if (secLabelStmt->objtype != OBJECT_ROLE)
+	if (secLabelStmt->objtype != OBJECT_ROLE &&
+		secLabelStmt->objtype != OBJECT_TABLE &&
+		secLabelStmt->objtype != OBJECT_COLUMN)
 	{
 		/*
 		 * If we are not in the coordinator, we don't want to interrupt the security
@@ -52,7 +54,7 @@ PostprocessSecLabelStmt(Node *node, const char *queryString)
 		if (EnableUnsupportedFeatureMessages && IsCoordinator())
 		{
 			ereport(NOTICE, (errmsg("not propagating SECURITY LABEL commands whose "
-									"object type is not role"),
+									"object type is not role or table or table column"),
 							 errhint("Connect to worker nodes directly to manually "
 									 "run the same SECURITY LABEL command.")));
 		}
@@ -63,11 +65,17 @@ PostprocessSecLabelStmt(Node *node, const char *queryString)
 	EnsurePropagationToCoordinator();
 	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 
-	const char *secLabelCommands = DeparseTreeNode((Node *) secLabelStmt);
+	List *commandList = NULL;
 
-	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
-								   (void *) secLabelCommands,
-								   ENABLE_DDL_PROPAGATION);
+	if (secLabelStmt->objtype == OBJECT_ROLE ||
+		secLabelStmt->objtype == OBJECT_TABLE ||
+		secLabelStmt->objtype == OBJECT_COLUMN)
+	{
+		const char *secLabelCommands = DeparseTreeNode((Node *) secLabelStmt);
+		commandList = list_make3(DISABLE_DDL_PROPAGATION,
+								 (void *) secLabelCommands,
+								 ENABLE_DDL_PROPAGATION);
+	}
 
 	return NodeDDLTaskList(REMOTE_NODES, commandList);
 }
