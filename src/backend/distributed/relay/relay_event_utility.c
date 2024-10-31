@@ -591,6 +591,58 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			break;
 		}
 
+		case T_SecLabelStmt:
+		{
+			SecLabelStmt *secLabelStmt = (SecLabelStmt *) parseTree;
+
+			/* Should be looking at a security label for a table or column */
+			if (secLabelStmt->objtype == OBJECT_TABLE || secLabelStmt->objtype ==
+				OBJECT_COLUMN)
+			{
+				List *qualified_name = (List *) secLabelStmt->object;
+				String *table_name = NULL;
+
+				switch (list_length(qualified_name))
+				{
+					case 1:
+					{
+						table_name = castNode(String, linitial(qualified_name));
+						break;
+					}
+
+					case 2:
+					case 3:
+					{
+						table_name = castNode(String, lsecond(qualified_name));
+						break;
+					}
+
+					default:
+					{
+						/* Unlikely, but just in case */
+						ereport(ERROR, (errmsg(
+											"unhandled name type in security label; name is: \"%s\"",
+											NameListToString(qualified_name))));
+						break;
+					}
+				}
+
+				/* Now change the table name: <dist table> -> <shard table> */
+				char *relationName = strVal(table_name);
+				AppendShardIdToName(&relationName, shardId);
+				strVal(table_name) = relationName;
+			}
+			else
+			{
+				ereport(WARNING, (errmsg(
+									  "unsafe object type in security label statement"),
+								  errdetail("Object type: %u",
+											(uint32) secLabelStmt->objtype)));
+			}
+
+			break; /* End of handling Security Label */
+		}
+
 		default:
 		{
 			ereport(WARNING, (errmsg("unsafe statement type in name extension"),
@@ -846,7 +898,6 @@ AppendShardIdToName(char **name, uint64 shardId)
 	{
 		SafeSnprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
 	}
-
 	/*
 	 * Otherwise, we need to truncate the name further to accommodate
 	 * a sufficient hash value. The resulting name will avoid collision
