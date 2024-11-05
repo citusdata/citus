@@ -748,6 +748,20 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                       | table columnar.chunk_group
                                                                                       | table columnar.options
                                                                                       | table columnar.stripe
+                                                                                      | type citus_shards
+                                                                                      | type citus_shards[]
+                                                                                      | type columnar.chunk
+                                                                                      | type columnar.chunk[]
+                                                                                      | type columnar.chunk_group
+                                                                                      | type columnar.chunk_group[]
+                                                                                      | type columnar.options
+                                                                                      | type columnar.options[]
+                                                                                      | type columnar.stripe
+                                                                                      | type columnar.stripe[]
+                                                                                      | type public.citus_tables
+                                                                                      | type public.citus_tables[]
+                                                                                      | type time_partitions
+                                                                                      | type time_partitions[]
                                                                                       | view citus_shards
                                                                                       | view public.citus_tables
                                                                                       | view time_partitions
@@ -765,9 +779,13 @@ ALTER EXTENSION citus UPDATE TO '10.0-4';
 SELECT * FROM multi_extension.print_extension_changes();
       previous_object      |   current_object
 ---------------------------------------------------------------------
- view public.citus_tables  |
-                           | view citus_tables
-(2 rows)
+ type public.citus_tables    |
+ type public.citus_tables[]  |
+ view public.citus_tables    |
+                             | type citus_tables
+                             | type citus_tables[]
+                             | view citus_tables
+(6 rows)
 
 -- recreate public schema, and recreate citus_tables in the public schema by default
 CREATE SCHEMA public;
@@ -785,9 +803,13 @@ ALTER EXTENSION citus UPDATE TO '10.0-4';
 SELECT * FROM multi_extension.print_extension_changes();
   previous_object   |      current_object
 ---------------------------------------------------------------------
- view citus_tables  |
-                    | view public.citus_tables
-(2 rows)
+ type citus_tables    |
+ type citus_tables[]  |
+ view citus_tables    |
+                      | type public.citus_tables
+                      | type public.citus_tables[]
+                      | view public.citus_tables
+(6 rows)
 
 -- not print "HINT: " to hide current lib version
 \set VERBOSITY terse
@@ -1078,6 +1100,10 @@ SELECT * FROM multi_extension.print_extension_changes();
  function master_get_table_metadata(text) record                                                                      |
  function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean) SETOF record |
  table citus.pg_dist_object                                                                                           |
+ type citus.pg_dist_object                                                                                            |
+ type citus.pg_dist_object[]                                                                                          |
+ type citus_worker_stat_activity                                                                                      |
+ type citus_worker_stat_activity[]                                                                                    |
  view citus_worker_stat_activity                                                                                      |
                                                                                                                       | function citus_backend_gpid() bigint
                                                                                                                       | function citus_calculate_gpid(integer,integer) bigint
