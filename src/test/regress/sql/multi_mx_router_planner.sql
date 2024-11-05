@@ -1,4 +1,7 @@
 
+-- Two alternative test outputs:
+-- multi_mx_router_planner.out for PG16 and before
+-- multi_mx_router_planner_0.out for PG17
 
 -- ===================================================================
 -- test router planner functionality for single shard select queries
