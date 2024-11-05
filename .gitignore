@@ -58,3 +58,6 @@ lib*.pc
 
 # added output when modifying check_gucs_are_alphabetically_sorted.sh
 guc.out
+
+mehmet*
+*_logfile
