@@ -55,7 +55,8 @@ ALTER TABLE name_lengths ADD CONSTRAINT nl_exclude_12345678901234567890123456789
 ALTER TABLE name_lengths ADD CONSTRAINT nl_checky_12345678901234567890123456789012345678901234567890 CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '2014-01-01'::date);
 
 \c - - :public_worker_1_host :worker_1_port
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
+-- The commit e59fcbd712c777eb2987d7c9ad542a7e817954ec in PostgreSQL 17
+SELECT "Constraint", CASE WHEN "Definition" ~ '^CHECK \\(.*\\)$' THEN regexp_replace("Definition", '^CHECK \\((.*)\\)$', 'CHECK \\1', 'g') ELSE "Definition" END as adjusted_definition FROM table_checks WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
 \c - - :master_host :master_port
 
 -- Rename the table to a too-long name
@@ -177,7 +178,8 @@ CREATE TABLE sneaky_name_lengths (
         );
 
 \di public.sneaky_name_lengths*
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
+-- The commit e59fcbd712c777eb2987d7c9ad542a7e817954ec in PostgreSQL 17
+SELECT "Constraint", CASE WHEN "Definition" ~ '^CHECK \\(.*\\)$' THEN regexp_replace("Definition", '^CHECK \\((.*)\\)$', 'CHECK \\1', 'g') ELSE "Definition" END as adjusted_definition FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
 
 SELECT create_distributed_table('sneaky_name_lengths', 'int_col_123456789012345678901234567890123456789012345678901234', 'hash');
 
@@ -194,7 +196,8 @@ ORDER BY 1 ASC, 2 ASC
 LIMIT 1 \gset
 
 \di :sneaky_index_name
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid= :sneaky_shard_oid ORDER BY 1 DESC, 2 DESC;
+-- The commit e59fcbd712c777eb2987d7c9ad542a7e817954ec in PostgreSQL 17
+SELECT "Constraint", CASE WHEN "Definition" ~ '^CHECK \\(.*\\)$' THEN regexp_replace("Definition", '^CHECK \\((.*)\\)$', 'CHECK \\1', 'g') ELSE "Definition" END as adjusted_definition FROM table_checks WHERE relid= :sneaky_shard_oid ORDER BY 1 DESC, 2 DESC;
 \c - - :master_host :master_port
 
 SET citus.shard_count TO 2;

@@ -88,10 +88,11 @@ ERROR:  cannot create constraint on "name_lengths"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE name_lengths ADD CONSTRAINT nl_checky_12345678901234567890123456789012345678901234567890 CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '2014-01-01'::date);
 \c - - :public_worker_1_host :worker_1_port
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
-                           Constraint                            |                                        Definition
+-- The commit e59fcbd712c777eb2987d7c9ad542a7e817954ec in PostgreSQL 17
+SELECT "Constraint", CASE WHEN "Definition" ~ '^CHECK \\(.*\\)$' THEN regexp_replace("Definition", '^CHECK \\((.*)\\)$', 'CHECK \\1', 'g') ELSE "Definition" END as adjusted_definition FROM table_checks WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
+                           Constraint                            |                                   adjusted_definition
 ---------------------------------------------------------------------
- nl_checky_1234567890123456789012345678901234567_b16df46d_225002 | CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '01-01-2014'::date)
+ nl_checky_1234567890123456789012345678901234567_b16df46d_225002 | CHECK date_col_12345678901234567890123456789012345678901234567890 >= '01-01-2014'::date
 (1 row)
 
 \c - - :master_host :master_port
@@ -250,10 +251,11 @@ CREATE TABLE sneaky_name_lengths (
  public | sneaky_name_lengths_int_col_1234567890123456789012345678901_key | index | postgres | sneaky_name_lengths
 (1 row)
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
-                        Constraint                         |                                  Definition
+-- The commit e59fcbd712c777eb2987d7c9ad542a7e817954ec in PostgreSQL 17
+SELECT "Constraint", CASE WHEN "Definition" ~ '^CHECK \\(.*\\)$' THEN regexp_replace("Definition", '^CHECK \\((.*)\\)$', 'CHECK \\1', 'g') ELSE "Definition" END as adjusted_definition FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
+                        Constraint                         |                            adjusted_definition
 ---------------------------------------------------------------------
- checky_12345678901234567890123456789012345678901234567890 | CHECK (int_col_123456789012345678901234567890123456789012345678901234 > 100)
+ checky_12345678901234567890123456789012345678901234567890 | CHECK int_col_123456789012345678901234567890123456789012345678901234 > 100
 (1 row)
 
 SELECT create_distributed_table('sneaky_name_lengths', 'int_col_123456789012345678901234567890123456789012345678901234', 'hash');
@@ -280,10 +282,11 @@ LIMIT 1 \gset
  public | sneaky_name_lengths_int_col_1234567890123456789_6402d2cd_225026 | index | postgres | sneaky_name_lengths_225026
 (1 row)
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid= :sneaky_shard_oid ORDER BY 1 DESC, 2 DESC;
-                        Constraint                         |                                  Definition
+-- The commit e59fcbd712c777eb2987d7c9ad542a7e817954ec in PostgreSQL 17
+SELECT "Constraint", CASE WHEN "Definition" ~ '^CHECK \\(.*\\)$' THEN regexp_replace("Definition", '^CHECK \\((.*)\\)$', 'CHECK \\1', 'g') ELSE "Definition" END as adjusted_definition FROM table_checks WHERE relid= :sneaky_shard_oid ORDER BY 1 DESC, 2 DESC;
+                        Constraint                         |                            adjusted_definition
 ---------------------------------------------------------------------
- checky_12345678901234567890123456789012345678901234567890 | CHECK (int_col_123456789012345678901234567890123456789012345678901234 > 100)
+ checky_12345678901234567890123456789012345678901234567890 | CHECK int_col_123456789012345678901234567890123456789012345678901234 > 100
 (1 row)
 
 \c - - :master_host :master_port
