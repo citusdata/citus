@@ -663,13 +663,13 @@ DROP ROLE propagated_role, non_propagated_role;
 
 -- test citus_internal.acquire_citus_advisory_object_class_lock with null input
 SELECT citus_internal.acquire_citus_advisory_object_class_lock(null, 'regression');
-SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), null);
-
 -- OCLASS_DATABASE
-SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), NULL);
-SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'regression');
-SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), '');
-SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 ELSE 26 END AS oclass_database), 'no_such_db');
+-- Set oclass_database value based on PostgreSQL version: 25 for < 16, 26 for version 16, and 1262 for version >= 17
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 WHEN substring(version(), '\d+')::integer = 16 THEN 26 ELSE 1262 END AS oclass_database), NULL);
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 WHEN substring(version(), '\d+')::integer = 16 THEN 26 ELSE 1262 END AS oclass_database), 'regression');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 WHEN substring(version(), '\d+')::integer = 16 THEN 26 ELSE 1262 END AS oclass_database), '');
+SELECT citus_internal.acquire_citus_advisory_object_class_lock((SELECT CASE WHEN substring(version(), '\d+')::integer < 16 THEN 25 WHEN substring(version(), '\d+')::integer = 16 THEN 26 ELSE 1262 END AS oclass_database), 'no_such_db');
+
 
 -- invalid OCLASS
 SELECT citus_internal.acquire_citus_advisory_object_class_lock(-1, NULL);

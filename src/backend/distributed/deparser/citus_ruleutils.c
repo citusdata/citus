@@ -1353,6 +1353,8 @@ convert_aclright_to_string(int aclright)
 			return "TEMPORARY";
 		case ACL_CONNECT:
 			return "CONNECT";
+		case ACL_MAINTAIN:    /* New case for PostgreSQL 17 https://github.com/postgres/postgres/commit/ecb0fd33720fab91df1207e85704f382f55e1eb7 */
+			return "MAINTAIN";	
 		default:
 			elog(ERROR, "unrecognized aclright: %d", aclright);
 			return NULL;
