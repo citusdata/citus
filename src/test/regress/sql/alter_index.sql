@@ -23,13 +23,17 @@ ALTER INDEX test_idx2 ALTER COLUMN 2 SET STATISTICS 99999;
 SELECT create_distributed_table('t2','a');
 
 -- verify statistics is set
-SELECT c.relname, a.attstattarget
+-- pg17 Changed `attstattarget` in `pg_attribute` to use `NullableDatum`, allowing null representation for default statistics target in PostgreSQL 17.
+-- https://github.com/postgres/postgres/commit/6a004f1be87d34cfe51acf2fe2552d2b08a79273
+SELECT c.relname, 
+       CASE WHEN a.attstattarget = -1 THEN NULL ELSE a.attstattarget END AS attstattarget
 FROM pg_attribute a
 JOIN pg_class c ON a.attrelid = c.oid AND c.relname LIKE 'test\_idx%'
 ORDER BY c.relname, a.attnum;
 
 \c - - - :worker_1_port
-SELECT c.relname, a.attstattarget
+SELECT c.relname, 
+       CASE WHEN a.attstattarget = -1 THEN NULL ELSE a.attstattarget END AS attstattarget
 FROM pg_attribute a
 JOIN pg_class c ON a.attrelid = c.oid AND c.relname SIMILAR TO 'test\_idx%\_\d%'
 ORDER BY c.relname, a.attnum;
