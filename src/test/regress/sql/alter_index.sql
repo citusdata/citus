@@ -1,3 +1,9 @@
+-- Two alternative test outputs:
+-- alter_index.out for PG16 and before
+-- alter_index_0.out for PG17
+-- related commit
+-- Changed `attstattarget` in `pg_attribute` to use `NullableDatum`, allowing null representation for default statistics target in PostgreSQL 17.
+-- https://github.com/postgres/postgres/commit/6a004f1be87d34cfe51acf2fe2552d2b08a79273
 CREATE SCHEMA alterindex;
 
 SET search_path TO "alterindex";

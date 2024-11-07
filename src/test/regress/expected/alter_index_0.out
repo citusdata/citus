@@ -45,7 +45,7 @@ ORDER BY c.relname, a.attnum;
   relname  | attstattarget
 ---------------------------------------------------------------------
  test_idx  |          4646
- test_idx2 |            -1
+ test_idx2 |
  test_idx2 |         10000
  test_idx2 |          3737
 (4 rows)
@@ -57,10 +57,10 @@ JOIN pg_class c ON a.attrelid = c.oid AND c.relname SIMILAR TO 'test\_idx%\_\d%'
 ORDER BY c.relname, a.attnum;
      relname      | attstattarget
 ---------------------------------------------------------------------
- test_idx2_980004 |            -1
+ test_idx2_980004 |
  test_idx2_980004 |         10000
  test_idx2_980004 |          3737
- test_idx2_980006 |            -1
+ test_idx2_980006 |
  test_idx2_980006 |         10000
  test_idx2_980006 |          3737
  test_idx_980000  |          4646
