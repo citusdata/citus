@@ -1,3 +1,9 @@
+-- Two alternative test outputs:
+-- pg13_propagate_statistics.out for PG16 and before
+-- pg13_propagate_statistics_0.out for PG17
+-- related commit
+-- Changed stxstattarget in pg_statistic_ext to use nullable representation, removing explicit -1 for default statistics target in PostgreSQL 17.
+-- https://github.com/postgres/postgres/commit/012460ee93c304fbc7220e5b55d9d0577fc766ab
 CREATE SCHEMA "statistics'TestTarget";
 SET search_path TO "statistics'TestTarget";
 SET citus.next_shard_id TO 980000;
