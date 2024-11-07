@@ -309,3 +309,5 @@ s/permission denied to terminate process/must be a superuser to terminate superu
 s/permission denied to cancel query/must be a superuser to cancel superuser query/g
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */
+
+s/DEBUG:  drop auto-cascades to type public\.pg_temp_[0-9]\+/DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx/g
