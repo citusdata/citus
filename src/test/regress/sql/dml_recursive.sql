@@ -1,3 +1,9 @@
+-- Two alternative test outputs:
+-- dml_recursive.out for PG16 and before
+-- dml_recursive_0.out for PG17
+-- related commit
+-- PostgreSQL 17 includes an enhancement that allows the optimizer to transform correlated IN subqueries into more efficient join operations.
+-- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=9f1337639
 CREATE SCHEMA recursive_dml_queries;
 SET search_path TO recursive_dml_queries, public;
 SET citus.next_shard_id TO 2370000;
