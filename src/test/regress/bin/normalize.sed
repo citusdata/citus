@@ -310,4 +310,11 @@ s/permission denied to cancel query/must be a superuser to cancel superuser quer
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */
 
-s/DEBUG:  drop auto-cascades to type public\.pg_temp_[0-9]\+/DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx/g
+# pg17 changes
+# can be removed when dropping PG16 support
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+# multi_mx_router_planner normalize public.pg_temp_xxxxx
+s/DEBUG:  drop auto-cascades to type public\.pg_temp_[0-9]+/DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx/g
+
+#endif /* PG_VERSION_NUM >= PG_VERSION_17 */
