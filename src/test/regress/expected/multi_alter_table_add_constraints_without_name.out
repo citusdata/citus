@@ -1,3 +1,9 @@
+-- Two alternative test outputs:
+-- multi_alter_table_add_constraints_without_name.out for PG16 and before
+-- multi_alter_table_add_constraints_without_name_0.out for PG17
+-- related commit
+-- PostgreSQL 17 now allows exclusion constraints on partitioned tables, lifting the previous restriction.
+-- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=9f1337639
 --
 -- MULTI_ALTER_TABLE_ADD_CONSTRAINTS_WITHOUT_NAME
 --
