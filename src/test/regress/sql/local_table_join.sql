@@ -1,3 +1,7 @@
+-- Two alternative test outputs:
+-- local_table_join.out for PG16 and before
+-- local_table_join_0.out for PG17
+-- PostgreSQL 17 optimizes correlated subqueries by pushing down filter conditions into subplans for more efficient query execution.
 CREATE SCHEMA local_table_join;
 SET search_path TO local_table_join;
 

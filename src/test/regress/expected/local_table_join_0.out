@@ -1431,7 +1431,7 @@ HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
 DEBUG:  Wrapping relation "postgres_table" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table d1 JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM local_table_join.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
  count
 ---------------------------------------------------------------------
@@ -1442,7 +1442,7 @@ set citus.local_table_join_policy to 'prefer-distributed';
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
 DEBUG:  Wrapping relation "distributed_table" "d1" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.distributed_table d1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.distributed_table d1 WHERE (key OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT d1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) d1_1) d1 JOIN local_table_join.postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM local_table_join.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
 ERROR:  direct joins between distributed and local tables are not supported
 HINT:  Use CTE's or subqueries to select from local tables and use them in joins
