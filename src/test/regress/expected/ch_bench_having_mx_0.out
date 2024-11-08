@@ -32,11 +32,11 @@ order by s_i_id;
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.s_i_id
-   InitPlan 1 (returns $0)
+   InitPlan 1
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  HashAggregate
          Group Key: remote_scan.s_i_id
-         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
+         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > (InitPlan 1).col1)
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Aggregate
@@ -62,10 +62,10 @@ order by s_i_id;
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: stock.s_i_id
-                           InitPlan 1 (returns $0)
+                           InitPlan 1
                              ->  Function Scan on read_intermediate_result intermediate_result
                            ->  Seq Scan on stock_1640000 stock
-                                 Filter: ((s_order_cnt)::numeric > $0)
+                                 Filter: ((s_order_cnt)::numeric > (InitPlan 1).col1)
 (36 rows)
 
 explain (costs false, summary false, timing false)
@@ -74,15 +74,15 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
-                                       QUERY PLAN
+                                         QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.s_i_id
-   InitPlan 1 (returns $0)
+   InitPlan 1
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  HashAggregate
          Group Key: remote_scan.s_i_id
-         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
+         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > (InitPlan 1).col1)
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Aggregate
@@ -107,12 +107,12 @@ select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock);
-                                    QUERY PLAN
+                                      QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.s_i_id
-   Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
-   InitPlan 1 (returns $0)
+   Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > (InitPlan 1).col1)
+   InitPlan 1
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  Custom Scan (Citus Adaptive)
          ->  Distributed Subplan XXX_1
@@ -139,18 +139,18 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
-                                              QUERY PLAN
+                                 QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.s_i_id
-   InitPlan 1 (returns $0)
+   InitPlan 1
      ->  Result
    ->  HashAggregate
          Group Key: remote_scan.s_i_id
          ->  Result
-               One-Time Filter: $0
+               One-Time Filter: (InitPlan 1).col1
                ->  Custom Scan (Citus Adaptive)
-                     Filter: $0
+                     Filter: (InitPlan 1).col1
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
@@ -168,12 +168,12 @@ having   (select true);
 ---------------------------------------------------------------------
  HashAggregate  (cost=500.01..503.01 rows=200 width=12)
    Group Key: remote_scan.s_i_id
-   InitPlan 1 (returns $0)
+   InitPlan 1
      ->  Result  (cost=0.00..0.01 rows=1 width=1)
    ->  Result  (cost=0.00..0.00 rows=100000 width=12)
-         One-Time Filter: $0
+         One-Time Filter: (InitPlan 1).col1
          ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=12)
-               Filter: $0
+               Filter: (InitPlan 1).col1
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
