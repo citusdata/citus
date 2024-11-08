@@ -66,7 +66,7 @@ BEGIN
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
 	WHERE (p.description is null OR c.description is null)
-		  AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
           AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
@@ -96,11 +96,15 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
- type |       identity
+ type |        identity
 ---------------------------------------------------------------------
+ type | public.citus_schemas
+ type | public.citus_schemas[]
+ type | public.citus_tables
+ type | public.citus_tables[]
  view | public.citus_schemas
  view | public.citus_tables
-(2 rows)
+(6 rows)
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
@@ -314,9 +318,51 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | table pg_dist_shard
                  | table pg_dist_transaction
                  | type citus.distribution_type
+                 | type citus.distribution_type[]
+                 | type citus.pg_dist_object
+                 | type citus.pg_dist_object[]
                  | type citus.shard_transfer_mode
+                 | type citus.shard_transfer_mode[]
                  | type citus_copy_format
+                 | type citus_copy_format[]
+                 | type citus_dist_stat_activity
+                 | type citus_dist_stat_activity[]
+                 | type citus_lock_waits
+                 | type citus_lock_waits[]
+                 | type citus_shard_indexes_on_worker
+                 | type citus_shard_indexes_on_worker[]
+                 | type citus_shards_on_worker
+                 | type citus_shards_on_worker[]
+                 | type citus_stat_statements
+                 | type citus_stat_statements[]
+                 | type citus_worker_stat_activity
+                 | type citus_worker_stat_activity[]
                  | type noderole
+                 | type noderole[]
+                 | type pg_dist_authinfo
+                 | type pg_dist_authinfo[]
+                 | type pg_dist_colocation
+                 | type pg_dist_colocation[]
+                 | type pg_dist_local_group
+                 | type pg_dist_local_group[]
+                 | type pg_dist_node
+                 | type pg_dist_node[]
+                 | type pg_dist_node_metadata
+                 | type pg_dist_node_metadata[]
+                 | type pg_dist_partition
+                 | type pg_dist_partition[]
+                 | type pg_dist_placement
+                 | type pg_dist_placement[]
+                 | type pg_dist_poolinfo
+                 | type pg_dist_poolinfo[]
+                 | type pg_dist_rebalance_strategy
+                 | type pg_dist_rebalance_strategy[]
+                 | type pg_dist_shard
+                 | type pg_dist_shard[]
+                 | type pg_dist_shard_placement
+                 | type pg_dist_shard_placement[]
+                 | type pg_dist_transaction
+                 | type pg_dist_transaction[]
                  | view citus_dist_stat_activity
                  | view citus_lock_waits
                  | view citus_shard_indexes_on_worker
@@ -324,7 +370,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | view citus_stat_statements
                  | view citus_worker_stat_activity
                  | view pg_dist_shard_placement
-(186 rows)
+(228 rows)
 
 -- Test downgrade to 9.2-2 from 9.2-4
 ALTER EXTENSION citus UPDATE TO '9.2-4';
@@ -708,10 +754,24 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                       | table columnar.chunk_group
                                                                                       | table columnar.options
                                                                                       | table columnar.stripe
+                                                                                      | type citus_shards
+                                                                                      | type citus_shards[]
+                                                                                      | type columnar.chunk
+                                                                                      | type columnar.chunk[]
+                                                                                      | type columnar.chunk_group
+                                                                                      | type columnar.chunk_group[]
+                                                                                      | type columnar.options
+                                                                                      | type columnar.options[]
+                                                                                      | type columnar.stripe
+                                                                                      | type columnar.stripe[]
+                                                                                      | type public.citus_tables
+                                                                                      | type public.citus_tables[]
+                                                                                      | type time_partitions
+                                                                                      | type time_partitions[]
                                                                                       | view citus_shards
                                                                                       | view public.citus_tables
                                                                                       | view time_partitions
-(68 rows)
+(82 rows)
 
 -- check that we depend on the existence of public schema, and we can not drop it now
 DROP SCHEMA public;
@@ -723,11 +783,15 @@ ALTER EXTENSION citus UPDATE TO '9.5-1';
 DROP SCHEMA public;
 ALTER EXTENSION citus UPDATE TO '10.0-4';
 SELECT * FROM multi_extension.print_extension_changes();
-      previous_object      |   current_object
+       previous_object       |    current_object
 ---------------------------------------------------------------------
- view public.citus_tables  |
-                           | view citus_tables
-(2 rows)
+ type public.citus_tables    |
+ type public.citus_tables[]  |
+ view public.citus_tables    |
+                             | type citus_tables
+                             | type citus_tables[]
+                             | view citus_tables
+(6 rows)
 
 -- recreate public schema, and recreate citus_tables in the public schema by default
 CREATE SCHEMA public;
@@ -743,11 +807,15 @@ GRANT ALL ON SCHEMA public TO public;
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 ALTER EXTENSION citus UPDATE TO '10.0-4';
 SELECT * FROM multi_extension.print_extension_changes();
-  previous_object   |      current_object
+   previous_object    |       current_object
 ---------------------------------------------------------------------
- view citus_tables  |
-                    | view public.citus_tables
-(2 rows)
+ type citus_tables    |
+ type citus_tables[]  |
+ view citus_tables    |
+                      | type public.citus_tables
+                      | type public.citus_tables[]
+                      | view public.citus_tables
+(6 rows)
 
 -- not print "HINT: " to hide current lib version
 \set VERBOSITY terse
@@ -1038,6 +1106,10 @@ SELECT * FROM multi_extension.print_extension_changes();
  function master_get_table_metadata(text) record                                                                      |
  function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean) SETOF record |
  table citus.pg_dist_object                                                                                           |
+ type citus.pg_dist_object                                                                                            |
+ type citus.pg_dist_object[]                                                                                          |
+ type citus_worker_stat_activity                                                                                      |
+ type citus_worker_stat_activity[]                                                                                    |
  view citus_worker_stat_activity                                                                                      |
                                                                                                                       | function citus_backend_gpid() bigint
                                                                                                                       | function citus_calculate_gpid(integer,integer) bigint
@@ -1069,8 +1141,12 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function worker_drop_shell_table(text) void
                                                                                                                       | function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean) SETOF record
                                                                                                                       | table pg_dist_object
+                                                                                                                      | type citus_stat_activity
+                                                                                                                      | type citus_stat_activity[]
+                                                                                                                      | type pg_dist_object
+                                                                                                                      | type pg_dist_object[]
                                                                                                                       | view citus_stat_activity
-(41 rows)
+(49 rows)
 
 -- Test downgrade to 11.0-1 from 11.0-2
 ALTER EXTENSION citus UPDATE TO '11.0-2';
@@ -1168,6 +1244,14 @@ SELECT * FROM multi_extension.print_extension_changes();
  table columnar.chunk_group                                                                                                                                                                                                                                        |
  table columnar.options                                                                                                                                                                                                                                            |
  table columnar.stripe                                                                                                                                                                                                                                             |
+ type columnar.chunk                                                                                                                                                                                                                                               |
+ type columnar.chunk[]                                                                                                                                                                                                                                             |
+ type columnar.chunk_group                                                                                                                                                                                                                                         |
+ type columnar.chunk_group[]                                                                                                                                                                                                                                       |
+ type columnar.options                                                                                                                                                                                                                                             |
+ type columnar.options[]                                                                                                                                                                                                                                           |
+ type columnar.stripe                                                                                                                                                                                                                                              |
+ type columnar.stripe[]                                                                                                                                                                                                                                            |
                                                                                                                                                                                                                                                                    | function citus_cleanup_orphaned_resources()
                                                                                                                                                                                                                                                                    | function citus_copy_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode) void
                                                                                                                                                                                                                                                                    | function citus_internal_delete_partition_metadata(regclass) void
@@ -1195,12 +1279,27 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                                                                                                                                                    | table pg_dist_background_task_depend
                                                                                                                                                                                                                                                                    | table pg_dist_cleanup
                                                                                                                                                                                                                                                                    | type citus_job_status
+                                                                                                                                                                                                                                                                   | type citus_job_status[]
+                                                                                                                                                                                                                                                                   | type citus_locks
+                                                                                                                                                                                                                                                                   | type citus_locks[]
                                                                                                                                                                                                                                                                    | type citus_task_status
+                                                                                                                                                                                                                                                                   | type citus_task_status[]
+                                                                                                                                                                                                                                                                   | type pg_dist_background_job
+                                                                                                                                                                                                                                                                   | type pg_dist_background_job[]
+                                                                                                                                                                                                                                                                   | type pg_dist_background_task
+                                                                                                                                                                                                                                                                   | type pg_dist_background_task[]
+                                                                                                                                                                                                                                                                   | type pg_dist_background_task_depend
+                                                                                                                                                                                                                                                                   | type pg_dist_background_task_depend[]
+                                                                                                                                                                                                                                                                   | type pg_dist_cleanup
+                                                                                                                                                                                                                                                                   | type pg_dist_cleanup[]
                                                                                                                                                                                                                                                                    | type replication_slot_info
+                                                                                                                                                                                                                                                                   | type replication_slot_info[]
                                                                                                                                                                                                                                                                    | type split_copy_info
+                                                                                                                                                                                                                                                                   | type split_copy_info[]
                                                                                                                                                                                                                                                                    | type split_shard_info
+                                                                                                                                                                                                                                                                   | type split_shard_info[]
                                                                                                                                                                                                                                                                    | view citus_locks
-(57 rows)
+(80 rows)
 
 -- Test downgrade to 11.1-1 from 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
@@ -1291,7 +1390,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                                                                                                                                                                         | operator family cluster_clock_ops for access method btree
                                                                                                                                                                                                                                                                                         | sequence pg_dist_clock_logical_seq
                                                                                                                                                                                                                                                                                         | type cluster_clock
-(38 rows)
+                                                                                                                                                                                                                                                                                        | type cluster_clock[]
+(39 rows)
 
 -- Test downgrade to 11.2-1 from 11.2-2
 ALTER EXTENSION citus UPDATE TO '11.2-2';
@@ -1333,9 +1433,13 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_stat_tenants_local_reset() void
                  | function citus_stat_tenants_reset() void
                  | function worker_drop_all_shell_tables(boolean)
+                 | type citus_stat_tenants
+                 | type citus_stat_tenants[]
+                 | type citus_stat_tenants_local
+                 | type citus_stat_tenants_local[]
                  | view citus_stat_tenants
                  | view citus_stat_tenants_local
-(11 rows)
+(15 rows)
 
 -- Test downgrade to 11.3-1 from 11.3-2
 ALTER EXTENSION citus UPDATE TO '11.3-2';
@@ -1390,8 +1494,12 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_schema_undistribute(regnamespace) void
                  | function citus_stat_tenants_local_internal(boolean) SETOF record
                  | table pg_dist_schema
+                 | type pg_dist_schema
+                 | type pg_dist_schema[]
+                 | type public.citus_schemas
+                 | type public.citus_schemas[]
                  | view public.citus_schemas
-(8 rows)
+(12 rows)
 
 -- Test downgrade to 12.0-1 from 12.1-1
 ALTER EXTENSION citus UPDATE TO '12.1-1';
@@ -1414,12 +1522,58 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_schema_move(regnamespace,text,integer,citus.shard_transfer_mode) void
 (5 rows)
 
+-- Test downgrade to 12.1-1 from 12.2-1
+ALTER EXTENSION citus UPDATE TO '12.2-1';
+ALTER EXTENSION citus UPDATE TO '12.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 12.2-1
+ALTER EXTENSION citus UPDATE TO '12.2-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                        previous_object                         |                                        current_object
+---------------------------------------------------------------------
+ function citus_unmark_object_distributed(oid,oid,integer) void |
+                                                                | function citus_internal.acquire_citus_advisory_object_class_lock(integer,cstring) void
+                                                                | function citus_internal.add_colocation_metadata(integer,integer,integer,regtype,oid) void
+                                                                | function citus_internal.add_object_metadata(text,text[],text[],integer,integer,boolean) void
+                                                                | function citus_internal.add_partition_metadata(regclass,"char",text,integer,"char") void
+                                                                | function citus_internal.add_placement_metadata(bigint,bigint,integer,bigint) void
+                                                                | function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text) void
+                                                                | function citus_internal.add_tenant_schema(oid,integer) void
+                                                                | function citus_internal.adjust_local_clock_to_remote(cluster_clock) void
+                                                                | function citus_internal.commit_management_command_2pc() void
+                                                                | function citus_internal.database_command(text) void
+                                                                | function citus_internal.delete_colocation_metadata(integer) void
+                                                                | function citus_internal.delete_partition_metadata(regclass) void
+                                                                | function citus_internal.delete_placement_metadata(bigint) void
+                                                                | function citus_internal.delete_shard_metadata(bigint) void
+                                                                | function citus_internal.delete_tenant_schema(oid) void
+                                                                | function citus_internal.execute_command_on_remote_nodes_as_user(text,text) void
+                                                                | function citus_internal.global_blocked_processes() SETOF record
+                                                                | function citus_internal.is_replication_origin_tracking_active() boolean
+                                                                | function citus_internal.local_blocked_processes() SETOF record
+                                                                | function citus_internal.mark_node_not_synced(integer,integer) void
+                                                                | function citus_internal.mark_object_distributed(oid,text,oid,text) void
+                                                                | function citus_internal.start_management_transaction(xid8) void
+                                                                | function citus_internal.start_replication_origin_tracking() void
+                                                                | function citus_internal.stop_replication_origin_tracking() void
+                                                                | function citus_internal.unregister_tenant_schema_globally(oid,text) void
+                                                                | function citus_internal.update_none_dist_table_metadata(oid,"char",bigint,boolean) void
+                                                                | function citus_internal.update_placement_metadata(bigint,integer,integer) void
+                                                                | function citus_internal.update_relation_colocation(oid,integer) void
+                                                                | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
+(30 rows)
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 12.1.5
+ 12.2devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -1432,11 +1586,15 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
- type |       identity
+ type |        identity
 ---------------------------------------------------------------------
+ type | public.citus_schemas
+ type | public.citus_schemas[]
+ type | public.citus_tables
+ type | public.citus_tables[]
  view | public.citus_schemas
  view | public.citus_tables
-(2 rows)
+(6 rows)
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
@@ -1453,7 +1611,7 @@ DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 12.1, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 12.2, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -1498,7 +1656,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 12.1, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 12.2, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
@@ -1608,8 +1766,8 @@ CREATE EXTENSION citus;
 -- Check that maintenance daemon can also be started in another database
 CREATE DATABASE another;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c another
 CREATE EXTENSION citus;
 CREATE SCHEMA test;
@@ -1667,13 +1825,13 @@ NOTICE:  drop cascades to function test_daemon.maintenance_daemon_died(text)
 -- create a test database, configure citus with single node
 CREATE DATABASE another;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c - - - :worker_1_port
 CREATE DATABASE another;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to workers
-HINT:  You can manually create a database and its extensions on workers.
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
 \c - - - :master_port
 \c another
 CREATE EXTENSION citus;
