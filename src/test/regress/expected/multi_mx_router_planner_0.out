@@ -1469,6 +1469,8 @@ CREATE MATERIALIZED VIEW mv_articles_hash_mx AS
 	SELECT * FROM articles_hash_mx WHERE author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
+DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx
+DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx[]
 SELECT * FROM mv_articles_hash_mx;
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
@@ -1485,6 +1487,8 @@ SET client_min_messages to 'DEBUG2';
 CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
 	SELECT * FROM articles_hash_mx WHERE author_id in (1,2);
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx
+DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx[]
 INSERT INTO articles_hash_mx VALUES (51,  1, 'amateus', 1814);
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1
