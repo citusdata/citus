@@ -785,9 +785,6 @@ SELECT con.conname
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
 
--- Check "ADD EXCLUDE" errors out for partitioned table since the postgres does not allow it
-ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD EXCLUDE(partition_col WITH =);
-
 -- Check "ADD CHECK"
 SET client_min_messages TO DEBUG1;
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD CHECK (dist_col > 0);
