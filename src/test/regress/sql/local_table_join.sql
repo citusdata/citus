@@ -395,12 +395,13 @@ select typdefault from (
   ) as subq_1
 ) as subq_2;
 
+CREATE TABLE postgres_table_key5_filtering AS TABLE postgres_table;
 -- correlated sublinks are not yet supported because of #4470, unless we convert not-correlated table
-SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table_key5_filtering using(key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
 
 set citus.local_table_join_policy to 'prefer-distributed';
-SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table_key5_filtering using(key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
 set citus.local_table_join_policy to 'auto';
 
