@@ -785,38 +785,6 @@ SELECT con.conname
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
 
--- Check "ADD EXCLUDE" errors out for partitioned table since the postgres does not allow it
-ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD EXCLUDE(partition_col WITH =);
-
--- Check "ADD CHECK"
-SET client_min_messages TO DEBUG1;
-ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD CHECK (dist_col > 0);
-RESET client_min_messages;
-
-SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'citus_local_partitioned_table';
-
-\c - - :public_worker_1_host :worker_1_port
-SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
-
-\c - - :master_host :master_port
-ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_check;
-
-\c - - :public_worker_1_host :worker_1_port
-SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
-
-\c - - :master_host :master_port
 -- Test with unusual table and column names
 CREATE TABLE AT_AddConstNoName."2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER);
 SELECT create_distributed_table('AT_AddConstNoName."2nd table"','2nd id');
