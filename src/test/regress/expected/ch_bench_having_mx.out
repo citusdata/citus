@@ -1,8 +1,3 @@
--- Two alternative test outputs:
--- ch_bench_having_mx.out for PG16 and before
--- ch_bench_having_mx_0.out for PG17
--- related commit
--- https://github.com/postgres/postgres/commit/fd0398fc
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1640000;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 4;
