@@ -7,12 +7,6 @@
 -- not done yet.
 --
 -- Upgrade tests verify the objects are added in citus_finish_pg_upgrade()
---
--- Two alternative test outputs:
--- multi_extension.out for PG16 and before
--- multi_extension_0.out for PG17
--- related commit
--- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commit;h=e5bc9454e527b1cba97553531d8d4992892fdeef
 
 SET citus.next_shard_id TO 580000;
 CREATE SCHEMA multi_extension;
