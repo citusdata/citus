@@ -298,29 +298,7 @@ FROM
 	) as baz
 	) as foo WHERE second_distributed_table.tenant_id = foo.tenant_id
 RETURNING *;
- tenant_id | dept |          info          | tenant_id
----------------------------------------------------------------------
- 14        |    3 | {"f1": 14, "f2": 196}  | 14
- 23        |    5 | {"f1": 23, "f2": 529}  | 23
- 24        |    6 | {"f1": 24, "f2": 576}  | 24
- 3         |    0 | {"f1": 3, "f2": 9}     | 3
- 33        |    8 | {"f1": 33, "f2": 1089} | 33
- 34        |    8 | {"f1": 34, "f2": 1156} | 34
- 4         |    1 | {"f1": 4, "f2": 16}    | 4
- 43        |   10 | {"f1": 43, "f2": 1849} | 43
- 44        |   11 | {"f1": 44, "f2": 1936} | 44
- 53        |   13 | {"f1": 53, "f2": 2809} | 53
- 54        |   13 | {"f1": 54, "f2": 2916} | 54
- 63        |   15 | {"f1": 63, "f2": 3969} | 63
- 64        |   16 | {"f1": 64, "f2": 4096} | 64
- 73        |   18 | {"f1": 73, "f2": 5329} | 73
- 74        |   18 | {"f1": 74, "f2": 5476} | 74
- 83        |   20 | {"f1": 83, "f2": 6889} | 83
- 84        |   21 | {"f1": 84, "f2": 7056} | 84
- 93        |   23 | {"f1": 93, "f2": 8649} | 93
- 94        |   23 | {"f1": 94, "f2": 8836} | 94
-(19 rows)
-
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- we don't support subqueries/CTEs inside VALUES
 INSERT INTO
 	second_distributed_table (tenant_id, dept)
