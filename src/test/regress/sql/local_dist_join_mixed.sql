@@ -2,6 +2,7 @@
 -- local_dist_join_mixed_0.out for PG16 and before
 -- local_dist_join_mixed.out for PG17
 -- PostgreSQL 17 optimizes correlated subqueries by pushing down filter conditions into subplans for more efficient query execution.
+-- https://github.com/postgres/postgres/commit/b262ad44
 CREATE SCHEMA local_dist_join_mixed;
 SET search_path TO local_dist_join_mixed;
 
