@@ -1,0 +1,28 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+
+[packages]
+mitmproxy = {editable = true, ref = "main", git = "https://github.com/citusdata/mitmproxy.git"}
+construct = "*"
+docopt = "==0.6.2"
+cryptography = ">=41.0.4"
+pytest = "*"
+psycopg = "*"
+filelock = "*"
+pytest-asyncio = "*"
+pytest-timeout = "*"
+pytest-xdist = "*"
+pytest-repeat = "*"
+pyyaml = "*"
+werkzeug = "==2.3.7"
+
+[dev-packages]
+black = "*"
+isort = "*"
+flake8 = "*"
+flake8-bugbear = "*"
+
+[requires]
+python_version = "3.9"
