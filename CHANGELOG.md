@@ -1,3 +1,8 @@
+### citus v12.1.6 (Nov 13, 2024) ###
+
+* Propagates `SECURITY LABEL .. ON ROLE` statements
+  (#7304)
+
 ### citus v12.1.5 (July 17, 2024) ###
 
 * Adds support for MERGE commands with single shard distributed target tables
