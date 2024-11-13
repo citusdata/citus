@@ -1143,7 +1143,7 @@ ConflictWithIsolationTestingBeforeCopy(void)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	if (RunningUnderIsolationTest)
+	if (RunningUnderCitusTestSuite)
 	{
 		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
 							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY,
@@ -1177,7 +1177,7 @@ ConflictWithIsolationTestingAfterCopy(void)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	if (RunningUnderIsolationTest)
+	if (RunningUnderCitusTestSuite)
 	{
 		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
 							 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
