@@ -25,7 +25,7 @@ WITH event_id
          FROM   events_table)
 SELECT Count(*)
 FROM   event_id
-WHERE  events_user_id IN (SELECT user_id
+WHERE  (events_user_id, random()) IN (SELECT user_id, 1
                           FROM   users_table
                           WHERE  users_table.time = events_time);
 

@@ -771,13 +771,13 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 (2 rows)
 
 -- correlated subquery with union in WHERE clause
-SELECT * FROM test a WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x) ORDER BY 1,2;
+SELECT * FROM test a WHERE (x + random()) IN (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_union.test b
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT c.y FROM recursive_union.test c WHERE (a.x OPERATOR(pg_catalog.=) c.x))) ORDER BY x, y
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (((x)::double precision OPERATOR(pg_catalog.+) random()) OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT c.y FROM recursive_union.test c WHERE (a.x OPERATOR(pg_catalog.=) c.x))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
