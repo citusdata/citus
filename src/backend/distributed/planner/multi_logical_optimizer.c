@@ -1557,9 +1557,10 @@ MasterAggregateMutator(Node *originalNode, MasterAggregateWalkerContext *walkerC
 	}
 	else if (IsA(originalNode, Var))
 	{
-		Var *newColumn = copyObject((Var *) originalNode);
-		newColumn->varno = masterTableId;
-		newColumn->varattno = walkerContext->columnId;
+		Var *origColumn = (Var *) originalNode;
+		Var *newColumn = makeVar(masterTableId, walkerContext->columnId,
+								 origColumn->vartype, origColumn->vartypmod,
+								 origColumn->varcollid, origColumn->varlevelsup);
 		walkerContext->columnId++;
 
 		newNode = (Node *) newColumn;
