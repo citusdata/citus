@@ -60,7 +60,7 @@ BEGIN
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
 	WHERE (p.description is null OR c.description is null)
-		  AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
           AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
@@ -1413,7 +1413,7 @@ DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 12.1.5
+ 12.1.6
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
