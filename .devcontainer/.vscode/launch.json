@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach Citus (devcontainer)",
+            "type": "cppdbg",
+            "request": "attach",
+            "processId": "${command:pickProcess}",
+            "program": "/home/citus/.pgenv/pgsql/bin/postgres",
+            "additionalSOLibSearchPath": "/home/citus/.pgenv/pgsql/lib",
+            "setupCommands": [
+                {
+                    "text": "handle SIGUSR1 noprint nostop pass",
+                    "description": "let gdb not stop when SIGUSR1 is sent to process",
+                    "ignoreFailures": true
+                }
+            ],
+        },
+        {
+            "name": "Open core file",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/home/citus/.pgenv/pgsql/bin/postgres",
+            "coreDumpPath": "${input:corefile}",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+        }
+    ],
+    "inputs": [
+        {
+            "id": "corefile",
+            "type": "command",
+            "command": "extension.commandvariable.file.pickFile",
+            "args": {
+                "dialogTitle": "Select core file",
+                "include": "**/core*",
+            },
+        },
+    ],
+}
