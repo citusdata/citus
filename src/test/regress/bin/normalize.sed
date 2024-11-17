@@ -309,3 +309,9 @@ s/permission denied to terminate process/must be a superuser to terminate superu
 s/permission denied to cancel query/must be a superuser to cancel superuser query/g
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */
+
+# Adjusted subplan generation in local_table_join test due to PostgreSQL 17 changes
+# ensuring consistency in the subquery condition format
+# https://github.com/postgres/postgres/commit/b262ad44
+# identify problematic line with "table_diff_filtering" name and change the filter to "WHERE true"
+s/(.*) table_diff_filtering WHERE (.*)/\1 table_diff_filtering WHERE true/g

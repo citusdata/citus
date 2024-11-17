@@ -396,12 +396,12 @@ select typdefault from (
 ) as subq_2;
 
 -- correlated sublinks are not yet supported because of #4470, unless we convert not-correlated table
-SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table table_diff_filtering using(key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
 
 set citus.local_table_join_policy to 'prefer-distributed';
-SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
-WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
+SELECT COUNT(*) FROM distributed_table table_diff_filtering JOIN postgres_table using(key)
+WHERE table_diff_filtering.key IN (SELECT key FROM distributed_table WHERE table_diff_filtering.key = key and key = 5);
 set citus.local_table_join_policy to 'auto';
 
 -- Some more subqueries

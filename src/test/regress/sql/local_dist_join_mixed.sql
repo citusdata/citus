@@ -330,7 +330,7 @@ SELECT id, name FROM local LEFT JOIN distributed USING (id) ORDER BY 1 LIMIT 1;
  (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo3,
  (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo2,
  (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo10,
- (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo1
+ (SELECT table_diff_filtering.id, table_diff_filtering.title FROM local table_diff_filtering, distributed WHERE table_diff_filtering.id = distributed.id ) as foo1
  WHERE
   foo1.id =  foo9.id AND
   foo1.id =  foo8.id AND
