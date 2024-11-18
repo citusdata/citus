@@ -1437,7 +1437,19 @@ columnar_scan_analyze_next_block(TableScanDesc scan,
 	 * to pages boundaries. So not much to do here. We return true anyway
 	 * so acquire_sample_rows() in analyze.c would call our
 	 * columnar_scan_analyze_next_tuple() callback.
+	 * In PG17, we return false in case there is no buffer left, since
+	 * the outer loop changed in acquire_sample_rows(), and it is
+	 * expected for the scan_analyze_next_block function to check whether
+	 * there are any blocks left in the block sampler.
 	 */
+#if PG_VERSION_NUM >= PG_VERSION_17
+	Buffer buf = read_stream_next_buffer(stream, NULL);
+	if (!BufferIsValid(buf))
+	{
+		return false;
+	}
+	ReleaseBuffer(buf);
+#endif
 	return true;
 }
 
