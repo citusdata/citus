@@ -116,12 +116,12 @@ MERGE INTO target
 USING target
 ON tid = tid
 WHEN MATCHED THEN DO NOTHING;
--- used in a CTE
+-- used in a CTE without RETURNING
 WITH foo AS (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE
 ) SELECT * FROM foo;
--- used in COPY
+-- used in COPY without RETURNING
 COPY (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE

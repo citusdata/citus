@@ -309,3 +309,12 @@ s/permission denied to terminate process/must be a superuser to terminate superu
 s/permission denied to cancel query/must be a superuser to cancel superuser query/g
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */
+
+# pg17 changes
+# can be removed when dropping PG14&15&16 support
+#if PG_VERSION_NUM < PG_VERSION_17
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG14&15&16 support )
+
+s/(WITH|COPY) (.*) a RETURNING clause/MERGE not supported in \1 query without a RETURNING clause/g
+
+#endif /* PG_VERSION_NUM < PG_VERSION_17 */
