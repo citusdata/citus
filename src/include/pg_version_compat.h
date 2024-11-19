@@ -144,6 +144,8 @@ getStxstattarget_compat(HeapTuple tup)
 #define getProcNo_compat(a) (a->pgprocno)
 #define getLxid_compat(a) (a->lxid)
 
+#define COLLPROVIDER_BUILTIN 'b'
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
