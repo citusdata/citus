@@ -52,8 +52,6 @@ QualifyAlterSequenceOwnerStmt(Node *node)
 }
 
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 /*
  * QualifyAlterSequencePersistenceStmt transforms a
  * ALTER SEQUENCE .. SET LOGGED/UNLOGGED
@@ -78,9 +76,6 @@ QualifyAlterSequencePersistenceStmt(Node *node)
 		}
 	}
 }
-
-
-#endif
 
 
 /*

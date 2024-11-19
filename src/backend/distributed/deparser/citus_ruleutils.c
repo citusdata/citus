@@ -258,10 +258,8 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	char *typeName = format_type_be(pgSequenceForm->seqtypid);
 
 	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND,
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 								 get_rel_persistence(sequenceRelationId) ==
 								 RELPERSISTENCE_UNLOGGED ? "UNLOGGED " : "",
-#endif
 								 qualifiedSequenceName,
 								 typeName,
 								 pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
@@ -857,12 +855,10 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 		appendStringInfoString(buffer, ") ");
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	if (indexStmt->nulls_not_distinct)
 	{
 		appendStringInfoString(buffer, "NULLS NOT DISTINCT ");
 	}
-#endif /* PG_VERSION_15 */
 
 	if (indexStmt->options != NIL)
 	{
