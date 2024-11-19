@@ -80,11 +80,11 @@ typedef enum DistOpsOperationType
  */
 typedef struct DistributeObjectOps
 {
-	char * (*deparse)(Node *);
+	char *(*deparse)(Node *);
 	void (*qualify)(Node *);
-	List * (*preprocess)(Node *, const char *, ProcessUtilityContext);
-	List * (*postprocess)(Node *, const char *);
-	List * (*address)(Node *, bool, bool);
+	List *(*preprocess)(Node *, const char *, ProcessUtilityContext);
+	List *(*postprocess)(Node *, const char *);
+	List *(*address)(Node *, bool, bool);
 	bool markDistributed;
 
 	/* fields used by common implementations, omitted for specialized implementations */
