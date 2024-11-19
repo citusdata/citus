@@ -1604,7 +1604,7 @@ USING
 	(id);
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id)) JOIN (SELECT distributed_1.id, NULL::text, NULL::text FROM local_dist_join_mixed.distributed distributed_1) foo(id, "?column?", "?column?_1") USING (id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id)) JOIN (SELECT distributed_1.id, NULL::text AS "?column?", NULL::text AS "?column?" FROM local_dist_join_mixed.distributed distributed_1) foo(id, "?column?", "?column?_1") USING (id))
  count
 ---------------------------------------------------------------------
    101
