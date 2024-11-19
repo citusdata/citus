@@ -350,12 +350,12 @@ WITH cte_1  AS (
           WITH cte_1 AS (
             WITH cte_1 AS (SELECT count(*), key FROM  test_table GROUP BY key)
             			   SELECT * FROM cte_1)
-          SELECT * FROM cte_1 WHERE key = 1)
-        SELECT * FROM cte_1 WHERE key = 2)
-      SELECT * FROM cte_1 WHERE key = 3)
-    SELECT * FROM cte_1 WHERE key = 4)
-  SELECT * FROM cte_1 WHERE key = 5)
-SELECT * FROM cte_1 WHERE key = 6;
+          SELECT * FROM cte_1 WHERE key >= 1)
+        SELECT * FROM cte_1 WHERE key >= 2)
+      SELECT * FROM cte_1 WHERE key >= 3)
+    SELECT * FROM cte_1 WHERE key >= 4)
+  SELECT * FROM cte_1 WHERE key >= 5)
+SELECT * FROM cte_1 WHERE key = 1;
 
 
 
