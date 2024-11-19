@@ -28,9 +28,7 @@ static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType obj
 static void AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static void AppendAlterSequencePersistenceStmt(StringInfo buf, AlterTableStmt *stmt);
-#endif
 static void AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSequenceSequences(StringInfo buf, GrantStmt *stmt);
 
@@ -262,8 +260,6 @@ AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt)
 }
 
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 /*
  * DeparseAlterSequencePersistenceStmt builds and returns a string representing
  * the AlterTableStmt consisting of changing the persistence of a sequence
@@ -347,9 +343,6 @@ AppendAlterSequencePersistenceStmt(StringInfo buf, AlterTableStmt *stmt)
 		}
 	}
 }
-
-
-#endif
 
 
 /*

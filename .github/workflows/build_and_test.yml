@@ -27,11 +27,10 @@ jobs:
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
       sql_snapshot_pg_version: "16.3"
-      image_suffix: "-v13fd57c"
-      pg14_version: '{ "major": "14", "full": "14.12" }'
+      image_suffix: "-dev-9884f40"
       pg15_version: '{ "major": "15", "full": "15.7" }'
       pg16_version: '{ "major": "16", "full": "16.3" }'
-      upgrade_pg_versions: "14.12-15.7-16.3"
+      upgrade_pg_versions: "15.7-16.3"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
@@ -105,7 +104,6 @@ jobs:
         image_suffix:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
     runs-on: ubuntu-20.04
@@ -136,7 +134,6 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
         make:
@@ -157,10 +154,6 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
@@ -169,19 +162,11 @@ jobs:
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
@@ -200,10 +185,6 @@ jobs:
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg16_version }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
@@ -252,7 +233,6 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
@@ -297,11 +277,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - old_pg_major: 14
-            new_pg_major: 15
           - old_pg_major: 15
-            new_pg_major: 16
-          - old_pg_major: 14
             new_pg_major: 16
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
@@ -336,10 +312,10 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
+    name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg14_version).full }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
     - params

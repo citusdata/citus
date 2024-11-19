@@ -467,7 +467,6 @@ ForeignKeyGetDefaultingAttrs(HeapTuple pgConstraintTuple)
 	}
 
 	List *onDeleteSetDefColumnList = NIL;
-#if PG_VERSION_NUM >= PG_VERSION_15
 	Datum onDeleteSetDefColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
 													   Anum_pg_constraint_confdelsetcols,
 													   &isNull);
@@ -482,7 +481,6 @@ ForeignKeyGetDefaultingAttrs(HeapTuple pgConstraintTuple)
 		onDeleteSetDefColumnList =
 			IntegerArrayTypeToList(DatumGetArrayTypeP(onDeleteSetDefColumnsDatum));
 	}
-#endif
 
 	if (list_length(onDeleteSetDefColumnList) == 0)
 	{

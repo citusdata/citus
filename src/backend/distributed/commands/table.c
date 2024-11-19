@@ -1153,7 +1153,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	{
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
 		stmtCopy->objtype = OBJECT_SEQUENCE;
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 
 		/*
 		 * it must be ALTER TABLE .. OWNER TO ..
@@ -1163,16 +1162,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		 */
 		return PreprocessSequenceAlterTableStmt((Node *) stmtCopy, alterTableCommand,
 												processUtilityContext);
-#else
-
-		/*
-		 * it must be ALTER TABLE .. OWNER TO .. command
-		 * since this is the only ALTER command of a sequence that
-		 * passes through an AlterTableStmt
-		 */
-		return PreprocessAlterSequenceOwnerStmt((Node *) stmtCopy, alterTableCommand,
-												processUtilityContext);
-#endif
 	}
 	else if (relKind == RELKIND_VIEW)
 	{
@@ -3664,9 +3653,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 			case AT_SetAccessMethod:
-#endif
 			case AT_SetNotNull:
 			case AT_ReplicaIdentity:
 			case AT_ChangeOwner:

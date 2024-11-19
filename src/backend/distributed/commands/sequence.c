@@ -735,8 +735,6 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 }
 
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 /*
  * PreprocessAlterSequencePersistenceStmt is called for change of persistence
  * of sequences before the persistence is changed on the local instance.
@@ -845,9 +843,6 @@ PreprocessSequenceAlterTableStmt(Node *node, const char *queryString,
 	}
 	return NIL;
 }
-
-
-#endif
 
 
 /*

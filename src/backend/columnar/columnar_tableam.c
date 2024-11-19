@@ -877,7 +877,7 @@ columnar_relation_set_new_filelocator(Relation rel,
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
-	SMgrRelation srel = RelationCreateStorage_compat(*newrlocator, persistence, true);
+	SMgrRelation srel = RelationCreateStorage(*newrlocator, persistence, true);
 
 	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
@@ -2245,7 +2245,6 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 				columnarRangeVar = alterTableStmt->relation;
 			}
 		}
-#if PG_VERSION_NUM >= PG_VERSION_15
 		else if (alterTableCmd->subtype == AT_SetAccessMethod)
 		{
 			if (columnarRangeVar || *columnarOptions)
@@ -2265,7 +2264,6 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 				DeleteColumnarTableOptions(RelationGetRelid(rel), true);
 			}
 		}
-#endif /* PG_VERSION_15 */
 	}
 
 	relation_close(rel, NoLock);
@@ -2649,21 +2647,12 @@ ColumnarCheckLogicalReplication(Relation rel)
 		return;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	{
 		PublicationDesc pubdesc;
 
 		RelationBuildPublicationDesc(rel, &pubdesc);
 		pubActionInsert = pubdesc.pubactions.pubinsert;
 	}
-#else
-	if (rel->rd_pubactions == NULL)
-	{
-		GetRelationPublicationActions(rel);
-		Assert(rel->rd_pubactions != NULL);
-	}
-	pubActionInsert = rel->rd_pubactions->pubinsert;
-#endif
 
 	if (pubActionInsert)
 	{

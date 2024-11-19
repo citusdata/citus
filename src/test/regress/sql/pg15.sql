@@ -1,13 +1,6 @@
 --
 -- PG15
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-\else
-\q
-\endif
 
 CREATE SCHEMA pg15;
 SET search_path TO pg15;

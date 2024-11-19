@@ -145,17 +145,6 @@ LogicalClockShmemSize(void)
 void
 InitializeClusterClockMem(void)
 {
-	/* On PG 15 and above, we use shmem_request_hook_type */
-	#if PG_VERSION_NUM < PG_VERSION_15
-
-	/* allocate shared memory for pre PG-15 versions */
-	if (!IsUnderPostmaster)
-	{
-		RequestAddinShmemSpace(LogicalClockShmemSize());
-	}
-
-	#endif
-
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = LogicalClockShmemInit;
 }

@@ -140,19 +140,6 @@ static void CitusQueryStatsRemoveExpiredEntries(HTAB *existingQueryIdHash);
 void
 InitializeCitusQueryStats(void)
 {
-/* on PG 15, we use shmem_request_hook_type */
-#if PG_VERSION_NUM < PG_VERSION_15
-
-	/* allocate shared memory */
-	if (!IsUnderPostmaster)
-	{
-		RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
-
-		elog(LOG, "requesting named LWLockTranch for %s", STATS_SHARED_MEM_NAME);
-		RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
-	}
-#endif
-
 	/* Install hook */
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = CitusQueryStatsShmemStartup;

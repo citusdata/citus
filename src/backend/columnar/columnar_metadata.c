@@ -1686,7 +1686,7 @@ DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 	simple_heap_delete(state->rel, tid);
 
 	/* execute AFTER ROW DELETE Triggers to enforce constraints */
-	ExecARDeleteTriggers_compat(estate, resultRelInfo, tid, NULL, NULL, false);
+	ExecARDeleteTriggers(estate, resultRelInfo, tid, NULL, NULL, false);
 }
 
 

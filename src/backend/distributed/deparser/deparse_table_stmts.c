@@ -193,12 +193,10 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 		{
 			appendStringInfoString(buf, " UNIQUE");
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 			if (constraint->nulls_not_distinct == true)
 			{
 				appendStringInfoString(buf, " NULLS NOT DISTINCT");
 			}
-#endif
 		}
 
 		if (subtype == AT_AddConstraint)
