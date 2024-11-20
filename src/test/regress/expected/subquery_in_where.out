@@ -30,12 +30,12 @@ WITH event_id
          FROM   events_table)
 SELECT Count(*)
 FROM   event_id
-WHERE  events_user_id IN (SELECT user_id
+WHERE  (events_user_id, random()) IN (SELECT user_id, 1
                           FROM   users_table
                           WHERE  users_table.time = events_time);
 DEBUG:  CTE event_id is going to be inlined via distributed planning
 DEBUG:  generating subplan XXX_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id WHERE (events_user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM public.users_table WHERE (users_table."time" OPERATOR(pg_catalog.=) event_id.events_time)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id WHERE ((events_user_id, random()) OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id, 1 FROM public.users_table WHERE (users_table."time" OPERATOR(pg_catalog.=) event_id.events_time)))
 ERROR:  correlated subqueries are not supported when the FROM clause contains a CTE or subquery
 -- Recurring tuples as empty join tree
 SELECT *
