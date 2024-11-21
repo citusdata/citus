@@ -309,3 +309,13 @@ s/permission denied to terminate process/must be a superuser to terminate superu
 s/permission denied to cancel query/must be a superuser to cancel superuser query/g
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */
+
+# pg17 changes
+# can be removed when dropping PG15&16 support
+#if PG_VERSION_NUM < PG_VERSION_17
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG15&16 support )
+
+s/COPY DEFAULT only available using COPY FROM/COPY DEFAULT cannot be used with COPY TO/
+s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter character must not appear in the DEFAULT specification/
+
+#endif /* PG_VERSION_NUM < PG_VERSION_17 */
