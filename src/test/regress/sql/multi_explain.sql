@@ -630,11 +630,13 @@ INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
 
 -- WHERE EXISTS forces pg12 to materialize cte
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
 WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
 SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
+$Q$);
 
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
@@ -949,9 +951,11 @@ SELECT count(distinct a) from r NATURAL JOIN ref_table;
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 
-EXPLAIN :default_analyze_flags
+SELECT public.explain_with_pg17_initplan_format($Q$
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
+$Q$);
 
 BEGIN;
 EXPLAIN :default_analyze_flags
