@@ -319,6 +319,3 @@ s/COPY DEFAULT only available using COPY FROM/COPY DEFAULT cannot be used with C
 s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter character must not appear in the DEFAULT specification/
 
 #endif /* PG_VERSION_NUM < PG_VERSION_17 */
-
-# multi_mx_router_planner normalize public.pg_temp_xxxxx
-s/DEBUG:  drop auto-cascades to type public\.pg_temp_[0-9]+/DEBUG:  drop auto-cascades to type public.pg_temp_xxxxx/g
