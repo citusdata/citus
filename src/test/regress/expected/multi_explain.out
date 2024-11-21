@@ -1456,25 +1456,27 @@ Custom Scan (Citus INSERT ... SELECT)
   INSERT/SELECT method: pull to coordinator
   ->  Function Scan on generate_series s
 -- WHERE EXISTS forces pg12 to materialize cte
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
 WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
 SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
+$Q$);
 Custom Scan (Citus INSERT ... SELECT)
   INSERT/SELECT method: pull to coordinator
   ->  Result
-        One-Time Filter: $3
+        One-Time Filter: (InitPlan 4).col1
         CTE cte1
           ->  Function Scan on generate_series s
         CTE cte1
           ->  Limit
-                InitPlan 2 (returns $1)
+                InitPlan 2
                   ->  CTE Scan on cte1 cte1_1
                 ->  Result
-                      One-Time Filter: $1
+                      One-Time Filter: (InitPlan 2).col1
                       ->  CTE Scan on cte1 cte1_2
-        InitPlan 4 (returns $3)
+        InitPlan 4
           ->  CTE Scan on cte1 cte1_3
         ->  CTE Scan on cte1
 EXPLAIN (COSTS OFF)
@@ -2425,9 +2427,11 @@ Aggregate (actual rows=1 loops=1)
                                 Sort Key: ref_table.a
                                 Sort Method: quicksort  Memory: 25kB
                                 ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
-EXPLAIN :default_analyze_flags
+SELECT public.explain_with_pg17_initplan_format($Q$
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
+$Q$);
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
         ->  Distributed Subplan XXX_1
@@ -2457,13 +2461,13 @@ Aggregate (actual rows=1 loops=1)
               Tuple data received from node: 8 bytes
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate (actual rows=1 loops=1)
-                    InitPlan 1 (returns $0)
+                    InitPlan 1
                       ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
                     ->  Sort (actual rows=4 loops=1)
                           Sort Key: dist_table.a
                           Sort Method: quicksort  Memory: 25kB
                           ->  Result (actual rows=4 loops=1)
-                                One-Time Filter: $0
+                                One-Time Filter: (InitPlan 1).col1
                                 ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
 BEGIN;
 EXPLAIN :default_analyze_flags
