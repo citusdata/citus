@@ -1068,7 +1068,7 @@ $$);
 
 -- we hit https://github.com/citusdata/citus/blob/f00c63c33daf3d16f06462626ca14732b141ae7a/src/backend/distributed/planner/relation_restriction_equivalence.c#L235-L242
 SELECT public.explain_has_distributed_subplan($$
-EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1, user_id) IN
+EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1 + random(), user_id) IN
 (
 SELECT u1.user_id, user_id FROM users_table_part
 UNION
