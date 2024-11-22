@@ -91,7 +91,7 @@ SET citus.stat_statements_track TO 'all';
 
 -- reset pg_stat_statements and verify it also cleans citus_stat_statements output
 -- verify that entries are actually removed from citus_stat_statements
-SELECT pg_stat_statements_reset();
+SELECT pg_stat_statements_reset() IS NOT NULL AS t;
 SELECT * FROM citus_stat_statements;
 
 -- run some queries
@@ -109,7 +109,7 @@ SELECT normalize_query_string(query), executor, partition_key, calls
 FROM citus_stat_statements
 ORDER BY 1, 2, 3, 4;
 
-SELECT pg_stat_statements_reset();
+SELECT pg_stat_statements_reset() IS NOT NULL AS t;
 
 SELECT count(*) FROM lineitem_hash_part;
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = 4;
