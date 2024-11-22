@@ -217,6 +217,13 @@ distributed_planner(Query *parse,
 
 		planContext.originalQuery = copyObject(parse);
 
+		/*
+		 * We may need to reorder parts of the planner tree we are receiving here.
+		 * We expect to produce an SQL query text but our tree has been optimized by
+		 * PostgreSL rewriter already...
+		 * FIXME is there conditions to reduce the number of calls ?
+		 */
+		RebuildParserTreeFromPlannerTree(planContext.originalQuery);
 
 		if (!fastPathRouterQuery)
 		{
