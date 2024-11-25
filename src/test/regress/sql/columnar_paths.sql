@@ -181,10 +181,18 @@ BEGIN;
   WHERE ct_1.a < 3000;
 ROLLBACK;
 
+-- Force nested loop join to ensure the next query has a
+-- consistent plan across pg versions
+set enable_hashjoin to 0;
+set enable_mergejoin to 0;
+
 -- use custom scan
 EXPLAIN (COSTS OFF) WITH w AS (SELECT * FROM full_correlated)
 SELECT * FROM w AS w1 JOIN w AS w2 ON w1.a = w2.d
 WHERE w2.a = 123;
+
+reset enable_hashjoin;
+reset enable_mergejoin;
 
 -- use index
 EXPLAIN (COSTS OFF) WITH w AS NOT MATERIALIZED (SELECT * FROM full_correlated)
