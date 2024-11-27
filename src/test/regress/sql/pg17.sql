@@ -168,9 +168,6 @@ GROUP BY dept;
 RESET client_min_messages;
 
 RESET search_path;
-RESET citus.next_shard_id;
-RESET citus.shard_count;
-RESET citus.shard_replication_factor;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
 
 \if :server_version_ge_17
@@ -181,7 +178,7 @@ DROP SCHEMA pg17_corr_subq_folding CASCADE;
 -- PG17-specific tests go here.
 --
 CREATE SCHEMA pg17;
-SET search_path TO pg17;
+SET search_path to pg17;
 
 -- Test specifying access method on partitioned tables. PG17 feature, added by:
 -- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=374c7a229
@@ -190,12 +187,12 @@ SET search_path TO pg17;
 -- to tableam when 17 is the minimum supported PG version.
 
 SELECT public.run_command_on_coordinator_and_workers($Q$
-	SET citus.enable_ddl_propagation TO off;
-	CREATE FUNCTION fake_am_handler(internal)
-	RETURNS table_am_handler
-	AS 'citus'
-	LANGUAGE C;
-	CREATE ACCESS METHOD fake_am TYPE TABLE HANDLER fake_am_handler;
+        SET citus.enable_ddl_propagation TO off;
+        CREATE FUNCTION fake_am_handler(internal)
+        RETURNS table_am_handler
+        AS 'citus'
+        LANGUAGE C;
+        CREATE ACCESS METHOD fake_am TYPE TABLE HANDLER fake_am_handler;
 $Q$);
 
 -- Since Citus assumes access methods are part of the extension, make fake_am
@@ -207,9 +204,9 @@ PARTITION BY RANGE (p) USING fake_am;
 
 -- Test that children inherit access method from parent
 CREATE TABLE test_partitioned_p1 PARTITION OF test_partitioned
-	FOR VALUES FROM (1) TO (10);
+        FOR VALUES FROM (1) TO (10);
 CREATE TABLE test_partitioned_p2 PARTITION OF test_partitioned
-	FOR VALUES FROM (11) TO (20);
+        FOR VALUES FROM (11) TO (20);
 
 INSERT INTO test_partitioned VALUES (1, 5, -1), (2, 15, -2);
 INSERT INTO test_partitioned VALUES (3, 6, -6), (4, 16, -4);
@@ -222,9 +219,66 @@ SELECT c.relname, am.amname FROM pg_class c, pg_am am
 WHERE c.relam = am.oid AND c.oid IN ('test_partitioned_p1'::regclass, 'test_partitioned_p2'::regclass)
 ORDER BY c.relname;
 
+-- Clean up
 DROP TABLE test_partitioned;
 ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
+SELECT public.run_command_on_coordinator_and_workers($Q$
+        RESET citus.enable_ddl_propagation;
+$Q$);
 
 -- End of testing specifying access method on partitioned tables.
 
+-- MAINTAIN privilege tests
+
+CREATE ROLE regress_maintain;
+CREATE ROLE regress_no_maintain;
+
+ALTER ROLE regress_maintain WITH login;
+GRANT USAGE ON SCHEMA pg17 TO regress_maintain;
+ALTER ROLE regress_no_maintain WITH login;
+GRANT USAGE ON SCHEMA pg17 TO regress_no_maintain;
+
+SET citus.shard_count TO 1; -- For consistent remote command logging
+CREATE TABLE dist_test(a int, b int);
+SELECT create_distributed_table('dist_test', 'a');
+INSERT INTO dist_test SELECT i % 10, i FROM generate_series(1, 100) t(i);
+
+SET citus.log_remote_commands TO on;
+
+SET citus.grep_remote_commands = '%maintain%';
+GRANT MAINTAIN ON dist_test TO regress_maintain;
+RESET citus.grep_remote_commands;
+
+SET ROLE regress_no_maintain;
+-- Current role does not have MAINTAIN privileges on dist_test
+ANALYZE dist_test;
+VACUUM dist_test;
+
+SET ROLE regress_maintain;
+-- Current role has MAINTAIN privileges on dist_test
+ANALYZE dist_test;
+VACUUM dist_test;
+
+-- Take away regress_maintain's MAINTAIN privileges on dist_test
+RESET ROLE;
+SET citus.grep_remote_commands = '%maintain%';
+REVOKE MAINTAIN ON dist_test FROM regress_maintain;
+RESET citus.grep_remote_commands;
+
+SET ROLE regress_maintain;
+-- Current role does not have MAINTAIN privileges on dist_test
+ANALYZE dist_test;
+VACUUM dist_test;
+
+RESET ROLE;
+
+-- End of MAINTAIN privilege tests
+
+RESET citus.log_remote_commands;
+RESET citus.next_shard_id;
+RESET citus.shard_count;
+RESET citus.shard_replication_factor;
+
 DROP SCHEMA pg17 CASCADE;
+DROP ROLE regress_maintain;
+DROP ROLE regress_no_maintain;

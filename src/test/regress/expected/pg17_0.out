@@ -282,9 +282,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 RESET client_min_messages;
 RESET search_path;
-RESET citus.next_shard_id;
-RESET citus.shard_count;
-RESET citus.shard_replication_factor;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table pg17_corr_subq_folding.test
