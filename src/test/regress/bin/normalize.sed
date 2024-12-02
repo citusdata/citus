@@ -319,3 +319,8 @@ s/COPY DEFAULT only available using COPY FROM/COPY DEFAULT cannot be used with C
 s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter character must not appear in the DEFAULT specification/
 
 #endif /* PG_VERSION_NUM < PG_VERSION_17 */
+
+# PG 17 Removes outer parentheses from CHECK constraints
+# we add them back for pg15,pg16 compatibility
+# e.g. change CHECK other_col >= 100 to CHECK (other_col >= 100)
+s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
