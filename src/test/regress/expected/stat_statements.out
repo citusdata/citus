@@ -179,10 +179,10 @@ ORDER BY 1, 2, 3, 4;
 SET citus.stat_statements_track TO 'all';
 -- reset pg_stat_statements and verify it also cleans citus_stat_statements output
 -- verify that entries are actually removed from citus_stat_statements
-SELECT pg_stat_statements_reset();
- pg_stat_statements_reset
+SELECT pg_stat_statements_reset() IS NOT NULL AS t;
+ t
 ---------------------------------------------------------------------
-
+ t
 (1 row)
 
 SELECT * FROM citus_stat_statements;
@@ -251,10 +251,10 @@ ORDER BY 1, 2, 3, 4;
  SELECT l_orderkey FROM lineitem_hash_part WHERE l_orderkey > ? | adaptive |               |     1
 (6 rows)
 
-SELECT pg_stat_statements_reset();
- pg_stat_statements_reset
+SELECT pg_stat_statements_reset() IS NOT NULL AS t;
+ t
 ---------------------------------------------------------------------
-
+ t
 (1 row)
 
 SELECT count(*) FROM lineitem_hash_part;
