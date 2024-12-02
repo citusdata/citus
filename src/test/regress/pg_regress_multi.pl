@@ -511,9 +511,6 @@ if($vanillatest)
 
     # we disable some restrictions for local objects like local views to not break postgres vanilla test behaviour.
     push(@pgOptions, "citus.enforce_object_restrictions_for_local_objects=false");
-
-    # we disable metadata synchronization to enable postgres vanilla DDL tests to pass.
-    push(@pgOptions, "citus.enable_metadata_sync=false");
 }
 
 if ($useMitmproxy)
