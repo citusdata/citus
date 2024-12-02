@@ -184,7 +184,6 @@ FROM     (
                                                    sample_6.info        AS c1,
                                                    subq_0.c2            AS c2,
                                                    subq_0.c3            AS c3,
-                                                   ref_3.domain_default AS c4,
                                                    sample_6.user_id     AS c5,
                                                    ref_3.collation_name AS c6
                                             FROM   orders        AS sample_6 TABLESAMPLE system (3.8)
