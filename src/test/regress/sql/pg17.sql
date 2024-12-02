@@ -172,7 +172,6 @@ DROP SCHEMA pg17_corr_subq_folding CASCADE;
 
 \if :server_version_ge_17
 -- Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
-
 -- Step 1: Create a distributed partitioned table
 \c - - :master_host :master_port
 CREATE TABLE distributed_partitioned_table (
