@@ -1119,6 +1119,51 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
+-- Check "ADD CHECK"
+SET client_min_messages TO DEBUG1;
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD CHECK (dist_col > 0);
+DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_5_check
+DEBUG:  verifying table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
+DEBUG:  verifying table "p1"
+RESET client_min_messages;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = 'citus_local_partitioned_table';
+               conname
+---------------------------------------------------------------------
+ citus_local_partitioned_table_check
+(1 row)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+               conname
+---------------------------------------------------------------------
+ citus_local_partitioned_table_check
+ citus_local_partitioned_table_check
+ citus_local_partitioned_table_check
+ citus_local_partitioned_table_check
+ citus_local_partitioned_table_check
+(5 rows)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_check;
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+ conname
+---------------------------------------------------------------------
+(0 rows)
+
+\c - - :master_host :master_port
 -- Test with unusual table and column names
 CREATE TABLE AT_AddConstNoName."2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER);
 SELECT create_distributed_table('AT_AddConstNoName."2nd table"','2nd id');
