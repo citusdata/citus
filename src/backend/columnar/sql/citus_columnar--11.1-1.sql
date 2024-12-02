@@ -71,7 +71,7 @@ BEGIN
 -- from version 12 and up we have support for tableam's if installed on pg11 we can't
 -- create the objects here. Instead we rely on citus_finish_pg_upgrade to be called by the
 -- user instead to add the missing objects
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+IF substring(current_Setting('server_version'), '[0-9]+')::int >= 12 THEN
   EXECUTE $$
 --#include "udfs/columnar_handler/10.0-1.sql"
 CREATE OR REPLACE FUNCTION columnar.columnar_handler(internal)
