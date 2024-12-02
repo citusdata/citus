@@ -288,5 +288,57 @@ DETAIL:  drop cascades to table pg17_corr_subq_folding.test
 drop cascades to table pg17_corr_subq_folding.users
 drop cascades to table pg17_corr_subq_folding.events
 \if :server_version_ge_17
+-- Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
+-- Step 1: Create a distributed partitioned table
+\c - - :master_host :master_port
+CREATE TABLE distributed_partitioned_table (
+    id serial NOT NULL,
+    partition_col int NOT NULL,
+    PRIMARY KEY (id, partition_col)
+) PARTITION BY RANGE (partition_col);
+-- Distribute the table
+SELECT create_distributed_table('distributed_partitioned_table', 'id');
+-- Step 2: Create a partitioned Citus local table
+CREATE TABLE local_partitioned_table (
+    id serial NOT NULL,
+    partition_col int NOT NULL,
+    PRIMARY KEY (id, partition_col)
+) PARTITION BY RANGE (partition_col);
+-- Step 3: Add an exclusion constraint with a name to the distributed partitioned table
+ALTER TABLE distributed_partitioned_table ADD CONSTRAINT dist_exclude_named EXCLUDE USING btree (id WITH =, partition_col WITH =);
+-- Step 4: Verify propagation of exclusion constraint to worker nodes
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname FROM pg_constraint WHERE conrelid = 'distributed_partitioned_table'::regclass AND conname = 'dist_exclude_named';
+-- Step 5: Add an exclusion constraint with a name to the Citus local partitioned table
+\c - - :master_host :master_port
+ALTER TABLE local_partitioned_table ADD CONSTRAINT local_exclude_named EXCLUDE USING btree (partition_col WITH =);
+-- Step 6: Verify the exclusion constraint on the local partitioned table
+SELECT conname, contype FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
+-- Step 7: Add exclusion constraints without names to both tables
+-- Ensure the distributed table exclusion constraint includes both partition columns
+ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, partition_col WITH =);
+ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
+-- Step 8: Verify the unnamed exclusion constraints were added
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'distributed_partitioned_table'::regclass AND contype = 'x';
+-- Step 9: Drop the exclusion constraints from both tables
+\c - - :master_host :master_port
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dist_exclude_named') THEN
+        ALTER TABLE distributed_partitioned_table DROP CONSTRAINT dist_exclude_named;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'local_exclude_named') THEN
+        ALTER TABLE local_partitioned_table DROP CONSTRAINT local_exclude_named;
+    END IF;
+END $$;
+-- Step 10: Verify the constraints were dropped
+SELECT * FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
+SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
+-- Step 11: Clean up - Drop the tables
+DROP TABLE IF EXISTS distributed_partitioned_table;
+DROP TABLE IF EXISTS local_partitioned_table;
 \else
 \q
