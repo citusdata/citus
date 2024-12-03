@@ -228,3 +228,41 @@ ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
 -- End of testing specifying access method on partitioned tables.
 
 DROP SCHEMA pg17 CASCADE;
+
+-- Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
+CREATE SCHEMA local_table_join_pg17;
+SET search_path TO local_table_join_pg17;
+-- Enable DEBUG-level logging to capture detailed execution plans
+SET client_min_messages TO DEBUG1;
+SET log_min_messages TO DEBUG1;
+SET citus.worker_min_messages TO DEBUG1;
+-- Create the tables
+CREATE TABLE postgres_table (key int, value text, value_2 jsonb);
+CREATE TABLE reference_table (key int, value text, value_2 jsonb);
+SELECT create_reference_table('reference_table');
+CREATE TABLE distributed_table (key int, value text, value_2 jsonb);
+SELECT create_distributed_table('distributed_table', 'key');
+-- Insert test data
+INSERT INTO postgres_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
+INSERT INTO reference_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
+INSERT INTO distributed_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
+-- Analyze tables to ensure up-to-date statistics
+ANALYZE postgres_table;
+ANALYZE reference_table;
+ANALYZE distributed_table;
+-- Set local table join policy to auto before running the tests
+SET citus.local_table_join_policy TO 'auto';
+-- Correlated sublinks are supported in PostgreSQL 17
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
+
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
+
+SET citus.local_table_join_policy TO 'prefer-distributed';
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
+SET citus.local_table_join_policy TO 'auto';
+
+-- Cleanup after tests
+DROP SCHEMA local_table_join_pg17 CASCADE;
