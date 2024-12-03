@@ -318,5 +318,6 @@ SET citus.local_table_join_policy TO 'auto';
 
 -- Cleanup after tests
 DROP SCHEMA local_table_join_pg17 CASCADE;
+-- End for Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
 DROP ROLE regress_maintain;
 DROP ROLE regress_no_maintain;
