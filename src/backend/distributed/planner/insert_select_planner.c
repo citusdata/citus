@@ -1810,6 +1810,8 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 		ereport(ERROR, (errmsg("could not find a conversion path from type %d to %d",
 							   sourceType, targetType)));
 	}
+
+	return NULL; /* keep compiler happy */
 }
 
 

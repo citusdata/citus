@@ -2521,6 +2521,8 @@ AvailableExtensionVersion(void)
 
 	ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					errmsg("citus extension is not found")));
+
+	return NULL; /* keep compiler happy */
 }
 
 
