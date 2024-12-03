@@ -301,16 +301,20 @@ SELECT * FROM w AS w1 JOIN w AS w2 ON w1.a = w2.d
 WHERE w2.a = 123;
                       QUERY PLAN
 ---------------------------------------------------------------------
- Hash Join
-   Hash Cond: (w1.a = w2.d)
+ Merge Join
+   Merge Cond: (w2.d = w1.a)
    CTE w
      ->  Custom Scan (ColumnarScan) on full_correlated
            Columnar Projected Columns: a, b, c, d
-   ->  CTE Scan on w w1
-   ->  Hash
+   ->  Sort
+         Sort Key: w2.d
          ->  CTE Scan on w w2
                Filter: (a = 123)
-(9 rows)
+   ->  Materialize
+         ->  Sort
+               Sort Key: w1.a
+               ->  CTE Scan on w w1
+(13 rows)
 
 -- use index
 EXPLAIN (COSTS OFF) WITH w AS NOT MATERIALIZED (SELECT * FROM full_correlated)
