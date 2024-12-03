@@ -423,3 +423,78 @@ DROP SCHEMA pg17 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to function fake_am_handler(internal)
 drop cascades to access method fake_am
+-- Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
+CREATE SCHEMA local_table_join_pg17;
+SET search_path TO local_table_join_pg17;
+-- Enable DEBUG-level logging to capture detailed execution plans
+SET client_min_messages TO DEBUG1;
+SET log_min_messages TO DEBUG1;
+SET citus.worker_min_messages TO DEBUG1;
+-- Create the tables
+CREATE TABLE postgres_table (key int, value text, value_2 jsonb);
+CREATE TABLE reference_table (key int, value text, value_2 jsonb);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table (key int, value text, value_2 jsonb);
+SELECT create_distributed_table('distributed_table', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Insert test data
+INSERT INTO postgres_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
+INSERT INTO reference_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO distributed_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- Analyze tables to ensure up-to-date statistics
+ANALYZE postgres_table;
+ANALYZE reference_table;
+ANALYZE distributed_table;
+-- Set local table join policy to auto before running the tests
+SET citus.local_table_join_policy TO 'auto';
+-- Correlated sublinks are supported in PostgreSQL 17
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join_pg17.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join_pg17.distributed_table d1 JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM local_table_join_pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join_pg17.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join_pg17.distributed_table d1 JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM local_table_join_pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SET citus.local_table_join_policy TO 'prefer-distributed';
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
+DEBUG:  Wrapping relation "distributed_table" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join_pg17.distributed_table d1 WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT d1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) d1_1) d1 JOIN local_table_join_pg17.postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM local_table_join_pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+SET citus.local_table_join_policy TO 'auto';
+-- Cleanup after tests
+DROP SCHEMA local_table_join_pg17 CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table postgres_table
+drop cascades to table reference_table
+drop cascades to table reference_table_361773
+drop cascades to table distributed_table
+-- End for Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
