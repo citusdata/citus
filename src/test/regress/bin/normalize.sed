@@ -324,3 +324,7 @@ s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter cha
 # we add them back for pg15,pg16 compatibility
 # e.g. change CHECK other_col >= 100 to CHECK (other_col >= 100)
 s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
+
+# Normalize subquery condition in debug logs to standardize across PostgreSQL versions #7731
+# https://github.com/postgres/postgres/commit/b262ad44
+s/for subquery SELECT id FROM local_dist_join_mixed\.local WHERE \(id IS NOT NULL\)/for subquery SELECT id FROM local_dist_join_mixed.local WHERE true/g
