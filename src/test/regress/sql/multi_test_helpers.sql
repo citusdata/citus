@@ -726,3 +726,24 @@ BEGIN
     RETURN NEXT;
   END LOOP;
 END; $$ language plpgsql;
+
+-- This function formats EXPLAIN output to conform to how pg <= 16 EXPLAIN 
+-- shows ANY <subquery> in an expression the pg version >= 17. When 17 is
+-- the minimum supported pgversion this function can be retired. The commit  
+-- that changed how ANY <subquery> exrpressions appear in EXPLAIN is:
+-- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=fd0398fcb
+CREATE OR REPLACE FUNCTION explain_with_pg16_subplan_format(explain_command text, out query_plan text)
+RETURNS SETOF TEXT AS $$
+DECLARE
+  pgversion int = 0;
+BEGIN
+  pgversion = substring(version(), '\d+')::int ;
+  FOR query_plan IN execute explain_command LOOP
+    IF pgversion >= 17 THEN
+      IF query_plan ~ 'SubPlan \d+\).col' THEN
+    	  query_plan = regexp_replace(query_plan, '\(ANY \(\w+ = \(SubPlan (\d+)\).col1\)\)', '(SubPlan \1)', 'g');
+      END IF;
+    END IF;
+    RETURN NEXT;
+  END LOOP;
+END; $$ language plpgsql;

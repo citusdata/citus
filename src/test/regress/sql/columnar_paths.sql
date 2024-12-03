@@ -1,6 +1,12 @@
 CREATE SCHEMA columnar_paths;
 SET search_path TO columnar_paths;
 
+-- columnar_paths has an alternative test output file because PG17 improved
+-- the optimizer's ability to use statistics to estimate the size of a CTE
+-- scan. 
+-- The relevant PG commit is:
+-- https://github.com/postgres/postgres/commit/f7816aec23eed1dc1da5f9a53cb6507d30b7f0a2
+
 CREATE TABLE full_correlated (a int, b text, c int, d int) USING columnar;
 INSERT INTO full_correlated SELECT i, i::text FROM generate_series(1, 1000000) i;
 CREATE INDEX full_correlated_btree ON full_correlated (a);
