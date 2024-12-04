@@ -612,9 +612,9 @@ BEGIN
   END LOOP;
 END; $$ language plpgsql;
 
--- This function formats EXPLAIN output to conform to how pg <= 16 EXPLAIN 
+-- This function formats EXPLAIN output to conform to how pg <= 16 EXPLAIN
 -- shows ANY <subquery> in an expression the pg version >= 17. When 17 is
--- the minimum supported pgversion this function can be retired. The commit  
+-- the minimum supported pgversion this function can be retired. The commit
 -- that changed how ANY <subquery> exrpressions appear in EXPLAIN is:
 -- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=fd0398fcb
 CREATE OR REPLACE FUNCTION explain_with_pg16_subplan_format(explain_command text, out query_plan text)
