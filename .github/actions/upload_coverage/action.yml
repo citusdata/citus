@@ -7,12 +7,12 @@ inputs:
 runs:
   using: composite
   steps:
-  - uses: codecov/codecov-action@v3
+  - uses: codecov/codecov-action@v4
     with:
       flags: ${{ inputs.flags }}
       token: ${{ inputs.codecov_token }}
       verbose: true
-      gcov: true
+      plugin: gcov
   - name: Create codeclimate coverage
     run: |-
       lcov --directory . --capture --output-file lcov.info
@@ -21,7 +21,7 @@ runs:
       mkdir -p /tmp/codeclimate
       cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/${{ inputs.flags }}.json lcov.info
     shell: bash
-  - uses: actions/upload-artifact@v3.1.1
+  - uses: actions/upload-artifact@v4
     with:
       path: "/tmp/codeclimate/*.json"
-      name: codeclimate
+      name: codeclimate-${{ inputs.flags }}
