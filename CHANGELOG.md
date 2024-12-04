@@ -1,3 +1,9 @@
+### citus v12.1.6 (Nov 14, 2024) ###
+
+* Propagates `SECURITY LABEL .. ON ROLE` statements (#7304)
+
+* Fixes crash caused by running queries with window partition (#7718)
+
 ### citus v12.1.5 (July 17, 2024) ###
 
 * Adds support for MERGE commands with single shard distributed target tables
