@@ -556,6 +556,12 @@ WHERE id = 1;
 SELECT * FROM summary_table ORDER BY id;
 
 -- try different syntax
+UPDATE summary_table SET (average_value, min_value) =
+	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
+WHERE id = 2;
+
+SELECT * FROM summary_table ORDER BY id;
+
 UPDATE summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM raw_table WHERE id = 2)
 WHERE id = 2;
@@ -875,6 +881,101 @@ DELETE FROM summary_table WHERE id < (
 CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
 
+-- test advanced UPDATE SET () with indirection and physical reordering.
+CREATE TABLE updateset (
+    id bigint primary key
+  , col_0 integer
+  , col_1 integer
+  , col_2 integer
+  , col_3 integer
+  );
+select create_reference_table('updateset');
+
+insert into updateset values (1, 0, 0, 0, 0);
+
+-- default physical ordering
+update updateset
+SET (col_0, col_1, col_2, col_3)
+  = (SELECT 100, 111, 222, 333)
+returning *;
+select * from updateset;
+
+-- check indirection
+update updateset
+SET (col_0, col_1, col_3, col_2)
+  = (SELECT 10, 11, 33, 22)
+returning *;
+select * from updateset;
+
+update updateset
+SET (col_0, col_3, col_1, col_2)
+  = (SELECT 100, 333, 111, 222)
+returning *;
+select * from updateset;
+
+update updateset
+SET (col_3, col_1)
+  = (SELECT 3, 1)
+returning *;
+select * from updateset;
+
+-- check more complex queries with indirection
+insert into updateset values (2, 0, 0, 0, 0);
+update updateset
+SET (col_0, col_1, col_3, col_2)
+  = (SELECT 10, 11, 33, 22)
+where id = 2
+returning *;
+select * from updateset where id = 2;
+
+update updateset
+SET (col_0, col_3, col_1, col_2)
+  = (SELECT 100, 333, 111, 222)
+where id = 2
+returning *;
+select * from updateset where id = 2;
+
+update updateset
+SET (col_3, col_1)
+  = (SELECT 3, 1)
+where id = 2
+returning *;
+select * from updateset where id = 2;
+
+-- the single row update is expected behavior
+insert into updateset values (3, 0, 1, 2, 3);
+insert into updateset values (4, 0, 0, 0, 0);
+with qq as (
+    update updateset
+    SET (col_1, col_3)
+      = (SELECT 11, 33)
+    where id = 4
+    returning *
+)
+update updateset
+set (col_2, col_1, col_3)
+  = (select col_2, col_1, col_3 from qq)
+where id in (3, 4)
+returning *;
+select * from updateset where id in (3, 4);
+
+-- add more advanced queries ?
+-- we want to ensure the reordering the targetlist
+-- from indirection is not run when it should not
+truncate updateset;
+
+-- change physical ordering
+alter table updateset drop col_2;
+alter table updateset add col_2 integer;
+insert into updateset values (1, 0, 0, 0, 0);
+insert into updateset values (2, 0, 0, 0, 0);
+update updateset
+SET (col_0, col_1, col_2, col_3)
+  = (SELECT 10, 11, 22, 33)
+returning *;
+select * from updateset;
+
+DROP TABLE updateset;
 DROP TABLE insufficient_shards;
 DROP TABLE raw_table;
 DROP TABLE summary_table;
