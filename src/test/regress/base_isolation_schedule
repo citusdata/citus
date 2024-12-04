@@ -1,5 +1,6 @@
 # ----------
 # isolation setup steps
 # ----------
+test: isolation_enable_ddl_propagation
 test: isolation_setup
 test: isolation_cluster_management
