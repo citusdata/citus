@@ -7,6 +7,7 @@ runs:
   using: composite
   steps:
   - uses: actions/upload-artifact@v3.1.1
+    if: failure()
     name: Upload logs
     with:
       name: ${{ inputs.folder }}
