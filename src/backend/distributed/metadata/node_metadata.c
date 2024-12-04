@@ -167,6 +167,7 @@ PG_FUNCTION_INFO_V1(citus_nodeport_for_nodeid);
 PG_FUNCTION_INFO_V1(citus_coordinator_nodeid);
 PG_FUNCTION_INFO_V1(citus_is_coordinator);
 PG_FUNCTION_INFO_V1(citus_internal_mark_node_not_synced);
+PG_FUNCTION_INFO_V1(citus_is_primary_node);
 
 /*
  * DefaultNodeMetadata creates a NodeMetadata struct with the fields set to
@@ -1664,6 +1665,26 @@ citus_is_coordinator(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(isCoordinator);
 }
 
+/*
+ * citus_is_primary_node returns whether the current node is a primary for
+ * a given group_id. We consider the node a primary if it has
+ * pg_dist_node entries marked as primary
+ */
+Datum
+citus_is_primary_node(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	bool isPrimary = false;
+	int32 groupId = GetLocalGroupId();
+	WorkerNode *workerNode = PrimaryNodeForGroup(groupId, NULL);
+	if (workerNode != NULL && workerNode->nodeId == GetLocalNodeId())
+	{
+		isPrimary = true;
+	}
+
+	PG_RETURN_BOOL(isPrimary);
+}
 
 /*
  * EnsureParentSessionHasExclusiveLockOnPgDistNode ensures given session id
