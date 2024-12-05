@@ -1115,6 +1115,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 	char		relkind;
 	struct ReindexIndexCallbackState *state = arg;
 	LOCKMODE	table_lockmode;
+	Oid			table_oid;
 
 	/*
 	 * Lock level here should match table lock in reindex_index() for
@@ -1152,13 +1153,24 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 				 errmsg("\"%s\" is not an index", relation->relname)));
 
 	/* Check permissions */
+
+	#if PG_VERSION_NUM >= PG_VERSION_17
+	table_oid = IndexGetRelation(relId, true);
+	if (OidIsValid(table_oid))
+	{
+		AclResult aclresult = pg_class_aclcheck(table_oid, GetUserId(), ACL_MAINTAIN);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_INDEX, relation->relname);
+	}
+	#else
 	if (!object_ownercheck(RelationRelationId, relId, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_INDEX, relation->relname);
+	#endif
 
 	/* Lock heap before index to avoid deadlock. */
 	if (relId != oldRelId)
 	{
-		Oid			table_oid = IndexGetRelation(relId, true);
+		table_oid = IndexGetRelation(relId, true);
 
 		/*
 		 * If the OID isn't valid, it means the index was concurrently
