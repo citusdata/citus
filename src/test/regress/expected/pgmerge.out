@@ -174,9 +174,21 @@ COPY (
   WHEN MATCHED THEN DELETE
 ) TO stdout;
 ERROR:  MERGE not supported in COPY
+-- used in a CTE with RETURNING
+WITH foo AS (
+  MERGE INTO target USING source ON (true)
+  WHEN MATCHED THEN DELETE RETURNING target.*
+) SELECT * FROM foo;
+ERROR:  syntax error at or near "RETURNING"
+-- used in COPY with RETURNING
+COPY (
+  MERGE INTO target USING source ON (true)
+  WHEN MATCHED THEN DELETE RETURNING target.*
+) TO stdout;
+ERROR:  syntax error at or near "RETURNING"
 -- unsupported relation types
 -- view
-CREATE VIEW tv AS SELECT * FROM target;
+CREATE VIEW tv AS SELECT count(tid) AS tid FROM target;
 MERGE INTO tv t
 USING source s
 ON t.tid = s.sid
