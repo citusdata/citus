@@ -31,12 +31,12 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "16.3"
-      image_suffix: "-v13fd57c"
-      pg14_version: '{ "major": "14", "full": "14.12" }'
-      pg15_version: '{ "major": "15", "full": "15.7" }'
-      pg16_version: '{ "major": "16", "full": "16.3" }'
-      upgrade_pg_versions: "14.12-15.7-16.3"
+      sql_snapshot_pg_version: "16.6"
+      image_suffix: "-dev-e680de6"
+      pg14_version: '{ "major": "14", "full": "14.15" }'
+      pg15_version: '{ "major": "15", "full": "15.10" }'
+      pg16_version: '{ "major": "16", "full": "16.6" }'
+      upgrade_pg_versions: "14.15-15.10-16.6"
     steps:
       # Since GHA jobs needs at least one step we use a noop step here.
       - name: Set up parameters
