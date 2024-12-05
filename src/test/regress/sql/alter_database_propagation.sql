@@ -15,4 +15,9 @@ alter database regression with IS_TEMPLATE false;
 -- this statement will get error since we don't have a multiple database support for now
 alter database regression rename to regression2;
 
+-- this database is not distributed so we will not see any remote commands
+CREATE DATABASE db_to_test;
+alter database db_to_test with CONNECTION LIMIT 100;
+DROP DATABASE db_to_test;
+
 set citus.log_remote_commands = false;
