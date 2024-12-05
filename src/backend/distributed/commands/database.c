@@ -24,6 +24,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
@@ -32,6 +33,8 @@
 
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static Oid get_database_owner(Oid db_oid);
+static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
+														  bool missingOk);
 List * PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 
@@ -161,12 +164,14 @@ List *
 PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 							ProcessUtilityContext processUtilityContext)
 {
-	if (!ShouldPropagate())
+	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
+	bool missingOk = false;
+	ObjectAddress *dbAddress = GetDatabaseAddressFromDatabaseName(stmt->dbname,
+																  missingOk);
+	if (!ShouldPropagate() || !IsAnyObjectDistributed(list_make1(dbAddress)))
 	{
 		return NIL;
 	}
-
-	AlterDatabaseStmt *stmt = castNode(AlterDatabaseStmt, node);
 
 	EnsureCoordinator();
 
@@ -213,3 +218,17 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 
 #endif
+
+
+/*
+ * GetDatabaseAddressFromDatabaseName gets the database name and returns the ObjectAddress
+ * of the database.
+ */
+static ObjectAddress *
+GetDatabaseAddressFromDatabaseName(char *databaseName, bool missingOk)
+{
+	Oid databaseOid = get_database_oid(databaseName, missingOk);
+	ObjectAddress *dbObjectAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*dbObjectAddress, DatabaseRelationId, databaseOid);
+	return dbObjectAddress;
+}
