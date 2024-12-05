@@ -33,4 +33,11 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- this statement will get error since we don't have a multiple database support for now
 alter database regression rename to regression2;
 ERROR:  current database cannot be renamed
+-- this database is not distributed so we will not see any remote commands
+CREATE DATABASE db_to_test;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+alter database db_to_test with CONNECTION LIMIT 100;
+DROP DATABASE db_to_test;
 set citus.log_remote_commands = false;
