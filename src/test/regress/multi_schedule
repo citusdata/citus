@@ -118,7 +118,7 @@ test: merge pgmerge
 test: merge_repartition2
 test: merge_repartition1 merge_schema_sharding
 test: merge_partition_tables
-test: merge_vcore
+test: merge_vcore merge_unsupported
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last

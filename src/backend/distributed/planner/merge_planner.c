@@ -1228,7 +1228,7 @@ ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *orig
 		MergeQualAndTargetListFunctionsSupported(
 			targetRelationId,
 			originalQuery,
-			originalQuery->jointree->mergeConditions,
+			originalQuery->mergeJoinCondition,
 			originalQuery->targetList,
 			originalQuery->commandType);
 
