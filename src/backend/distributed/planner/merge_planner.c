@@ -723,8 +723,13 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 	/*
 	 * Sub-queries and CTEs are not allowed in actions and ON clause
 	 */
-	if (FindNodeMatchingCheckFunction((Node *) mergeQuery->mergeJoinCondition,
-									  IsNodeSubquery))
+#if PG_VERSION_NUM >= PG_VERSION_17
+	Node *joinCondition = (Node *) mergeQuery->mergeJoinCondition;
+#else
+	Node *joinCondition = (Node *) mergeQuery->jointree->quals;
+#endif
+
+	if (FindNodeMatchingCheckFunction(joinCondition, IsNodeSubquery))
 	{
 		ereport(ERROR,
 				(errmsg("Sub-queries and CTEs are not allowed in ON clause for MERGE "
@@ -1224,11 +1229,17 @@ ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *orig
 							   "supported in MERGE sql with distributed tables")));
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+	Node *joinCondition = (Node *) originalQuery->mergeJoinCondition;
+#else
+	Node *joinCondition = (Node *) originalQuery->jointree->quals;
+#endif
+
 	DeferredErrorMessage *deferredError =
 		MergeQualAndTargetListFunctionsSupported(
 			targetRelationId,
 			originalQuery,
-			originalQuery->mergeJoinCondition,
+			joinCondition,
 			originalQuery->targetList,
 			originalQuery->commandType);
 
@@ -1305,6 +1316,7 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 								 CitusTableCacheEntry *targetRelation)
 {
 	/* Get all the Join conditions from the ON clause */
+#if PG_VERSION_NUM >= PG_VERSION_17
 	List *mergeJoinConditionList = NIL;
 	if (IsA(mergeQuery->mergeJoinCondition, List))
 	{
@@ -1317,6 +1329,10 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 		joinClause = (Node *) canonicalize_qual((Expr *) joinClause, false);
 		mergeJoinConditionList = make_ands_implicit((Expr *) joinClause);
 	}
+#else
+	List *mergeJoinConditionList = WhereClauseList(mergeQuery->jointree);
+#endif
+
 
 	Var *targetColumn = targetRelation->partitionColumn;
 	Var *sourceRepartitionVar = NULL;
