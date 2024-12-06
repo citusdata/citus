@@ -723,7 +723,7 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 	/*
 	 * Sub-queries and CTEs are not allowed in actions and ON clause
 	 */
-	if (FindNodeMatchingCheckFunction((Node *) mergeQuery->jointree->quals,
+	if (FindNodeMatchingCheckFunction((Node *) mergeQuery->mergeJoinCondition,
 									  IsNodeSubquery))
 	{
 		ereport(ERROR,
@@ -1225,11 +1225,12 @@ ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *orig
 	}
 
 	DeferredErrorMessage *deferredError =
-		MergeQualAndTargetListFunctionsSupported(targetRelationId,
-												 originalQuery,
-												 originalQuery->jointree->quals,
-												 originalQuery->targetList,
-												 originalQuery->commandType);
+		MergeQualAndTargetListFunctionsSupported(
+			targetRelationId,
+			originalQuery,
+			originalQuery->jointree->mergeConditions,
+			originalQuery->targetList,
+			originalQuery->commandType);
 
 	if (deferredError)
 	{
@@ -1304,7 +1305,19 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 								 CitusTableCacheEntry *targetRelation)
 {
 	/* Get all the Join conditions from the ON clause */
-	List *mergeJoinConditionList = WhereClauseList(mergeQuery->jointree);
+	List *mergeJoinConditionList = NIL;
+	if (IsA(mergeQuery->mergeJoinCondition, List))
+	{
+		mergeJoinConditionList = (List *) mergeQuery->mergeJoinCondition;
+	}
+	else
+	{
+		Node *joinClause =
+			eval_const_expressions(NULL, mergeQuery->mergeJoinCondition);
+		joinClause = (Node *) canonicalize_qual((Expr *) joinClause, false);
+		mergeJoinConditionList = make_ands_implicit((Expr *) joinClause);
+	}
+
 	Var *targetColumn = targetRelation->partitionColumn;
 	Var *sourceRepartitionVar = NULL;
 	bool foundTypeMismatch = false;
