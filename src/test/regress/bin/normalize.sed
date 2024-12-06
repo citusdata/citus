@@ -324,3 +324,10 @@ s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter cha
 # we add them back for pg15,pg16 compatibility
 # e.g. change CHECK other_col >= 100 to CHECK (other_col >= 100)
 s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
+
+# pg17 change: this is a rule that ignores additional DEBUG logging
+# for CREATE MATERIALIZED VIEW (commit b4da732fd64). This could be
+# changed to a normalization rule when 17 becomes the minimum
+# supported Postgres version.
+
+/DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
