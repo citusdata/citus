@@ -260,6 +260,10 @@ FROM
 		tenant_id,
 		user_id) AS subquery;
 
+SELECT success FROM run_command_on_workers('alter system set enable_nestloop to off');
+SELECT success FROM run_command_on_workers('alter system set enable_sort to off');
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
+
 -- Union and left join subquery pushdown
 EXPLAIN (COSTS OFF)
 SELECT
@@ -395,6 +399,10 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
+
+SELECT success FROM run_command_on_workers('alter system reset enable_nestloop');
+SELECT success FROM run_command_on_workers('alter system reset enable_sort');
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
 -- Lateral join subquery pushdown
 -- set subquery_pushdown due to limit in the query
