@@ -97,6 +97,7 @@ static DistributedPlan * CreateNonPushableMergePlan(Oid targetRelationId, uint64
 													plannerRestrictionContext,
 													ParamListInfo boundParams);
 static char * MergeCommandResultIdPrefix(uint64 planId);
+static void ErrorIfMergeHasReturningList(Query *query);
 
 #endif
 
@@ -950,8 +951,23 @@ ConvertSourceRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 
 /*
+ * ErrorIfMergeHasReturningList raises an exception if the MERGE
+ * has a RETURNING clause.
+ */
+static void
+ErrorIfMergeHasReturningList(Query *query)
+{
+	if (query->returningList)
+	{
+		ereport(ERROR, (errmsg("MERGE with RETURNING is not yet supported")));
+	}
+}
+
+
+/*
  * ErrorIfMergeNotSupported Checks for conditions that are not supported in either
  * the routable or repartition strategies. It checks for
+ * - MERGE with a RETURNING clause
  * - Supported table types and their combinations
  * - Check the target lists and quals of both the query and merge actions
  * - Supported CTEs
@@ -959,6 +975,7 @@ ConvertSourceRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 static void
 ErrorIfMergeNotSupported(Query *query, Oid targetRelationId, List *rangeTableList)
 {
+	ErrorIfMergeHasReturningList(query);
 	ErrorIfMergeHasUnsupportedTables(targetRelationId, rangeTableList);
 	ErrorIfMergeQueryQualAndTargetListNotSupported(targetRelationId, query);
 	ErrorIfUnsupportedCTEs(query);
