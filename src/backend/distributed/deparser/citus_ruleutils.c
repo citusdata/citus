@@ -315,6 +315,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 	AttrNumber defaultValueIndex = 0;
 	AttrNumber constraintIndex = 0;
 	AttrNumber constraintCount = 0;
+	bool relIsPartition = false;
 	StringInfoData buffer = { NULL, 0, 0, 0 };
 
 	/*
@@ -342,6 +343,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 		}
 
 		appendStringInfo(&buffer, "TABLE %s (", relationName);
+
+		relIsPartition = relation->rd_rel->relispartition;
 	}
 	else
 	{
@@ -392,7 +395,13 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 								 GetCompressionMethodName(attributeForm->attcompression));
 			}
 
-			if (attributeForm->attidentity && includeIdentityDefaults)
+			/*
+			 * If this is an identity column do not include its identity definition;
+			 * it will be inherited from the parent table on ATTACH PARTITION; this is
+			 * Postgres 17+ behavior (commit 699586315). Previous PG versions did not
+			 * support identity columns in partitioned tables.
+			 */
+			if (attributeForm->attidentity && includeIdentityDefaults && !relIsPartition)
 			{
 				bool missing_ok = false;
 				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(
