@@ -97,6 +97,7 @@ static DistributedPlan * CreateNonPushableMergePlan(Oid targetRelationId, uint64
 													plannerRestrictionContext,
 													ParamListInfo boundParams);
 static char * MergeCommandResultIdPrefix(uint64 planId);
+static void ErrorIfMergeHasReturningList(Query *query);
 
 #endif
 
@@ -153,6 +154,32 @@ CreateMergePlan(uint64 planId, Query *originalQuery, Query *query,
 	return distributedPlan;
 
 	#endif
+}
+
+
+/*
+ * GetMergeJoinConditionList returns all the Join conditions from the ON clause
+ */
+List *
+GetMergeJoinConditionList(Query *mergeQuery)
+{
+#if PG_VERSION_NUM >= PG_VERSION_17
+	List *mergeJoinConditionList = NIL;
+	if (IsA(mergeQuery->mergeJoinCondition, List))
+	{
+		mergeJoinConditionList = (List *) mergeQuery->mergeJoinCondition;
+	}
+	else
+	{
+		Node *joinClause =
+			eval_const_expressions(NULL, mergeQuery->mergeJoinCondition);
+		joinClause = (Node *) canonicalize_qual((Expr *) joinClause, false);
+		mergeJoinConditionList = make_ands_implicit((Expr *) joinClause);
+	}
+#else
+	List *mergeJoinConditionList = WhereClauseList(mergeQuery->jointree);
+#endif
+	return mergeJoinConditionList;
 }
 
 
@@ -562,7 +589,6 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, Query *query,
 										 List *targetList, CmdType commandType)
 {
 	uint32 targetRangeTableIndex = query->resultRelation;
-	FromExpr *joinTree = query->jointree;
 	Var *distributionColumn = NULL;
 	if (IsCitusTable(resultRelationId) && HasDistributionKey(resultRelationId))
 	{
@@ -600,7 +626,8 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, Query *query,
 		}
 
 		if (targetEntryDistributionColumn &&
-			TargetEntryChangesValue(targetEntry, distributionColumn, joinTree))
+			TargetEntryChangesValue(targetEntry, distributionColumn, (Node *) query,
+									CMD_MERGE))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "updating the distribution column is not "
@@ -722,8 +749,13 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 	/*
 	 * Sub-queries and CTEs are not allowed in actions and ON clause
 	 */
-	if (FindNodeMatchingCheckFunction((Node *) mergeQuery->jointree->quals,
-									  IsNodeSubquery))
+#if PG_VERSION_NUM >= PG_VERSION_17
+	Node *joinCondition = (Node *) mergeQuery->mergeJoinCondition;
+#else
+	Node *joinCondition = (Node *) mergeQuery->jointree->quals;
+#endif
+
+	if (FindNodeMatchingCheckFunction(joinCondition, IsNodeSubquery))
 	{
 		ereport(ERROR,
 				(errmsg("Sub-queries and CTEs are not allowed in ON clause for MERGE "
@@ -950,8 +982,23 @@ ConvertSourceRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 
 /*
+ * ErrorIfMergeHasReturningList raises an exception if the MERGE
+ * has a RETURNING clause.
+ */
+static void
+ErrorIfMergeHasReturningList(Query *query)
+{
+	if (query->returningList)
+	{
+		ereport(ERROR, (errmsg("MERGE with RETURNING is not yet supported")));
+	}
+}
+
+
+/*
  * ErrorIfMergeNotSupported Checks for conditions that are not supported in either
  * the routable or repartition strategies. It checks for
+ * - MERGE with a RETURNING clause
  * - Supported table types and their combinations
  * - Check the target lists and quals of both the query and merge actions
  * - Supported CTEs
@@ -959,6 +1006,7 @@ ConvertSourceRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 static void
 ErrorIfMergeNotSupported(Query *query, Oid targetRelationId, List *rangeTableList)
 {
+	ErrorIfMergeHasReturningList(query);
 	ErrorIfMergeHasUnsupportedTables(targetRelationId, rangeTableList);
 	ErrorIfMergeQueryQualAndTargetListNotSupported(targetRelationId, query);
 	ErrorIfUnsupportedCTEs(query);
@@ -1207,12 +1255,19 @@ ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *orig
 							   "supported in MERGE sql with distributed tables")));
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+	Node *joinCondition = (Node *) originalQuery->mergeJoinCondition;
+#else
+	Node *joinCondition = (Node *) originalQuery->jointree->quals;
+#endif
+
 	DeferredErrorMessage *deferredError =
-		MergeQualAndTargetListFunctionsSupported(targetRelationId,
-												 originalQuery,
-												 originalQuery->jointree->quals,
-												 originalQuery->targetList,
-												 originalQuery->commandType);
+		MergeQualAndTargetListFunctionsSupported(
+			targetRelationId,
+			originalQuery,
+			joinCondition,
+			originalQuery->targetList,
+			originalQuery->commandType);
 
 	if (deferredError)
 	{
@@ -1286,8 +1341,7 @@ static int
 SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 								 CitusTableCacheEntry *targetRelation)
 {
-	/* Get all the Join conditions from the ON clause */
-	List *mergeJoinConditionList = WhereClauseList(mergeQuery->jointree);
+	List *mergeJoinConditionList = GetMergeJoinConditionList(mergeQuery);
 	Var *targetColumn = targetRelation->partitionColumn;
 	Var *sourceRepartitionVar = NULL;
 	bool foundTypeMismatch = false;
