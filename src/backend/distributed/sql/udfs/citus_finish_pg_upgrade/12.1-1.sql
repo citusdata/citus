@@ -10,7 +10,7 @@ DECLARE
 BEGIN
 
 
-    IF substring(current_Setting('server_version'), '\d+')::int >= 14 THEN
+    IF substring(current_Setting('server_version'), '[0-9]+')::int >= 14 THEN
     EXECUTE $cmd$
         -- disable propagation to prevent EnsureCoordinator errors
         -- the aggregate created here does not depend on Citus extension (yet)
@@ -53,7 +53,7 @@ BEGIN
 
     -- PG16 has its own any_value, so only create it pre PG16.
     -- We can remove this part when we drop support for PG16
-    IF substring(current_Setting('server_version'), '\d+')::int < 16 THEN
+    IF substring(current_Setting('server_version'), '[0-9]+')::int < 16 THEN
     EXECUTE $cmd$
         -- disable propagation to prevent EnsureCoordinator errors
         -- the aggregate created here does not depend on Citus extension (yet)
