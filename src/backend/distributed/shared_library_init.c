@@ -112,6 +112,7 @@
 #include "distributed/transaction_recovery.h"
 #include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/utils/directory.h"
+#include "distributed/utils/restore_interval.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -2675,6 +2676,26 @@ RegisterCitusConfigVariables(void)
 		&WritableStandbyCoordinator,
 		false,
 		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.restore_point_interval",
+		gettext_noop("Sets the timeout for periodic recovery cluster point"),
+		NULL,
+		&RestorePointInterval,
+		"never",
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		GucCheckInterval, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.restore_point_interval_name",
+		gettext_noop("Sets the prefix of pointname for the periodic recovery cluster point"),
+		NULL,
+		&RestorePointIntervalName,
+		NULL,
+		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
