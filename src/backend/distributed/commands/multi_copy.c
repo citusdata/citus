@@ -346,9 +346,7 @@ static LocalCopyStatus GetLocalCopyStatus(void);
 static bool ShardIntervalListHasLocalPlacements(List *shardIntervalList);
 static void LogLocalCopyToRelationExecution(uint64 shardId);
 static void LogLocalCopyToFileExecution(uint64 shardId);
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void ErrorIfMergeInCopy(CopyStmt *copyStatement);
-#endif
 
 
 /* exports for SQL callable functions */
@@ -2831,23 +2829,22 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 /*
  * ErrorIfMergeInCopy Raises an exception if the MERGE is called in the COPY.
  */
 static void
 ErrorIfMergeInCopy(CopyStmt *copyStatement)
 {
+#if PG_VERSION_NUM < 150000
+	return;
+#else
 	if (!copyStatement->relation && (IsA(copyStatement->query, MergeStmt)))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("MERGE not supported in COPY")));
 	}
-}
-
-
 #endif
+}
 
 
 /*
@@ -2860,9 +2857,7 @@ Node *
 ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 				char *queryString)
 {
-	#if PG_VERSION_NUM >= PG_VERSION_15
 	ErrorIfMergeInCopy(copyStatement);
-	#endif
 
 	/*
 	 * Handle special COPY "resultid" FROM STDIN WITH (format result) commands

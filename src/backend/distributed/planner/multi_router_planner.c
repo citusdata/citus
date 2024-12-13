@@ -597,9 +597,8 @@ TargetlistAndFunctionsSupported(Oid resultRelationId, FromExpr *joinTree, Node *
 								 NULL, NULL);
 		}
 
-		if (targetEntryPartitionColumn &&
-			TargetEntryChangesValue(targetEntry, partitionColumn,
-									(Node *) joinTree, commandType))
+		if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
+			TargetEntryChangesValue(targetEntry, partitionColumn, joinTree))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "modifying the partition value of rows is not "
@@ -1611,15 +1610,8 @@ MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
  * tree, or the target entry sets a different column.
  */
 bool
-TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, Node *node, CmdType
-						commandType)
+TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
 {
-	if (commandType != CMD_UPDATE && commandType != CMD_MERGE)
-	{
-		/* no-op */
-		return false;
-	}
-
 	bool isColumnValueChanged = true;
 	Expr *setExpr = targetEntry->expr;
 
@@ -1635,6 +1627,7 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, Node *node, CmdTy
 	else if (IsA(setExpr, Const))
 	{
 		Const *newValue = (Const *) setExpr;
+		List *restrictClauseList = WhereClauseList(joinTree);
 		OpExpr *equalityExpr = MakeOpExpression(column, BTEqualStrategyNumber);
 		Node *rightOp = get_rightop((Expr *) equalityExpr);
 
@@ -1645,16 +1638,6 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, Node *node, CmdTy
 		rightConst->constvalue = newValue->constvalue;
 		rightConst->constisnull = newValue->constisnull;
 		rightConst->constbyval = newValue->constbyval;
-
-		List *restrictClauseList = NIL;
-		if (commandType == CMD_UPDATE)
-		{
-			restrictClauseList = WhereClauseList((FromExpr *) node);
-		}
-		else
-		{
-			restrictClauseList = GetMergeJoinConditionList((Query *) node);
-		}
 
 		bool predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
 													   restrictClauseList, false);
