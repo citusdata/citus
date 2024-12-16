@@ -294,10 +294,6 @@ SELECT create_distributed_table('distributed_table', 'key');
 INSERT INTO postgres_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
 INSERT INTO reference_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
 INSERT INTO distributed_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
--- Analyze tables to ensure up-to-date statistics
-ANALYZE postgres_table;
-ANALYZE reference_table;
-ANALYZE distributed_table;
 -- Set local table join policy to auto before running the tests
 SET citus.local_table_join_policy TO 'auto';
 -- Correlated sublinks are supported in PostgreSQL 17
