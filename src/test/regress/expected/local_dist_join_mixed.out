@@ -1244,8 +1244,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT local.id, dis
   foo1.id =  foo4.id AND
   foo1.id =  foo3.id AND
   foo1.id =  foo2.id AND
-  foo1.id =  foo10.id AND
-  foo1.id =  foo1.id
+  foo1.id =  foo10.id
 ORDER BY 1;
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
