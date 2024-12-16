@@ -350,165 +350,6 @@ drop cascades to table pg17_corr_subq_folding.events
 -- PG17-specific tests go here.
 --
 CREATE SCHEMA pg17;
-SET search_path TO pg17;
--- Test specifying access method on partitioned tables. PG17 feature, added by:
--- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=374c7a229
--- The following tests were failing tests in tableam but will pass on PG >= 17.
--- There is some set-up duplication of tableam, and this test can be returned
--- to tableam when 17 is the minimum supported PG version.
-SELECT public.run_command_on_coordinator_and_workers($Q$
-	SET citus.enable_ddl_propagation TO off;
-	CREATE FUNCTION fake_am_handler(internal)
-	RETURNS table_am_handler
-	AS 'citus'
-	LANGUAGE C;
-	CREATE ACCESS METHOD fake_am TYPE TABLE HANDLER fake_am_handler;
-$Q$);
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
--- Since Citus assumes access methods are part of the extension, make fake_am
--- owned manually to be able to pass checks on Citus while distributing tables.
-ALTER EXTENSION citus ADD ACCESS METHOD fake_am;
-CREATE TABLE test_partitioned(id int, p int, val int)
-PARTITION BY RANGE (p) USING fake_am;
--- Test that children inherit access method from parent
-CREATE TABLE test_partitioned_p1 PARTITION OF test_partitioned
-	FOR VALUES FROM (1) TO (10);
-CREATE TABLE test_partitioned_p2 PARTITION OF test_partitioned
-	FOR VALUES FROM (11) TO (20);
-INSERT INTO test_partitioned VALUES (1, 5, -1), (2, 15, -2);
-WARNING:  fake_tuple_insert
-WARNING:  fake_tuple_insert
-INSERT INTO test_partitioned VALUES (3, 6, -6), (4, 16, -4);
-WARNING:  fake_tuple_insert
-WARNING:  fake_tuple_insert
-SELECT count(1) FROM test_partitioned_p1;
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
- count
----------------------------------------------------------------------
-     2
-(1 row)
-
-SELECT count(1) FROM test_partitioned_p2;
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
- count
----------------------------------------------------------------------
-     2
-(1 row)
-
--- Both child table partitions inherit fake_am
-SELECT c.relname, am.amname FROM pg_class c, pg_am am
-WHERE c.relam = am.oid AND c.oid IN ('test_partitioned_p1'::regclass, 'test_partitioned_p2'::regclass)
-ORDER BY c.relname;
-       relname       | amname
----------------------------------------------------------------------
- test_partitioned_p1 | fake_am
- test_partitioned_p2 | fake_am
-(2 rows)
-
-DROP TABLE test_partitioned;
-ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
--- End of testing specifying access method on partitioned tables.
--- Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
--- Step 1: Create a distributed partitioned table
-\c - - :master_host :master_port
-CREATE TABLE distributed_partitioned_table (
-    id serial NOT NULL,
-    partition_col int NOT NULL,
-    PRIMARY KEY (id, partition_col)
-) PARTITION BY RANGE (partition_col);
--- Distribute the table
-SELECT create_distributed_table('distributed_partitioned_table', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
--- Step 2: Create a partitioned Citus local table
-CREATE TABLE local_partitioned_table (
-    id serial NOT NULL,
-    partition_col int NOT NULL,
-    PRIMARY KEY (id, partition_col)
-) PARTITION BY RANGE (partition_col);
--- Step 3: Add an exclusion constraint with a name to the distributed partitioned table
-ALTER TABLE distributed_partitioned_table ADD CONSTRAINT dist_exclude_named EXCLUDE USING btree (id WITH =, partition_col WITH =);
--- Step 4: Verify propagation of exclusion constraint to worker nodes
-\c - - :public_worker_1_host :worker_1_port
-SELECT conname FROM pg_constraint WHERE conrelid = 'distributed_partitioned_table'::regclass AND conname = 'dist_exclude_named';
-      conname
----------------------------------------------------------------------
- dist_exclude_named
-(1 row)
-
--- Step 5: Add an exclusion constraint with a name to the Citus local partitioned table
-\c - - :master_host :master_port
-ALTER TABLE local_partitioned_table ADD CONSTRAINT local_exclude_named EXCLUDE USING btree (partition_col WITH =);
--- Step 6: Verify the exclusion constraint on the local partitioned table
-SELECT conname, contype FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
-       conname       | contype
----------------------------------------------------------------------
- local_exclude_named | x
-(1 row)
-
--- Step 7: Add exclusion constraints without names to both tables
--- Ensure the distributed table exclusion constraint includes both partition columns
-ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, partition_col WITH =);
-ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
--- Step 8: Verify the unnamed exclusion constraints were added
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
-                  conname                   | contype
----------------------------------------------------------------------
- local_exclude_named                        | x
- local_partitioned_table_partition_col_excl | x
-(2 rows)
-
-\c - - :public_worker_1_host :worker_1_port
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'distributed_partitioned_table'::regclass AND contype = 'x';
-                       conname                       | contype
----------------------------------------------------------------------
- dist_exclude_named                                  | x
- distributed_partitioned_table_id_partition_col_excl | x
-(2 rows)
-
--- Step 9: Drop the exclusion constraints from both tables
-\c - - :master_host :master_port
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dist_exclude_named') THEN
-        ALTER TABLE distributed_partitioned_table DROP CONSTRAINT dist_exclude_named;
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'local_exclude_named') THEN
-        ALTER TABLE local_partitioned_table DROP CONSTRAINT local_exclude_named;
-    END IF;
-END $$;
--- Step 10: Verify the constraints were dropped
-SELECT * FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
- oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
----------------------------------------------------------------------
-(0 rows)
-
-SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
- oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
----------------------------------------------------------------------
-(0 rows)
-
--- Step 11: Clean up - Drop the tables
-DROP TABLE IF EXISTS distributed_partitioned_table;
-DROP TABLE IF EXISTS local_partitioned_table;
-\else
-\q
-\endif
--- PG17-specific tests go here.
---
-CREATE SCHEMA pg17;
 SET search_path to pg17;
 -- Test specifying access method on partitioned tables. PG17 feature, added by:
 -- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=374c7a229
@@ -652,6 +493,109 @@ DETAIL:  on server regress_maintain@localhost:xxxxx connectionId: xxxxxxx
 RESET ROLE;
 -- End of MAINTAIN privilege tests
 -- Partitions inherit identity column
+-- Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
+-- Step 1: Create a distributed partitioned table
+\c - - :master_host :master_port
+CREATE TABLE distributed_partitioned_table (
+    id serial NOT NULL,
+    partition_col int NOT NULL,
+    PRIMARY KEY (id, partition_col)
+) PARTITION BY RANGE (partition_col);
+-- Add partitions to the distributed partitioned table
+CREATE TABLE distributed_partitioned_table_p1 PARTITION OF distributed_partitioned_table
+FOR VALUES FROM (1) TO (100);
+CREATE TABLE distributed_partitioned_table_p2 PARTITION OF distributed_partitioned_table
+FOR VALUES FROM (100) TO (200);
+-- Distribute the table
+SELECT create_distributed_table('distributed_partitioned_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Step 2: Create a partitioned Citus local table
+CREATE TABLE local_partitioned_table (
+    id serial NOT NULL,
+    partition_col int NOT NULL,
+    PRIMARY KEY (id, partition_col)
+) PARTITION BY RANGE (partition_col);
+-- Add partitions to the local partitioned table
+CREATE TABLE local_partitioned_table_p1 PARTITION OF local_partitioned_table
+FOR VALUES FROM (1) TO (100);
+CREATE TABLE local_partitioned_table_p2 PARTITION OF local_partitioned_table
+FOR VALUES FROM (100) TO (200);
+SELECT citus_add_local_table_to_metadata('local_partitioned_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Verify the Citus tables
+SELECT table_name, citus_table_type FROM citus_tables
+WHERE table_name::regclass::text like '%_partitioned_table' ORDER BY 1;
+          table_name           | citus_table_type
+---------------------------------------------------------------------
+ distributed_partitioned_table | distributed
+ local_partitioned_table       | local
+(2 rows)
+
+-- Step 3: Add an exclusion constraint with a name to the distributed partitioned table
+ALTER TABLE distributed_partitioned_table ADD CONSTRAINT dist_exclude_named EXCLUDE USING btree (id WITH =, partition_col WITH =);
+-- Step 4: Verify propagation of exclusion constraint to worker nodes
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname FROM pg_constraint WHERE conrelid = 'distributed_partitioned_table'::regclass AND conname = 'dist_exclude_named';
+      conname
+---------------------------------------------------------------------
+ dist_exclude_named
+(1 row)
+
+-- Step 5: Add an exclusion constraint with a name to the Citus local partitioned table
+\c - - :master_host :master_port
+ALTER TABLE local_partitioned_table ADD CONSTRAINT local_exclude_named EXCLUDE USING btree (partition_col WITH =);
+-- Step 6: Verify the exclusion constraint on the local partitioned table
+SELECT conname, contype FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
+       conname       | contype
+---------------------------------------------------------------------
+ local_exclude_named | x
+(1 row)
+
+-- Step 7: Add exclusion constraints without names to both tables
+ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, partition_col WITH =);
+ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
+-- Step 8: Verify the unnamed exclusion constraints were added
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
+                  conname                   | contype
+---------------------------------------------------------------------
+ local_exclude_named                        | x
+ local_partitioned_table_partition_col_excl | x
+(2 rows)
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'distributed_partitioned_table'::regclass AND contype = 'x';
+                       conname                       | contype
+---------------------------------------------------------------------
+ dist_exclude_named                                  | x
+ distributed_partitioned_table_id_partition_col_excl | x
+(2 rows)
+
+-- Step 9: Drop the exclusion constraints from both tables
+\c - - :master_host :master_port
+ALTER TABLE distributed_partitioned_table DROP CONSTRAINT dist_exclude_named;
+ALTER TABLE local_partitioned_table DROP CONSTRAINT local_exclude_named;
+-- Step 10: Verify the constraints were dropped
+SELECT * FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
+ oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
+ oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
+---------------------------------------------------------------------
+(0 rows)
+
+-- Step 11: Clean up - Drop the tables
+DROP TABLE distributed_partitioned_table, local_partitioned_table;
+-- End of Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
 RESET citus.log_remote_commands;
 -- PG17 added support for identity columns in partioned tables:
 -- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=699586315
@@ -1119,8 +1063,8 @@ RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 DROP SCHEMA pg17 CASCADE;
 NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to function fake_am_handler(internal)
+DETAIL:  drop cascades to function pg17.fake_am_handler(internal)
 drop cascades to access method fake_am
-drop cascades to table dist_test
+drop cascades to table pg17.dist_test
 DROP ROLE regress_maintain;
 DROP ROLE regress_no_maintain;
