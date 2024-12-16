@@ -282,12 +282,8 @@ RESET citus.shard_replication_factor;
 DROP SCHEMA pg17 CASCADE;
 
 -- Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
-CREATE SCHEMA local_table_join_pg17;
-SET search_path TO local_table_join_pg17;
 -- Enable DEBUG-level logging to capture detailed execution plans
 SET client_min_messages TO DEBUG1;
-SET log_min_messages TO DEBUG1;
-SET citus.worker_min_messages TO DEBUG1;
 -- Create the tables
 CREATE TABLE postgres_table (key int, value text, value_2 jsonb);
 CREATE TABLE reference_table (key int, value text, value_2 jsonb);
