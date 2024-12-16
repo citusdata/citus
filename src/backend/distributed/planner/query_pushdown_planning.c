@@ -2049,6 +2049,17 @@ CreateSubqueryTargetListAndAdjustVars(List *columnList)
 		 */
 		column->varno = 1;
 		column->varattno = resNo;
+
+		/*
+		 * With Postgres 16+, we need to ensure that column's varnullingrels - the set
+		 * of join rels that can null the var - is empty. This is because there is one
+		 * one range table entry in the query being constructed by subquery pushdown
+		 * so a non-empty varnullingrels would be incorrect, and confuse the Postgres
+		 * planner as in #7787.
+		 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+		column->varnullingrels = NULL;
+#endif
 	}
 
 	return subqueryTargetEntryList;
