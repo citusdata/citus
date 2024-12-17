@@ -274,13 +274,6 @@ RESET ROLE;
 
 -- End of MAINTAIN privilege tests
 
-RESET citus.log_remote_commands;
-RESET citus.next_shard_id;
-RESET citus.shard_count;
-RESET citus.shard_replication_factor;
-
-DROP SCHEMA pg17 CASCADE;
-
 -- Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
 -- Enable DEBUG-level logging to capture detailed execution plans
 SET client_min_messages TO DEBUG1;
@@ -307,9 +300,13 @@ SET citus.local_table_join_policy TO 'prefer-distributed';
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
 SET citus.local_table_join_policy TO 'auto';
-
--- Cleanup after tests
-DROP SCHEMA pg17 CASCADE;
 -- End for Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
+
+RESET citus.log_remote_commands;
+RESET citus.next_shard_id;
+RESET citus.shard_count;
+RESET citus.shard_replication_factor;
+
+DROP SCHEMA pg17 CASCADE;
 DROP ROLE regress_maintain;
 DROP ROLE regress_no_maintain;
