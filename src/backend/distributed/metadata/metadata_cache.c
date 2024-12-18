@@ -4546,16 +4546,6 @@ GetLocalNodeId(void)
 
 
 /*
- * CachedLocalNodeIdIsValid return true if the cached local node id is valid.
- */
-bool
-CachedLocalNodeIdIsValid(void)
-{
-	return LocalNodeId != -1;
-}
-
-
-/*
  * RegisterLocalGroupIdCacheCallbacks registers the callbacks required to
  * maintain LocalGroupId at a consistent value. It's separate from
  * GetLocalGroupId so the callback can be registered early, before metadata

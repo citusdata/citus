@@ -2899,13 +2899,6 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	 * So we set the FinishedStartupCitusBackend flag in StartupCitusBackend to
 	 * indicate when this responsibility handoff has happened.
 	 *
-	 * On the other hand, even if now it's this hook's responsibility to update
-	 * the global pid, we cannot do so if the cached local node id is invalidated
-	 * and we're not allowed to access the catalog tables. Within a transaction
-	 * block, we can access the catalog tables. For this reason, in addition to
-	 * checking FinishedStartupCitusBackend, we also require either being in a
-	 * transaction block or the cached local node id to be valid.
-	 *
 	 * Another solution to the catalog table acccess problem would be to update
 	 * global pid lazily, like we do for HideShards. But that's not possible
 	 * for the global pid, since it is stored in shared memory instead of in a
@@ -2914,8 +2907,7 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	 * as reasonably possible, which is also why we extract global pids in the
 	 * AuthHook already (extracting doesn't require catalog access).
 	 */
-	if (FinishedStartupCitusBackend &&
-		(IsTransactionState() || CachedLocalNodeIdIsValid()))
+	if (FinishedStartupCitusBackend)
 	{
 		AssignGlobalPID(newval);
 	}
