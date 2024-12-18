@@ -5,10 +5,14 @@ SELECT master_remove_node('localhost', :master_port);
 
 (1 row)
 
--- restore coordinator for the rest of the tests
-SELECT citus_set_coordinator_host('localhost', :master_port);
- citus_set_coordinator_host
----------------------------------------------------------------------
-
-(1 row)
-
+-- to silence -potentially flaky- "could not establish connection after" warnings in below test
+SET client_min_messages TO ERROR;
+-- to fail fast if the hostname is not resolvable
+SET citus.node_connection_timeout to '1s';
+BEGIN;
+  SET application_name TO 'new_app_name';
+  -- that should fail because of bad hostname & port
+  SELECT citus_add_node('200.200.200.200', 1, 200);
+ERROR:  connection to the remote node postgres@200.200.200.200:1 failed
+SSL SYSCALL error: EOF detected
+connection to server was lost
