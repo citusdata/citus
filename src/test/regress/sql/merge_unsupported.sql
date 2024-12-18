@@ -1,6 +1,12 @@
 
 
 SHOW server_version \gset
+SELECT CASE
+           WHEN substring(current_setting('server_version'), '\d+')::int >= 17 THEN '17+'
+           WHEN substring(current_setting('server_version'), '\d+')::int IN (15, 16) THEN '15_16'
+           WHEN substring(current_setting('server_version'), '\d+')::int = 14 THEN '14'
+           ELSE 'Unsupported version'
+       END AS version_category;
 SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \gset
 \if :server_version_ge_15
@@ -17,16 +23,10 @@ SET search_path TO pgmerge_schema;
 
 SET citus.use_citus_managed_tables to true;
 
-DROP TABLE IF EXISTS target;
-DROP TABLE IF EXISTS source;
 CREATE TABLE target (tid integer, balance integer)
   WITH (autovacuum_enabled=off);
 CREATE TABLE source (sid integer, delta integer) -- no index
   WITH (autovacuum_enabled=off);
-
-SELECT citus_add_local_table_to_metadata('target');
-SELECT citus_add_local_table_to_metadata('source');
-
 
 \set SHOW_CONTEXT errors
 -- used in a CTE

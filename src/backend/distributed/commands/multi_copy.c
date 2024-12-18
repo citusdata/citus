@@ -2830,18 +2830,21 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
 
 
 /*
- * ErrorIfMergeInCopy Raises an exception if the MERGE is called in the COPY.
+ * ErrorIfMergeInCopy Raises an exception if the MERGE is called in the COPY
+ * where Citus tables are involved, as we don't support this yet
+ * Relevant PG17 commit: c649fa24a
  */
 static void
 ErrorIfMergeInCopy(CopyStmt *copyStatement)
 {
-#if PG_VERSION_NUM < 150000
+#if PG_VERSION_NUM < 170000
 	return;
 #else
 	if (!copyStatement->relation && (IsA(copyStatement->query, MergeStmt)))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("MERGE not supported in COPY")));
+						errmsg("MERGE with Citus tables "
+							   "is not yet supported in COPY")));
 	}
 #endif
 }

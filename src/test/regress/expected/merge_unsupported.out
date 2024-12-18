@@ -1,4 +1,15 @@
 SHOW server_version \gset
+SELECT CASE
+           WHEN substring(current_setting('server_version'), '\d+')::int >= 17 THEN '17+'
+           WHEN substring(current_setting('server_version'), '\d+')::int IN (15, 16) THEN '15_16'
+           WHEN substring(current_setting('server_version'), '\d+')::int = 14 THEN '14'
+           ELSE 'Unsupported version'
+       END AS version_category;
+ version_category
+---------------------------------------------------------------------
+ 17+
+(1 row)
+
 SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \gset
 \if :server_version_ge_15
@@ -13,26 +24,10 @@ NOTICE:  schema "pgmerge_schema" does not exist, skipping
 CREATE SCHEMA pgmerge_schema;
 SET search_path TO pgmerge_schema;
 SET citus.use_citus_managed_tables to true;
-DROP TABLE IF EXISTS target;
-NOTICE:  table "target" does not exist, skipping
-DROP TABLE IF EXISTS source;
-NOTICE:  table "source" does not exist, skipping
 CREATE TABLE target (tid integer, balance integer)
   WITH (autovacuum_enabled=off);
 CREATE TABLE source (sid integer, delta integer) -- no index
   WITH (autovacuum_enabled=off);
-SELECT citus_add_local_table_to_metadata('target');
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT citus_add_local_table_to_metadata('source');
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
 \set SHOW_CONTEXT errors
 -- used in a CTE
 WITH foo AS (
@@ -45,19 +40,19 @@ COPY (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE
 ) TO stdout;
-ERROR:  MERGE not supported in COPY
+ERROR:  MERGE with Citus tables is not yet supported in COPY
 -- used in a CTE with RETURNING
 WITH foo AS (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE RETURNING target.*
 ) SELECT * FROM foo;
-ERROR:  MERGE with RETURNING is not yet supported
+ERROR:  MERGE with RETURNING is not yet supported for Citus tables
 -- used in COPY with RETURNING
 COPY (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE RETURNING target.*
 ) TO stdout;
-ERROR:  MERGE not supported in COPY
+ERROR:  MERGE with Citus tables is not yet supported in COPY
 -- unsupported relation types
 -- view
 CREATE VIEW tv AS SELECT count(tid) AS tid FROM target;
@@ -102,5 +97,5 @@ WHEN NOT MATCHED THEN
 WHEN MATCHED AND tid < 2 THEN
         DELETE
 RETURNING *;
-ERROR:  MERGE with RETURNING is not yet supported
+ERROR:  MERGE with RETURNING is not yet supported for Citus tables
 ROLLBACK;

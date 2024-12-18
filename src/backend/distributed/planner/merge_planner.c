@@ -173,6 +173,7 @@ GetMergeJoinTree(Query *mergeQuery)
 	 * jointree with an empty fromlist. This works because the fromlist of a merge query
 	 * join tree consists of range table references only, and range table references are
 	 * disregarded by the WhereClauseList() walker.
+	 * Relevant PG17 commit: 0294df2f1
 	 */
 	mergeJointree = makeFromExpr(NIL, mergeQuery->mergeJoinCondition);
 #else
@@ -995,15 +996,17 @@ ConvertSourceRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 
 /*
- * ErrorIfMergeHasReturningList raises an exception if the MERGE
- * has a RETURNING clause.
+ * ErrorIfMergeHasReturningList raises an exception if the MERGE has
+ * a RETURNING clause, as we don't support this yet for Citus tables
+ * Relevant PG17 commit: c649fa24a
  */
 static void
 ErrorIfMergeHasReturningList(Query *query)
 {
 	if (query->returningList)
 	{
-		ereport(ERROR, (errmsg("MERGE with RETURNING is not yet supported")));
+		ereport(ERROR, (errmsg("MERGE with RETURNING is not yet supported "
+							   "for Citus tables")));
 	}
 }
 

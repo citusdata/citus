@@ -167,7 +167,7 @@ COPY (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE
 ) TO stdout;
-ERROR:  MERGE not supported in COPY
+ERROR:  MERGE with Citus tables is not yet supported in COPY
 -- unsupported relation types
 -- materialized view
 CREATE MATERIALIZED VIEW mv AS SELECT * FROM target;

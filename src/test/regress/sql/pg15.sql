@@ -287,11 +287,6 @@ WITH targq AS (
 MERGE INTO tbl1 USING targq ON (true)
 WHEN MATCHED THEN DELETE;
 
-COPY (
-  MERGE INTO tbl1 USING tbl2 ON (true)
-  WHEN MATCHED THEN DELETE
-) TO stdout;
-
 MERGE INTO tbl1 t
 USING tbl2
 ON (true)
