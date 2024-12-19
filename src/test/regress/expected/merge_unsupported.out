@@ -40,7 +40,7 @@ COPY (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE
 ) TO stdout;
-ERROR:  MERGE with Citus tables is not yet supported in COPY
+ERROR:  COPY query must have a RETURNING clause
 -- used in a CTE with RETURNING
 WITH foo AS (
   MERGE INTO target USING source ON (true)
@@ -52,7 +52,7 @@ COPY (
   MERGE INTO target USING source ON (true)
   WHEN MATCHED THEN DELETE RETURNING target.*
 ) TO stdout;
-ERROR:  MERGE with Citus tables is not yet supported in COPY
+ERROR:  MERGE with RETURNING is not yet supported for Citus tables
 -- unsupported relation types
 -- view
 CREATE VIEW tv AS SELECT count(tid) AS tid FROM target;

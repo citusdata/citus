@@ -2842,6 +2842,11 @@ ErrorIfMergeInCopy(CopyStmt *copyStatement)
 #else
 	if (!copyStatement->relation && (IsA(copyStatement->query, MergeStmt)))
 	{
+		/*
+		 * This path is currently not reachable because Merge in COPY can
+		 * only work with a RETURNING clause, and a RETURNING check
+		 * will error out sooner for Citus
+		 */
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("MERGE with Citus tables "
 							   "is not yet supported in COPY")));
@@ -2860,8 +2865,6 @@ Node *
 ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 				char *queryString)
 {
-	ErrorIfMergeInCopy(copyStatement);
-
 	/*
 	 * Handle special COPY "resultid" FROM STDIN WITH (format result) commands
 	 * for sending intermediate results to workers.
@@ -2889,6 +2892,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 	 */
 	if (copyStatement->relation != NULL)
 	{
+		ErrorIfMergeInCopy(copyStatement);
+
 		bool isFrom = copyStatement->is_from;
 
 		/* consider using RangeVarGetRelidExtended to check perms before locking */

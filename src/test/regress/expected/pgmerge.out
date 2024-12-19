@@ -162,12 +162,6 @@ ON tid = tid
 WHEN MATCHED THEN DO NOTHING;
 ERROR:  name "target" specified more than once
 DETAIL:  The name is used both as MERGE target table and data source.
--- used in COPY
-COPY (
-  MERGE INTO target USING source ON (true)
-  WHEN MATCHED THEN DELETE
-) TO stdout;
-ERROR:  MERGE with Citus tables is not yet supported in COPY
 -- unsupported relation types
 -- materialized view
 CREATE MATERIALIZED VIEW mv AS SELECT * FROM target;
