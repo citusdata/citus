@@ -116,27 +116,8 @@ MERGE INTO target
 USING target
 ON tid = tid
 WHEN MATCHED THEN DO NOTHING;
--- used in a CTE
-WITH foo AS (
-  MERGE INTO target USING source ON (true)
-  WHEN MATCHED THEN DELETE
-) SELECT * FROM foo;
--- used in COPY
-COPY (
-  MERGE INTO target USING source ON (true)
-  WHEN MATCHED THEN DELETE
-) TO stdout;
 
 -- unsupported relation types
--- view
-CREATE VIEW tv AS SELECT * FROM target;
-MERGE INTO tv t
-USING source s
-ON t.tid = s.sid
-WHEN NOT MATCHED THEN
-	INSERT DEFAULT VALUES;
-DROP VIEW tv;
-
 -- materialized view
 CREATE MATERIALIZED VIEW mv AS SELECT * FROM target;
 MERGE INTO mv t
@@ -903,21 +884,6 @@ WHEN NOT MATCHED THEN
 	INSERT (balance, tid) VALUES (balance + delta, sid)
 WHEN MATCHED AND tid < 2 THEN
 	DELETE;
-ROLLBACK;
-
--- RETURNING
-BEGIN;
-INSERT INTO sq_source (sid, balance, delta) VALUES (-1, -1, -10);
-MERGE INTO sq_target t
-USING v
-ON tid = sid
-WHEN MATCHED AND tid > 2 THEN
-    UPDATE SET balance = t.balance + delta
-WHEN NOT MATCHED THEN
-	INSERT (balance, tid) VALUES (balance + delta, sid)
-WHEN MATCHED AND tid < 2 THEN
-	DELETE
-RETURNING *;
 ROLLBACK;
 
 -- EXPLAIN

@@ -346,6 +346,7 @@ static LocalCopyStatus GetLocalCopyStatus(void);
 static bool ShardIntervalListHasLocalPlacements(List *shardIntervalList);
 static void LogLocalCopyToRelationExecution(uint64 shardId);
 static void LogLocalCopyToFileExecution(uint64 shardId);
+static void ErrorIfMergeInCopy(CopyStmt *copyStatement);
 
 
 /* exports for SQL callable functions */
@@ -2829,6 +2830,32 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
 
 
 /*
+ * ErrorIfMergeInCopy Raises an exception if the MERGE is called in the COPY
+ * where Citus tables are involved, as we don't support this yet
+ * Relevant PG17 commit: c649fa24a
+ */
+static void
+ErrorIfMergeInCopy(CopyStmt *copyStatement)
+{
+#if PG_VERSION_NUM < 170000
+	return;
+#else
+	if (!copyStatement->relation && (IsA(copyStatement->query, MergeStmt)))
+	{
+		/*
+		 * This path is currently not reachable because Merge in COPY can
+		 * only work with a RETURNING clause, and a RETURNING check
+		 * will error out sooner for Citus
+		 */
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("MERGE with Citus tables "
+							   "is not yet supported in COPY")));
+	}
+#endif
+}
+
+
+/*
  * ProcessCopyStmt handles Citus specific concerns for COPY like supporting
  * COPYing from distributed tables and preventing unsupported actions. The
  * function returns a modified COPY statement to be executed, or NULL if no
@@ -2865,6 +2892,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 	 */
 	if (copyStatement->relation != NULL)
 	{
+		ErrorIfMergeInCopy(copyStatement);
+
 		bool isFrom = copyStatement->is_from;
 
 		/* consider using RangeVarGetRelidExtended to check perms before locking */
