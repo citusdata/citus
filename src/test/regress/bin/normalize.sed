@@ -331,7 +331,3 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 # supported Postgres version.
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
-
-# Normalize subquery condition in debug logs to standardize across PostgreSQL versions #7731
-# https://github.com/postgres/postgres/commit/b262ad44
-s/for subquery SELECT id FROM local_dist_join_mixed\.local WHERE \(id IS NOT NULL\)/for subquery SELECT id FROM local_dist_join_mixed.local WHERE true/g
