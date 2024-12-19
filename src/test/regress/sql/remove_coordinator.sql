@@ -4,7 +4,7 @@ SELECT master_remove_node('localhost', :master_port);
 -- to silence -potentially flaky- "could not establish connection after" warnings in below test
 SET client_min_messages TO ERROR;
 
--- to fail fast if the hostname is not resolvable
+-- to fail fast when the hostname is not resolvable, as it will be the case below
 SET citus.node_connection_timeout to '1s';
 
 BEGIN;
