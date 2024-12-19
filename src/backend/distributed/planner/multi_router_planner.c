@@ -598,8 +598,7 @@ TargetlistAndFunctionsSupported(Oid resultRelationId, FromExpr *joinTree, Node *
 		}
 
 		if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
-			TargetEntryChangesValue(targetEntry, partitionColumn,
-									joinTree))
+			TargetEntryChangesValue(targetEntry, partitionColumn, joinTree))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "modifying the partition value of rows is not "
