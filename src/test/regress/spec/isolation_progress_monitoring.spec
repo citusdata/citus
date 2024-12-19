@@ -126,8 +126,8 @@ session "monitor"
 
 step "show-progress"
 {
-	SELECT show_progress(1337);
-	SELECT show_progress(3778);
+	SELECT step, progress FROM show_progress(1337) ORDER BY 1, 2;
+	SELECT step, progress FROM show_progress(3778) ORDER BY 1, 2;
 }
 
 permutation "take-locks" "s1-start-operation" "s2-start-operation" "s3-start-operation" "show-progress" "release-locks-1" "show-progress" "release-locks-2" "show-progress" "release-locks-3"
