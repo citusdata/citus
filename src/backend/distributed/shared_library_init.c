@@ -2899,6 +2899,18 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	 * So we set the FinishedStartupCitusBackend flag in StartupCitusBackend to
 	 * indicate when this responsibility handoff has happened.
 	 *
+	 * On the other hand, even if now it's this hook's responsibility to update
+	 * the global pid, we cannot do so if we might need to read from catalog
+	 * but it's unsafe to do so. For Citus internal backends, this cannot be the
+	 * case because in that case AssignGlobalPID() just extracts its global pid
+	 * from the application_name and extracting doesn't require catalog access.
+	 * But for external client backends, we either need to guarantee that we won't
+	 * read from catalog tables or that it's safe to do so. The only case where
+	 * AssignGlobalPID() could read from catalog tables is when the cached local
+	 * node id is invalidated. So for this reason, for external client backends,
+	 * we require that either the cached local node id is valid or that we are in
+	 * a transaction block -because in that case it's safe to read from catalog.
+	 *
 	 * Another solution to the catalog table acccess problem would be to update
 	 * global pid lazily, like we do for HideShards. But that's not possible
 	 * for the global pid, since it is stored in shared memory instead of in a
@@ -2907,7 +2919,9 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	 * as reasonably possible, which is also why we extract global pids in the
 	 * AuthHook already (extracting doesn't require catalog access).
 	 */
-	if (FinishedStartupCitusBackend)
+	if (FinishedStartupCitusBackend &&
+		(!IsExternalClientBackend() || CachedLocalNodeIdIsValid() ||
+		 IsTransactionState()))
 	{
 		AssignGlobalPID(newval);
 	}
