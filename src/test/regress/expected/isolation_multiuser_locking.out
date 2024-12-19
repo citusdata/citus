@@ -355,4 +355,3 @@ step s1-commit:
 step s2-truncate: <... completed>
 step s2-commit:
  COMMIT;
-
