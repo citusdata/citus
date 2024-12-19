@@ -1,6 +1,6 @@
 // Two alternative test outputs:
-// isolation_multiuser_locking.out for PG16 and before
-// isolation_multiuser_locking_0.out for PG17
+// isolation_multiuser_locking_0.out for PG16 and before
+// isolation_multiuser_locking.out for PG17
 
 setup
 {
