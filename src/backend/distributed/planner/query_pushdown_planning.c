@@ -2049,6 +2049,16 @@ CreateSubqueryTargetListAndAdjustVars(List *columnList)
 		 */
 		column->varno = 1;
 		column->varattno = resNo;
+
+		/*
+		 * 1 subquery means there is one range table entry so with Postgres 16+ we need
+		 * to ensure that column's varnullingrels - the set of join rels that can null
+		 * the var - is empty. Otherwise, when given the query, the Postgres planner
+		 * may attempt to access a non-existent range table and segfault, as in #7787.
+		 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+		column->varnullingrels = NULL;
+#endif
 	}
 
 	return subqueryTargetEntryList;
