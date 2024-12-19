@@ -70,21 +70,21 @@ step s3-start-operation:
  SELECT sample_operation(3778, 30, 9);
  <waiting ...>
 step show-progress: 
- SELECT show_progress(1337);
- SELECT show_progress(3778);
+ SELECT step, progress FROM show_progress(1337) ORDER BY 1, 2;
+ SELECT step, progress FROM show_progress(3778) ORDER BY 1, 2;
 
-show_progress
+step|progress
 ---------------------------------------------------------------------
-(0,0)
-(1,0)
-(0,0)
-(1,0)
+   0|       0
+   0|       0
+   1|       0
+   1|       0
 (4 rows)
 
-show_progress
+step|progress
 ---------------------------------------------------------------------
-(0,0)
-(1,0)
+   0|       0
+   1|       0
 (2 rows)
 
 step release-locks-1:
@@ -109,21 +109,21 @@ t
 (1 row)
 
 step show-progress:
- SELECT show_progress(1337);
- SELECT show_progress(3778);
+ SELECT step, progress FROM show_progress(1337) ORDER BY 1, 2;
+ SELECT step, progress FROM show_progress(3778) ORDER BY 1, 2;
 
-show_progress
+step|progress
 ---------------------------------------------------------------------
-(0,-1)
-(1,0)
-(0,2)
-(1,0)
+   0|      -1
+   0|       2
+   1|       0
+   1|       0
 (4 rows)
 
-show_progress
+step|progress
 ---------------------------------------------------------------------
-(0,9)
-(1,0)
+   0|       9
+   1|       0
 (2 rows)
 
 step release-locks-2:
@@ -148,21 +148,21 @@ t
 (1 row)
 
 step show-progress:
- SELECT show_progress(1337);
- SELECT show_progress(3778);
+ SELECT step, progress FROM show_progress(1337) ORDER BY 1, 2;
+ SELECT step, progress FROM show_progress(3778) ORDER BY 1, 2;
 
-show_progress
+step|progress
 ---------------------------------------------------------------------
-(0,-1)
-(1,-1)
-(0,2)
-(1,2)
+   0|      -1
+   0|       2
+   1|      -1
+   1|       2
 (4 rows)
 
-show_progress
+step|progress
 ---------------------------------------------------------------------
-(0,9)
-(1,9)
+   0|       9
+   1|       9
 (2 rows)
 
 step release-locks-3:
