@@ -285,9 +285,9 @@ CREATE TABLE distributed_partitioned_table (
     PRIMARY KEY (id, partition_col)
 ) PARTITION BY RANGE (partition_col);
 -- Add partitions to the distributed partitioned table
-CREATE TABLE distributed_partitioned_table_p1 PARTITION OF distributed_partitioned_table 
+CREATE TABLE distributed_partitioned_table_p1 PARTITION OF distributed_partitioned_table
 FOR VALUES FROM (1) TO (100);
-CREATE TABLE distributed_partitioned_table_p2 PARTITION OF distributed_partitioned_table 
+CREATE TABLE distributed_partitioned_table_p2 PARTITION OF distributed_partitioned_table
 FOR VALUES FROM (100) TO (200);
 -- Distribute the table
 SELECT create_distributed_table('distributed_partitioned_table', 'id');
@@ -299,9 +299,9 @@ CREATE TABLE local_partitioned_table (
     PRIMARY KEY (id, partition_col)
 ) PARTITION BY RANGE (partition_col);
 -- Add partitions to the local partitioned table
-CREATE TABLE local_partitioned_table_p1 PARTITION OF local_partitioned_table 
+CREATE TABLE local_partitioned_table_p1 PARTITION OF local_partitioned_table
 FOR VALUES FROM (1) TO (100);
-CREATE TABLE local_partitioned_table_p2 PARTITION OF local_partitioned_table 
+CREATE TABLE local_partitioned_table_p2 PARTITION OF local_partitioned_table
 FOR VALUES FROM (100) TO (200);
 SELECT citus_add_local_table_to_metadata('local_partitioned_table');
 
