@@ -464,28 +464,25 @@ DROP TABLE alt_test;
 
 -- End of partition with identity columns testing
 
-RESET citus.next_shard_id;
-RESET citus.shard_count;
-RESET citus.shard_replication_factor;
-
-DROP SCHEMA pg17 CASCADE;
-
 -- Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
 -- Enable DEBUG-level logging to capture detailed execution plans
-RESET citus.log_remote_commands;
-SET client_min_messages TO DEBUG1;
+
 -- Create the tables
 CREATE TABLE postgres_table (key int, value text, value_2 jsonb);
 CREATE TABLE reference_table (key int, value text, value_2 jsonb);
 SELECT create_reference_table('reference_table');
 CREATE TABLE distributed_table (key int, value text, value_2 jsonb);
 SELECT create_distributed_table('distributed_table', 'key');
+
 -- Insert test data
-INSERT INTO postgres_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
-INSERT INTO reference_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
-INSERT INTO distributed_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 100) i;
+INSERT INTO postgres_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 10) i;
+INSERT INTO reference_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 10) i;
+INSERT INTO distributed_table SELECT i, i::varchar(256), '{}'::jsonb FROM generate_series(1, 10) i;
+
 -- Set local table join policy to auto before running the tests
 SET citus.local_table_join_policy TO 'auto';
+SET client_min_messages TO DEBUG1;
+
 -- Correlated sublinks are supported in PostgreSQL 17
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
@@ -496,13 +493,11 @@ WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 
 SET citus.local_table_join_policy TO 'prefer-distributed';
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
-SET citus.local_table_join_policy TO 'auto';
--- End for Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
 
-RESET citus.log_remote_commands;
-RESET citus.next_shard_id;
-RESET citus.shard_count;
-RESET citus.shard_replication_factor;
+RESET citus.local_table_join_policy;
+RESET client_min_messages;
+DROP TABLE reference_table;
+-- End for Correlated sublinks are now supported as of PostgreSQL 17, resolving issue #4470.
 
 DROP SCHEMA pg17 CASCADE;
 DROP ROLE regress_maintain;
