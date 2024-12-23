@@ -965,6 +965,23 @@ SetBackendDataGlobalPID(uint64 gpid)
 
 
 /*
+ * SetBackendDataDistributedCommandOriginator sets the distributedCommandOriginator
+ * field on MyBackendData.
+ */
+void
+SetBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
+{
+	if (!MyBackendData)
+	{
+		return;
+	}
+	SpinLockAcquire(&MyBackendData->mutex);
+	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
+	SpinLockRelease(&MyBackendData->mutex);
+}
+
+
+/*
  * GetGlobalPID returns the global process id of the current backend.
  */
 uint64

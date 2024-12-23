@@ -190,6 +190,9 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 /*
  * override_backend_data_gpid is a wrapper around SetBackendDataGpid().
+ * Also sets distributedCommandOriginator to true since the only caller of
+ * this method calls this function actually wants this backend to
+ * be treated as a distributed command originator with the given global pid.
  */
 Datum
 override_backend_data_gpid(PG_FUNCTION_ARGS)
@@ -199,6 +202,7 @@ override_backend_data_gpid(PG_FUNCTION_ARGS)
 	uint64 gpid = PG_GETARG_INT64(0);
 
 	SetBackendDataGlobalPID(gpid);
+	SetBackendDataDistributedCommandOriginator(true);
 
 	PG_RETURN_VOID();
 }
