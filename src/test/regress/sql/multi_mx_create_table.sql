@@ -383,6 +383,14 @@ SET citus.shard_count TO 4;
 CREATE TABLE company_employees_mx (company_id int, employee_id int, manager_id int);
 SELECT create_distributed_table('company_employees_mx', 'company_id');
 
+CREATE TABLE articles_single_shard_hash_mx_partition_inst1 (LIKE articles_single_shard_hash_mx);
+CREATE TABLE articles_single_shard_hash_mx_partition_inst2 (LIKE articles_single_shard_hash_mx);
+SET citus.shard_count TO 1;
+SET citus.enable_single_shard_table_multi_node_placement to on;
+SELECT create_distributed_table('articles_single_shard_hash_mx_partition_inst1', 'author_id', colocate_with => 'none');
+SELECT create_distributed_table('articles_single_shard_hash_mx_partition_inst2', 'author_id', colocate_with => 'none');
+set citus.enable_single_shard_table_multi_node_placement to off;
+
 WITH shard_counts AS (
 	SELECT logicalrelid, count(*) AS shard_count FROM pg_dist_shard GROUP BY logicalrelid
 	)
