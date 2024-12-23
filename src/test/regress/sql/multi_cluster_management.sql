@@ -537,3 +537,6 @@ SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHER
 -- keep permissions compatible accross versions, in regression
 -- tests.
 GRANT ALL ON SCHEMA public TO PUBLIC;
+-- enable ddl propagation in all nodes
+SELECT result from  run_command_on_all_nodes('ALTER SYSTEM SET citus.enable_ddl_propagation TO ON');
+SELECT result from  run_command_on_all_nodes('SELECT pg_reload_conf()');
