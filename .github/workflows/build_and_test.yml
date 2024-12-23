@@ -38,7 +38,7 @@ jobs:
       pg16_version: '{ "major": "16", "full": "16.5" }'
       upgrade_pg_versions: "14.14-15.9-16.5"
     steps:
-      # Since GHA jobs needs at least one step we use a noop step here.
+      # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
         run: echo 'noop'
   check-sql-snapshots:
