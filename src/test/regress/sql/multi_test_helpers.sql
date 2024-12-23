@@ -653,6 +653,26 @@ BEGIN
 END;
 $func$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION check_parameter_privileges(users text[], parameters text[], permissions text[])
+RETURNS TABLE ( res text, usr text, param text, perms text) AS  $func$
+DECLARE
+    u text;
+    p text;
+    perm text;
+BEGIN
+     FOREACH u IN ARRAY users
+    LOOP
+        FOREACH p IN ARRAY parameters
+        LOOP
+            FOREACH perm IN ARRAY permissions
+            LOOP
+                RETURN QUERY EXECUTE format($inner$SELECT result ,'%1$s','%2$s','%3$s' FROM run_command_on_all_nodes($$SELECT has_parameter_privilege('%1$s','%2$s', '%3$s'); $$)$inner$, u, p, perm);
+            END LOOP;
+        END LOOP;
+    END LOOP;
+END;
+$func$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION check_database_privileges(role_name text, db_name text, permissions text[])
 RETURNS TABLE(permission text, result text)
 AS $func$
