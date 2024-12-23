@@ -1333,6 +1333,49 @@ SELECT b, c FROM forcetest WHERE a = 6;
 
 \pset null ''
 -- End of Testing FORCE_NOT_NULL and FORCE_NULL options
+-- Test for ALTER TABLE SET ACCESS METHOD DEFAULT
+-- Step 1: Local table setup (non-distributed)
+CREATE TABLE test_local_table (id int);
+SELECT citus_add_local_table_to_metadata('test_local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Step 2: Attempt to set access method to DEFAULT on a Citus local table (should fail)
+ALTER TABLE test_local_table SET ACCESS METHOD DEFAULT;
+ERROR:  DEFAULT option in ALTER TABLE ... SET ACCESS METHOD is currently unsupported.
+HINT:  You can rerun the command by explicitly writing the access method name.
+-- Step 3: Setup: create and distribute a table
+CREATE TABLE test_alter_access_method (id int);
+SELECT create_distributed_table('test_alter_access_method', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Step 4: Attempt to set access method to DEFAULT on a distributed table (should fail with your custom error)
+ALTER TABLE test_alter_access_method SET ACCESS METHOD DEFAULT;
+ERROR:  DEFAULT option in ALTER TABLE ... SET ACCESS METHOD is currently unsupported.
+HINT:  You can rerun the command by explicitly writing the access method name.
+-- Step 5: Create and distribute a partitioned table
+CREATE TABLE test_partitioned_alter (id int, val text) PARTITION BY RANGE (id);
+CREATE TABLE test_partitioned_alter_part1 PARTITION OF test_partitioned_alter FOR VALUES FROM (1) TO (100);
+SELECT create_distributed_table('test_partitioned_alter', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Step 6: Attempt to set access method to DEFAULT on a partitioned, distributed table (should fail)
+ALTER TABLE test_partitioned_alter SET ACCESS METHOD DEFAULT;
+ERROR:  DEFAULT option in ALTER TABLE ... SET ACCESS METHOD is currently unsupported.
+HINT:  You can rerun the command by explicitly writing the access method name.
+-- Cleanup
+DROP TABLE test_local_table CASCADE;
+DROP TABLE test_alter_access_method CASCADE;
+DROP TABLE test_partitioned_alter CASCADE;
+-- End of Test for ALTER TABLE SET ACCESS METHOD DEFAULT
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
