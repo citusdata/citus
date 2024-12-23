@@ -1117,6 +1117,113 @@ SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 
 DROP TABLE distributed_partitioned_table CASCADE;
 DROP TABLE local_partitioned_table CASCADE;
 -- End of Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
+-- Test for ALTER TABLE SET ACCESS METHOD DEFAULT
+-- Step 1: Setup
+SET default_table_access_method = 'heap';
+-- Create a distributed table with a specific access method
+CREATE TABLE dist_table (id SERIAL PRIMARY KEY, data TEXT) USING heap;
+SELECT create_distributed_table('dist_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Create a reference table with a specific access method
+CREATE TABLE ref_table (id SERIAL PRIMARY KEY, info TEXT) USING heap;
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Verify the current access method for both tables
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('dist_table', 'ref_table');
+  relname   | relam
+---------------------------------------------------------------------
+ dist_table |     2
+ ref_table  |     2
+(2 rows)
+
+-- Step 2: Change default_table_access_method
+SET default_table_access_method = 'heap'; -- Use a valid access method
+-- Alter the distributed table's access method to DEFAULT
+ALTER TABLE dist_table SET ACCESS METHOD DEFAULT;
+-- Alter the reference table's access method to DEFAULT
+ALTER TABLE ref_table SET ACCESS METHOD DEFAULT;
+-- Verify the updated access methods
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('dist_table', 'ref_table');
+  relname   | relam
+---------------------------------------------------------------------
+ dist_table |     2
+ ref_table  |     2
+(2 rows)
+
+-- Step 3: Test edge cases
+-- Step 3.1: Partitioned table behavior
+-- Create a partitioned table
+CREATE TABLE partitioned_table (id INT, data TEXT) PARTITION BY RANGE (id);
+-- Verify initial relam for partitioned table (should be 0 historically)
+SELECT relname, relam FROM pg_class WHERE relname = 'partitioned_table';
+      relname      | relam
+---------------------------------------------------------------------
+ partitioned_table |     0
+(1 row)
+
+-- Set access method for the partitioned table
+ALTER TABLE partitioned_table SET ACCESS METHOD heap;
+-- Verify that relam is updated
+SELECT relname, relam FROM pg_class WHERE relname = 'partitioned_table';
+      relname      | relam
+---------------------------------------------------------------------
+ partitioned_table |     2
+(1 row)
+
+-- Reset relam to default
+ALTER TABLE partitioned_table SET ACCESS METHOD DEFAULT;
+-- Verify that relam is reset to 0 (default behavior)
+SELECT relname, relam FROM pg_class WHERE relname = 'partitioned_table';
+      relname      | relam
+---------------------------------------------------------------------
+ partitioned_table |     0
+(1 row)
+
+-- Create a partition and verify its access method
+CREATE TABLE partition1 PARTITION OF partitioned_table FOR VALUES FROM (1) TO (100);
+-- Verify the access method of the partition
+SELECT relname, relam FROM pg_class WHERE relname = 'partition1';
+  relname   | relam
+---------------------------------------------------------------------
+ partition1 |     2
+(1 row)
+
+-- Step 3.2: Unsupported object behavior
+-- Attempt to alter an unsupported object type (e.g., a view or materialized view)
+CREATE VIEW test_view AS SELECT * FROM dist_table;
+-- This command should fail because views do not support access methods
+DO $$
+BEGIN
+    BEGIN
+        ALTER TABLE test_view SET ACCESS METHOD DEFAULT;
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Expected failure for test_view: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  Expected failure for test_view: ALTER action SET ACCESS METHOD cannot be performed on relation "test_view"
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+-- Cleanup
+DROP TABLE dist_table CASCADE;
+NOTICE:  drop cascades to view test_view
+DROP TABLE ref_table CASCADE;
+DROP TABLE partitioned_table CASCADE;
+DROP VIEW test_view;
+ERROR:  view "test_view" does not exist
+RESET default_table_access_method;
+-- End of Test for ALTER TABLE SET ACCESS METHOD DEFAULT
 DROP SCHEMA pg17 CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function fake_am_handler(internal)

@@ -574,6 +574,86 @@ DROP TABLE distributed_partitioned_table CASCADE;
 DROP TABLE local_partitioned_table CASCADE;
 -- End of Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
 
+-- Test for ALTER TABLE SET ACCESS METHOD DEFAULT
+-- Step 1: Setup
+SET default_table_access_method = 'heap';
+
+-- Create a distributed table with a specific access method
+CREATE TABLE dist_table (id SERIAL PRIMARY KEY, data TEXT) USING heap;
+SELECT create_distributed_table('dist_table', 'id');
+
+-- Create a reference table with a specific access method
+CREATE TABLE ref_table (id SERIAL PRIMARY KEY, info TEXT) USING heap;
+SELECT create_reference_table('ref_table');
+
+-- Verify the current access method for both tables
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('dist_table', 'ref_table');
+
+-- Step 2: Change default_table_access_method
+SET default_table_access_method = 'heap'; -- Use a valid access method
+
+-- Alter the distributed table's access method to DEFAULT
+ALTER TABLE dist_table SET ACCESS METHOD DEFAULT;
+
+-- Alter the reference table's access method to DEFAULT
+ALTER TABLE ref_table SET ACCESS METHOD DEFAULT;
+
+-- Verify the updated access methods
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('dist_table', 'ref_table');
+
+-- Step 3: Test edge cases
+-- Step 3.1: Partitioned table behavior
+-- Create a partitioned table
+CREATE TABLE partitioned_table (id INT, data TEXT) PARTITION BY RANGE (id);
+
+-- Verify initial relam for partitioned table (should be 0 historically)
+SELECT relname, relam FROM pg_class WHERE relname = 'partitioned_table';
+
+-- Set access method for the partitioned table
+ALTER TABLE partitioned_table SET ACCESS METHOD heap;
+
+-- Verify that relam is updated
+SELECT relname, relam FROM pg_class WHERE relname = 'partitioned_table';
+
+-- Reset relam to default
+ALTER TABLE partitioned_table SET ACCESS METHOD DEFAULT;
+
+-- Verify that relam is reset to 0 (default behavior)
+SELECT relname, relam FROM pg_class WHERE relname = 'partitioned_table';
+
+-- Create a partition and verify its access method
+CREATE TABLE partition1 PARTITION OF partitioned_table FOR VALUES FROM (1) TO (100);
+
+-- Verify the access method of the partition
+SELECT relname, relam FROM pg_class WHERE relname = 'partition1';
+
+-- Step 3.2: Unsupported object behavior
+-- Attempt to alter an unsupported object type (e.g., a view or materialized view)
+CREATE VIEW test_view AS SELECT * FROM dist_table;
+
+-- This command should fail because views do not support access methods
+DO $$
+BEGIN
+    BEGIN
+        ALTER TABLE test_view SET ACCESS METHOD DEFAULT;
+    EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Expected failure for test_view: %', SQLERRM;
+    END;
+END;
+$$;
+
+-- Cleanup
+DROP TABLE dist_table CASCADE;
+DROP TABLE ref_table CASCADE;
+DROP TABLE partitioned_table CASCADE;
+DROP VIEW test_view;
+RESET default_table_access_method;
+-- End of Test for ALTER TABLE SET ACCESS METHOD DEFAULT
+
 DROP SCHEMA pg17 CASCADE;
 DROP ROLE regress_maintain;
 DROP ROLE regress_no_maintain;
