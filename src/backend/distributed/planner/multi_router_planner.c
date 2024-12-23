@@ -1869,6 +1869,13 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	}
 	else
 	{
+		/*
+		 * We may need to reorder parts of the planner tree we are receiving here.
+		 * We expect to produce an SQL query text but our tree has been optimized by
+		 * PostgreSL rewriter already...
+		 * FIXME is there conditions to reduce the number of calls ?
+		 */
+		RebuildParserTreeFromPlannerTree(originalQuery);
 		(*planningError) = PlanRouterQuery(originalQuery, plannerRestrictionContext,
 										   &placementList, &shardId, &relationShardList,
 										   &prunedShardIntervalListList,
