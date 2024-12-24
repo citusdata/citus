@@ -855,6 +855,16 @@ GetCurrentDistributedTransactionId(void)
 void
 AssignDistributedTransactionId(void)
 {
+	/*
+	 * MyBackendData should always be available. However, we observed some
+	 * crashes where certain hooks were not executed.
+	 * Bug 3697586: Server crashes when assigning distributed transaction
+	 */
+	if (!MyBackendData)
+	{
+		ereport(ERROR, (errmsg("backend is not ready for distributed transactions")));
+	}
+
 	pg_atomic_uint64 *transactionNumberSequence =
 		&backendManagementShmemData->nextTransactionNumber;
 
