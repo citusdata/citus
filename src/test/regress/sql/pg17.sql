@@ -1038,6 +1038,48 @@ DROP EVENT TRIGGER reindex_event_trigger_end;
 DROP TABLE reindex_test CASCADE;
 
 -- End of test for REINDEX support in event triggers for Citus-related objects
+-- Propagate EXPLAIN MEMORY
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/5de890e36
+-- Propagate EXPLAIN SERIALIZE
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/06286709e
+
+SET citus.next_shard_id TO 12242024;
+CREATE TABLE int8_tbl(q1 int8, q2 int8);
+SELECT create_distributed_table('int8_tbl', 'q1');
+INSERT INTO int8_tbl VALUES
+  ('  123   ','  456'),
+  ('123   ','4567890123456789'),
+  ('4567890123456789','123'),
+  (+4567890123456789,'4567890123456789'),
+  ('+4567890123456789','-4567890123456789');
+
+-- memory tests, same as postgres tests, we just distributed the table
+-- we can see the memory used separately per each task in worker nodes
+
+SET citus.log_remote_commands TO true;
+
+-- for explain analyze, we run worker_save_query_explain_analyze query
+-- for regular explain, we run EXPLAIN query
+-- therefore let's grep the commands based on the shard id
+SET citus.grep_remote_commands TO '%12242024%';
+
+select public.explain_filter('explain (memory) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, analyze) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, analyze, format json) select * from int8_tbl i8');
+prepare int8_query as select * from int8_tbl i8;
+select public.explain_filter('explain (memory) execute int8_query');
+
+-- serialize tests, same as postgres tests, we just distributed the table
+select public.explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');
+select public.explain_filter('explain (analyze,serialize) select * from int8_tbl i8');
+select public.explain_filter('explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8');
+select public.explain_filter('explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8');
+-- this tests an edge case where we have no data to return
+select public.explain_filter('explain (analyze,serialize) create temp table explain_temp as select * from int8_tbl i8');
+
+RESET citus.log_remote_commands;
+-- End of EXPLAIN MEMORY SERIALIZE tests
 
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
