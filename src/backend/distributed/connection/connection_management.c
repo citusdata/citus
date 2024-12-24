@@ -61,8 +61,8 @@ static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32
 static void ErrorIfMultipleMetadataConnectionExists(dlist_head *connections);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
-static bool ShouldShutdownConnection(MultiConnection *connection, const int
-									 cachedConnectionCount);
+static bool ShouldShutdownConnection(MultiConnection *connection,
+									 const int cachedConnectionCount);
 static bool RemoteTransactionIdle(MultiConnection *connection);
 static int EventSetSizeForConnectionList(List *connections);
 
@@ -354,6 +354,11 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
+			if (flags & REQUIRE_MAINTENANCE_CONNECTION)
+			{
+				/* Maintenance database may have changed, so cached connection should be closed */
+				connection->forceCloseAtTransactionEnd = true;
+			}
 			return connection;
 		}
 	}
@@ -377,9 +382,12 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	/* these two flags are by nature cannot happen at the same time */
 	Assert(!((flags & WAIT_FOR_CONNECTION) && (flags & OPTIONAL_CONNECTION)));
 
+	int sharedCounterFlags = (flags & REQUIRE_MAINTENANCE_CONNECTION)
+							 ? MAINTENANCE_CONNECTION
+							 : 0;
 	if (flags & WAIT_FOR_CONNECTION)
 	{
-		WaitLoopForSharedConnection(hostname, port);
+		WaitLoopForSharedConnection(sharedCounterFlags, hostname, port);
 	}
 	else if (flags & OPTIONAL_CONNECTION)
 	{
@@ -389,7 +397,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 * cannot reserve the right to establish a connection, we prefer to
 		 * error out.
 		 */
-		if (!TryToIncrementSharedConnectionCounter(hostname, port))
+		if (!TryToIncrementSharedConnectionCounter(sharedCounterFlags, hostname, port))
 		{
 			/* do not track the connection anymore */
 			dlist_delete(&connection->connectionNode);
@@ -409,7 +417,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 *
 		 * Still, we keep track of the connection counter.
 		 */
-		IncrementSharedConnectionCounter(hostname, port);
+		IncrementSharedConnectionCounter(sharedCounterFlags, hostname, port);
 	}
 
 
@@ -423,10 +431,14 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 	ResetShardPlacementAssociation(connection);
 
-
-	if ((flags & REQUIRE_METADATA_CONNECTION))
+	if (flags & REQUIRE_METADATA_CONNECTION)
 	{
 		connection->useForMetadataOperations = true;
+	}
+	else if (flags & REQUIRE_MAINTENANCE_CONNECTION)
+	{
+		connection->useForMaintenanceOperations = true;
+		connection->forceCloseAtTransactionEnd = true;
 	}
 
 	/* fully initialized the connection, record it */
@@ -492,6 +504,12 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			 * If the connection has not been initialized, it should not be
 			 * considered as available.
 			 */
+			continue;
+		}
+
+		if ((flags & REQUIRE_MAINTENANCE_CONNECTION) &&
+			!connection->useForMaintenanceOperations)
+		{
 			continue;
 		}
 
@@ -1191,7 +1209,11 @@ CitusPQFinish(MultiConnection *connection)
 	/* behave idempotently, there is no gurantee that CitusPQFinish() is called once */
 	if (connection->initializationState >= POOL_STATE_COUNTER_INCREMENTED)
 	{
-		DecrementSharedConnectionCounter(connection->hostname, connection->port);
+		int sharedCounterFlags = (connection->useForMaintenanceOperations)
+								 ? MAINTENANCE_CONNECTION
+								 : 0;
+		DecrementSharedConnectionCounter(sharedCounterFlags, connection->hostname,
+										 connection->port);
 		connection->initializationState = POOL_STATE_NOT_INITIALIZED;
 	}
 }

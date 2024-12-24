@@ -49,6 +49,7 @@
 
 #include "distributed/background_jobs.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/connection_management.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -89,12 +90,14 @@ typedef struct MaintenanceDaemonDBData
 	Oid userOid;
 	pid_t workerPid;
 	bool daemonStarted;
+	bool daemonShuttingDown;
 	bool triggerNodeMetadataSync;
 	Latch *latch; /* pointer to the background worker's latch */
 } MaintenanceDaemonDBData;
 
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
+char *MaintenanceManagementDatabase = "";
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int BackgroundTaskQueueCheckInterval = 5000;
@@ -118,7 +121,7 @@ static volatile sig_atomic_t got_SIGHUP = false;
 static volatile sig_atomic_t got_SIGTERM = false;
 
 /* set to true when becoming a maintenance daemon */
-static bool IsMaintenanceDaemon = false;
+bool IsMaintenanceDaemon = false;
 
 static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
@@ -237,6 +240,14 @@ InitializeMaintenanceDaemonBackend(void)
 	if (dbData == NULL)
 	{
 		WarnMaintenanceDaemonNotStarted();
+		LWLockRelease(&MaintenanceDaemonControl->lock);
+		return;
+	}
+
+	if (dbData->daemonShuttingDown)
+	{
+		elog(DEBUG1, "Another maintenance daemon for database %u is shutting down. "
+					 "Aborting current initialization", MyDatabaseId);
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 		return;
 	}
@@ -1056,20 +1067,11 @@ MaintenanceDaemonShmemExit(int code, Datum arg)
 
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
-													HASH_FIND, NULL);
+													HASH_REMOVE, NULL);
 
-	/* myDbData is NULL after StopMaintenanceDaemon */
-	if (myDbData != NULL)
-	{
-		/*
-		 * Confirm that I am still the registered maintenance daemon before exiting.
-		 */
-		Assert(myDbData->workerPid == MyProcPid);
-
-		myDbData->daemonStarted = false;
-		myDbData->workerPid = 0;
-	}
-
+	/* Workaround for -Werror=unused-variable */
+	(void) myDbData;
+	Assert(myDbData->workerPid == MyProcPid);
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 }
 
@@ -1168,11 +1170,12 @@ StopMaintenanceDaemon(Oid databaseId)
 	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
 		MaintenanceDaemonDBHash,
 		&databaseId,
-		HASH_REMOVE, &found);
+		HASH_FIND, &found);
 
 	if (found)
 	{
 		workerPid = dbData->workerPid;
+		dbData->daemonShuttingDown = true;
 	}
 
 	LWLockRelease(&MaintenanceDaemonControl->lock);

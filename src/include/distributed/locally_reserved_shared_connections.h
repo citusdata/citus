@@ -20,8 +20,8 @@ extern bool CanUseReservedConnection(const char *hostName, int nodePort,
 extern void MarkReservedConnectionUsed(const char *hostName, int nodePort,
 									   Oid userId, Oid databaseOid);
 extern void DeallocateReservedConnections(void);
-extern void EnsureConnectionPossibilityForRemotePrimaryNodes(void);
-extern bool TryConnectionPossibilityForLocalPrimaryNode(void);
-extern bool IsReservationPossible(void);
+extern void EnsureConnectionPossibilityForRemotePrimaryNodes(uint32 connectionFlags);
+extern bool TryConnectionPossibilityForLocalPrimaryNode(uint32 connectionFlags);
+extern bool IsReservationPossible(uint32 connectionFlags);
 
 #endif /* LOCALLY_RESERVED_SHARED_CONNECTIONS_H_ */

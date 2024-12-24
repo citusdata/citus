@@ -39,6 +39,7 @@
 /* Config variables managed via guc.c */
 char *WorkerListFileName;
 int MaxWorkerNodesTracked = 2048;    /* determines worker node hash table size */
+int MaxDatabasesPerWorkerNodesTracked = 1; /* determine database per worker hash table size */
 
 
 /* Local functions forward declarations */
