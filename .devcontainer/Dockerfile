@@ -103,6 +103,18 @@ RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
+FROM base AS pg17
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.1
+RUN rm .pgenv/src/*.tar*
+RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/src/include install
+
+# create a staging directory with all files we want to copy from our pgenv build
+# we will copy the contents of the staged folder into the final image at once
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+
 FROM base AS uncrustify-builder
 
 RUN sudo apt update && sudo apt install -y cmake tree
@@ -211,7 +223,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch 16.6
+RUN pgenv switch 17.1
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
