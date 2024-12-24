@@ -658,6 +658,15 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '12.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Test downgrade to 12.1-1 from 13.0-1
+ALTER EXTENSION citus UPDATE TO '13.0-1';
+ALTER EXTENSION citus UPDATE TO '12.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+-- Snapshot of state at 13.0-1
+ALTER EXTENSION citus UPDATE TO '13.0-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 
 -- show running version
