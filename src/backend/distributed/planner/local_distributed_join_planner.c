@@ -179,7 +179,7 @@ static bool HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 											RelationRestriction *relationRestriction);
 
 static bool HasDependencyOnInitPlanParam(RangeTblEntry *rangeTableEntry,
-											RelationRestriction *relationRestriction);
+										 RelationRestriction *relationRestriction);
 
 static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionContext *
 														 plannerRestrictionContext,
@@ -300,8 +300,9 @@ GetConversionChoice(ConversionCandidates *conversionCandidates,
 		 * If Local table is referenced by the InitPlan that is kind of a One time filter,
 		 * In that case we should refrain from converting the local tables.
 		 */
-		return localRTECandidate && (!localRTECandidate->hasDependencyOnInitPlanParam) ?
-			CONVERT_LOCAL_TABLES : CONVERT_DISTRIBUTED_TABLES;
+		return localRTECandidate &&
+			   (!localRTECandidate->hasDependencyOnInitPlanParam) ?
+			   CONVERT_LOCAL_TABLES : CONVERT_DISTRIBUTED_TABLES;
 	}
 	else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED)
 	{
@@ -325,8 +326,9 @@ GetConversionChoice(ConversionCandidates *conversionCandidates,
 		}
 		else
 		{
-			return localRTECandidate && (!localRTECandidate->hasDependencyOnInitPlanParam) ?
-				CONVERT_LOCAL_TABLES : CONVERT_DISTRIBUTED_TABLES;
+			return localRTECandidate &&
+				   (!localRTECandidate->hasDependencyOnInitPlanParam) ?
+				   CONVERT_LOCAL_TABLES : CONVERT_DISTRIBUTED_TABLES;
 		}
 	}
 }
@@ -403,10 +405,9 @@ ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList)
  */
 static bool
 HasDependencyOnInitPlanParam(RangeTblEntry *rangeTableEntry,
-								RelationRestriction *relationRestriction)
+							 RelationRestriction *relationRestriction)
 {
-	List* whereClauseList;
-	List* initPlanParamIDs = NIL;
+	List *initPlanParamIDs = NIL;
 	ListCell *lc = NULL;
 
 	/*
@@ -414,11 +415,17 @@ HasDependencyOnInitPlanParam(RangeTblEntry *rangeTableEntry,
 	 * does not contain joininfo.
 	 */
 	if (rangeTableEntry == NULL || relationRestriction == NULL)
+	{
 		return false;
+	}
 	if (relationRestriction->relOptInfo->joininfo == NULL)
+	{
 		return false;
+	}
 	if (relationRestriction->plannerInfo->init_plans == NULL)
+	{
 		return false;
+	}
 
 	/*
 	 * Gather all parameter IDs referenced by the InitPlan
@@ -432,19 +439,24 @@ HasDependencyOnInitPlanParam(RangeTblEntry *rangeTableEntry,
 			SubPlan *subplan = (SubPlan *) plan;
 			if (subplan->setParam != NIL)
 			{
-				initPlanParamIDs = list_concat_unique_int(initPlanParamIDs, subplan->setParam);
-
+				initPlanParamIDs = list_concat_unique_int(initPlanParamIDs,
+														  subplan->setParam);
 			}
 		}
 	}
 	if (initPlanParamIDs == NIL)
+	{
 		return false;
+	}
+
 	/*
 	 * Check if any parameter in the join conditions (join info) for this relation
 	 * is referenced by the initPlan. This is important to ensure that we can
 	 * decide whether we want to convert local or remote tables.
 	 */
-	whereClauseList = extract_actual_clauses(relationRestriction->relOptInfo->joininfo, true);
+	List *whereClauseList = extract_actual_clauses(
+		relationRestriction->relOptInfo->joininfo,
+		true);
 
 	foreach(lc, whereClauseList)
 	{
@@ -464,6 +476,7 @@ HasDependencyOnInitPlanParam(RangeTblEntry *rangeTableEntry,
 	}
 	return false;
 }
+
 
 /*
  * HasConstantFilterOnUniqueColumn returns true if the given rangeTableEntry has a constant
