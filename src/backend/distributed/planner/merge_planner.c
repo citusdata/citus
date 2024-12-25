@@ -1547,7 +1547,8 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 		}
 
 		/* NOT MATCHED can have either INSERT or DO NOTHING */
-		if (action->commandType == CMD_NOTHING)
+		/* NOT MATCHED BY SOURCE in PG17 can also have UPDATE */
+		if (action->commandType == CMD_NOTHING || action->commandType == CMD_UPDATE)
 		{
 			return NULL;
 		}
