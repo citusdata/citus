@@ -574,6 +574,41 @@ DROP TABLE distributed_partitioned_table CASCADE;
 DROP TABLE local_partitioned_table CASCADE;
 -- End of Test for exclusion constraints on partitioned and distributed partitioned tables in Citus environment
 
+-- Propagate SET STATISTICS DEFAULT
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/4f622503d
+SET citus.next_shard_id TO 25122024;
+
+CREATE TABLE tbl (c1 int, c2 int);
+SELECT citus_add_local_table_to_metadata('tbl');
+CREATE INDEX tbl_idx ON tbl (c1, (c1+0)) INCLUDE (c2);
+
+-- Citus currently doesn't support ALTER TABLE ALTER COLUMN SET STATISTICS anyway
+ALTER TABLE tbl ALTER COLUMN 1 SET STATISTICS 100;
+ALTER TABLE tbl ALTER COLUMN 1 SET STATISTICS DEFAULT;
+ALTER TABLE tbl ALTER COLUMN 1 SET STATISTICS -1;
+
+-- Citus propagates ALTER INDEX ALTER COLUMN SET STATISTICS DEFAULT to the nodes and shards
+SET citus.log_remote_commands TO true;
+SET citus.grep_remote_commands = '%STATISTICS%';
+
+ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS 1000;
+\d+ tbl_idx
+\d+ tbl_idx_25122024
+ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS DEFAULT;
+\d+ tbl_idx
+\d+ tbl_idx_25122024
+ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
+\d+ tbl_idx
+\d+ tbl_idx_25122024
+
+-- End of testing SET STATISTICS DEFAULT
+
+\set VERBOSITY terse
+SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
+\set VERBOSITY default
+RESET client_min_messages;
+
 DROP ROLE regress_maintain;
 DROP ROLE regress_no_maintain;
