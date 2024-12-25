@@ -2197,7 +2197,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 
 		/* Print info about serialization of output */
 		ExplainPrintSerialize(es, &serializeMetrics);
-	} 
+	}
 #endif
 
 	/*
@@ -2255,7 +2255,7 @@ elapsed_time(instr_time *starttime)
  * Return whether show_buffer_usage would have anything to print, if given
  * the same 'usage' data.  Note that when the format is anything other than
  * text, we print even if the counters are all zeroes.
- * 
+ *
  * Copied from explain.c.
  */
 static bool
@@ -2298,7 +2298,7 @@ peek_buffer_usage(ExplainState *es, const BufferUsage *usage)
 
 /*
  * Show buffer usage details.  This better be sync with peek_buffer_usage.
- * 
+ *
  * Copied from explain.c.
  */
 static void
@@ -2474,7 +2474,7 @@ show_buffer_usage(ExplainState *es, const BufferUsage *usage)
  * We indent by two spaces per indentation level.  However, when emitting
  * data for a parallel worker there might already be data on the current line
  * (cf. ExplainOpenWorker); in that case, don't indent any more.
- * 
+ *
  * Copied from explain.c.
  */
 static void
@@ -2488,7 +2488,7 @@ ExplainIndentText(ExplainState *es)
 
 /*
  * Show memory usage details.
- * 
+ *
  * Copied from explain.c.
  */
 static void
@@ -2517,7 +2517,7 @@ show_memory_counters(ExplainState *es, const MemoryContextCounters *mem_counters
 /*
  * ExplainPrintSerialize -
  *	  Append information about query output volume to es->str.
- * 
+ *
  * Copied from explain.c.
  */
 static void
@@ -2579,7 +2579,7 @@ ExplainPrintSerialize(ExplainState *es, SerializeMetrics *metrics)
  * We have to be careful here since the receiver could be an IntoRel
  * receiver if the subject statement is CREATE TABLE AS.  In that
  * case, return all-zeroes stats.
- * 
+ *
  * Copied from explain.c.
  */
 static SerializeMetrics

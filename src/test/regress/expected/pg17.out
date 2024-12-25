@@ -21,9 +21,9 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE test (x int, y int);
 SELECT create_distributed_table('test', 'x');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO test VALUES (1,1), (2,2);
@@ -35,15 +35,15 @@ SELECT *
 FROM test a
 WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x)
 ORDER BY 1,2;
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                              QUERY PLAN
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.x, remote_scan.y
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Nested Loop
                      ->  Seq Scan on test_20240017 a
                      ->  Subquery Scan on "ANY_subquery"
@@ -62,8 +62,8 @@ FROM test a
 WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x)
 ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
- x | y 
----+---
+ x | y
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -75,15 +75,15 @@ explain (costs off)
 SELECT a.*
 FROM test a JOIN LATERAL (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x) dt1 ON a.x = dt1.x
 ORDER BY 1,2;
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                              QUERY PLAN
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.x, remote_scan.y
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Nested Loop
                      ->  Seq Scan on test_20240017 a
                      ->  Subquery Scan on dt1
@@ -101,8 +101,8 @@ SELECT a.*
 FROM test a JOIN LATERAL (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x) dt1 ON a.x = dt1.x
 ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
- x | y 
----+---
+ x | y
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -111,15 +111,15 @@ RESET client_min_messages;
 CREATE TABLE users (user_id int, time int, dept int, info bigint);
 CREATE TABLE events (user_id int, time int, event_type int, payload text);
 select create_distributed_table('users', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 select create_distributed_table('events', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 insert into users
@@ -141,14 +141,14 @@ FROM   event_id
 WHERE  (events_user_id) IN (SELECT user_id
                           FROM   users
                           WHERE  users.time = events_time);
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: ((events."time" = users."time") AND (events.user_id = users.user_id))
@@ -172,8 +172,8 @@ WHERE  (events_user_id) IN (SELECT user_id
                           WHERE  users.time = events_time);
 DEBUG:  CTE event_id is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
- count 
--------
+ count
+---------------------------------------------------------------------
     31
 (1 row)
 
@@ -188,14 +188,14 @@ FROM (SELECT user_id AS events_user_id,
                 event_type FROM   events) dt1
 INNER JOIN (SELECT distinct user_id, time FROM   users) dt
     ON events_user_id = dt.user_id and events_time = dt.time;
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: ((events.user_id = users.user_id) AND (events."time" = users."time"))
@@ -214,8 +214,8 @@ FROM (SELECT user_id AS events_user_id,
 INNER JOIN (SELECT distinct user_id, time FROM   users) dt
     ON events_user_id = dt.user_id and events_time = dt.time;
 DEBUG:  Router planner cannot handle multi-shard select queries
- count 
--------
+ count
+---------------------------------------------------------------------
     31
 (1 row)
 
@@ -233,15 +233,15 @@ WHERE d1.user_id = users.user_id
 	(SELECT s2.user_id FROM users as s2
 		GROUP BY d1.user_id, s2.user_id)) dt
 GROUP BY dept;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                         QUERY PLAN
+---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.dept
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  GroupAggregate
                      Group Key: users.dept
                      ->  Sort
@@ -271,8 +271,8 @@ WHERE d1.user_id = users.user_id
 		GROUP BY d1.user_id, s2.user_id)) dt
 GROUP BY dept;
 DEBUG:  Router planner cannot handle multi-shard select queries
- dept | sum 
-------+-----
+ dept | sum
+---------------------------------------------------------------------
     3 | 110
     4 | 130
 (2 rows)
@@ -290,15 +290,15 @@ WHERE d1.user_id = users.user_id
       AND users.dept IN (3,4)
 	AND users.user_id = d2.user_id) dt
 GROUP BY dept;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                         QUERY PLAN
+---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.dept
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  GroupAggregate
                      Group Key: users.dept
                      ->  Sort
@@ -330,8 +330,8 @@ WHERE d1.user_id = users.user_id
 	AND users.user_id = d2.user_id) dt
 GROUP BY dept;
 DEBUG:  Router planner cannot handle multi-shard select queries
- dept | sum 
-------+-----
+ dept | sum
+---------------------------------------------------------------------
     3 | 110
     4 | 130
 (2 rows)
@@ -364,9 +364,9 @@ SELECT public.run_command_on_coordinator_and_workers($Q$
         LANGUAGE C;
         CREATE ACCESS METHOD fake_am TYPE TABLE HANDLER fake_am_handler;
 $Q$);
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Since Citus assumes access methods are part of the extension, make fake_am
@@ -389,8 +389,8 @@ SELECT count(1) FROM test_partitioned_p1;
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -398,8 +398,8 @@ SELECT count(1) FROM test_partitioned_p2;
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -407,8 +407,8 @@ WARNING:  fake_scan_getnextslot
 SELECT c.relname, am.amname FROM pg_class c, pg_am am
 WHERE c.relam = am.oid AND c.oid IN ('test_partitioned_p1'::regclass, 'test_partitioned_p2'::regclass)
 ORDER BY c.relname;
-       relname       | amname  
----------------------+---------
+       relname       | amname
+---------------------------------------------------------------------
  test_partitioned_p1 | fake_am
  test_partitioned_p2 | fake_am
 (2 rows)
@@ -419,9 +419,9 @@ ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
 SELECT public.run_command_on_coordinator_and_workers($Q$
         RESET citus.enable_ddl_propagation;
 $Q$);
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 -- End of testing specifying access method on partitioned tables.
@@ -435,9 +435,9 @@ GRANT USAGE ON SCHEMA pg17 TO regress_no_maintain;
 SET citus.shard_count TO 1; -- For consistent remote command logging
 CREATE TABLE dist_test(a int, b int);
 SELECT create_distributed_table('dist_test', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO dist_test SELECT i % 10, i FROM generate_series(1, 100) t(i);
@@ -445,51 +445,51 @@ SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%maintain%';
 GRANT MAINTAIN ON dist_test TO regress_maintain;
 NOTICE:  issuing GRANT maintain ON dist_test TO regress_maintain
-DETAIL:  on server postgres@localhost:57638 connectionId: 2
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing GRANT maintain ON dist_test TO regress_maintain
-DETAIL:  on server postgres@localhost:57637 connectionId: 1
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (20240023, 'pg17', 'GRANT maintain ON dist_test TO regress_maintain')
-DETAIL:  on server postgres@localhost:57637 connectionId: 1
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 RESET citus.grep_remote_commands;
 SET ROLE regress_no_maintain;
 -- Current role does not have MAINTAIN privileges on dist_test
 ANALYZE dist_test;
 WARNING:  permission denied to analyze "dist_test", skipping it
 NOTICE:  issuing ANALYZE pg17.dist_test_20240023
-DETAIL:  on server regress_no_maintain@localhost:57637 connectionId: 7
+DETAIL:  on server regress_no_maintain@localhost:xxxxx connectionId: xxxxxxx
 VACUUM dist_test;
 WARNING:  permission denied to vacuum "dist_test", skipping it
 NOTICE:  issuing VACUUM pg17.dist_test_20240023
-DETAIL:  on server regress_no_maintain@localhost:57637 connectionId: 7
+DETAIL:  on server regress_no_maintain@localhost:xxxxx connectionId: xxxxxxx
 SET ROLE regress_maintain;
 -- Current role has MAINTAIN privileges on dist_test
 ANALYZE dist_test;
 NOTICE:  issuing ANALYZE pg17.dist_test_20240023
-DETAIL:  on server regress_maintain@localhost:57637 connectionId: 8
+DETAIL:  on server regress_maintain@localhost:xxxxx connectionId: xxxxxxx
 VACUUM dist_test;
 NOTICE:  issuing VACUUM pg17.dist_test_20240023
-DETAIL:  on server regress_maintain@localhost:57637 connectionId: 8
+DETAIL:  on server regress_maintain@localhost:xxxxx connectionId: xxxxxxx
 -- Take away regress_maintain's MAINTAIN privileges on dist_test
 RESET ROLE;
 SET citus.grep_remote_commands = '%maintain%';
 REVOKE MAINTAIN ON dist_test FROM regress_maintain;
 NOTICE:  issuing REVOKE maintain ON dist_test FROM regress_maintain
-DETAIL:  on server postgres@localhost:57638 connectionId: 2
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REVOKE maintain ON dist_test FROM regress_maintain
-DETAIL:  on server postgres@localhost:57637 connectionId: 1
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (20240023, 'pg17', 'REVOKE maintain ON dist_test FROM regress_maintain')
-DETAIL:  on server postgres@localhost:57637 connectionId: 1
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 RESET citus.grep_remote_commands;
 SET ROLE regress_maintain;
 -- Current role does not have MAINTAIN privileges on dist_test
 ANALYZE dist_test;
 WARNING:  permission denied to analyze "dist_test", skipping it
 NOTICE:  issuing ANALYZE pg17.dist_test_20240023
-DETAIL:  on server regress_maintain@localhost:57637 connectionId: 8
+DETAIL:  on server regress_maintain@localhost:xxxxx connectionId: xxxxxxx
 VACUUM dist_test;
 WARNING:  permission denied to vacuum "dist_test", skipping it
 NOTICE:  issuing VACUUM pg17.dist_test_20240023
-DETAIL:  on server regress_maintain@localhost:57637 connectionId: 8
+DETAIL:  on server regress_maintain@localhost:xxxxx connectionId: xxxxxxx
 RESET ROLE;
 -- End of MAINTAIN privilege tests
 -- Partitions inherit identity column
@@ -506,19 +506,19 @@ CREATE TABLE partitioned_table (
 PARTITION BY RANGE (c);
 CREATE TABLE pt_1 PARTITION OF partitioned_table FOR VALUES FROM (1) TO (50);
 SELECT create_distributed_table('partitioned_table', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE pt_2 PARTITION OF partitioned_table FOR VALUES FROM (50) TO (1000);
 -- (1) The partitioned table has pt_1 and pt_2 as its partitions
 \d+ partitioned_table;
                                     Partitioned table "pg17.partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: pt_1 FOR VALUES FROM (1) TO (50),
             pt_2 FOR VALUES FROM (50) TO (1000)
@@ -527,18 +527,18 @@ Partitions: pt_1 FOR VALUES FROM (1) TO (50),
 -- This is PG17 behavior for support for identity in partitioned tables.
 \d pt_1;
                              Table "pg17.pt_1"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: partitioned_table FOR VALUES FROM (1) TO (50)
 
 \d pt_2;
                              Table "pg17.pt_2"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: partitioned_table FOR VALUES FROM (50) TO (1000)
 
 -- Attaching a partition inherits the identity column from the parent table
@@ -546,10 +546,10 @@ CREATE TABLE pt_3 (a bigint not null, c int);
 ALTER TABLE partitioned_table ATTACH PARTITION pt_3 FOR VALUES FROM (1000) TO (2000);
 \d+ partitioned_table;
                                     Partitioned table "pg17.partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: pt_1 FOR VALUES FROM (1) TO (50),
             pt_2 FOR VALUES FROM (50) TO (1000),
@@ -557,10 +557,10 @@ Partitions: pt_1 FOR VALUES FROM (1) TO (50),
 
 \d pt_3;
                              Table "pg17.pt_3"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: partitioned_table FOR VALUES FROM (1000) TO (2000)
 
 -- Partition pt_4 has its own identity column, which is not allowed in PG17
@@ -575,10 +575,10 @@ SET search_path TO pg17;
 -- (1) The partitioned table has pt_1, pt_2 and pt_3 as its partitions
 \d+ partitioned_table;
                                     Partitioned table "pg17.partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: pt_1 FOR VALUES FROM (1) TO (50),
             pt_2 FOR VALUES FROM (50) TO (1000),
@@ -587,26 +587,26 @@ Partitions: pt_1 FOR VALUES FROM (1) TO (50),
 -- (2) The partititions have the same identity column as the parent table
 \d pt_1;
                              Table "pg17.pt_1"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: partitioned_table FOR VALUES FROM (1) TO (50)
 
 \d pt_2;
                              Table "pg17.pt_2"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: partitioned_table FOR VALUES FROM (50) TO (1000)
 
 \d pt_3;
                              Table "pg17.pt_3"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: partitioned_table FOR VALUES FROM (1000) TO (2000)
 
 \c - - - :master_port
@@ -617,48 +617,48 @@ ALTER TABLE partitioned_table DETACH PARTITION pt_3;
 -- and pt_3 does not have an identity column
 \d+ partitioned_table;
                                     Partitioned table "pg17.partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: pt_1 FOR VALUES FROM (1) TO (50),
             pt_2 FOR VALUES FROM (50) TO (1000)
 
 \d pt_3;
                  Table "pg17.pt_3"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | bigint  |           | not null | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | bigint  |           | not null |
+ c      | integer |           |          |
 
 -- Verify that the detach has propagated to the worker node
 \c - - - :worker_1_port
 SET search_path TO pg17;
 \d+ partitioned_table;
                                     Partitioned table "pg17.partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: pt_1 FOR VALUES FROM (1) TO (50),
             pt_2 FOR VALUES FROM (50) TO (1000)
 
 \d pt_3;
                  Table "pg17.pt_3"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | bigint  |           | not null | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | bigint  |           | not null |
+ c      | integer |           |          |
 
 \c - - - :master_port
 SET search_path TO pg17;
 CREATE TABLE alt_test (a int, b date, c int) PARTITION BY RANGE(c);
 SELECT create_distributed_table('alt_test', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE alt_test_pt_1 PARTITION OF alt_test FOR VALUES FROM (1) TO (50);
@@ -675,62 +675,62 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VAL
 -- Verify that the identity column was not added, on coordinator and worker nodes
 \d+ alt_test;
                             Partitioned table "pg17.alt_test"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | date    |           |          |         | plain   |              | 
- c      | integer |           |          |         | plain   |              | 
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | integer |           |          |         | plain   |              |
+ b      | date    |           |          |         | plain   |              |
+ c      | integer |           |          |         | plain   |              |
 Partition key: RANGE (c)
 Partitions: alt_test_pt_1 FOR VALUES FROM (1) TO (50),
             alt_test_pt_2 FOR VALUES FROM (50) TO (100)
 
 \d alt_test_pt_1;
             Table "pg17.alt_test_pt_1"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | integer |           |          | 
- b      | date    |           |          | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | integer |           |          |
+ b      | date    |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (1) TO (50)
 
 \d alt_test_pt_2;
             Table "pg17.alt_test_pt_2"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | integer |           |          | 
- b      | date    |           |          | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | integer |           |          |
+ b      | date    |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (50) TO (100)
 
 \c - - - :worker_1_port
 SET search_path TO pg17;
 \d+ alt_test;
                             Partitioned table "pg17.alt_test"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
- a      | integer |           |          |         | plain   |              | 
- b      | date    |           |          |         | plain   |              | 
- c      | integer |           |          |         | plain   |              | 
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | integer |           |          |         | plain   |              |
+ b      | date    |           |          |         | plain   |              |
+ c      | integer |           |          |         | plain   |              |
 Partition key: RANGE (c)
 Partitions: alt_test_pt_1 FOR VALUES FROM (1) TO (50),
             alt_test_pt_2 FOR VALUES FROM (50) TO (100)
 
 \d alt_test_pt_1;
             Table "pg17.alt_test_pt_1"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | integer |           |          | 
- b      | date    |           |          | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | integer |           |          |
+ b      | date    |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (1) TO (50)
 
 \d alt_test_pt_2;
             Table "pg17.alt_test_pt_2"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | integer |           |          | 
- b      | date    |           |          | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | integer |           |          |
+ b      | date    |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (50) TO (100)
 
 \c - - - :master_port
@@ -741,9 +741,9 @@ CREATE TABLE alt_test (a bigint GENERATED BY DEFAULT AS IDENTITY (START WITH 10 
                      c int)
 PARTITION BY RANGE(c);
 SELECT create_distributed_table('alt_test', 'b');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE alt_test_pt_1 PARTITION OF alt_test FOR VALUES FROM (1) TO (50);
@@ -756,62 +756,62 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VAL
 -- Verify that alt_test still has identity on column a
 \d+ alt_test;
                                          Partitioned table "pg17.alt_test"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- b      | integer |           |          |                                  | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ b      | integer |           |          |                                  | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: alt_test_pt_1 FOR VALUES FROM (1) TO (50),
             alt_test_pt_2 FOR VALUES FROM (50) TO (100)
 
 \d alt_test_pt_1;
                          Table "pg17.alt_test_pt_1"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- b      | integer |           |          | 
- c      | integer |           |          | 
+ b      | integer |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (1) TO (50)
 
 \d alt_test_pt_2;
                          Table "pg17.alt_test_pt_2"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- b      | integer |           |          | 
- c      | integer |           |          | 
+ b      | integer |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (50) TO (100)
 
 \c - - - :worker_1_port
 SET search_path TO pg17;
 \d+ alt_test;
                                          Partitioned table "pg17.alt_test"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- b      | integer |           |          |                                  | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ b      | integer |           |          |                                  | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: alt_test_pt_1 FOR VALUES FROM (1) TO (50),
             alt_test_pt_2 FOR VALUES FROM (50) TO (100)
 
 \d alt_test_pt_1;
                          Table "pg17.alt_test_pt_1"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- b      | integer |           |          | 
- c      | integer |           |          | 
+ b      | integer |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (1) TO (50)
 
 \d alt_test_pt_2
                          Table "pg17.alt_test_pt_2"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- b      | integer |           |          | 
- c      | integer |           |          | 
+ b      | integer |           |          |
+ c      | integer |           |          |
 Partition of: alt_test FOR VALUES FROM (50) TO (100)
 
 \c - - - :master_port
@@ -824,9 +824,9 @@ CREATE TABLE local_partitioned_table (
 PARTITION BY RANGE (c);
 CREATE TABLE lpt_1 PARTITION OF local_partitioned_table FOR VALUES FROM (1) TO (50);
 SELECT citus_add_local_table_to_metadata('local_partitioned_table');
- citus_add_local_table_to_metadata 
------------------------------------
- 
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Can create tables as partitions and attach tables as partitions to a citus local table:
@@ -836,10 +836,10 @@ ALTER TABLE local_partitioned_table ATTACH PARTITION lpt_3 FOR VALUES FROM (1000
 -- The partitions have the same identity column as the parent table, on coordinator and worker nodes
 \d+ local_partitioned_table;
                                  Partitioned table "pg17.local_partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: lpt_1 FOR VALUES FROM (1) TO (50),
             lpt_2 FOR VALUES FROM (50) TO (1000),
@@ -847,36 +847,36 @@ Partitions: lpt_1 FOR VALUES FROM (1) TO (50),
 
 \d lpt_1;
                              Table "pg17.lpt_1"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: local_partitioned_table FOR VALUES FROM (1) TO (50)
 
 \d lpt_2;
                              Table "pg17.lpt_2"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: local_partitioned_table FOR VALUES FROM (50) TO (1000)
 
 \d lpt_3;
                              Table "pg17.lpt_3"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: local_partitioned_table FOR VALUES FROM (1000) TO (2000)
 
 \c - - - :worker_1_port
 SET search_path TO pg17;
 \d+ local_partitioned_table;
                                  Partitioned table "pg17.local_partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: lpt_1 FOR VALUES FROM (1) TO (50),
             lpt_2 FOR VALUES FROM (50) TO (1000),
@@ -884,26 +884,26 @@ Partitions: lpt_1 FOR VALUES FROM (1) TO (50),
 
 \d lpt_1;
                              Table "pg17.lpt_1"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: local_partitioned_table FOR VALUES FROM (1) TO (50)
 
 \d lpt_2;
                              Table "pg17.lpt_2"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: local_partitioned_table FOR VALUES FROM (50) TO (1000)
 
 \d lpt_3;
                              Table "pg17.lpt_3"
- Column |  Type   | Collation | Nullable |             Default              
---------+---------+-----------+----------+----------------------------------
+ Column |  Type   | Collation | Nullable |             Default
+---------------------------------------------------------------------
  a      | bigint  |           | not null | generated by default as identity
- c      | integer |           |          | 
+ c      | integer |           |          |
 Partition of: local_partitioned_table FOR VALUES FROM (1000) TO (2000)
 
 \c - - - :master_port
@@ -912,39 +912,39 @@ SET search_path TO pg17;
 ALTER TABLE local_partitioned_table DETACH PARTITION lpt_3;
 \d+ local_partitioned_table;
                                  Partitioned table "pg17.local_partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: lpt_1 FOR VALUES FROM (1) TO (50),
             lpt_2 FOR VALUES FROM (50) TO (1000)
 
 \d lpt_3;
                 Table "pg17.lpt_3"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | bigint  |           | not null | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | bigint  |           | not null |
+ c      | integer |           |          |
 
 \c - - - :worker_1_port
 SET search_path TO pg17;
 \d+ local_partitioned_table;
                                  Partitioned table "pg17.local_partitioned_table"
- Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description 
---------+---------+-----------+----------+----------------------------------+---------+--------------+-------------
- a      | bigint  |           | not null | generated by default as identity | plain   |              | 
- c      | integer |           |          |                                  | plain   |              | 
+ Column |  Type   | Collation | Nullable |             Default              | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | bigint  |           | not null | generated by default as identity | plain   |              |
+ c      | integer |           |          |                                  | plain   |              |
 Partition key: RANGE (c)
 Partitions: lpt_1 FOR VALUES FROM (1) TO (50),
             lpt_2 FOR VALUES FROM (50) TO (1000)
 
 \d lpt_3;
                 Table "pg17.lpt_3"
- Column |  Type   | Collation | Nullable | Default 
---------+---------+-----------+----------+---------
- a      | bigint  |           | not null | 
- c      | integer |           |          | 
+ Column |  Type   | Collation | Nullable | Default
+---------------------------------------------------------------------
+ a      | bigint  |           | not null |
+ c      | integer |           |          |
 
 \c - - - :master_port
 SET search_path TO pg17;
@@ -961,16 +961,16 @@ DROP TABLE alt_test;
 CREATE TABLE postgres_table (key int, value text, value_2 jsonb);
 CREATE TABLE reference_table (key int, value text, value_2 jsonb);
 SELECT create_reference_table('reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE distributed_table (key int, value text, value_2 jsonb);
 SELECT create_distributed_table('distributed_table', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Insert test data
@@ -984,20 +984,20 @@ SET client_min_messages TO DEBUG1;
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
 DEBUG:  Wrapping relation "postgres_table" to a subquery
-DEBUG:  generating subplan 3_1 for subquery SELECT key FROM pg17.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
-DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (pg17.distributed_table d1 JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
- count 
--------
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM pg17.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (pg17.distributed_table d1 JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
 DEBUG:  Wrapping relation "postgres_table" to a subquery
-DEBUG:  generating subplan 4_1 for subquery SELECT key FROM pg17.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
-DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (pg17.distributed_table d1 JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
- count 
--------
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM pg17.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (pg17.distributed_table d1 JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -1005,8 +1005,8 @@ SET citus.local_table_join_policy TO 'prefer-distributed';
 SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table USING (key)
 WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key AND key = 5);
 DEBUG:  Wrapping relation "distributed_table" "d1" to a subquery
-DEBUG:  generating subplan 5_1 for subquery SELECT key FROM pg17.distributed_table d1 WHERE (key OPERATOR(pg_catalog.=) 5)
-DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT d1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) d1_1) d1 JOIN pg17.postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM pg17.distributed_table d1 WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT d1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) d1_1) d1 JOIN pg17.postgres_table USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table.key FROM pg17.distributed_table WHERE ((d1.key OPERATOR(pg_catalog.=) distributed_table.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 5))))
 ERROR:  direct joins between distributed and local tables are not supported
 HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 RESET citus.local_table_join_policy;
@@ -1029,9 +1029,9 @@ CREATE TABLE distributed_partitioned_table_p2 PARTITION OF distributed_partition
 FOR VALUES FROM (100) TO (200);
 -- Distribute the table
 SELECT create_distributed_table('distributed_partitioned_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 2: Create a partitioned Citus local table
@@ -1046,25 +1046,23 @@ FOR VALUES FROM (1) TO (100);
 CREATE TABLE local_partitioned_table_p2 PARTITION OF local_partitioned_table
 FOR VALUES FROM (100) TO (200);
 SELECT citus_add_local_table_to_metadata('local_partitioned_table');
- citus_add_local_table_to_metadata 
------------------------------------
- 
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Verify the Citus tables
 SELECT table_name, citus_table_type FROM pg_catalog.citus_tables
 WHERE table_name::regclass::text LIKE '%_partitioned_table' ORDER BY 1;
 ERROR:  relation "pg_catalog.citus_tables" does not exist
-LINE 1: SELECT table_name, citus_table_type FROM pg_catalog.citus_ta...
-                                                 ^
 -- Step 3: Add an exclusion constraint with a name to the distributed partitioned table
 ALTER TABLE distributed_partitioned_table ADD CONSTRAINT dist_exclude_named EXCLUDE USING btree (id WITH =, partition_col WITH =);
 -- Step 4: Verify propagation of exclusion constraint to worker nodes
 \c - - :public_worker_1_host :worker_1_port
 SET search_path TO pg17;
 SELECT conname FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND conname = 'dist_exclude_named';
-      conname       
---------------------
+      conname
+---------------------------------------------------------------------
  dist_exclude_named
 (1 row)
 
@@ -1074,8 +1072,8 @@ SET search_path TO pg17;
 ALTER TABLE local_partitioned_table ADD CONSTRAINT local_exclude_named EXCLUDE USING btree (partition_col WITH =);
 -- Step 6: Verify the exclusion constraint on the local partitioned table
 SELECT conname, contype FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
-       conname       | contype 
----------------------+---------
+       conname       | contype
+---------------------------------------------------------------------
  local_exclude_named | x
 (1 row)
 
@@ -1084,8 +1082,8 @@ ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, pa
 ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
 -- Step 8: Verify the unnamed exclusion constraints were added
 SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
-                  conname                   | contype 
---------------------------------------------+---------
+                  conname                   | contype
+---------------------------------------------------------------------
  local_exclude_named                        | x
  local_partitioned_table_partition_col_excl | x
 (2 rows)
@@ -1093,8 +1091,8 @@ SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_t
 \c - - :public_worker_1_host :worker_1_port
 SET search_path TO pg17;
 SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x';
-                       conname                       | contype 
------------------------------------------------------+---------
+                       conname                       | contype
+---------------------------------------------------------------------
  dist_exclude_named                                  | x
  distributed_partitioned_table_id_partition_col_excl | x
 (2 rows)
@@ -1106,13 +1104,13 @@ ALTER TABLE distributed_partitioned_table DROP CONSTRAINT dist_exclude_named;
 ALTER TABLE local_partitioned_table DROP CONSTRAINT local_exclude_named;
 -- Step 10: Verify the constraints were dropped
 SELECT * FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
- oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin 
------+---------+--------------+---------+---------------+-------------+--------------+----------+----------+----------+-------------+-----------+-------------+-------------+---------------+------------+-------------+--------------+--------+---------+-----------+-----------+-----------+----------------+-----------+--------
+ oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
- oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin 
------+---------+--------------+---------+---------------+-------------+--------------+----------+----------+----------+-------------+-----------+-------------+-------------+---------------+------------+-------------+--------------+--------+---------+-----------+-----------+-----------+----------------+-----------+--------
+ oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
+---------------------------------------------------------------------
 (0 rows)
 
 -- Step 11: Clean up - Drop the tables
@@ -1125,9 +1123,9 @@ DROP TABLE local_partitioned_table CASCADE;
 SET citus.next_shard_id TO 25122024;
 CREATE TABLE tbl (c1 int, c2 int);
 SELECT citus_add_local_table_to_metadata('tbl');
- citus_add_local_table_to_metadata 
------------------------------------
- 
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE INDEX tbl_idx ON tbl (c1, (c1+0)) INCLUDE (c2);
@@ -1146,74 +1144,74 @@ SET citus.log_remote_commands TO true;
 SET citus.grep_remote_commands = '%STATISTICS%';
 ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS 1000;
 NOTICE:  issuing ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS 1000;
-DETAIL:  on server postgres@localhost:57638 connectionId: 1
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS 1000;
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (25122024, 'pg17', 'ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS 1000;')
 \d+ tbl_idx
                      Index "pg17.tbl_idx"
- Column |  Type   | Key? | Definition | Storage | Stats target 
---------+---------+------+------------+---------+--------------
- c1     | integer | yes  | c1         | plain   | 
+ Column |  Type   | Key? | Definition | Storage | Stats target
+---------------------------------------------------------------------
+ c1     | integer | yes  | c1         | plain   |
  expr   | integer | yes  | (c1 + 0)   | plain   | 1000
- c2     | integer | no   | c2         | plain   | 
+ c2     | integer | no   | c2         | plain   |
 btree, for table "pg17.tbl"
 
 \d+ tbl_idx_25122024
                  Index "pg17.tbl_idx_25122024"
- Column |  Type   | Key? | Definition | Storage | Stats target 
---------+---------+------+------------+---------+--------------
- c1     | integer | yes  | c1         | plain   | 
+ Column |  Type   | Key? | Definition | Storage | Stats target
+---------------------------------------------------------------------
+ c1     | integer | yes  | c1         | plain   |
  expr   | integer | yes  | (c1 + 0)   | plain   | 1000
- c2     | integer | no   | c2         | plain   | 
+ c2     | integer | no   | c2         | plain   |
 btree, for table "pg17.tbl_25122024"
 
 ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS DEFAULT;
 NOTICE:  issuing ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS DEFAULT;
-DETAIL:  on server postgres@localhost:57638 connectionId: 1
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS DEFAULT;
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (25122024, 'pg17', 'ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS DEFAULT;')
 \d+ tbl_idx
                      Index "pg17.tbl_idx"
- Column |  Type   | Key? | Definition | Storage | Stats target 
---------+---------+------+------------+---------+--------------
- c1     | integer | yes  | c1         | plain   | 
- expr   | integer | yes  | (c1 + 0)   | plain   | 
- c2     | integer | no   | c2         | plain   | 
+ Column |  Type   | Key? | Definition | Storage | Stats target
+---------------------------------------------------------------------
+ c1     | integer | yes  | c1         | plain   |
+ expr   | integer | yes  | (c1 + 0)   | plain   |
+ c2     | integer | no   | c2         | plain   |
 btree, for table "pg17.tbl"
 
 \d+ tbl_idx_25122024
                  Index "pg17.tbl_idx_25122024"
- Column |  Type   | Key? | Definition | Storage | Stats target 
---------+---------+------+------------+---------+--------------
- c1     | integer | yes  | c1         | plain   | 
- expr   | integer | yes  | (c1 + 0)   | plain   | 
- c2     | integer | no   | c2         | plain   | 
+ Column |  Type   | Key? | Definition | Storage | Stats target
+---------------------------------------------------------------------
+ c1     | integer | yes  | c1         | plain   |
+ expr   | integer | yes  | (c1 + 0)   | plain   |
+ c2     | integer | no   | c2         | plain   |
 btree, for table "pg17.tbl_25122024"
 
 ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
 NOTICE:  issuing ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
-DETAIL:  on server postgres@localhost:57638 connectionId: 1
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (25122024, 'pg17', 'ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;')
 \d+ tbl_idx
                      Index "pg17.tbl_idx"
- Column |  Type   | Key? | Definition | Storage | Stats target 
---------+---------+------+------------+---------+--------------
- c1     | integer | yes  | c1         | plain   | 
- expr   | integer | yes  | (c1 + 0)   | plain   | 
- c2     | integer | no   | c2         | plain   | 
+ Column |  Type   | Key? | Definition | Storage | Stats target
+---------------------------------------------------------------------
+ c1     | integer | yes  | c1         | plain   |
+ expr   | integer | yes  | (c1 + 0)   | plain   |
+ c2     | integer | no   | c2         | plain   |
 btree, for table "pg17.tbl"
 
 \d+ tbl_idx_25122024
                  Index "pg17.tbl_idx_25122024"
- Column |  Type   | Key? | Definition | Storage | Stats target 
---------+---------+------+------------+---------+--------------
- c1     | integer | yes  | c1         | plain   | 
- expr   | integer | yes  | (c1 + 0)   | plain   | 
- c2     | integer | no   | c2         | plain   | 
+ Column |  Type   | Key? | Definition | Storage | Stats target
+---------------------------------------------------------------------
+ c1     | integer | yes  | c1         | plain   |
+ expr   | integer | yes  | (c1 + 0)   | plain   |
+ c2     | integer | no   | c2         | plain   |
 btree, for table "pg17.tbl_25122024"
 
 -- End of testing SET STATISTICS DEFAULT
@@ -1224,9 +1222,9 @@ btree, for table "pg17.tbl_25122024"
 -- https://github.com/postgres/postgres/commit/b725b7eec
 CREATE TABLE check_ign_err (n int, m int[], k int);
 SELECT create_distributed_table('check_ign_err', 'n');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 COPY check_ign_err FROM STDIN WITH (on_error stop);
@@ -1253,83 +1251,83 @@ CREATE TABLE forcetest (
 );
 \pset null NULL
 SELECT create_distributed_table('forcetest', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- should succeed with no effect ("b" remains an empty string, "c" remains NULL)
 -- expected output for inserted row in test:
 -- b |  c
------+------
+---------------------------------------------------------------------
 --   | NULL
 --(1 row)
 BEGIN;
 COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL(b), FORCE_NULL(c));
 COMMIT;
 SELECT b, c FROM forcetest WHERE a = 1;
- b |  c   
----+------
+ b |  c
+---------------------------------------------------------------------
    | NULL
 (1 row)
 
 -- should succeed, FORCE_NULL and FORCE_NOT_NULL can be both specified
 -- expected output for inserted row in test:
 -- c |  d
------+------
+---------------------------------------------------------------------
 --   | NULL
 --(1 row)
 BEGIN;
 COPY forcetest (a, b, c, d) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL(c,d), FORCE_NULL(c,d));
 COMMIT;
 SELECT c, d FROM forcetest WHERE a = 2;
- c |  d   
----+------
+ c |  d
+---------------------------------------------------------------------
    | NULL
 (1 row)
 
 -- should succeed with no effect ("b" remains an empty string, "c" remains NULL)
 -- expected output for inserted row in test:
 -- b |  c
------+------
+---------------------------------------------------------------------
 --   | NULL
 --(1 row)
 BEGIN;
 COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *, FORCE_NULL *);
 COMMIT;
 SELECT b, c FROM forcetest WHERE a = 4;
- b |  c   
----+------
+ b |  c
+---------------------------------------------------------------------
    | NULL
 (1 row)
 
 -- should succeed with effect ("b" remains an empty string)
 -- expected output for inserted row in test:
 -- b | c
------+---
+---------------------------------------------------------------------
 --   |
 --(1 row)
 BEGIN;
 COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *);
 COMMIT;
 SELECT b, c FROM forcetest WHERE a = 5;
- b | c 
----+---
-   | 
+ b | c
+---------------------------------------------------------------------
+   |
 (1 row)
 
 -- should succeed with effect ("c" remains NULL)
 -- expected output for inserted row in test:
 -- b |  c
------+------
+---------------------------------------------------------------------
 -- b | NULL
 --(1 row)
 BEGIN;
 COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NULL *);
 COMMIT;
 SELECT b, c FROM forcetest WHERE a = 6;
- b |  c   
----+------
+ b |  c
+---------------------------------------------------------------------
  b | NULL
 (1 row)
 
@@ -1339,9 +1337,9 @@ SELECT b, c FROM forcetest WHERE a = 6;
 -- Step 1: Local table setup (non-distributed)
 CREATE TABLE test_local_table (id int);
 SELECT citus_add_local_table_to_metadata('test_local_table');
- citus_add_local_table_to_metadata 
------------------------------------
- 
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 2: Attempt to set access method to DEFAULT on a Citus local table (should fail)
@@ -1351,9 +1349,9 @@ HINT:  You can rerun the command by explicitly writing the access method name.
 -- Step 3: Setup: create and distribute a table
 CREATE TABLE test_alter_access_method (id int);
 SELECT create_distributed_table('test_alter_access_method', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 4: Attempt to set access method to DEFAULT on a distributed table (should fail with your custom error)
@@ -1364,9 +1362,9 @@ HINT:  You can rerun the command by explicitly writing the access method name.
 CREATE TABLE test_partitioned_alter (id int, val text) PARTITION BY RANGE (id);
 CREATE TABLE test_partitioned_alter_part1 PARTITION OF test_partitioned_alter FOR VALUES FROM (1) TO (100);
 SELECT create_distributed_table('test_partitioned_alter', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 6: Attempt to set access method to DEFAULT on a partitioned, distributed table (should fail)
@@ -1382,9 +1380,9 @@ DROP TABLE test_partitioned_alter CASCADE;
 -- Step 1: Local table setup (non-distributed)
 CREATE TABLE test_local_table_expr (id int, col int);
 SELECT citus_add_local_table_to_metadata('test_local_table_expr');
- citus_add_local_table_to_metadata 
------------------------------------
- 
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 2: Attempt to set expression on a Citus local table (should fail)
@@ -1393,9 +1391,9 @@ ERROR:  ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION commands are currently u
 -- Step 3: Create and distribute a table
 CREATE TABLE test_distributed_table_expr (id int, col int);
 SELECT create_distributed_table('test_distributed_table_expr', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 4: Attempt to set expression on a distributed table (should fail)
@@ -1406,9 +1404,9 @@ CREATE TABLE test_partitioned_expr (id int, val text) PARTITION BY RANGE (id);
 CREATE TABLE test_partitioned_expr_part1 PARTITION OF test_partitioned_expr
   FOR VALUES FROM (1) TO (100);
 SELECT create_distributed_table('test_partitioned_expr', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 6: Attempt to set expression on a partitioned, distributed table (should fail)
@@ -1431,29 +1429,29 @@ SET citus.next_shard_id TO 27122024;
 -- https://github.com/postgres/postgres/commit/97957fdba
 CREATE TABLE test_at_local (id int, time_example timestamp with time zone);
 SELECT create_distributed_table('test_at_local', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 BEGIN;
 SET LOCAL TimeZone TO 'Europe/Tirane';
 SELECT timestamp '2001-02-16 20:38:40' AT LOCAL;
-           timezone           
-------------------------------
+           timezone
+---------------------------------------------------------------------
  Fri Feb 16 20:38:40 2001 CET
 (1 row)
 
 -- verify that we evaluate AT LOCAL at the coordinator and then perform the insert remotely
 SET citus.log_remote_commands TO on;
 INSERT INTO test_at_local VALUES (1, timestamp '2001-02-16 20:38:40' AT LOCAL);
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(0, 353, '2025-01-02 09:52:25.077227+01');
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-NOTICE:  issuing /*{"cId":1390025,"tId":"1"}*/INSERT INTO pg17.test_at_local_27122024 (id, time_example) VALUES (1, 'Fri Feb 16 20:38:40 2001 CET'::timestamp with time zone)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO pg17.test_at_local_27122024 (id, time_example) VALUES (1, 'Fri Feb 16 20:38:40 2001 CET'::timestamp with time zone)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 ROLLBACK;
 NOTICE:  issuing ROLLBACK
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- End of Testing AT LOCAL option
 -- interval can have infinite values
 -- Relevant PG17 commit: https://github.com/postgres/postgres/commit/519fc1bd9
@@ -1465,26 +1463,26 @@ CREATE TABLE date_partitioned_table(
  measure_data jsonb) PARTITION BY RANGE(eventdate);
 SELECT create_time_partitions('date_partitioned_table', INTERVAL 'infinity', '2022-01-01', '2021-01-01');
 ERROR:  Partition interval must be a finite value
-CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line 15 at RAISE
+CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
 SELECT create_time_partitions('date_partitioned_table', INTERVAL '-infinity', '2022-01-01', '2021-01-01');
 ERROR:  Partition interval must be a finite value
-CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line 15 at RAISE
+CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
 -- end of testing interval with infinite values
 -- various jsonpath methods were added in PG17
 -- relevant PG commit: https://github.com/postgres/postgres/commit/66ea94e8e
 -- here we add the same test as in pg15_jsonpath.sql for the new additions
 CREATE TABLE jsonpath_test (id serial, sample text);
 SELECT create_distributed_table('jsonpath_test', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \COPY jsonpath_test(sample) FROM STDIN
 -- Cast the text into jsonpath on the worker nodes.
 SELECT sample, sample::jsonpath FROM jsonpath_test ORDER BY id;
-                 sample                  |                 sample                  
------------------------------------------+-----------------------------------------
+                 sample                  |                 sample
+---------------------------------------------------------------------
  $.bigint().integer().number().decimal() | $.bigint().integer().number().decimal()
  $.boolean()                             | $.boolean()
  $.date()                                | $.date()
@@ -1503,8 +1501,8 @@ SELECT sample, sample::jsonpath FROM jsonpath_test ORDER BY id;
 -- Pull the data, and cast on the coordinator node
 WITH samples as (SELECT id, sample FROM jsonpath_test OFFSET 0)
 SELECT sample, sample::jsonpath FROM samples ORDER BY id;
-                 sample                  |                 sample                  
------------------------------------------+-----------------------------------------
+                 sample                  |                 sample
+---------------------------------------------------------------------
  $.bigint().integer().number().decimal() | $.bigint().integer().number().decimal()
  $.boolean()                             | $.boolean()
  $.date()                                | $.date()
@@ -1527,8 +1525,8 @@ CREATE TABLE test_xml (id int, a xml) USING columnar;
 -- expected to insert x&lt;P&gt;73&lt;/P&gt;0.42truej
 INSERT INTO test_xml VALUES (1, xmltext('x'|| '<P>73</P>'::xml || .42 || true || 'j'::char));
 SELECT * FROM test_xml ORDER BY 1;
- id |                a                
-----+---------------------------------
+ id |                a
+---------------------------------------------------------------------
   1 | x&lt;P&gt;73&lt;/P&gt;0.42truej
 (1 row)
 
@@ -1537,16 +1535,16 @@ NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg17.test_xml$$)
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- expected to insert foo &amp; &lt;&quot;bar&quot;&gt;
 INSERT INTO test_xml VALUES (2, xmltext('foo & <"bar">'));
 SELECT * FROM test_xml ORDER BY 1;
- id |                 a                 
-----+-----------------------------------
+ id |                 a
+---------------------------------------------------------------------
   1 | x&lt;P&gt;73&lt;/P&gt;0.42truej
   2 | foo &amp; &lt;&quot;bar&quot;&gt;
 (2 rows)
@@ -1559,33 +1557,33 @@ SELECT * FROM test_xml ORDER BY 1;
 --
 CREATE TABLE dist_table (dist_col int, agg_col numeric);
 SELECT create_distributed_table('dist_table', 'dist_col');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE ref_table (int_col int);
 SELECT create_reference_table('ref_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Test the cases where the worker agg exec. returns no tuples.
 SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
 FROM (SELECT *, random(0, 1) FROM dist_table) a;
- percentile_disc 
------------------
-                
+ percentile_disc
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT PERCENTILE_DISC((2 > random(0, 1))::int::numeric / 10)
        WITHIN GROUP (ORDER BY agg_col)
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
- percentile_disc 
------------------
-                
+ percentile_disc
+---------------------------------------------------------------------
+
 (1 row)
 
 -- run the same queries after loading some data
@@ -1593,8 +1591,8 @@ INSERT INTO dist_table VALUES (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.
                               (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
 SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
 FROM (SELECT *, random(0, 1) FROM dist_table) a;
- percentile_disc 
------------------
+ percentile_disc
+---------------------------------------------------------------------
             3.22
 (1 row)
 
@@ -1602,8 +1600,8 @@ SELECT PERCENTILE_DISC((2 > random_normal(0, 1))::int::numeric / 10)
        WITHIN GROUP (ORDER BY agg_col)
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
- percentile_disc 
------------------
+ percentile_disc
+---------------------------------------------------------------------
             1.19
 (1 row)
 
@@ -1622,17 +1620,17 @@ CREATE TABLE test_partition_2 PARTITION OF test_partitioned_alter
   FOR VALUES FROM (100) TO (200);
 -- Step 3: Distribute the partitioned table
 SELECT create_distributed_table('test_partitioned_alter', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Step 4: Verify that the table and partitions are created and distributed correctly on the coordinator
 SELECT relname, relam
 FROM pg_class
 WHERE relname = 'test_partitioned_alter';
-        relname         | relam 
-------------------------+-------
+        relname         | relam
+---------------------------------------------------------------------
  test_partitioned_alter |     2
 (1 row)
 
@@ -1640,8 +1638,8 @@ SELECT relname, relam
 FROM pg_class
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
-     relname      | relam 
-------------------+-------
+     relname      | relam
+---------------------------------------------------------------------
  test_partition_1 |     2
  test_partition_2 |     2
 (2 rows)
@@ -1653,8 +1651,8 @@ SET search_path TO pg17;
 SELECT relname, relam
 FROM pg_class
 WHERE relname = 'test_partitioned_alter';
-        relname         | relam 
-------------------------+-------
+        relname         | relam
+---------------------------------------------------------------------
  test_partitioned_alter |     2
 (1 row)
 
@@ -1663,8 +1661,8 @@ SELECT relname, relam
 FROM pg_class
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
-     relname      | relam 
-------------------+-------
+     relname      | relam
+---------------------------------------------------------------------
  test_partition_1 |     2
  test_partition_2 |     2
 (2 rows)
@@ -1682,8 +1680,8 @@ ALTER TABLE test_partitioned_alter SET ACCESS METHOD columnar;
 SELECT relname, relam
 FROM pg_class
 WHERE relname = 'test_partitioned_alter';
-        relname         | relam 
-------------------------+-------
+        relname         | relam
+---------------------------------------------------------------------
  test_partitioned_alter | 16413
 (1 row)
 
@@ -1692,8 +1690,8 @@ SELECT relname, relam
 FROM pg_class
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
-     relname      | relam 
-------------------+-------
+     relname      | relam
+---------------------------------------------------------------------
  test_partition_1 |     2
  test_partition_2 |     2
 (2 rows)
@@ -1704,8 +1702,8 @@ CREATE TABLE test_partition_3 PARTITION OF test_partitioned_alter
 SELECT relname, relam
 FROM pg_class
 WHERE relname = 'test_partition_3';
-     relname      | relam 
-------------------+-------
+     relname      | relam
+---------------------------------------------------------------------
  test_partition_3 | 16413
 (1 row)
 
@@ -1716,8 +1714,8 @@ SET search_path TO pg17;
 SELECT relname, relam
 FROM pg_class
 WHERE relname = 'test_partition_3';
-     relname      | relam 
-------------------+-------
+     relname      | relam
+---------------------------------------------------------------------
  test_partition_3 | 16413
 (1 row)
 
@@ -1730,9 +1728,9 @@ DROP TABLE test_partitioned_alter CASCADE;
 -- Create a test table with a distributed setup
 CREATE TABLE reindex_test (id SERIAL PRIMARY KEY, data TEXT);
 SELECT create_distributed_table('reindex_test', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Create an index to test REINDEX functionality
@@ -1767,15 +1765,15 @@ FROM generate_series(1, 10000) g(i);
 -- Perform REINDEX TABLE ... CONCURRENTLY and verify event trigger logs
 REINDEX TABLE CONCURRENTLY reindex_test;
 NOTICE:  Event Trigger Log: {"query": "REINDEX TABLE CONCURRENTLY reindex_test;", "command_tag": "REINDEX", "object_type": "ddl_command_start"}
-CONTEXT:  PL/pgSQL function log_reindex_events() line 12 at RAISE
+CONTEXT:  PL/pgSQL function log_reindex_events() line XX at RAISE
 NOTICE:  Event Trigger Log: {"query": "REINDEX TABLE CONCURRENTLY reindex_test;", "command_tag": "REINDEX", "object_type": "ddl_command_end"}
-CONTEXT:  PL/pgSQL function log_reindex_events() line 12 at RAISE
+CONTEXT:  PL/pgSQL function log_reindex_events() line XX at RAISE
 -- Perform REINDEX INDEX ... CONCURRENTLY and verify event trigger logs
 REINDEX INDEX CONCURRENTLY reindex_test_data_idx;
 NOTICE:  Event Trigger Log: {"query": "REINDEX INDEX CONCURRENTLY reindex_test_data_idx;", "command_tag": "REINDEX", "object_type": "ddl_command_start"}
-CONTEXT:  PL/pgSQL function log_reindex_events() line 12 at RAISE
+CONTEXT:  PL/pgSQL function log_reindex_events() line XX at RAISE
 NOTICE:  Event Trigger Log: {"query": "REINDEX INDEX CONCURRENTLY reindex_test_data_idx;", "command_tag": "REINDEX", "object_type": "ddl_command_end"}
-CONTEXT:  PL/pgSQL function log_reindex_events() line 12 at RAISE
+CONTEXT:  PL/pgSQL function log_reindex_events() line XX at RAISE
 -- Cleanup
 DROP EVENT TRIGGER reindex_event_trigger;
 DROP EVENT TRIGGER reindex_event_trigger_end;
@@ -1788,9 +1786,9 @@ DROP TABLE reindex_test CASCADE;
 SET citus.next_shard_id TO 12242024;
 CREATE TABLE int8_tbl(q1 int8, q2 int8);
 SELECT create_distributed_table('int8_tbl', 'q1');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO int8_tbl VALUES
@@ -1808,10 +1806,10 @@ SET citus.log_remote_commands TO true;
 SET citus.grep_remote_commands TO '%12242024%';
 select public.explain_filter('explain (memory) select * from int8_tbl i8');
 NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY FALSE, MEMORY TRUE, SERIALIZE none, FORMAT TEXT) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                                explain_filter                                
-------------------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                explain_filter
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N)
    Task Count: N
    Tasks Shown: One of N
@@ -1825,10 +1823,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 
 select public.explain_filter('explain (memory, analyze) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                                                   explain_filter                                                   
---------------------------------------------------------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N
    Tuple data received from nodes: N bytes
@@ -1848,10 +1846,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 
 select public.explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
 NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY TRUE, MEMORY TRUE, SERIALIZE none, FORMAT YAML) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                       explain_filter                        
--------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                       explain_filter
+---------------------------------------------------------------------
  - Plan:                                                    +
      Node Type: "Custom Scan"                               +
      Custom Plan Provider: "Citus Adaptive"                 +
@@ -1891,10 +1889,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 
 select public.explain_filter('explain (memory, analyze, format json) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "JSON"}') AS (field_0 bigint, field_1 bigint)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                          explain_filter                          
-------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                          explain_filter
+---------------------------------------------------------------------
  [                                                               +
    {                                                             +
      "Plan": {                                                   +
@@ -1969,10 +1967,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 prepare int8_query as select * from int8_tbl i8;
 select public.explain_filter('explain (memory) execute int8_query');
 NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY FALSE, MEMORY TRUE, SERIALIZE none, FORMAT TEXT) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                                explain_filter                                
-------------------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                explain_filter
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N)
    Task Count: N
    Tasks Shown: One of N
@@ -1987,10 +1985,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 -- serialize tests, same as postgres tests, we just distributed the table
 select public.explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "YAML"}') AS (field_0 bigint, field_1 bigint)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                       explain_filter                        
--------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                       explain_filter
+---------------------------------------------------------------------
  - Plan:                                                    +
      Node Type: "Custom Scan"                               +
      Custom Plan Provider: "Citus Adaptive"                 +
@@ -2108,10 +2106,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 
 select public.explain_filter('explain (analyze,serialize) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                                                   explain_filter                                                   
---------------------------------------------------------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N
    Tuple data received from nodes: N bytes
@@ -2130,10 +2128,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 
 select public.explain_filter('explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "text", "timing": false, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                                            explain_filter                                            
-------------------------------------------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                            explain_filter
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual rows=N loops=N)
    Task Count: N
    Tuple data received from nodes: N bytes
@@ -2152,10 +2150,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 
 select public.explain_filter('explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "binary", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                                                   explain_filter                                                   
---------------------------------------------------------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N
    Tuple data received from nodes: N bytes
@@ -2175,10 +2173,10 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECU
 -- this tests an edge case where we have no data to return
 select public.explain_filter('explain (analyze,serialize) create temp table explain_temp as select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
-DETAIL:  on server postgres@localhost:57637 connectionId: 2
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line 5 at FOR over EXECUTE statement
-                                                   explain_filter                                                   
---------------------------------------------------------------------------------------------------------------------
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N
    Tuple data received from nodes: N bytes
