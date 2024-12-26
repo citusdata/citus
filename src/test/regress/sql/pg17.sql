@@ -604,6 +604,23 @@ ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
 
 -- End of testing SET STATISTICS DEFAULT
 
+-- COPY ON_ERROR option
+-- Error out for Citus tables because we don't support it yet
+-- Relevant PG17 commits: 
+-- https://github.com/postgres/postgres/commit/9e2d87011
+-- https://github.com/postgres/postgres/commit/b725b7eec
+
+CREATE TABLE check_ign_err (n int, m int[], k int);
+SELECT create_distributed_table('check_ign_err', 'n');
+
+COPY check_ign_err FROM STDIN WITH (on_error stop);
+COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore);
+COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose);
+COPY check_ign_err FROM STDIN WITH (log_verbosity verbose, on_error ignore);
+COPY check_ign_err FROM STDIN WITH (log_verbosity verbose);
+
+-- End of Test for COPY ON_ERROR option
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
