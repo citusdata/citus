@@ -606,7 +606,7 @@ ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
 
 -- COPY ON_ERROR option
 -- Error out for Citus tables because we don't support it yet
--- Relevant PG17 commits: 
+-- Relevant PG17 commits:
 -- https://github.com/postgres/postgres/commit/9e2d87011
 -- https://github.com/postgres/postgres/commit/b725b7eec
 
