@@ -621,6 +621,96 @@ COPY check_ign_err FROM STDIN WITH (log_verbosity verbose);
 
 -- End of Test for COPY ON_ERROR option
 
+-- Test FORCE_NOT_NULL and FORCE_NULL options
+-- FORCE_NULL * and FORCE_NOT_NULL * options for COPY FROM were added in PG17
+-- Same tests as in PG copy2.sql, we just distribute the table first
+-- Relevant PG17 commit: https://github.com/postgres/postgres/commit/f6d4c9cf1
+
+CREATE TABLE forcetest (
+    a INT NOT NULL,
+    b TEXT NOT NULL,
+    c TEXT,
+    d TEXT,
+    e TEXT
+);
+\pset null NULL
+
+SELECT create_distributed_table('forcetest', 'a');
+
+-- should succeed with no effect ("b" remains an empty string, "c" remains NULL)
+-- expected output for inserted row in test:
+-- b |  c
+-----+------
+--   | NULL
+--(1 row)
+
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL(b), FORCE_NULL(c));
+1,,""
+\.
+COMMIT;
+SELECT b, c FROM forcetest WHERE a = 1;
+
+-- should succeed, FORCE_NULL and FORCE_NOT_NULL can be both specified
+-- expected output for inserted row in test:
+-- c |  d
+-----+------
+--   | NULL
+--(1 row)
+
+BEGIN;
+COPY forcetest (a, b, c, d) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL(c,d), FORCE_NULL(c,d));
+2,'a',,""
+\.
+COMMIT;
+SELECT c, d FROM forcetest WHERE a = 2;
+
+-- should succeed with no effect ("b" remains an empty string, "c" remains NULL)
+-- expected output for inserted row in test:
+-- b |  c
+-----+------
+--   | NULL
+--(1 row)
+
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *, FORCE_NULL *);
+4,,""
+\.
+COMMIT;
+SELECT b, c FROM forcetest WHERE a = 4;
+
+-- should succeed with effect ("b" remains an empty string)
+-- expected output for inserted row in test:
+-- b | c
+-----+---
+--   |
+--(1 row)
+
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *);
+5,,""
+\.
+COMMIT;
+SELECT b, c FROM forcetest WHERE a = 5;
+
+-- should succeed with effect ("c" remains NULL)
+-- expected output for inserted row in test:
+-- b |  c
+-----+------
+-- b | NULL
+--(1 row)
+
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NULL *);
+6,"b",""
+\.
+COMMIT;
+SELECT b, c FROM forcetest WHERE a = 6;
+
+\pset null ''
+
+-- End of Testing FORCE_NOT_NULL and FORCE_NULL options
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
