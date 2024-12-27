@@ -66,7 +66,7 @@ test: pg14
 test: pg15
 test: pg15_jsonpath detect_conn_close
 test: pg16
-test: pg17
+test: pg17 json_table
 test: drop_column_partitioned_table
 test: tableam
 
