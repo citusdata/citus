@@ -1376,6 +1376,47 @@ DROP TABLE test_local_table CASCADE;
 DROP TABLE test_alter_access_method CASCADE;
 DROP TABLE test_partitioned_alter CASCADE;
 -- End of Test for ALTER TABLE SET ACCESS METHOD DEFAULT
+-- Test for ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION
+-- Step 1: Local table setup (non-distributed)
+CREATE TABLE test_local_table_expr (id int, col int);
+SELECT citus_add_local_table_to_metadata('test_local_table_expr');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Step 2: Attempt to set expression on a Citus local table (should fail)
+ALTER TABLE test_local_table_expr ALTER COLUMN col SET EXPRESSION AS (id * 4);
+ERROR:  ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION commands are currently unsupported.
+-- Step 3: Create and distribute a table
+CREATE TABLE test_distributed_table_expr (id int, col int);
+SELECT create_distributed_table('test_distributed_table_expr', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Step 4: Attempt to set expression on a distributed table (should fail)
+ALTER TABLE test_distributed_table_expr ALTER COLUMN col SET EXPRESSION AS (id * 4);
+ERROR:  ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION commands are currently unsupported.
+-- Step 5: Create and distribute a partitioned table
+CREATE TABLE test_partitioned_expr (id int, val text) PARTITION BY RANGE (id);
+CREATE TABLE test_partitioned_expr_part1 PARTITION OF test_partitioned_expr
+  FOR VALUES FROM (1) TO (100);
+SELECT create_distributed_table('test_partitioned_expr', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Step 6: Attempt to set expression on a partitioned, distributed table (should fail)
+ALTER TABLE test_partitioned_expr ALTER COLUMN val SET EXPRESSION AS (id * 4);
+ERROR:  ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION commands are currently unsupported.
+-- Cleanup
+DROP TABLE test_local_table_expr CASCADE;
+DROP TABLE test_distributed_table_expr CASCADE;
+DROP TABLE test_partitioned_expr CASCADE;
+-- End of Test for ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
