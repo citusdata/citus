@@ -773,6 +773,51 @@ DROP TABLE test_distributed_table_expr CASCADE;
 DROP TABLE test_partitioned_expr CASCADE;
 -- End of Test for ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION
 
+-- Test: Access Method Behavior for Partitioned Tables
+-- This test verifies the ability to specify and modify table access methods for partitioned tables
+-- using CREATE TABLE ... USING and ALTER TABLE ... SET ACCESS METHOD, including distributed tables.
+
+-- Step 1: Create a partitioned table with a specified access method
+CREATE TABLE test_partitioned_alter (id INT PRIMARY KEY, value TEXT)
+PARTITION BY RANGE (id)
+USING heap;
+
+-- Step 2: Create partitions for the partitioned table
+CREATE TABLE test_partition_1 PARTITION OF test_partitioned_alter
+  FOR VALUES FROM (0) TO (100);
+
+CREATE TABLE test_partition_2 PARTITION OF test_partitioned_alter
+  FOR VALUES FROM (100) TO (200);
+
+-- Step 3: Distribute the partitioned table
+SELECT create_distributed_table('test_partitioned_alter', 'id');
+
+-- Step 4: Verify that the table and partitions are created and distributed correctly
+SELECT relname, relam
+FROM pg_class
+WHERE relname = 'test_partitioned_alter';
+
+-- Check the partitions' access methods
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('test_partition_1', 'test_partition_2');
+
+-- Step 5: Test ALTER TABLE ... SET ACCESS METHOD to a different method
+ALTER TABLE test_partitioned_alter SET ACCESS METHOD columnar;
+
+-- Step 6: Verify the change is applied to future partitions
+CREATE TABLE test_partition_3 PARTITION OF test_partitioned_alter
+  FOR VALUES FROM (200) TO (300);
+
+SELECT relname, relam
+FROM pg_class
+WHERE relname = 'test_partition_3';
+
+-- Clean up
+DROP TABLE test_partitioned_alter CASCADE;
+
+-- End of Test: Access Method Behavior for Partitioned Tables
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
