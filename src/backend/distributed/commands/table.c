@@ -3666,6 +3666,24 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 #if PG_VERSION_NUM >= PG_VERSION_15
 			case AT_SetAccessMethod:
+			{
+				/*
+				 * If command->name == NULL, that means the user is trying to use
+				 * ALTER TABLE ... SET ACCESS METHOD DEFAULT
+				 * which we don't support currently.
+				 */
+				if (command->name == NULL)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg(
+										"DEFAULT option in ALTER TABLE ... SET ACCESS METHOD "
+										"is currently unsupported."),
+									errhint(
+										"You can rerun the command by explicitly writing the access method name.")));
+				}
+				break;
+			}
+
 #endif
 			case AT_SetNotNull:
 			case AT_ReplicaIdentity:
