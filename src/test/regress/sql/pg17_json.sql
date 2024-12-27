@@ -1,5 +1,5 @@
 --
--- JSON_TABLE
+-- PG17_JSON
 -- PG17 has added basic JSON_TABLE() functionality
 -- JSON_TABLE() allows JSON data to be converted into a relational view
 -- and thus used, for example, in a FROM clause, like other tabular
@@ -19,8 +19,8 @@ SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
 \q
 \endif
 
-CREATE SCHEMA json_table;
-SET search_path TO json_table;
+CREATE SCHEMA pg17_json;
+SET search_path TO pg17_json;
 
 SET citus.next_shard_id TO 1687000;
 
@@ -285,6 +285,8 @@ UPDATE test_table SET VALUE = 'XYZ' FROM json_cte
 
 -- JSON_TABLE NESTED
 -- JSON_TABLE: plan execution
+-- Check output with Postgres table in sqljson_jsontable test
+-- https://github.com/postgres/postgres/blob/REL_17_0/src/test/regress/expected/sqljson_jsontable.out#L776-L814
 
 CREATE TABLE jsonb_table_test (id bigserial, js jsonb);
 SELECT create_distributed_table('jsonb_table_test', 'id');
@@ -313,5 +315,65 @@ from
 		)
 	) jt;
 
+-- test some utility functions on the target list & where clause: json_exists()
+select jsonb_path_exists(js, '$.favorites') from my_films;
+select bool_and(JSON_EXISTS(js, '$.favorites.films.title')) from my_films;
+SELECT count(*) FROM my_films WHERE jsonb_path_exists(js, '$.favorites');
+SELECT count(*) FROM my_films WHERE JSON_EXISTS(js, '$.favorites.films.title');
+
+-- check constraint with json_exists, use json_scalar also
+SET citus.shard_replication_factor TO 1;
+create table user_profiles (
+    id bigserial,
+    addresses jsonb,
+    anyjson  jsonb,
+    serialized bytea,
+    check (json_exists( addresses, '$.main' )) -- we should insert a key named main
+);
+select create_distributed_table('user_profiles', 'id');
+
+insert into user_profiles (addresses) VALUES (JSON_SCALAR('1'));
+insert into user_profiles (addresses, anyjson) VALUES ('{"main":"value"}', JSON_SCALAR('1')) RETURNING *;
+
+-- use json() - we cannot insert because WITH UNIQUE KEYS
+insert into user_profiles (addresses) VALUES (JSON ('{"main":"value", "main":"value"}' WITH UNIQUE KEYS));
+
+-- we can insert with
+insert into user_profiles (addresses) VALUES (JSON ('{"main":"value", "main":"value"}' WITHOUT UNIQUE KEYS)) RETURNING *;
+
+-- JSON predicates
+TRUNCATE user_profiles;
+INSERT INTO user_profiles (anyjson) VALUES ('12'), ('"abc"'), ('[1,2,3]'), ('{"a":12}');
+select anyjson, anyjson is json array as json_array, anyjson is json object as json_object, anyjson is json scalar as json_scalar,
+anyjson is json with UNIQUE keys
+from user_profiles WHERE anyjson IS NOT NULL ORDER BY 1;
+
+-- use json_serialize
+-- it is evaluated in the worker
+SELECT JSON_SERIALIZE('{ "a" : 1 } ' RETURNING bytea);
+SET citus.log_remote_commands TO on;
+INSERT INTO user_profiles (serialized) VALUES (JSON_SERIALIZE('{ "a" : 1 } ' RETURNING bytea)) RETURNING *;
+RESET citus.log_remote_commands;
+
+-- use json_query
+SELECT i,
+       json_query('[{"x": "aaa"},{"x": "bbb"},{"x": "ccc"}]'::JSONB, '$[$i].x' passing id AS i RETURNING text omit quotes)
+FROM generate_series(0, 3) i
+JOIN my_films ON(id = i) ORDER BY 1;
+
+-- use json_value
+-- check output with sqljson_queryfuncs test
+-- https://github.com/postgres/postgres/blob/REL_17_0/src/test/regress/expected/sqljson_queryfuncs.out#L439-L455
+SELECT i,
+       JSON_VALUE(
+		jsonb '{"a": 1, "b": 2}',
+		'$.* ? (@ > $i)' PASSING id AS i
+		RETURNING int
+		DEFAULT -1 ON EMPTY
+		DEFAULT -2 ON ERROR
+	)
+FROM generate_series(0, 3) i
+JOIN my_films ON(id = i) ORDER BY 1;
+
 SET client_min_messages TO ERROR;
-DROP SCHEMA json_table CASCADE;
+DROP SCHEMA pg17_json CASCADE;

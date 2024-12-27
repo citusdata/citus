@@ -1,5 +1,5 @@
 --
--- JSON_TABLE
+-- PG17_JSON
 -- PG17 has added basic JSON_TABLE() functionality
 -- JSON_TABLE() allows JSON data to be converted into a relational view
 -- and thus used, for example, in a FROM clause, like other tabular
