@@ -1468,6 +1468,57 @@ SELECT create_time_partitions('date_partitioned_table', INTERVAL '-infinity', '2
 ERROR:  Partition interval must be a finite value
 CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
 -- end of testing interval with infinite values
+-- various jsonpath methods were added in PG17
+-- relevant PG commit: https://github.com/postgres/postgres/commit/66ea94e8e
+-- here we add the same test as in pg15_jsonpath.sql for the new additions
+CREATE TABLE jsonpath_test (id serial, sample text);
+SELECT create_distributed_table('jsonpath_test', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\COPY jsonpath_test(sample) FROM STDIN
+-- Cast the text into jsonpath on the worker nodes.
+SELECT sample, sample::jsonpath FROM jsonpath_test ORDER BY id;
+                 sample                  |                 sample
+---------------------------------------------------------------------
+ $.bigint().integer().number().decimal() | $.bigint().integer().number().decimal()
+ $.boolean()                             | $.boolean()
+ $.date()                                | $.date()
+ $.decimal(4,2)                          | $.decimal(4,2)
+ $.string()                              | $.string()
+ $.time()                                | $.time()
+ $.time(6)                               | $.time(6)
+ $.time_tz()                             | $.time_tz()
+ $.time_tz(4)                            | $.time_tz(4)
+ $.timestamp()                           | $.timestamp()
+ $.timestamp(2)                          | $.timestamp(2)
+ $.timestamp_tz()                        | $.timestamp_tz()
+ $.timestamp_tz(0)                       | $.timestamp_tz(0)
+(13 rows)
+
+-- Pull the data, and cast on the coordinator node
+WITH samples as (SELECT id, sample FROM jsonpath_test OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples ORDER BY id;
+                 sample                  |                 sample
+---------------------------------------------------------------------
+ $.bigint().integer().number().decimal() | $.bigint().integer().number().decimal()
+ $.boolean()                             | $.boolean()
+ $.date()                                | $.date()
+ $.decimal(4,2)                          | $.decimal(4,2)
+ $.string()                              | $.string()
+ $.time()                                | $.time()
+ $.time(6)                               | $.time(6)
+ $.time_tz()                             | $.time_tz()
+ $.time_tz(4)                            | $.time_tz(4)
+ $.timestamp()                           | $.timestamp()
+ $.timestamp(2)                          | $.timestamp(2)
+ $.timestamp_tz()                        | $.timestamp_tz()
+ $.timestamp_tz(0)                       | $.timestamp_tz(0)
+(13 rows)
+
+-- End of testing jsonpath methods
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
