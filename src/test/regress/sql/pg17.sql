@@ -987,6 +987,58 @@ DROP TABLE test_partitioned_alter CASCADE;
 
 -- End of Test: Access Method Behavior for Partitioned Tables
 
+-- Test for REINDEX support in event triggers for Citus-related objects
+-- Create a test table with a distributed setup
+CREATE TABLE reindex_test (id SERIAL PRIMARY KEY, data TEXT);
+SELECT create_distributed_table('reindex_test', 'id');
+
+-- Create an index to test REINDEX functionality
+CREATE INDEX reindex_test_data_idx ON reindex_test (data);
+
+-- Create event triggers to capture REINDEX events (start and end)
+CREATE OR REPLACE FUNCTION log_reindex_events() RETURNS event_trigger LANGUAGE plpgsql AS $$
+DECLARE
+    command_tag TEXT;
+    command_object JSONB;
+BEGIN
+    command_tag := tg_tag;
+    command_object := jsonb_build_object(
+        'object_type', tg_event,
+        'command_tag', command_tag,
+        'query', current_query()
+    );
+    RAISE NOTICE 'Event Trigger Log: %', command_object::TEXT;
+END;
+$$;
+
+CREATE EVENT TRIGGER reindex_event_trigger
+    ON ddl_command_start
+    WHEN TAG IN ('REINDEX')
+EXECUTE FUNCTION log_reindex_events();
+
+CREATE EVENT TRIGGER reindex_event_trigger_end
+    ON ddl_command_end
+    WHEN TAG IN ('REINDEX')
+EXECUTE FUNCTION log_reindex_events();
+
+-- Insert some data to create index bloat
+INSERT INTO reindex_test (data)
+SELECT 'value_' || g.i
+FROM generate_series(1, 10000) g(i);
+
+-- Perform REINDEX TABLE ... CONCURRENTLY and verify event trigger logs
+REINDEX TABLE CONCURRENTLY reindex_test;
+
+-- Perform REINDEX INDEX ... CONCURRENTLY and verify event trigger logs
+REINDEX INDEX CONCURRENTLY reindex_test_data_idx;
+
+-- Cleanup
+DROP EVENT TRIGGER reindex_event_trigger;
+DROP EVENT TRIGGER reindex_event_trigger_end;
+DROP TABLE reindex_test CASCADE;
+
+-- End of test for REINDEX support in event triggers for Citus-related objects
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
