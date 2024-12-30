@@ -1,0 +1,18 @@
+--
+-- PG17_JSON
+-- PG17 has added basic JSON_TABLE() functionality
+-- JSON_TABLE() allows JSON data to be converted into a relational view
+-- and thus used, for example, in a FROM clause, like other tabular
+-- data. We treat JSON_TABLE the same as correlated functions (e.g., recurring tuples).
+-- In the end, for multi-shard JSON_TABLE commands, we apply the same
+-- restrictions as reference tables (e.g., cannot perform a lateral outer join
+-- when a distributed subquery references a (reference table)/JSON_TABLE etc.)
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/de3600452
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
+\gset
+\if :server_version_ge_17
+\else
+\q
