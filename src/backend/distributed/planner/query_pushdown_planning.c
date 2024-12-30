@@ -1775,7 +1775,7 @@ ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 
 /*
  * IsJsonTableRTE checks whether the RTE refers to a JSON_TABLE
- * table function, which was introduced in PostgreSQL 15.
+ * table function, which was introduced in PostgreSQL 17.
  */
 bool
 IsJsonTableRTE(RangeTblEntry *rte)
