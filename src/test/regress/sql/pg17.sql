@@ -772,6 +772,30 @@ DROP TABLE test_local_table_expr CASCADE;
 DROP TABLE test_distributed_table_expr CASCADE;
 DROP TABLE test_partitioned_expr CASCADE;
 -- End of Test for ALTER TABLE ... ALTER COLUMN ... SET EXPRESSION
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 27122024;
+
+-- PG17 has added support for AT LOCAL operator
+-- it converts the given time type to
+-- time stamp with the session's TimeZone value as time zone.
+-- Here we add tests that validate that we can use AT LOCAL at INSERT commands
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/97957fdba
+
+CREATE TABLE test_at_local (id int, time_example timestamp with time zone);
+SELECT create_distributed_table('test_at_local', 'id');
+
+BEGIN;
+SET LOCAL TimeZone TO 'Europe/Tirane';
+SELECT timestamp '2001-02-16 20:38:40' AT LOCAL;
+-- verify that we evaluate AT LOCAL at the coordinator and then perform the insert remotely
+SET citus.log_remote_commands TO on;
+INSERT INTO test_at_local VALUES (1, timestamp '2001-02-16 20:38:40' AT LOCAL);
+ROLLBACK;
+
+-- End of Testing AT LOCAL option
 
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
