@@ -37,11 +37,9 @@ CREATE TABLE t_62629600(a int);
 SET search_path TO worker_copy_table_to_node;
 -- Make sure that the UDF doesn't work on Citus tables
 SELECT worker_copy_table_to_node('t', :worker_1_node);
-ERROR:  cannot execute a distributed query from a query on a shard
-DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+ERROR:  table worker_copy_table_to_node.t is a Citus table, only copies of shards or regular postgres tables are supported
 SELECT worker_copy_table_to_node('ref', :worker_1_node);
-ERROR:  cannot execute a distributed query from a query on a shard
-DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+ERROR:  table worker_copy_table_to_node.ref is a Citus table, only copies of shards or regular postgres tables are supported
 -- It should work on shards
 SELECT worker_copy_table_to_node('t_62629600', :worker_1_node);
  worker_copy_table_to_node
