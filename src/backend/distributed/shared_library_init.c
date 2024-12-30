@@ -2945,6 +2945,9 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslcrl",
 		"sslkey",
 		"sslmode",
+#if PG_VERSION_NUM >= PG_VERSION_17
+		"sslnegotiation",
+#endif
 		"sslrootcert",
 		"tcp_user_timeout",
 	};
