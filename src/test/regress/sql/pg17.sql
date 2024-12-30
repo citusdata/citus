@@ -797,6 +797,21 @@ ROLLBACK;
 
 -- End of Testing AT LOCAL option
 
+-- interval can have infinite values
+-- Relevant PG17 commit: https://github.com/postgres/postgres/commit/519fc1bd9
+-- disallow those in create_time_partitions
+
+-- test create_time_partitions with infinity values
+CREATE TABLE date_partitioned_table(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb) PARTITION BY RANGE(eventdate);
+
+SELECT create_time_partitions('date_partitioned_table', INTERVAL 'infinity', '2022-01-01', '2021-01-01');
+SELECT create_time_partitions('date_partitioned_table', INTERVAL '-infinity', '2022-01-01', '2021-01-01');
+
+-- end of testing interval with infinite values
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
