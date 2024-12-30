@@ -366,6 +366,7 @@ test: distributed_collations_conflict
 test: function_propagation
 test: view_propagation
 test: check_mx
+test: functions_pushdown
 
 # ---------
 # deparsing logic tests
