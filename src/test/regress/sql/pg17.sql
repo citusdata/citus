@@ -812,6 +812,38 @@ SELECT create_time_partitions('date_partitioned_table', INTERVAL '-infinity', '2
 
 -- end of testing interval with infinite values
 
+-- various jsonpath methods were added in PG17
+-- relevant PG commit: https://github.com/postgres/postgres/commit/66ea94e8e
+-- here we add the same test as in pg15_jsonpath.sql for the new additions
+
+CREATE TABLE jsonpath_test (id serial, sample text);
+SELECT create_distributed_table('jsonpath_test', 'id');
+
+\COPY jsonpath_test(sample) FROM STDIN
+$.bigint().integer().number().decimal()
+$.boolean()
+$.date()
+$.decimal(4,2)
+$.string()
+$.time()
+$.time(6)
+$.time_tz()
+$.time_tz(4)
+$.timestamp()
+$.timestamp(2)
+$.timestamp_tz()
+$.timestamp_tz(0)
+\.
+
+-- Cast the text into jsonpath on the worker nodes.
+SELECT sample, sample::jsonpath FROM jsonpath_test ORDER BY id;
+
+-- Pull the data, and cast on the coordinator node
+WITH samples as (SELECT id, sample FROM jsonpath_test OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples ORDER BY id;
+
+-- End of testing jsonpath methods
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
