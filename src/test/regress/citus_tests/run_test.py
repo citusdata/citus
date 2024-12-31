@@ -181,6 +181,9 @@ DEPS = {
             "multi_test_helpers_superuser",
         ],
     ),
+    "foreign_key_to_reference_shard_rebalance": TestDeps(
+        "minimal_schedule", ["remove_coordinator_from_metadata"]
+    ),
 }
 
 
