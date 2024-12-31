@@ -844,6 +844,57 @@ SELECT sample, sample::jsonpath FROM samples ORDER BY id;
 
 -- End of testing jsonpath methods
 
+-- xmltext() function added in PG17, test with columnar and distributed table
+-- Relevant PG17 commit: https://github.com/postgres/postgres/commit/526fe0d79
+CREATE TABLE test_xml (id int, a xml) USING columnar;
+-- expected to insert x&lt;P&gt;73&lt;/P&gt;0.42truej
+INSERT INTO test_xml VALUES (1, xmltext('x'|| '<P>73</P>'::xml || .42 || true || 'j'::char));
+SELECT * FROM test_xml ORDER BY 1;
+
+SELECT create_distributed_table('test_xml', 'id');
+-- expected to insert foo &amp; &lt;&quot;bar&quot;&gt;
+INSERT INTO test_xml VALUES (2, xmltext('foo & <"bar">'));
+SELECT * FROM test_xml ORDER BY 1;
+
+-- end of xmltest() testing with Citus
+
+--
+-- random(min, max) to generate random numbers in a specified range
+-- adding here the same tests as the ones with random() in aggregate_support.sql
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/e6341323a
+--
+
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
+SELECT create_distributed_table('dist_table', 'dist_col');
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+
+-- Test the cases where the worker agg exec. returns no tuples.
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random(0, 1) FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random(0, 1))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+-- run the same queries after loading some data
+
+INSERT INTO dist_table VALUES (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25),
+                              (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random(0, 1) FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random_normal(0, 1))::int::numeric / 10)
+       WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+-- End of random(min, max) testing with Citus
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
