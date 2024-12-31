@@ -895,6 +895,98 @@ LEFT JOIN ref_table ON TRUE;
 
 -- End of random(min, max) testing with Citus
 
+-- Test: Access Method Behavior for Partitioned Tables
+-- This test verifies the ability to specify and modify table access methods for partitioned tables
+-- using CREATE TABLE ... USING and ALTER TABLE ... SET ACCESS METHOD, including distributed tables.
+
+-- Step 1: Create a partitioned table with a specified access method
+CREATE TABLE test_partitioned_alter (id INT PRIMARY KEY, value TEXT)
+PARTITION BY RANGE (id)
+USING heap;
+
+-- Step 2: Create partitions for the partitioned table
+CREATE TABLE test_partition_1 PARTITION OF test_partitioned_alter
+  FOR VALUES FROM (0) TO (100);
+
+CREATE TABLE test_partition_2 PARTITION OF test_partitioned_alter
+  FOR VALUES FROM (100) TO (200);
+
+-- Step 3: Distribute the partitioned table
+SELECT create_distributed_table('test_partitioned_alter', 'id');
+
+-- Step 4: Verify that the table and partitions are created and distributed correctly on the coordinator
+SELECT relname, relam
+FROM pg_class
+WHERE relname = 'test_partitioned_alter';
+
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('test_partition_1', 'test_partition_2')
+ORDER BY relname;
+
+-- Step 4 (Repeat on a Worker Node): Verify that the table and partitions are created correctly
+\c - - - :worker_1_port
+SET search_path TO pg17;
+
+-- Verify the table's access method on the worker node
+SELECT relname, relam
+FROM pg_class
+WHERE relname = 'test_partitioned_alter';
+
+-- Verify the partitions' access methods on the worker node
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('test_partition_1', 'test_partition_2')
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg17;
+
+-- Step 5: Test ALTER TABLE ... SET ACCESS METHOD to a different method
+ALTER TABLE test_partitioned_alter SET ACCESS METHOD columnar;
+
+-- Verify the access method in the distributed parent and existing partitions
+-- Note: Specifying an access method for a partitioned table lets the value be used for all
+-- future partitions created under it, closely mirroring the behavior of the TABLESPACE
+-- option for partitioned tables. Existing partitions are not modified.
+-- Reference: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=374c7a2290429eac3217b0c7b0b485db9c2bcc72
+
+-- Verify the parent table's access method
+SELECT relname, relam
+FROM pg_class
+WHERE relname = 'test_partitioned_alter';
+
+-- Verify the partitions' access methods
+SELECT relname, relam
+FROM pg_class
+WHERE relname IN ('test_partition_1', 'test_partition_2')
+ORDER BY relname;
+
+-- Step 6: Verify the change is applied to future partitions
+CREATE TABLE test_partition_3 PARTITION OF test_partitioned_alter
+  FOR VALUES FROM (200) TO (300);
+
+SELECT relname, relam
+FROM pg_class
+WHERE relname = 'test_partition_3';
+
+-- Step 6 (Repeat on a Worker Node): Verify that the new partition is created correctly
+\c - - - :worker_1_port
+SET search_path TO pg17;
+
+-- Verify the new partition's access method on the worker node
+SELECT relname, relam
+FROM pg_class
+WHERE relname = 'test_partition_3';
+
+\c - - - :master_port
+SET search_path TO pg17;
+
+-- Clean up
+DROP TABLE test_partitioned_alter CASCADE;
+
+-- End of Test: Access Method Behavior for Partitioned Tables
+
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
