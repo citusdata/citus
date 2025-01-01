@@ -58,8 +58,8 @@ CREATE TABLE tenk1 (
 SELECT create_distributed_table('tenk1', 'unique1');
 
 SET citus.log_remote_commands TO on;
-EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
-EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = $1;
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = $1;
 SET citus.log_remote_commands TO off;
 
 -- Proper error when creating statistics without a name on a Citus table
