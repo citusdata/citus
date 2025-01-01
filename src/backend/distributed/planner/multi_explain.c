@@ -190,6 +190,14 @@ PG_FUNCTION_INFO_V1(worker_save_query_explain_analyze);
 void
 CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es)
 {
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (es->generic)
+	{
+		ereport(ERROR, (errmsg(
+							"EXPLAIN GENERIC_PLAN is currently not supported for Citus tables")));
+	}
+#endif
+
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
@@ -1021,18 +1029,12 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
 					 "COSTS %s, BUFFERS %s, WAL %s, "
-#if PG_VERSION_NUM >= PG_VERSION_16
-					 "GENERIC_PLAN %s, "
-#endif
 					 "TIMING %s, SUMMARY %s, FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
 					 es->costs ? "TRUE" : "FALSE",
 					 es->buffers ? "TRUE" : "FALSE",
 					 es->wal ? "TRUE" : "FALSE",
-#if PG_VERSION_NUM >= PG_VERSION_16
-					 es->generic ? "TRUE" : "FALSE",
-#endif
 					 es->timing ? "TRUE" : "FALSE",
 					 es->summary ? "TRUE" : "FALSE",
 					 formatStr,
