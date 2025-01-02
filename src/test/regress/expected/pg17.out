@@ -1779,6 +1779,422 @@ DROP EVENT TRIGGER reindex_event_trigger;
 DROP EVENT TRIGGER reindex_event_trigger_end;
 DROP TABLE reindex_test CASCADE;
 -- End of test for REINDEX support in event triggers for Citus-related objects
+-- Propagate EXPLAIN MEMORY
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/5de890e36
+-- Propagate EXPLAIN SERIALIZE
+-- Relevant PG commit: https://github.com/postgres/postgres/commit/06286709e
+SET citus.next_shard_id TO 12242024;
+CREATE TABLE int8_tbl(q1 int8, q2 int8);
+SELECT create_distributed_table('int8_tbl', 'q1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO int8_tbl VALUES
+  ('  123   ','  456'),
+  ('123   ','4567890123456789'),
+  ('4567890123456789','123'),
+  (+4567890123456789,'4567890123456789'),
+  ('+4567890123456789','-4567890123456789');
+-- memory tests, same as postgres tests, we just distributed the table
+-- we can see the memory used separately per each task in worker nodes
+SET citus.log_remote_commands TO true;
+-- for explain analyze, we run worker_save_query_explain_analyze query
+-- for regular explain, we run EXPLAIN query
+-- therefore let's grep the commands based on the shard id
+SET citus.grep_remote_commands TO '%12242024%';
+select public.explain_filter('explain (memory) select * from int8_tbl i8');
+NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY FALSE, MEMORY TRUE, SERIALIZE none, FORMAT TEXT) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N)
+   Task Count: N
+   Tasks Shown: One of N
+   ->  Task
+         Node: host=localhost port=N dbname=regression
+         ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N)
+             Planning:
+               Memory: used=NkB  allocated=NkB
+   Memory: used=NkB  allocated=NkB
+(9 rows)
+
+select public.explain_filter('explain (memory, analyze) select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   Task Count: N
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+             Planning:
+               Memory: used=NkB  allocated=NkB
+             Planning Time: N.N ms
+             Execution Time: N.N ms
+   Memory: used=NkB  allocated=NkB
+ Planning Time: N.N ms
+ Execution Time: N.N ms
+(15 rows)
+
+select public.explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
+NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY TRUE, MEMORY TRUE, SERIALIZE none, FORMAT YAML) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                       explain_filter
+---------------------------------------------------------------------
+ - Plan:                                                    +
+     Node Type: "Custom Scan"                               +
+     Custom Plan Provider: "Citus Adaptive"                 +
+     Parallel Aware: false                                  +
+     Async Capable: false                                   +
+     Startup Cost: N.N                                      +
+     Total Cost: N.N                                        +
+     Plan Rows: N                                           +
+     Plan Width: N                                          +
+     Distributed Query:                                     +
+       Job:                                                 +
+         Task Count: N                                      +
+         Tasks Shown: "One of N"                            +
+         Tasks:                                             +
+           - Node: "host=localhost port=N dbname=regression"+
+             Remote Plan:                                   +
+               - Plan:                                      +
+                   Node Type: "Seq Scan"                    +
+                   Parallel Aware: false                    +
+                   Async Capable: false                     +
+                   Relation Name: "int8_tbl_12242024"       +
+                   Alias: "i8"                              +
+                   Startup Cost: N.N                        +
+                   Total Cost: N.N                          +
+                   Plan Rows: N                             +
+                   Plan Width: N                            +
+                 Planning:                                  +
+                   Memory Used: N                           +
+                   Memory Allocated: N                      +
+                 Planning Time: N.N                         +
+                                                            +
+   Planning:                                                +
+     Memory Used: N                                         +
+     Memory Allocated: N                                    +
+   Planning Time: N.N
+(1 row)
+
+select public.explain_filter('explain (memory, analyze, format json) select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "JSON"}') AS (field_0 bigint, field_1 bigint)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                          explain_filter
+---------------------------------------------------------------------
+ [                                                               +
+   {                                                             +
+     "Plan": {                                                   +
+       "Node Type": "Custom Scan",                               +
+       "Custom Plan Provider": "Citus Adaptive",                 +
+       "Parallel Aware": false,                                  +
+       "Async Capable": false,                                   +
+       "Startup Cost": N.N,                                      +
+       "Total Cost": N.N,                                        +
+       "Plan Rows": N,                                           +
+       "Plan Width": N,                                          +
+       "Actual Startup Time": N.N,                               +
+       "Actual Total Time": N.N,                                 +
+       "Actual Rows": N,                                         +
+       "Actual Loops": N,                                        +
+       "Distributed Query": {                                    +
+         "Job": {                                                +
+           "Task Count": N,                                      +
+           "Tuple data received from nodes": "N bytes",          +
+           "Tasks Shown": "One of N",                            +
+           "Tasks": [                                            +
+             {                                                   +
+               "Tuple data received from node": "N bytes",       +
+               "Node": "host=localhost port=N dbname=regression",+
+               "Remote Plan": [                                  +
+                 [                                               +
+                   {                                             +
+                     "Plan": {                                   +
+                       "Node Type": "Seq Scan",                  +
+                       "Parallel Aware": false,                  +
+                       "Async Capable": false,                   +
+                       "Relation Name": "int8_tbl_12242024",     +
+                       "Alias": "i8",                            +
+                       "Startup Cost": N.N,                      +
+                       "Total Cost": N.N,                        +
+                       "Plan Rows": N,                           +
+                       "Plan Width": N,                          +
+                       "Actual Startup Time": N.N,               +
+                       "Actual Total Time": N.N,                 +
+                       "Actual Rows": N,                         +
+                       "Actual Loops": N                         +
+                     },                                          +
+                     "Planning": {                               +
+                       "Memory Used": N,                         +
+                       "Memory Allocated": N                     +
+                     },                                          +
+                     "Planning Time": N.N,                       +
+                     "Triggers": [                               +
+                     ],                                          +
+                     "Execution Time": N.N                       +
+                   }                                             +
+                 ]                                               +
+                                                                 +
+               ]                                                 +
+             }                                                   +
+           ]                                                     +
+         }                                                       +
+       }                                                         +
+     },                                                          +
+     "Planning": {                                               +
+       "Memory Used": N,                                         +
+       "Memory Allocated": N                                     +
+     },                                                          +
+     "Planning Time": N.N,                                       +
+     "Triggers": [                                               +
+     ],                                                          +
+     "Execution Time": N.N                                       +
+   }                                                             +
+ ]
+(1 row)
+
+prepare int8_query as select * from int8_tbl i8;
+select public.explain_filter('explain (memory) execute int8_query');
+NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY FALSE, MEMORY TRUE, SERIALIZE none, FORMAT TEXT) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N)
+   Task Count: N
+   Tasks Shown: One of N
+   ->  Task
+         Node: host=localhost port=N dbname=regression
+         ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N)
+             Planning:
+               Memory: used=NkB  allocated=NkB
+   Memory: used=NkB  allocated=NkB
+(9 rows)
+
+-- serialize tests, same as postgres tests, we just distributed the table
+select public.explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "YAML"}') AS (field_0 bigint, field_1 bigint)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                       explain_filter
+---------------------------------------------------------------------
+ - Plan:                                                    +
+     Node Type: "Custom Scan"                               +
+     Custom Plan Provider: "Citus Adaptive"                 +
+     Parallel Aware: false                                  +
+     Async Capable: false                                   +
+     Startup Cost: N.N                                      +
+     Total Cost: N.N                                        +
+     Plan Rows: N                                           +
+     Plan Width: N                                          +
+     Actual Startup Time: N.N                               +
+     Actual Total Time: N.N                                 +
+     Actual Rows: N                                         +
+     Actual Loops: N                                        +
+     Distributed Query:                                     +
+       Job:                                                 +
+         Task Count: N                                      +
+         Tuple data received from nodes: "N bytes"          +
+         Tasks Shown: "One of N"                            +
+         Tasks:                                             +
+           - Tuple data received from node: "N bytes"       +
+             Node: "host=localhost port=N dbname=regression"+
+             Remote Plan:                                   +
+               - Plan:                                      +
+                   Node Type: "Seq Scan"                    +
+                   Parallel Aware: false                    +
+                   Async Capable: false                     +
+                   Relation Name: "int8_tbl_12242024"       +
+                   Alias: "i8"                              +
+                   Startup Cost: N.N                        +
+                   Total Cost: N.N                          +
+                   Plan Rows: N                             +
+                   Plan Width: N                            +
+                   Actual Startup Time: N.N                 +
+                   Actual Total Time: N.N                   +
+                   Actual Rows: N                           +
+                   Actual Loops: N                          +
+                   Shared Hit Blocks: N                     +
+                   Shared Read Blocks: N                    +
+                   Shared Dirtied Blocks: N                 +
+                   Shared Written Blocks: N                 +
+                   Local Hit Blocks: N                      +
+                   Local Read Blocks: N                     +
+                   Local Dirtied Blocks: N                  +
+                   Local Written Blocks: N                  +
+                   Temp Read Blocks: N                      +
+                   Temp Written Blocks: N                   +
+                 Planning:                                  +
+                   Shared Hit Blocks: N                     +
+                   Shared Read Blocks: N                    +
+                   Shared Dirtied Blocks: N                 +
+                   Shared Written Blocks: N                 +
+                   Local Hit Blocks: N                      +
+                   Local Read Blocks: N                     +
+                   Local Dirtied Blocks: N                  +
+                   Local Written Blocks: N                  +
+                   Temp Read Blocks: N                      +
+                   Temp Written Blocks: N                   +
+                 Planning Time: N.N                         +
+                 Triggers:                                  +
+                 Serialization:                             +
+                   Time: N.N                                +
+                   Output Volume: N                         +
+                   Format: "text"                           +
+                   Shared Hit Blocks: N                     +
+                   Shared Read Blocks: N                    +
+                   Shared Dirtied Blocks: N                 +
+                   Shared Written Blocks: N                 +
+                   Local Hit Blocks: N                      +
+                   Local Read Blocks: N                     +
+                   Local Dirtied Blocks: N                  +
+                   Local Written Blocks: N                  +
+                   Temp Read Blocks: N                      +
+                   Temp Written Blocks: N                   +
+                 Execution Time: N.N                        +
+                                                            +
+     Shared Hit Blocks: N                                   +
+     Shared Read Blocks: N                                  +
+     Shared Dirtied Blocks: N                               +
+     Shared Written Blocks: N                               +
+     Local Hit Blocks: N                                    +
+     Local Read Blocks: N                                   +
+     Local Dirtied Blocks: N                                +
+     Local Written Blocks: N                                +
+     Temp Read Blocks: N                                    +
+     Temp Written Blocks: N                                 +
+   Planning:                                                +
+     Shared Hit Blocks: N                                   +
+     Shared Read Blocks: N                                  +
+     Shared Dirtied Blocks: N                               +
+     Shared Written Blocks: N                               +
+     Local Hit Blocks: N                                    +
+     Local Read Blocks: N                                   +
+     Local Dirtied Blocks: N                                +
+     Local Written Blocks: N                                +
+     Temp Read Blocks: N                                    +
+     Temp Written Blocks: N                                 +
+   Planning Time: N.N                                       +
+   Triggers:                                                +
+   Serialization:                                           +
+     Time: N.N                                              +
+     Output Volume: N                                       +
+     Format: "text"                                         +
+     Shared Hit Blocks: N                                   +
+     Shared Read Blocks: N                                  +
+     Shared Dirtied Blocks: N                               +
+     Shared Written Blocks: N                               +
+     Local Hit Blocks: N                                    +
+     Local Read Blocks: N                                   +
+     Local Dirtied Blocks: N                                +
+     Local Written Blocks: N                                +
+     Temp Read Blocks: N                                    +
+     Temp Written Blocks: N                                 +
+   Execution Time: N.N
+(1 row)
+
+select public.explain_filter('explain (analyze,serialize) select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   Task Count: N
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+             Planning Time: N.N ms
+             Serialization: time=N.N ms  output=NkB  format=text
+             Execution Time: N.N ms
+ Planning Time: N.N ms
+ Serialization: time=N.N ms  output=NkB  format=text
+ Execution Time: N.N ms
+(14 rows)
+
+select public.explain_filter('explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "text", "timing": false, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                            explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual rows=N loops=N)
+   Task Count: N
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N) (actual rows=N loops=N)
+             Planning Time: N.N ms
+             Serialization: output=NkB  format=text
+             Execution Time: N.N ms
+ Planning Time: N.N ms
+ Serialization: output=NkB  format=text
+ Execution Time: N.N ms
+(14 rows)
+
+select public.explain_filter('explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "binary", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   Task Count: N
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+             Planning Time: N.N ms
+             Serialization: time=N.N ms  output=NkB  format=binary
+             Execution Time: N.N ms
+ Planning Time: N.N ms
+ Serialization: time=N.N ms  output=NkB  format=binary
+ Execution Time: N.N ms
+(14 rows)
+
+-- this tests an edge case where we have no data to return
+select public.explain_filter('explain (analyze,serialize) create temp table explain_temp as select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+                                                   explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+   Task Count: N
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+             Planning Time: N.N ms
+             Serialization: time=N.N ms  output=NkB  format=text
+             Execution Time: N.N ms
+ Planning Time: N.N ms
+ Serialization: time=N.N ms  output=NkB  format=text
+ Execution Time: N.N ms
+(14 rows)
+
+RESET citus.log_remote_commands;
+-- End of EXPLAIN MEMORY SERIALIZE tests
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
