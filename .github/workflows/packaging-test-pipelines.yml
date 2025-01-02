@@ -115,7 +115,6 @@ jobs:
         # for each deb based image and we use POSTGRES_VERSION to set
         # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
-          - debian-buster-all
           - debian-bookworm-all
           - debian-bullseye-all
           - ubuntu-focal-all
