@@ -1080,6 +1080,263 @@ select public.explain_filter('explain (analyze,serialize) create temp table expl
 
 RESET citus.log_remote_commands;
 -- End of EXPLAIN MEMORY SERIALIZE tests
+-- Add support for MERGE ... WHEN NOT MATCHED BY SOURCE.
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/0294df2f1
+
+SET citus.next_shard_id TO 25122024;
+
+-- Regular Postgres tables
+CREATE TABLE postgres_target_1 (tid integer, balance float, val text);
+CREATE TABLE postgres_target_2 (tid integer, balance float, val text);
+CREATE TABLE postgres_source (sid integer, delta float);
+INSERT INTO postgres_target_1 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO postgres_target_2 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO postgres_source SELECT id, id * 10  FROM generate_series(1,14) AS id;
+
+-- Citus local tables
+CREATE TABLE citus_local_target (tid integer, balance float, val text);
+CREATE TABLE citus_local_source (sid integer, delta float);
+SELECT citus_add_local_table_to_metadata('citus_local_target');
+SELECT citus_add_local_table_to_metadata('citus_local_source');
+INSERT INTO citus_local_target SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO citus_local_source SELECT id, id * 10  FROM generate_series(1,14) AS id;
+-- Citus distributed tables
+CREATE TABLE citus_distributed_target (tid integer, balance float, val text);
+CREATE TABLE citus_distributed_source (sid integer, delta float);
+SELECT create_distributed_table('citus_distributed_target', 'tid');
+SELECT create_distributed_table('citus_distributed_source', 'sid');
+INSERT INTO citus_distributed_target SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO citus_distributed_source SELECT id, id * 10  FROM generate_series(1,14) AS id;
+-- Citus reference tables
+CREATE TABLE citus_reference_target (tid integer, balance float, val text);
+CREATE TABLE citus_reference_source (sid integer, delta float);
+SELECT create_reference_table('citus_reference_target');
+SELECT create_reference_table('citus_reference_source');
+INSERT INTO citus_reference_target SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO citus_reference_source SELECT id, id * 10  FROM generate_series(1,14) AS id;
+
+-- Try all combinations of tables with two queries:
+-- 1: Simple Merge
+-- 2: Merge with a constant qual
+
+-- Run the merge queries with the postgres tables
+-- to save the expected output
+
+-- try simple MERGE
+MERGE INTO postgres_target_1 t
+  USING postgres_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT * FROM postgres_target_1 ORDER BY tid, val;
+
+-- same with a constant qual
+MERGE INTO postgres_target_2 t
+  USING postgres_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT * FROM postgres_target_2 ORDER BY tid, val;
+
+-- function to compare the output from Citus tables
+-- with the expected output from Postgres tables
+
+CREATE OR REPLACE FUNCTION compare_tables(table1 TEXT, table2 TEXT) RETURNS BOOLEAN AS $$
+DECLARE ret BOOL;
+BEGIN
+EXECUTE 'select count(*) = 0 from ((
+  SELECT * FROM ' || table1 ||
+  ' EXCEPT
+  SELECT * FROM ' || table2 || ' )
+ UNION ALL (
+  SELECT * FROM ' || table2 ||
+  ' EXCEPT
+  SELECT * FROM ' || table1 || ' ))' INTO ret;
+RETURN ret;
+END
+$$ LANGUAGE PLPGSQL;
+
+-- Local-Local
+-- Let's also print the command here
+-- try simple MERGE
+BEGIN;
+SET citus.log_local_commands TO on;
+MERGE INTO citus_local_target t
+  USING citus_local_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_local_target', 'postgres_target_1');
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_local_target t
+  USING citus_local_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_local_target', 'postgres_target_2');
+ROLLBACK;
+
+-- Local-Reference
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_local_target t
+  USING citus_reference_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_local_target', 'postgres_target_1');
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_local_target t
+  USING citus_reference_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_local_target', 'postgres_target_2');
+ROLLBACK;
+
+-- Local-Distributed - Merge currently not supported, Feature in development.
+-- try simple MERGE
+MERGE INTO citus_local_target t
+  USING citus_distributed_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+
+-- Distributed-Local
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_distributed_target t
+  USING citus_local_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target', 'postgres_target_1');
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_distributed_target t
+  USING citus_local_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target', 'postgres_target_2');
+ROLLBACK;
+
+-- Distributed-Distributed
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_distributed_target t
+  USING citus_distributed_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target', 'postgres_target_1');
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_distributed_target t
+  USING citus_distributed_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target', 'postgres_target_2');
+ROLLBACK;
+
+-- Distributed-Reference
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_distributed_target t
+  USING citus_reference_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target', 'postgres_target_1');
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_distributed_target t
+  USING citus_reference_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target', 'postgres_target_2');
+ROLLBACK;
+
+-- Reference-N/A - Reference table as target is not allowed in Merge
+-- try simple MERGE
+MERGE INTO citus_reference_target t
+  USING citus_distributed_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+
+-- End of MERGE ... WHEN NOT MATCHED BY SOURCE tests
 
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
