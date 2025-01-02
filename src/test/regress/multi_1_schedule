@@ -38,6 +38,7 @@ test: create_single_shard_table
 test: create_drop_database_propagation
 test: create_drop_database_propagation_pg15
 test: create_drop_database_propagation_pg16
+test: grant_on_parameter_propagation
 test: comment_on_database
 test: comment_on_role
 test: metadata_sync_from_non_maindb
