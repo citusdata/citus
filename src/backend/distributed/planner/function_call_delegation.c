@@ -76,6 +76,20 @@ bool InTopLevelDelegatedFunctionCall = false;
 /* global variable keeping track of whether we are in a delegated function call */
 bool InDelegatedFunctionCall = false;
 
+/*
+ * check if the function is a distributed by an argument. If false, the
+ * function can be push down.
+ * The input can be NULL, in such case it is assumsed also it can be pushed down...
+ */
+static inline bool
+IsFunctionDistributedByArg(DistObjectCacheEntry *procedure)
+{
+	if (procedure == NULL)
+		return false;
+
+	return procedure->isDistributed
+		&& procedure->distributionArgIndex != InvalidOid;
+}
 
 /*
  * contain_param_walker scans node for Param nodes.
@@ -111,13 +125,15 @@ contain_param_walker(Node *node, void *context)
 	}
 }
 
-
 /*
  * TryToDelegateFunctionCall calls a function on the worker if possible.
  * We only support delegating the SELECT func(...) form for distributed
  * functions colocated by distributed tables, and not more complicated
  * forms involving multiple function calls, FROM clauses, WHERE clauses,
  * ... Those complex forms are handled in the coordinator.
+ * We also support push down of SELECT ..., fn1(), ... FROM ... WHERE
+ * when the function has no distribution_arg_name defined.
+ * XXX only 1 function can be push down.
  */
 PlannedStmt *
 TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
@@ -125,6 +141,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	ShardPlacement *placement = NULL;
 	struct ParamWalkerContext walkerParamContext = { 0 };
 	bool inTransactionBlock = false;
+	bool MaybeReturnNull = false;
 
 	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG4))
 	{
@@ -155,12 +172,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	if (joinTree == NULL)
 	{
 		/* no join tree (mostly here to be defensive) */
-		return NULL;
-	}
-
-	if (joinTree->quals != NULL)
-	{
-		/* query has a WHERE section */
 		return NULL;
 	}
 
@@ -199,7 +210,17 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 			{
 				/* e.g. SELECT f() FROM rel */
 				ereport(DEBUG4, (errmsg("FromList item is not empty")));
-				return NULL;
+
+				/* XXX only 1 function can be push down at the moment */
+				if (MaybeReturnNull)
+					return NULL;
+
+				/*
+				 * It's ok if the function is not distributed with an explicit key.
+				 * We check that later.
+				 */
+				MaybeReturnNull = true;
+
 			}
 		}
 		else
@@ -212,17 +233,31 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		}
 	}
 
+	if (joinTree->quals != NULL)
+	{
+		/*
+		 * query has a WHERE section
+		 * It's ok if the function is not distributed with an explicit key.
+		 * We check that later.
+		 */
+		MaybeReturnNull = true;
+	}
+
 	FuncExpr *targetFuncExpr = NULL;
 	List *targetList = planContext->query->targetList;
 	int targetListLen = list_length(targetList);
+	ListCell *targetEntryCell = NULL;
 
-	if (targetListLen == 1)
+	if (targetListLen > 0)
 	{
-		TargetEntry *targetEntry = (TargetEntry *) linitial(targetList);
-		if (IsA(targetEntry->expr, FuncExpr))
+		foreach(targetEntryCell, targetList)
 		{
-			/* function from the SELECT clause e.g. SELECT fn() FROM  */
-			targetFuncExpr = (FuncExpr *) targetEntry->expr;
+			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			if (IsA(targetEntry->expr, FuncExpr))
+			{
+				/* function from the SELECT clause e.g. SELECT ...fn()... FROM  */
+				targetFuncExpr = (FuncExpr *) targetEntry->expr;
+			}
 		}
 	}
 
@@ -264,6 +299,13 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	else
 	{
 		ereport(DEBUG4, (errmsg("function is distributed")));
+	}
+
+	/* maybe return null if the fuction is disitributed with a distribution argument */
+	if (MaybeReturnNull && procedure->distributionArgIndex != InvalidOid)
+	{
+		/* query is of the form SELECT f() FROM rel and/or has a WHERE section */
+		return NULL;
 	}
 
 	if (IsCitusInternalBackend())
