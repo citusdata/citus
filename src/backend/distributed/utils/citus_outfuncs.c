@@ -536,6 +536,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_FLOAT_FIELD(fetchedExplainAnalyzeExecutionDuration, "%.2f");
 	WRITE_BOOL_FIELD(isLocalTableModification);
 	WRITE_BOOL_FIELD(cannotBeExecutedInTransaction);
+	WRITE_BOOL_FIELD(safeToPush);
 }
 
 
