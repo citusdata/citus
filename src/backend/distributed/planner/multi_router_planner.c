@@ -2229,8 +2229,6 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 	if (!foundNonReferenceTable)
 		task->safeToPush = true;
 
-exitnow:
-
 	return list_make1(task);
 }
 
