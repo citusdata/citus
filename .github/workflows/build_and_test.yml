@@ -11,9 +11,6 @@ on:
         default: false
         type: boolean
   push:
-    branches:
-      - "main"
-      - "release-*"
   pull_request:
     types: [opened, reopened,synchronize]
   merge_group:
