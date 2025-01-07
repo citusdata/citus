@@ -237,11 +237,11 @@ jobs:
       if: always()
       with:
         folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+    # - uses: "./.github/actions/upload_coverage"
+    #   if: always()
+    #   with:
+    #     flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
+    #     codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
     name: PG${{ fromJson(matrix.pg_version).major }} - check-arbitrary-configs-${{ matrix.parallel }}
     runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
@@ -284,11 +284,11 @@ jobs:
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.pg_major }}_upgrade
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+    # - uses: "./.github/actions/upload_coverage"
+    #   if: always()
+    #   with:
+    #     flags: ${{ env.pg_major }}_upgrade
+    #     codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
     runs-on: ubuntu-20.04
@@ -335,11 +335,11 @@ jobs:
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+    # - uses: "./.github/actions/upload_coverage"
+    #   if: always()
+    #   with:
+    #     flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
+    #     codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
     name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
     runs-on: ubuntu-20.04
@@ -380,11 +380,11 @@ jobs:
         done;
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.pg_major }}_upgrade
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+    # - uses: "./.github/actions/upload_coverage"
+    #   if: always()
+    #   with:
+    #     flags: ${{ env.pg_major }}_upgrade
+    #     codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
     if: always()
     env:
