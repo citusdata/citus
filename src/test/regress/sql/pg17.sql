@@ -1189,7 +1189,7 @@ MERGE INTO citus_local_target t
   ON t.tid = s.sid AND tid = 1
   WHEN MATCHED THEN
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
-  WHEN NOT MATCHED THEN
+  WHEN NOT MATCHED BY TARGET THEN
     INSERT VALUES (sid, delta, 'inserted by merge')
   WHEN NOT MATCHED BY SOURCE THEN
     UPDATE SET val = val || ' not matched by source';
@@ -1204,7 +1204,7 @@ MERGE INTO citus_local_target t
   ON t.tid = s.sid
   WHEN MATCHED THEN
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
-  WHEN NOT MATCHED THEN
+  WHEN NOT MATCHED BY TARGET THEN
     INSERT VALUES (sid, delta, 'inserted by merge')
   WHEN NOT MATCHED BY SOURCE THEN
     UPDATE SET val = val || ' not matched by source';
@@ -1259,7 +1259,7 @@ MERGE INTO citus_distributed_target t
   ON t.tid = s.sid AND tid = 1
   WHEN MATCHED THEN
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
-  WHEN NOT MATCHED THEN
+  WHEN NOT MATCHED BY TARGET THEN
     INSERT VALUES (sid, delta, 'inserted by merge')
   WHEN NOT MATCHED BY SOURCE THEN
     UPDATE SET val = val || ' not matched by source';
