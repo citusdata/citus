@@ -2890,14 +2890,27 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	DetermineCitusBackendType(newval);
 
 	/*
-	 * AssignGlobalPID might read from catalog tables to get the the local
-	 * nodeid. But ApplicationNameAssignHook might be called before catalog
-	 * access is available to the backend (such as in early stages of
-	 * authentication). We use StartupCitusBackend to initialize the global pid
-	 * after catalogs are available. After that happens this hook becomes
-	 * responsible to update the global pid on later application_name changes.
-	 * So we set the FinishedStartupCitusBackend flag in StartupCitusBackend to
-	 * indicate when this responsibility handoff has happened.
+	 * We use StartupCitusBackend to initialize the global pid after catalogs
+	 * are available. After that happens this hook becomes responsible to update
+	 * the global pid on later application_name changes. So we set the
+	 * FinishedStartupCitusBackend flag in StartupCitusBackend to indicate when
+	 * this responsibility handoff has happened.
+	 *
+	 * Also note that when application_name changes, we don't actually need to
+	 * try re-assigning the global pid for external client backends and
+	 * background workers because application_name doesn't affect the global
+	 * pid for such backends - note that !IsExternalClientBackend() check covers
+	 * both types of backends. Plus,
+	 * trying to re-assign the global pid for such backends would unnecessarily
+	 * cause performing a catalog access when the cached local node id is
+	 * invalidated. However, accessing to the catalog tables is dangerous in
+	 * certain situations like when we're not in a transaction block. And for
+	 * the other types of backends, i.e., the Citus internal backends, we need
+	 * to re-assign the global pid when the application_name changes because for
+	 * such backends we simply extract the global pid inherited from the
+	 * originating backend from the application_name -that's specified by
+	 * originating backend when openning that connection- and this doesn't require
+	 * catalog access.
 	 *
 	 * Another solution to the catalog table acccess problem would be to update
 	 * global pid lazily, like we do for HideShards. But that's not possible
@@ -2907,7 +2920,7 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	 * as reasonably possible, which is also why we extract global pids in the
 	 * AuthHook already (extracting doesn't require catalog access).
 	 */
-	if (FinishedStartupCitusBackend)
+	if (FinishedStartupCitusBackend && !IsExternalClientBackend())
 	{
 		AssignGlobalPID(newval);
 	}
