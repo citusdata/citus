@@ -111,8 +111,6 @@ jobs:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
           - ${{ needs.params.outputs.pg14_version }}
-          - ${{ needs.params.outputs.pg15_version }}
-          - ${{ needs.params.outputs.pg16_version }}
     runs-on: ubuntu-20.04
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
