@@ -385,6 +385,28 @@ jobs:
       with:
         flags: ${{ env.pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  upload-coverage:
+    if: always()
+    env:
+      CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+    runs-on: ubuntu-20.04
+    container:
+      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg16_version).full }}${{ needs.params.outputs.image_suffix }}
+    needs:
+      - params
+      - test-citus
+      - test-arbitrary-configs
+      - test-citus-upgrade
+      - test-pg-upgrade
+    steps:
+      - uses: actions/download-artifact@v3.0.1
+        with:
+          name: "codeclimate"
+          path: "codeclimate"
+      - name: Upload coverage results to Code Climate
+        run: |-
+          cc-test-reporter sum-coverage codeclimate/*.json -o total.json
+          cc-test-reporter upload-coverage -i total.json
   ch_benchmark:
     name: CH Benchmark
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
