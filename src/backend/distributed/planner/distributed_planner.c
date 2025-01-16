@@ -272,6 +272,22 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
+
+			if (needsDistributedPlanning)
+			{
+				List *rtesPostPlan = ExtractRangeTableEntryList(planContext.query);
+				if (list_length(rtesPostPlan) < list_length(rangeTableList))
+				{
+					bool fDistributedTable = false;
+
+					/* range table entries have been reduced by planner, possibly by constant folding. */
+					needsDistributedPlanning = ListContainsDistributedTableRTE(
+						rtesPostPlan,
+						&
+						fDistributedTable);
+				}
+			}
+
 			if (needsDistributedPlanning)
 			{
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
