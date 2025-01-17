@@ -1,3 +1,25 @@
+### citus v13.0.0 (January 17, 2025) ###
+
+* Adds support for PostgreSQL 17.2 (#7699, #7661)
+
+* Propagates MERGE ... WHEN NOT MATCHED BY SOURCE (#7807)
+
+* Adds JSON_TABLE() support in distributed queries (#7816)
+
+* Propagates MEMORY and SERIALIZE options of EXPLAIN (#7802)
+
+* Allows specifying an access method for distributed partitioned tables (#7818)
+
+* Adds support for exclusion constraints on distributed partitioned tables (#7733)
+
+* Adds support for identity columns in distributed partitioned tables (#7785)
+
+* Propagates SECURITY LABEL ON ROLE stmt (#7304)
+
+* Allows configuring sslnegotiation using citus.node_conn_info (#7821)
+
+* Adds devcontainer support (#7739)
+
 ### citus v12.1.6 (Nov 14, 2024) ###
 
 * Propagates `SECURITY LABEL .. ON ROLE` statements (#7304)
