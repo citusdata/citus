@@ -8,8 +8,6 @@
 
 * Propagates MEMORY and SERIALIZE options of EXPLAIN (#7802)
 
-* Propagates SECURITY LABEL ON ROLE stmt (#7304)
-
 * Adds support for identity columns in distributed partitioned tables (#7785)
 
 * Allows specifying an access method for distributed partitioned tables (#7818)
@@ -26,8 +24,6 @@
 * Fixes a crash that happens because of unsafe catalog access when re-assigning
   the global pid after application_name changes (#7791)
 
-* Fixes a possible segfault on distributed queries with window partition (#7718)
-
 * Fixes incorrect VALID UNTIL setting assumption made for roles when syncing
   them to new nodes (#7534)
 
@@ -36,6 +32,9 @@
 
 * Fixes server crash when trying to execute activate_node_snapshot() on a
   single-node cluster (#7552)
+
+* Improves citus_move_shard_placement() to fail early if there is a new node
+  without reference tables yet (#7467)
 
 ### citus v12.1.6 (Nov 14, 2024) ###
 
