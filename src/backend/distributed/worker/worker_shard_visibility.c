@@ -441,7 +441,7 @@ FilterShardsFromPgclass(Node *node, void *context)
 		/*
 		 * We process the whole rtable rather than visiting individual RangeTblEntry's
 		 * in the walker, since we need to know the varno to generate the right
-		 * fiter.
+		 * filter.
 		 */
 		int varno = 0;
 		RangeTblEntry *rangeTableEntry = NULL;
@@ -471,29 +471,47 @@ FilterShardsFromPgclass(Node *node, void *context)
 			/* make sure the expression is in the right memory context */
 			MemoryContext originalContext = MemoryContextSwitchTo(queryContext);
 
+            /* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
+            Node *newQual = CreateRelationIsAKnownShardFilter(varno);
 
-			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
-			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
-			Node *oldQuals = query->jointree->quals;
-			if (oldQuals)
-			{
-				query->jointree->quals = (Node *) makeBoolExpr(
-					AND_EXPR,
-					list_make2(oldQuals, newQual),
-					-1);
-			}
-			else
-			{
-				query->jointree->quals = newQual;
-			}
+#if PG_VERSION_NUM >= PG_VERSION_17
+            /*
+             * In PG17, MERGE queries introduce a new struct `mergeJoinCondition`.
+             * We need to handle this condition safely.
+             */
+            if (query->mergeJoinCondition != NULL)
+            {
+                /* Add the filter to mergeJoinCondition */
+                query->mergeJoinCondition = (Node *) makeBoolExpr(
+                    AND_EXPR,
+                    list_make2(query->mergeJoinCondition, newQual),
+                    -1);
+            }
+            else
+#endif
+            {
+                /* Handle older versions or queries without mergeJoinCondition */
+                Node *oldQuals = query->jointree->quals;
+                if (oldQuals)
+                {
+                    query->jointree->quals = (Node *) makeBoolExpr(
+                        AND_EXPR,
+                        list_make2(oldQuals, newQual),
+                        -1);
+                }
+                else
+                {
+                    query->jointree->quals = newQual;
+                }
+            }
 
-			MemoryContextSwitchTo(originalContext);
-		}
+            MemoryContextSwitchTo(originalContext);
+        }
 
-		return query_tree_walker((Query *) node, FilterShardsFromPgclass, context, 0);
-	}
+        return query_tree_walker((Query *) node, FilterShardsFromPgclass, context, 0);
+    }
 
-	return expression_tree_walker(node, FilterShardsFromPgclass, context);
+    return expression_tree_walker(node, FilterShardsFromPgclass, context);
 }
 
 

@@ -2690,6 +2690,32 @@ SELECT * FROM sensor_readings ORDER BY 1;
 (4 rows)
 
 -- End of MERGE ... WHEN NOT MATCHED BY SOURCE tests
+-- Issue #7846
+-- Create a non-distributed table with a random suffix
+CREATE TABLE non_dist_table_12345 (id INTEGER);
+-- Test crash scenario on a non-distributed table
+MERGE INTO non_dist_table_12345 AS target_0
+USING pg_catalog.pg_class AS ref_0
+ON target_0.id = ref_0.relpages
+WHEN NOT MATCHED THEN DO NOTHING;
+-- Create a distributed table with a random suffix
+CREATE TABLE dist_table_67890 (id INTEGER);
+SELECT create_distributed_table('dist_table_67890', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- Test crash scenario on a distributed table
+MERGE INTO dist_table_67890 AS target_0
+USING pg_catalog.pg_class AS ref_0
+ON target_0.id = ref_0.relpages
+WHEN NOT MATCHED THEN DO NOTHING;
+ERROR:  MERGE INTO an distributed table from Postgres table is not yet supported
+-- Cleanup
+DROP TABLE IF EXISTS non_dist_table_12345;
+DROP TABLE IF EXISTS dist_table_67890 CASCADE;
+-- End of Issue #7846
 \set VERBOSITY terse
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg17 CASCADE;
