@@ -1451,29 +1451,38 @@ SELECT * FROM sensor_readings ORDER BY 1;
 
 -- End of MERGE ... WHEN NOT MATCHED BY SOURCE tests
 
--- Issue #7846
--- Create a non-distributed table with a random suffix
+-- Issue #7846: Test crash scenarios with MERGE on non-distributed and distributed tables
+-- Step 1: Connect to a worker node to verify shard visibility
+\c postgresql://postgres@localhost::worker_1_port/regression?application_name=psql
+SET search_path TO pg17;
+
+-- Step 2: Create and test a non-distributed table
 CREATE TABLE non_dist_table_12345 (id INTEGER);
 
--- Test crash scenario on a non-distributed table
+-- Test MERGE on the non-distributed table
 MERGE INTO non_dist_table_12345 AS target_0
 USING pg_catalog.pg_class AS ref_0
 ON target_0.id = ref_0.relpages
 WHEN NOT MATCHED THEN DO NOTHING;
 
--- Create a distributed table with a random suffix
+-- Step 3: Switch back to the coordinator for distributed table operations
+\c - - - :master_port
+SET search_path TO pg17;
+
+-- Step 4: Create and test a distributed table
 CREATE TABLE dist_table_67890 (id INTEGER);
 SELECT create_distributed_table('dist_table_67890', 'id');
 
--- Test crash scenario on a distributed table
+-- Test MERGE on the distributed table
 MERGE INTO dist_table_67890 AS target_0
 USING pg_catalog.pg_class AS ref_0
 ON target_0.id = ref_0.relpages
 WHEN NOT MATCHED THEN DO NOTHING;
 
--- Cleanup
-DROP TABLE IF EXISTS non_dist_table_12345;
-DROP TABLE IF EXISTS dist_table_67890 CASCADE;
+-- Step 5: Cleanup
+DROP TABLE non_dist_table_12345;
+DROP TABLE dist_table_67890 CASCADE;
+
 -- End of Issue #7846
 
 \set VERBOSITY terse
