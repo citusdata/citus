@@ -2701,9 +2701,9 @@ WHEN NOT MATCHED THEN DO NOTHING;
 -- Create a distributed table with a random suffix
 CREATE TABLE dist_table_67890 (id INTEGER);
 SELECT create_distributed_table('dist_table_67890', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Test crash scenario on a distributed table
