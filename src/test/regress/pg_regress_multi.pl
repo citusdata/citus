@@ -256,6 +256,7 @@ exec $valgrindPath \\
     --suppressions=${postgresSrcdir}/src/tools/valgrind.supp \\
     --trace-children=yes --track-origins=yes --read-var-info=no \\
     --leak-check=no \\
+    --keep-debuginfo=yes \\
     --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \\
     --max-stackframe=16000000 \\
     --log-file=$valgrindLogFile \\
@@ -1199,4 +1200,3 @@ else {
 	die "Failed in ". ($endTime - $startTime)." seconds. \n";
 
 }
-
