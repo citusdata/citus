@@ -1466,7 +1466,7 @@ ON target_0.id = ref_0.relpages
 WHEN NOT MATCHED THEN DO NOTHING;
 
 -- Step 3: Switch back to the coordinator for distributed table operations
-\c - - - :master_port
+\c postgresql://postgres@localhost::master_port/regression?application_name=psql
 SET search_path TO pg17;
 
 -- Step 4: Create and test a distributed table
