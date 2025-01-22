@@ -2,7 +2,7 @@
 
 * Drops support for PostgreSQL 14 (#7753)
 
-### citus v13.0.0 (January 17, 2025) ###
+### citus v13.0.0 (January 22, 2025) ###
 
 * Adds support for PostgreSQL 17 (#7699, #7661)
 
