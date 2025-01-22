@@ -1479,10 +1479,7 @@ USING pg_catalog.pg_class AS ref_0
 ON target_0.id = ref_0.relpages
 WHEN NOT MATCHED THEN DO NOTHING;
 
--- Step 5: Cleanup
-DROP TABLE non_dist_table_12345;
-DROP TABLE dist_table_67890 CASCADE;
-
+\c - - - :master_port
 -- End of Issue #7846
 
 \set VERBOSITY terse
