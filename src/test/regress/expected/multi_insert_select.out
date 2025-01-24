@@ -690,10 +690,10 @@ INSERT INTO agg_events
   FROM
     raw_events_first;
 DEBUG:  CTE sub_cte is going to be inlined via distributed planning
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1 AS "?column?") sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300000 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1 AS "?column?") sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300001 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1 AS "?column?") sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300002 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1 AS "?column?") sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300003 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300000 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300001 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300002 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, (SELECT sub_cte."?column?" FROM (SELECT 1) sub_cte("?column?")) FROM multi_insert_select.raw_events_first_13300003 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
 -- We support set operations
 BEGIN;
 INSERT INTO

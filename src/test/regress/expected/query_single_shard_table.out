@@ -1973,7 +1973,7 @@ DEBUG:  recursively planning left side of the right join since the outer side is
 DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "distributed_table" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer) AS "?column?", cte.b FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))) cte) citus_insert_select_subquery("?column?", b)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer), cte.b FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))) cte) citus_insert_select_subquery("?column?", b)
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- .. and via SELECT's cte list too
 INSERT INTO raw_events_second (user_id, value_1)

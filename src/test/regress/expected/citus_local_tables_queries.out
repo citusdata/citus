@@ -369,7 +369,7 @@ SELECT clear_and_init_test_tables();
 
 -- anonymous columns
 WITH a AS (SELECT a, '' FROM citus_local_table GROUP BY a) SELECT a.a FROM a ORDER BY 1 LIMIT 5;
-NOTICE:  executing the command locally: SELECT a FROM (SELECT citus_local_table.a, ''::text AS "?column?" FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table GROUP BY citus_local_table.a) a(a, "?column?") ORDER BY a LIMIT 5
+NOTICE:  executing the command locally: SELECT a FROM (SELECT citus_local_table.a, ''::text FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table GROUP BY citus_local_table.a) a(a, "?column?") ORDER BY a LIMIT 5
  a
 ---------------------------------------------------------------------
  0
@@ -380,7 +380,7 @@ NOTICE:  executing the command locally: SELECT a FROM (SELECT citus_local_table.
 (5 rows)
 
 WITH a AS (SELECT b, '' FROM citus_local_table WHERE a = 1) SELECT * FROM a, a b ORDER BY 1 LIMIT 5;
-NOTICE:  executing the command locally: WITH a AS (SELECT citus_local_table.b, ''::text AS "?column?" FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) 1)) SELECT a.b, a."?column?", b.b, b."?column?" FROM a a(b, "?column?"), a b(b, "?column?") ORDER BY a.b LIMIT 5
+NOTICE:  executing the command locally: WITH a AS (SELECT citus_local_table.b, ''::text FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) 1)) SELECT a.b, a."?column?", b.b, b."?column?" FROM a a(b, "?column?"), a b(b, "?column?") ORDER BY a.b LIMIT 5
  b | ?column? | b | ?column?
 ---------------------------------------------------------------------
  1 |          | 1 |

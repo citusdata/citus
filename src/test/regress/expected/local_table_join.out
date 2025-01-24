@@ -1556,7 +1556,7 @@ DEBUG:  Wrapping relation "table2" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
 DEBUG:  Wrapping relation "table2" to a subquery
 DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_1) table2 RIGHT JOIN (SELECT 1 AS "?column?" FROM local_table_join.table1, (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_2) table2_1) sub1("?column?") ON (false))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_1) table2 RIGHT JOIN (SELECT 1 FROM local_table_join.table1, (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_2) table2_1) sub1("?column?") ON (false))
  res
 ---------------------------------------------------------------------
    1
@@ -1614,7 +1614,7 @@ DEBUG:  Wrapping relation "table2" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
 DEBUG:  Wrapping relation "table2" to a subquery
 DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_1) table2 RIGHT JOIN (SELECT 1 AS "?column?" FROM local_table_join.table1, (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_2) table2_1) sub1("?column?") ON (false))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_1) table2 RIGHT JOIN (SELECT 1 FROM local_table_join.table1, (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_2) table2_1) sub1("?column?") ON (false))
  res
 ---------------------------------------------------------------------
    1
@@ -1636,7 +1636,7 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
 DEBUG:  Wrapping relation "table1" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table1 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM (local_table_join.table2 RIGHT JOIN (SELECT 1 AS "?column?" FROM (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table1_1) table1, local_table_join.table2 table2_1) sub1("?column?") ON (false))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM (local_table_join.table2 RIGHT JOIN (SELECT 1 FROM (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table1_1) table1, local_table_join.table2 table2_1) sub1("?column?") ON (false))
  res
 ---------------------------------------------------------------------
    1
