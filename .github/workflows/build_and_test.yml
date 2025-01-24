@@ -28,6 +28,7 @@ jobs:
       style_checker_tools_version: "0.8.18"
       sql_snapshot_pg_version: "17.2"
       image_suffix: "-v889e4c1"
+      image_suffix_citus_upgrade: "-dev-2ad1f90"
       pg14_version: '{ "major": "14", "full": "14.15" }'
       pg15_version: '{ "major": "15", "full": "15.10" }'
       pg16_version: '{ "major": "16", "full": "16.6" }'
@@ -366,10 +367,10 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
+    name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg14_version).full }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix_citus_upgrade }}"
       options: --user root
     needs:
     - params
