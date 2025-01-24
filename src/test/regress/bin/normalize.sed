@@ -107,7 +107,8 @@ s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
 # Extra outputs after minor bump to PG14.5 and PG13.8
 /^\s*invalid socket$/d
 
-# can be removed when dropping PG14 support
+# pg15 changes
+s/ AS "\?column\?"//g
 # We ignore multiline error messages, and substitute first line with a single line
 # alternative that is used in some older libpq versions.
 s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
