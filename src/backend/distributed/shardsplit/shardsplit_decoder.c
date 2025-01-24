@@ -122,11 +122,7 @@ update_replication_progress(LogicalDecodingContext *ctx, bool skipped_xact)
 	 */
 	if (ctx->end_xact || ++changes_count >= CHANGES_THRESHOLD)
 	{
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 		OutputPluginUpdateProgress(ctx, skipped_xact);
-#else
-		OutputPluginUpdateProgress(ctx);
-#endif
 		changes_count = 0;
 	}
 }
