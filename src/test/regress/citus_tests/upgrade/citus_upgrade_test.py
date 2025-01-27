@@ -146,11 +146,66 @@ def restart_database(pg_path, abs_data_path, node_name, node_ports, logfile_pref
     subprocess.run(command, check=True)
 
 
+import subprocess
+import utils
+
 def run_alter_citus(pg_path, mixed_mode, config):
     for port in config.node_name_to_ports.values():
         if mixed_mode and port == config.chosen_random_worker_port:
             continue
-        utils.psql(pg_path, port, "ALTER EXTENSION citus UPDATE;")
+
+        alter_extension_sql = """
+            SELECT '=== BEFORE ALTER ===' AS info;
+
+            SELECT pid, query, state, wait_event_type, wait_event
+            FROM pg_stat_activity
+            ORDER BY pid;
+
+            SELECT l.locktype,
+                l.relation::regclass AS relname,
+                l.mode,
+                l.granted,
+                a.pid,
+                a.query AS current_query
+            FROM pg_locks l
+            JOIN pg_stat_activity a ON (l.pid = a.pid)
+            ORDER BY l.relation, l.pid;
+
+            ALTER EXTENSION citus UPDATE;
+        """
+
+        debug_sql = """
+            SELECT '=== AFTER ALTER ===' AS info;
+
+            SELECT pid, query, state, wait_event_type, wait_event
+            FROM pg_stat_activity
+            ORDER BY pid;
+
+            SELECT l.locktype,
+                l.relation::regclass AS relname,
+                l.mode,
+                l.granted,
+                a.pid,
+                a.query AS current_query
+            FROM pg_locks l
+            JOIN pg_stat_activity a ON (l.pid = a.pid)
+            ORDER BY l.relation, l.pid;
+        """
+
+        try:
+            utils.psql(pg_path, port, alter_extension_sql)
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] Failed to run 'ALTER EXTENSION citus UPDATE;' on port {port}")
+            print(f"        psql returned: {e.returncode}, {e.output}")
+
+            try:
+                utils.psql(pg_path, port, debug_sql)
+                
+            except subprocess.CalledProcessError as inner_e:
+                print(f"[WARNING] Could not retrieve diagnostic info on port {port}: {inner_e}")
+
+            raise
+
 
 
 def verify_upgrade(config, mixed_mode, node_ports):
