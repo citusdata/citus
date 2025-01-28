@@ -157,6 +157,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	Node *parsetree = pstmt->utilityStmt;
 
+    if (parsetree && (nodeTag(parsetree) == T_AlterExtensionStmt))
+    {
+        /* Skip unnecessary backend initializations during ALTER EXTENSION */
+        PrevProcessUtility(pstmt, queryString, false, context,
+                           params, queryEnv, dest, completionTag);
+        return;
+    }	
+
 	if (IsA(parsetree, TransactionStmt))
 	{
 		TransactionStmt *transactionStmt = (TransactionStmt *) parsetree;
