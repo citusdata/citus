@@ -45,7 +45,9 @@ RUN apt update && apt install -y \
 
 RUN sudo pip3 install pipenv pipenv-shebang
 
-RUN cpanm install IPC::Run
+# the --force flag is to suppress test failures when building an arm64 build on qemu
+# to allow github actions to create a devcontainer version for the mac with apple silicon
+RUN cpanm install --force IPC::Run
 
 RUN locale-gen en_US.UTF-8
 
