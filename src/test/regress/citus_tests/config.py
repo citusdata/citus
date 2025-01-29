@@ -184,7 +184,24 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.pre_tar_path = pre_tar
         self.post_tar_path = post_tar
         self.temp_dir = "./tmp_citus_upgrade"
-        self.new_settings = {"citus.enable_version_checks": "false"}
+        self.new_settings = {
+            "citus.enable_version_checks": "false",
+            "log_statement": "all",  # Logs all SQL statements
+            "log_min_duration_statement": "0",  # Logs all queries, even fast ones
+            "log_error_verbosity": "verbose",  # Includes detailed error messages
+            "log_min_messages": "DEBUG1",  # Logs detailed debugging messages
+            "log_min_error_statement": "LOG",  # Logs all error statements
+            "log_lock_waits": "on",  # Logs when queries wait for locks
+            "deadlock_timeout": "1s",  # Logs locks that wait longer than 1s
+            "log_connections": "on",  # Logs new connections
+            "log_disconnections": "on",  # Logs when connections close
+            "log_checkpoints": "on",  # Logs when checkpoints occur
+            "log_temp_files": "0",  # Logs temp file usage
+            "log_replication_commands": "on",  # Logs replication commands
+            "log_line_prefix": "%m [%p] %q%u@%d ",  # Includes timestamp, PID, user, and database
+            "citus.work_min_messages": "DEBUG1",  # Enables more logging for Citus background workers
+        }
+
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
         self.fixed_port = 57635
