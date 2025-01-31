@@ -24,4 +24,4 @@ runs:
   - uses: actions/upload-artifact@v4.6.0
     with:
       path: "/tmp/codeclimate/*.json"
-      name: codeclimate
+      name: codeclimate-${{ inputs.flags }}
