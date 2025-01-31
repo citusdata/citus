@@ -252,10 +252,12 @@ jobs:
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
@@ -299,6 +301,8 @@ jobs:
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
@@ -344,10 +348,12 @@ jobs:
         done;
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_citus_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
     if: always()
@@ -365,8 +371,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4.1.8
         with:
-          name: "codeclimate"
-          path: "codeclimate"
+          pattern: codeclimate*
+          path: codeclimate
+          merge-multiple: true
       - name: Upload coverage results to Code Climate
         run: |-
           cc-test-reporter sum-coverage codeclimate/*.json -o total.json
