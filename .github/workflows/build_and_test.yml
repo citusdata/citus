@@ -424,7 +424,7 @@ jobs:
       - test-citus-upgrade
       - test-pg-upgrade
     steps:
-      - uses: actions/download-artifact@v3.0.1
+      - uses: actions/download-artifact@v4.1.8
         with:
           name: "codeclimate"
           path: "codeclimate"
@@ -525,7 +525,7 @@ jobs:
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
     steps:
     - uses: actions/checkout@v3.5.0
-    - uses: actions/download-artifact@v3.0.1
+    - uses: actions/download-artifact@v4.1.8
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-
