@@ -154,7 +154,10 @@ permutation "s1-begin" "s1-ddl" "s2-create-restore" "s1-commit"
 // verify that citus_create_restore_point is not blocked by concurrent COPY (only commit)
 permutation "s1-begin" "s1-copy" "s2-create-restore" "s1-commit"
 
-// verify that citus_create_restore_point is blocked by concurrent recover_prepared_transactions
+// verify that citus_create_restore_point is partially blocked by concurrent recover_prepared_transactions.
+// In the test output, we won't be able to explicitly observe this since
+// recover_prepared_transactions unblocks citus_create_restore_point after in-progress prepared transactions
+// are recovered.
 permutation "s1-begin" "s1-recover" "s2-create-restore" "s1-commit"
 
 // verify that citus_create_restore_point is blocked by concurrent DROP TABLE
