@@ -347,7 +347,23 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	}
 
 	systable_endscan(scanDescriptor);
-	table_close(pgDistTransaction, NoLock);
+
+	/*
+	 * Here we release the lock on pg_dist_transaction while closing it to avoid
+	 * deadlocks that might occur because of trying to acquire a lock on
+	 * pg_dist_authinfo while holding a lock on pg_dist_transaction. Such a scenario
+	 * can only cause a deadlock if another transaction is trying to acquire a strong
+	 * lock on pg_dist_transaction while holding a lock on pg_dist_authinfo. As of
+	 * today, we (implicitly) acquire a strong lock on pg_dist_transaction only when
+	 * upgrading Citus to 11.3-1 and this happens when creating a REPLICA IDENTITY on
+	 * pg_dist_transaction.
+	 *
+	 * And reglardless of the code-path we are in, it should be okay to release the
+	 * lock now because all we do after this point is to abort the prepared
+	 * transactions that are not part of an in-progress distributed transaction and
+	 * releasing the lock before doing so should be just fine.
+	 */
+	table_close(pgDistTransaction, RowExclusiveLock);
 
 	if (!recoveryFailed)
 	{
