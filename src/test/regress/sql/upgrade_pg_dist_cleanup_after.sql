@@ -13,3 +13,8 @@ SELECT COUNT(*) FROM pg_dist_placement WHERE shardid IN (SELECT shardid FROM pg_
 SELECT * FROM pg_dist_cleanup;
 CALL citus_cleanup_orphaned_resources();
 DROP TABLE table_with_orphaned_shards;
+
+-- Re-enable automatic shard cleanup by maintenance daemon as
+-- we have disabled it in upgrade_pg_dist_cleanup_before.sql
+ALTER SYSTEM RESET citus.defer_shard_delete_interval;
+SELECT pg_reload_conf();
