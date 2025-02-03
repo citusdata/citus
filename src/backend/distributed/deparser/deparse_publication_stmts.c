@@ -32,7 +32,6 @@
 static void AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,
 										bool whereClauseNeedsTransform,
 										bool includeLocalTables);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static bool AppendPublicationObjects(StringInfo buf, List *publicationObjects,
 									 bool whereClauseNeedsTransform,
 									 bool includeLocalTables);
@@ -40,10 +39,6 @@ static void AppendWhereClauseExpression(StringInfo buf, RangeVar *tableName,
 										Node *whereClause,
 										bool whereClauseNeedsTransform);
 static void AppendAlterPublicationAction(StringInfo buf, AlterPublicationAction action);
-#else
-static bool AppendTables(StringInfo buf, List *tables, bool includeLocalTables);
-static void AppendDefElemAction(StringInfo buf, DefElemAction action);
-#endif
 static bool AppendAlterPublicationStmt(StringInfo buf, AlterPublicationStmt *stmt,
 									   bool whereClauseNeedsTransform,
 									   bool includeLocalTables);
@@ -108,7 +103,6 @@ AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,
 	{
 		appendStringInfoString(buf, " FOR ALL TABLES");
 	}
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	else if (stmt->pubobjects != NIL)
 	{
 		bool hasObjects = false;
@@ -146,32 +140,6 @@ AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,
 									 includeLocalTables);
 		}
 	}
-#else
-	else if (stmt->tables != NIL)
-	{
-		bool hasTables = false;
-		RangeVar *rangeVar = NULL;
-
-		/*
-		 * Check whether there are tables to propagate, mainly to know whether
-		 * we should include "FOR".
-		 */
-		foreach_declared_ptr(rangeVar, stmt->tables)
-		{
-			if (includeLocalTables || IsCitusTableRangeVar(rangeVar, NoLock, false))
-			{
-				hasTables = true;
-				break;
-			}
-		}
-
-		if (hasTables)
-		{
-			appendStringInfoString(buf, " FOR");
-			AppendTables(buf, stmt->tables, includeLocalTables);
-		}
-	}
-#endif
 
 	if (stmt->options != NIL)
 	{
@@ -181,8 +149,6 @@ AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,
 	}
 }
 
-
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 
 /*
  * AppendPublicationObjects appends a string representing a list of publication
@@ -320,57 +286,6 @@ AppendWhereClauseExpression(StringInfo buf, RangeVar *tableName,
 }
 
 
-#else
-
-/*
- * AppendPublicationObjects appends a string representing a list of publication
- * objects to a buffer.
- *
- * For instance: TABLE users, departments
- */
-static bool
-AppendTables(StringInfo buf, List *tables, bool includeLocalTables)
-{
-	RangeVar *rangeVar = NULL;
-	bool appendedObject = false;
-
-	foreach_declared_ptr(rangeVar, tables)
-	{
-		if (!includeLocalTables &&
-			!IsCitusTableRangeVar(rangeVar, NoLock, false))
-		{
-			/* do not propagate local tables */
-			continue;
-		}
-
-		char *schemaName = rangeVar->schemaname;
-		char *tableName = rangeVar->relname;
-
-		if (schemaName != NULL)
-		{
-			/* qualified table name */
-			appendStringInfo(buf, "%s %s",
-							 appendedObject ? "," : " TABLE",
-							 quote_qualified_identifier(schemaName, tableName));
-		}
-		else
-		{
-			/* unqualified table name */
-			appendStringInfo(buf, "%s %s",
-							 appendedObject ? "," : " TABLE",
-							 quote_identifier(tableName));
-		}
-
-		appendedObject = true;
-	}
-
-	return appendedObject;
-}
-
-
-#endif
-
-
 /*
  * DeparseAlterPublicationSchemaStmt builds and returns a string representing
  * an AlterPublicationStmt.
@@ -439,18 +354,11 @@ AppendAlterPublicationStmt(StringInfo buf, AlterPublicationStmt *stmt,
 		return true;
 	}
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	AppendAlterPublicationAction(buf, stmt->action);
 	return AppendPublicationObjects(buf, stmt->pubobjects, whereClauseNeedsTransform,
 									includeLocalTables);
-#else
-	AppendDefElemAction(buf, stmt->tableAction);
-	return AppendTables(buf, stmt->tables, includeLocalTables);
-#endif
 }
 
-
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 
 /*
  * AppendAlterPublicationAction appends a string representing an AlterPublicationAction
@@ -485,46 +393,6 @@ AppendAlterPublicationAction(StringInfo buf, AlterPublicationAction action)
 		}
 	}
 }
-
-
-#else
-
-/*
- * AppendDefElemAction appends a string representing a DefElemAction
- * to a buffer.
- */
-static void
-AppendDefElemAction(StringInfo buf, DefElemAction action)
-{
-	switch (action)
-	{
-		case DEFELEM_ADD:
-		{
-			appendStringInfoString(buf, " ADD");
-			break;
-		}
-
-		case DEFELEM_DROP:
-		{
-			appendStringInfoString(buf, " DROP");
-			break;
-		}
-
-		case DEFELEM_SET:
-		{
-			appendStringInfoString(buf, " SET");
-			break;
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unrecognized publication action: %d", action)));
-		}
-	}
-}
-
-
-#endif
 
 
 /*
@@ -651,11 +519,7 @@ AppendPublicationOptions(StringInfo stringBuffer, List *optionList)
 		appendStringInfo(stringBuffer, "%s = ",
 						 quote_identifier(optionName));
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 		if (valueType == T_Integer || valueType == T_Float || valueType == T_Boolean)
-#else
-		if (valueType == T_Integer || valueType == T_Float)
-#endif
 		{
 			/* string escaping is unnecessary for numeric types and can cause issues */
 			appendStringInfo(stringBuffer, "%s", optionValue);

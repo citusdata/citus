@@ -258,17 +258,6 @@ DROP PUBLICATION "pub-all-insertupdateonly";
 DROP PUBLICATION "pub-all";
 DROP PUBLICATION pubpartitioned;
 DROP PUBLICATION pubnotdistributed;
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-\else
-SET client_min_messages TO ERROR;
-DROP SCHEMA publication CASCADE;
-DROP SCHEMA "publication-1" CASCADE;
-DROP SCHEMA citus_schema_1 CASCADE;
-\q
-\endif
 -- recreate a mixed publication
 CREATE PUBLICATION pubtables FOR TABLE test, "publication-1"."test-pubs", citus_schema_1.test;
 -- operations on an existing distributed table

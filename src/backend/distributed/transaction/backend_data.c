@@ -519,15 +519,6 @@ UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 void
 InitializeBackendManagement(void)
 {
-/* on PG 15, we use shmem_request_hook_type */
-#if PG_VERSION_NUM < PG_VERSION_15
-
-	/* allocate shared memory */
-	if (!IsUnderPostmaster)
-	{
-		RequestAddinShmemSpace(BackendManagementShmemSize());
-	}
-#endif
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = BackendManagementShmemInit;
 }
