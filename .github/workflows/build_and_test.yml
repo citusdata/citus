@@ -40,8 +40,21 @@ jobs:
     runs-on: ubuntu-20.04
     container:
       image: ${{ needs.params.outputs.build_image_name }}:latest
+      volumes:
+        # see https://github.com/actions/checkout/issues/1474#issuecomment-2604308106
+        - /tmp:/__e/node20
       options: --user root
     steps:
+    # see https://github.com/actions/checkout/issues/1474#issuecomment-2604308106
+    - name: Install node.js for GitHub Actions
+      run: |
+        apt-get install -y curl ca-certificates &&
+        # Install a Node.js version that works in older Ubuntu containers (read: does not require very recent glibc)
+        NODE_VERSION=v20.18.1 &&
+        NODE_TAR_FILE=node-$NODE_VERSION-linux-x64-glibc-217.tar.gz &&
+        NODE_URL=https://unofficial-builds.nodejs.org/download/release/$NODE_VERSION/$NODE_TAR_FILE &&
+        curl -Lo /tmp/$NODE_TAR_FILE $NODE_URL &&
+        tar -C /__e/node20 -x --strip-components=1 -f /tmp/$NODE_TAR_FILE
     - uses: actions/checkout@v3.5.0
     - name: Check Snapshots
       run: |
