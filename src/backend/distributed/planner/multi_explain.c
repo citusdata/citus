@@ -1287,8 +1287,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	}
 
 	/* resolve OIDs of unknown (user-defined) types */
-	Query *analyzedQuery = parse_analyze_varparams_compat(parseTree, queryString,
-														  &paramTypes, &numParams, NULL);
+	Query *analyzedQuery = parse_analyze_varparams(parseTree, queryString,
+												   &paramTypes, &numParams, NULL);
 
 	/* pg_rewrite_query is a wrapper around QueryRewrite with some debugging logic */
 	List *queryList = pg_rewrite_query(analyzedQuery);

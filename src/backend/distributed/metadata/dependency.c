@@ -1716,13 +1716,11 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			/*
 			 * As of PostgreSQL 15, the same applies to schemas.
 			 */
-#if PG_VERSION_NUM >= PG_VERSION_15
 			List *schemaIdList =
 				GetPublicationSchemas(publicationId);
 			List *schemaDependencyList =
 				CreateObjectAddressDependencyDefList(NamespaceRelationId, schemaIdList);
 			result = list_concat(result, schemaDependencyList);
-#endif
 
 			break;
 		}

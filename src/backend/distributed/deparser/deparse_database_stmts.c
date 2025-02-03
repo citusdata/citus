@@ -211,7 +211,6 @@ DeparseAlterDatabaseStmt(Node *node)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
 {

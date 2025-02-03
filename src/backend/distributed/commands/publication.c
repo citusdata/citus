@@ -33,11 +33,9 @@
 
 
 static CreatePublicationStmt * BuildCreatePublicationStmt(Oid publicationId);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static PublicationObjSpec * BuildPublicationRelationObjSpec(Oid relationId,
 															Oid publicationId,
 															bool tableOnly);
-#endif
 static void AppendPublishOptionList(StringInfo str, List *strings);
 static char * AlterPublicationOwnerCommand(Oid publicationId);
 static bool ShouldPropagateCreatePublication(CreatePublicationStmt *stmt);
@@ -154,7 +152,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 	ReleaseSysCache(publicationTuple);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	List *schemaIds = GetPublicationSchemas(publicationId);
 	Oid schemaId = InvalidOid;
 
@@ -170,7 +167,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
 	}
-#endif
 
 	List *relationIds = GetPublicationRelations(publicationId,
 												publicationForm->pubviaroot ?
@@ -183,7 +179,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 	foreach_declared_oid(relationId, relationIds)
 	{
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 		bool tableOnly = false;
 
 		/* since postgres 15, tables can have a column list and filter */
@@ -270,8 +265,6 @@ AppendPublishOptionList(StringInfo str, List *options)
 }
 
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 /*
  * BuildPublicationRelationObjSpec returns a PublicationObjSpec that
  * can be included in a CREATE or ALTER PUBLICATION statement.
@@ -349,9 +342,6 @@ BuildPublicationRelationObjSpec(Oid relationId, Oid publicationId,
 
 	return publicationObject;
 }
-
-
-#endif
 
 
 /*
@@ -452,7 +442,6 @@ GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 
 	ReleaseSysCache(pubTuple);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	bool tableOnly = !isAdd;
 
 	/* since postgres 15, tables can have a column list and filter */
@@ -461,16 +450,6 @@ GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 
 	alterPubStmt->pubobjects = lappend(alterPubStmt->pubobjects, publicationObject);
 	alterPubStmt->action = isAdd ? AP_AddObjects : AP_DropObjects;
-#else
-
-	/* before postgres 15, only full tables are supported */
-	char *schemaName = get_namespace_name(get_rel_namespace(relationId));
-	char *tableName = get_rel_name(relationId);
-	RangeVar *rangeVar = makeRangeVar(schemaName, tableName, -1);
-
-	alterPubStmt->tables = lappend(alterPubStmt->tables, rangeVar);
-	alterPubStmt->tableAction = isAdd ? DEFELEM_ADD : DEFELEM_DROP;
-#endif
 
 	/* we take the WHERE clause from the catalog where it is already transformed */
 	bool whereClauseNeedsTransform = false;

@@ -79,11 +79,8 @@ typedef struct DatabaseCollationInfo
 {
 	char *datcollate;
 	char *datctype;
-
-#if PG_VERSION_NUM >= PG_VERSION_15
 	char *daticulocale;
 	char *datcollversion;
-#endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 	char *daticurules;
@@ -94,9 +91,7 @@ static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database
 															databaseForm);
 static DatabaseCollationInfo GetDatabaseCollation(Oid dbOid);
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
-#if PG_VERSION_NUM >= PG_VERSION_15
 static char * GetLocaleProviderString(char datlocprovider);
-#endif
 static char * GetTablespaceName(Oid tablespaceOid);
 static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
 														  bool missingOk);
@@ -320,8 +315,6 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 /*
  * PreprocessAlterDatabaseRefreshCollStmt is executed before the statement is applied to
  * the local postgres instance.
@@ -357,9 +350,6 @@ PreprocessAlterDatabaseRefreshCollStmt(Node *node, const char *queryString,
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
-
-
-#endif
 
 
 /*
@@ -849,8 +839,6 @@ GetDatabaseCollation(Oid dbOid)
 	Datum ctypeDatum = heap_getattr(tup, Anum_pg_database_datctype, tupdesc, &isNull);
 	info.datctype = TextDatumGetCString(ctypeDatum);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc,
 										&isNull);
 	if (!isNull)
@@ -864,7 +852,6 @@ GetDatabaseCollation(Oid dbOid)
 	{
 		info.datcollversion = TextDatumGetCString(collverDatum);
 	}
-#endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 	Datum icurulesDatum = heap_getattr(tup, Anum_pg_database_daticurules, tupdesc,
@@ -881,8 +868,6 @@ GetDatabaseCollation(Oid dbOid)
 	return info;
 }
 
-
-#if PG_VERSION_NUM >= PG_VERSION_15
 
 /*
  * GetLocaleProviderString gets the datlocprovider stored in pg_database
@@ -910,9 +895,6 @@ GetLocaleProviderString(char datlocprovider)
 		}
 	}
 }
-
-
-#endif
 
 
 /*
@@ -956,7 +938,6 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	appendStringInfo(&str, " ENCODING = %s",
 					 quote_literal_cstr(pg_encoding_to_char(databaseForm->encoding)));
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	if (collInfo.datcollversion != NULL)
 	{
 		appendStringInfo(&str, " COLLATION_VERSION = %s",
@@ -972,7 +953,6 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 	appendStringInfo(&str, " LOCALE_PROVIDER = %s",
 					 quote_identifier(GetLocaleProviderString(
 										  databaseForm->datlocprovider)));
-#endif
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 	if (collInfo.daticurules != NULL)

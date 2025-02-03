@@ -718,10 +718,8 @@ static void RebuildWaitEventSetForSessions(DistributedExecution *execution);
 static void AddLatchWaitEventToExecution(DistributedExecution *execution);
 static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int
 							  eventCount, bool *cancellationReceived);
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void RemoteSocketClosedForAnySession(DistributedExecution *execution);
 static void ProcessWaitEventsForSocketClosed(WaitEvent *events, int eventCount);
-#endif
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
@@ -1784,11 +1782,8 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	session->commandsSent = 0;
 	session->waitEventSetIndex = WAIT_EVENT_SET_INDEX_NOT_INITIALIZED;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 	/* always detect closed sockets */
 	UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED);
-#endif
 
 	dlist_init(&session->pendingTaskQueue);
 	dlist_init(&session->readyTaskQueue);
@@ -1832,7 +1827,6 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
  * the events, even ignores cancellation events. Future callers of this
  * function should consider its limitations.
  */
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void
 RemoteSocketClosedForAnySession(DistributedExecution *execution)
 {
@@ -1848,9 +1842,6 @@ RemoteSocketClosedForAnySession(DistributedExecution *execution)
 									  execution->eventSetSize, WAIT_EVENT_CLIENT_READ);
 	ProcessWaitEventsForSocketClosed(execution->events, eventCount);
 }
-
-
-#endif
 
 
 /*
@@ -2188,8 +2179,6 @@ ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int eventC
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 /*
  * ProcessWaitEventsForSocketClosed mainly checks for WL_SOCKET_CLOSED event.
  * If WL_SOCKET_CLOSED is found, the function sets the underlying connection's
@@ -2220,9 +2209,6 @@ ProcessWaitEventsForSocketClosed(WaitEvent *events, int eventCount)
 		}
 	}
 }
-
-
-#endif
 
 
 /*
@@ -2719,7 +2705,6 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 	 * Instead, we prefer this slight difference, which in effect has almost no
 	 * difference, but doing things in different points in time.
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_15
 
 	/* we added new connections, rebuild the waitEventSet */
 	RebuildWaitEventSetForSessions(execution);
@@ -2739,9 +2724,6 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 	 * of the execution.
 	 */
 	AddLatchWaitEventToExecution(execution);
-#else
-	execution->rebuildWaitEventSet = true;
-#endif
 
 	WorkerSession *session = NULL;
 	foreach_declared_ptr(session, newSessionsList)
@@ -3678,13 +3660,8 @@ UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags)
 		return;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 	/* always detect closed sockets */
 	connection->waitFlags = waitFlags | WL_SOCKET_CLOSED;
-#else
-	connection->waitFlags = waitFlags;
-#endif
 
 	/* without signalling the execution, the flag changes won't be reflected */
 	execution->waitFlagsChanged = true;
@@ -3709,13 +3686,11 @@ CheckConnectionReady(WorkerSession *session)
 		return false;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_CLOSED) != 0)
 	{
 		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
 	}
-#endif
 
 	/* try to send all pending data */
 	int sendStatus = PQflush(connection->pgConn);

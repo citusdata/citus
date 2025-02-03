@@ -1750,48 +1750,6 @@ GetSequencesFromAttrDef(Oid attrdefOid)
 }
 
 
-#if PG_VERSION_NUM < PG_VERSION_15
-
-/*
- * Given a pg_attrdef OID, return the relation OID and column number of
- * the owning column (represented as an ObjectAddress for convenience).
- *
- * Returns InvalidObjectAddress if there is no such pg_attrdef entry.
- */
-ObjectAddress
-GetAttrDefaultColumnAddress(Oid attrdefoid)
-{
-	ObjectAddress result = InvalidObjectAddress;
-	ScanKeyData skey[1];
-	HeapTuple tup;
-
-	Relation attrdef = table_open(AttrDefaultRelationId, AccessShareLock);
-	ScanKeyInit(&skey[0],
-				Anum_pg_attrdef_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(attrdefoid));
-	SysScanDesc scan = systable_beginscan(attrdef, AttrDefaultOidIndexId, true,
-										  NULL, 1, skey);
-
-	if (HeapTupleIsValid(tup = systable_getnext(scan)))
-	{
-		Form_pg_attrdef atdform = (Form_pg_attrdef) GETSTRUCT(tup);
-
-		result.classId = RelationRelationId;
-		result.objectId = atdform->adrelid;
-		result.objectSubId = atdform->adnum;
-	}
-
-	systable_endscan(scan);
-	table_close(attrdef, AccessShareLock);
-
-	return result;
-}
-
-
-#endif
-
-
 /*
  * GetAttrDefsFromSequence returns a list of attrdef OIDs that have
  * a dependency on the given sequence
@@ -3113,7 +3071,6 @@ SyncNodeMetadataToNodesMain(Datum main_arg)
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
-		ProcessCompletedNotifies();
 
 		if (syncedAllNodes)
 		{
