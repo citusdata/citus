@@ -302,6 +302,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	 * Look up this worker's configuration.
 	 */
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
+	LWLockAcquire(ExtensionUpdateLock, LW_SHARED);
 
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
@@ -355,6 +356,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	IsMaintenanceDaemon = true;
 
 	LWLockRelease(&MaintenanceDaemonControl->lock);
+	LWLockRelease(ExtensionUpdateLock);
 
 	/*
 	 * Setup error context so log messages can be properly attributed. Some of

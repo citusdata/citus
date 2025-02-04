@@ -613,6 +613,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
+	RequestNamedLWLockTranche(CITUS_EXTENSION_LOCK, 1);
 }
 
 
@@ -2640,6 +2641,16 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+    DefineCustomBoolVariable(
+		"citus.enable_extension_update_lock",
+		gettext_noop("Use a dedicated LWLock to prevent deadlocks during extension updates."),
+		NULL,
+		&enable_extension_update_lock,
+		true,
+		PGC_SUSET,
+		0,
 		NULL, NULL, NULL);
 
 	/* warn about config items in the citus namespace that are not registered above */

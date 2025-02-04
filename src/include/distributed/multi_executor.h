@@ -71,6 +71,7 @@ extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
 extern bool SortReturning;
 extern int ExecutorLevel;
+extern bool enable_extension_update_lock;
 
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);

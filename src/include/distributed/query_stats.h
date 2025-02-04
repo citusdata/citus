@@ -13,6 +13,7 @@
 #include "distributed/multi_server_executor.h"
 
 #define STATS_SHARED_MEM_NAME "citus_query_stats"
+#define CITUS_EXTENSION_LOCK "CitusExtensionLock"
 
 extern Size CitusQueryStatsSharedMemSize(void);
 extern void InitializeCitusQueryStats(void);

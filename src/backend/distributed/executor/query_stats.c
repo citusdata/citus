@@ -172,6 +172,7 @@ CitusQueryStatsShmemStartup(void)
 	{
 		/* First time through ... */
 		queryStats->lock = &(GetNamedLWLockTranche(STATS_SHARED_MEM_NAME))->lock;
+		queryStats->lock = &(GetNamedLWLockTranche(CITUS_EXTENSION_LOCK))->lock;
 	}
 
 	memset(&info, 0, sizeof(info));

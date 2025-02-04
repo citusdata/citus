@@ -150,6 +150,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 DestReceiver *dest,
 					 QueryCompletion *completionTag)
 {
+
+	bool isCitusExtensionDDL = false;
+
+	
 	if (readOnlyTree)
 	{
 		pstmt = copyObject(pstmt);
@@ -168,6 +172,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			SaveBeginCommandProperties(transactionStmt);
 		}
 	}
+
+	if (IsA(parsetree, AlterExtensionStmt))
+    {
+         isCitusExtensionDDL = true;
+    }
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, ListenStmt) ||
@@ -329,6 +338,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	UtilityHookLevel++;
 
+	if (isCitusExtensionDDL)
+    {
+        LockCitusExtension();  /* EXCLUSIVE lock for extension DDL */
+    }
+
 	PG_TRY();
 	{
 		ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
@@ -392,6 +406,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	}
 	PG_CATCH();
 	{
+		if (isCitusExtensionDDL)
+        {
+            UnlockCitusExtension();
+        }
+
 		if (UtilityHookLevel == 1)
 		{
 			ResetConstraintDropped();
@@ -402,6 +421,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	if (isCitusExtensionDDL)
+    {
+        UnlockCitusExtension();
+    }
 }
 
 
@@ -1318,6 +1342,26 @@ set_indexsafe_procflags(void)
 	MyProc->statusFlags |= PROC_IN_SAFE_IC;
 	ProcGlobal->statusFlags[MyProc->pgxactoff] = MyProc->statusFlags;
 	LWLockRelease(ProcArrayLock);
+}
+
+/* Acquire the lock in EXCLUSIVE mode. */
+static void
+LockCitusExtension(void)
+{
+    if (!enable_extension_update_lock || ExtensionUpdateLock == NULL)
+        return;  /* do nothing if disabled or not set up */
+
+    LWLockAcquire(ExtensionUpdateLock, LW_EXCLUSIVE);
+}
+
+/* Release the lock. */
+static void
+UnlockCitusExtension(void)
+{
+    if (!enable_extension_update_lock || ExtensionUpdateLock == NULL)
+        return;
+
+    LWLockRelease(ExtensionUpdateLock);
 }
 
 
