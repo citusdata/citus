@@ -147,14 +147,15 @@ recover_prepared_transactions
 
 step s2-create-restore:
 	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
 
+step s2-create-restore: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
-
-step s1-commit:
- COMMIT;
 
 
 starting permutation: s1-begin s1-drop s2-create-restore s1-commit
