@@ -1,8 +1,6 @@
-### citus v13.0.1 (February 3rd, 2025) ###
+### citus v13.0.1 (February 4th, 2025) ###
 
 * Drops support for PostgreSQL 14 (#7753)
-
-* Fixes a possible deadlock during citus upgrade (#7863)
 
 ### citus v13.0.0 (January 22, 2025) ###
 
