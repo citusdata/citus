@@ -1,3 +1,213 @@
+### citus v13.0.0 (January 17, 2025) ###
+
+* Adds support for PostgreSQL 17 (#7699, #7661)
+
+* Adds `JSON_TABLE()` support in distributed queries (#7816)
+
+* Propagates `MERGE ... WHEN NOT MATCHED BY SOURCE` (#7807)
+
+* Propagates `MEMORY` and `SERIALIZE` options of `EXPLAIN` (#7802)
+
+* Adds support for identity columns in distributed partitioned tables (#7785)
+
+* Allows specifying an access method for distributed partitioned tables (#7818)
+
+* Allows exclusion constraints on distributed partitioned tables (#7733)
+
+* Allows configuring sslnegotiation using `citus.node_conn_info` (#7821)
+
+* Avoids wal receiver timeouts during large shard splits (#7229)
+
+* Fixes a bug causing incorrect writing of data to target `MERGE` repartition
+  command (#7659)
+
+* Fixes a crash that happens because of unsafe catalog access when re-assigning
+  the global pid after `application_name` changes (#7791)
+
+* Fixes incorrect `VALID UNTIL` setting assumption made for roles when syncing
+  them to new nodes (#7534)
+
+* Fixes segfault when calling distributed procedure with a parameterized
+  distribution argument (#7242)
+
+* Fixes server crash when trying to execute `activate_node_snapshot()` on a
+  single-node cluster (#7552)
+
+* Improves `citus_move_shard_placement()` to fail early if there is a new node
+  without reference tables yet (#7467)
+
+### citus v12.1.6 (Nov 14, 2024) ###
+
+* Propagates `SECURITY LABEL .. ON ROLE` statements (#7304)
+
+* Fixes crash caused by running queries with window partition (#7718)
+
+### citus v12.1.5 (July 17, 2024) ###
+
+* Adds support for MERGE commands with single shard distributed target tables
+  (#7643)
+
+* Fixes an error with MERGE commands when insert value does not have source
+  distribution column (#7627)
+
+### citus v12.1.4 (May 28, 2024) ###
+
+* Adds null check for node in HasRangeTableRef (#7604)
+
+### citus v12.1.3 (April 18, 2024) ###
+
+* Allows overwriting host name for all inter-node connections by
+  supporting "host" parameter in citus.node_conninfo (#7541)
+
+* Changes the order in which the locks are acquired for the target and
+  reference tables, when a modify request is initiated from a worker
+  node that is not the "FirstWorkerNode" (#7542)
+
+* Fixes a performance issue when distributing a table that depends on an
+  extension (#7574)
+
+* Fixes a performance issue when using "\d tablename" on a server with
+  many tables (#7577)
+
+* Fixes a crash caused by some form of ALTER TABLE ADD COLUMN
+  statements. When adding multiple columns, if one of the ADD COLUMN
+  statements contains a FOREIGN constraint omitting the referenced
+  columns in the statement, a SEGFAULT was occurring. (#7522)
+
+* Fixes a performance issue when creating distributed tables if many
+  already exist (#7575, #7579)
+
+* Fixes a bug when hostname in pg_dist_node resolves to multiple IPs
+  (#7377)
+
+* Fixes performance issue when tracking foreign key constraints on
+  systems with many constraints (#7578)
+
+* Fixes segmentation fault when using CASE WHEN in DO block within
+  functions. (#7554)
+
+* Fixes undefined behavior in master_disable_node due to argument
+  mismatch (#7492)
+
+* Fixes some potential bugs by correctly marking some variables as
+  volatile (#7570)
+
+* Logs username in the failed connection message (#7432)
+
+### citus v11.0.10 (February 15, 2024) ###
+
+* Removes pg_send_cancellation and all references (#7135)
+
+### citus v12.1.2 (February 12, 2024) ###
+
+* Fixes the incorrect column count after ALTER TABLE (#7379)
+
+### citus v12.0.1 (July 11, 2023) ###
+
+* Fixes incorrect default value assumption for VACUUM(PROCESS_TOAST) #7122)
+
+* Fixes a bug that causes an unexpected error when adding a column
+  with a NULL constraint (#7093)
+
+* Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
+
+* Fixes a bug with deleting colocation groups (#6929)
+
+* Fixes memory and memory contexts leaks in Foreign Constraint Graphs (#7236)
+
+* Fixes shard size bug with too many shards (#7018)
+
+* Fixes the incorrect column count after ALTER TABLE (#7379)
+
+* Improves citus_tables view performance (#7050)
+
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
+
+* Removes pg_send_cancellation and all references (#7135)
+
+### citus v11.3.1 (February 12, 2024) ###
+
+* Disallows MERGE when the query prunes down to zero shards (#6946)
+
+* Fixes a bug related to non-existent objects in DDL commands (#6984)
+
+* Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
+
+* Fixes a bug with deleting colocation groups (#6929)
+
+* Fixes incorrect results on fetching scrollable with hold cursors (#7014)
+
+* Fixes memory and memory context leaks in Foreign Constraint Graphs (#7236)
+
+* Fixes replicate reference tables task fail when user is superuser (#6930)
+
+* Fixes the incorrect column count after ALTER TABLE (#7379)
+
+* Improves citus_shard_sizes performance (#7050)
+
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
+
+* Removes pg_send_cancellation and all references (#7135)
+
+### citus v11.2.2 (February 12, 2024) ###
+
+* Fixes a bug in background shard rebalancer where the replicate
+  reference tables task fails if the current user is not a superuser (#6930)
+
+* Fixes a bug related to non-existent objects in DDL commands (#6984)
+
+* Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
+
+* Fixes a bug with deleting colocation groups (#6929)
+
+* Fixes incorrect results on fetching scrollable with hold cursors (#7014)
+
+* Fixes memory and memory context leaks in Foreign Constraint Graphs (#7236)
+
+* Fixes the incorrect column count after ALTER TABLE (#7379)
+
+* Improves failure handling of distributed execution (#7090)
+
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
+
+* Removes pg_send_cancellation (#7135)
+
+### citus v11.1.7 (February 12, 2024) ###
+
+* Fixes memory and memory context leaks in Foreign Constraint Graphs (#7236)
+
+* Fixes a bug related to non-existent objects in DDL commands (#6984)
+
+* Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
+
+* Fixes a bug with deleting colocation groups (#6929)
+
+* Fixes incorrect results on fetching scrollable with hold cursors (#7014)
+
+* Fixes the incorrect column count after ALTER TABLE (#7379)
+
+* Improves failure handling of distributed execution (#7090)
+
+* Makes sure to disallow creating a replicated distributed table
+  concurrently (#7219)
+
+* Removes pg_send_cancellation and all references (#7135)
+
+### citus v11.0.9 (February 12, 2024) ###
+
+* Fixes a bug that could cause COPY logic to skip data in case of OOM (#7152)
+
+* Fixes a bug with deleting colocation groups (#6929)
+
+* Fixes memory and memory context leaks in Foreign Constraint Graphs (#7236)
+
+* Fixes the incorrect column count after ALTER TABLE (#7462)
+
+* Improve failure handling of distributed execution (#7090)
+
 ### citus v12.1.1 (November 9, 2023) ###
 
 * Fixes leaking of memory and memory contexts in Citus foreign key cache

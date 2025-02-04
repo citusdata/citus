@@ -87,14 +87,6 @@
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
 
-#define EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER \
-	"SELECT citus_internal.execute_command_on_remote_nodes_as_user(%s, %s)"
-#define START_MANAGEMENT_TRANSACTION \
-	"SELECT citus_internal.start_management_transaction('%lu')"
-#define MARK_OBJECT_DISTRIBUTED \
-	"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
-
-
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_IMMEDIATE;
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
@@ -122,8 +114,7 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
-static void RunPreprocessMainDBCommand(Node *parsetree, const char *queryString);
-static void RunPostprocessMainDBCommand(Node *parsetree);
+
 
 /*
  * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
@@ -255,22 +246,26 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 	if (!CitusHasBeenLoaded())
 	{
-		if (!IsMainDB)
-		{
-			RunPreprocessMainDBCommand(parsetree, queryString);
-		}
-
 		/*
-		 * Ensure that utility commands do not behave any differently until CREATE
-		 * EXTENSION is invoked.
+		 * Process the command via RunPreprocessNonMainDBCommand and
+		 * RunPostprocessNonMainDBCommand hooks if we're in a non-main database
+		 * and if the command is a node-wide object management command that we
+		 * support from non-main databases.
 		 */
-		PrevProcessUtility(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
 
-		if (!IsMainDB)
+		bool shouldSkipPrevUtilityHook = RunPreprocessNonMainDBCommand(parsetree);
+
+		if (!shouldSkipPrevUtilityHook)
 		{
-			RunPostprocessMainDBCommand(parsetree);
+			/*
+			 * Ensure that utility commands do not behave any differently until CREATE
+			 * EXTENSION is invoked.
+			 */
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
 		}
+
+		RunPostprocessNonMainDBCommand(parsetree);
 
 		return;
 	}
@@ -737,6 +732,13 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 								" nodes"),
 						 errhint("Connect to other nodes directly to manually create all"
 								 " necessary users and roles.")));
+	}
+	else if (IsA(parsetree, SecLabelStmt) && !EnableAlterRolePropagation)
+	{
+		ereport(NOTICE, (errmsg("not propagating SECURITY LABEL commands to other"
+								" nodes"),
+						 errhint("Connect to other nodes directly to manually assign"
+								 " necessary labels.")));
 	}
 
 	/*
@@ -1287,7 +1289,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 						 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
 								 "invalid index, then retry the original command.")));
 			}
-			else
+			else if (ddlJob->warnForPartialFailure)
 			{
 				ereport(WARNING,
 						(errmsg(
@@ -1296,9 +1298,9 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 							 "state.\nIf the problematic command is a CREATE operation, "
 							 "consider using the 'IF EXISTS' syntax to drop the object,"
 							 "\nif applicable, and then re-attempt the original command.")));
-
-				PG_RE_THROW();
 			}
+
+			PG_RE_THROW();
 		}
 		PG_END_TRY();
 	}
@@ -1514,9 +1516,12 @@ DDLTaskList(Oid relationId, const char *commandString)
  * NontransactionalNodeDDLTaskList builds a list of tasks to execute a DDL command on a
  * given target set of nodes with cannotBeExecutedInTransaction is set to make sure
  * that task list is executed outside a transaction block.
+ *
+ * Also sets warnForPartialFailure for the returned DDLJobs.
  */
 List *
-NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands)
+NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
+								bool warnForPartialFailure)
 {
 	List *ddlJobs = NodeDDLTaskList(targets, commands);
 	DDLJob *ddlJob = NULL;
@@ -1527,6 +1532,8 @@ NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands)
 		{
 			task->cannotBeExecutedInTransaction = true;
 		}
+
+		ddlJob->warnForPartialFailure = warnForPartialFailure;
 	}
 	return ddlJobs;
 }
@@ -1593,51 +1600,4 @@ bool
 DropSchemaOrDBInProgress(void)
 {
 	return activeDropSchemaOrDBs > 0;
-}
-
-
-/*
- * RunPreprocessMainDBCommand runs the necessary commands for a query, in main
- * database before query is run on the local node with PrevProcessUtility
- */
-static void
-RunPreprocessMainDBCommand(Node *parsetree, const char *queryString)
-{
-	if (IsA(parsetree, CreateRoleStmt))
-	{
-		StringInfo mainDBQuery = makeStringInfo();
-		appendStringInfo(mainDBQuery,
-						 START_MANAGEMENT_TRANSACTION,
-						 GetCurrentFullTransactionId().value);
-		RunCitusMainDBQuery(mainDBQuery->data);
-		mainDBQuery = makeStringInfo();
-		appendStringInfo(mainDBQuery,
-						 EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER,
-						 quote_literal_cstr(queryString),
-						 quote_literal_cstr(CurrentUserName()));
-		RunCitusMainDBQuery(mainDBQuery->data);
-	}
-}
-
-
-/*
- * RunPostprocessMainDBCommand runs the necessary commands for a query, in main
- * database after query is run on the local node with PrevProcessUtility
- */
-static void
-RunPostprocessMainDBCommand(Node *parsetree)
-{
-	if (IsA(parsetree, CreateRoleStmt))
-	{
-		StringInfo mainDBQuery = makeStringInfo();
-		CreateRoleStmt *createRoleStmt = castNode(CreateRoleStmt, parsetree);
-		Oid roleOid = get_role_oid(createRoleStmt->role, false);
-		appendStringInfo(mainDBQuery,
-						 MARK_OBJECT_DISTRIBUTED,
-						 AuthIdRelationId,
-						 quote_literal_cstr(createRoleStmt->role),
-						 roleOid,
-						 quote_literal_cstr(CurrentUserName()));
-		RunCitusMainDBQuery(mainDBQuery->data);
-	}
 }

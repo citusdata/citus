@@ -79,7 +79,7 @@ test: multi_basic_queries cross_join multi_complex_expressions multi_subquery mu
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
 test: sql_procedure multi_function_in_join row_types materialized_view
 test: multi_subquery_in_where_reference_clause adaptive_executor propagate_set_commands geqo
-test: forcedelegation_functions
+test: forcedelegation_functions system_queries
 # this should be run alone as it gets too many clients
 test: join_pushdown
 test: multi_subquery_union multi_subquery_in_where_clause multi_subquery_misc statement_cancel_error_message
@@ -103,21 +103,24 @@ test: multi_dropped_column_aliases foreign_key_restriction_enforcement
 test: binary_protocol
 test: alter_table_set_access_method
 test: alter_distributed_table
-test: issue_5248 issue_5099 issue_5763 issue_6543 issue_6758
+test: issue_5248 issue_5099 issue_5763 issue_6543 issue_6758 issue_7477 issue_7705
 test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes
 test: background_task_queue_monitor
-test: other_databases
+test: other_databases grant_role_from_non_maindb role_operations_from_non_maindb seclabel_non_maindb
 test: citus_internal_access
+test: function_with_case_when
 
 # Causal clock test
 test: clock
 
 # MERGE tests
-test: merge pgmerge merge_repartition2
+test: merge pgmerge
+test: merge_repartition2
 test: merge_repartition1 merge_schema_sharding
 test: merge_partition_tables
+test: merge_vcore
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last

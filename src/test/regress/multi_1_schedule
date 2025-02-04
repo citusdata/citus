@@ -40,6 +40,7 @@ test: create_drop_database_propagation_pg15
 test: create_drop_database_propagation_pg16
 test: comment_on_database
 test: comment_on_role
+test: metadata_sync_from_non_maindb
 # don't parallelize single_shard_table_udfs to make sure colocation ids are sequential
 test: single_shard_table_udfs
 test: schema_based_sharding
@@ -57,7 +58,7 @@ test: multi_metadata_attributes
 
 test: multi_read_from_secondaries
 
-test: grant_on_database_propagation
+test: grant_on_database_propagation grant_on_database_propagation_from_non_maindb
 test: alter_database_propagation
 
 test: citus_shards

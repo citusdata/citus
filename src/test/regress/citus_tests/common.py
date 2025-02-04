@@ -294,6 +294,9 @@ def _run_pg_regress(
         output_dir,
         "--use-existing",
     ]
+    if PG_MAJOR_VERSION >= 16:
+        command.append("--expecteddir")
+        command.append(output_dir)
     if extra_tests != "":
         command.append(extra_tests)
 

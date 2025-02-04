@@ -50,6 +50,24 @@ prepare transaction 'take-aggressive-lock';
 
 -- shards are hidden when using psql as application_name
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+-- Even when using subquery and having no existing quals on pg_clcass
+SELECT relname FROM (SELECT relname, relnamespace FROM pg_catalog.pg_class) AS q WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- Check that inserts into pg_class don't add the filter
+EXPLAIN (COSTS OFF) INSERT INTO pg_class VALUES (1);
+-- Unless it's an INSERT SELECT that queries from pg_class;
+EXPLAIN (COSTS OFF) INSERT INTO pg_class SELECT * FROM pg_class;
+
+-- Check that query that psql "\d test_table" does gets optimized to an index
+-- scan
+EXPLAIN (COSTS OFF) SELECT c.oid,
+  n.nspname,
+  c.relname
+FROM pg_catalog.pg_class c
+     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname OPERATOR(pg_catalog.~) '^(test_table)$' COLLATE pg_catalog.default
+  AND pg_catalog.pg_table_is_visible(c.oid)
+ORDER BY 2, 3;
 
 commit prepared 'take-aggressive-lock';
 

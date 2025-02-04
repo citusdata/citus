@@ -115,21 +115,45 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SECURITY LABEL ON ROLE user1 IS 'citus_unclassified';
 NOTICE:  issuing SECURITY LABEL ON ROLE user1 IS 'citus_unclassified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-SECURITY LABEL for "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified';
-NOTICE:  issuing SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified'
+SECURITY LABEL for "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus_classified';
+NOTICE:  issuing SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus_classified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 \c - - - :worker_1_port
--- command not allowed from worker node
-SECURITY LABEL for "citus '!tests_label_provider" ON ROLE user1 IS 'citus ''!unclassified';
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-\c - - - :master_port
-RESET citus.log_remote_commands;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%SECURITY LABEL%';
+-- command from the worker node should be propagated to the coordinator
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
   node_type  |                                             result
 ---------------------------------------------------------------------
  coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
  worker_1    | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SECURITY LABEL for "citus '!tests_label_provider" ON ROLE user1 IS 'citus_classified';
+NOTICE:  issuing SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE user1 IS 'citus_classified'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+RESET citus.log_remote_commands;
+SECURITY LABEL for "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified';
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
+  node_type  |                                              result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+\c - - - :master_port
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (2 rows)
 
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
@@ -143,9 +167,9 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') 
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
 SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
-NOTICE:  issuing SELECT worker_create_or_alter_role('user1', 'CREATE ROLE user1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', 'ALTER ROLE user1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''');SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE user1 IS 'citus_unclassified'
+NOTICE:  issuing SELECT worker_create_or_alter_role('user1', 'CREATE ROLE user1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL', 'ALTER ROLE user1 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL');SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE user1 IS 'citus_classified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_create_or_alter_role('user 2', 'CREATE ROLE "user 2" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''', 'ALTER ROLE "user 2" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL VALID UNTIL ''infinity''');SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified'
+NOTICE:  issuing SELECT worker_create_or_alter_role('user 2', 'CREATE ROLE "user 2" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL', 'ALTER ROLE "user 2" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL');SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------
@@ -155,9 +179,9 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
   node_type  |                                             result
 ---------------------------------------------------------------------
- coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
- worker_1    | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
- worker_2    | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (3 rows)
 
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
@@ -168,6 +192,35 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') 
  worker_2    | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (3 rows)
 
+-- disable the GUC and check that the command is not propagated
+SET citus.enable_alter_role_propagation TO off;
+SECURITY LABEL ON ROLE user1 IS 'citus_unclassified';
+NOTICE:  not propagating SECURITY LABEL commands to other nodes
+HINT:  Connect to other nodes directly to manually assign necessary labels.
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+\c - - - :worker_2_port
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands = '%SECURITY LABEL%';
+SET citus.enable_alter_role_propagation TO off;
+SECURITY LABEL ON ROLE user1 IS 'citus ''!unclassified';
+NOTICE:  not propagating SECURITY LABEL commands to other nodes
+HINT:  Connect to other nodes directly to manually assign necessary labels.
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
+  node_type  |                                              result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+RESET citus.enable_alter_role_propagation;
 -- cleanup
 RESET citus.log_remote_commands;
 DROP ROLE user1, "user 2";

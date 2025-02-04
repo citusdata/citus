@@ -3,7 +3,7 @@
 -- For versions >= 15, pg15_create_drop_database_propagation.sql is used.
 -- For versions >= 16, pg16_create_drop_database_propagation.sql is used.
 -- Test the UDF that we use to issue database command during metadata sync.
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 CREATE ROLE test_db_commands WITH LOGIN;
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_db_commands';
@@ -21,22 +21,22 @@ SELECT pg_sleep(0.1);
 
 SET ROLE test_db_commands;
 -- fails on null input
-SELECT pg_catalog.citus_internal_database_command(null);
+SELECT citus_internal.database_command(null);
 ERROR:  command cannot be NULL
 -- fails on non create / drop db command
-SELECT pg_catalog.citus_internal_database_command('CREATE TABLE foo_bar(a int)');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
-SELECT pg_catalog.citus_internal_database_command('SELECT 1');
-ERROR:  citus_internal_database_command() can only be used for CREATE DATABASE command by Citus.
-SELECT pg_catalog.citus_internal_database_command('asfsfdsg');
+SELECT citus_internal.database_command('CREATE TABLE foo_bar(a int)');
+ERROR:  citus_internal.database_command() can only be used for CREATE DATABASE command by Citus.
+SELECT citus_internal.database_command('SELECT 1');
+ERROR:  citus_internal.database_command() can only be used for CREATE DATABASE command by Citus.
+SELECT citus_internal.database_command('asfsfdsg');
 ERROR:  syntax error at or near "asfsfdsg"
-SELECT pg_catalog.citus_internal_database_command('');
+SELECT citus_internal.database_command('');
 ERROR:  cannot execute multiple utility events
 RESET ROLE;
 ALTER ROLE test_db_commands nocreatedb;
 SET ROLE test_db_commands;
--- make sure that pg_catalog.citus_internal_database_command doesn't cause privilege escalation
-SELECT pg_catalog.citus_internal_database_command('CREATE DATABASE no_permissions');
+-- make sure that citus_internal.database_command doesn't cause privilege escalation
+SELECT citus_internal.database_command('CREATE DATABASE no_permissions');
 ERROR:  permission denied to create database
 RESET ROLE;
 DROP USER test_db_commands;
@@ -427,11 +427,16 @@ SELECT * FROM public.check_database_on_all_nodes('my_template_database') ORDER B
 --tests for special characters in database name
 set citus.enable_create_database_propagation=on;
 SET citus.log_remote_commands = true;
-set citus.grep_remote_commands = '%CREATE DATABASE%';
+set citus.grep_remote_commands = '%DATABASE%';
+SET citus.next_operation_id TO 2000;
 create database "mydatabase#1'2";
-NOTICE:  issuing CREATE DATABASE "mydatabase#1'2"
+NOTICE:  issuing CREATE DATABASE citus_temp_database_2000_0
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE DATABASE "mydatabase#1'2"
+NOTICE:  issuing CREATE DATABASE citus_temp_database_2000_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE citus_temp_database_2000_0 RENAME TO "mydatabase#1'2"
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE citus_temp_database_2000_0 RENAME TO "mydatabase#1'2"
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 set citus.grep_remote_commands = '%DROP DATABASE%';
 drop database if exists "mydatabase#1'2";
@@ -1264,6 +1269,95 @@ SELECT 1 FROM run_command_on_all_nodes($$REVOKE ALL ON TABLESPACE pg_default FRO
 
 DROP DATABASE no_createdb;
 DROP USER no_createdb;
+-- Test a failure scenario by trying to create a distributed database that
+-- already exists on one of the nodes.
+\c - - - :worker_1_port
+CREATE DATABASE "test_\!failure";
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+\c - - - :master_port
+SET citus.enable_create_database_propagation TO ON;
+CREATE DATABASE "test_\!failure";
+ERROR:  database "test_\!failure" already exists
+CONTEXT:  while executing command on localhost:xxxxx
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+SELECT result AS database_cleanedup_on_node FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+ database_cleanedup_on_node
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes($$test_\!failure$$) ORDER BY node_type, result;
+      node_type       |                                                                                                                                                                                                                          result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_\\!failure", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SET citus.enable_create_database_propagation TO OFF;
+CREATE DATABASE "test_\!failure1";
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+\c - - - :worker_1_port
+DROP DATABASE "test_\!failure";
+SET citus.enable_create_database_propagation TO ON;
+CREATE DATABASE "test_\!failure1";
+ERROR:  database "test_\!failure1" already exists
+CONTEXT:  while executing command on localhost:xxxxx
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+SELECT result AS database_cleanedup_on_node FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+ database_cleanedup_on_node
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes($$test_\!failure1$$) ORDER BY node_type, result;
+      node_type       |                                                                                                                                                                                                                           result
+---------------------------------------------------------------------
+ coordinator (remote) | {"database_properties": {"datacl": null, "datname": "test_\\!failure1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (local)  | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+\c - - - :master_port
+-- Before dropping local "test_\!failure1" database, test a failure scenario
+-- by trying to create a distributed database that already exists "on local
+-- node" this time.
+SET citus.enable_create_database_propagation TO ON;
+CREATE DATABASE "test_\!failure1";
+ERROR:  database "test_\!failure1" already exists
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+SELECT result AS database_cleanedup_on_node FROM run_command_on_all_nodes($$SELECT COUNT(*)=0 FROM pg_database WHERE datname LIKE 'citus_temp_database_%'$$);
+ database_cleanedup_on_node
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT * FROM public.check_database_on_all_nodes($$test_\!failure1$$) ORDER BY node_type, result;
+      node_type       |                                                                                                                                                                                                                           result
+---------------------------------------------------------------------
+ coordinator (local)  | {"database_properties": {"datacl": null, "datname": "test_\\!failure1", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+ worker node (remote) | {"database_properties": null, "pg_dist_object_record_for_db_exists": false, "stale_pg_dist_object_record_for_a_db_exists": false}
+(3 rows)
+
+SET citus.enable_create_database_propagation TO OFF;
+DROP DATABASE "test_\!failure1";
 SET citus.enable_create_database_propagation TO ON;
 --clean up resources created by this test
 -- DROP TABLESPACE is not supported, so we need to drop it manually.

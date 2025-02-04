@@ -13,19 +13,19 @@ SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 SET client_min_messages TO NOTICE;
 -- Verify that the UDFs used to sync tenant schema metadata to workers
 -- fail on NULL input.
-SELECT citus_internal_add_tenant_schema(NULL, 1);
+SELECT citus_internal.add_tenant_schema(NULL, 1);
 ERROR:  schema_id cannot be NULL
-SELECT citus_internal_add_tenant_schema(1, NULL);
+SELECT citus_internal.add_tenant_schema(1, NULL);
 ERROR:  colocation_id cannot be NULL
-SELECT citus_internal_delete_tenant_schema(NULL);
+SELECT citus_internal.delete_tenant_schema(NULL);
 ERROR:  schema_id cannot be NULL
-SELECT citus_internal_unregister_tenant_schema_globally(1, NULL);
+SELECT citus_internal.unregister_tenant_schema_globally(1, NULL);
 ERROR:  schema_name cannot be NULL
-SELECT citus_internal_unregister_tenant_schema_globally(NULL, 'text');
+SELECT citus_internal.unregister_tenant_schema_globally(NULL, 'text');
 ERROR:  schema_id cannot be NULL
--- Verify that citus_internal_unregister_tenant_schema_globally can only
+-- Verify that citus_internal.unregister_tenant_schema_globally can only
 -- be called on schemas that are dropped already.
-SELECT citus_internal_unregister_tenant_schema_globally('regular_schema'::regnamespace, 'regular_schema');
+SELECT citus_internal.unregister_tenant_schema_globally('regular_schema'::regnamespace, 'regular_schema');
 ERROR:  schema is expected to be already dropped because this function is only expected to be called from Citus drop hook
 SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
  ?column?
@@ -1511,10 +1511,10 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
--- Verify that citus_internal_unregister_tenant_schema_globally is a no-op
+-- Verify that citus_internal.unregister_tenant_schema_globally is a no-op
 -- on workers.
-SELECT citus_internal_unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
- citus_internal_unregister_tenant_schema_globally
+SELECT citus_internal.unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
+ unregister_tenant_schema_globally
 ---------------------------------------------------------------------
 
 (1 row)

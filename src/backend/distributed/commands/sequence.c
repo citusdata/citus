@@ -14,6 +14,7 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_attrdef.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "nodes/makefuncs.h"
@@ -507,22 +508,14 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 static Oid
 SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress, char depType)
 {
-	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
-	Oid citusTableId = InvalidOid;
-	foreach_oid(citusTableId, citusTableIdList)
+	Oid relationId;
+	List *relations = GetDependentRelationsWithSequence(sequenceAddress->objectId,
+														depType);
+	foreach_oid(relationId, relations)
 	{
-		List *seqInfoList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0, depType);
-		SequenceInfo *seqInfo = NULL;
-		foreach_ptr(seqInfo, seqInfoList)
+		if (IsCitusTable(relationId))
 		{
-			/*
-			 * This sequence is used in a distributed table
-			 */
-			if (seqInfo->sequenceOid == sequenceAddress->objectId)
-			{
-				return citusTableId;
-			}
+			return relationId;
 		}
 	}
 

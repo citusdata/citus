@@ -271,9 +271,24 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	 * We allocate everything in the provided context so as to facilitate using
 	 * pfree on all runtime parameters when connections using these entries are
 	 * invalidated during config reloads.
+	 *
+	 * Also, when "host" is already provided in global parameters, we use hostname
+	 * from the key as "hostaddr" instead of "host" to avoid host name lookup. In
+	 * that case, the value for "host" becomes useful only if the authentication
+	 * method requires it.
 	 */
+	bool gotHostParamFromGlobalParams = false;
+	for (Size paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
+	{
+		if (strcmp(ConnParams.keywords[paramIndex], "host") == 0)
+		{
+			gotHostParamFromGlobalParams = true;
+			break;
+		}
+	}
+
 	const char *runtimeKeywords[] = {
-		"host",
+		gotHostParamFromGlobalParams ? "hostaddr" : "host",
 		"port",
 		"dbname",
 		"user",

@@ -126,7 +126,6 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	const char *nullPrintCharacter = "\\N";
 
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-	const int fileMode = (S_IRUSR | S_IWUSR);
 
 	/* use the memory context that was in place when the DestReceiver was created */
 	MemoryContext oldContext = MemoryContextSwitchTo(taskFileDest->memoryContext);
@@ -148,8 +147,7 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	taskFileDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(
 														   taskFileDest->filePath,
-														   fileFlags,
-														   fileMode));
+														   fileFlags));
 
 	if (copyOutState->binary)
 	{

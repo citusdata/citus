@@ -296,10 +296,12 @@ sub generate_hba
 
     open(my $fh, ">", catfile($TMP_CHECKDIR, $nodename, "data", "pg_hba.conf"))
         or die "could not open pg_hba.conf";
-    print $fh "host all         alice,bob localhost      md5\n";
+    print $fh "host all         alice,bob 127.0.0.1/32 md5\n";
+    print $fh "host all         alice,bob ::1/128      md5\n";
     print $fh "host all         all       127.0.0.1/32 trust\n";
     print $fh "host all         all       ::1/128      trust\n";
-    print $fh "host replication postgres  localhost    trust\n";
+    print $fh "host replication postgres  127.0.0.1/32 trust\n";
+    print $fh "host replication postgres  ::1/128      trust\n";
     close $fh;
 }
 
@@ -1126,16 +1128,33 @@ sub RunVanillaTests
     system("mkdir", ("-p", "$pgregressOutputdir/sql")) == 0
             or die "Could not create vanilla sql dir.";
 
-    $exitcode = system("$plainRegress",
-                        ("--dlpath", $dlpath),
-                        ("--inputdir",  $pgregressInputdir),
-                        ("--outputdir",  $pgregressOutputdir),
-                        ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
-                        ("--use-existing"),
-                        ("--host","$host"),
-                        ("--port","$masterPort"),
-                        ("--user","$user"),
-                        ("--dbname", "$dbName"));
+    if ($majorversion >= "16")
+    {
+        $exitcode = system("$plainRegress",
+                            ("--dlpath", $dlpath),
+                            ("--inputdir",  $pgregressInputdir),
+                            ("--outputdir",  $pgregressOutputdir),
+                            ("--expecteddir",  $pgregressOutputdir),
+                            ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
+                            ("--use-existing"),
+                            ("--host","$host"),
+                            ("--port","$masterPort"),
+                            ("--user","$user"),
+                            ("--dbname", "$dbName"));
+    }
+    else
+    {
+        $exitcode = system("$plainRegress",
+                            ("--dlpath", $dlpath),
+                            ("--inputdir",  $pgregressInputdir),
+                            ("--outputdir",  $pgregressOutputdir),
+                            ("--schedule",  catfile("$pgregressInputdir", "parallel_schedule")),
+                            ("--use-existing"),
+                            ("--host","$host"),
+                            ("--port","$masterPort"),
+                            ("--user","$user"),
+                            ("--dbname", "$dbName"));
+    }
 }
 
 if ($useMitmproxy) {

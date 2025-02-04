@@ -74,7 +74,7 @@ AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
 void
 AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGrant)
 {
-	if (isGrant && grantor)
+	if (grantor)
 	{
 		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(grantor, true));
 	}

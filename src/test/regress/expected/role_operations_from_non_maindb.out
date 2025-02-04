@@ -1,0 +1,138 @@
+-- Create a new database
+set citus.enable_create_database_propagation to on;
+CREATE DATABASE role_operations_test_db;
+SET citus.superuser TO 'postgres';
+-- Connect to the new database
+\c role_operations_test_db
+-- Test CREATE ROLE with various options
+CREATE ROLE test_role1 WITH LOGIN PASSWORD 'password1';
+\c role_operations_test_db - - :worker_1_port
+CREATE USER "test_role2-needs\!escape"
+WITH
+    SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION
+LIMIT 10 VALID UNTIL '2023-01-01' IN ROLE test_role1;
+\c regression - - :master_port
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        ORDER BY rolname
+    ) t
+$$);
+                                                                                                                                                                                                                                result
+---------------------------------------------------------------------
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":true,"rolinherit":true,"rolcreaterole":true,"rolcreatedb":true,"rolcanlogin":true,"rolreplication":true,"rolbypassrls":true,"rolconnlimit":10,"pass_not_empty":null,"date":"2023-01-01"}]
+(3 rows)
+
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT r.rolname
+        FROM pg_dist_object d
+        JOIN pg_roles r ON d.objid = r.oid
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape')
+        order by r.rolname
+    ) t
+$$);
+                               result
+---------------------------------------------------------------------
+ [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"}]
+ [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"}]
+ [{"rolname":"test_role1"},{"rolname":"test_role2-needs\\!escape"}]
+(3 rows)
+
+\c role_operations_test_db - - :master_port
+-- Test ALTER ROLE with various options
+ALTER ROLE test_role1 WITH PASSWORD 'new_password1';
+\c role_operations_test_db - - :worker_1_port
+ALTER USER "test_role2-needs\!escape"
+WITH
+    NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION
+LIMIT 5 VALID UNTIL '2024-01-01';
+\c regression - - :master_port
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape')
+        ORDER BY rolname
+    ) t
+$$);
+                                                                                                                                                                                                                                   result
+---------------------------------------------------------------------
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
+ [{"rolname":"test_role1","rolsuper":false,"rolinherit":true,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":true,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":-1,"pass_not_empty":true,"date":null},{"rolname":"test_role2-needs\\!escape","rolsuper":false,"rolinherit":false,"rolcreaterole":false,"rolcreatedb":false,"rolcanlogin":false,"rolreplication":false,"rolbypassrls":false,"rolconnlimit":5,"pass_not_empty":null,"date":"2024-01-01"}]
+(3 rows)
+
+\c role_operations_test_db - - :master_port
+-- Test DROP ROLE
+DROP ROLE no_such_role; -- fails nicely
+ERROR:  role "no_such_role" does not exist
+DROP ROLE IF EXISTS no_such_role;  -- doesn't fail
+NOTICE:  role "no_such_role" does not exist, skipping
+CREATE ROLE new_role;
+DROP ROLE IF EXISTS no_such_role, new_role; -- doesn't fail
+NOTICE:  role "no_such_role" does not exist, skipping
+DROP ROLE IF EXISTS test_role1, "test_role2-needs\!escape";
+\c regression - - :master_port
+--verify that roles and dist_object are dropped
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
+        rolcanlogin, rolreplication, rolbypassrls, rolconnlimit,
+        (rolpassword != '') as pass_not_empty, DATE(rolvaliduntil)
+        FROM pg_authid
+        WHERE rolname in ('test_role1', 'test_role2-needs\!escape','new_role','no_such_role')
+        ORDER BY rolname
+    ) t
+$$);
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+select result FROM run_command_on_all_nodes($$
+    SELECT array_to_json(array_agg(row_to_json(t)))
+    FROM (
+        SELECT r.rolname
+        FROM pg_roles r
+        WHERE r.rolname IN ('test_role1', 'test_role2-needs\!escape','new_role','no_such_role')
+        order by r.rolname
+    ) t
+$$);
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes($$
+  SELECT count(*) leaked_pg_dist_object_records_for_roles
+  FROM pg_dist_object LEFT JOIN pg_authid ON (objid = oid)
+  WHERE classid = 1260 AND oid IS NULL
+$$);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+-- Clean up: drop the database
+set citus.enable_create_database_propagation to on;
+DROP DATABASE role_operations_test_db;
+reset citus.enable_create_database_propagation;

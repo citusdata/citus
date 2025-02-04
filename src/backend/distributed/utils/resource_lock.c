@@ -707,13 +707,27 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 	}
 
 	List *replicatedShardList = NIL;
-	if (AnyTableReplicated(shardIntervalList, &replicatedShardList))
-	{
-		if (ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
-		{
-			LockShardListResourcesOnFirstWorker(lockMode, replicatedShardList);
-		}
+	bool anyTableReplicated = AnyTableReplicated(shardIntervalList, &replicatedShardList);
 
+	/*
+	 * Acquire locks on the modified table.
+	 * If the table is replicated, the locks are first acquired on the first worker node then locally.
+	 * But if we're already on the first worker, acquiring on the first worker node and locally are the same operation.
+	 * So we only acquire locally in that case.
+	 */
+	if (anyTableReplicated && ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
+	{
+		LockShardListResourcesOnFirstWorker(lockMode, replicatedShardList);
+	}
+	LockShardListResources(shardIntervalList, lockMode);
+
+	/*
+	 * Next, acquire locks on the reference tables that are referenced by a foreign key if there are any.
+	 * Note that LockReferencedReferenceShardResources() first acquires locks on the first worker,
+	 * then locally.
+	 */
+	if (anyTableReplicated)
+	{
 		ShardInterval *firstShardInterval =
 			(ShardInterval *) linitial(replicatedShardList);
 		if (ReferenceTableShardId(firstShardInterval->shardId))
@@ -728,8 +742,6 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 			LockReferencedReferenceShardResources(firstShardInterval->shardId, lockMode);
 		}
 	}
-
-	LockShardListResources(shardIntervalList, lockMode);
 }
 
 

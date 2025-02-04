@@ -40,14 +40,37 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/serialize_distributed_ddls.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+
+
+/*
+ * Used to save original name of the database before it is replaced with a
+ * temporary name for failure handling purposes in PreprocessCreateDatabaseStmt().
+ */
+static char *CreateDatabaseCommandOriginalDbName = NULL;
+
+
+/*
+ * The format string used when creating a temporary databases for failure
+ * handling purposes.
+ *
+ * The fields are as follows to ensure using a unique name for each temporary
+ * database:
+ * - operationId: The operation id returned by RegisterOperationNeedingCleanup().
+ * - groupId:     The group id of the worker node where CREATE DATABASE command
+ *                is issued from.
+ */
+#define TEMP_DATABASE_NAME_FMT "citus_temp_database_%lu_%d"
+
 
 /*
  * DatabaseCollationInfo is used to store collation related information of a database.
@@ -286,8 +309,9 @@ PreprocessAlterDatabaseStmt(Node *node, const char *queryString,
 		 * NontransactionalNodeDDLTask to run the command on the workers outside
 		 * the transaction block.
 		 */
-
-		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+		bool warnForPartialFailure = true;
+		return NontransactionalNodeDDLTaskList(NON_COORDINATOR_NODES, commands,
+											   warnForPartialFailure);
 	}
 	else
 	{
@@ -453,7 +477,12 @@ PreprocessAlterDatabaseSetStmt(Node *node, const char *queryString,
  *
  * In this stage, we perform validations that we want to ensure before delegating to
  * previous utility hooks because it might not be convenient to throw an error in an
- * implicit transaction that creates a database.
+ * implicit transaction that creates a database. Also in this stage, we save the original
+ * database name and replace dbname field with a temporary name for failure handling
+ * purposes. We let Postgres create the database with the temporary name, insert a cleanup
+ * record for the temporary database name on all nodes and let PostprocessCreateDatabaseStmt()
+ * to return the distributed DDL job that both creates the database with the temporary name
+ * and then renames it back to its original name.
  *
  * We also serialize database commands globally by acquiring a Citus specific advisory
  * lock based on OCLASS_DATABASE on the first primary worker node.
@@ -467,12 +496,40 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsurePropagationToCoordinator();
+	EnsureCoordinatorIsInMetadata();
 
 	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
 	EnsureSupportedCreateDatabaseCommand(stmt);
 
 	SerializeDistributedDDLsOnObjectClass(OCLASS_DATABASE);
+
+	OperationId operationId = RegisterOperationNeedingCleanup();
+
+	char *tempDatabaseName = psprintf(TEMP_DATABASE_NAME_FMT,
+									  operationId, GetLocalGroupId());
+
+	List *remoteNodes = TargetWorkerSetNodeList(ALL_SHARD_NODES, RowShareLock);
+	WorkerNode *remoteNode = NULL;
+	foreach_ptr(remoteNode, remoteNodes)
+	{
+		InsertCleanupRecordOutsideTransaction(
+			CLEANUP_OBJECT_DATABASE,
+			pstrdup(quote_identifier(tempDatabaseName)),
+			remoteNode->groupId,
+			CLEANUP_ON_FAILURE
+			);
+	}
+
+	CreateDatabaseCommandOriginalDbName = stmt->dbname;
+	stmt->dbname = tempDatabaseName;
+
+	/*
+	 * Delete cleanup records in the same transaction so that if the current
+	 * transactions fails for some reason, then the cleanup records won't be
+	 * deleted. In the happy path, we will delete the cleanup records without
+	 * deferring them to the background worker.
+	 */
+	FinalizeOperationNeedingCleanupOnSuccess("create database");
 
 	return NIL;
 }
@@ -480,11 +537,15 @@ PreprocessCreateDatabaseStmt(Node *node, const char *queryString,
 
 /*
  * PostprocessCreateDatabaseStmt is executed after the statement is applied to the local
- * postgres instance. In this stage we prepare the commands that need to be run on
- * all workers to create the database. Since the CREATE DATABASE statement gives error
- * in a transaction block, we need to use NontransactionalNodeDDLTaskList to send the
- * CREATE DATABASE statement to the workers.
+ * postgres instance.
  *
+ * In this stage, we first rename the temporary database back to its original name for
+ * local node and then return a list of distributed DDL jobs to create the database with
+ * the temporary name and then to rename it back to its original name. That way, if CREATE
+ * DATABASE fails on any of the nodes, the temporary database will be cleaned up by the
+ * cleanup records that we inserted in PreprocessCreateDatabaseStmt() and in case of a
+ * failure, we won't leak any databases called as the name that user intended to use for
+ * the database.
  */
 List *
 PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
@@ -508,20 +569,71 @@ PostprocessCreateDatabaseStmt(Node *node, const char *queryString)
 
 	char *createDatabaseCommand = DeparseTreeNode(node);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) createDatabaseCommand,
-								ENABLE_DDL_PROPAGATION);
+	List *createDatabaseCommands = list_make3(DISABLE_DDL_PROPAGATION,
+											  (void *) createDatabaseCommand,
+											  ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands);
+	/*
+	 * Since the CREATE DATABASE statements cannot be executed in a transaction
+	 * block, we need to use NontransactionalNodeDDLTaskList() to send the CREATE
+	 * DATABASE statement to the workers.
+	 */
+	bool warnForPartialFailure = false;
+	List *createDatabaseDDLJobList =
+		NontransactionalNodeDDLTaskList(REMOTE_NODES, createDatabaseCommands,
+										warnForPartialFailure);
+
+	CreatedbStmt *stmt = castNode(CreatedbStmt, node);
+
+	char *renameDatabaseCommand =
+		psprintf("ALTER DATABASE %s RENAME TO %s",
+				 quote_identifier(stmt->dbname),
+				 quote_identifier(CreateDatabaseCommandOriginalDbName));
+
+	List *renameDatabaseCommands = list_make3(DISABLE_DDL_PROPAGATION,
+											  renameDatabaseCommand,
+											  ENABLE_DDL_PROPAGATION);
+
+	/*
+	 * We use NodeDDLTaskList() to send the RENAME DATABASE statement to the
+	 * workers because we want to execute it in a coordinated transaction.
+	 */
+	List *renameDatabaseDDLJobList =
+		NodeDDLTaskList(REMOTE_NODES, renameDatabaseCommands);
+
+	/*
+	 * Temporarily disable citus.enable_ddl_propagation before issuing
+	 * rename command locally because we don't want to execute it on remote
+	 * nodes yet. We will execute it on remote nodes by returning it as a
+	 * distributed DDL job.
+	 *
+	 * The reason why we don't want to execute it on remote nodes yet is that
+	 * the database is not created on remote nodes yet.
+	 */
+	int saveNestLevel = NewGUCNestLevel();
+	set_config_option("citus.enable_ddl_propagation", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	ExecuteUtilityCommand(renameDatabaseCommand);
+
+	AtEOXact_GUC(true, saveNestLevel);
+
+	/*
+	 * Restore the original database name because MarkObjectDistributed()
+	 * resolves oid of the object based on the database name and is called
+	 * after executing the distributed DDL job that renames temporary database.
+	 */
+	stmt->dbname = CreateDatabaseCommandOriginalDbName;
+
+	return list_concat(createDatabaseDDLJobList, renameDatabaseDDLJobList);
 }
 
 
 /*
  * PreprocessDropDatabaseStmt is executed before the statement is applied to the local
  * postgres instance. In this stage we can prepare the commands that need to be run on
- * all workers to drop the database. Since the DROP DATABASE statement gives error in
- * transaction context, we need to use NontransactionalNodeDDLTaskList to send the
- * DROP DATABASE statement to the workers.
+ * all workers to drop the database.
  *
  * We also serialize database commands globally by acquiring a Citus specific advisory
  * lock based on OCLASS_DATABASE on the first primary worker node.
@@ -559,11 +671,20 @@ PreprocessDropDatabaseStmt(Node *node, const char *queryString,
 
 	char *dropDatabaseCommand = DeparseTreeNode(node);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) dropDatabaseCommand,
-								ENABLE_DDL_PROPAGATION);
+	List *dropDatabaseCommands = list_make3(DISABLE_DDL_PROPAGATION,
+											(void *) dropDatabaseCommand,
+											ENABLE_DDL_PROPAGATION);
 
-	return NontransactionalNodeDDLTaskList(REMOTE_NODES, commands);
+	/*
+	 * Due to same reason stated in PostprocessCreateDatabaseStmt(), we need to
+	 * use NontransactionalNodeDDLTaskList() to send the DROP DATABASE statement
+	 * to the workers.
+	 */
+	bool warnForPartialFailure = true;
+	List *dropDatabaseDDLJobList =
+		NontransactionalNodeDDLTaskList(REMOTE_NODES, dropDatabaseCommands,
+										warnForPartialFailure);
+	return dropDatabaseDDLJobList;
 }
 
 
@@ -890,7 +1011,7 @@ CreateDatabaseDDLCommand(Oid dbId)
 
 	/* Generate the CREATE DATABASE statement */
 	appendStringInfo(outerDbStmt,
-					 "SELECT pg_catalog.citus_internal_database_command(%s)",
+					 "SELECT citus_internal.database_command(%s)",
 					 quote_literal_cstr(createStmt));
 
 	ReleaseSysCache(tuple);

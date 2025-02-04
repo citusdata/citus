@@ -19,7 +19,7 @@ jobs:
       pg_versions: ${{ steps.get-postgres-versions.outputs.pg_versions }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2
       - name: Get Postgres Versions
@@ -51,18 +51,6 @@ jobs:
           - almalinux-8
           - almalinux-9
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
-        # Postgres removed support for CentOS 7 in PG 16. Below block is needed to
-        # keep the build for CentOS 7 working for PG 14 and PG 15.
-        # Once dependent systems drop support for Centos 7, we can remove this block.
-        include:
-          - packaging_docker_image: centos-7
-            POSTGRES_VERSION: 14
-          - packaging_docker_image: centos-7
-            POSTGRES_VERSION: 15
-          - packaging_docker_image: oraclelinux-7
-            POSTGRES_VERSION: 14
-          - packaging_docker_image: oraclelinux-7
-            POSTGRES_VERSION: 15
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
@@ -70,7 +58,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set Postgres and python parameters for rpm based distros
         run: |
@@ -128,7 +116,6 @@ jobs:
         # for each deb based image and we use POSTGRES_VERSION to set
         # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
-          - debian-buster-all
           - debian-bookworm-all
           - debian-bullseye-all
           - ubuntu-focal-all

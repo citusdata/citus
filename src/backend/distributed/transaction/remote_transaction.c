@@ -107,6 +107,12 @@ bool IsMainDB = true;
  */
 char *SuperuserRole = NULL;
 
+/*
+ * IsMainDBCommandInXact shows if the query sent to the main database requires
+ * a transaction
+ */
+bool IsMainDBCommandInXact = true;
+
 
 /*
  * start_management_transaction starts a management transaction
@@ -190,7 +196,11 @@ RunCitusMainDBQuery(char *query)
 														 PostPortNumber,
 														 SuperuserRole,
 														 MainDb);
-		RemoteTransactionBegin(MainDBConnection);
+
+		if (IsMainDBCommandInXact)
+		{
+			RemoteTransactionBegin(MainDBConnection);
+		}
 	}
 
 	SendRemoteCommand(MainDBConnection, query);

@@ -121,17 +121,17 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, (rolpassword != '') as pass_not_empty, rolvaliduntil FROM pg_authid WHERE rolname LIKE 'create\_%' ORDER BY rolname;
            rolname           | rolsuper | rolinherit | rolcreaterole | rolcreatedb | rolcanlogin | rolreplication | rolbypassrls | rolconnlimit | pass_not_empty |        rolvaliduntil
 ---------------------------------------------------------------------
- create_group                | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_group_2              | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role                 | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
- create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_group                | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_group_2              | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role                 | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_with_everything | t        | t          | t             | t           | t           | t              | t            |          105 | t              | Thu May 04 17:00:00 2045 PDT
  create_role_with_nothing    | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
- create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
- create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
+ create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
+ create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
 (11 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
@@ -196,6 +196,7 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 (1 row)
 
 \c - - - :master_port
+create role test_admin_role;
 -- test grants with distributed and non-distributed roles
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
@@ -221,29 +222,72 @@ CREATE ROLE non_dist_role_4;
 NOTICE:  not propagating CREATE ROLE/USER commands to other nodes
 HINT:  Connect to other nodes directly to manually create all necessary users and roles.
 SET citus.enable_create_role_propagation TO ON;
+grant dist_role_3,dist_role_1 to test_admin_role with admin option;
 SET ROLE dist_role_1;
 GRANT non_dist_role_1 TO non_dist_role_2;
 SET citus.enable_create_role_propagation TO OFF;
+grant dist_role_1 to non_dist_role_1 with admin option;
 SET ROLE non_dist_role_1;
-GRANT dist_role_1 TO dist_role_2;
+GRANT dist_role_1 TO dist_role_2 granted by non_dist_role_1;
 RESET ROLE;
 SET citus.enable_create_role_propagation TO ON;
-GRANT dist_role_3 TO non_dist_role_3;
+GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
 GRANT non_dist_role_4 TO dist_role_4;
+GRANT dist_role_3 TO dist_role_4 granted by test_admin_role;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+  ) q;
+  $$
+);
+                                                result
+---------------------------------------------------------------------
+ [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false},     +
+  {"member":"non_dist_role_3","role":"dist_role_3","grantor":"test_admin_role","admin_option":false}, +
+  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false},     +
+  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"dist_role_4","role":"dist_role_3","grantor":"test_admin_role","admin_option":false},     +
+  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+(3 rows)
+
+REVOKE dist_role_3 from dist_role_4 granted by test_admin_role cascade;
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
+  ) q;
+  $$
+);
+                                                result
+---------------------------------------------------------------------
+ [{"member":"non_dist_role_3","role":"dist_role_3","grantor":"test_admin_role","admin_option":false}, +
+  {"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+(3 rows)
+
+SELECT roleid::regrole::text AS role, member::regrole::text, (grantor::regrole::text IN ('postgres', 'non_dist_role_1', 'dist_role_1','test_admin_role')) AS grantor, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
       role       |     member      | grantor | admin_option
 ---------------------------------------------------------------------
  dist_role_1     | dist_role_2     | t       | f
+ dist_role_1     | non_dist_role_1 | t       | t
+ dist_role_1     | test_admin_role | t       | t
  dist_role_3     | non_dist_role_3 | t       | f
+ dist_role_3     | test_admin_role | t       | t
  non_dist_role_1 | non_dist_role_2 | t       | f
  non_dist_role_4 | dist_role_4     | t       | f
-(4 rows)
+(7 rows)
 
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%dist\_%' ORDER BY 1;
       objid
@@ -255,6 +299,25 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
  non_dist_role_4
 (5 rows)
 
+REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role cascade;
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  SELECT json_agg(q.* ORDER BY member) FROM (
+    SELECT member::regrole::text, roleid::regrole::text AS role, grantor::regrole::text, admin_option
+    FROM pg_auth_members WHERE roleid::regrole::text = 'dist_role_3'
+    order by member::regrole::text
+  ) q;
+  $$
+);
+                                            result
+---------------------------------------------------------------------
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+ [{"member":"test_admin_role","role":"dist_role_3","grantor":"postgres","admin_option":true}]
+(3 rows)
+
+revoke dist_role_3,dist_role_1 from test_admin_role cascade;
+drop role test_admin_role;
 \c - - - :worker_1_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
       role       |   member    | grantor  | admin_option
@@ -276,9 +339,8 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_%' ORDER BY 1;
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
       role       |   member    | grantor  | admin_option
 ---------------------------------------------------------------------
- dist_role_1     | dist_role_2 | postgres | f
  non_dist_role_4 | dist_role_4 | postgres | f
-(2 rows)
+(1 row)
 
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_%' ORDER BY 1;
      rolname

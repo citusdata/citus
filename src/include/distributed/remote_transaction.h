@@ -152,5 +152,6 @@ extern bool IsMainDB;
 extern char *SuperuserRole;
 extern char *MainDb;
 extern struct MultiConnection *MainDBConnection;
+extern bool IsMainDBCommandInXact;
 
 #endif /* REMOTE_TRANSACTION_H */

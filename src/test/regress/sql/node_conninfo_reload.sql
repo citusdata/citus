@@ -205,4 +205,30 @@ show citus.node_conninfo;
 -- Should work again
 ALTER TABLE test ADD COLUMN e INT;
 
+-- show that we allow providing "host" param via citus.node_conninfo
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=require host=nosuchhost';
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+
+-- fails due to invalid host
+SELECT COUNT(*)>=0 FROM test;
+
+SELECT array_agg(nodeid) as updated_nodeids from pg_dist_node WHERE nodename = 'localhost' \gset
+UPDATE pg_dist_node SET nodename = '127.0.0.1' WHERE nodeid = ANY(:'updated_nodeids'::int[]);
+
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=require host=localhost';
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+
+-- works when hostaddr is specified in pg_dist_node after providing host in citus.node_conninfo
+SELECT COUNT(*)>=0 FROM test;
+
+-- restore original nodenames into pg_dist_node
+UPDATE pg_dist_node SET nodename = 'localhost' WHERE nodeid = ANY(:'updated_nodeids'::int[]);
+
+-- reset it
+ALTER SYSTEM RESET citus.node_conninfo;
+select pg_reload_conf();
+select pg_sleep(0.1); -- wait for config reload to apply
+
 DROP SCHEMA node_conninfo_reload CASCADE;

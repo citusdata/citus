@@ -465,8 +465,8 @@ static bool
 AnyObjectViolatesOwnership(DropStmt *dropStmt)
 {
 	bool hasOwnershipViolation = false;
-	volatile ObjectAddress objectAddress = { 0 };
-	Relation relation = NULL;
+	ObjectAddress objectAddress = { 0 };
+	volatile Relation relation = NULL;
 	ObjectType objectType = dropStmt->removeType;
 	bool missingOk = dropStmt->missing_ok;
 
@@ -480,8 +480,17 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 		Node *object = NULL;
 		foreach_ptr(object, dropStmt->objects)
 		{
+			Relation rel = NULL;
 			objectAddress = get_object_address(objectType, object,
-											   &relation, AccessShareLock, missingOk);
+											   &rel, AccessShareLock, missingOk);
+
+			/*
+			 * The object relation is qualified with volatile and its value is obtained from
+			 * get_object_address(). Unless we can qualify the corresponding parameter of
+			 * get_object_address() with volatile (this is a function defined in PostgreSQL),
+			 * we cannot get rid of this assignment.
+			 */
+			relation = rel;
 
 			if (OidIsValid(objectAddress.objectId))
 			{

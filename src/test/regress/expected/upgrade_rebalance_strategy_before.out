@@ -35,3 +35,23 @@ SELECT citus_set_default_rebalance_strategy('custom_strategy');
 
 (1 row)
 
+-- Disable the trigger temporarily to allow the invalid strategy to be added.
+-- Normally an invalid strategy can end up in the table by deleting one of the
+-- functions it depends on. But we do directly in this test because we want to
+-- have a consistent OID, so we get consistent test output.
+ALTER TABLE pg_catalog.pg_dist_rebalance_strategy DISABLE TRIGGER pg_dist_rebalance_strategy_validation_trigger;
+SELECT citus_add_rebalance_strategy(
+        'invalid_strategy',
+        1234567,
+        'capacity_high_worker_1',
+        'only_worker_2',
+        0.5,
+        0.2,
+        0.3
+    );
+ citus_add_rebalance_strategy
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE pg_catalog.pg_dist_rebalance_strategy ENABLE TRIGGER pg_dist_rebalance_strategy_validation_trigger;

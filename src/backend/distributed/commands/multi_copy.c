@@ -2568,7 +2568,7 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 	 * Find the shard interval and id for the partition column value for
 	 * non-reference tables.
 	 *
-	 * For reference table, this function blindly returns the tables single
+	 * For reference table, and single shard distributed table this function blindly returns the tables single
 	 * shard.
 	 */
 	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue, cacheEntry);
@@ -2663,7 +2663,6 @@ CreateLocalColocatedIntermediateFile(CitusCopyDestReceiver *copyDest,
 	CreateIntermediateResultsDirectory();
 
 	const int fileFlags = (O_CREAT | O_RDWR | O_TRUNC);
-	const int fileMode = (S_IRUSR | S_IWUSR);
 
 	StringInfo filePath = makeStringInfo();
 	appendStringInfo(filePath, "%s_%ld", copyDest->colocatedIntermediateResultIdPrefix,
@@ -2671,7 +2670,7 @@ CreateLocalColocatedIntermediateFile(CitusCopyDestReceiver *copyDest,
 
 	const char *fileName = QueryResultFileName(filePath->data);
 	shardState->fileDest =
-		FileCompatFromFileStart(FileOpenForTransmit(fileName, fileFlags, fileMode));
+		FileCompatFromFileStart(FileOpenForTransmit(fileName, fileFlags));
 
 	CopyOutState localFileCopyOutState = shardState->copyOutState;
 	bool isBinaryCopy = localFileCopyOutState->binary;

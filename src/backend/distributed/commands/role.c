@@ -491,18 +491,17 @@ GenerateRoleOptionsList(HeapTuple tuple)
 		options = lappend(options, makeDefElem("password", NULL, -1));
 	}
 
-	/* load valid unitl data from the heap tuple, use default of infinity if not set */
+	/* load valid until data from the heap tuple */
 	Datum rolValidUntilDatum = SysCacheGetAttr(AUTHNAME, tuple,
 											   Anum_pg_authid_rolvaliduntil, &isNull);
-	char *rolValidUntil = "infinity";
 	if (!isNull)
 	{
-		rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
-	}
+		char *rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
 
-	Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
-	DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
-	options = lappend(options, validUntilOption);
+		Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
+		DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
+		options = lappend(options, validUntilOption);
+	}
 
 	return options;
 }
@@ -886,6 +885,14 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
+		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*roleAddress, AuthIdRelationId, membership->grantor);
+		if (!IsAnyObjectDistributed(list_make1(roleAddress)))
+		{
+			/* we only need to propagate the grant if the grantor is distributed */
+			continue;
+		}
+
 		GrantRoleStmt *grantRoleStmt = makeNode(GrantRoleStmt);
 		grantRoleStmt->is_grant = true;
 
@@ -901,7 +908,11 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		granteeRole->rolename = GetUserNameFromId(membership->member, true);
 		grantRoleStmt->grantee_roles = list_make1(granteeRole);
 
-		grantRoleStmt->grantor = NULL;
+		RoleSpec *grantorRole = makeNode(RoleSpec);
+		grantorRole->roletype = ROLESPEC_CSTRING;
+		grantorRole->location = -1;
+		grantorRole->rolename = GetUserNameFromId(membership->grantor, false);
+		grantRoleStmt->grantor = grantorRole;
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 
@@ -1241,12 +1252,6 @@ PreprocessGrantRoleStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	/*
-	 * Postgres don't seem to use the grantor. Even dropping the grantor doesn't
-	 * seem to affect the membership. If this changes, we might need to add grantors
-	 * to the dependency resolution too. For now we just don't propagate it.
-	 */
-	stmt->grantor = NULL;
 	stmt->grantee_roles = distributedGranteeRoles;
 	char *sql = DeparseTreeNode((Node *) stmt);
 	stmt->grantee_roles = allGranteeRoles;

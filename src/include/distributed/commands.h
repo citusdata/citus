@@ -104,6 +104,10 @@ typedef struct DistributeObjectOps
 
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
+/* functions to support node-wide object management commands from non-main dbs */
+extern bool RunPreprocessNonMainDBCommand(Node *parsetree);
+extern void RunPostprocessNonMainDBCommand(Node *parsetree);
+
 /*
  * Flags that can be passed to GetForeignKeyOids to indicate
  * which foreign key constraint OIDs are to be extracted

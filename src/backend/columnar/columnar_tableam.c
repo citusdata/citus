@@ -2946,7 +2946,7 @@ MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion)
 	}
 	else
 	{
-		rightComparisionLimit = strlen(leftVersion);
+		rightComparisionLimit = strlen(rightVersion);
 	}
 
 	/* we can error out early if hypens are not in the same position */
@@ -3021,6 +3021,8 @@ AvailableExtensionVersionColumnar(void)
 
 	ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					errmsg("citus extension is not found")));
+
+	return NULL; /* keep compiler happy */
 }
 
 

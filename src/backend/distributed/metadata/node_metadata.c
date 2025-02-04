@@ -217,6 +217,9 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 		EnsureTransactionalMetadataSyncMode();
 	}
 
+	/* prevent concurrent modification */
+	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
+
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
 													  &isCoordinatorInMetadata);
@@ -507,7 +510,13 @@ citus_disable_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	bool synchronousDisableNode = PG_GETARG_BOOL(2);
+
+	bool synchronousDisableNode = 1;
+	Assert(PG_NARGS() == 2 || PG_NARGS() == 3);
+	if (PG_NARGS() == 3)
+	{
+		synchronousDisableNode = PG_GETARG_BOOL(2);
+	}
 
 	char *nodeName = text_to_cstring(nodeNameText);
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
@@ -1692,7 +1701,7 @@ EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid)
 	if (!parentHasExclusiveLock)
 	{
 		ereport(ERROR, (errmsg("lock is not held by the caller. Unexpected caller "
-							   "for citus_internal_mark_node_not_synced")));
+							   "for citus_internal.mark_node_not_synced")));
 	}
 }
 

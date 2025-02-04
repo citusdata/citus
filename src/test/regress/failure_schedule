@@ -35,6 +35,7 @@ test: failure_mx_metadata_sync
 test: failure_mx_metadata_sync_multi_trans
 test: failure_connection_establishment
 test: failure_non_main_db_2pc
+test: failure_create_database
 
 # this test syncs metadata to the workers
 test: failure_failover_to_local_execution

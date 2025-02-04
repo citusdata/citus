@@ -92,6 +92,8 @@ static bool TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 													 char *nodeName,
 													 int nodePort);
 static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int nodePort);
+static bool TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName,
+											  int nodePort);
 
 static CleanupRecord * GetCleanupRecordByNameAndType(char *objectName,
 													 CleanupObject type);
@@ -141,7 +143,6 @@ Datum
 citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 	PreventInTransactionBlock(true, "citus_cleanup_orphaned_resources");
 
 	int droppedCount = DropOrphanedResourcesForCleanup();
@@ -245,12 +246,6 @@ TryDropOrphanedResources()
 static int
 DropOrphanedResourcesForCleanup()
 {
-	/* Only runs on Coordinator */
-	if (!IsCoordinator())
-	{
-		return 0;
-	}
-
 	List *cleanupRecordList = ListCleanupRecords();
 
 	/*
@@ -452,15 +447,15 @@ CompareCleanupRecordsByObjectType(const void *leftElement, const void *rightElem
 
 
 /*
- * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
+ * InsertCleanupOnSuccessRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
  * as part of the current transaction. This is primarily useful for deferred drop scenarios,
- * since these records would roll back in case of operation failure.
+ * since these records would roll back in case of operation failure. And for the same reason,
+ * always sets the policy type to CLEANUP_DEFERRED_ON_SUCCESS.
  */
 void
-InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
-										char *objectName,
-										int nodeGroupId,
-										CleanupPolicy policy)
+InsertCleanupOnSuccessRecordInCurrentTransaction(CleanupObject objectType,
+												 char *objectName,
+												 int nodeGroupId)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
 	 * will call RegisterOperationNeedingCleanup.
@@ -482,7 +477,8 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 	values[Anum_pg_dist_cleanup_object_type - 1] = Int32GetDatum(objectType);
 	values[Anum_pg_dist_cleanup_object_name - 1] = CStringGetTextDatum(objectName);
 	values[Anum_pg_dist_cleanup_node_group_id - 1] = Int32GetDatum(nodeGroupId);
-	values[Anum_pg_dist_cleanup_policy_type - 1] = Int32GetDatum(policy);
+	values[Anum_pg_dist_cleanup_policy_type - 1] =
+		Int32GetDatum(CLEANUP_DEFERRED_ON_SUCCESS);
 
 	/* open cleanup relation and insert new tuple */
 	Oid relationId = DistCleanupRelationId();
@@ -499,22 +495,26 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 
 
 /*
- * InsertCleanupRecordInSubtransaction inserts a new pg_dist_cleanup entry in a
+ * InsertCleanupRecordOutsideTransaction inserts a new pg_dist_cleanup entry in a
  * separate transaction to ensure the record persists after rollback. We should
  * delete these records if the operation completes successfully.
  *
- * For failure scenarios, use a subtransaction (direct insert via localhost).
+ * This is used in scenarios where we need to cleanup resources on operation
+ * completion (CLEANUP_ALWAYS) or on failure (CLEANUP_ON_FAILURE).
  */
 void
-InsertCleanupRecordInSubtransaction(CleanupObject objectType,
-									char *objectName,
-									int nodeGroupId,
-									CleanupPolicy policy)
+InsertCleanupRecordOutsideTransaction(CleanupObject objectType,
+									  char *objectName,
+									  int nodeGroupId,
+									  CleanupPolicy policy)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
 	 * will call RegisterOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
+
+	/* assert the circumstance noted in function comment */
+	Assert(policy == CLEANUP_ALWAYS || policy == CLEANUP_ON_FAILURE);
 
 	StringInfo sequenceName = makeStringInfo();
 	appendStringInfo(sequenceName, "%s.%s",
@@ -601,6 +601,12 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 		case CLEANUP_OBJECT_USER:
 		{
 			return TryDropUserOutsideTransaction(record->objectName, nodeName, nodePort);
+		}
+
+		case CLEANUP_OBJECT_DATABASE:
+		{
+			return TryDropDatabaseOutsideTransaction(record->objectName, nodeName,
+													 nodePort);
 		}
 
 		default:
@@ -880,6 +886,69 @@ TryDropUserOutsideTransaction(char *username,
 					 quote_identifier(username))));
 
 	return success;
+}
+
+
+/*
+ * TryDropDatabaseOutsideTransaction drops the database with the given name
+ * if it exists.
+ */
+static bool
+TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePort)
+{
+	int connectionFlags = (OUTSIDE_TRANSACTION | FORCE_NEW_CONNECTION);
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		return false;
+	}
+
+	/*
+	 * We want to disable DDL propagation and set lock_timeout before issuing
+	 * the DROP DATABASE command but we cannot do so in a way that's scoped
+	 * to the DROP DATABASE command. This is because, we cannot use a
+	 * transaction block for the DROP DATABASE command.
+	 *
+	 * For this reason, to avoid leaking the lock_timeout and DDL propagation
+	 * settings to future commands, we force the connection to close at the end
+	 * of the transaction.
+	 */
+	ForceConnectionCloseAtTransactionEnd(connection);
+
+	/*
+	 * The DROP DATABASE command should not propagate, so we disable DDL
+	 * propagation.
+	 */
+	List *commandList = list_make3(
+		"SET lock_timeout TO '1s'",
+		"SET citus.enable_ddl_propagation TO OFF;",
+		psprintf("DROP DATABASE IF EXISTS %s;", quote_identifier(databaseName))
+		);
+
+	bool executeCommand = true;
+
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		/*
+		 * Cannot use SendOptionalCommandListToWorkerOutsideTransactionWithConnection()
+		 * because we don't want to open a transaction block on remote nodes as DROP
+		 * DATABASE commands cannot be run inside a transaction block.
+		 */
+		if (ExecuteOptionalRemoteCommand(connection, commandString, NULL) !=
+			RESPONSE_OKAY)
+		{
+			executeCommand = false;
+			break;
+		}
+	}
+
+	CloseConnection(connection);
+	return executeCommand;
 }
 
 

@@ -54,6 +54,7 @@ static bool ShouldHideShardsInternal(void);
 static bool IsPgBgWorker(void);
 static bool FilterShardsFromPgclass(Node *node, void *context);
 static Node * CreateRelationIsAKnownShardFilter(int pgClassVarno);
+static bool HasRangeTableRef(Node *node, int *varno);
 
 PG_FUNCTION_INFO_V1(citus_table_is_visible);
 PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
@@ -421,8 +422,8 @@ IsPgBgWorker(void)
 
 
 /*
- * FilterShardsFromPgclass adds a NOT relation_is_a_known_shard(oid) filter
- * to the security quals of pg_class RTEs.
+ * FilterShardsFromPgclass adds a "relation_is_a_known_shard(oid) IS NOT TRUE"
+ * filter to the quals of queries that query pg_class.
  */
 static bool
 FilterShardsFromPgclass(Node *node, void *context)
@@ -456,12 +457,35 @@ FilterShardsFromPgclass(Node *node, void *context)
 				continue;
 			}
 
+			/*
+			 * Skip if pg_class is not actually queried. This is possible on
+			 * INSERT statements that insert into pg_class.
+			 */
+			if (!expression_tree_walker((Node *) query->jointree->fromlist,
+										HasRangeTableRef, &varno))
+			{
+				/* the query references pg_class */
+				continue;
+			}
+
 			/* make sure the expression is in the right memory context */
 			MemoryContext originalContext = MemoryContextSwitchTo(queryContext);
 
-			/* add NOT relation_is_a_known_shard(oid) to the security quals of the RTE */
-			rangeTableEntry->securityQuals =
-				list_make1(CreateRelationIsAKnownShardFilter(varno));
+
+			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
+			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
+			Node *oldQuals = query->jointree->quals;
+			if (oldQuals)
+			{
+				query->jointree->quals = (Node *) makeBoolExpr(
+					AND_EXPR,
+					list_make2(oldQuals, newQual),
+					-1);
+			}
+			else
+			{
+				query->jointree->quals = newQual;
+			}
 
 			MemoryContextSwitchTo(originalContext);
 		}
@@ -474,8 +498,36 @@ FilterShardsFromPgclass(Node *node, void *context)
 
 
 /*
+ * HasRangeTableRef passed to expression_tree_walker to check if a node is a
+ * RangeTblRef of the given varno is present in a fromlist.
+ */
+static bool
+HasRangeTableRef(Node *node, int *varno)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblRef))
+	{
+		RangeTblRef *rangeTblRef = (RangeTblRef *) node;
+		return rangeTblRef->rtindex == *varno;
+	}
+
+	return expression_tree_walker(node, HasRangeTableRef, varno);
+}
+
+
+/*
  * CreateRelationIsAKnownShardFilter constructs an expression of the form:
- * NOT pg_catalog.relation_is_a_known_shard(oid)
+ * pg_catalog.relation_is_a_known_shard(oid) IS NOT TRUE
+ *
+ * The difference between "NOT pg_catalog.relation_is_a_known_shard(oid)" and
+ * "pg_catalog.relation_is_a_known_shard(oid) IS NOT TRUE" is that the former
+ * will return FALSE if the function returns NULL, while the second will return
+ * TRUE. This difference is important in the case of outer joins, because this
+ * filter might be applied on an oid that is then NULL.
  */
 static Node *
 CreateRelationIsAKnownShardFilter(int pgClassVarno)
@@ -496,9 +548,9 @@ CreateRelationIsAKnownShardFilter(int pgClassVarno)
 	funcExpr->location = -1;
 	funcExpr->args = list_make1(oidVar);
 
-	BoolExpr *notExpr = makeNode(BoolExpr);
-	notExpr->boolop = NOT_EXPR;
-	notExpr->args = list_make1(funcExpr);
+	BooleanTest *notExpr = makeNode(BooleanTest);
+	notExpr->booltesttype = IS_NOT_TRUE;
+	notExpr->arg = (Expr *) funcExpr;
 	notExpr->location = -1;
 
 	return (Node *) notExpr;

@@ -75,6 +75,15 @@ typedef struct DDLJob
 	const char *metadataSyncCommand;
 
 	List *taskList;            /* worker DDL tasks to execute */
+
+	/*
+	 * Only applicable when any of the tasks cannot be executed in a
+	 * transaction block.
+	 *
+	 * Controls whether to emit a warning within the utility hook in case of a
+	 * failure.
+	 */
+	bool warnForPartialFailure;
 } DDLJob;
 
 extern ProcessUtility_hook_type PrevProcessUtility;
@@ -94,7 +103,8 @@ extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
-extern List * NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands);
+extern List * NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
+											  bool warnForPartialFailure);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);

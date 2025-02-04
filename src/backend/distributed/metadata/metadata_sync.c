@@ -492,19 +492,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 bool
 ClusterHasKnownMetadataWorkers()
 {
-	bool workerWithMetadata = false;
-
-	if (!IsCoordinator())
-	{
-		workerWithMetadata = true;
-	}
-
-	if (workerWithMetadata || HasMetadataWorkers())
-	{
-		return true;
-	}
-
-	return false;
+	return !IsCoordinator() || HasMetadataWorkers();
 }
 
 
@@ -1176,7 +1164,7 @@ DistributionDeleteMetadataCommand(Oid relationId)
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	appendStringInfo(deleteCommand,
-					 "SELECT pg_catalog.citus_internal_delete_partition_metadata(%s)",
+					 "SELECT citus_internal.delete_partition_metadata(%s)",
 					 quote_literal_cstr(qualifiedRelationName));
 
 	return deleteCommand->data;
@@ -1259,7 +1247,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertPlacementCommand, ") ");
 
 	appendStringInfo(insertPlacementCommand,
-					 "SELECT citus_internal_add_placement_metadata("
+					 "SELECT citus_internal.add_placement_metadata("
 					 "shardid, shardlength, groupid, placementid) "
 					 "FROM placement_data;");
 
@@ -1315,7 +1303,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	appendStringInfo(insertShardCommand, ") ");
 
 	appendStringInfo(insertShardCommand,
-					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
+					 "SELECT citus_internal.add_shard_metadata(relationname, shardid, "
 					 "storagetype, shardminvalue, shardmaxvalue) "
 					 "FROM shard_data;");
 
@@ -1354,7 +1342,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 
 	StringInfo deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
-					 "SELECT citus_internal_delete_shard_metadata(%ld);", shardId);
+					 "SELECT citus_internal.delete_shard_metadata(%ld);", shardId);
 
 	return list_make1(deleteShardCommand->data);
 }
@@ -1424,7 +1412,7 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 	StringInfo command = makeStringInfo();
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 	appendStringInfo(command,
-					 "SELECT citus_internal_update_relation_colocation(%s::regclass, %d)",
+					 "SELECT citus_internal.update_relation_colocation(%s::regclass, %d)",
 					 quote_literal_cstr(qualifiedRelationName), colocationId);
 
 	return command->data;
@@ -1650,6 +1638,74 @@ GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 
 
 /*
+ * GetDependentDependentRelationsWithSequence returns a list of oids of
+ * relations that have have a dependency on the given sequence.
+ * There are three types of dependencies:
+ * 1. direct auto (owned sequences), created using SERIAL or BIGSERIAL
+ * 2. indirect auto (through an AttrDef), created using DEFAULT nextval('..')
+ * 3. internal, created using GENERATED ALWAYS AS IDENTITY
+ *
+ * Depending on the passed deptype, we return the relations that have the
+ * given type(s):
+ * - DEPENDENCY_AUTO returns both 1 and 2
+ * - DEPENDENCY_INTERNAL returns 3
+ *
+ * The returned list can contain duplicates, as the same relation can have
+ * multiple dependencies on the sequence.
+ */
+List *
+GetDependentRelationsWithSequence(Oid sequenceOid, char depType)
+{
+	List *relations = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(sequenceOid));
+	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
+										  NULL, lengthof(key), key);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (
+			deprec->refclassid == RelationRelationId &&
+			deprec->refobjsubid != 0 &&
+			deprec->deptype == depType)
+		{
+			relations = lappend_oid(relations, deprec->refobjid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	if (depType == DEPENDENCY_AUTO)
+	{
+		Oid attrDefOid;
+		List *attrDefOids = GetAttrDefsFromSequence(sequenceOid);
+
+		foreach_oid(attrDefOid, attrDefOids)
+		{
+			ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
+			relations = lappend_oid(relations, columnAddress.objectId);
+		}
+	}
+
+	return relations;
+}
+
+
+/*
  * GetSequencesFromAttrDef returns a list of sequence OIDs that have
  * dependency with the given attrdefOid in pg_depend
  */
@@ -1691,6 +1747,90 @@ GetSequencesFromAttrDef(Oid attrdefOid)
 	table_close(depRel, AccessShareLock);
 
 	return sequencesResult;
+}
+
+
+#if PG_VERSION_NUM < PG_VERSION_15
+
+/*
+ * Given a pg_attrdef OID, return the relation OID and column number of
+ * the owning column (represented as an ObjectAddress for convenience).
+ *
+ * Returns InvalidObjectAddress if there is no such pg_attrdef entry.
+ */
+ObjectAddress
+GetAttrDefaultColumnAddress(Oid attrdefoid)
+{
+	ObjectAddress result = InvalidObjectAddress;
+	ScanKeyData skey[1];
+	HeapTuple tup;
+
+	Relation attrdef = table_open(AttrDefaultRelationId, AccessShareLock);
+	ScanKeyInit(&skey[0],
+				Anum_pg_attrdef_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(attrdefoid));
+	SysScanDesc scan = systable_beginscan(attrdef, AttrDefaultOidIndexId, true,
+										  NULL, 1, skey);
+
+	if (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_attrdef atdform = (Form_pg_attrdef) GETSTRUCT(tup);
+
+		result.classId = RelationRelationId;
+		result.objectId = atdform->adrelid;
+		result.objectSubId = atdform->adnum;
+	}
+
+	systable_endscan(scan);
+	table_close(attrdef, AccessShareLock);
+
+	return result;
+}
+
+
+#endif
+
+
+/*
+ * GetAttrDefsFromSequence returns a list of attrdef OIDs that have
+ * a dependency on the given sequence
+ */
+List *
+GetAttrDefsFromSequence(Oid seqOid)
+{
+	List *attrDefsResult = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(seqOid));
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, lengthof(key), key);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->classid == AttrDefaultRelationId &&
+			deprec->deptype == DEPENDENCY_NORMAL)
+		{
+			attrDefsResult = lappend_oid(attrDefsResult, deprec->objid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	return attrDefsResult;
 }
 
 
@@ -4056,7 +4196,7 @@ citus_internal_database_command(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		ereport(ERROR, (errmsg("citus_internal_database_command() can only be used "
+		ereport(ERROR, (errmsg("citus_internal.database_command() can only be used "
 							   "for CREATE DATABASE command by Citus.")));
 	}
 
@@ -4209,7 +4349,7 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 	StringInfo deleteColocationCommand = makeStringInfo();
 
 	appendStringInfo(deleteColocationCommand,
-					 "SELECT pg_catalog.citus_internal_delete_colocation_metadata(%d)",
+					 "SELECT citus_internal.delete_colocation_metadata(%d)",
 					 colocationId);
 
 	return deleteColocationCommand->data;
@@ -4225,7 +4365,7 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+					 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 					 RemoteSchemaIdExpressionById(schemaId), colocationId);
 
 	return command->data;
@@ -4241,7 +4381,7 @@ TenantSchemaDeleteCommand(char *schemaName)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_tenant_schema(%s)",
+					 "SELECT citus_internal.delete_tenant_schema(%s)",
 					 RemoteSchemaIdExpressionByName(schemaName));
 
 	return command->data;
@@ -4258,7 +4398,7 @@ UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_update_none_dist_table_metadata(%s, '%c', %u, %s)",
+					 "SELECT citus_internal.update_none_dist_table_metadata(%s, '%c', %u, %s)",
 					 RemoteTableIdExpression(relationId), replicationModel, colocationId,
 					 autoConverted ? "true" : "false");
 
@@ -4276,7 +4416,7 @@ AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal_add_placement_metadata(%ld, %ld, %d, %ld)",
+					 "SELECT citus_internal.add_placement_metadata(%ld, %ld, %d, %ld)",
 					 shardId, shardLength, groupId, placementId);
 	return command->data;
 }
@@ -4291,7 +4431,7 @@ DeletePlacementMetadataCommand(uint64 placementId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT pg_catalog.citus_internal_delete_placement_metadata(%ld)",
+					 "SELECT citus_internal.delete_placement_metadata(%ld)",
 					 placementId);
 	return command->data;
 }
@@ -4957,7 +5097,7 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+						 "SELECT citus_internal.add_tenant_schema(%s, %u)",
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 

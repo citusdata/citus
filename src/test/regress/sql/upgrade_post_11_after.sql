@@ -27,6 +27,21 @@ SET datestyle = "ISO, YMD";
 SELECT 1 FROM run_command_on_workers($$ALTER SYSTEM SET datestyle = "ISO, YMD";$$);
 SELECT 1 FROM run_command_on_workers($$SELECT pg_reload_conf()$$);
 
+-- In the version that we use for upgrade tests (v10.2.0), we propagate
+-- "valid until" to the workers as "infinity" even if it's not set. And
+-- given that "postgres" role is created in the older version, "valid until"
+-- is set to "infinity" on the workers while this is not the case for
+-- coordinator. See https://github.com/citusdata/citus/issues/7533.
+--
+-- We're fixing this for new versions of Citus and we'll probably backport
+-- this to some older versions too. However, v10.2.0 won't ever have this
+-- fix.
+--
+-- For this reason, here we set "valid until" to "infinity" for all the
+-- nodes so that below query doesn't report any difference between the
+-- metadata on coordinator and workers.
+ALTER ROLE postgres WITH VALID UNTIL 'infinity';
+
 -- make sure that the metadata is consistent across all nodes
 -- we exclude the distributed_object_data as they are
 -- not sorted in the same order (as OIDs differ on the nodes)
