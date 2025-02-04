@@ -147,8 +147,8 @@ jobs:
           - ${{ needs.params.outputs.test_image_name }}
         pg_version:
           - ${{ needs.params.outputs.pg13_version }}
-          - ${{ needs.params.outputs.pg13_version }}
           - ${{ needs.params.outputs.pg14_version }}
+          - ${{ needs.params.outputs.pg15_version }}
         make:
           - check-split
           - check-multi
