@@ -3,9 +3,8 @@
 * Fixes a crash that happens because of unsafe catalog access when re-assigning
   the global pid after `application_name` changes (#7791)
 
-* Prevents crashes when another extension skips executing the `ClientAuthentication_hook` of Citus. (#7836)
-
-* Fixes tests: foreign_key_to_reference_shard_rebalance test (#7826) and mixed Citus upgrade tests (#7218)
+* Prevents crashes when another extension skips executing the 
+  `ClientAuthentication_hook` of Citus. (#7836)
 
 ### citus v12.1.6 (Nov 14, 2024) ###
 
