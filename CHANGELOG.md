@@ -1,6 +1,7 @@
 ### citus v12.1.7 (Feb 6, 2025) ###
 
-* Avoids re-assigning the global pid for client backends and bg workers when the application_name changes (#7791)
+* Fixes a crash that happens because of unsafe catalog access when re-assigning
+  the global pid after `application_name` changes (#7791)
 
 * Raises an ERROR instead of server crash for certain scenarios, e.g, Bug 3697586 (#7836)
 
