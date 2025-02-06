@@ -1,4 +1,4 @@
-### citus v12.1.6 (Feb 6, 2025) ###
+### citus v12.1.7 (Feb 6, 2025) ###
 
 * Avoids re-assigning the global pid for client backends and bg workers when the application_name changes (#7791)
 
