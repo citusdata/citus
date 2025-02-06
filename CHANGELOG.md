@@ -1,3 +1,11 @@
+### citus v12.1.6 (Feb 6, 2025) ###
+
+* Avoids re-assigning the global pid for client backends and bg workers when the application_name changes (#7791)
+
+* Raises an ERROR instead of server crash for certain scenarios, e.g, Bug 3697586 (#7836)
+
+* Fixes tests: foreign_key_to_reference_shard_rebalance test (#7826) and mixed Citus upgrade tests (#7218)
+
 ### citus v12.1.6 (Nov 14, 2024) ###
 
 * Propagates `SECURITY LABEL .. ON ROLE` statements (#7304)
