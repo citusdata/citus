@@ -47,6 +47,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/comment.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
@@ -752,6 +753,28 @@ ConvertTableInternal(TableConversionState *con)
 
 	postLoadCommands = list_concat(postLoadCommands,
 								   WrapTableDDLCommands(alterPublicationCommands));
+
+	if (con->conversionType == UNDISTRIBUTE_TABLE)
+	{
+		List *commentDDLCommandsTable = GetCommentPropagationCommandsX(
+			con->relationId, RelationRelationId, con->relationName, OBJECT_TABLE,
+			NULL, 0);
+		postLoadCommands = list_concat(postLoadCommands,
+									   WrapTableDDLCommands(commentDDLCommandsTable));
+		List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(
+			con->relationId);
+		char *columnName = NULL;
+		int columnCount = 0;
+		foreach_ptr(columnName, nonStoredColumnNameList)
+		{
+			List *commentDDLCommandsColumn = GetCommentPropagationCommandsX(
+				con->relationId, RelationRelationId, columnName, OBJECT_COLUMN,
+				con->relationName, ++columnCount);
+			postLoadCommands = list_concat(postLoadCommands,
+										   WrapTableDDLCommands(
+											   commentDDLCommandsColumn));
+		}
+	}
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
