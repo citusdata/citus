@@ -890,6 +890,16 @@ SELECT * FROM summary_table ORDER BY id;
 (2 rows)
 
 -- try different syntax
+UPDATE summary_table SET (average_value, min_value) =
+	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
+WHERE id = 2;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques
+---------------------------------------------------------------------
+  1 |           | 200.0000000000000000 |       |
+  2 |       400 | 450.0000000000000000 |       |
+(2 rows)
+
 UPDATE summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM raw_table WHERE id = 2)
 WHERE id = 2;
@@ -1297,6 +1307,187 @@ CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
 ERROR:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
+-- test advanced UPDATE SET () with indirection and physical reordering.
+CREATE TABLE updateset (
+    id bigint primary key
+  , col_0 integer
+  , col_1 integer
+  , col_2 integer
+  , col_3 integer
+  );
+select create_reference_table('updateset');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into updateset values (1, 0, 0, 0, 0);
+-- default physical ordering
+update updateset
+SET (col_0, col_1, col_2, col_3)
+  = (SELECT 100, 111, 222, 333)
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |   100 |   111 |   222 |   333
+(1 row)
+
+select * from updateset;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |   100 |   111 |   222 |   333
+(1 row)
+
+-- check indirection
+update updateset
+SET (col_0, col_1, col_3, col_2)
+  = (SELECT 10, 11, 33, 22)
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |    10 |    11 |    22 |    33
+(1 row)
+
+select * from updateset;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |    10 |    11 |    22 |    33
+(1 row)
+
+update updateset
+SET (col_0, col_3, col_1, col_2)
+  = (SELECT 100, 333, 111, 222)
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |   100 |   111 |   222 |   333
+(1 row)
+
+select * from updateset;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |   100 |   111 |   222 |   333
+(1 row)
+
+update updateset
+SET (col_3, col_1)
+  = (SELECT 3, 1)
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |   100 |     1 |   222 |     3
+(1 row)
+
+select * from updateset;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  1 |   100 |     1 |   222 |     3
+(1 row)
+
+-- check more complex queries with indirection
+insert into updateset values (2, 0, 0, 0, 0);
+update updateset
+SET (col_0, col_1, col_3, col_2)
+  = (SELECT 10, 11, 33, 22)
+where id = 2
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  2 |    10 |    11 |    22 |    33
+(1 row)
+
+select * from updateset where id = 2;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  2 |    10 |    11 |    22 |    33
+(1 row)
+
+update updateset
+SET (col_0, col_3, col_1, col_2)
+  = (SELECT 100, 333, 111, 222)
+where id = 2
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  2 |   100 |   111 |   222 |   333
+(1 row)
+
+select * from updateset where id = 2;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  2 |   100 |   111 |   222 |   333
+(1 row)
+
+update updateset
+SET (col_3, col_1)
+  = (SELECT 3, 1)
+where id = 2
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  2 |   100 |     1 |   222 |     3
+(1 row)
+
+select * from updateset where id = 2;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  2 |   100 |     1 |   222 |     3
+(1 row)
+
+-- the single row update is expected behavior
+insert into updateset values (3, 0, 1, 2, 3);
+insert into updateset values (4, 0, 0, 0, 0);
+with qq as (
+    update updateset
+    SET (col_1, col_3)
+      = (SELECT 11, 33)
+    where id = 4
+    returning *
+)
+update updateset
+set (col_2, col_1, col_3)
+  = (select col_2, col_1, col_3 from qq)
+where id in (3, 4)
+returning *;
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  3 |     0 |    11 |     0 |    33
+(1 row)
+
+select * from updateset where id in (3, 4);
+ id | col_0 | col_1 | col_2 | col_3
+---------------------------------------------------------------------
+  3 |     0 |    11 |     0 |    33
+  4 |     0 |    11 |     0 |    33
+(2 rows)
+
+-- add more advanced queries ?
+-- we want to ensure the reordering the targetlist
+-- from indirection is not run when it should not
+truncate updateset;
+-- change physical ordering
+alter table updateset drop col_2;
+alter table updateset add col_2 integer;
+insert into updateset values (1, 0, 0, 0, 0);
+insert into updateset values (2, 0, 0, 0, 0);
+update updateset
+SET (col_0, col_1, col_2, col_3)
+  = (SELECT 10, 11, 22, 33)
+returning *;
+ id | col_0 | col_1 | col_3 | col_2
+---------------------------------------------------------------------
+  1 |    10 |    11 |    33 |    22
+  2 |    10 |    11 |    33 |    22
+(2 rows)
+
+select * from updateset;
+ id | col_0 | col_1 | col_3 | col_2
+---------------------------------------------------------------------
+  1 |    10 |    11 |    33 |    22
+  2 |    10 |    11 |    33 |    22
+(2 rows)
+
+DROP TABLE updateset;
 DROP TABLE insufficient_shards;
 DROP TABLE raw_table;
 DROP TABLE summary_table;

@@ -217,7 +217,6 @@ distributed_planner(Query *parse,
 
 		planContext.originalQuery = copyObject(parse);
 
-
 		if (!fastPathRouterQuery)
 		{
 			/*
