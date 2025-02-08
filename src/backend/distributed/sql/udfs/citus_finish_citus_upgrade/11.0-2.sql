@@ -18,7 +18,7 @@ BEGIN
 	FROM pg_dist_node_metadata;
 
 	SELECT r[1], r[2], r[3]
-	FROM regexp_matches(last_upgrade_version_string,'([0-9]+)\.([0-9]+)-([0-9]+)','') r
+	FROM regexp_matches(last_upgrade_version_string,'([0-9]+)[.]([0-9]+)-([0-9]+)','') r
 	INTO last_upgrade_major_version, last_upgrade_minor_version, last_upgrade_sqlpatch_version;
 
 	IF last_upgrade_major_version IS NULL OR last_upgrade_minor_version IS NULL OR last_upgrade_sqlpatch_version IS NULL THEN

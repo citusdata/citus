@@ -5,7 +5,7 @@ SET search_path TO columnar;
 DO $proc$
 BEGIN
 
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+IF substring(current_Setting('server_version'), '[0-9]+')::int >= 12 THEN
   EXECUTE $$
     DROP FUNCTION pg_catalog.alter_columnar_table_reset(
         table_name regclass,
