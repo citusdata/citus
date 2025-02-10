@@ -48,7 +48,7 @@ jobs:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
@@ -125,7 +125,7 @@ jobs:
     - name: Build
       run: "./ci/build-citus.sh"
       shell: bash
-    - uses: actions/upload-artifact@v3.1.1
+    - uses: actions/upload-artifact@v4.6.0
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
@@ -284,10 +284,12 @@ jobs:
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
@@ -335,6 +337,8 @@ jobs:
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
@@ -380,10 +384,12 @@ jobs:
         done;
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_citus_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
     if: always()
@@ -399,10 +405,11 @@ jobs:
       - test-citus-upgrade
       - test-pg-upgrade
     steps:
-      - uses: actions/download-artifact@v3.0.1
+      - uses: actions/download-artifact@v4.1.8
         with:
-          name: "codeclimate"
-          path: "codeclimate"
+          pattern: codeclimate*
+          path: codeclimate
+          merge-multiple: true
       - name: Upload coverage results to Code Climate
         run: |-
           cc-test-reporter sum-coverage codeclimate/*.json -o total.json
@@ -516,6 +523,7 @@ jobs:
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4.1.8
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-

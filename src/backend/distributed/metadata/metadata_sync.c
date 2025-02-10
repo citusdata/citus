@@ -4688,7 +4688,7 @@ void
 SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context, List *commands)
 {
 	/*
-	 * do not send any command to workers if we collcet commands.
+	 * do not send any command to workers if we collect commands.
 	 * Collect commands into metadataSyncContext's collected command
 	 * list.
 	 */
