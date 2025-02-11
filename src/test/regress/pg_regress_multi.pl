@@ -464,7 +464,7 @@ push(@pgOptions, "wal_retrieve_retry_interval=250");
 
 push(@pgOptions, "max_logical_replication_workers=50");
 push(@pgOptions, "max_wal_senders=50");
-push(@pgOptions, "max_worker_processes=50");
+push(@pgOptions, "max_worker_processes=150");
 
 if ($majorversion >= "14") {
     # disable compute_query_id so that we don't get Query Identifiers

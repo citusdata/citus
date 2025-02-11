@@ -220,6 +220,8 @@ test: multi_generate_ddl_commands
 test: multi_create_shards
 test: multi_transaction_recovery
 test: multi_transaction_recovery_multiple_databases
+test: multi_maintenance_multiple_databases
+#test: maintenance_connection_timeout
 
 test: local_dist_join_modifications
 test: local_table_join

@@ -581,7 +581,12 @@ alter table parent_1 drop constraint fkey_test_drop;
 select count(*) from pg_constraint where conname = 'fkey_test_drop';
 -- verify we still preserve the child-parent hierarchy after all conversions
 -- check the shard partition
-select inhrelid::regclass from pg_inherits where (select inhparent::regclass::text) ~ '^parent_1_\d{7}$' order by 1;
+SELECT count(*) = 1 AS child_parent_hierarchy_test
+FROM pg_inherits
+WHERE (SELECT inhparent::regclass::text) ~ '^parent_1_\d{7}$'
+  -- order of the child shard id is not guaranteed, but should be either 1904004 or 04
+  AND (inhrelid::regclass::text) IN ('parent_1_child_1_1904004', 'parent_1_child_1_1904006')
+ORDER BY 1;
 -- check the shell partition
 select inhrelid::regclass from pg_inherits where inhparent='parent_1'::regclass order by 1;
 

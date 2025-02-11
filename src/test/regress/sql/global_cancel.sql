@@ -39,11 +39,12 @@ FROM pg_stat_activity psa JOIN get_all_active_transactions() gaat ON psa.pid = g
 WHERE application_name = 'Citus Maintenance Daemon' \gset
 
 SET client_min_messages TO ERROR;
-CREATE USER global_cancel_user;
-SELECT 1 FROM run_command_on_workers('CREATE USER global_cancel_user');
+CREATE USER global_cancel_user NOSUPERUSER ;
+SELECT 1 FROM run_command_on_workers('CREATE USER global_cancel_user NOSUPERUSER ;');
 RESET client_min_messages;
 
 \c - global_cancel_user - :master_port
+SELECT current_user;
 
 SELECT pg_typeof(:maintenance_daemon_gpid);
 

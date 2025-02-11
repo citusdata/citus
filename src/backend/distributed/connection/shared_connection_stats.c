@@ -13,12 +13,12 @@
 #include "postgres.h"
 
 #include "libpq-fe.h"
+#include "math.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 
 #include "access/hash.h"
 #include "access/htup_details.h"
-#include "catalog/pg_authid.h"
 #include "commands/dbcommands.h"
 #include "common/hashfn.h"
 #include "storage/ipc.h"
@@ -27,18 +27,14 @@
 #include "pg_version_constants.h"
 
 #include "distributed/backend_data.h"
-#include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
-#include "distributed/listutils.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
 #include "distributed/placement_connection.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/time_constants.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
-
 
 #define REMOTE_CONNECTION_STATS_COLUMNS 4
 
@@ -55,11 +51,18 @@ typedef struct ConnectionStatsSharedData
 	char *sharedConnectionHashTrancheName;
 
 	LWLock sharedConnectionHashLock;
-	ConditionVariable waitersConditionVariable;
+	ConditionVariable regularConnectionWaitersConditionVariable;
+	ConditionVariable maintenanceConnectionWaitersConditionVariable;
 } ConnectionStatsSharedData;
 
-
-typedef struct SharedConnStatsHashKey
+/*
+ * There are two hash tables:
+ *
+ * 1. The first one tracks the connection count per worker node and used for the connection throttling
+ * 2. The second one tracks the connection count per database on a worker node and used for statistics
+ *
+ */
+typedef struct SharedWorkerNodeConnStatsHashKey
 {
 	/*
 	 * We keep the entries in the shared memory even after master_update_node()
@@ -68,21 +71,29 @@ typedef struct SharedConnStatsHashKey
 	 */
 	char hostname[MAX_NODE_LENGTH];
 	int32 port;
+} SharedWorkerNodeConnStatsHashKey;
 
-	/*
-	 * Given that citus.shared_max_pool_size can be defined per database, we
-	 * should keep track of shared connections per database.
-	 */
-	Oid databaseOid;
-} SharedConnStatsHashKey;
+typedef struct SharedWorkerNodeDatabaseConnStatsHashKey
+{
+	SharedWorkerNodeConnStatsHashKey workerNodeKey;
+	Oid database;
+} SharedWorkerNodeDatabaseConnStatsHashKey;
 
 /* hash entry for per worker stats */
-typedef struct SharedConnStatsHashEntry
+typedef struct SharedWorkerNodeConnStatsHashEntry
 {
-	SharedConnStatsHashKey key;
+	SharedWorkerNodeConnStatsHashKey key;
 
-	int connectionCount;
-} SharedConnStatsHashEntry;
+	int regularConnectionsCount;
+	int maintenanceConnectionsCount;
+} SharedWorkerNodeConnStatsHashEntry;
+
+/* hash entry for per database on worker stats */
+typedef struct SharedWorkerNodeDatabaseConnStatsHashEntry
+{
+	SharedWorkerNodeDatabaseConnStatsHashKey key;
+	int count;
+} SharedWorkerNodeDatabaseConnStatsHashEntry;
 
 
 /*
@@ -92,6 +103,14 @@ typedef struct SharedConnStatsHashEntry
  * Anything else means use that number
  */
 int MaxSharedPoolSize = 0;
+
+/*
+ * Controlled via a GUC, never access directly, use GetMaxMaintenanceSharedPoolSize().
+ * Pool size for maintenance connections exclusively
+ * "0" or "-1" means do not apply connection throttling
+ */
+int MaxMaintenanceSharedPoolSize = -1;
+int MaintenanceConnectionPoolTimeout = 30 * MS_PER_SECOND;
 
 /*
  * Controlled via a GUC, never access directly, use GetLocalSharedPoolSize().
@@ -106,7 +125,8 @@ int MaxClientConnections = ALLOW_ALL_EXTERNAL_CONNECTIONS;
 
 
 /* the following two structs are used for accessing shared memory */
-static HTAB *SharedConnStatsHash = NULL;
+static HTAB *SharedWorkerNodeConnStatsHash = NULL;
+static HTAB *SharedWorkerNodeDatabaseConnStatsHash = NULL;
 static ConnectionStatsSharedData *ConnectionStatsSharedState = NULL;
 
 
@@ -121,6 +141,25 @@ static void UnLockConnectionSharedMemory(void);
 static bool ShouldWaitForConnection(int currentConnectionCount);
 static uint32 SharedConnectionHashHash(const void *key, Size keysize);
 static int SharedConnectionHashCompare(const void *a, const void *b, Size keysize);
+static uint32 SharedWorkerNodeDatabaseHashHash(const void *key, Size keysize);
+static int SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size
+											   keysize);
+static bool isConnectionThrottlingDisabled(uint32 externalFlags);
+static bool IncrementSharedConnectionCounterInternal(uint32 externalFlags, bool
+													 checkLimits, const char *hostname,
+													 int port,
+													 Oid database);
+static SharedWorkerNodeConnStatsHashKey PrepareWorkerNodeHashKey(const char *hostname, int
+																 port);
+static SharedWorkerNodeDatabaseConnStatsHashKey PrepareWorkerNodeDatabaseHashKey(const
+																				 char *
+																				 hostname,
+																				 int port,
+																				 Oid
+																				 database);
+static void DecrementSharedConnectionCounterInternal(uint32 externalFlags, const
+													 char *hostname, int port, Oid
+													 database);
 
 
 PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
@@ -160,26 +199,29 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 	LockConnectionSharedMemory(LW_SHARED);
 
 	HASH_SEQ_STATUS status;
-	SharedConnStatsHashEntry *connectionEntry = NULL;
+	SharedWorkerNodeDatabaseConnStatsHashEntry *connectionEntry = NULL;
 
-	hash_seq_init(&status, SharedConnStatsHash);
-	while ((connectionEntry = (SharedConnStatsHashEntry *) hash_seq_search(&status)) != 0)
+	hash_seq_init(&status, SharedWorkerNodeDatabaseConnStatsHash);
+	while ((connectionEntry =
+				(SharedWorkerNodeDatabaseConnStatsHashEntry *) hash_seq_search(
+					&status)) != 0)
 	{
 		/* get ready for the next tuple */
 		memset(values, 0, sizeof(values));
 		memset(isNulls, false, sizeof(isNulls));
 
-		char *databaseName = get_database_name(connectionEntry->key.databaseOid);
+		char *databaseName = get_database_name(connectionEntry->key.database);
 		if (databaseName == NULL)
 		{
 			/* database might have been dropped */
 			continue;
 		}
 
-		values[0] = PointerGetDatum(cstring_to_text(connectionEntry->key.hostname));
-		values[1] = Int32GetDatum(connectionEntry->key.port);
+		values[0] = PointerGetDatum(cstring_to_text(
+										connectionEntry->key.workerNodeKey.hostname));
+		values[1] = Int32GetDatum(connectionEntry->key.workerNodeKey.port);
 		values[2] = PointerGetDatum(cstring_to_text(databaseName));
-		values[3] = Int32GetDatum(connectionEntry->connectionCount);
+		values[3] = Int32GetDatum(connectionEntry->count);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
@@ -226,6 +268,13 @@ GetMaxSharedPoolSize(void)
 }
 
 
+int
+GetMaxMaintenanceSharedPoolSize(void)
+{
+	return MaxMaintenanceSharedPoolSize;
+}
+
+
 /*
  * GetLocalSharedPoolSize is a wrapper around LocalSharedPoolSize which is
  * controlled via a GUC.
@@ -248,18 +297,18 @@ GetLocalSharedPoolSize(void)
 /*
  * WaitLoopForSharedConnection tries to increment the shared connection
  * counter for the given hostname/port and the current database in
- * SharedConnStatsHash.
+ * SharedWorkerNodeConnStatsHash.
  *
  * The function implements a retry mechanism via a condition variable.
  */
 void
-WaitLoopForSharedConnection(const char *hostname, int port)
+WaitLoopForSharedConnection(uint32 flags, const char *hostname, int port)
 {
-	while (!TryToIncrementSharedConnectionCounter(hostname, port))
+	while (!TryToIncrementSharedConnectionCounter(flags, hostname, port))
 	{
 		CHECK_FOR_INTERRUPTS();
 
-		WaitForSharedConnection();
+		WaitForSharedConnection(flags);
 	}
 
 	ConditionVariableCancelSleep();
@@ -269,30 +318,18 @@ WaitLoopForSharedConnection(const char *hostname, int port)
 /*
  * TryToIncrementSharedConnectionCounter tries to increment the shared
  * connection counter for the given nodeId and the current database in
- * SharedConnStatsHash.
+ * SharedWorkerNodeConnStatsHash.
  *
  * If the function returns true, the caller is allowed (and expected)
  * to establish a new connection to the given node. Else, the caller
  * is not allowed to establish a new connection.
  */
 bool
-TryToIncrementSharedConnectionCounter(const char *hostname, int port)
+TryToIncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port)
 {
-	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
+	if (isConnectionThrottlingDisabled(flags))
 	{
-		/* connection throttling disabled */
 		return true;
-	}
-
-	bool counterIncremented = false;
-	SharedConnStatsHashKey connKey;
-
-	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
-	if (strlen(hostname) > MAX_NODE_LENGTH)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("hostname exceeds the maximum length of %d",
-							   MAX_NODE_LENGTH)));
 	}
 
 	/*
@@ -307,35 +344,41 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 		return true;
 	}
 
-	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
+	return IncrementSharedConnectionCounterInternal(flags,
+													true,
+													hostname,
+													port,
+													MyDatabaseId);
+}
 
-	/*
-	 * Handle adaptive connection management for the local node slightly different
-	 * as local node can failover to local execution.
-	 */
-	bool connectionToLocalNode = false;
-	int activeBackendCount = 0;
-	WorkerNode *workerNode = FindWorkerNode(hostname, port);
-	if (workerNode)
+
+/*
+ * IncrementSharedConnectionCounter increments the shared counter
+ * for the given hostname and port.
+ */
+void
+IncrementSharedConnectionCounter(uint32 flags, const char *hostname, int port)
+{
+	if (isConnectionThrottlingDisabled(flags))
 	{
-		connectionToLocalNode = (workerNode->groupId == GetLocalGroupId());
-		if (connectionToLocalNode &&
-			GetLocalSharedPoolSize() == DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES)
-		{
-			/*
-			 * This early return is required as LocalNodeParallelExecutionFactor
-			 * is ignored for the first connection below. This check makes the
-			 * user experience is more accurate and also makes it easy for
-			 * having regression tests which emulates the local node adaptive
-			 * connection management.
-			 */
-			return false;
-		}
-
-		activeBackendCount = GetExternalClientBackendCount();
+		return;
 	}
 
+	IncrementSharedConnectionCounterInternal(flags,
+											 false,
+											 hostname,
+											 port,
+											 MyDatabaseId);
+}
+
+
+static bool
+IncrementSharedConnectionCounterInternal(uint32 externalFlags,
+										 bool checkLimits,
+										 const char *hostname,
+										 int port,
+										 Oid database)
+{
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
 	/*
@@ -344,30 +387,83 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 	 * space in the shared memory. That's why we prefer continuing the execution
 	 * instead of throwing an error.
 	 */
-	bool entryFound = false;
-	SharedConnStatsHashEntry *connectionEntry =
-		hash_search(SharedConnStatsHash, &connKey, HASH_ENTER_NULL, &entryFound);
+	SharedWorkerNodeConnStatsHashKey workerNodeKey = PrepareWorkerNodeHashKey(hostname,
+																			  port);
+	bool workerNodeEntryFound = false;
+	SharedWorkerNodeConnStatsHashEntry *workerNodeConnectionEntry =
+		hash_search(SharedWorkerNodeConnStatsHash,
+					&workerNodeKey,
+					HASH_ENTER_NULL,
+					&workerNodeEntryFound);
 
 	/*
 	 * It is possible to throw an error at this point, but that doesn't help us in anyway.
 	 * Instead, we try our best, let the connection establishment continue by-passing the
 	 * connection throttling.
 	 */
-	if (!connectionEntry)
+	if (!workerNodeConnectionEntry)
 	{
 		UnLockConnectionSharedMemory();
 		return true;
 	}
 
-	if (!entryFound)
+	if (!workerNodeEntryFound)
 	{
 		/* we successfully allocated the entry for the first time, so initialize it */
-		connectionEntry->connectionCount = 1;
-
-		counterIncremented = true;
+		workerNodeConnectionEntry->regularConnectionsCount = 0;
+		workerNodeConnectionEntry->maintenanceConnectionsCount = 0;
 	}
-	else if (connectionToLocalNode)
+
+	/* Initialize SharedWorkerNodeDatabaseConnStatsHash the same way  */
+	SharedWorkerNodeDatabaseConnStatsHashKey workerNodeDatabaseKey =
+		PrepareWorkerNodeDatabaseHashKey(hostname, port, database);
+	bool workerNodeDatabaseEntryFound = false;
+	SharedWorkerNodeDatabaseConnStatsHashEntry *workerNodeDatabaseEntry =
+		hash_search(SharedWorkerNodeDatabaseConnStatsHash,
+					&workerNodeDatabaseKey,
+					HASH_ENTER_NULL,
+					&workerNodeDatabaseEntryFound);
+
+	if (!workerNodeDatabaseEntry)
 	{
+		UnLockConnectionSharedMemory();
+		return true;
+	}
+
+	if (!workerNodeDatabaseEntryFound)
+	{
+		workerNodeDatabaseEntry->count = 0;
+	}
+
+	/* Increment counter if a slot available */
+	bool connectionSlotAvailable = true;
+
+	bool maintenanceConnection = externalFlags & MAINTENANCE_CONNECTION;
+	if (checkLimits)
+	{
+		WorkerNode *workerNode = FindWorkerNode(hostname, port);
+		bool connectionToLocalNode = workerNode && (workerNode->groupId ==
+													GetLocalGroupId());
+
+		int currentConnectionsLimit;
+		int currentConnectionsCount;
+		if (maintenanceConnection)
+		{
+			currentConnectionsLimit = GetMaxMaintenanceSharedPoolSize();
+			currentConnectionsCount =
+				workerNodeConnectionEntry->maintenanceConnectionsCount;
+		}
+		else
+		{
+			currentConnectionsLimit = connectionToLocalNode
+									  ? GetLocalSharedPoolSize()
+									  : GetMaxSharedPoolSize();
+			currentConnectionsCount = workerNodeConnectionEntry->regularConnectionsCount;
+		}
+
+		bool currentConnectionsLimitExceeded = currentConnectionsCount + 1 >
+											   currentConnectionsLimit;
+
 		/*
 		 * For local nodes, solely relying on citus.max_shared_pool_size or
 		 * max_connections might not be sufficient. The former gives us
@@ -380,98 +476,49 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 		 * a reasonable pace. The latter limit typically kicks in when the database
 		 * is issued lots of concurrent sessions at the same time, such as benchmarks.
 		 */
-		if (activeBackendCount + 1 > GetLocalSharedPoolSize())
+		bool localNodeConnectionsLimitExceeded =
+			connectionToLocalNode &&
+			(GetLocalSharedPoolSize() == DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES ||
+			 GetExternalClientBackendCount() + 1 > GetLocalSharedPoolSize());
+		if (currentConnectionsLimitExceeded || localNodeConnectionsLimitExceeded)
 		{
-			counterIncremented = false;
+			connectionSlotAvailable = false;
 		}
-		else if (connectionEntry->connectionCount + 1 > GetLocalSharedPoolSize())
+	}
+
+	if (connectionSlotAvailable)
+	{
+		if (maintenanceConnection)
 		{
-			counterIncremented = false;
+			workerNodeConnectionEntry->maintenanceConnectionsCount += 1;
 		}
 		else
 		{
-			connectionEntry->connectionCount++;
-			counterIncremented = true;
+			workerNodeConnectionEntry->regularConnectionsCount += 1;
 		}
+		workerNodeDatabaseEntry->count += 1;
 	}
-	else if (connectionEntry->connectionCount + 1 > GetMaxSharedPoolSize())
+
+	if (IsLoggableLevel(DEBUG4))
 	{
-		/* there is no space left for this connection */
-		counterIncremented = false;
-	}
-	else
-	{
-		connectionEntry->connectionCount++;
-		counterIncremented = true;
+		ereport(DEBUG4, errmsg(
+					"Incrementing %s connection counter. "
+					"Current regular connections: %i, maintenance connections: %i. "
+					"Connection slot to %s:%i database %i is %s",
+					maintenanceConnection ? "maintenance" : "regular",
+					workerNodeConnectionEntry->regularConnectionsCount,
+					workerNodeConnectionEntry->maintenanceConnectionsCount,
+					hostname,
+					port,
+					database,
+					connectionSlotAvailable ? "available" : "not available"
+					));
 	}
 
 	UnLockConnectionSharedMemory();
 
-	return counterIncremented;
-}
 
-
-/*
- * IncrementSharedConnectionCounter increments the shared counter
- * for the given hostname and port.
- */
-void
-IncrementSharedConnectionCounter(const char *hostname, int port)
-{
-	SharedConnStatsHashKey connKey;
-
-	if (MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING)
-	{
-		/* connection throttling disabled */
-		return;
-	}
-
-	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
-	if (strlen(hostname) > MAX_NODE_LENGTH)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("hostname exceeds the maximum length of %d",
-							   MAX_NODE_LENGTH)));
-	}
-
-	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
-
-	LockConnectionSharedMemory(LW_EXCLUSIVE);
-
-	/*
-	 * As the hash map is allocated in shared memory, it doesn't rely on palloc for
-	 * memory allocation, so we could get NULL via HASH_ENTER_NULL. That's why we prefer
-	 * continuing the execution instead of throwing an error.
-	 */
-	bool entryFound = false;
-	SharedConnStatsHashEntry *connectionEntry =
-		hash_search(SharedConnStatsHash, &connKey, HASH_ENTER_NULL, &entryFound);
-
-	/*
-	 * It is possible to throw an error at this point, but that doesn't help us in anyway.
-	 * Instead, we try our best, let the connection establishment continue by-passing the
-	 * connection throttling.
-	 */
-	if (!connectionEntry)
-	{
-		UnLockConnectionSharedMemory();
-
-		ereport(DEBUG4, (errmsg("No entry found for node %s:%d while incrementing "
-								"connection counter", hostname, port)));
-
-		return;
-	}
-
-	if (!entryFound)
-	{
-		/* we successfully allocated the entry for the first time, so initialize it */
-		connectionEntry->connectionCount = 0;
-	}
-
-	connectionEntry->connectionCount += 1;
-
-	UnLockConnectionSharedMemory();
+	return connectionSlotAvailable;
 }
 
 
@@ -480,77 +527,119 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
  * for the given hostname and port for the given count.
  */
 void
-DecrementSharedConnectionCounter(const char *hostname, int port)
+DecrementSharedConnectionCounter(uint32 externalFlags, const char *hostname, int port)
 {
-	SharedConnStatsHashKey connKey;
-
-	/*
-	 * Do not call GetMaxSharedPoolSize() here, since it may read from
-	 * the catalog and we may be in the process exit handler.
-	 */
-	if (MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING)
+	/* TODO: possible bug, remove this check? */
+	if (isConnectionThrottlingDisabled(externalFlags))
 	{
-		/* connection throttling disabled */
 		return;
 	}
 
-	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
-	if (strlen(hostname) > MAX_NODE_LENGTH)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("hostname exceeds the maximum length of %d",
-							   MAX_NODE_LENGTH)));
-	}
-
-	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
-
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
-	bool entryFound = false;
-	SharedConnStatsHashEntry *connectionEntry =
-		hash_search(SharedConnStatsHash, &connKey, HASH_FIND, &entryFound);
+	DecrementSharedConnectionCounterInternal(externalFlags, hostname, port, MyDatabaseId);
+
+	UnLockConnectionSharedMemory();
+	WakeupWaiterBackendsForSharedConnection(externalFlags);
+}
+
+
+static void
+DecrementSharedConnectionCounterInternal(uint32 externalFlags,
+										 const char *hostname,
+										 int port,
+										 Oid database)
+{
+	bool workerNodeEntryFound = false;
+	SharedWorkerNodeConnStatsHashKey workerNodeKey = PrepareWorkerNodeHashKey(hostname,
+																			  port);
+	SharedWorkerNodeConnStatsHashEntry *workerNodeConnectionEntry =
+		hash_search(SharedWorkerNodeConnStatsHash, &workerNodeKey, HASH_FIND,
+					&workerNodeEntryFound);
 
 	/* this worker node is removed or updated, no need to care */
-	if (!entryFound)
+	if (!workerNodeEntryFound)
 	{
-		UnLockConnectionSharedMemory();
-
-		/* wake up any waiters in case any backend is waiting for this node */
-		WakeupWaiterBackendsForSharedConnection();
-
 		ereport(DEBUG4, (errmsg("No entry found for node %s:%d while decrementing "
 								"connection counter", hostname, port)));
-
 		return;
 	}
 
 	/* we should never go below 0 */
-	Assert(connectionEntry->connectionCount > 0);
+	Assert(workerNodeConnectionEntry->regularConnectionsCount > 0 ||
+		   workerNodeConnectionEntry->maintenanceConnectionsCount > 0);
 
-	connectionEntry->connectionCount -= 1;
-
-	if (connectionEntry->connectionCount == 0)
+	bool maintenanceConnection = externalFlags & MAINTENANCE_CONNECTION;
+	if (maintenanceConnection)
 	{
-		/*
-		 * We don't have to remove at this point as the node might be still active
-		 * and will have new connections open to it. Still, this seems like a convenient
-		 * place to remove the entry, as connectionCount == 0 implies that the server is
-		 * not busy, and given the default value of MaxCachedConnectionsPerWorker = 1,
-		 * we're unlikely to trigger this often.
-		 */
-		hash_search(SharedConnStatsHash, &connKey, HASH_REMOVE, &entryFound);
+		workerNodeConnectionEntry->maintenanceConnectionsCount -= 1;
+	}
+	else
+	{
+		workerNodeConnectionEntry->regularConnectionsCount -= 1;
 	}
 
-	UnLockConnectionSharedMemory();
+	if (IsLoggableLevel(DEBUG4))
+	{
+		ereport(DEBUG4, errmsg(
+					"Decrementing %s connection counter. "
+					"Current regular connections: %i, maintenance connections: %i. "
+					"Connection slot to %s:%i database %i is released",
+					maintenanceConnection ? "maintenance" : "regular",
+					workerNodeConnectionEntry->regularConnectionsCount,
+					workerNodeConnectionEntry->maintenanceConnectionsCount,
+					hostname,
+					port,
+					database
+					));
+	}
 
-	WakeupWaiterBackendsForSharedConnection();
+	/*
+	 * We don't have to remove at this point as the node might be still active
+	 * and will have new connections open to it. Still, this seems like a convenient
+	 * place to remove the entry, as count == 0 implies that the server is
+	 * not busy, and given the default value of MaxCachedConnectionsPerWorker = 1,
+	 * we're unlikely to trigger this often.
+	 */
+	if (workerNodeConnectionEntry->regularConnectionsCount == 0 &&
+		workerNodeConnectionEntry->maintenanceConnectionsCount == 0)
+	{
+		hash_search(SharedWorkerNodeConnStatsHash, &workerNodeKey, HASH_REMOVE, NULL);
+	}
+
+	/*
+	 * Perform the same with SharedWorkerNodeDatabaseConnStatsHashKey
+	 */
+
+	SharedWorkerNodeDatabaseConnStatsHashKey workerNodeDatabaseKey =
+		PrepareWorkerNodeDatabaseHashKey(hostname, port, MyDatabaseId);
+	bool workerNodeDatabaseEntryFound = false;
+	SharedWorkerNodeDatabaseConnStatsHashEntry *workerNodeDatabaseEntry =
+		hash_search(SharedWorkerNodeDatabaseConnStatsHash,
+					&workerNodeDatabaseKey,
+					HASH_FIND,
+					&workerNodeDatabaseEntryFound);
+
+	if (!workerNodeDatabaseEntryFound)
+	{
+		return;
+	}
+
+	Assert(workerNodeDatabaseEntry->count > 0);
+
+	workerNodeDatabaseEntry->count -= 1;
+
+	if (workerNodeDatabaseEntry->count == 0)
+	{
+		hash_search(SharedWorkerNodeDatabaseConnStatsHash, &workerNodeDatabaseKey,
+					HASH_REMOVE, NULL);
+	}
 }
 
 
 /*
  * LockConnectionSharedMemory is a utility function that should be used when
- * accessing to the SharedConnStatsHash, which is in the shared memory.
+ * accessing to the SharedWorkerNodeConnStatsHash, which is in the shared memory.
  */
 static void
 LockConnectionSharedMemory(LWLockMode lockMode)
@@ -587,9 +676,18 @@ UnLockConnectionSharedMemory(void)
  * this function.
  */
 void
-WakeupWaiterBackendsForSharedConnection(void)
+WakeupWaiterBackendsForSharedConnection(uint32 flags)
 {
-	ConditionVariableBroadcast(&ConnectionStatsSharedState->waitersConditionVariable);
+	if (flags & MAINTENANCE_CONNECTION)
+	{
+		ConditionVariableBroadcast(
+			&ConnectionStatsSharedState->maintenanceConnectionWaitersConditionVariable);
+	}
+	else
+	{
+		ConditionVariableBroadcast(
+			&ConnectionStatsSharedState->regularConnectionWaitersConditionVariable);
+	}
 }
 
 
@@ -600,10 +698,30 @@ WakeupWaiterBackendsForSharedConnection(void)
  * WakeupWaiterBackendsForSharedConnection().
  */
 void
-WaitForSharedConnection(void)
+WaitForSharedConnection(uint32 flags)
 {
-	ConditionVariableSleep(&ConnectionStatsSharedState->waitersConditionVariable,
-						   PG_WAIT_EXTENSION);
+	if (flags & MAINTENANCE_CONNECTION)
+	{
+		bool connectionSlotNotAcquired = ConditionVariableTimedSleep(
+			&ConnectionStatsSharedState->maintenanceConnectionWaitersConditionVariable,
+			MaintenanceConnectionPoolTimeout,
+			PG_WAIT_EXTENSION);
+		if (connectionSlotNotAcquired)
+		{
+			ereport(ERROR, (errmsg("Failed to acquire maintenance connection for %i ms",
+								   MaintenanceConnectionPoolTimeout),
+							errhint(
+								"Try increasing citus.max_maintenance_shared_pool_size or "
+								"citus.maintenance_connection_pool_timeout"
+								)));
+		}
+	}
+	else
+	{
+		ConditionVariableSleep(
+			&ConnectionStatsSharedState->regularConnectionWaitersConditionVariable,
+			PG_WAIT_EXTENSION);
+	}
 }
 
 
@@ -640,10 +758,18 @@ SharedConnectionStatsShmemSize(void)
 
 	size = add_size(size, sizeof(ConnectionStatsSharedData));
 
-	Size hashSize = hash_estimate_size(MaxWorkerNodesTracked,
-									   sizeof(SharedConnStatsHashEntry));
+	Size workerNodeConnHashSize = hash_estimate_size(MaxWorkerNodesTracked,
+													 sizeof(
+														 SharedWorkerNodeConnStatsHashEntry));
 
-	size = add_size(size, hashSize);
+	size = add_size(size, workerNodeConnHashSize);
+
+	Size workerNodeDatabaseConnSize = hash_estimate_size(MaxWorkerNodesTracked *
+														 MaxDatabasesPerWorkerNodesTracked,
+														 sizeof(
+															 SharedWorkerNodeDatabaseConnStatsHashEntry));
+
+	size = add_size(size, workerNodeDatabaseConnSize);
 
 	return size;
 }
@@ -657,15 +783,6 @@ void
 SharedConnectionStatsShmemInit(void)
 {
 	bool alreadyInitialized = false;
-	HASHCTL info;
-
-	/* create (hostname, port, database) -> [counter] */
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(SharedConnStatsHashKey);
-	info.entrysize = sizeof(SharedConnStatsHashEntry);
-	info.hash = SharedConnectionHashHash;
-	info.match = SharedConnectionHashCompare;
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
 
 	/*
 	 * Currently the lock isn't required because allocation only happens at
@@ -691,17 +808,54 @@ SharedConnectionStatsShmemInit(void)
 		LWLockInitialize(&ConnectionStatsSharedState->sharedConnectionHashLock,
 						 ConnectionStatsSharedState->sharedConnectionHashTrancheId);
 
-		ConditionVariableInit(&ConnectionStatsSharedState->waitersConditionVariable);
+		ConditionVariableInit(
+			&ConnectionStatsSharedState->regularConnectionWaitersConditionVariable);
+		ConditionVariableInit(
+			&ConnectionStatsSharedState->maintenanceConnectionWaitersConditionVariable);
 	}
 
-	/* allocate hash table */
-	SharedConnStatsHash =
-		ShmemInitHash("Shared Conn. Stats Hash", MaxWorkerNodesTracked,
-					  MaxWorkerNodesTracked, &info, hashFlags);
+	/* allocate hash tables */
+
+	/* create (hostname, port) -> [counter] */
+	HASHCTL sharedWorkerNodeConnStatsHashInfo;
+	memset(&sharedWorkerNodeConnStatsHashInfo, 0,
+		   sizeof(sharedWorkerNodeConnStatsHashInfo));
+	sharedWorkerNodeConnStatsHashInfo.keysize = sizeof(SharedWorkerNodeConnStatsHashKey);
+	sharedWorkerNodeConnStatsHashInfo.entrysize =
+		sizeof(SharedWorkerNodeConnStatsHashEntry);
+	sharedWorkerNodeConnStatsHashInfo.hash = SharedConnectionHashHash;
+	sharedWorkerNodeConnStatsHashInfo.match = SharedConnectionHashCompare;
+	SharedWorkerNodeConnStatsHash =
+		ShmemInitHash("Shared Conn. Stats Hash",
+					  MaxWorkerNodesTracked,
+					  MaxWorkerNodesTracked,
+					  &sharedWorkerNodeConnStatsHashInfo,
+					  (HASH_ELEM | HASH_FUNCTION | HASH_COMPARE));
+
+	/* create (hostname, port, database) -> [counter] */
+	HASHCTL sharedWorkerNodeDatabaseConnStatsHashInfo;
+	memset(&sharedWorkerNodeDatabaseConnStatsHashInfo, 0,
+		   sizeof(sharedWorkerNodeDatabaseConnStatsHashInfo));
+	sharedWorkerNodeDatabaseConnStatsHashInfo.keysize =
+		sizeof(SharedWorkerNodeDatabaseConnStatsHashKey);
+	sharedWorkerNodeDatabaseConnStatsHashInfo.entrysize =
+		sizeof(SharedWorkerNodeDatabaseConnStatsHashEntry);
+	sharedWorkerNodeDatabaseConnStatsHashInfo.hash = SharedWorkerNodeDatabaseHashHash;
+	sharedWorkerNodeDatabaseConnStatsHashInfo.match = SharedWorkerNodeDatabaseHashCompare;
+
+	int sharedWorkerNodeDatabaseConnStatsHashSize = MaxWorkerNodesTracked *
+													MaxDatabasesPerWorkerNodesTracked;
+	SharedWorkerNodeDatabaseConnStatsHash =
+		ShmemInitHash("Shared Conn Per Database. Stats Hash",
+					  sharedWorkerNodeDatabaseConnStatsHashSize,
+					  sharedWorkerNodeDatabaseConnStatsHashSize,
+					  &sharedWorkerNodeDatabaseConnStatsHashInfo,
+					  (HASH_ELEM | HASH_FUNCTION | HASH_COMPARE));
 
 	LWLockRelease(AddinShmemInitLock);
 
-	Assert(SharedConnStatsHash != NULL);
+	Assert(SharedWorkerNodeConnStatsHash != NULL);
+	Assert(SharedWorkerNodeDatabaseConnStatsHash != NULL);
 	Assert(ConnectionStatsSharedState->sharedConnectionHashTrancheId != 0);
 
 	if (prev_shmem_startup_hook != NULL)
@@ -800,14 +954,53 @@ ShouldWaitForConnection(int currentConnectionCount)
 }
 
 
+static SharedWorkerNodeConnStatsHashKey
+PrepareWorkerNodeHashKey(const char *hostname, int port)
+{
+	SharedWorkerNodeConnStatsHashKey key;
+	strlcpy(key.hostname, hostname, MAX_NODE_LENGTH);
+	if (strlen(hostname) > MAX_NODE_LENGTH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("hostname exceeds the maximum length of %d",
+							   MAX_NODE_LENGTH)));
+	}
+	key.port = port;
+	return key;
+}
+
+
+static SharedWorkerNodeDatabaseConnStatsHashKey
+PrepareWorkerNodeDatabaseHashKey(const char *hostname,
+								 int port,
+								 Oid database)
+{
+	SharedWorkerNodeDatabaseConnStatsHashKey workerNodeDatabaseKey;
+	workerNodeDatabaseKey.workerNodeKey = PrepareWorkerNodeHashKey(hostname, port);
+	workerNodeDatabaseKey.database = database;
+	return workerNodeDatabaseKey;
+}
+
+
 static uint32
 SharedConnectionHashHash(const void *key, Size keysize)
 {
-	SharedConnStatsHashKey *entry = (SharedConnStatsHashKey *) key;
+	SharedWorkerNodeConnStatsHashKey *entry = (SharedWorkerNodeConnStatsHashKey *) key;
 
 	uint32 hash = string_hash(entry->hostname, NAMEDATALEN);
 	hash = hash_combine(hash, hash_uint32(entry->port));
-	hash = hash_combine(hash, hash_uint32(entry->databaseOid));
+
+	return hash;
+}
+
+
+static uint32
+SharedWorkerNodeDatabaseHashHash(const void *key, Size keysize)
+{
+	SharedWorkerNodeDatabaseConnStatsHashKey *entry =
+		(SharedWorkerNodeDatabaseConnStatsHashKey *) key;
+	uint32 hash = SharedConnectionHashHash(&(entry->workerNodeKey), keysize);
+	hash = hash_combine(hash, hash_uint32(entry->database));
 
 	return hash;
 }
@@ -816,17 +1009,39 @@ SharedConnectionHashHash(const void *key, Size keysize)
 static int
 SharedConnectionHashCompare(const void *a, const void *b, Size keysize)
 {
-	SharedConnStatsHashKey *ca = (SharedConnStatsHashKey *) a;
-	SharedConnStatsHashKey *cb = (SharedConnStatsHashKey *) b;
+	SharedWorkerNodeConnStatsHashKey *ca = (SharedWorkerNodeConnStatsHashKey *) a;
+	SharedWorkerNodeConnStatsHashKey *cb = (SharedWorkerNodeConnStatsHashKey *) b;
 
-	if (strncmp(ca->hostname, cb->hostname, MAX_NODE_LENGTH) != 0 ||
-		ca->port != cb->port ||
-		ca->databaseOid != cb->databaseOid)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
+	return strncmp(ca->hostname, cb->hostname, MAX_NODE_LENGTH) != 0 ||
+		   ca->port != cb->port;
+}
+
+
+static int
+SharedWorkerNodeDatabaseHashCompare(const void *a, const void *b, Size keysize)
+{
+	SharedWorkerNodeDatabaseConnStatsHashKey *ca =
+		(SharedWorkerNodeDatabaseConnStatsHashKey *) a;
+	SharedWorkerNodeDatabaseConnStatsHashKey *cb =
+		(SharedWorkerNodeDatabaseConnStatsHashKey *) b;
+
+	int sharedConnectionHashCompare =
+		SharedConnectionHashCompare(&(ca->workerNodeKey), &(cb->workerNodeKey), keysize);
+	return sharedConnectionHashCompare ||
+		   ca->database != cb->database;
+}
+
+
+static bool
+isConnectionThrottlingDisabled(uint32 externalFlags)
+{
+	bool maintenanceConnection = externalFlags & MAINTENANCE_CONNECTION;
+
+	/*
+	 * Do not call Get*PoolSize() functions here, since it may read from
+	 * the catalog and we may be in the process exit handler.
+	 */
+	return maintenanceConnection
+		   ? MaxMaintenanceSharedPoolSize <= 0
+		   : MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING;
 }

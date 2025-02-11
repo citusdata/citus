@@ -62,7 +62,7 @@ def test_set_maindb(cluster_factory):
 
     wait_until_maintenance_deamons_start(2, cluster)
 
-    cluster.coordinator.sql("DROP DATABASE mymaindb;")
+    cluster.coordinator.drop_database("mymaindb")
 
     wait_until_maintenance_deamons_start(1, cluster)
 
