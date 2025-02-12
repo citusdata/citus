@@ -2563,8 +2563,8 @@ AllShardsColocated(List *relationShardList)
 bool
 ContainsOnlyLocalOrReferenceTables(RTEListProperties *rteProperties)
 {
-    // If hasDistributedTable is false, then all tables are either local or reference.
-    return !rteProperties->hasDistributedTable;
+	/* If hasDistributedTable is false, then all tables are either local or reference. */
+	return !rteProperties->hasDistributedTable;
 }
 
 
