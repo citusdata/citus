@@ -2562,7 +2562,7 @@ AllShardsColocated(List *relationShardList)
 bool
 ContainsOnlyLocalTables(RTEListProperties *rteProperties)
 {
-	return !rteProperties->hasDistributedTable && !rteProperties->hasReferenceTable;
+	return !rteProperties->hasDistributedTable;
 }
 
 
