@@ -1,0 +1,140 @@
+CREATE SCHEMA issue_7891;
+SET search_path TO issue_7891;
+
+-- Create tables
+CREATE TABLE t2_ref (
+    vkey INT,
+    pkey INT,
+    c15 TIMESTAMP
+);
+
+CREATE TABLE t4_pg (
+    vkey INT,
+    pkey INT,
+    c22 NUMERIC,
+    c23 TEXT,
+    c24 TIMESTAMP
+);
+
+CREATE TABLE t6_pg (
+    vkey INT,
+    pkey INT,
+    c26 TEXT
+);
+
+-- Mark t2_ref as a reference table
+SELECT create_reference_table('t2_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+
+-- Insert sample data
+INSERT INTO t6_pg (vkey, pkey, c26) VALUES (2, 12000, '');
+INSERT INTO t4_pg (vkey, pkey, c22, c23, c24)
+    VALUES (5, 15000, 0.0, ']]?', MAKE_TIMESTAMP(2071, 10, 26, 16, 20, 5));
+INSERT INTO t2_ref (vkey, pkey, c15)
+    VALUES (14, 24000, NULL::timestamp);
+
+-- Show initial data
+SELECT 't6_pg before' AS label, * FROM t6_pg;
+    label     | vkey | pkey  | c26
+---------------------------------------------------------------------
+ t6_pg before |    2 | 12000 |
+(1 row)
+
+SELECT 't4_pg data' AS label, * FROM t4_pg;
+   label    | vkey | pkey  | c22 | c23 |           c24
+---------------------------------------------------------------------
+ t4_pg data |    5 | 15000 | 0.0 | ]]? | Mon Oct 26 16:20:05 2071
+(1 row)
+
+SELECT 't2_ref data' AS label, * FROM t2_ref;
+    label    | vkey | pkey  | c15
+---------------------------------------------------------------------
+ t2_ref data |   14 | 24000 |
+(1 row)
+
+
+--
+-- The problematic query: update t6_pg referencing t4_pg and sub-subquery on t2_ref.
+-- Historically might produce a 0-task plan if the planner incorrectly fails to
+-- treat t4_pg/t2_ref as local/reference.
+--
+--- EXPLAIN of update (problem scenario) ---
+EXPLAIN (VERBOSE, COSTS OFF)
+UPDATE t6_pg
+   SET vkey = 43
+ WHERE EXISTS (
+   SELECT (SELECT c15 FROM t2_ref)
+   FROM t4_pg
+);
+                                                                                                                               QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Query: UPDATE issue_7891.t6_pg SET vkey = 43 WHERE (EXISTS (SELECT (SELECT t2_ref.c15 FROM (SELECT NULL::integer AS vkey, NULL::integer AS pkey, NULL::timestamp without time zone AS c15 WHERE false) t2_ref(vkey, pkey, c15)) AS c15 FROM issue_7891.t4_pg))
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Update on issue_7891.t6_pg
+               InitPlan 1
+                 ->  Seq Scan on issue_7891.t4_pg
+               ->  Result
+                     Output: 43, t6_pg.ctid
+                     One-Time Filter: (InitPlan 1).col1
+                     ->  Seq Scan on issue_7891.t6_pg
+                           Output: t6_pg.ctid
+(14 rows)
+
+
+--- EXPLAIN reversing subquery usage ---
+EXPLAIN (VERBOSE, COSTS OFF)
+UPDATE t6_pg
+   SET vkey = 43
+ WHERE EXISTS (
+   SELECT (SELECT c22 FROM t4_pg)
+   FROM t2_ref
+);
+                                                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Query: UPDATE issue_7891.t6_pg SET vkey = 43 WHERE (EXISTS (SELECT (SELECT t4_pg.c22 FROM issue_7891.t4_pg) AS c22 FROM issue_7891.t2_ref_363177 t2_ref))
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Update on issue_7891.t6_pg
+               InitPlan 1
+                 ->  Seq Scan on issue_7891.t2_ref_363177 t2_ref
+               ->  Result
+                     Output: 43, t6_pg.ctid
+                     One-Time Filter: (InitPlan 1).col1
+                     ->  Seq Scan on issue_7891.t6_pg
+                           Output: t6_pg.ctid
+(14 rows)
+
+
+-- Now actually do the update to confirm it works
+UPDATE t6_pg
+   SET vkey = 43
+ WHERE EXISTS (
+   SELECT (SELECT c15 FROM t2_ref)
+   FROM t4_pg
+);
+
+-- Show final data
+SELECT 't6_pg after' AS label, * FROM t6_pg;
+    label    | vkey | pkey  | c26
+---------------------------------------------------------------------
+ t6_pg after |   43 | 12000 |
+(1 row)
+
+
+DROP SCHEMA issue_7891 CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table t2_ref
+drop cascades to table t4_pg
+drop cascades to table t6_pg
+drop cascades to table t2_ref_363177
