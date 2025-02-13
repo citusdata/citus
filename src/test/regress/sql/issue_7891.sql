@@ -59,7 +59,7 @@ SELECT 't6_pg after' AS label, * FROM t6_pg;
 
 -- The outer subquery iterates over rows from the reference table t2_ref
 UPDATE t6_pg
-   SET vkey = 43
+   SET vkey = 44
  WHERE EXISTS (
    SELECT (SELECT c22 FROM t4_pg)
    FROM t2_ref
