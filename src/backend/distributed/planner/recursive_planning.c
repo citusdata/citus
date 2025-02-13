@@ -2292,6 +2292,129 @@ BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 
 
 /*
+ * For the given target list, build an empty relation with the same target list.
+ * For example, if the target list is (a, b, c), and resultId is "empty", then
+ * it returns a Query object for this SQL:
+ *      SELECT a, b, c FROM (VALUES (NULL, NULL, NULL)) AS empty(a, b, c) WHERE false;
+ */
+Query *
+BuildEmptyResultQuery(List *targetEntryList, char *resultId)
+{
+	List *targetList = NIL;
+	ListCell *targetEntryCell = NULL;
+
+	List *colTypes = NIL;
+	List *colTypMods = NIL;
+	List *colCollations = NIL;
+	List *colNames = NIL;
+
+	List *valueConsts = NIL;
+	List *valueTargetList = NIL;
+	List *valueColNames = NIL;
+
+	int targetIndex = 1;
+
+	/* build the target list and column lists needed */
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Node *targetExpr = (Node *) targetEntry->expr;
+		char *columnName = targetEntry->resname;
+		Oid columnType = exprType(targetExpr);
+		Oid columnTypMod = exprTypmod(targetExpr);
+		Oid columnCollation = exprCollation(targetExpr);
+
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+
+		Var *tgtVar = makeVar(1, targetIndex, columnType, columnTypMod, columnCollation,
+							  0);
+		TargetEntry *tgtEntry = makeTargetEntry((Expr *) tgtVar, targetIndex, columnName,
+												false);
+		Const *valueConst = makeConst(columnType, columnTypMod, columnCollation, 0,
+									  (Datum) 0, true, false);
+
+		StringInfoData *columnString = makeStringInfo();
+		appendStringInfo(columnString, "column%d", targetIndex);
+
+		TargetEntry *valueTgtEntry = makeTargetEntry((Expr *) tgtVar, targetIndex,
+													 columnString->data, false);
+
+		valueConsts = lappend(valueConsts, valueConst);
+		valueTargetList = lappend(valueTargetList, valueTgtEntry);
+		valueColNames = lappend(valueColNames, makeString(columnString->data));
+
+		colNames = lappend(colNames, makeString(columnName));
+		colTypes = lappend_oid(colTypes, columnType);
+		colTypMods = lappend_oid(colTypMods, columnTypMod);
+		colCollations = lappend_oid(colCollations, columnCollation);
+
+		targetList = lappend(targetList, tgtEntry);
+
+		targetIndex++;
+	}
+
+	/* Build a RangeTable Entry for the VALUES relation */
+	RangeTblEntry *valuesRangeTable = makeNode(RangeTblEntry);
+	valuesRangeTable->rtekind = RTE_VALUES;
+	valuesRangeTable->values_lists = list_make1(valueConsts);
+	valuesRangeTable->colcollations = colCollations;
+	valuesRangeTable->coltypes = colTypes;
+	valuesRangeTable->coltypmods = colTypMods;
+	valuesRangeTable->alias = NULL;
+	valuesRangeTable->eref = makeAlias("*VALUES*", valueColNames);
+	valuesRangeTable->inFromCl = true;
+
+	RangeTblRef *valuesRTRef = makeNode(RangeTblRef);
+	valuesRTRef->rtindex = 1;
+
+	FromExpr *valuesJoinTree = makeNode(FromExpr);
+	valuesJoinTree->fromlist = list_make1(valuesRTRef);
+
+	/* build the VALUES query */
+	Query *valuesQuery = makeNode(Query);
+	valuesQuery->canSetTag = true;
+	valuesQuery->commandType = CMD_SELECT;
+	valuesQuery->rtable = list_make1(valuesRangeTable);
+	#if PG_VERSION_NUM >= PG_VERSION_16
+	valuesQuery->rteperminfos = NIL;
+	#endif
+	valuesQuery->jointree = valuesJoinTree;
+	valuesQuery->targetList = valueTargetList;
+
+	/* build the relation selecting from the VALUES */
+	RangeTblEntry *emptyRangeTable = makeNode(RangeTblEntry);
+	emptyRangeTable->rtekind = RTE_SUBQUERY;
+	emptyRangeTable->subquery = valuesQuery;
+	emptyRangeTable->alias = makeAlias(resultId, colNames);
+	emptyRangeTable->eref = emptyRangeTable->alias;
+	emptyRangeTable->inFromCl = true;
+
+	/* build the SELECT query */
+	Query *resultQuery = makeNode(Query);
+	resultQuery->commandType = CMD_SELECT;
+	resultQuery->canSetTag = true;
+	resultQuery->rtable = list_make1(emptyRangeTable);
+#if PG_VERSION_NUM >= PG_VERSION_16
+	resultQuery->rteperminfos = NIL;
+#endif
+	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
+	rangeTableRef->rtindex = 1;
+
+	/* insert a FALSE qual to ensure 0 rows returned */
+	FromExpr *joinTree = makeNode(FromExpr);
+	joinTree->fromlist = list_make1(rangeTableRef);
+	joinTree->quals = makeBoolConst(false, false);
+	resultQuery->jointree = joinTree;
+	resultQuery->targetList = targetList;
+
+	return resultQuery;
+}
+
+
+/*
  * BuildReadIntermediateResultsQuery is the common code for generating
  * queries to read from result files. It is used by
  * BuildReadIntermediateResultsArrayQuery and BuildSubPlanResultQuery.
