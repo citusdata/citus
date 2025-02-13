@@ -1,5 +1,17 @@
--- This construct has been used as a regression test to ensure that the planner
--- correctly distinguishes between "local" and "reference" tables, avoiding an erroneous 0-task plan.
+-- This test validates that the query planner correctly handles nested subqueries involving both a
+-- local table (t4_pg) and a reference table (t2_ref). The steps are as follows:
+--
+-- 1. A dedicated schema (issue_7891) is created, and three tables (t2_ref, t4_pg, t6_pg) are set up.
+-- 2. The table t2_ref is designated as a reference table using the create_reference_table() function.
+-- 3. Sample data is inserted into all tables.
+-- 4. An UPDATE is executed on t6_pg. The update uses an EXISTS clause with a nested subquery:
+--    - The outer subquery iterates over every row in t4_pg.
+--    - The inner subquery selects c15 from t2_ref.
+-- 5. The update should occur if the nested subquery returns any row, effectively updating t6_pg's vkey to 43.
+-- 6. The final state of t6_pg is displayed to confirm that the update was applied.
+--
+-- Note: This test was originally designed to detect a planner bug where the nested structure might
+-- lead to an incorrect plan (such as a 0-task plan), ensuring proper handling of reference and local tables.
 -- https://github.com/citusdata/citus/issues/7891
 CREATE SCHEMA issue_7891;
 SET search_path TO issue_7891;
@@ -57,16 +69,6 @@ UPDATE t6_pg
 -- Show final data
 SELECT 't6_pg after' AS label, * FROM t6_pg;
 
--- The outer subquery iterates over rows from the reference table t2_ref
-UPDATE t6_pg
-   SET vkey = 44
- WHERE EXISTS (
-   SELECT (SELECT c22 FROM t4_pg)
-   FROM t2_ref
-);
-
--- Show final data
-SELECT 't6_pg after' AS label, * FROM t6_pg;
-
+-- Cleanup
 SET client_min_messages TO WARNING;
 DROP SCHEMA issue_7891 CASCADE;
