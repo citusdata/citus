@@ -1,0 +1,4 @@
+test: failure_non_main_db_2pc
+test: metadata_sync_from_non_maindb
+test: grant_on_database_propagation_from_non_maindb
+test: other_databases grant_role_from_non_maindb role_operations_from_non_maindb seclabel_non_maindb
