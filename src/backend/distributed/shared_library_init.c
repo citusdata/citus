@@ -1834,16 +1834,6 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
-	DefineCustomStringVariable(
-		"citus.main_db",
-		gettext_noop("Which database is designated as the main_db"),
-		NULL,
-		&MainDb,
-		"",
-		PGC_POSTMASTER,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
 		gettext_noop("Sets the maximum number of connections per worker node used by "
