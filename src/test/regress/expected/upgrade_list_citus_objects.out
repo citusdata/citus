@@ -64,7 +64,6 @@ ORDER BY 1;
  function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text)
  function citus_internal.add_tenant_schema(oid,integer)
  function citus_internal.adjust_local_clock_to_remote(cluster_clock)
- function citus_internal.commit_management_command_2pc()
  function citus_internal.database_command(text)
  function citus_internal.delete_colocation_metadata(integer)
  function citus_internal.delete_partition_metadata(regclass)
@@ -368,5 +367,5 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(361 rows)
+(357 rows)
 
