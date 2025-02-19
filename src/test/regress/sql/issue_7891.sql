@@ -41,7 +41,10 @@ CREATE TABLE t6_pg (
 SELECT create_reference_table('t2_ref');
 
 -- Insert sample data
-INSERT INTO t6_pg (vkey, pkey, c26) VALUES (2, 12000, '');
+INSERT INTO t6_pg (vkey, pkey, c26) VALUES
+    (2, 12000, 'initial'),
+    (3, 13000, 'will_be_deleted'),
+    (4, 14000, 'to_merge');
 INSERT INTO t4_pg (vkey, pkey, c22, c23, c24)
     VALUES (5, 15000, 0.0, ']]?', MAKE_TIMESTAMP(2071, 10, 26, 16, 20, 5));
 INSERT INTO t2_ref (vkey, pkey, c15)
@@ -66,8 +69,66 @@ UPDATE t6_pg
    FROM t4_pg
 );
 
--- Show final data
 SELECT 't6_pg after' AS label, * FROM t6_pg;
+
+--
+--    DELETE with a similar nested subquery approach
+--    Here, let's delete any rows for which t4_pg is non-empty (like a trivial check).
+--    We'll specifically target the row with c26='will_be_deleted' to confirm it's removed.
+--
+DELETE FROM t6_pg
+ WHERE EXISTS (
+   SELECT (SELECT c15 FROM t2_ref)
+   FROM t4_pg
+ )
+ AND c26 = 'will_be_deleted';
+
+SELECT 't6_pg after DELETE' AS label, * FROM t6_pg;
+
+--
+--    We'll merge from t4_pg into t6_pg. The merge will update c26 for pkey=14000.
+--
+MERGE INTO t6_pg AS tgt
+USING t4_pg AS src
+ON (tgt.pkey = 14000)
+WHEN MATCHED THEN
+    UPDATE SET c26 = 'merged_' || (SELECT pkey FROM t2_ref WHERE pkey=24000 LIMIT 1)
+WHEN NOT MATCHED THEN
+    INSERT (vkey, pkey, c26)
+    VALUES (99, src.pkey, 'inserted_via_merge');
+
+MERGE INTO t6_pg AS tgt
+USING t4_pg AS src
+  ON (tgt.pkey = src.pkey)
+WHEN MATCHED THEN
+  UPDATE SET c26 = 'merged_value'
+WHEN NOT MATCHED THEN
+  INSERT (vkey, pkey, c26)
+  VALUES (src.vkey, src.pkey, 'inserted_via_merge');
+
+
+
+SELECT 't6_pg after MERGE' AS label, * FROM t6_pg;
+
+--
+--   Update the REFERENCE table itself and verify the change
+--   This is to ensure that the reference table is correctly handled.
+
+UPDATE t2_ref
+   SET c15 = '2099-01-01 00:00:00'::timestamp
+ WHERE pkey = 24000;
+
+SELECT 't2_ref after self-update' AS label, * FROM t2_ref;
+
+
+UPDATE t2_ref
+   SET c15 = '2099-01-01 00:00:00'::timestamp
+ WHERE EXISTS (
+    SELECT 1
+    FROM t4_pg
+ );
+
+SELECT 't2_ref after UPDATE' AS label, * FROM t2_ref;
 
 -- Cleanup
 SET client_min_messages TO WARNING;
