@@ -1819,6 +1819,8 @@ ExpandRolesToGroups(Oid roleid)
 													true, NULL, scanKeyCount, scanKey);
 
 	List *roles = NIL;
+
+	elog(NOTICE, "Originator Roleid: %s", GetUserNameFromId(roleid, true));
 	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
@@ -1827,8 +1829,21 @@ ExpandRolesToGroups(Oid roleid)
 		definition->mode = DependencyObjectAddress;
 		ObjectAddressSet(definition->data.address, AuthIdRelationId, membership->roleid);
 
+		//log the name of the membership->roleid
+		elog(NOTICE, "Dependency roleid granted: %s", GetUserNameFromId(membership->roleid, true));
+
+
 		roles = lappend(roles, definition);
+
+		DependencyDefinition *definition1 = palloc0(sizeof(DependencyDefinition));
+		definition1->mode = DependencyObjectAddress;
+		ObjectAddressSet(definition1->data.address, AuthIdRelationId, membership->grantor);
+		elog(NOTICE, "Dependency roleid grantor: %s",GetUserNameFromId( membership->grantor,true));
+		elog(NOTICE, "Dependency roleid member: %s",GetUserNameFromId( membership->member,true));
+
+		roles = lappend(roles, definition1);
 	}
+	elog(NOTICE, "Originator Roleid: %s completed", GetUserNameFromId(roleid, true));
 
 	systable_endscan(scanDescriptor);
 	table_close(pgAuthMembers, AccessShareLock);
