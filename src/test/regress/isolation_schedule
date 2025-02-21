@@ -1,3 +1,4 @@
+test: isolation_enable_ddl_propagation
 test: isolation_setup
 test: isolation_add_remove_node
 test: isolation_update_node
