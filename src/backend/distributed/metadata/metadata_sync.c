@@ -65,6 +65,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
+#include "distributed/grant_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata/dependency.h"
@@ -115,11 +116,6 @@ static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnE
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
-static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
-											  Oid roleOid,
-											  Oid objectId,
-											  char *permission,
-											  bool withGrantOption);
 static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
@@ -130,7 +126,6 @@ static List * GenerateGrantOnFunctionQueriesFromAclItem(Oid schemaOid,
 static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
 static List * GenerateGrantOnSequenceQueriesFromAclItem(Oid sequenceOid,
 														AclItem *aclItem);
-static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
@@ -2299,18 +2294,66 @@ GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
  * The field `objects` of GrantStmt doesn't have a common structure for all types.
  * Make sure you have added your object type to GetObjectsForGrantStmt.
  */
-static GrantStmt *
+GrantStmt *
 GenerateGrantStmtForRights(ObjectType objectType,
 						   Oid roleOid,
 						   Oid objectId,
 						   char *permission,
 						   bool withGrantOption)
 {
+	return BaseGenerateGrantStmtForRights(objectType, roleOid, objectId, NULL, permission,
+										  withGrantOption);
+}
+
+
+/*
+ * GenerateGrantStmtForRightsWithObjectName is the function for creating
+ * GrantStmt's for all types of objects that are supported with object name.
+ * It takes parameters to fill a GrantStmt's fields and returns the GrantStmt.
+ * The field `objects` of GrantStmt doesn't have a common structure for all types.
+ * Make sure you have added your object type to GetObjectsForGrantStmt.
+ */
+GrantStmt *
+GenerateGrantStmtForRightsWithObjectName(ObjectType objectType,
+										 Oid roleOid,
+										 char *objectName,
+										 char *permission,
+										 bool withGrantOption)
+{
+	return BaseGenerateGrantStmtForRights(objectType, roleOid, InvalidOid, objectName,
+										  permission, withGrantOption);
+}
+
+
+/*
+ * BaseGenerateGrantStmtForRights is the base function for creating
+ * GrantStmt's for all types of objects that are supported with object .
+ * It is used by GenerateGrantStmtForRights and GenerateGrantStmtForRightsWithObjectName
+ * to support both object id and object name.
+ */
+GrantStmt *
+BaseGenerateGrantStmtForRights(ObjectType objectType,
+							   Oid roleOid,
+							   Oid objectId,
+							   char *objectName,
+							   char *permission,
+							   bool withGrantOption)
+{
+	/*either objectId or objectName should be valid */
+	Assert(objectId != InvalidOid || objectName != NULL);
+
 	GrantStmt *stmt = makeNode(GrantStmt);
 	stmt->is_grant = true;
 	stmt->targtype = ACL_TARGET_OBJECT;
 	stmt->objtype = objectType;
-	stmt->objects = GetObjectsForGrantStmt(objectType, objectId);
+	if (objectId != InvalidOid)
+	{
+		stmt->objects = GetObjectsForGrantStmt(objectType, objectId);
+	}
+	else
+	{
+		stmt->objects = list_make1(makeString(objectName));
+	}
 	stmt->privileges = list_make1(GetAccessPrivObjectForGrantStmt(permission));
 	stmt->grantees = list_make1(GetRoleSpecObjectForUser(roleOid));
 	stmt->grant_option = withGrantOption;
@@ -2703,7 +2746,7 @@ SetLocalEnableMetadataSync(bool state)
 }
 
 
-static char *
+char *
 GenerateSetRoleQuery(Oid roleOid)
 {
 	StringInfo buf = makeStringInfo();
@@ -4822,6 +4865,10 @@ PropagateNodeWideObjectsCommandList(void)
 		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
 		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
+#if PG_VERSION_NUM >= PG_VERSION_15
+	List *grantOnParameterCommands = GenerateGrantStmtOnParametersFromCatalogTable();
+	ddlCommands = list_concat(ddlCommands, grantOnParameterCommands);
+#endif /* PG_VERSION_NUM >= PG_VERSION_15 */
 
 	return ddlCommands;
 }
