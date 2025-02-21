@@ -451,7 +451,7 @@ jobs:
           chmod +x run_hammerdb.sh
           run_hammerdb.sh citusbot_tpcc_benchmark_rg
   prepare_parallelization_matrix_32:
-    name: Parallel 32
+    name: Prepare parallelization matrix
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     needs: test-flakyness-pre
     runs-on: ubuntu-20.04
@@ -537,3 +537,5 @@ jobs:
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: test_flakyness_parallel_${{ matrix.id }}
