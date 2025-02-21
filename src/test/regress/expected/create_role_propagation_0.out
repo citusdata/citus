@@ -121,17 +121,17 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, (rolpassword != '') as pass_not_empty, rolvaliduntil FROM pg_authid WHERE rolname LIKE 'create\_%' ORDER BY rolname;
            rolname           | rolsuper | rolinherit | rolcreaterole | rolcreatedb | rolcanlogin | rolreplication | rolbypassrls | rolconnlimit | pass_not_empty |        rolvaliduntil
 ---------------------------------------------------------------------
- create_group                | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
- create_group_2              | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
- create_role                 | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
- create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
- create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
- create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
- create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_group                | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_group_2              | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_role                 | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
  create_role_with_everything | t        | t          | t             | t           | t           | t              | t            |          105 | t              | Thu May 04 17:00:00 2045 PDT
  create_role_with_nothing    | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
- create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
- create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
+ create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
+ create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
 (11 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
@@ -319,7 +319,7 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 (6 rows)
 
 REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role cascade;
-WARNING:  role "non_dist_role_3" has not been granted membership in role "dist_role_3" by role "test_admin_role"
+WARNING:  role "non_dist_role_3" is not a member of role "dist_role_3"
 ERROR:  role "non_dist_role_3" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT result FROM run_command_on_all_nodes(
@@ -363,7 +363,7 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
       role       |     member      |     grantor     | admin_option
 ---------------------------------------------------------------------
  dist_role_1     | dist_role_2     | non_dist_role_1 | f
- dist_role_1     | non_dist_role_1 | postgres        | t
+ dist_role_1     | non_dist_role_1 | dist_role_1     | t
  non_dist_role_4 | dist_role_4     | postgres        | f
 (3 rows)
 
