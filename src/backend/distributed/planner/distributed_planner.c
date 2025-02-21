@@ -272,6 +272,28 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
+
+			if (needsDistributedPlanning)
+			{
+				Node *origQuals = planContext.originalQuery->jointree->quals;
+				Node *plannedQuals = planContext.query->jointree->quals;
+
+				/*
+				 * The WHERE quals have been eliminated by the Postgres planner, possibly by
+				 * an OR clause that was simplified to TRUE. In such cases, we need to check
+				 * if planned query still requires distributed planning.
+				 */
+				if (origQuals != NULL && plannedQuals == NULL)
+				{
+					List *rtesPostPlan = ExtractRangeTableEntryList(planContext.query);
+					if (list_length(rtesPostPlan) < list_length(rangeTableList))
+					{
+						needsDistributedPlanning = ListContainsDistributedTableRTE(
+							rtesPostPlan, NULL);
+					}
+				}
+			}
+
 			if (needsDistributedPlanning)
 			{
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
