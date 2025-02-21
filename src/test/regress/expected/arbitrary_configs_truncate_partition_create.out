@@ -1,5 +1,6 @@
 CREATE SCHEMA truncate_partition_tests_schema;
 SET search_path TO truncate_partition_tests_schema;
+GRANT ALL ON SCHEMA truncate_partition_tests_schema TO regularuser;
 -- partioned table
 CREATE TABLE partitioned_table(a int) PARTITION BY RANGE(a);
 CREATE TABLE partitioned_table_0 PARTITION OF partitioned_table
