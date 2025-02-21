@@ -76,4 +76,4 @@ jobs:
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
       with:
-          folder: ${{ matrix.id }}
+          folder: check_flakyness_parallel_${{ matrix.id }}
