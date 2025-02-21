@@ -1336,6 +1336,177 @@ MERGE INTO citus_reference_target t
   WHEN NOT MATCHED BY SOURCE THEN
     UPDATE SET val = val || ' not matched by source';
 
+-- Test Distributed-reference and distributed-local when the source table has fewer rows
+-- than distributed target; this tests that MERGE with NOT MATCHED BY SOURCE needs to run
+-- on all shards of the distributed target, regardless of whether or not the reshuffled
+-- source table has data in the corresponding shard.
+
+-- Re-populate the Postgres tables;
+DELETE FROM postgres_source;
+DELETE FROM postgres_target_1;
+DELETE FROM postgres_target_2;
+
+-- This time, the source table has fewer rows
+INSERT INTO postgres_target_1 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO postgres_target_2 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO postgres_source SELECT id, id * 10  FROM generate_series(1,4) AS id;
+
+-- try simple MERGE
+MERGE INTO postgres_target_1 t
+  USING postgres_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT * FROM postgres_target_1 ORDER BY tid, val;
+
+-- same with a constant qual
+MERGE INTO postgres_target_2 t
+  USING postgres_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT * FROM postgres_target_2 ORDER BY tid, val;
+
+-- Re-populate the Citus tables; this time, the source table has fewer rows
+DELETE FROM citus_local_source;
+DELETE FROM citus_reference_source;
+INSERT INTO citus_reference_source SELECT id, id * 10  FROM generate_series(1,4) AS id;
+INSERT INTO citus_local_source SELECT id, id * 10  FROM generate_series(1,4) AS id;
+
+SET citus.shard_count to 32;
+CREATE TABLE citus_distributed_target32 (tid integer, balance float, val text);
+SELECT create_distributed_table('citus_distributed_target32', 'tid');
+INSERT INTO citus_distributed_target32 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+
+-- Distributed-Local
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_local_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_1');
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_local_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED BY TARGET THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_2');
+ROLLBACK;
+
+-- Distributed-Reference
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_reference_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_1');
+ROLLBACK;
+
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_reference_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_2');
+ROLLBACK;
+
+-- Test that MERGE with NOT MATCHED BY SOURCE runs on all shards of
+-- a distributed table when the source is a repartition query with
+-- rows that do not match the distributed target
+
+set citus.shard_count = 32;
+
+CREATE TABLE dist_target (tid integer, balance float);
+CREATE TABLE dist_src1(sid integer, tid integer, val float);
+CREATE TABLE dist_src2(sid integer);
+CREATE TABLE dist_ref(sid integer);
+
+INSERT INTO dist_target SELECT id, 0 FROM generate_series(1,9,2) AS id;
+INSERT INTO dist_src1 SELECT id, id%3 + 1, id*10  FROM generate_series(1,15) AS id;
+INSERT INTO dist_src2 SELECT id  FROM generate_series(1,100) AS id;
+INSERT INTO dist_ref SELECT id  FROM generate_series(1,10) AS id;
+
+-- Run a MERGE command with dist_target as target and an aggregating query
+-- as source; note that at this point all tables are vanilla Postgres tables
+BEGIN;
+SELECT * FROM dist_target ORDER BY tid;
+MERGE INTO dist_target t
+USING (SELECT dt.tid, avg(dt.val) as av, min(dt.val) as m, max(dt.val) as x
+       FROM dist_src1 dt INNER JOIN dist_src2 dt2 on dt.sid=dt2.sid
+          INNER JOIN dist_ref dr ON dt.sid=dr.sid
+	GROUP BY dt.tid) dv ON (t.tid=dv.tid)
+WHEN MATCHED THEN
+         UPDATE SET balance = dv.av
+WHEN NOT MATCHED THEN
+	INSERT (tid, balance) VALUES (dv.tid, dv.m)
+WHEN NOT MATCHED BY SOURCE THEN
+        UPDATE SET balance = 99.95;
+SELECT * FROM dist_target ORDER BY tid;
+ROLLBACK;
+
+-- Distribute the tables
+SELECT create_distributed_table('dist_target', 'tid');
+SELECT create_distributed_table('dist_src1', 'sid');
+SELECT create_distributed_table('dist_src2', 'sid');
+SELECT create_reference_table('dist_ref');
+
+-- Re-run the merge; the target is now distributed and the source is a
+-- distributed query that is repartitioned.
+BEGIN;
+SELECT * FROM dist_target ORDER BY tid;
+MERGE INTO dist_target t
+USING (SELECT dt.tid, avg(dt.val) as av, min(dt.val) as m, max(dt.val) as x
+       FROM dist_src1 dt INNER JOIN dist_src2 dt2 on dt.sid=dt2.sid
+          INNER JOIN dist_ref dr ON dt.sid=dr.sid
+	GROUP BY dt.tid) dv ON (t.tid=dv.tid)
+WHEN MATCHED THEN
+         UPDATE SET balance = dv.av
+WHEN NOT MATCHED THEN
+	INSERT (tid, balance) VALUES (dv.tid, dv.m)
+WHEN NOT MATCHED BY SOURCE THEN
+        UPDATE SET balance = 99.95;
+
+-- Data in dist_target is as it was with vanilla Postgres tables:
+SELECT * FROM dist_target ORDER BY tid;
+ROLLBACK;
+
+-- Reset shard_count for the DEBUG output in the following test
+
+SET citus.shard_count to 4;
 -- Complex repartition query example with a mix of tables
 -- Example from blog post
 -- https://www.citusdata.com/blog/2023/07/27/how-citus-12-supports-postgres-merge

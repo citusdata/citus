@@ -2555,6 +2555,285 @@ MERGE INTO citus_reference_target t
   WHEN NOT MATCHED BY SOURCE THEN
     UPDATE SET val = val || ' not matched by source';
 ERROR:  Reference table as target is not allowed in MERGE command
+-- Test Distributed-reference and distributed-local when the source table has fewer rows
+-- than distributed target; this tests that MERGE with NOT MATCHED BY SOURCE needs to run
+-- on all shards of the distributed target, regardless of whether or not the reshuffled
+-- source table has data in the corresponding shard.
+-- Re-populate the Postgres tables;
+DELETE FROM postgres_source;
+DELETE FROM postgres_target_1;
+DELETE FROM postgres_target_2;
+-- This time, the source table has fewer rows
+INSERT INTO postgres_target_1 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO postgres_target_2 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+INSERT INTO postgres_source SELECT id, id * 10  FROM generate_series(1,4) AS id;
+-- try simple MERGE
+MERGE INTO postgres_target_1 t
+  USING postgres_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT * FROM postgres_target_1 ORDER BY tid, val;
+ tid | balance |              val
+---------------------------------------------------------------------
+   1 |     110 | initial updated by merge
+   2 |      20 | inserted by merge
+   3 |     330 | initial updated by merge
+   4 |      40 | inserted by merge
+   5 |     500 | initial not matched by source
+   7 |     700 | initial not matched by source
+   9 |     900 | initial not matched by source
+  11 |    1100 | initial not matched by source
+  13 |    1300 | initial not matched by source
+  15 |    1500 | initial not matched by source
+(10 rows)
+
+-- same with a constant qual
+MERGE INTO postgres_target_2 t
+  USING postgres_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT * FROM postgres_target_2 ORDER BY tid, val;
+ tid | balance |              val
+---------------------------------------------------------------------
+   1 |     110 | initial updated by merge
+   2 |      20 | inserted by merge
+   3 |     300 | initial not matched by source
+   3 |      30 | inserted by merge
+   4 |      40 | inserted by merge
+   5 |     500 | initial not matched by source
+   7 |     700 | initial not matched by source
+   9 |     900 | initial not matched by source
+  11 |    1100 | initial not matched by source
+  13 |    1300 | initial not matched by source
+  15 |    1500 | initial not matched by source
+(11 rows)
+
+-- Re-populate the Citus tables; this time, the source table has fewer rows
+DELETE FROM citus_local_source;
+DELETE FROM citus_reference_source;
+INSERT INTO citus_reference_source SELECT id, id * 10  FROM generate_series(1,4) AS id;
+INSERT INTO citus_local_source SELECT id, id * 10  FROM generate_series(1,4) AS id;
+SET citus.shard_count to 32;
+CREATE TABLE citus_distributed_target32 (tid integer, balance float, val text);
+SELECT create_distributed_table('citus_distributed_target32', 'tid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO citus_distributed_target32 SELECT id, id * 100, 'initial' FROM generate_series(1,15,2) AS id;
+-- Distributed-Local
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_local_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_1');
+ compare_tables
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_local_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED BY TARGET THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_2');
+ compare_tables
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+-- Distributed-Reference
+-- try simple MERGE
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_reference_source s
+  ON t.tid = s.sid
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_1');
+ compare_tables
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+-- same with a constant qual
+BEGIN;
+MERGE INTO citus_distributed_target32 t
+  USING citus_reference_source s
+  ON t.tid = s.sid AND tid = 1
+  WHEN MATCHED THEN
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
+  WHEN NOT MATCHED THEN
+    INSERT VALUES (sid, delta, 'inserted by merge')
+  WHEN NOT MATCHED BY SOURCE THEN
+    UPDATE SET val = val || ' not matched by source';
+SELECT compare_tables('citus_distributed_target32', 'postgres_target_2');
+ compare_tables
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+-- Test that MERGE with NOT MATCHED BY SOURCE runs on all shards of
+-- a distributed table when the source is a repartition query with
+-- rows that do not match the distributed target
+set citus.shard_count = 32;
+CREATE TABLE dist_target (tid integer, balance float);
+CREATE TABLE dist_src1(sid integer, tid integer, val float);
+CREATE TABLE dist_src2(sid integer);
+CREATE TABLE dist_ref(sid integer);
+INSERT INTO dist_target SELECT id, 0 FROM generate_series(1,9,2) AS id;
+INSERT INTO dist_src1 SELECT id, id%3 + 1, id*10  FROM generate_series(1,15) AS id;
+INSERT INTO dist_src2 SELECT id  FROM generate_series(1,100) AS id;
+INSERT INTO dist_ref SELECT id  FROM generate_series(1,10) AS id;
+-- Run a MERGE command with dist_target as target and an aggregating query
+-- as source; note that at this point all tables are vanilla Postgres tables
+BEGIN;
+SELECT * FROM dist_target ORDER BY tid;
+ tid | balance
+---------------------------------------------------------------------
+   1 |       0
+   3 |       0
+   5 |       0
+   7 |       0
+   9 |       0
+(5 rows)
+
+MERGE INTO dist_target t
+USING (SELECT dt.tid, avg(dt.val) as av, min(dt.val) as m, max(dt.val) as x
+       FROM dist_src1 dt INNER JOIN dist_src2 dt2 on dt.sid=dt2.sid
+          INNER JOIN dist_ref dr ON dt.sid=dr.sid
+	GROUP BY dt.tid) dv ON (t.tid=dv.tid)
+WHEN MATCHED THEN
+         UPDATE SET balance = dv.av
+WHEN NOT MATCHED THEN
+	INSERT (tid, balance) VALUES (dv.tid, dv.m)
+WHEN NOT MATCHED BY SOURCE THEN
+        UPDATE SET balance = 99.95;
+SELECT * FROM dist_target ORDER BY tid;
+ tid | balance
+---------------------------------------------------------------------
+   1 |      60
+   2 |      10
+   3 |      50
+   5 |   99.95
+   7 |   99.95
+   9 |   99.95
+(6 rows)
+
+ROLLBACK;
+-- Distribute the tables
+SELECT create_distributed_table('dist_target', 'tid');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg17.dist_target$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist_src1', 'sid');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg17.dist_src1$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist_src2', 'sid');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg17.dist_src2$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('dist_ref');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg17.dist_ref$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Re-run the merge; the target is now distributed and the source is a
+-- distributed query that is repartitioned.
+BEGIN;
+SELECT * FROM dist_target ORDER BY tid;
+ tid | balance
+---------------------------------------------------------------------
+   1 |       0
+   3 |       0
+   5 |       0
+   7 |       0
+   9 |       0
+(5 rows)
+
+MERGE INTO dist_target t
+USING (SELECT dt.tid, avg(dt.val) as av, min(dt.val) as m, max(dt.val) as x
+       FROM dist_src1 dt INNER JOIN dist_src2 dt2 on dt.sid=dt2.sid
+          INNER JOIN dist_ref dr ON dt.sid=dr.sid
+	GROUP BY dt.tid) dv ON (t.tid=dv.tid)
+WHEN MATCHED THEN
+         UPDATE SET balance = dv.av
+WHEN NOT MATCHED THEN
+	INSERT (tid, balance) VALUES (dv.tid, dv.m)
+WHEN NOT MATCHED BY SOURCE THEN
+        UPDATE SET balance = 99.95;
+-- Data in dist_target is as it was with vanilla Postgres tables:
+SELECT * FROM dist_target ORDER BY tid;
+ tid | balance
+---------------------------------------------------------------------
+   1 |      60
+   2 |      10
+   3 |      50
+   5 |   99.95
+   7 |   99.95
+   9 |   99.95
+(6 rows)
+
+ROLLBACK;
+-- Reset shard_count for the DEBUG output in the following test
+SET citus.shard_count to 4;
 -- Complex repartition query example with a mix of tables
 -- Example from blog post
 -- https://www.citusdata.com/blog/2023/07/27/how-citus-12-supports-postgres-merge
@@ -2670,8 +2949,10 @@ DEBUG:  Using column - index:0 from the source list to redistribute
 DEBUG:  Executing subplans of the source query and storing the results at the respective node(s)
 DEBUG:  Redistributing source result rows across nodes
 DEBUG:  Executing final MERGE on workers using intermediate results
-DEBUG:  <Deparsed MERGE query: MERGE INTO pg17.sensor_readings_1072043 sr USING (SELECT intermediate_result.sensor_id, intermediate_result.average_reading, intermediate_result.last_reading_timestamp, intermediate_result.rid FROM read_intermediate_results('{repartitioned_results_xxxxx_from_1072047_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(sensor_id numeric, average_reading numeric, last_reading_timestamp timestamp without time zone, rid numeric)) new_readings ON (sr.sensor_id OPERATOR(pg_catalog.=) new_readings.sensor_id) WHEN MATCHED THEN UPDATE SET reading_value = new_readings.average_reading, reading_timestamp = new_readings.last_reading_timestamp WHEN NOT MATCHED BY TARGET THEN INSERT (reading_id, sensor_id, reading_value, reading_timestamp) VALUES (new_readings.rid, new_readings.sensor_id, new_readings.average_reading, new_readings.last_reading_timestamp) WHEN NOT MATCHED BY SOURCE THEN UPDATE SET reading_value = 100>
-DEBUG:  <Deparsed MERGE query: MERGE INTO pg17.sensor_readings_1072045 sr USING (SELECT intermediate_result.sensor_id, intermediate_result.average_reading, intermediate_result.last_reading_timestamp, intermediate_result.rid FROM read_intermediate_results('{repartitioned_results_xxxxx_from_1072049_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(sensor_id numeric, average_reading numeric, last_reading_timestamp timestamp without time zone, rid numeric)) new_readings ON (sr.sensor_id OPERATOR(pg_catalog.=) new_readings.sensor_id) WHEN MATCHED THEN UPDATE SET reading_value = new_readings.average_reading, reading_timestamp = new_readings.last_reading_timestamp WHEN NOT MATCHED BY TARGET THEN INSERT (reading_id, sensor_id, reading_value, reading_timestamp) VALUES (new_readings.rid, new_readings.sensor_id, new_readings.average_reading, new_readings.last_reading_timestamp) WHEN NOT MATCHED BY SOURCE THEN UPDATE SET reading_value = 100>
+DEBUG:  <Deparsed MERGE query: MERGE INTO pg17.sensor_readings_1072171 sr USING (SELECT temp_empty_rel__1072171.sensor_id, temp_empty_rel__1072171.average_reading, temp_empty_rel__1072171.last_reading_timestamp, temp_empty_rel__1072171.rid FROM (VALUES (NULL::numeric,NULL::numeric,NULL::timestamp without time zone,NULL::numeric)) temp_empty_rel__1072171(sensor_id, average_reading, last_reading_timestamp, rid) WHERE false) new_readings ON (sr.sensor_id OPERATOR(pg_catalog.=) new_readings.sensor_id) WHEN MATCHED THEN UPDATE SET reading_value = new_readings.average_reading, reading_timestamp = new_readings.last_reading_timestamp WHEN NOT MATCHED BY TARGET THEN INSERT (reading_id, sensor_id, reading_value, reading_timestamp) VALUES (new_readings.rid, new_readings.sensor_id, new_readings.average_reading, new_readings.last_reading_timestamp) WHEN NOT MATCHED BY SOURCE THEN UPDATE SET reading_value = 100>
+DEBUG:  <Deparsed MERGE query: MERGE INTO pg17.sensor_readings_1072172 sr USING (SELECT intermediate_result.sensor_id, intermediate_result.average_reading, intermediate_result.last_reading_timestamp, intermediate_result.rid FROM read_intermediate_results('{repartitioned_results_xxxxx_from_1072176_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(sensor_id numeric, average_reading numeric, last_reading_timestamp timestamp without time zone, rid numeric)) new_readings ON (sr.sensor_id OPERATOR(pg_catalog.=) new_readings.sensor_id) WHEN MATCHED THEN UPDATE SET reading_value = new_readings.average_reading, reading_timestamp = new_readings.last_reading_timestamp WHEN NOT MATCHED BY TARGET THEN INSERT (reading_id, sensor_id, reading_value, reading_timestamp) VALUES (new_readings.rid, new_readings.sensor_id, new_readings.average_reading, new_readings.last_reading_timestamp) WHEN NOT MATCHED BY SOURCE THEN UPDATE SET reading_value = 100>
+DEBUG:  <Deparsed MERGE query: MERGE INTO pg17.sensor_readings_1072173 sr USING (SELECT temp_empty_rel__1072173.sensor_id, temp_empty_rel__1072173.average_reading, temp_empty_rel__1072173.last_reading_timestamp, temp_empty_rel__1072173.rid FROM (VALUES (NULL::numeric,NULL::numeric,NULL::timestamp without time zone,NULL::numeric)) temp_empty_rel__1072173(sensor_id, average_reading, last_reading_timestamp, rid) WHERE false) new_readings ON (sr.sensor_id OPERATOR(pg_catalog.=) new_readings.sensor_id) WHEN MATCHED THEN UPDATE SET reading_value = new_readings.average_reading, reading_timestamp = new_readings.last_reading_timestamp WHEN NOT MATCHED BY TARGET THEN INSERT (reading_id, sensor_id, reading_value, reading_timestamp) VALUES (new_readings.rid, new_readings.sensor_id, new_readings.average_reading, new_readings.last_reading_timestamp) WHEN NOT MATCHED BY SOURCE THEN UPDATE SET reading_value = 100>
+DEBUG:  <Deparsed MERGE query: MERGE INTO pg17.sensor_readings_1072174 sr USING (SELECT intermediate_result.sensor_id, intermediate_result.average_reading, intermediate_result.last_reading_timestamp, intermediate_result.rid FROM read_intermediate_results('{repartitioned_results_xxxxx_from_1072178_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(sensor_id numeric, average_reading numeric, last_reading_timestamp timestamp without time zone, rid numeric)) new_readings ON (sr.sensor_id OPERATOR(pg_catalog.=) new_readings.sensor_id) WHEN MATCHED THEN UPDATE SET reading_value = new_readings.average_reading, reading_timestamp = new_readings.last_reading_timestamp WHEN NOT MATCHED BY TARGET THEN INSERT (reading_id, sensor_id, reading_value, reading_timestamp) VALUES (new_readings.rid, new_readings.sensor_id, new_readings.average_reading, new_readings.last_reading_timestamp) WHEN NOT MATCHED BY SOURCE THEN UPDATE SET reading_value = 100>
 RESET client_min_messages;
 -- Expected output is:
 --  reading_id | sensor_id |     reading_value      |  reading_timestamp

@@ -219,6 +219,7 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 		copyObject(distributedPlan->selectPlanForModifyViaCoordinatorOrRepartition);
 	char *intermediateResultIdPrefix = distributedPlan->intermediateResultIdPrefix;
 	bool hasReturning = distributedPlan->expectResults;
+	bool hasNotMatchedBySource = HasMergeNotMatchedBySource(mergeQuery);
 	int partitionColumnIndex = distributedPlan->sourceResultRepartitionColumnIndex;
 
 	/*
@@ -233,7 +234,7 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 
 	ereport(DEBUG1, (errmsg("Collect source query results on coordinator")));
 
-	List *prunedTaskList = NIL;
+	List *prunedTaskList = NIL, *emptySourceTaskList = NIL;
 	HTAB *shardStateHash =
 		ExecuteMergeSourcePlanIntoColocatedIntermediateResults(
 			targetRelationId,
@@ -255,7 +256,8 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 	 * We cannot actually execute MERGE INTO ... tasks that read from
 	 * intermediate results that weren't created because no rows were
 	 * written to them. Prune those tasks out by only including tasks
-	 * on shards with connections.
+	 * on shards with connections; however, if the MERGE INTO includes
+	 * a NOT MATCHED BY SOURCE clause we need to include the task.
 	 */
 	Task *task = NULL;
 	foreach_declared_ptr(task, taskList)
@@ -268,6 +270,19 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 		{
 			prunedTaskList = lappend(prunedTaskList, task);
 		}
+		else if (hasNotMatchedBySource)
+		{
+			emptySourceTaskList = lappend(emptySourceTaskList, task);
+		}
+	}
+
+	if (emptySourceTaskList != NIL)
+	{
+		ereport(DEBUG1, (errmsg("MERGE has NOT MATCHED BY SOURCE clause, "
+								"execute MERGE on all shards")));
+		AdjustTaskQueryForEmptySource(targetRelationId, mergeQuery, emptySourceTaskList,
+									  intermediateResultIdPrefix);
+		prunedTaskList = list_concat(prunedTaskList, emptySourceTaskList);
 	}
 
 	if (prunedTaskList == NIL)
