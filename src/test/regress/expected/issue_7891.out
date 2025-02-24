@@ -21,6 +21,11 @@ CREATE TABLE t2_ref (
     pkey INT,
     c15 TIMESTAMP
 );
+CREATE TABLE t2_ref2 (
+    vkey INT,
+    pkey INT,
+    c15 TIMESTAMP
+);
 CREATE TABLE t4_pg (
     vkey INT,
     pkey INT,
@@ -33,8 +38,14 @@ CREATE TABLE t6_pg (
     pkey INT,
     c26 TEXT
 );
--- Mark t2_ref as a reference table
+-- Mark t2_ref and t2_ref2 as a reference table
 SELECT create_reference_table('t2_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('t2_ref2');
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -111,15 +122,49 @@ SELECT 't6_pg after DELETE' AS label, * FROM t6_pg;
 --
 --    We'll merge from t4_pg into t6_pg. The merge will update c26 for pkey=14000.
 --
+-- Anticipate an error indicating non-IMMUTABLE functions are not supported in MERGE statements on distributed tables.
+-- Retain this comment to highlight the current limitation.
+--
 MERGE INTO t6_pg AS tgt
 USING t4_pg AS src
-ON (tgt.pkey = 14000)    -- trivial condition to "match" row pkey=14000
+ON (tgt.pkey = 14000)
 WHEN MATCHED THEN
     UPDATE SET c26 = 'merged_' || (SELECT pkey FROM t2_ref WHERE pkey=24000 LIMIT 1)
 WHEN NOT MATCHED THEN
     INSERT (vkey, pkey, c26)
     VALUES (99, src.pkey, 'inserted_via_merge');
 ERROR:  non-IMMUTABLE functions are not yet supported in MERGE sql with distributed tables
+MERGE INTO t2_ref AS tgt
+USING t4_pg AS src
+  ON (tgt.pkey = src.pkey)
+WHEN MATCHED THEN
+  UPDATE SET c15 = '2088-01-01 00:00:00'::timestamp
+WHEN NOT MATCHED THEN
+  INSERT (vkey, pkey, c15)
+  VALUES (src.vkey, src.pkey, '2099-12-31 23:59:59'::timestamp);
+ERROR:  Reference table as target is not allowed in MERGE command
+-- Show the final state of t2_ref:
+SELECT 't2_ref after MERGE (using t4_pg)' AS label, * FROM t2_ref;
+              label               | vkey | pkey  | c15
+---------------------------------------------------------------------
+ t2_ref after MERGE (using t4_pg) |   14 | 24000 |
+(1 row)
+
+MERGE INTO t2_ref2 AS tgt
+USING t2_ref AS src
+  ON (tgt.pkey = src.pkey)
+WHEN MATCHED THEN
+  UPDATE SET c15 = '2077-07-07 07:07:07'::timestamp
+WHEN NOT MATCHED THEN
+  INSERT (vkey, pkey, c15)
+  VALUES (src.vkey, src.pkey, '2066-06-06 06:06:06'::timestamp);
+ERROR:  Reference table as target is not allowed in MERGE command
+-- Show the final state of t2_ref2:
+SELECT 't2_ref2 after MERGE (using t2_ref)' AS label, * FROM t2_ref2;
+ label | vkey | pkey | c15
+---------------------------------------------------------------------
+(0 rows)
+
 MERGE INTO t6_pg AS tgt
 USING t4_pg AS src
   ON (tgt.pkey = src.pkey)
@@ -159,6 +204,58 @@ SELECT 't2_ref after UPDATE' AS label, * FROM t2_ref;
         label        | vkey | pkey  |           c15
 ---------------------------------------------------------------------
  t2_ref after UPDATE |   14 | 24000 | Thu Jan 01 00:00:00 2099
+(1 row)
+
+-- Creating an additional reference table t3_ref to confirm subquery logic
+create table t3_ref(pkey int, c15 text);
+select create_reference_table('t3_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into t3_ref values (99, 'Initial Data');
+UPDATE t2_ref SET c15 = '2088-08-08 00:00:00'::timestamp WHERE EXISTS ( SELECT 1 FROM t3_ref);
+SELECT 't2_ref after UPDATE' AS label, * FROM t2_ref;
+        label        | vkey | pkey  |           c15
+---------------------------------------------------------------------
+ t2_ref after UPDATE |   14 | 24000 | Sun Aug 08 00:00:00 2088
+(1 row)
+
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 't2_ref after UPDATE - without worker 2' AS label, * FROM t2_ref;
+                 label                  | vkey | pkey  |           c15
+---------------------------------------------------------------------
+ t2_ref after UPDATE - without worker 2 |   14 | 24000 | Sun Aug 08 00:00:00 2088
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT citus_remove_node('localhost', :worker_1_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 't2_ref after UPDATE - without worker 1' AS label, * FROM t2_ref;
+                 label                  | vkey | pkey  |           c15
+---------------------------------------------------------------------
+ t2_ref after UPDATE - without worker 1 |   14 | 24000 | Sun Aug 08 00:00:00 2088
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
 (1 row)
 
 -- Cleanup

@@ -23,6 +23,13 @@ CREATE TABLE t2_ref (
     c15 TIMESTAMP
 );
 
+CREATE TABLE t2_ref2 (
+    vkey INT,
+    pkey INT,
+    c15 TIMESTAMP
+);
+
+
 CREATE TABLE t4_pg (
     vkey INT,
     pkey INT,
@@ -37,8 +44,9 @@ CREATE TABLE t6_pg (
     c26 TEXT
 );
 
--- Mark t2_ref as a reference table
+-- Mark t2_ref and t2_ref2 as a reference table
 SELECT create_reference_table('t2_ref');
+SELECT create_reference_table('t2_ref2');
 
 -- Insert sample data
 INSERT INTO t6_pg (vkey, pkey, c26) VALUES
@@ -88,6 +96,9 @@ SELECT 't6_pg after DELETE' AS label, * FROM t6_pg;
 --
 --    We'll merge from t4_pg into t6_pg. The merge will update c26 for pkey=14000.
 --
+-- Anticipate an error indicating non-IMMUTABLE functions are not supported in MERGE statements on distributed tables.
+-- Retain this comment to highlight the current limitation.
+--
 MERGE INTO t6_pg AS tgt
 USING t4_pg AS src
 ON (tgt.pkey = 14000)
@@ -97,6 +108,31 @@ WHEN NOT MATCHED THEN
     INSERT (vkey, pkey, c26)
     VALUES (99, src.pkey, 'inserted_via_merge');
 
+MERGE INTO t2_ref AS tgt
+USING t4_pg AS src
+  ON (tgt.pkey = src.pkey)
+WHEN MATCHED THEN
+  UPDATE SET c15 = '2088-01-01 00:00:00'::timestamp
+WHEN NOT MATCHED THEN
+  INSERT (vkey, pkey, c15)
+  VALUES (src.vkey, src.pkey, '2099-12-31 23:59:59'::timestamp);
+
+-- Show the final state of t2_ref:
+SELECT 't2_ref after MERGE (using t4_pg)' AS label, * FROM t2_ref;
+
+MERGE INTO t2_ref2 AS tgt
+USING t2_ref AS src
+  ON (tgt.pkey = src.pkey)
+WHEN MATCHED THEN
+  UPDATE SET c15 = '2077-07-07 07:07:07'::timestamp
+WHEN NOT MATCHED THEN
+  INSERT (vkey, pkey, c15)
+  VALUES (src.vkey, src.pkey, '2066-06-06 06:06:06'::timestamp);
+
+-- Show the final state of t2_ref2:
+SELECT 't2_ref2 after MERGE (using t2_ref)' AS label, * FROM t2_ref2;
+
+
 MERGE INTO t6_pg AS tgt
 USING t4_pg AS src
   ON (tgt.pkey = src.pkey)
@@ -105,8 +141,6 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
   INSERT (vkey, pkey, c26)
   VALUES (src.vkey, src.pkey, 'inserted_via_merge');
-
-
 
 SELECT 't6_pg after MERGE' AS label, * FROM t6_pg;
 
@@ -129,6 +163,26 @@ UPDATE t2_ref
  );
 
 SELECT 't2_ref after UPDATE' AS label, * FROM t2_ref;
+
+-- Creating an additional reference table t3_ref to confirm subquery logic
+create table t3_ref(pkey int, c15 text);
+select create_reference_table('t3_ref');
+insert into t3_ref values (99, 'Initial Data');
+
+UPDATE t2_ref SET c15 = '2088-08-08 00:00:00'::timestamp WHERE EXISTS ( SELECT 1 FROM t3_ref);
+
+SELECT 't2_ref after UPDATE' AS label, * FROM t2_ref;
+
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+SELECT 't2_ref after UPDATE - without worker 2' AS label, * FROM t2_ref;
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_1_port);
+
+SELECT 't2_ref after UPDATE - without worker 1' AS label, * FROM t2_ref;
+
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 
 -- Cleanup
 SET client_min_messages TO WARNING;
