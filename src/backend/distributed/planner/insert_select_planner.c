@@ -1435,6 +1435,62 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 
 	PrepareInsertSelectForCitusPlanner(insertSelectQuery);
 
+/* 
+	 * The insertTargetList are the columns we plan to insert into the target table. 
+	 * For partial inserts, it might incorrectly include the identity column if 
+	 * some rewriting logic added it. We'll fix that below.
+	 */
+	List *insertTargetList = insertSelectQuery->targetList;
+
+	/*
+	 * 1) Open the target relation to inspect its attributes and detect identity columns.
+	 */
+	Relation targetRel = RelationIdGetRelation(targetRelationId);
+	if (RelationIsValid(targetRel))
+	{
+		/* We'll build a new list of TLEs that excludes identity columns if user omitted them. */
+		List *newTargetList = NIL;
+		ListCell *lc = NULL;
+
+		foreach(lc, insertTargetList)
+		{
+			TargetEntry *tle = (TargetEntry *) lfirst(lc);
+
+			/*
+			 * resno is 1-based attribute number: if we have 3 columns in table, they
+			 * correspond to resno=1..3. Make sure attno is in range before we do anything.
+			 */
+			int attno = tle->resno;
+			if (attno > 0 && attno <= targetRel->rd_att->natts)
+			{
+				Form_pg_attribute attr = TupleDescAttr(targetRel->rd_att, attno - 1);
+	
+				/*
+				 * If 'attr->attidentity' is 'a' or 'd' => It's an identity column. 
+				 * If the user hasn't explicitly specified a value (which is presumably 
+				 * indicated by something in the parse tree?), we remove or convert 
+				 * the TLE to a default. 
+				 */
+				bool userSpecifiedValue = CheckIfUserSpecifiedValue(tle, parse); 
+				if ((attr->attidentity == ATTRIBUTE_IDENTITY_ALWAYS ||
+					 attr->attidentity == ATTRIBUTE_IDENTITY_BY_DEFAULT) &&
+					!userSpecifiedValue)
+				{
+					/* Skip adding TLE => effectively uses default identity generation */
+					continue; 
+				}
+			}
+
+			/* If we get here, we keep the TLE. */
+			newTargetList = lappend(newTargetList, tle);
+		}
+
+		/* Update the plan's target list to the "cleaned" version */
+		insertSelectQuery->targetList = newTargetList;
+
+		RelationClose(targetRel);
+	}
+
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
 	Query *selectQuery = selectRte->subquery;
 
