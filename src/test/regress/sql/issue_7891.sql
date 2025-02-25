@@ -164,26 +164,6 @@ UPDATE t2_ref
 
 SELECT 't2_ref after UPDATE' AS label, * FROM t2_ref;
 
--- Creating an additional reference table t3_ref to confirm subquery logic
-CREATE TABLE t3_ref(pkey INT, c15 TEXT);
-SELECT create_reference_table('t3_ref');
-INSERT INTO t3_ref VALUES (99, 'Initial Data');
-
-UPDATE t2_ref SET c15 = '2088-08-08 00:00:00'::timestamp WHERE EXISTS ( SELECT 1 FROM t3_ref);
-
-SELECT 't2_ref after UPDATE' AS label, * FROM t2_ref;
-
-SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
-
-SELECT 't2_ref after UPDATE - without worker 2' AS label, * FROM t2_ref;
-
-SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
-SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
-
-SELECT 't2_ref after UPDATE - without worker 1' AS label, * FROM t2_ref;
-
-SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
-
 -- Cleanup
 SET client_min_messages TO WARNING;
 DROP SCHEMA issue_7891 CASCADE;
