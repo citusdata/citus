@@ -2540,13 +2540,15 @@ AllShardsColocated(List *relationShardList)
 
 
 /*
- * ContainsOnlyLocalTables returns true if there is only
- * local tables and not any distributed or reference table.
+ * ContainsOnlyLocalOrReferenceTables returns true if there are no distributed
+ * tables in the query. In other words, the query might reference only local
+ * tables and/or reference tables, but no fully distributed tables.
  */
 bool
-ContainsOnlyLocalTables(RTEListProperties *rteProperties)
+ContainsOnlyLocalOrReferenceTables(RTEListProperties *rteProperties)
 {
-	return !rteProperties->hasDistributedTable && !rteProperties->hasReferenceTable;
+	/* If hasDistributedTable is false, then all tables are either local or reference. */
+	return !rteProperties->hasDistributedTable;
 }
 
 
