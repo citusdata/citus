@@ -660,6 +660,18 @@ GetTableTypeName(Oid tableId)
 bool
 IsCitusTable(Oid relationId)
 {
+	/*
+	 * PostgreSQL's OID generator assigns user operation OIDs starting
+	 * from FirstNormalObjectId. This means no user object can have
+	 * an OID lower than FirstNormalObjectId. Therefore, if the
+	 * relationId is less than FirstNormalObjectId
+	 * (i.e. in PostgreSQL's reserved range), we can immediately
+	 * return false, since such objects cannot be Citus tables.
+	 */
+	if (relationId < FirstNormalObjectId)
+	{
+		return false;
+	}
 	return LookupCitusTableCacheEntry(relationId) != NULL;
 }
 
