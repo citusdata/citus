@@ -65,43 +65,48 @@ SELECT * FROM test_dist_indirection_new ORDER BY id;
 -- now UPDATEs
 UPDATE test_ref_indirection
     SET (col_bool, col_date, col_int, col_text)
-        = (SELECT true, '1970-12-31'::date, 1, 'ok')
+        = (SELECT true, '1970-01-01'::date, 1, 'ok')
 RETURNING *;
 UPDATE test_dist_indirection
     SET (col_bool, col_date, col_int, col_text)
-        = (SELECT true, '1970-12-31'::date, 1, 'ok')
+        = (SELECT true, '1970-01-01'::date, 1, 'ok')
 RETURNING *;
 
 UPDATE test_ref_indirection
-    SET (col_bool, col_date)  = (select true, '1970-06-06'::date)
+    SET (col_bool, col_date)  = (select true, '1970-01-01'::date)
       , (col_int, col_text) = (select 1, 'still ok')
 RETURNING *;
 UPDATE test_dist_indirection
-    SET (col_bool, col_date)  = (select true, '1970-06-06'::date)
+    SET (col_bool, col_date)  = (select true, '1970-01-01'::date)
       , (col_int, col_text) = (select 1, 'still ok')
+RETURNING *;
+
+UPDATE test_ref_indirection
+    SET (col_bool, col_int)  = (select true, 1)
+      , (col_text) = (select 'ok')
 RETURNING *;
 
 SELECT * FROM test_ref_indirection ORDER BY id;
 SELECT * FROM test_dist_indirection ORDER BY id;
 
 -- but those should not:
--- TODO wrong ERROR
 UPDATE test_ref_indirection
     SET (col_date, col_text, col_int, col_bool)
-        = (SELECT '1970-12-31'::date, 'not ok', 2, false)
+        = (SELECT '1970-06-06'::date, 'not ok', 2, false)
 RETURNING *;
--- TODO wrong ERROR
 UPDATE test_dist_indirection
     SET (col_date, col_text, col_int, col_bool)
-        = (SELECT '1970-12-31'::date, 'not ok', 2, false)
+        = (SELECT '1970-06-06'::date, 'not ok', 2, false)
 RETURNING *;
 
--- TODO wrong ERROR
+UPDATE test_ref_indirection
+    SET (col_int, col_text)  = (select 2, 'not ok')
+      , (col_bool) = (select false)
+RETURNING *;
 UPDATE test_ref_indirection
     SET (col_int, col_date)  = (select 2, '1970-06-06'::date)
       , (col_text, col_bool) = (select 'not ok', false)
 RETURNING *;
--- TODO wrong ERROR
 UPDATE test_dist_indirection
     SET (col_int, col_date)  = (select 2, '1970-06-06'::date)
       , (col_text, col_bool) = (select 'not ok', false)
@@ -131,28 +136,23 @@ SELECT * FROM test_ref_indirection ORDER BY id;
 SELECT * FROM test_dist_indirection ORDER BY id;
 
 -- those should not
--- TODO wrong ERROR
 UPDATE test_ref_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 RETURNING *;
--- TODO wrong ERROR
 UPDATE test_dist_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 RETURNING *;
 
--- TODO wrong ERROR
 UPDATE test_ref_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 WHERE id = 2
 RETURNING *;
--- TODO wrong ERROR
 UPDATE test_dist_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 WHERE id = 2
 RETURNING *;
 
 -- several updates in CTE shoult not work
--- TODO wrong ERROR
 with qq3 as (
     update test_ref_indirection
     SET (col_text, col_bool)
@@ -168,7 +168,6 @@ qq4 as (
     returning *
 )
 select * from qq3 union all select * from qq4;
--- TODO wrong ERROR
 with qq3 as (
     update test_dist_indirection
     SET (col_text, col_bool)
