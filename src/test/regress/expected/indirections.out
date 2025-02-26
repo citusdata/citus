@@ -103,103 +103,113 @@ SELECT * FROM test_dist_indirection_new ORDER BY id;
 -- now UPDATEs
 UPDATE test_ref_indirection
     SET (col_bool, col_date, col_int, col_text)
-        = (SELECT true, '1970-12-31'::date, 1, 'ok')
+        = (SELECT true, '1970-01-01'::date, 1, 'ok')
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 12-31-1970 |       1 | ok
-  2 | t        | 12-31-1970 |       1 | ok
-  3 | t        | 12-31-1970 |       1 | ok
-  4 | t        | 12-31-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 UPDATE test_dist_indirection
     SET (col_bool, col_date, col_int, col_text)
-        = (SELECT true, '1970-12-31'::date, 1, 'ok')
+        = (SELECT true, '1970-01-01'::date, 1, 'ok')
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 12-31-1970 |       1 | ok
-  2 | t        | 12-31-1970 |       1 | ok
-  3 | t        | 12-31-1970 |       1 | ok
-  4 | t        | 12-31-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 UPDATE test_ref_indirection
-    SET (col_bool, col_date)  = (select true, '1970-06-06'::date)
+    SET (col_bool, col_date)  = (select true, '1970-01-01'::date)
       , (col_int, col_text) = (select 1, 'still ok')
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | still ok
-  2 | t        | 06-06-1970 |       1 | still ok
-  3 | t        | 06-06-1970 |       1 | still ok
-  4 | t        | 06-06-1970 |       1 | still ok
+  1 | t        | 01-01-1970 |       1 | still ok
+  2 | t        | 01-01-1970 |       1 | still ok
+  3 | t        | 01-01-1970 |       1 | still ok
+  4 | t        | 01-01-1970 |       1 | still ok
 (4 rows)
 
 UPDATE test_dist_indirection
-    SET (col_bool, col_date)  = (select true, '1970-06-06'::date)
+    SET (col_bool, col_date)  = (select true, '1970-01-01'::date)
       , (col_int, col_text) = (select 1, 'still ok')
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | still ok
-  2 | t        | 06-06-1970 |       1 | still ok
-  3 | t        | 06-06-1970 |       1 | still ok
-  4 | t        | 06-06-1970 |       1 | still ok
+  1 | t        | 01-01-1970 |       1 | still ok
+  2 | t        | 01-01-1970 |       1 | still ok
+  3 | t        | 01-01-1970 |       1 | still ok
+  4 | t        | 01-01-1970 |       1 | still ok
+(4 rows)
+
+UPDATE test_ref_indirection
+    SET (col_bool, col_int)  = (select true, 1)
+      , (col_text) = (select 'ok')
+RETURNING *;
+ id | col_bool |  col_date  | col_int | col_text
+---------------------------------------------------------------------
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 SELECT * FROM test_ref_indirection ORDER BY id;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | still ok
-  2 | t        | 06-06-1970 |       1 | still ok
-  3 | t        | 06-06-1970 |       1 | still ok
-  4 | t        | 06-06-1970 |       1 | still ok
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 SELECT * FROM test_dist_indirection ORDER BY id;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | still ok
-  2 | t        | 06-06-1970 |       1 | still ok
-  3 | t        | 06-06-1970 |       1 | still ok
-  4 | t        | 06-06-1970 |       1 | still ok
+  1 | t        | 01-01-1970 |       1 | still ok
+  2 | t        | 01-01-1970 |       1 | still ok
+  3 | t        | 01-01-1970 |       1 | still ok
+  4 | t        | 01-01-1970 |       1 | still ok
 (4 rows)
 
 -- but those should not:
--- TODO wrong ERROR
 UPDATE test_ref_indirection
     SET (col_date, col_text, col_int, col_bool)
-        = (SELECT '1970-12-31'::date, 'not ok', 2, false)
+        = (SELECT '1970-06-06'::date, 'not ok', 2, false)
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type date
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
--- TODO wrong ERROR
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 UPDATE test_dist_indirection
     SET (col_date, col_text, col_int, col_bool)
-        = (SELECT '1970-12-31'::date, 'not ok', 2, false)
+        = (SELECT '1970-06-06'::date, 'not ok', 2, false)
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type date
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
--- TODO wrong ERROR
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
+UPDATE test_ref_indirection
+    SET (col_int, col_text)  = (select 2, 'not ok')
+      , (col_bool) = (select false)
+RETURNING *;
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 UPDATE test_ref_indirection
     SET (col_int, col_date)  = (select 2, '1970-06-06'::date)
       , (col_text, col_bool) = (select 'not ok', false)
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type integer
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
--- TODO wrong ERROR
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 UPDATE test_dist_indirection
     SET (col_int, col_date)  = (select 2, '1970-06-06'::date)
       , (col_text, col_bool) = (select 'not ok', false)
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type integer
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 --
 -- more restrictive ones, just in case we miss a wrong value
 --
@@ -209,10 +219,10 @@ UPDATE test_ref_indirection
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | ok
-  2 | t        | 06-06-1970 |       1 | ok
-  3 | t        | 06-06-1970 |       1 | ok
-  4 | t        | 06-06-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 UPDATE test_dist_indirection
@@ -220,10 +230,10 @@ UPDATE test_dist_indirection
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | ok
-  2 | t        | 06-06-1970 |       1 | ok
-  3 | t        | 06-06-1970 |       1 | ok
-  4 | t        | 06-06-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 UPDATE test_ref_indirection
@@ -232,7 +242,7 @@ WHERE id = 1
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
 (1 row)
 
 UPDATE test_dist_indirection
@@ -241,60 +251,51 @@ WHERE id = 1
 RETURNING *;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
 (1 row)
 
 SELECT * FROM test_ref_indirection ORDER BY id;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | ok
-  2 | t        | 06-06-1970 |       1 | ok
-  3 | t        | 06-06-1970 |       1 | ok
-  4 | t        | 06-06-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 SELECT * FROM test_dist_indirection ORDER BY id;
  id | col_bool |  col_date  | col_int | col_text
 ---------------------------------------------------------------------
-  1 | t        | 06-06-1970 |       1 | ok
-  2 | t        | 06-06-1970 |       1 | ok
-  3 | t        | 06-06-1970 |       1 | ok
-  4 | t        | 06-06-1970 |       1 | ok
+  1 | t        | 01-01-1970 |       1 | ok
+  2 | t        | 01-01-1970 |       1 | ok
+  3 | t        | 01-01-1970 |       1 | ok
+  4 | t        | 01-01-1970 |       1 | ok
 (4 rows)
 
 -- those should not
--- TODO wrong ERROR
 UPDATE test_ref_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type text
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
--- TODO wrong ERROR
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 UPDATE test_dist_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type text
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
--- TODO wrong ERROR
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 UPDATE test_ref_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 WHERE id = 2
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type text
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
--- TODO wrong ERROR
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 UPDATE test_dist_indirection
     SET (col_text, col_bool) = (SELECT 'not ok', false)
 WHERE id = 2
 RETURNING *;
-ERROR:  column "col_bool" is of type boolean but expression is of type text
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 -- several updates in CTE shoult not work
--- TODO wrong ERROR
 with qq3 as (
     update test_ref_indirection
     SET (col_text, col_bool)
@@ -310,10 +311,8 @@ qq4 as (
     returning *
 )
 select * from qq3 union all select * from qq4;
-ERROR:  column "col_bool" is of type boolean but expression is of type text
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
--- TODO wrong ERROR
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 with qq3 as (
     update test_dist_indirection
     SET (col_text, col_bool)
@@ -329,9 +328,8 @@ qq4 as (
     returning *
 )
 select * from qq3 union all select * from qq4;
-ERROR:  column "col_bool" is of type boolean but expression is of type text
-HINT:  You will need to rewrite or cast the expression.
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 DROP TABLE test_dist_indirection;
 DROP TABLE test_dist_indirection_new;
 DROP TABLE test_ref_indirection;
@@ -351,6 +349,8 @@ SELECT create_reference_table('indirections.update_test');
 UPDATE update_test
 SET (b,a) = (select a,b from update_test where b = 41 and c = 'car')
 WHERE a = 100 AND b = 20;
+ERROR:  cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order
+HINT:  Sort the columns on the left side by physical order.
 -- https://github.com/citusdata/citus/pull/5692
 DROP SCHEMA indirections CASCADE;
 NOTICE:  drop cascades to 2 other objects
