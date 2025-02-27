@@ -269,14 +269,10 @@ SELECT create_distributed_table('domain_indirection_test', 'f1');
 
 -- not supported (field indirection to underlying composite type)
 INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);
--- TODO crash Citus
--- INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) SELECT 0, 1, 2;
+INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) SELECT 0, 1, 2;
 INSERT INTO domain_indirection_test (f1,f3.if1) VALUES (0, 1);
--- TODO here: not the expected ERROR
--- INSERT INTO domain_indirection_test (f1,f3.if1) SELECT 0, 1;
--- ERROR:  could not find a conversion path from type 23 to 17619
+INSERT INTO domain_indirection_test (f1,f3.if1) SELECT 0, 1;
 UPDATE domain_indirection_test SET domain_array[0].if2 = 5;
--- TODO here: not the expected ERROR
 UPDATE domain_indirection_test SET domain_array[0].if2 = (SELECT 5);
 
 -- below are supported as we don't do any field indirection

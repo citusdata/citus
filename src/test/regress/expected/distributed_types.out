@@ -429,18 +429,18 @@ SELECT create_distributed_table('domain_indirection_test', 'f1');
 INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);
 ERROR:  inserting or modifying composite type fields is not supported
 HINT:  Use the column name to insert or update the composite type as a single value
--- TODO crash Citus
--- INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) SELECT 0, 1, 2;
+INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) SELECT 0, 1, 2;
+ERROR:  cannot plan distributed INSERT INTO ... SELECT query
+HINT:  Do not use array references and field stores on the INSERT target list.
 INSERT INTO domain_indirection_test (f1,f3.if1) VALUES (0, 1);
 ERROR:  inserting or modifying composite type fields is not supported
 HINT:  Use the column name to insert or update the composite type as a single value
--- TODO here: not the expected ERROR
--- INSERT INTO domain_indirection_test (f1,f3.if1) SELECT 0, 1;
--- ERROR:  could not find a conversion path from type 23 to 17619
+INSERT INTO domain_indirection_test (f1,f3.if1) SELECT 0, 1;
+ERROR:  cannot plan distributed INSERT INTO ... SELECT query
+HINT:  Do not use array references and field stores on the INSERT target list.
 UPDATE domain_indirection_test SET domain_array[0].if2 = 5;
 ERROR:  inserting or modifying composite type fields is not supported
 HINT:  Use the column name to insert or update the composite type as a single value
--- TODO here: not the expected ERROR
 UPDATE domain_indirection_test SET domain_array[0].if2 = (SELECT 5);
 ERROR:  inserting or modifying composite type fields is not supported
 HINT:  Use the column name to insert or update the composite type as a single value
