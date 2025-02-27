@@ -1083,9 +1083,11 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		AttrNumber originalAttrNo = get_attnum(insertRelationId,
 											   oldInsertTargetEntry->resname);
 
+		/* we need to explore the underlying expression */
+		Node *expr = strip_implicit_coercions((Node *) oldInsertTargetEntry->expr);
+
 		/* see transformInsertRow() for the details */
-		if (IsA(oldInsertTargetEntry->expr, SubscriptingRef) ||
-			IsA(oldInsertTargetEntry->expr, FieldStore))
+		if (IsA(expr, SubscriptingRef) || IsA(expr, FieldStore))
 		{
 			ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 							errmsg(
