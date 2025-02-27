@@ -151,7 +151,10 @@ static RouterPlanType GetRouterPlanType(Query *query,
 										bool hasUnresolvedParams);
 static void ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan,
 										   PlannedStmt *concatPlan);
-
+static bool CheckPostPlanDistribution(bool isDistributedQuery,
+									  Query *origQuery,
+									  List *rangeTableList,
+									  Query *plannedQuery);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -272,6 +275,11 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
+			needsDistributedPlanning = CheckPostPlanDistribution(needsDistributedPlanning,
+																 planContext.originalQuery,
+																 rangeTableList,
+																 planContext.query);
+
 			if (needsDistributedPlanning)
 			{
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
@@ -2732,4 +2740,42 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 								   "citus_add_local_table_to_metadata()"))));
 		}
 	}
+}
+
+
+static bool
+CheckPostPlanDistribution(bool isDistributedQuery,
+						  Query *origQuery, List *rangeTableList,
+						  Query *plannedQuery)
+{
+	if (isDistributedQuery)
+	{
+		Node *origQuals = origQuery->jointree->quals;
+		Node *plannedQuals = plannedQuery->jointree->quals;
+
+		#if PG_VERSION_NUM >= PG_VERSION_17
+		if (IsMergeQuery(origQuery))
+		{
+			origQuals = origQuery->mergeJoinCondition;
+			plannedQuals = plannedQuery->mergeJoinCondition;
+		}
+		#endif
+
+		/*
+		 * The WHERE quals have been eliminated by the Postgres planner, possibly by
+		 * an OR clause that was simplified to TRUE. In such cases, we need to check
+		 * if the planned query still requires distributed planning.
+		 */
+		if (origQuals != NULL && plannedQuals == NULL)
+		{
+			List *rtesPostPlan = ExtractRangeTableEntryList(plannedQuery);
+			if (list_length(rtesPostPlan) < list_length(rangeTableList))
+			{
+				isDistributedQuery = ListContainsDistributedTableRTE(
+					rtesPostPlan, NULL);
+			}
+		}
+	}
+
+	return isDistributedQuery;
 }
