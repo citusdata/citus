@@ -366,3 +366,19 @@ SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
 DROP SCHEMA type_tests2 CASCADE;
 DROP USER typeuser;
+
+RESET client_min_messages;
+CREATE SCHEMA issue_4704;
+SET search_path TO issue_4704;
+
+-- https://github.com/citusdata/citus/issues/4704
+-- known to have crash citus before
+CREATE TYPE comptype as (r float8, i float8);
+CREATE DOMAIN dcomptypea as comptype[];
+CREATE TABLE dcomptable (d1 dcomptypea unique);
+SELECT create_distributed_table('dcomptable', 'd1');
+insert into dcomptable values (array[row(1,2)]::dcomptypea);
+
+SET client_min_messages TO error; -- suppress cascading objects dropping
+DROP TABLE dcomptable;
+DROP SCHEMA issue_4704 CASCADE;
