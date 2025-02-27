@@ -256,7 +256,7 @@ SELECT create_distributed_table('field_indirection_test_2', 'int_col');
 INSERT INTO field_indirection_test_2 (ct2_col.int_1, int_col, ct2_col.text_1, ct1_col.int_2)
 VALUES (0, 1, 'text1', 2), (3, 4, 'text1', 5);
 INSERT INTO field_indirection_test_2 (ct2_col.int_1, int_col, ct2_col.text_1, ct1_col.int_2)
-SELECT * FROM (VALUES (0, 1, 'text1', 2), (3, 4, 'text1', 5));
+SELECT * FROM (VALUES (0, 1, 'text1', 2), (3, 4, 'text1', 5)) qq(int_1, int_col2, text_1, int_2);
 
 -- not supported (field indirection in update)
 UPDATE field_indirection_test_2 SET (ct2_col.text_1, ct1_col.int_2) = ('text2', 10) WHERE int_col=4;
@@ -279,7 +279,7 @@ UPDATE domain_indirection_test SET domain_array[0].if2 = (SELECT 5);
 INSERT INTO field_indirection_test_2 (ct2_col, int_col, ct1_col)
 VALUES ('(1, "text1", 2)', 3, '(4, 5)'), ('(6, "text2", 7)', 8, '(9, 10)');
 INSERT INTO field_indirection_test_2 (ct2_col, int_col, ct1_col)
-SELECT * FROM (VALUES ('(1, "text1", 2)'::ct2, 3, '(4, 5)'::ct1), ('(6, "text2", 7)'::ct2, 8, '(9, 10)'::ct1));
+SELECT * FROM (VALUES ('(1, "text1", 2)'::ct2, 3, '(4, 5)'::ct1), ('(6, "text2", 7)'::ct2, 8, '(9, 10)'::ct1)) qq(ct2_col, int_col, ct1_col);
 UPDATE field_indirection_test_2 SET (ct2_col, ct1_col) = ('(10, "text10", 20)', '(40, 50)') WHERE int_col=8;
 UPDATE field_indirection_test_2 SET (ct2_col, ct1_col) = (SELECT '(10, "text10", 20)'::ct2, '(40, 50)'::ct1) WHERE int_col=8;
 
