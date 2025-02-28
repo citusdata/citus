@@ -1435,12 +1435,8 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 
 	PrepareInsertSelectForCitusPlanner(insertSelectQuery);
 
-/* 
-	 * The insertTargetList are the columns we plan to insert into the target table. 
-	 * For partial inserts, it might incorrectly include the identity column if 
-	 * some rewriting logic added it. We'll fix that below.
-	 */
-	List *insertTargetList = insertSelectQuery->targetList;
+	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
+	Query *selectQuery = selectRte->subquery;
 
 	/*
 	 * 1) Open the target relation to inspect its attributes and detect identity columns.
@@ -1448,51 +1444,73 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	Relation targetRel = RelationIdGetRelation(targetRelationId);
 	if (RelationIsValid(targetRel))
 	{
-		/* We'll build a new list of TLEs that excludes identity columns if user omitted them. */
-		List *newTargetList = NIL;
-		ListCell *lc = NULL;
 
-		foreach(lc, insertTargetList)
+		ListCell *lcInsert = NULL;
+		// ListCell *lcSelect = list_head(selectQuery->targetList);
+		
+		/* We'll build new lists for both sides */
+		List *newInsertTList = NIL;
+		List *newSelectTList = NIL;
+		
+		int insertIndex = 0;
+		
+		foreach(lcInsert, insertSelectQuery->targetList)
 		{
-			TargetEntry *tle = (TargetEntry *) lfirst(lc);
-
+			TargetEntry *insertTle = (TargetEntry *) lfirst(lcInsert);
+			insertIndex++;
+		
+			/* Get the corresponding TLE from the SELECT by position or resno */
+			TargetEntry *selectTle = NULL;
+		
 			/*
-			 * resno is 1-based attribute number: if we have 3 columns in table, they
-			 * correspond to resno=1..3. Make sure attno is in range before we do anything.
-			 */
-			int attno = tle->resno;
+			* If your plan is guaranteed to keep them in the same order, you can
+			* do "selectTle = (TargetEntry *) list_nth(selectQuery->targetList, insertIndex - 1)".
+			*
+			* Alternatively, if you rely on resno alignment, you'd find the TLE with resno==insertTle->resno.
+			* For simplicity, let's assume same ordering:
+			*/
+			selectTle = (TargetEntry *) list_nth(selectQuery->targetList, insertIndex - 1);
+		
+			/*
+			* Check if the insertTle is an identity column that the user didn't supply,
+			* e.g. by checking 'attr->attidentity == ATTRIBUTE_IDENTITY_ALWAYS' etc.
+			* If we skip it, also skip the SELECT TLE at the same position.
+			*/
+			
+			int attno = insertTle->resno;
 			if (attno > 0 && attno <= targetRel->rd_att->natts)
 			{
 				Form_pg_attribute attr = TupleDescAttr(targetRel->rd_att, attno - 1);
-	
+
 				/*
-				 * If 'attr->attidentity' is 'a' or 'd' => It's an identity column. 
-				 * If the user hasn't explicitly specified a value (which is presumably 
-				 * indicated by something in the parse tree?), we remove or convert 
-				 * the TLE to a default. 
-				 */
-				bool userSpecifiedValue = CheckIfUserSpecifiedValue(tle, parse); 
+				* If 'attr->attidentity' is 'a' or 'd' => It's an identity column. 
+				* If the user hasn't explicitly specified a value (which is presumably 
+				* indicated by something in the parse tree?), we remove or convert 
+				* the TLE to a default. 
+				*/
+				// bool userSpecifiedValue = CheckIfUserSpecifiedValue(tle, parse); 
+				bool userSpecifiedValue = false; 
 				if ((attr->attidentity == ATTRIBUTE_IDENTITY_ALWAYS ||
-					 attr->attidentity == ATTRIBUTE_IDENTITY_BY_DEFAULT) &&
+					attr->attidentity == ATTRIBUTE_IDENTITY_BY_DEFAULT) &&
 					!userSpecifiedValue)
 				{
 					/* Skip adding TLE => effectively uses default identity generation */
 					continue; 
 				}
 			}
-
-			/* If we get here, we keep the TLE. */
-			newTargetList = lappend(newTargetList, tle);
+		
+			/* else keep both TLEs */
+			newInsertTList = lappend(newInsertTList, insertTle);
+			newSelectTList = lappend(newSelectTList, selectTle);
 		}
 
-		/* Update the plan's target list to the "cleaned" version */
-		insertSelectQuery->targetList = newTargetList;
+		/* Now we have 1:1 matching lists with the identity column removed from both sides */
+		insertSelectQuery->targetList = newInsertTList;
+		selectQuery->targetList = newSelectTList;
 
 		RelationClose(targetRel);
 	}
-
-	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
-	Query *selectQuery = selectRte->subquery;
+	 
 
 	/*
 	 * Later we might need to call WrapTaskListForProjection(), which requires
