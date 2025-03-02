@@ -73,43 +73,69 @@ UPDATE test_dist_indirection
 RETURNING *;
 
 UPDATE test_ref_indirection
-    SET (col_bool, col_date)  = (select true, '1970-01-01'::date)
-      , (col_int, col_text) = (select 1, 'still ok')
+    SET (col_bool, col_date)  = (select false, '1971-01-01'::date)
+      , (col_int, col_text) = (select 2, '2 ok')
 RETURNING *;
 UPDATE test_dist_indirection
-    SET (col_bool, col_date)  = (select true, '1970-01-01'::date)
-      , (col_int, col_text) = (select 1, 'still ok')
+    SET (col_bool, col_date)  = (select false, '1971-01-01'::date)
+      , (col_int, col_text) = (select 2, '2 ok')
 RETURNING *;
 
 UPDATE test_ref_indirection
-    SET (col_bool, col_int)  = (select true, 1)
-      , (col_text) = (select 'ok')
+    SET (col_bool, col_int)  = (select true, 3)
+      , (col_text) = (select '3 ok')
+RETURNING *;
+UPDATE test_dist_indirection
+    SET (col_bool, col_int)  = (select true, 3)
+      , (col_text) = (select '3 ok')
 RETURNING *;
 
-SELECT * FROM test_ref_indirection ORDER BY id;
-SELECT * FROM test_dist_indirection ORDER BY id;
-
--- but those should not:
+-- but those should work since 13.X
 UPDATE test_ref_indirection
     SET (col_date, col_text, col_int, col_bool)
-        = (SELECT '1970-06-06'::date, 'not ok', 2, false)
+        = (SELECT '1972-01-01'::date, '4 ok', 4, false)
 RETURNING *;
 UPDATE test_dist_indirection
     SET (col_date, col_text, col_int, col_bool)
-        = (SELECT '1970-06-06'::date, 'not ok', 2, false)
+        = (SELECT '1972-01-01'::date, '4 ok', 4, false)
 RETURNING *;
 
 UPDATE test_ref_indirection
-    SET (col_int, col_text)  = (select 2, 'not ok')
+    SET (col_int, col_text)  = (select 5, '5 ok')
+      , (col_bool) = (select true)
+RETURNING *;
+UPDATE test_dist_indirection
+    SET (col_int, col_text)  = (select 5, '5 ok')
+      , (col_bool) = (select true)
+RETURNING *;
+
+UPDATE test_ref_indirection
+    SET (col_int, col_date)  = (select 6, '1973-01-01'::date)
+      , (col_text, col_bool) = (select '6 ok', false)
+RETURNING *;
+UPDATE test_dist_indirection
+    SET (col_int, col_date)  = (select 6, '1973-01-01'::date)
+      , (col_text, col_bool) = (select '6 ok', false)
+RETURNING *;
+
+UPDATE test_ref_indirection
+    SET (col_int, col_date, col_text)  = (select 7, '1974-01-01'::date, '7 ok')
+      , (col_bool) = (select true)
+RETURNING *;
+UPDATE test_dist_indirection
+    SET (col_int, col_date, col_text)  = (select 7, '1974-01-01'::date, '7 ok')
+      , (col_bool) = (select true)
+RETURNING *;
+
+UPDATE test_ref_indirection
+    SET (col_date, col_text)  = (select '1975-01-01'::date, '8 ok')
+      , (col_int) = (select 8)
       , (col_bool) = (select false)
 RETURNING *;
-UPDATE test_ref_indirection
-    SET (col_int, col_date)  = (select 2, '1970-06-06'::date)
-      , (col_text, col_bool) = (select 'not ok', false)
-RETURNING *;
 UPDATE test_dist_indirection
-    SET (col_int, col_date)  = (select 2, '1970-06-06'::date)
-      , (col_text, col_bool) = (select 'not ok', false)
+    SET (col_date, col_text)  = (select '1975-01-01'::date, '8 ok')
+      , (col_int) = (select 8)
+      , (col_bool) = (select false)
 RETURNING *;
 
 --
@@ -117,38 +143,34 @@ RETURNING *;
 --
 -- those should work
 UPDATE test_ref_indirection
-    SET (col_bool, col_text) = (SELECT true, 'ok')
+    SET (col_bool, col_text) = (SELECT true, '9 ok')
 RETURNING *;
 UPDATE test_dist_indirection
-    SET (col_bool, col_text) = (SELECT true, 'ok')
+    SET (col_bool, col_text) = (SELECT true, '9 ok')
 RETURNING *;
 
 UPDATE test_ref_indirection
-    SET (col_bool, col_text) = (SELECT true, 'ok')
+    SET (col_bool, col_text) = (SELECT false, '10 ok')
 WHERE id = 1
 RETURNING *;
 UPDATE test_dist_indirection
-    SET (col_bool, col_text) = (SELECT true, 'ok')
+    SET (col_bool, col_text) = (SELECT false, '10 ok')
 WHERE id = 1
 RETURNING *;
 
-SELECT * FROM test_ref_indirection ORDER BY id;
-SELECT * FROM test_dist_indirection ORDER BY id;
-
--- those should not
 UPDATE test_ref_indirection
-    SET (col_text, col_bool) = (SELECT 'not ok', false)
+    SET (col_text, col_bool) = (SELECT '11 ok', true)
 RETURNING *;
 UPDATE test_dist_indirection
-    SET (col_text, col_bool) = (SELECT 'not ok', false)
+    SET (col_text, col_bool) = (SELECT '11 ok', true)
 RETURNING *;
 
 UPDATE test_ref_indirection
-    SET (col_text, col_bool) = (SELECT 'not ok', false)
+    SET (col_text, col_bool) = (SELECT '12 ok', false)
 WHERE id = 2
 RETURNING *;
 UPDATE test_dist_indirection
-    SET (col_text, col_bool) = (SELECT 'not ok', false)
+    SET (col_text, col_bool) = (SELECT '12 ok', false)
 WHERE id = 2
 RETURNING *;
 
@@ -156,14 +178,14 @@ RETURNING *;
 with qq3 as (
     update test_ref_indirection
     SET (col_text, col_bool)
-      = (SELECT 'full', true)
+      = (SELECT '13', true)
     where id = 3
     returning *
 ),
 qq4 as (
     update test_ref_indirection
     SET (col_text, col_bool)
-      = (SELECT 'fully', true)
+      = (SELECT '14', false)
     where id = 4
     returning *
 )
@@ -171,14 +193,14 @@ select * from qq3 union all select * from qq4;
 with qq3 as (
     update test_dist_indirection
     SET (col_text, col_bool)
-      = (SELECT 'full', true)
+      = (SELECT '13', true)
     where id = 3
     returning *
 ),
 qq4 as (
     update test_dist_indirection
     SET (col_text, col_bool)
-      = (SELECT 'fully', true)
+      = (SELECT '14', false)
     where id = 4
     returning *
 )
@@ -201,5 +223,6 @@ SET (b,a) = (select a,b from update_test where b = 41 and c = 'car')
 WHERE a = 100 AND b = 20;
 
 -- https://github.com/citusdata/citus/pull/5692
-
+set client_min_messages to ERROR;
 DROP SCHEMA indirections CASCADE;
+
