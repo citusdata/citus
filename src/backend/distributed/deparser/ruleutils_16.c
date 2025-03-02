@@ -3525,9 +3525,6 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 	SubLink    *cur_ma_sublink;
 	List	   *ma_sublinks;
 
-	AttrNumber	previous_attnum = InvalidAttrNumber;
-	int 		paramid_increment = 0;
-
 	/*
 	 * Prepare to deal with MULTIEXPR assignments: collect the source SubLinks
 	 * into a list.  We expect them to appear, in ID order, in resjunk tlist
@@ -3536,13 +3533,21 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 	ma_sublinks = NIL;
 	if (query->hasSubLinks)		/* else there can't be any */
 	{
+		bool saw_junk = false;
+		bool need_to_sort_target_list = false;
+		int previous_paramid = 0;
+
 		foreach(l, targetList)
 		{
 			TargetEntry *tle = (TargetEntry *) lfirst(l);
 
+			// elog(WARNING, "TOP node to string: %s", nodeToString(tle->expr));
+			// elog(WARNING, "TOP node type: %d", (int) nodeTag(tle->expr));
+
 			if (tle->resjunk && IsA(tle->expr, SubLink))
 			{
 				SubLink    *sl = (SubLink *) tle->expr;
+				saw_junk = true;
 
 				if (sl->subLinkType == MULTIEXPR_SUBLINK)
 				{
@@ -3550,7 +3555,30 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 					Assert(sl->subLinkId == list_length(ma_sublinks));
 				}
 			}
+			else if (!tle->resjunk)
+			{
+				int paramid = 0;
+				if (saw_junk)
+					elog(ERROR, "out of order target list");
+
+				paramid = GetParamId((Node *) tle->expr);
+				if (paramid < previous_paramid)
+					need_to_sort_target_list = true;
+
+				previous_paramid = paramid;
+			}
 		}
+
+		/*
+		 * reorder the target list on left side of the update:
+		 * SET () = (SELECT )
+		 * reordering the SELECT side only does not work, consider a case like:
+		 * SET (col_1, col3) = (SELECT 1, 3), (col_2) = (SELECT 2)
+		 * Then default order will lead to:
+		 * SET (col_1, col2) = (SELECT 1, 3), (col_3) = (SELECT 2)
+		 */
+		if (need_to_sort_target_list)
+			list_sort(targetList, target_list_cmp);
 	}
 	next_ma_cell = list_head(ma_sublinks);
 	cur_ma_sublink = NULL;
@@ -3650,54 +3678,18 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 		 */
 		if (cur_ma_sublink != NULL)
 		{
-			AttrNumber attnum = InvalidAttrNumber;
-			if (IsA(expr, Param))
-			{
-				Param *param = (Param *) expr;
-				attnum = param->paramid + paramid_increment;
-			}
-			else if (IsA(expr, FuncExpr))
-			{
-				FuncExpr *func = (FuncExpr *) expr;
-				ListCell *lc;
-
-				/* Iterate through the arguments of the FuncExpr */
-				foreach(lc, func->args)
-				{
-					Node *arg = (Node *) lfirst(lc);
-
-					/* Check if the argument is a PARAM node */
-					if (IsA(arg, Param))
-					{
-						Param *param = (Param *) arg;
-						attnum = param->paramid + paramid_increment;
-
-						break;  /* Exit loop once we find the PARAM node */
-					}
-				}
-			}
-
-			if (previous_attnum >= attnum)
-				ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-								errmsg(
-									"cannot plan distributed UPDATE SET (..) = (SELECT ...) query when not sorted by physical order"),
-								errhint("Sort the columns on the left side by physical order.")));
-
-			previous_attnum = attnum;
-
 			if (--remaining_ma_columns > 0)
 				continue;		/* not the last column of multiassignment */
-
 			appendStringInfoChar(buf, ')');
 			expr = (Node *) cur_ma_sublink;
 			cur_ma_sublink = NULL;
-			paramid_increment = previous_attnum;
 		}
 
 		appendStringInfoString(buf, " = ");
 
 		get_rule_expr(expr, context, false);
 	}
+	elog(DEBUG4, "rewriten query: %s", buf->data);
 }
 
 /* ----------
