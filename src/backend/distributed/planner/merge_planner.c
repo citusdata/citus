@@ -1583,7 +1583,7 @@ IsLocalTableModification(Oid targetRelationId, Query *query, uint64 shardId,
 		return true;
 	}
 
-	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalTables(rteProperties))
+	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalOrReferenceTables(rteProperties))
 	{
 		return true;
 	}
