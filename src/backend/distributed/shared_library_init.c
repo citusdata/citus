@@ -105,6 +105,7 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/stat_counters.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/time_constants.h"
@@ -511,6 +512,8 @@ _PG_init(void)
 
 	InitializeMultiTenantMonitorSMHandleManagement();
 
+	InitializeStatCountersArrayMem();
+
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
@@ -622,6 +625,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
+	RequestAddinShmemSpace(StatCountersArrayShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 }
 

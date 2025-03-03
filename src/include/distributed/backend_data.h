@@ -48,6 +48,7 @@ typedef struct BackendData
 
 extern void BackendManagementShmemInit(void);
 extern size_t BackendManagementShmemSize(void);
+extern bool UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId);
 extern void InitializeBackendManagement(void);
 extern int TotalProcCount(void);
 extern void InitializeBackendData(const char *applicationName);

@@ -171,6 +171,7 @@
 #include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"
@@ -3215,6 +3216,7 @@ ConnectionStateMachine(WorkerSession *session)
 					 workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL))
 				{
 					/* a task has failed due to this connection failure */
+					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					ReportConnectionError(connection, ERROR);
 				}
 				else if (workerPool->activeConnectionCount > 0 ||
@@ -3228,11 +3230,34 @@ ConnectionStateMachine(WorkerSession *session)
 					 *
 					 * Similarly when the pool is failed over to local execution, warning
 					 * the user just creates chatter.
+					 *
+					 * And from "connection stats" perspective, we think of this as a
+					 * an optional connection failure. We could also think of this as
+					 * part of a separate bucket like "STAT_CONNECTION_FAILED_BUT_OK" but
+					 * we don't want to complicate the things from the users' perspective.
+					 * Plus, in a sense, connections to local node can be thought as
+					 * optional connections as long as we're allowed to failover to local
+					 * execution as in here.
 					 */
+					IncrementStatCounter(STAT_CONNECTION_OPTIONAL_SKIPPED);
 					ReportConnectionError(connection, DEBUG1);
 				}
 				else
 				{
+					/*
+					 * Transaction was not marked as critical and we're not asked
+					 * to fail on any failure, so we emit a warning instead of
+					 * throwing an error here.
+					 *
+					 * However, even though this is the case, we still treat this
+					 * as a failure from "connection stats" perspective because we
+					 * don't have a way to recover from this failure since we both
+					 * don't have any active connections to the node and we cannot
+					 * also failover to local execution. So this means that, the
+					 * executor cannot serve the user's request, even though they're
+					 * okay with that.
+					 */
+					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					ReportConnectionError(connection, WARNING);
 				}
 

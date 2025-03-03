@@ -39,6 +39,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/stat_counters.h"
 #include "distributed/time_constants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
@@ -354,6 +355,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
+			IncrementStatCounter(STAT_CONNECTION_REUSED);
 			return connection;
 		}
 	}
@@ -394,6 +396,8 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 			/* do not track the connection anymore */
 			dlist_delete(&connection->connectionNode);
 			pfree(connection);
+
+			IncrementStatCounter(STAT_CONNECTION_OPTIONAL_SKIPPED);
 
 			return NULL;
 		}
@@ -1025,6 +1029,11 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 
 			if (event->events & WL_POSTMASTER_DEATH)
 			{
+				/*
+				 * We don't increment the failed connection stats counter here
+				 * because this is not a connection failure, but a postmaster
+				 * death.
+				 */
 				ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
 			}
 
@@ -1041,6 +1050,11 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 					 * reset the memory context
 					 */
 					MemoryContextDelete(MemoryContextSwitchTo(oldContext));
+
+					/*
+					 * Don't increment the failed connection stats counter here
+					 * because user cancelled the query or such.
+					 */
 					return;
 				}
 
@@ -1071,6 +1085,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 											 eventMask, NULL);
 					if (!success)
 					{
+						IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 						ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 										errmsg("connection establishment for node %s:%d "
 											   "failed", connection->hostname,
@@ -1113,6 +1128,28 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				 * Close all connections that have not been fully established.
 				 */
 				CloseNotReadyMultiConnectionStates(connectionStates);
+
+				/*
+				 * We treat this as a failure from connection stats counter perspective
+				 * since the callers of this function don't re-try the connections that
+				 * didn't complete establishment.
+				 *
+				 * And since we know that this is true for all of the connections that
+				 * didn't complete establishment, we increment the failed connection
+				 * counter for all of them.
+				 */
+				int connectingConnectionCount = 0;
+				MultiConnectionPollState *connectionState = NULL;
+				foreach_ptr(connectionState, connectionStates)
+				{
+					if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTING)
+					{
+						connectingConnectionCount++;
+					}
+				}
+
+				IncrementStatCounterMany(STAT_CONNECTION_ESTABLISHMENT_FAILED,
+										 connectingConnectionCount);
 
 				break;
 			}
@@ -1591,6 +1628,8 @@ MarkConnectionConnected(MultiConnection *connection)
 	{
 		INSTR_TIME_SET_CURRENT(connection->connectionEstablishmentEnd);
 	}
+
+	IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED);
 }
 
 
