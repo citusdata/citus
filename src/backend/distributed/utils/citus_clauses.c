@@ -41,6 +41,7 @@ static bool ShouldEvaluateExpression(Expr *expression);
 static bool ShouldEvaluateFunctions(CoordinatorEvaluationContext *evaluationContext);
 static void FixFunctionArguments(Node *expr);
 static bool FixFunctionArgumentsWalker(Node *expr, void *context);
+static bool CheckContainsMultiexprOrSublink(Node *expr);
 
 
 /*
@@ -99,15 +100,15 @@ PartiallyEvaluateExpression(Node *expression,
 	}
 
 	NodeTag nodeTag = nodeTag(expression);
-	if (nodeTag == T_Param)
+	if (CheckContainsMultiexprOrSublink(expression))
 	{
-		Param *param = (Param *) expression;
-		if (param->paramkind == PARAM_SUBLINK)
-		{
-			/* ExecInitExpr cannot handle PARAM_SUBLINK */
-			return expression;
-		}
+		/* ExecInitExpr cannot handle PARAM_MULTIEXPR and PARAM_SUBLINK */
+		return expression;
+	}
 
+	/* ExecInitExpr cannot handle PARAM_MULTIEXPR and PARAM_SUBLINK but we have guards */
+	else if (nodeTag == T_Param)
+	{
 		return (Node *) citus_evaluate_expr((Expr *) expression,
 											exprType(expression),
 											exprTypmod(expression),
@@ -536,4 +537,44 @@ FixFunctionArgumentsWalker(Node *expr, void *context)
 	}
 
 	return expression_tree_walker(expr, FixFunctionArgumentsWalker, NULL);
+}
+
+
+/*
+ * Recursively search an expression for a Param with sublink
+ */
+static bool
+CheckContainsMultiexprOrSublink(Node *expr)
+{
+	if (expr == NULL)
+	{
+		return false;
+	}
+
+	/* If it's a Param, return its attnum */
+	else if (IsA(expr, Param))
+	{
+		Param *param = (Param *) expr;
+		if (param->paramkind == PARAM_MULTIEXPR ||
+			param->paramkind == PARAM_SUBLINK)
+		{
+			return true;
+		}
+	}
+
+	/* If it's a FuncExpr, search in arguments */
+	else if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *func = (FuncExpr *) expr;
+		ListCell *lc;
+
+		foreach(lc, func->args)
+		{
+			if (CheckContainsMultiexprOrSublink((Node *) lfirst(lc)))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
