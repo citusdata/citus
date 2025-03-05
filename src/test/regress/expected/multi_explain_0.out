@@ -3214,6 +3214,19 @@ SET auto_explain.log_min_duration = 0;
 set auto_explain.log_analyze to true;
 -- the following should not be locally executed since explain analyze is on
 select * from test_ref_table;
+CREATE TABLE test_auto_explain.test_params
+( coll1 int8 NULL,
+  coll2 int4 NOT NULL);
+SELECT create_distributed_table('test_auto_explain.test_params', 'coll1');
+
+CREATE OR REPLACE PROCEDURE test_auto_explain.test_delete_from(p_coll2 int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+DELETE FROM test_auto_explain.test_params
+WHERE coll2 = p_coll2;
+END;$$;
+CALL test_auto_explain.test_delete_from(20240401);
 DROP SCHEMA test_auto_explain CASCADE;
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
