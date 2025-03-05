@@ -431,6 +431,11 @@ PrepareAndSetTransactionClock(void)
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
 		WorkerNode *workerNode = FindWorkerNode(connection->hostname, connection->port);
+		if (!workerNode)
+		{
+			ereport(WARNING, errmsg("Worker node is missing"));
+			continue;
+		}
 
 		/* Skip the node if we already in the list */
 		if (list_member_int(nodeList, workerNode->groupId))
