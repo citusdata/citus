@@ -106,13 +106,6 @@ ORDER BY table_name, id;
  local2_bydefault | 5000 | yyyyy    |            2
 (8 rows)
 
+-- Cleanup
+SET client_min_messages TO WARNING;
 DROP SCHEMA issue_7887 CASCADE;
-NOTICE:  drop cascades to 8 other objects
-DETAIL:  drop cascades to table local1_102010
-drop cascades to table reference1
-drop cascades to table reference1_102008
-drop cascades to table local2_102009
-drop cascades to table local2
-drop cascades to table local1
-drop cascades to table local2_bydefault_102011
-drop cascades to table local2_bydefault
