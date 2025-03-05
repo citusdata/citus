@@ -706,8 +706,12 @@ TaskConcurrentCancelCheck(TaskExecutionContext *taskExecutionContext)
 	BackgroundExecutorHashEntry *handleEntry = taskExecutionContext->handleEntry;
 	BackgroundTask *task = GetBackgroundTaskByTaskId(handleEntry->taskid);
 	taskExecutionContext->task = task;
+	if (!task)
+	{
+		ereport(ERROR, (errmsg("unexpected missing task id: %ld", handleEntry->taskid)));
+	}
 
-	if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING)
+	if (task->status == BACKGROUND_TASK_STATUS_CANCELLING)
 	{
 		/*
 		 * being in that step means that a concurrent cancel or removal happened. we should
