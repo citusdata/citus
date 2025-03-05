@@ -64,7 +64,6 @@ INSERT INTO local2_bydefault(local1fk, reference1fk)
 -- Show inserted row in local2_bydefault
 SELECT * FROM local2_bydefault;
 
-
 --
 -- Overriding a BY DEFAULT identity with user value
 -- (which is allowed even without OVERRIDING clause).
