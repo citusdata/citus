@@ -31,14 +31,14 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "16.3"
-      image_suffix: "-v13fd57c"
-      pg14_version: '{ "major": "14", "full": "14.12" }'
-      pg15_version: '{ "major": "15", "full": "15.7" }'
-      pg16_version: '{ "major": "16", "full": "16.3" }'
-      upgrade_pg_versions: "14.12-15.7-16.3"
+      sql_snapshot_pg_version: "16.6"
+      image_suffix: "-v5779674"
+      pg14_version: '{ "major": "14", "full": "14.15" }'
+      pg15_version: '{ "major": "15", "full": "15.10" }'
+      pg16_version: '{ "major": "16", "full": "16.6" }'
+      upgrade_pg_versions: "14.15-15.10-16.6"
     steps:
-      # Since GHA jobs needs at least one step we use a noop step here.
+      # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
         run: echo 'noop'
   check-sql-snapshots:
@@ -48,7 +48,7 @@ jobs:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
@@ -125,7 +125,7 @@ jobs:
     - name: Build
       run: "./ci/build-citus.sh"
       shell: bash
-    - uses: actions/upload-artifact@v3.1.1
+    - uses: actions/upload-artifact@v4.6.0
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
@@ -284,10 +284,12 @@ jobs:
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
@@ -335,6 +337,8 @@ jobs:
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
@@ -380,10 +384,12 @@ jobs:
         done;
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_citus_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
     if: always()
@@ -399,10 +405,11 @@ jobs:
       - test-citus-upgrade
       - test-pg-upgrade
     steps:
-      - uses: actions/download-artifact@v3.0.1
+      - uses: actions/download-artifact@v4.1.8
         with:
-          name: "codeclimate"
-          path: "codeclimate"
+          pattern: codeclimate*
+          path: codeclimate
+          merge-multiple: true
       - name: Upload coverage results to Code Climate
         run: |-
           cc-test-reporter sum-coverage codeclimate/*.json -o total.json
@@ -444,7 +451,7 @@ jobs:
           chmod +x run_hammerdb.sh
           run_hammerdb.sh citusbot_tpcc_benchmark_rg
   prepare_parallelization_matrix_32:
-    name: Parallel 32
+    name: Prepare parallelization matrix
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     needs: test-flakyness-pre
     runs-on: ubuntu-20.04
@@ -516,6 +523,7 @@ jobs:
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4.1.8
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-
@@ -529,3 +537,5 @@ jobs:
       shell: bash
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: test_flakyness_parallel_${{ matrix.id }}
