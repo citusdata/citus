@@ -62,9 +62,15 @@ def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_sched
 
     install_citus(config.post_tar_path)
 
+    # disable 2pc recovery for all nodes to work around https://github.com/citusdata/citus/issues/7875
+    disable_2pc_recovery_for_all_nodes(config.bindir, config)
+
     restart_databases(config.bindir, config.datadir, config.mixed_mode, config)
     run_alter_citus(config.bindir, config.mixed_mode, config)
     verify_upgrade(config, config.mixed_mode, config.node_name_to_ports.values())
+
+    # re-enable 2pc recovery for all nodes
+    enable_2pc_recovery_for_all_nodes(config.bindir, config)
 
     run_test_on_coordinator(config, after_upgrade_schedule)
     remove_citus(config.post_tar_path)
@@ -144,6 +150,18 @@ def restart_database(pg_path, abs_data_path, node_name, node_ports, logfile_pref
         os.path.join(abs_data_path, common.logfile_name(logfile_prefix, node_name)),
     ]
     subprocess.run(command, check=True)
+
+
+def disable_2pc_recovery_for_all_nodes(pg_path, config):
+    for port in config.node_name_to_ports.values():
+        utils.psql(pg_path, port, "ALTER SYSTEM SET citus.recover_2pc_interval TO -1;")
+        utils.psql(pg_path, port, "SELECT pg_reload_conf();")
+
+
+def enable_2pc_recovery_for_all_nodes(pg_path, config):
+    for port in config.node_name_to_ports.values():
+        utils.psql(pg_path, port, "ALTER SYSTEM RESET citus.recover_2pc_interval;")
+        utils.psql(pg_path, port, "SELECT pg_reload_conf();")
 
 
 def run_alter_citus(pg_path, mixed_mode, config):

@@ -81,29 +81,9 @@ SELECT create_distributed_table('tenk1', 'unique1');
 (1 row)
 
 SET citus.log_remote_commands TO on;
-EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SAVEPOINT citus_explain_savepoint
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, GENERIC_PLAN TRUE, TIMING FALSE, SUMMARY FALSE, FORMAT TEXT) SELECT unique1 FROM pg16.tenk1_950001 tenk1 WHERE (thousand OPERATOR(pg_catalog.=) 1000)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ROLLBACK TO SAVEPOINT citus_explain_savepoint
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-                                   QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on tenk1_950001 tenk1  (cost=0.00..35.50 rows=10 width=4)
-               Filter: (thousand = 1000)
-(7 rows)
-
-EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = $1;
+ERROR:  EXPLAIN GENERIC_PLAN is currently not supported for Citus tables
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = $1;
 ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
 SET citus.log_remote_commands TO off;
 -- Proper error when creating statistics without a name on a Citus table

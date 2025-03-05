@@ -78,11 +78,5 @@ SELECT * FROM public.check_database_on_all_nodes('test_locale_provider') ORDER B
  worker node (remote) | {"database_properties": {"datacl": null, "datname": "test_locale_provider", "datctype": "C", "encoding": "UTF8", "datcollate": "C", "tablespace": "pg_default", "daticurules": null, "datallowconn": true, "datconnlimit": -1, "daticulocale": null, "datistemplate": false, "database_owner": "postgres", "datcollversion": null, "datlocprovider": "c"}, "pg_dist_object_record_for_db_exists": true, "stale_pg_dist_object_record_for_a_db_exists": false}
 (3 rows)
 
-\c test_locale_provider - - :worker_2_port
-set citus.enable_create_database_propagation to on;
-create database unsupported_option_from_non_main_db with oid = 12345;
-ERROR:  CREATE DATABASE option "oid" is not supported
-\c regression - - :master_port
-set citus.enable_create_database_propagation to on;
 drop database test_locale_provider;
 \c - - - :master_port

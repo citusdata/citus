@@ -61,6 +61,7 @@ extern void AssignGlobalPID(const char *applicationName);
 extern uint64 GetGlobalPID(void);
 extern void SetBackendDataDatabaseId(void);
 extern void SetBackendDataGlobalPID(uint64 gpid);
+extern void SetBackendDataDistributedCommandOriginator(bool distributedCommandOriginator);
 extern uint64 ExtractGlobalPID(const char *applicationName);
 extern int ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk);
 extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
