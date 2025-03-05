@@ -196,7 +196,6 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 (1 row)
 
 \c - - - :master_port
-create role test_admin_role;
 -- test grants with distributed and non-distributed roles
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
@@ -204,6 +203,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 
 (1 row)
 
+create role test_admin_role;
 CREATE ROLE dist_role_1 SUPERUSER;
 CREATE ROLE dist_role_2;
 CREATE ROLE dist_role_3;
@@ -225,6 +225,10 @@ SET citus.enable_create_role_propagation TO ON;
 grant dist_role_3,dist_role_1 to test_admin_role with admin option;
 SET ROLE dist_role_1;
 GRANT non_dist_role_1 TO non_dist_role_2;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no granted roles are distributed, the GRANT command will not be propagated to other nodes.
 SET citus.enable_create_role_propagation TO OFF;
 grant dist_role_1 to non_dist_role_1 with admin option;
 SET ROLE non_dist_role_1;
@@ -232,7 +236,11 @@ GRANT dist_role_1 TO dist_role_2 granted by non_dist_role_1;
 RESET ROLE;
 SET citus.enable_create_role_propagation TO ON;
 GRANT dist_role_3 TO non_dist_role_3 granted by test_admin_role;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
 GRANT non_dist_role_4 TO dist_role_4;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no granted roles are distributed, the GRANT command will not be propagated to other nodes.
 GRANT dist_role_3 TO dist_role_4 granted by test_admin_role;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
@@ -300,6 +308,8 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 (5 rows)
 
 REVOKE dist_role_3 from non_dist_role_3 granted by test_admin_role cascade;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
 SELECT result FROM run_command_on_all_nodes(
   $$
   SELECT json_agg(q.* ORDER BY member) FROM (
@@ -320,10 +330,9 @@ revoke dist_role_3,dist_role_1 from test_admin_role cascade;
 drop role test_admin_role;
 \c - - - :worker_1_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
-      role       |   member    | grantor  | admin_option
+ role | member | grantor | admin_option
 ---------------------------------------------------------------------
- non_dist_role_4 | dist_role_4 | postgres | f
-(1 row)
+(0 rows)
 
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_%' ORDER BY 1;
      rolname
@@ -435,15 +444,13 @@ SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::
 
 \c - - - :worker_1_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_mixed%' ORDER BY 1, 2;
-      role       |    member    | grantor  | admin_option
+     role     |    member    | grantor  | admin_option
 ---------------------------------------------------------------------
- dist_mixed_1    | dist_mixed_3 | postgres | f
- dist_mixed_1    | dist_mixed_4 | postgres | f
- dist_mixed_2    | dist_mixed_3 | postgres | f
- dist_mixed_2    | dist_mixed_4 | postgres | f
- nondist_mixed_1 | dist_mixed_3 | postgres | f
- nondist_mixed_1 | dist_mixed_4 | postgres | f
-(6 rows)
+ dist_mixed_1 | dist_mixed_3 | postgres | f
+ dist_mixed_1 | dist_mixed_4 | postgres | f
+ dist_mixed_2 | dist_mixed_3 | postgres | f
+ dist_mixed_2 | dist_mixed_4 | postgres | f
+(4 rows)
 
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_mixed%' ORDER BY 1;
      rolname
@@ -571,7 +578,15 @@ HINT:  Connect to other nodes directly to manually create all necessary users an
 SET citus.enable_create_role_propagation TO ON;
 CREATE ROLE dist_cascade;
 GRANT nondist_cascade_1 TO nondist_cascade_2;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no granted roles are distributed, the GRANT command will not be propagated to other nodes.
 GRANT nondist_cascade_2 TO nondist_cascade_3;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no grantees are distributed, the GRANT command will not be propagated to other nodes.
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no granted roles are distributed, the GRANT command will not be propagated to other nodes.
 SELECT objid::regrole FROM pg_catalog.pg_dist_object WHERE classid='pg_authid'::regclass::oid AND objid::regrole::text LIKE '%cascade%' ORDER BY 1;
     objid
 ---------------------------------------------------------------------
@@ -605,6 +620,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 (1 row)
 
 GRANT nondist_cascade_3 TO dist_cascade;
+NOTICE:  not propagating GRANT command to other nodes
+HINT:  Since no granted roles are distributed, the GRANT command will not be propagated to other nodes.
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
@@ -643,8 +660,7 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 ---------------------------------------------------------------------
  nondist_cascade_1 | nondist_cascade_2 | postgres | f
  nondist_cascade_2 | nondist_cascade_3 | postgres | f
- nondist_cascade_3 | dist_cascade      | postgres | f
-(3 rows)
+(2 rows)
 
 \c - - - :worker_2_port
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%cascade%' ORDER BY 1;
@@ -675,7 +691,7 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 (0 rows)
 
 GRANT existing_role_1, nonexisting_role_1 TO existing_role_2, nonexisting_role_2;
-ERROR:  role "nonexisting_role_2" does not exist
+ERROR:  role "nonexisting_role_1" does not exist
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%existing%' ORDER BY 1, 2;
  role | member | grantor | admin_option
 ---------------------------------------------------------------------
