@@ -55,7 +55,6 @@ ORDER BY 1;
  function citus_finish_pg_upgrade()
  function citus_get_active_worker_nodes()
  function citus_get_node_clock()
- function citus_get_stat_counters()
  function citus_get_transaction_clock()
  function citus_internal.acquire_citus_advisory_object_class_lock(integer,cstring)
  function citus_internal.add_colocation_metadata(integer,integer,integer,regtype,oid)
@@ -141,7 +140,6 @@ ORDER BY 1;
  function citus_relation_size(regclass)
  function citus_remote_connection_stats()
  function citus_remove_node(text,integer)
- function citus_reset_stat_counters()
  function citus_run_local_command(text)
  function citus_schema_distribute(regnamespace)
  function citus_schema_move(regnamespace,integer,citus.shard_transfer_mode)
@@ -159,6 +157,8 @@ ORDER BY 1;
  function citus_shards_on_worker()
  function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode)
  function citus_stat_activity()
+ function citus_stat_counters()
+ function citus_stat_counters_reset()
  function citus_stat_statements()
  function citus_stat_statements_reset()
  function citus_stat_tenants(boolean)
@@ -364,10 +364,11 @@ ORDER BY 1;
  view citus_shards
  view citus_shards_on_worker
  view citus_stat_activity
+ view citus_stat_counters
  view citus_stat_statements
  view citus_stat_tenants
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(359 rows)
+(360 rows)
 
