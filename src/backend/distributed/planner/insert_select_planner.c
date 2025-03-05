@@ -10,8 +10,10 @@
 
 #include "postgres.h"
 
+#include "catalog/dependency.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
+#include "commands/sequence.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -1128,7 +1130,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 												oldInsertTargetEntry->resname);
 				bool missingOk = false;
 
-				Oid seqOid = getIdentitySequence(targetRel, attrNum, missingOk);
+				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(targetRel), attrNum, missingOk);
 				if (!OidIsValid(seqOid))
 				{
 					table_close(targetRel, AccessShareLock);
