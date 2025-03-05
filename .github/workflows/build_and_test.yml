@@ -197,11 +197,11 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: installcheck
+          - make: check-cdc
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg15_version }}
-          - make: installcheck
+          - make: check-cdc
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg16_version }}
