@@ -239,26 +239,15 @@ AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
 {
 	const Oid userId = GetUserId();
 
-	bool showAllBackends = superuser() || is_member_of_role(userId, ROLE_PG_MONITOR);
-
 	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
 		PGPROC *currentProc = GetPGProcByNumber(backendIndex);
 
 		/*
-		 * Unless the user has a role that allows seeing all stats (superuser,
-		 * pg_monitor), we only follow pg_stat_statements owner checks.
-		 */
-		bool showCurrentBackendDetails = showAllBackends ||
-										 UserHasPermissionToViewStatsOf(userId,
-																		currentProc->
-																		roleId);
-
-		/*
 		 * We imitate pg_stat_activity such that if a user doesn't have enough
-		 * privileges, then we don't show the backend details.
+		 * privileges, then we don't collect the stats for that backend.
 		 */
-		if (showCurrentBackendDetails)
+		if (UserHasPermissionToViewStatsOf(userId, currentProc->roleId))
 		{
 			for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
 			{
