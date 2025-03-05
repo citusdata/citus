@@ -224,6 +224,7 @@ DEPS = {
         ],
         repeatable=False,
     ),
+    "multi_follower_sanity_check": TestDeps("multi_follower_schedule"),
 }
 
 
@@ -324,6 +325,8 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
         "failure"
     ):
         make_recipe = "check-failure-custom-schedule"
+    elif dependencies.schedule == "multi_follower_schedule":
+        make_recipe = "check-follower-cluster"
     else:
         make_recipe = "check-custom-schedule"
 
@@ -359,6 +362,9 @@ def default_base_schedule(test_schedule, args):
 
     if "operations" in test_schedule:
         return "minimal_schedule"
+
+    if "follower" in test_schedule:
+        return "multi_follower_schedule"
 
     if "pg_upgrade" in test_schedule:
         return "minimal_pg_upgrade_schedule"
@@ -416,7 +422,26 @@ def find_test_schedule_and_line(test_name, args):
 
 def test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
-        return DEPS[test_name]
+        # Since enable_ddl_propagation is a must to execute tests,
+        # below block adds enable_ddl_propagation as a dependency
+        # as the first element of extra tests if schedule is not
+        # configured. We don't do so if the schedule is confugured
+        # because all base schedules include enable_ddl_propagation
+        # anyway.
+        test_deps = DEPS[test_name]
+        ddl_propagation_test = (
+            "isolation_enable_ddl_propagation"
+            if test_name.startswith("isolation")
+            else "enable_ddl_propagation"
+        )
+
+        if test_deps is not None and test_deps.schedule is None:
+            test_deps.direct_extra_tests = [
+                ddl_propagation_test
+            ] + test_deps.direct_extra_tests
+            return test_deps
+        else:
+            return DEPS[test_name]
 
     if "citus_upgrade" in test_schedule:
         return TestDeps(None, citus_upgrade_infra=True)
