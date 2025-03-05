@@ -1237,7 +1237,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 Expr *
 MakeNextValExprForIdentity(Oid seq_relid)
 {
-
 	Const *seq_const = makeConst(
 		REGCLASSOID,                     /* type for regclass */
 		-1,                              /* no specific collation */
