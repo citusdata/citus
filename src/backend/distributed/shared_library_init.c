@@ -2391,7 +2391,7 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&SkipAdvisoryLockPermissionChecks,
 		false,
-		GUC_SUPERUSER_ONLY,
+		PGC_SUSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
