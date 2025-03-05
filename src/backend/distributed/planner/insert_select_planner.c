@@ -1071,8 +1071,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		TargetEntry *newSubqueryTargetEntry = NULL;
 		AttrNumber originalAttrNo = get_attnum(insertRelationId,
 											   oldInsertTargetEntry->resname);
-										   
-																					  
+
 
 		/* see transformInsertRow() for the details */
 		if (IsA(oldInsertTargetEntry->expr, SubscriptingRef) ||
@@ -1112,19 +1111,21 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		else
 		{
 			/*
-			* Check if the target column is an identity column and whether the query did NOT
-			* specify OVERRIDING SYSTEM VALUE. If both conditions are true, we need to consider
-			* generating a default sequence value.
-			*/
-			if (IsIdentityColumn(insertRelationId, oldInsertTargetEntry->resname) && originalQuery->override != OVERRIDING_SYSTEM_VALUE)
+			 * Check if the target column is an identity column and whether the query did NOT
+			 * specify OVERRIDING SYSTEM VALUE. If both conditions are true, we need to consider
+			 * generating a default sequence value.
+			 */
+			if (IsIdentityColumn(insertRelationId, oldInsertTargetEntry->resname) &&
+				originalQuery->override != OVERRIDING_SYSTEM_VALUE)
 			{
-				/* 
-				* Open the target relation (table) with an AccessShareLock to safely access metadata,
-				* such as the identity sequence.
-				*/
+				/*
+				 * Open the target relation (table) with an AccessShareLock to safely access metadata,
+				 * such as the identity sequence.
+				 */
 				Relation targetRel = table_open(insertRelationId, AccessShareLock);
 
-				AttrNumber attrNum = get_attnum(insertRelationId, oldInsertTargetEntry->resname);
+				AttrNumber attrNum = get_attnum(insertRelationId,
+												oldInsertTargetEntry->resname);
 				bool missingOk = false;
 
 				Oid seqOid = getIdentitySequence(targetRel, attrNum, missingOk);
@@ -1137,23 +1138,23 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 
 				/* Build an expression tree that represents: nextval('sequence_oid'::regclass) */
 				Expr *defaultExpr = MakeNextValExprForIdentity(seqOid);
-		
+
 				/* Create a new target entry that uses the default expression to generate the next sequence value */
 				newSubqueryTargetEntry = makeTargetEntry(
 					defaultExpr,
 					resno,
 					oldInsertTargetEntry->resname,
 					oldInsertTargetEntry->resjunk
-				);
+					);
 
 				table_close(targetRel, AccessShareLock);
-			} 
+			}
 			else
 			{
 				/*
-				* For non-identity columns, or if the query used OVERRIDING SYSTEM VALUE,
-				* use the provided expression without modification.
-				*/
+				 * For non-identity columns, or if the query used OVERRIDING SYSTEM VALUE,
+				 * use the provided expression without modification.
+				 */
 				newSubqueryTargetEntry = makeTargetEntry(oldInsertTargetEntry->expr,
 														 resno,
 														 oldInsertTargetEntry->resname,
@@ -1233,36 +1234,35 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 Expr *
 MakeNextValExprForIdentity(Oid seq_relid)
 {
-    Const   *seq_const;
-    List    *func_args;
-    Oid      nextval_oid;
+	List *func_args;
+	Oid nextval_oid;
 
-    seq_const = makeConst(
-                    REGCLASSOID,         /* type for regclass */
-                    -1,                  /* no specific collation */
-                    InvalidOid,          /* default collation */
-                    sizeof(Oid),         /* size of the Oid */
-                    ObjectIdGetDatum(seq_relid),
-                    false,               /* not null */
-                    true                 /* pass by value */
-                );
+	Const *seq_const = makeConst(
+		REGCLASSOID,                     /* type for regclass */
+		-1,                              /* no specific collation */
+		InvalidOid,                      /* default collation */
+		sizeof(Oid),                     /* size of the Oid */
+		ObjectIdGetDatum(seq_relid),
+		false,                           /* not null */
+		true                             /* pass by value */
+		);
 
-    func_args = list_make1(seq_const);
-    nextval_oid = LookupFuncName(
-                      list_make1(makeString("nextval")),
-                      1,
-                      (Oid[]){ REGCLASSOID },
-                      false
-                  );
+	func_args = list_make1(seq_const);
+	nextval_oid = LookupFuncName(
+		list_make1(makeString("nextval")),
+		1,
+		(Oid[]) { REGCLASSOID },
+		false
+		);
 
-    return (Expr *) makeFuncExpr(
-        nextval_oid,        /* OID of nextval() */
-        INT8OID,            /* nextval returns int8 */
-        func_args,          /* arguments for nextval() */
-        InvalidOid,         /* no specific collation */
-        InvalidOid,
-        COERCE_EXPLICIT_CALL
-    );
+	return (Expr *) makeFuncExpr(
+		nextval_oid,        /* OID of nextval() */
+		INT8OID,            /* nextval returns int8 */
+		func_args,          /* arguments for nextval() */
+		InvalidOid,         /* no specific collation */
+		InvalidOid,
+		COERCE_EXPLICIT_CALL
+		);
 }
 
 
@@ -1272,36 +1272,42 @@ MakeNextValExprForIdentity(Oid seq_relid)
 bool
 IsIdentityColumn(Oid relid, const char *colName)
 {
-    /* Check if colName is non-null (optional, if colName can be NULL) */
-    if (colName == NULL)
-        return false;
+	/* Check if colName is non-null (optional, if colName can be NULL) */
+	if (colName == NULL)
+	{
+		return false;
+	}
 
-    /* Get the attribute number for the given column name */
-    AttrNumber attrNum = get_attnum(relid, colName);
-    if (attrNum == InvalidAttrNumber)
-        return false;
+	/* Get the attribute number for the given column name */
+	AttrNumber attrNum = get_attnum(relid, colName);
+	if (attrNum == InvalidAttrNumber)
+	{
+		return false;
+	}
 
-    /* Open the relation to access its metadata */
-    Relation rel = RelationIdGetRelation(relid);
-    if (!RelationIsValid(rel))
-        return false;
+	/* Open the relation to access its metadata */
+	Relation rel = RelationIdGetRelation(relid);
+	if (!RelationIsValid(rel))
+	{
+		return false;
+	}
 
-    /* Ensure the attribute number is within the valid range */
-    if (attrNum <= 0 || attrNum > rel->rd_att->natts)
-    {
-        RelationClose(rel);
-        return false;
-    }
+	/* Ensure the attribute number is within the valid range */
+	if (attrNum <= 0 || attrNum > rel->rd_att->natts)
+	{
+		RelationClose(rel);
+		return false;
+	}
 
-    /* Fetch the attribute metadata (attributes are 0-indexed) */
-    Form_pg_attribute attr = TupleDescAttr(rel->rd_att, attrNum - 1);
+	/* Fetch the attribute metadata (attributes are 0-indexed) */
+	Form_pg_attribute attr = TupleDescAttr(rel->rd_att, attrNum - 1);
 
-    /* Determine if the column is defined as an identity column */
-    bool is_identity = (attr->attidentity == ATTRIBUTE_IDENTITY_ALWAYS ||
-                        attr->attidentity == ATTRIBUTE_IDENTITY_BY_DEFAULT);
+	/* Determine if the column is defined as an identity column */
+	bool is_identity = (attr->attidentity == ATTRIBUTE_IDENTITY_ALWAYS ||
+						attr->attidentity == ATTRIBUTE_IDENTITY_BY_DEFAULT);
 
-    RelationClose(rel);
-    return is_identity;
+	RelationClose(rel);
+	return is_identity;
 }
 
 

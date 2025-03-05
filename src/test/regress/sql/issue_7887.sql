@@ -35,7 +35,7 @@ INSERT INTO local2(local1fk, reference1fk)
 SELECT * FROM local2;
 
 
--- We do a "INSERT INTO local2(id, local1fk, reference1fk) SELECT 9999, id, 2" which 
+-- We do a "INSERT INTO local2(id, local1fk, reference1fk) SELECT 9999, id, 2" which
 -- should fail under normal PG rules if no OVERRIDING clause is used.
 
 INSERT INTO local2(id, local1fk, reference1fk)
@@ -66,7 +66,7 @@ SELECT * FROM local2_bydefault;
 
 
 --
--- Overriding a BY DEFAULT identity with user value 
+-- Overriding a BY DEFAULT identity with user value
 -- (which is allowed even without OVERRIDING clause).
 --
 -- Provide explicit id for BY DEFAULT identity => no special OVERRIDING needed
