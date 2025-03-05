@@ -1130,7 +1130,8 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 												oldInsertTargetEntry->resname);
 				bool missingOk = false;
 
-				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(targetRel), attrNum, missingOk);
+				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(
+													 targetRel), attrNum, missingOk);
 				if (!OidIsValid(seqOid))
 				{
 					table_close(targetRel, AccessShareLock);

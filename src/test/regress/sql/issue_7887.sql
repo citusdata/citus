@@ -88,4 +88,6 @@ UNION ALL
 SELECT 'local2_bydefault', * FROM local2_bydefault
 ORDER BY table_name, id;
 
+-- Cleanup
+SET client_min_messages TO WARNING;
 DROP SCHEMA issue_7887 CASCADE;
