@@ -562,12 +562,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 
 	if (EnableCreateRolePropagation)
 	{
-		List *grantRoleStmts = GenerateGrantRoleStmtsOfRole(roleOid);
 		Node *stmt = NULL;
-		foreach_ptr(stmt, grantRoleStmts)
-		{
-			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
-		}
 
 		/*
 		 * append SECURITY LABEL ON ROLE commands for this specific user
