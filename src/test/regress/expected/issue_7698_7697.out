@@ -1,0 +1,88 @@
+-- Issue #7698: An incorrect query result, where the distributed query plan seems wrong
+-- https://github.com/citusdata/citus/issues/7698
+CREATE TABLE t1 (vkey int4 ,c10 int4);
+CREATE TABLE t3 (vkey int4);
+INSERT INTO t3 (vkey) values (1);
+INSERT INTO t1 (vkey,c10) values (4, -70);
+SELECT  t3.vkey
+    FROM  (t1  RIGHT OUTER JOIN t3
+    ON (t1.c10 = t3.vkey ))
+    WHERE EXISTS (SELECT * FROM t3);
+ vkey
+---------------------------------------------------------------------
+    1
+(1 row)
+
+-- Make t1 a distributed table
+SELECT create_distributed_table('t1', 'vkey');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.t1$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Result should remain the same after making t1 a distributed table
+SELECT  t3.vkey
+    FROM  (t1  RIGHT OUTER JOIN t3
+    ON (t1.c10 = t3.vkey ))
+    WHERE EXISTS (SELECT * FROM t3);
+ vkey
+---------------------------------------------------------------------
+    1
+(1 row)
+
+--- cleanup
+DROP TABLE t1;
+DROP TABLE t3;
+-- Issue #7697: Incorrect result from a distributed table full outer join an undistributed table.
+-- https://github.com/citusdata/citus/issues/7697
+CREATE TABLE t0 (vkey int4 ,c3 timestamp);
+CREATE TABLE t3 (vkey int4 ,c26 timestamp);
+CREATE TABLE t4 (vkey int4);
+INSERT INTO t0 (vkey, c3) VALUES
+    (13,make_timestamp(2019, 10, 23, 15, 34, 50));
+INSERT INTO t3 (vkey,c26) VALUES
+    (1, make_timestamp(2024, 3, 26, 17, 36, 53));
+INSERT INTO t4 (vkey) VALUES
+    (1);
+SELECT * FROM
+  (t0 FULL OUTER JOIN t3 ON (t0.c3 = t3.c26 ))
+  WHERE (
+    EXISTS (SELECT * FROM t4)
+  );
+ vkey |            c3            | vkey |           c26
+---------------------------------------------------------------------
+   13 | Wed Oct 23 15:34:50 2019 |      |
+      |                          |    1 | Tue Mar 26 17:36:53 2024
+(2 rows)
+
+-- change t0 to distributed table
+SELECT create_distributed_table('t0', 'vkey');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.t0$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Result should remain the same after making t0 a distributed table
+SELECT * FROM
+  (t0 FULL OUTER JOIN t3 ON (t0.c3 = t3.c26 ))
+  WHERE (
+    EXISTS (SELECT * FROM t4)
+  );
+ vkey |            c3            | vkey |           c26
+---------------------------------------------------------------------
+      |                          |    1 | Tue Mar 26 17:36:53 2024
+   13 | Wed Oct 23 15:34:50 2019 |      |
+(2 rows)
+
+--- cleanup
+DROP TABLE t0;
+DROP TABLE t3;
+DROP TABLE t4;
