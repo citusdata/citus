@@ -1237,7 +1237,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 Expr *
 MakeNextValExprForIdentity(Oid seq_relid)
 {
-	List *func_args;
 	Oid nextval_oid;
 
 	Const *seq_const = makeConst(
@@ -1250,7 +1249,7 @@ MakeNextValExprForIdentity(Oid seq_relid)
 		true                             /* pass by value */
 		);
 
-	func_args = list_make1(seq_const);
+	List *func_args = list_make1(seq_const);
 	nextval_oid = LookupFuncName(
 		list_make1(makeString("nextval")),
 		1,
