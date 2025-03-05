@@ -45,8 +45,6 @@
 static RangeTblEntry * AnchorRte(Query *subquery);
 static List * UnionRelationRestrictionLists(List *firstRelationList,
 											List *secondRelationList);
-static List * CreateFilteredTargetListForRelation(Oid relationId,
-												  List *requiredAttributes);
 static List * CreateDummyTargetList(Oid relationId, List *requiredAttributes);
 static TargetEntry * CreateTargetEntryForColumn(Form_pg_attribute attributeTuple, Index
 												rteIndex,
@@ -378,7 +376,7 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
  * only the required columns of the given relation. If there is not required
  * columns then a dummy NULL column is put as the only entry.
  */
-static List *
+List *
 CreateFilteredTargetListForRelation(Oid relationId, List *requiredAttributes)
 {
 	Relation relation = relation_open(relationId, AccessShareLock);
