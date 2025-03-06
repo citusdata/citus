@@ -55,5 +55,3 @@ lib*.pc
 # style related temporary outputs
 *.uncrustify
 .venv
-
-citus-tools
