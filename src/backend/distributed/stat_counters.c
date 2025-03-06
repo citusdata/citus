@@ -51,7 +51,6 @@ static char StatMapping[MAX_STAT_COUNT][MAX_STAT_NAME_LENGTH] = {
 	[STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED] = "connection_establishment_succeeded",
 	[STAT_CONNECTION_ESTABLISHMENT_FAILED] = "connection_establishment_failed",
 	[STAT_CONNECTION_REUSED] = "connection_reused",
-	[STAT_CONNECTION_OPTIONAL_SKIPPED] = "connection_optional_skipped",
 };
 
 

@@ -19,7 +19,7 @@
 #include <port/atomics.h>
 
 #define MAX_STAT_NAME_LENGTH 255
-#define MAX_STAT_COUNT 5
+#define MAX_STAT_COUNT 4
 
 /* do not use MAX_STAT_INDEX and ensure it is the last entry */
 typedef enum
