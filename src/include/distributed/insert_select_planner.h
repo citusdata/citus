@@ -46,6 +46,8 @@ extern DistributedPlan * CreateInsertSelectIntoLocalTablePlan(uint64 planId,
 extern char * InsertSelectResultIdPrefix(uint64 planId);
 extern bool PlanningInsertSelect(void);
 extern Query * WrapSubquery(Query *subquery);
+extern bool IsIdentityColumn(Oid relid, const char *colName);
+extern Expr * MakeNextValExprForIdentity(Oid seq_relid);
 
 
 #endif /* INSERT_SELECT_PLANNER_H */
