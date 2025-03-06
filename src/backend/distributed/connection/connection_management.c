@@ -397,8 +397,12 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 			dlist_delete(&connection->connectionNode);
 			pfree(connection);
 
-			IncrementStatCounter(STAT_CONNECTION_OPTIONAL_SKIPPED);
-
+			/*
+			 * Here we don't increment the connection stat counter for the optional
+			 * connections that we gave up establishing due to connection throttling
+			 * because the callers who request optional connections know how to
+			 * survive without them.
+			 */
 			return NULL;
 		}
 	}
@@ -1030,9 +1034,9 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 			if (event->events & WL_POSTMASTER_DEATH)
 			{
 				/*
-				 * We don't increment the failed connection stats counter here
-				 * because this is not a connection failure, but a postmaster
-				 * death.
+				 * Here we don't increment the connection stat counter for the
+				 * optional failed connections because this is not a connection
+				 * failure, but a postmaster death in the local node.
 				 */
 				ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
 			}
@@ -1052,8 +1056,9 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 					MemoryContextDelete(MemoryContextSwitchTo(oldContext));
 
 					/*
-					 * Don't increment the failed connection stats counter here
-					 * because user cancelled the query or such.
+					 * Similarly, we don't increment the connection stat counter for the
+					 * failed connections here because this is not a connection failure
+					 * but a cancellation request is received.
 					 */
 					return;
 				}
@@ -1129,28 +1134,6 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				 */
 				CloseNotReadyMultiConnectionStates(connectionStates);
 
-				/*
-				 * We treat this as a failure from connection stats counter perspective
-				 * since the callers of this function don't re-try the connections that
-				 * didn't complete establishment.
-				 *
-				 * And since we know that this is true for all of the connections that
-				 * didn't complete establishment, we increment the failed connection
-				 * counter for all of them.
-				 */
-				int connectingConnectionCount = 0;
-				MultiConnectionPollState *connectionState = NULL;
-				foreach_ptr(connectionState, connectionStates)
-				{
-					if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTING)
-					{
-						connectingConnectionCount++;
-					}
-				}
-
-				IncrementStatCounterMany(STAT_CONNECTION_ESTABLISHMENT_FAILED,
-										 connectingConnectionCount);
-
 				break;
 			}
 		}
@@ -1208,6 +1191,8 @@ CloseNotReadyMultiConnectionStates(List *connectionStates)
 
 		/* close connection, otherwise we take up resource on the other side */
 		CitusPQFinish(connection);
+
+		IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 	}
 }
 

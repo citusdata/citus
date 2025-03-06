@@ -2045,6 +2045,7 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 			else
 			{
 				connection->connectionState = MULTI_CONNECTION_FAILED;
+				IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 			}
 
 
@@ -3030,6 +3031,7 @@ ConnectionStateMachine(WorkerSession *session)
 				 * connection, clear any state associated with it.
 				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
+				IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				break;
 			}
 
@@ -3046,6 +3048,7 @@ ConnectionStateMachine(WorkerSession *session)
 				else if (status == CONNECTION_BAD)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
+					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					break;
 				}
 
@@ -3061,6 +3064,7 @@ ConnectionStateMachine(WorkerSession *session)
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
+					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{
@@ -3156,6 +3160,11 @@ ConnectionStateMachine(WorkerSession *session)
 					break;
 				}
 
+				/*
+				 * Here we don't increment the connection stat counter for failed
+				 * connections because we don't track the connections that we could
+				 * establish but lost later.
+				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
 				break;
 			}
@@ -3216,7 +3225,6 @@ ConnectionStateMachine(WorkerSession *session)
 					 workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL))
 				{
 					/* a task has failed due to this connection failure */
-					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					ReportConnectionError(connection, ERROR);
 				}
 				else if (workerPool->activeConnectionCount > 0 ||
@@ -3230,34 +3238,11 @@ ConnectionStateMachine(WorkerSession *session)
 					 *
 					 * Similarly when the pool is failed over to local execution, warning
 					 * the user just creates chatter.
-					 *
-					 * And from "connection stats" perspective, we think of this as a
-					 * an optional connection failure. We could also think of this as
-					 * part of a separate bucket like "STAT_CONNECTION_FAILED_BUT_OK" but
-					 * we don't want to complicate the things from the users' perspective.
-					 * Plus, in a sense, connections to local node can be thought as
-					 * optional connections as long as we're allowed to failover to local
-					 * execution as in here.
 					 */
-					IncrementStatCounter(STAT_CONNECTION_OPTIONAL_SKIPPED);
 					ReportConnectionError(connection, DEBUG1);
 				}
 				else
 				{
-					/*
-					 * Transaction was not marked as critical and we're not asked
-					 * to fail on any failure, so we emit a warning instead of
-					 * throwing an error here.
-					 *
-					 * However, even though this is the case, we still treat this
-					 * as a failure from "connection stats" perspective because we
-					 * don't have a way to recover from this failure since we both
-					 * don't have any active connections to the node and we cannot
-					 * also failover to local execution. So this means that, the
-					 * executor cannot serve the user's request, even though they're
-					 * okay with that.
-					 */
-					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					ReportConnectionError(connection, WARNING);
 				}
 

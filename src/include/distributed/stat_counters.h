@@ -27,7 +27,6 @@ typedef enum
 	STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED,
 	STAT_CONNECTION_ESTABLISHMENT_FAILED,
 	STAT_CONNECTION_REUSED,
-	STAT_CONNECTION_OPTIONAL_SKIPPED,
 
 	/* this must be the last value in the StatType */
 	MAX_STAT_INDEX
@@ -38,6 +37,5 @@ typedef pg_atomic_uint64 CitusAtomicStatCounters[MAX_STAT_COUNT];
 extern void InitializeStatCountersArrayMem(void);
 extern Size StatCountersArrayShmemSize(void);
 extern void IncrementStatCounter(int statId);
-extern void IncrementStatCounterMany(int statId, int64 count);
 
 #endif /* STAT_COUNTERS_H */

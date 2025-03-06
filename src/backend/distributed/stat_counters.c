@@ -127,24 +127,13 @@ StatCountersArrayShmemSize(void)
 void
 IncrementStatCounter(int statId)
 {
-	IncrementStatCounterMany(statId, 1);
-}
-
-
-/*
- * IncrementStatCounterMany increments the stat counter for the given statId
- * for this backend for the given count.
- */
-void
-IncrementStatCounterMany(int statId, int64 count)
-{
-#if PG_VERSION_NUM >= 170000
+	#if PG_VERSION_NUM >= 170000
 	pg_atomic_uint64 *statPtr = &SharedStatCountersArray[MyProcNumber][statId];
 #else
 	pg_atomic_uint64 *statPtr = &SharedStatCountersArray[MyBackendId - 1][statId];
 #endif
 
-	pg_atomic_fetch_add_u64(statPtr, count);
+	pg_atomic_fetch_add_u64(statPtr, 1);
 }
 
 
@@ -267,7 +256,7 @@ ResetStatCounters(void)
 {
 	/*
 	 * Some stats might be lost between reading the stats for all the backend processes
-	 * and resetting the stats. However, we are okay with this since we don't to block
+	 * and resetting the stats. However, we are okay with this since we don't want to block
 	 * the client backends that might be incrementing the stats.
 	 *
 	 * Also, we cannot use Memset() to reset the stats as it is not safe to reset the stats
