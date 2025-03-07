@@ -41,7 +41,7 @@ static bool ShouldEvaluateExpression(Expr *expression);
 static bool ShouldEvaluateFunctions(CoordinatorEvaluationContext *evaluationContext);
 static void FixFunctionArguments(Node *expr);
 static bool FixFunctionArgumentsWalker(Node *expr, void *context);
-static bool CheckContainsMultiexprOrSublink(Node *expr);
+static bool CheckExprExecutorSafe(Node *expr);
 
 
 /*
@@ -100,9 +100,9 @@ PartiallyEvaluateExpression(Node *expression,
 	}
 
 	NodeTag nodeTag = nodeTag(expression);
-	if (CheckContainsMultiexprOrSublink(expression))
+	/* ExecInitExpr cannot handle some expressions (PARAM_MULTIEXPR and PARAM_SUBLINK) */
+	if (!CheckExprExecutorSafe(expression))
 	{
-		/* ExecInitExpr cannot handle PARAM_MULTIEXPR and PARAM_SUBLINK */
 		return expression;
 	}
 
@@ -541,24 +541,29 @@ FixFunctionArgumentsWalker(Node *expr, void *context)
 
 
 /*
- * Recursively search an expression for a Param with sublink
+ * Recursively explore an expression to ensure it can be used in the PostgreSQL
+ * ExecInitExpr.
+ * Currently only search for PARAM_MULTIEXPR or PARAM_SUBLINK.
  */
 static bool
-CheckContainsMultiexprOrSublink(Node *expr)
+CheckExprExecutorSafe(Node *expr)
 {
 	if (expr == NULL)
 	{
-		return false;
+		return true;
 	}
 
-	/* If it's a Param, return its attnum */
+	/*
+	 * If it's a Param, we're done traversing the tree.
+	 * Just check if it contins a sublink or multiexpr.
+	 */
 	else if (IsA(expr, Param))
 	{
 		Param *param = (Param *) expr;
 		if (param->paramkind == PARAM_MULTIEXPR ||
 			param->paramkind == PARAM_SUBLINK)
 		{
-			return true;
+			return false;
 		}
 	}
 
@@ -570,11 +575,11 @@ CheckContainsMultiexprOrSublink(Node *expr)
 
 		foreach(lc, func->args)
 		{
-			if (CheckContainsMultiexprOrSublink((Node *) lfirst(lc)))
+			if (!CheckExprExecutorSafe((Node *) lfirst(lc)))
 			{
-				return true;
+				return false;
 			}
 		}
 	}
-	return false;
+	return true;
 }
