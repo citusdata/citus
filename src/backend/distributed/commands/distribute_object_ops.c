@@ -78,15 +78,6 @@ static DistributeObjectOps Aggregate_Rename = {
 	.address = RenameFunctionStmtObjectAddress,
 	.markDistributed = false,
 };
-static DistributeObjectOps Aggregate_Grant = {
-	.deparse = DeparseGrantOnFunctionStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnFunctionStmt,
-	.postprocess = PostprocessGrantOnFunctionStmt,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
 static DistributeObjectOps Any_AlterEnum = {
 	.deparse = DeparseAlterEnumStmt,
 	.qualify = QualifyAlterEnumStmt,
@@ -354,10 +345,10 @@ static DistributeObjectOps Any_CreateTrigger = {
 	.markDistributed = false,
 };
 static DistributeObjectOps Any_Grant = {
-	.deparse = NULL,
+	.deparse = DeparseGrantStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessGrantStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessGrantStmt,
 	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
 	.markDistributed = false,
@@ -478,9 +469,9 @@ static DistributeObjectOps Database_AlterOwner = {
 };
 
 static DistributeObjectOps Database_Grant = {
-	.deparse = DeparseGrantOnDatabaseStmt,
+	.deparse = DeparseGrantStmt,
 	.qualify = NULL,
-	.preprocess = PreprocessGrantOnDatabaseStmt,
+	.preprocess = PreprocessGrantStmt,
 	.postprocess = NULL,
 	.objectType = OBJECT_DATABASE,
 	.operationType = DIST_OPS_ALTER,
@@ -645,30 +636,12 @@ static DistributeObjectOps Extension_Drop = {
 	.address = NULL,
 	.markDistributed = false,
 };
-static DistributeObjectOps FDW_Grant = {
-	.deparse = DeparseGrantOnFDWStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnFDWStmt,
-	.postprocess = NULL,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
 static DistributeObjectOps ForeignServer_Drop = {
 	.deparse = DeparseDropForeignServerStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessDropDistributedObjectStmt,
 	.postprocess = NULL,
 	.operationType = DIST_OPS_DROP,
-	.address = NULL,
-	.markDistributed = false,
-};
-static DistributeObjectOps ForeignServer_Grant = {
-	.deparse = DeparseGrantOnForeignServerStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnForeignServerStmt,
-	.postprocess = NULL,
-	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
 	.markDistributed = false,
 };
@@ -736,15 +709,6 @@ static DistributeObjectOps Function_Drop = {
 	.preprocess = PreprocessDropDistributedObjectStmt,
 	.postprocess = NULL,
 	.operationType = DIST_OPS_DROP,
-	.address = NULL,
-	.markDistributed = false,
-};
-static DistributeObjectOps Function_Grant = {
-	.deparse = DeparseGrantOnFunctionStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnFunctionStmt,
-	.postprocess = PostprocessGrantOnFunctionStmt,
-	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
 	.markDistributed = false,
 };
@@ -829,15 +793,6 @@ static DistributeObjectOps Procedure_Drop = {
 	.preprocess = PreprocessDropDistributedObjectStmt,
 	.postprocess = NULL,
 	.operationType = DIST_OPS_DROP,
-	.address = NULL,
-	.markDistributed = false,
-};
-static DistributeObjectOps Procedure_Grant = {
-	.deparse = DeparseGrantOnFunctionStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnFunctionStmt,
-	.postprocess = PostprocessGrantOnFunctionStmt,
-	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
 	.markDistributed = false,
 };
@@ -947,10 +902,10 @@ static DistributeObjectOps Sequence_Drop = {
 	.markDistributed = false,
 };
 static DistributeObjectOps Sequence_Grant = {
-	.deparse = DeparseGrantOnSequenceStmt,
+	.deparse = DeparseGrantStmt,
 	.qualify = QualifyGrantOnSequenceStmt,
-	.preprocess = PreprocessGrantOnSequenceStmt,
-	.postprocess = PostprocessGrantOnSequenceStmt,
+	.preprocess = PreprocessGrantStmt,
+	.postprocess = PostprocessGrantStmt,
 	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
 	.markDistributed = false,
@@ -1145,15 +1100,6 @@ static DistributeObjectOps Routine_Drop = {
 	.address = NULL,
 	.markDistributed = false,
 };
-static DistributeObjectOps Routine_Grant = {
-	.deparse = DeparseGrantOnFunctionStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnFunctionStmt,
-	.postprocess = PostprocessGrantOnFunctionStmt,
-	.operationType = DIST_OPS_ALTER,
-	.address = NULL,
-	.markDistributed = false,
-};
 static DistributeObjectOps Routine_Rename = {
 	.deparse = DeparseRenameFunctionStmt,
 	.qualify = QualifyRenameFunctionStmt,
@@ -1179,15 +1125,6 @@ static DistributeObjectOps Schema_Drop = {
 	.preprocess = PreprocessDropSchemaStmt,
 	.postprocess = NULL,
 	.operationType = DIST_OPS_DROP,
-	.address = NULL,
-	.markDistributed = false,
-};
-static DistributeObjectOps Schema_Grant = {
-	.deparse = DeparseGrantOnSchemaStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnSchemaStmt,
-	.postprocess = NULL,
-	.operationType = DIST_OPS_ALTER,
 	.address = NULL,
 	.markDistributed = false,
 };
@@ -2054,44 +1991,9 @@ GetDistributeObjectOps(Node *node)
 			GrantStmt *stmt = castNode(GrantStmt, node);
 			switch (stmt->objtype)
 			{
-				case OBJECT_SCHEMA:
-				{
-					return &Schema_Grant;
-				}
-
 				case OBJECT_SEQUENCE:
 				{
 					return &Sequence_Grant;
-				}
-
-				case OBJECT_FDW:
-				{
-					return &FDW_Grant;
-				}
-
-				case OBJECT_FOREIGN_SERVER:
-				{
-					return &ForeignServer_Grant;
-				}
-
-				case OBJECT_FUNCTION:
-				{
-					return &Function_Grant;
-				}
-
-				case OBJECT_AGGREGATE:
-				{
-					return &Aggregate_Grant;
-				}
-
-				case OBJECT_PROCEDURE:
-				{
-					return &Procedure_Grant;
-				}
-
-				case OBJECT_ROUTINE:
-				{
-					return &Routine_Grant;
 				}
 
 				case OBJECT_DATABASE:

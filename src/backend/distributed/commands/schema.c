@@ -43,7 +43,6 @@
 
 
 static List * GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);
-static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
 static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
@@ -195,50 +194,6 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * PreprocessGrantOnSchemaStmt is executed before the statement is applied to the local
- * postgres instance.
- *
- * In this stage we can prepare the commands that need to be run on all workers to grant
- * on schemas. Only grant statements for distributed schema are propagated.
- */
-List *
-PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
-							ProcessUtilityContext processUtilityContext)
-{
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_SCHEMA);
-
-	List *distributedSchemas = FilterDistributedSchemas(stmt->objects);
-
-	if (list_length(distributedSchemas) == 0)
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	List *originalObjects = stmt->objects;
-
-	stmt->objects = distributedSchemas;
-
-	char *sql = DeparseTreeNode((Node *) stmt);
-
-	stmt->objects = originalObjects;
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * CreateSchemaStmtObjectAddress returns the ObjectAddress of the schema that is
  * the object of the CreateSchemaStmt. Errors if missing_ok is false.
  */
@@ -316,7 +271,7 @@ GetObjectAddressBySchemaName(char *schemaName, bool missing_ok)
  * FilterDistributedSchemas filters the schema list and returns the distributed ones
  * as a list
  */
-static List *
+List *
 FilterDistributedSchemas(List *schemas)
 {
 	List *distributedSchemas = NIL;
@@ -457,7 +412,7 @@ GetGrantCommandsFromCreateSchemaStmt(Node *node)
 			/* we only propagate GRANT ON SCHEMA in community */
 			case OBJECT_SCHEMA:
 			{
-				commands = lappend(commands, DeparseGrantOnSchemaStmt(element));
+				commands = lappend(commands, DeparseGrantStmt(element));
 				break;
 			}
 

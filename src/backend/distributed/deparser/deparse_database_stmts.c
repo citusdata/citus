@@ -32,9 +32,7 @@ static void AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stm
 static void AppendAlterDatabaseStmt(StringInfo buf, AlterDatabaseStmt *stmt);
 static void AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt);
 static void AppendDropDatabaseStmt(StringInfo buf, DropdbStmt *stmt);
-static void AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendBasicAlterDatabaseOptions(StringInfo buf, AlterDatabaseStmt *stmt);
-static void AppendGrantDatabases(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterDatabaseSetTablespace(StringInfo buf, DefElem *def, char *dbname);
 
 const DefElemOptionFormat createDatabaseOptionFormats[] = {
@@ -87,37 +85,6 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 					 "ALTER DATABASE %s OWNER TO %s;",
 					 quote_identifier(strVal((String *) stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
-}
-
-
-static void
-AppendGrantDatabases(StringInfo buf, GrantStmt *stmt)
-{
-	ListCell *cell = NULL;
-	appendStringInfo(buf, " ON DATABASE ");
-
-	foreach(cell, stmt->objects)
-	{
-		char *database = strVal(lfirst(cell));
-		appendStringInfoString(buf, quote_identifier(database));
-		if (cell != list_tail(stmt->objects))
-		{
-			appendStringInfo(buf, ", ");
-		}
-	}
-}
-
-
-static void
-AppendGrantOnDatabaseStmt(StringInfo buf, GrantStmt *stmt)
-{
-	Assert(stmt->objtype == OBJECT_DATABASE);
-
-	AppendGrantSharedPrefix(buf, stmt);
-
-	AppendGrantDatabases(buf, stmt);
-
-	AppendGrantSharedSuffix(buf, stmt);
 }
 
 
@@ -179,21 +146,6 @@ AppendBasicAlterDatabaseOptions(StringInfo buf, AlterDatabaseStmt *stmt)
 		DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
 									 alterDatabaseOptionFormats));
 	}
-}
-
-
-char *
-DeparseGrantOnDatabaseStmt(Node *node)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_DATABASE);
-
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendGrantOnDatabaseStmt(&str, stmt);
-
-	return str.data;
 }
 
 

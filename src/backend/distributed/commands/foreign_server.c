@@ -31,7 +31,6 @@
 
 static char * GetForeignServerAlterOwnerCommand(Oid serverId);
 static Node * RecreateForeignServerStmt(Oid serverId);
-static bool NameListHasDistributedServer(List *serverNames);
 static List * GetObjectAddressByServerName(char *serverName, bool missing_ok);
 
 
@@ -66,54 +65,6 @@ AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok, bool isPostproc
 	AlterForeignServerStmt *stmt = castNode(AlterForeignServerStmt, node);
 
 	return GetObjectAddressByServerName(stmt->servername, missing_ok);
-}
-
-
-/*
- * PreprocessGrantOnForeignServerStmt is executed before the statement is applied to the
- * local postgres instance.
- *
- * In this stage we can prepare the commands that need to be run on all workers to grant
- * on servers.
- */
-List *
-PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
-								   ProcessUtilityContext processUtilityContext)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_FOREIGN_SERVER);
-
-	bool includesDistributedServer = NameListHasDistributedServer(stmt->objects);
-
-	if (!includesDistributedServer)
-	{
-		return NIL;
-	}
-
-	if (list_length(stmt->objects) > 1)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot grant on distributed server with other servers"),
-						errhint("Try granting on each object in separate commands")));
-	}
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	/*  the code-path only supports a single object */
-	Assert(list_length(stmt->objects) == 1);
-
-	char *sql = DeparseTreeNode((Node *) stmt);
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -243,7 +194,7 @@ RecreateForeignServerStmt(Oid serverId)
  * NameListHasDistributedServer takes a namelist of servers and returns true if at least
  * one of them is distributed. Returns false otherwise.
  */
-static bool
+bool
 NameListHasDistributedServer(List *serverNames)
 {
 	String *serverValue = NULL;

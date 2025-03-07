@@ -33,7 +33,11 @@ static void AppendDropRoleStmt(StringInfo buf, DropRoleStmt *stmt);
 static void AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt);
 static void AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt);
 static void AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt);
+static void AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGrant);
 
+static void
+AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior behavior, bool
+										 isGrant);
 
 /*
  * DeparseAlterRoleStmt builds and returns a string representing of the
@@ -531,4 +535,30 @@ AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt)
 
 	VariableSetStmt *setStmt = castNode(VariableSetStmt, stmt->setstmt);
 	AppendVariableSet(buf, setStmt);
+}
+
+
+static void
+AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGrant)
+{
+	if (grantor)
+	{
+		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(grantor, true));
+	}
+}
+static void
+AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior behavior, bool
+										 isGrant)
+{
+	if (!isGrant)
+	{
+		if (behavior == DROP_RESTRICT)
+		{
+			appendStringInfo(buf, " RESTRICT");
+		}
+		else if (behavior == DROP_CASCADE)
+		{
+			appendStringInfo(buf, " CASCADE");
+		}
+	}
 }

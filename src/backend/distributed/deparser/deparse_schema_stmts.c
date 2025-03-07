@@ -4,7 +4,7 @@
  *	  All routines to deparse schema statements.
  *	  This file contains all entry points specific for schema statement deparsing
  *	  as well as functions that are currently only used for deparsing of the
- *	  schema statements.
+ *	  schema statements, except grant statements.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -22,8 +22,6 @@
 
 static void AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt);
 static void AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt);
-static void AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterSchemaOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 
@@ -50,21 +48,6 @@ DeparseDropSchemaStmt(Node *node)
 	initStringInfo(&str);
 
 	AppendDropSchemaStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-char *
-DeparseGrantOnSchemaStmt(Node *node)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_SCHEMA);
-
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendGrantOnSchemaStmt(&str, stmt);
 
 	return str.data;
 }
@@ -170,78 +153,6 @@ AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt)
 	else if (stmt->behavior == DROP_RESTRICT)
 	{
 		appendStringInfoString(buf, " RESTRICT");
-	}
-}
-
-
-static void
-AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
-{
-	Assert(stmt->objtype == OBJECT_SCHEMA);
-
-	AppendGrantSharedPrefix(buf, stmt);
-
-	AppendGrantOnSchemaSchemas(buf, stmt);
-
-	AppendGrantSharedSuffix(buf, stmt);
-}
-
-
-void
-AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt)
-{
-	if (list_length(stmt->privileges) == 0)
-	{
-		appendStringInfo(buf, "ALL PRIVILEGES");
-	}
-	else
-	{
-		ListCell *cell = NULL;
-		foreach(cell, stmt->privileges)
-		{
-			AccessPriv *privilege = (AccessPriv *) lfirst(cell);
-			appendStringInfoString(buf, privilege->priv_name);
-			if (cell != list_tail(stmt->privileges))
-			{
-				appendStringInfo(buf, ", ");
-			}
-		}
-	}
-}
-
-
-static void
-AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt)
-{
-	ListCell *cell = NULL;
-	appendStringInfo(buf, " ON SCHEMA ");
-
-	foreach(cell, stmt->objects)
-	{
-		char *schema = strVal(lfirst(cell));
-		appendStringInfoString(buf, quote_identifier(schema));
-		if (cell != list_tail(stmt->objects))
-		{
-			appendStringInfo(buf, ", ");
-		}
-	}
-}
-
-
-void
-AppendGrantGrantees(StringInfo buf, GrantStmt *stmt)
-{
-	ListCell *cell = NULL;
-	appendStringInfo(buf, " %s ", stmt->is_grant ? "TO" : "FROM");
-
-	foreach(cell, stmt->grantees)
-	{
-		RoleSpec *grantee = (RoleSpec *) lfirst(cell);
-		appendStringInfoString(buf, RoleSpecString(grantee, true));
-		if (cell != list_tail(stmt->grantees))
-		{
-			appendStringInfo(buf, ", ");
-		}
 	}
 }
 
