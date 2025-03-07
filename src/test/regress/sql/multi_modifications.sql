@@ -505,6 +505,32 @@ VALUES (104, 'Wayz'), (105, 'Mynt') RETURNING *;
 SELECT * FROM app_analytics_events ORDER BY id;
 DROP TABLE app_analytics_events;
 
+-- test function call in UPDATE SET
+-- https://github.com/citusdata/citus/issues/7676
+CREATE TABLE test_ref_multiexpr (
+    id bigint primary key
+  , col_int integer
+  , col_bool bool
+  , col_text text
+  , col_timestamp timestamp
+  );
+SELECT create_reference_table('test_ref_multiexpr');
+
+/* TODO how to ensure in test that 'now()' is correctly pre-executed */
+INSERT INTO test_ref_multiexpr VALUES (1, 1, true, 'one', now());
+
+UPDATE test_ref_multiexpr
+SET (col_timestamp)
+  = (SELECT now())
+RETURNING id, col_int, col_bool;
+
+UPDATE test_ref_multiexpr
+SET (col_bool, col_timestamp)
+  = (SELECT true, now())
+RETURNING id, col_int, col_bool;
+
+DROP TABLE test_ref_multiexpr;
+
 -- Test multi-row insert with serial in a non-partition column
 CREATE TABLE app_analytics_events (id int, app_id serial, name text);
 SELECT create_distributed_table('app_analytics_events', 'id');
