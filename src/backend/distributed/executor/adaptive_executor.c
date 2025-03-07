@@ -691,7 +691,7 @@ static bool SendNextQuery(TaskPlacementExecution *placementExecution,
 						  WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
 static bool HasUnfinishedTaskForSession(WorkerSession *session);
-static void HandleMultiConnectionSuccess(WorkerSession *session);
+static void HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection);
 static bool HasAnyConnectionFailure(WorkerPool *workerPool);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
@@ -3040,7 +3040,12 @@ ConnectionStateMachine(WorkerSession *session)
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
 				{
-					HandleMultiConnectionSuccess(session);
+					/*
+					 * Connection was already established, possibly a cached
+					 * connection.
+					 */
+					bool newConnection = false;
+					HandleMultiConnectionSuccess(session, newConnection);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 					break;
@@ -3082,7 +3087,12 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					HandleMultiConnectionSuccess(session);
+					/*
+					 * Connection was not established befoore (!= CONNECTION_OK)
+					 * but PQconnectPoll() did so now.
+					 */
+					bool newConnection = true;
+					HandleMultiConnectionSuccess(session, newConnection);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
@@ -3327,12 +3337,12 @@ HasUnfinishedTaskForSession(WorkerSession *session)
  * connection's state.
  */
 static void
-HandleMultiConnectionSuccess(WorkerSession *session)
+HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection)
 {
 	MultiConnection *connection = session->connection;
 	WorkerPool *workerPool = session->workerPool;
 
-	MarkConnectionConnected(connection);
+	MarkConnectionConnected(connection, newConnection);
 
 	ereport(DEBUG4, (errmsg("established connection to %s:%d for "
 							"session %ld in %ld microseconds",

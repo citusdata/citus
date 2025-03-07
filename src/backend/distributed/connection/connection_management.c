@@ -1107,7 +1107,15 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				 */
 				if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTED)
 				{
-					MarkConnectionConnected(connectionState->connection);
+					/*
+					 * Since WaitEventSetFromMultiConnectionStates() only adds the
+					 * connections that we haven't completed the connection
+					 * establishment yet, here we always have a new connection.
+					 * In other words, at this point, we surely know that we're
+					 * not dealing with a cached connection.
+					 */
+					bool newConnection = true;
+					MarkConnectionConnected(connectionState->connection, newConnection);
 				}
 			}
 		}
@@ -1605,7 +1613,7 @@ RemoteTransactionIdle(MultiConnection *connection)
  * establishment time when necessary.
  */
 void
-MarkConnectionConnected(MultiConnection *connection)
+MarkConnectionConnected(MultiConnection *connection, bool newConnection)
 {
 	connection->connectionState = MULTI_CONNECTION_CONNECTED;
 
@@ -1614,7 +1622,10 @@ MarkConnectionConnected(MultiConnection *connection)
 		INSTR_TIME_SET_CURRENT(connection->connectionEstablishmentEnd);
 	}
 
-	IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED);
+	if (newConnection)
+	{
+		IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED);
+	}
 }
 
 
