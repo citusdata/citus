@@ -65,8 +65,7 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			return PreprocessGrantStmtOnShards(node, queryString, processUtilityContext);
 			break;
 		default:
-			elog(WARNING, "grant TREE: %s", nodeToString(grantStmt));
-			// elog(ERROR, "GRANT statement not managed by citus");
+			return NIL;
 	}
 	return NIL;
 }
@@ -278,8 +277,6 @@ PreprocessGrantStmtOnNodes(Node *node, const char *queryString,
 		case OBJECT_ROLE:
 
 		default:
-			elog(WARNING, "grant TREE: %s", nodeToString(grantStmt));
-			// elog(ERROR, "GRANT statement on nodes not managed by citus");
 			return NIL;
 	}
 
@@ -298,7 +295,6 @@ PreprocessGrantStmtOnNodes(Node *node, const char *queryString,
 		grantStmt->targtype = distributedGrantTargetType;
 
 	char *sql = DeparseTreeNode((Node *) grantStmt);
-	// elog(WARNING, "deparsed grant for nodes: %s", sql);
 
 	grantStmt->objects = originalObjects;
 	grantStmt->targtype = originalTargetType;
@@ -331,7 +327,6 @@ PreprocessGrantStmtOnShards(Node *node, const char *queryString,
 	}
 
 	GrantStmt *grantStmt = castNode(GrantStmt, node);
-	// elog(WARNING, "grant TREE: %s", nodeToString(stmt));
 
 	switch(grantStmt->objtype)
 	{
@@ -371,7 +366,6 @@ PreprocessGrantStmtOnShards(Node *node, const char *queryString,
 						 (RangeVarGetRelid(rangeVar, NoLock, false)));
 		ddlJob->metadataSyncCommand = pstrdup(sql);
 		ddlJob->taskList = NIL;
-		// elog(WARNING, "deparsed grant for shard: %s", sql);
 		if (IsCitusTable(relationId))
 		{
 			ddlJob->taskList = DDLTaskList(relationId, sql);
