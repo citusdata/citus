@@ -78,6 +78,9 @@ extern char * DeparseAlterForeignServerOwnerStmt(Node *node);
 extern char * DeparseDropForeignServerStmt(Node *node);
 extern char * DeparseGrantOnForeignServerStmt(Node *node);
 
+/* forward declarations for deparse_grant_stmts.c */
+extern char * DeparseGrantStmt(Node *node);
+
 /* forward declarations for deparse_table_stmts.c */
 extern char * DeparseAlterTableSchemaStmt(Node *stmt);
 extern char * DeparseAlterTableStmt(Node *node);
