@@ -271,7 +271,9 @@ PreprocessGrantStmtOnNodes(Node *node, const char *queryString,
 		case OBJECT_DOMAIN:
 		case OBJECT_LANGUAGE:
 		case OBJECT_LARGEOBJECT:
+#if PG_VERSION_NUM >= PG_VERSION_15
 		case OBJECT_PARAMETER_ACL:
+#endif
 		case OBJECT_TYPE:
 		case OBJECT_ROLE:
 
