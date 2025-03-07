@@ -23,7 +23,6 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 
-static bool NameListHasFDWOwnedByDistributedExtension(List *FDWNames);
 static ObjectAddress GetObjectAddressByFDWName(char *FDWName, bool missing_ok);
 
 
@@ -82,7 +81,7 @@ PreprocessGrantOnFDWStmt(Node *node, const char *queryString,
  * NameListHasFDWOwnedByDistributedExtension takes a namelist of FDWs and returns true
  * if at least one of them depends on a distributed extension. Returns false otherwise.
  */
-static bool
+bool
 NameListHasFDWOwnedByDistributedExtension(List *FDWNames)
 {
 	String *FDWValue = NULL;

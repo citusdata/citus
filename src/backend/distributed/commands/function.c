@@ -112,7 +112,6 @@ static void DistributeFunctionColocatedWithSingleShardTable(const
 															text *colocateWithText);
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
-static List * FilterDistributedFunctions(GrantStmt *grantStmt);
 
 static void EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
 													const ObjectAddress extensionAddress,
@@ -2095,7 +2094,7 @@ PostprocessGrantOnFunctionStmt(Node *node, const char *queryString)
  * FilterDistributedFunctions determines and returns a list of distributed functions
  * ObjectAddress-es from given grant statement.
  */
-static List *
+List *
 FilterDistributedFunctions(GrantStmt *grantStmt)
 {
 	List *grantFunctionList = NIL;

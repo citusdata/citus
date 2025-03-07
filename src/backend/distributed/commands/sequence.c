@@ -37,7 +37,6 @@
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static Oid SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress, char
 										  depType);
-static List * FilterDistributedSequences(GrantStmt *stmt);
 
 
 /*
@@ -992,7 +991,7 @@ GenerateBackupNameForSequenceCollision(const ObjectAddress *address)
  *   it expands the ALL IN SCHEMA to the actual sequences, and returns the distributed
  *   sequences from those.
  */
-static List *
+List *
 FilterDistributedSequences(GrantStmt *stmt)
 {
 	bool grantOnSequenceCommand = (stmt->targtype == ACL_TARGET_OBJECT &&

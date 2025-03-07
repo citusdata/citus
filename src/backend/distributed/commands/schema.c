@@ -43,7 +43,6 @@
 
 
 static List * GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);
-static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
 static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
@@ -316,7 +315,7 @@ GetObjectAddressBySchemaName(char *schemaName, bool missing_ok)
  * FilterDistributedSchemas filters the schema list and returns the distributed ones
  * as a list
  */
-static List *
+List *
 FilterDistributedSchemas(List *schemas)
 {
 	List *distributedSchemas = NIL;

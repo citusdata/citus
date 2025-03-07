@@ -31,7 +31,6 @@
 
 static char * GetForeignServerAlterOwnerCommand(Oid serverId);
 static Node * RecreateForeignServerStmt(Oid serverId);
-static bool NameListHasDistributedServer(List *serverNames);
 static List * GetObjectAddressByServerName(char *serverName, bool missing_ok);
 
 
@@ -243,7 +242,7 @@ RecreateForeignServerStmt(Oid serverId)
  * NameListHasDistributedServer takes a namelist of servers and returns true if at least
  * one of them is distributed. Returns false otherwise.
  */
-static bool
+bool
 NameListHasDistributedServer(List *serverNames)
 {
 	String *serverValue = NULL;

@@ -101,7 +101,6 @@ static char * GetTablespaceName(Oid tablespaceOid);
 static ObjectAddress * GetDatabaseAddressFromDatabaseName(char *databaseName,
 														  bool missingOk);
 
-static List * FilterDistributedDatabases(List *databases);
 static Oid get_database_owner(Oid dbId);
 
 
@@ -230,7 +229,7 @@ PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
  * FilterDistributedDatabases filters the database list and returns the distributed ones,
  * as a list.
  */
-static List *
+List *
 FilterDistributedDatabases(List *databases)
 {
 	List *distributedDatabases = NIL;
