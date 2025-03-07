@@ -10,10 +10,8 @@
 
 #include "postgres.h"
 
-#include "catalog/dependency.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
-#include "commands/sequence.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -98,6 +96,17 @@ static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetLis
 								   Oid targetRelationId);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 					   int targetTypeMod);
+static Oid GetNextvalReturnTypeCatalog(void);
+static void append_casted_entry(TargetEntry *insertEntry, TargetEntry *selectEntry,
+								Oid castFromType, Oid targetType, Oid collation, int32
+								typmod,
+								int targetEntryIndex,
+								List **projectedEntries, List **nonProjectedEntries);
+static void set_target_entry_name(TargetEntry *tle, const char *format, int index);
+static void reset_target_entry_resno(List *targetList);
+static void process_entry_pair(TargetEntry *insertEntry, TargetEntry *selectEntry,
+							   Form_pg_attribute attr, int targetEntryIndex,
+							   List **projectedEntries, List **nonProjectedEntries);
 
 
 /* depth of current insert/select planner. */
@@ -1074,7 +1083,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		AttrNumber originalAttrNo = get_attnum(insertRelationId,
 											   oldInsertTargetEntry->resname);
 
-
 		/* see transformInsertRow() for the details */
 		if (IsA(oldInsertTargetEntry->expr, SubscriptingRef) ||
 			IsA(oldInsertTargetEntry->expr, FieldStore))
@@ -1112,63 +1120,13 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		}
 		else
 		{
-			/*
-			 * Check if the target column is an identity column and whether the query did NOT
-			 * specify OVERRIDING SYSTEM VALUE. If both conditions are true, we need to consider
-			 * generating a default sequence value.
-			 */
-			if (IsIdentityColumn(insertRelationId, oldInsertTargetEntry->resname) &&
-				originalQuery->override != OVERRIDING_SYSTEM_VALUE)
-			{
-				/*
-				 * Open the target relation (table) with an AccessShareLock to safely access metadata,
-				 * such as the identity sequence.
-				 */
-				Relation targetRel = table_open(insertRelationId, AccessShareLock);
-
-				AttrNumber attrNum = get_attnum(insertRelationId,
-												oldInsertTargetEntry->resname);
-				bool missingOk = false;
-
-				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(
-													 targetRel), attrNum, missingOk);
-				if (!OidIsValid(seqOid))
-				{
-					table_close(targetRel, AccessShareLock);
-					elog(ERROR, "could not find identity sequence for relation %u col %s",
-						 insertRelationId, oldInsertTargetEntry->resname);
-				}
-
-				/* Build an expression tree that represents: nextval('sequence_oid'::regclass) */
-				Expr *defaultExpr = MakeNextValExprForIdentity(seqOid);
-
-				/* Create a new target entry that uses the default expression to generate the next sequence value */
-				newSubqueryTargetEntry = makeTargetEntry(
-					defaultExpr,
-					resno,
-					oldInsertTargetEntry->resname,
-					oldInsertTargetEntry->resjunk
-					);
-
-				table_close(targetRel, AccessShareLock);
-			}
-			else
-			{
-				/*
-				 * For non-identity columns, or if the query used OVERRIDING SYSTEM VALUE,
-				 * use the provided expression without modification.
-				 */
-				newSubqueryTargetEntry = makeTargetEntry(oldInsertTargetEntry->expr,
-														 resno,
-														 oldInsertTargetEntry->resname,
-														 oldInsertTargetEntry->resjunk);
-			}
-
-			/* Append the new target entry to the subquery's target list */
+			newSubqueryTargetEntry = makeTargetEntry(oldInsertTargetEntry->expr,
+													 resno,
+													 oldInsertTargetEntry->resname,
+													 oldInsertTargetEntry->resjunk);
 			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
 											newSubqueryTargetEntry);
 		}
-
 
 		String *columnName = makeString(newSubqueryTargetEntry->resname);
 		columnNameList = lappend(columnNameList, columnName);
@@ -1227,87 +1185,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	subqueryRte->eref->colnames = columnNameList;
 
 	return NULL;
-}
-
-
-/*
- * MakeNextValExprForIdentity creates an expression that generates the next value
- * from the specified sequence, which is used for identity columns.
- */
-Expr *
-MakeNextValExprForIdentity(Oid seq_relid)
-{
-	Const *seq_const = makeConst(
-		REGCLASSOID,                     /* type for regclass */
-		-1,                              /* no specific collation */
-		InvalidOid,                      /* default collation */
-		sizeof(Oid),                     /* size of the Oid */
-		ObjectIdGetDatum(seq_relid),
-		false,                           /* not null */
-		true                             /* pass by value */
-		);
-
-	List *func_args = list_make1(seq_const);
-	Oid nextval_oid = LookupFuncName(
-		list_make1(makeString("nextval")),
-		1,
-		(Oid[]) { REGCLASSOID },
-		false
-		);
-
-	return (Expr *) makeFuncExpr(
-		nextval_oid,        /* OID of nextval() */
-		INT8OID,            /* nextval returns int8 */
-		func_args,          /* arguments for nextval() */
-		InvalidOid,         /* no specific collation */
-		InvalidOid,
-		COERCE_EXPLICIT_CALL
-		);
-}
-
-
-/*
- * Checks whether a given column in the specified relation is an identity column.
- */
-bool
-IsIdentityColumn(Oid relid, const char *colName)
-{
-	/* Check if colName is non-null (optional, if colName can be NULL) */
-	if (colName == NULL)
-	{
-		return false;
-	}
-
-	/* Get the attribute number for the given column name */
-	AttrNumber attrNum = get_attnum(relid, colName);
-	if (attrNum == InvalidAttrNumber)
-	{
-		return false;
-	}
-
-	/* Open the relation to access its metadata */
-	Relation rel = RelationIdGetRelation(relid);
-	if (!RelationIsValid(rel))
-	{
-		return false;
-	}
-
-	/* Ensure the attribute number is within the valid range */
-	if (attrNum <= 0 || attrNum > rel->rd_att->natts)
-	{
-		RelationClose(rel);
-		return false;
-	}
-
-	/* Fetch the attribute metadata (attributes are 0-indexed) */
-	Form_pg_attribute attr = TupleDescAttr(rel->rd_att, attrNum - 1);
-
-	/* Determine if the column is defined as an identity column */
-	bool is_identity = (attr->attidentity == ATTRIBUTE_IDENTITY_ALWAYS ||
-						attr->attidentity == ATTRIBUTE_IDENTITY_BY_DEFAULT);
-
-	RelationClose(rel);
-	return is_identity;
 }
 
 
@@ -1751,11 +1628,73 @@ RelabelTargetEntryList(List *selectTargetList, List *insertTargetList)
 
 
 /*
- * AddInsertSelectCasts makes sure that the types in columns in the given
- * target lists have the same type as the columns of the given relation.
- * It might add casts to ensure that.
+ * Processes a single pair of insert and select target entries.
+ * It compares the source and target types and appends either the
+ * original select entry or a casted version to the appropriate list.
+ */
+static void
+process_entry_pair(TargetEntry *insertEntry, TargetEntry *selectEntry,
+				   Form_pg_attribute attr, int targetEntryIndex,
+				   List **projectedEntries, List **nonProjectedEntries)
+{
+	Oid sourceType = exprType((Node *) selectEntry->expr);
+	Oid targetType = attr->atttypid;
+
+	if (IsA(selectEntry->expr, NextValueExpr))
+	{
+		Oid nextvalType = GetNextvalReturnTypeCatalog();
+		if (targetType != nextvalType)
+		{
+			append_casted_entry(insertEntry, selectEntry,
+								nextvalType, targetType,
+								attr->attcollation, attr->atttypmod,
+								targetEntryIndex,
+								projectedEntries, nonProjectedEntries);
+		}
+		else
+		{
+			*projectedEntries = lappend(*projectedEntries, selectEntry);
+		}
+	}
+	else if (sourceType != targetType)
+	{
+		append_casted_entry(insertEntry, selectEntry,
+							sourceType, targetType,
+							attr->attcollation, attr->atttypmod,
+							targetEntryIndex,
+							projectedEntries, nonProjectedEntries);
+	}
+	else
+	{
+		/* Types match, no cast needed */
+		*projectedEntries = lappend(*projectedEntries, selectEntry);
+	}
+}
+
+
+/*
+ * Resets the resno field for each target entry in the list so that
+ * they are numbered sequentially.
+ */
+static void
+reset_target_entry_resno(List *targetList)
+{
+	int entryResNo = 1;
+	ListCell *lc = NULL;
+	foreach(lc, targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+		tle->resno = entryResNo++;
+	}
+}
+
+
+/*
+ * AddInsertSelectCasts ensures that the columns in the given target lists
+ * have the same type as the corresponding columns of the target relation.
+ * It adds casts when necessary.
  *
- * It returns the updated selectTargetList.
+ * Returns the updated selectTargetList.
  */
 static List *
 AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
@@ -1765,9 +1704,9 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	List *nonProjectedEntries = NIL;
 
 	/*
-	 * ReorderInsertSelectTargetLists() makes sure that first few columns of
-	 * the SELECT query match the insert targets. It might contain additional
-	 * items for GROUP BY, etc.
+	 * ReorderInsertSelectTargetLists() ensures that the first few columns of the
+	 * SELECT query match the insert targets. It might also include additional
+	 * items (for GROUP BY, etc.), so the insertTargetList is shorter.
 	 */
 	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
 
@@ -1780,71 +1719,20 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 
 	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
 	{
+		/*
+		 * Retrieve the target attribute corresponding to the insert entry.
+		 * The attribute is located at (resno - 1) in the tuple descriptor.
+		 */
 		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
 											   insertEntry->resno - 1);
 
-		Oid sourceType = exprType((Node *) selectEntry->expr);
-		Oid targetType = attr->atttypid;
-		if (sourceType != targetType)
-		{
-			/* ReorderInsertSelectTargetLists ensures we only have Vars */
-			Assert(IsA(insertEntry->expr, Var));
-
-			/* we will cast the SELECT expression, so the type changes */
-			Var *insertVar = (Var *) insertEntry->expr;
-			insertVar->vartype = targetType;
-			insertVar->vartypmod = attr->atttypmod;
-			insertVar->varcollid = attr->attcollation;
-
-			/*
-			 * We cannot modify the selectEntry in-place, because ORDER BY or
-			 * GROUP BY clauses might be pointing to it with comparison types
-			 * of the source type. So instead we keep the original one as a
-			 * non-projected entry, so GROUP BY and ORDER BY are happy, and
-			 * create a duplicated projected entry with the coerced expression.
-			 */
-			TargetEntry *coercedEntry = copyObject(selectEntry);
-			coercedEntry->expr = CastExpr((Expr *) selectEntry->expr, sourceType,
-										  targetType, attr->attcollation,
-										  attr->atttypmod);
-			coercedEntry->ressortgroupref = 0;
-
-			/*
-			 * The only requirement is that users don't use this name in ORDER BY
-			 * or GROUP BY, and it should be unique across the same query.
-			 */
-			StringInfo resnameString = makeStringInfo();
-			appendStringInfo(resnameString, "auto_coerced_by_citus_%d", targetEntryIndex);
-			coercedEntry->resname = resnameString->data;
-
-			projectedEntries = lappend(projectedEntries, coercedEntry);
-
-			if (selectEntry->ressortgroupref != 0)
-			{
-				selectEntry->resjunk = true;
-
-				/*
-				 * This entry might still end up in the SELECT output list, so
-				 * rename it to avoid ambiguity.
-				 *
-				 * See https://github.com/citusdata/citus/pull/3470.
-				 */
-				resnameString = makeStringInfo();
-				appendStringInfo(resnameString, "discarded_target_item_%d",
-								 targetEntryIndex);
-				selectEntry->resname = resnameString->data;
-
-				nonProjectedEntries = lappend(nonProjectedEntries, selectEntry);
-			}
-		}
-		else
-		{
-			projectedEntries = lappend(projectedEntries, selectEntry);
-		}
+		process_entry_pair(insertEntry, selectEntry, attr, targetEntryIndex,
+						   &projectedEntries, &nonProjectedEntries);
 
 		targetEntryIndex++;
 	}
 
+	/* Append any additional non-projected entries from selectTargetList */
 	for (int entryIndex = list_length(insertTargetList);
 		 entryIndex < list_length(selectTargetList);
 		 entryIndex++)
@@ -1853,18 +1741,100 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 																	entryIndex));
 	}
 
-	/* selectEntry->resno must be the ordinal number of the entry */
+	/* Concatenate projected and non-projected entries and reset resno numbering */
 	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
-	int entryResNo = 1;
-	TargetEntry *selectTargetEntry = NULL;
-	foreach_declared_ptr(selectTargetEntry, selectTargetList)
-	{
-		selectTargetEntry->resno = entryResNo++;
-	}
+	reset_target_entry_resno(selectTargetList);
 
 	table_close(distributedRelation, NoLock);
 
 	return selectTargetList;
+}
+
+
+/*
+ * Looks up the nextval(regclass) function in pg_proc, returning its actual
+ * rettype. In a standard build, that will be INT8OID, but this is more robust.
+ */
+static Oid
+GetNextvalReturnTypeCatalog(void)
+{
+	Oid argTypes[1] = { REGCLASSOID };
+	List *nameList = list_make1(makeString("nextval"));
+	Oid nextvalReturnType;
+
+	/* Look up the nextval(regclass) function */
+	Oid nextvalFuncOid = LookupFuncName(nameList, 1, argTypes, false);
+	if (!OidIsValid(nextvalFuncOid))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_FUNCTION),
+				 errmsg("could not find function nextval(regclass)")));
+	}
+
+	/* Retrieve and validate the return type of the nextval function */
+	nextvalReturnType = get_func_rettype(nextvalFuncOid);
+	if (!OidIsValid(nextvalReturnType))
+	{
+		elog(ERROR, "could not determine return type of nextval(regclass)");
+	}
+
+	return nextvalReturnType;
+}
+
+
+/* Helper function to set the target entry name using a formatted string */
+static void
+set_target_entry_name(TargetEntry *tle, const char *format, int index)
+{
+	StringInfo resnameString = makeStringInfo();
+	appendStringInfo(resnameString, format, index);
+	tle->resname = resnameString->data;
+}
+
+
+/**
+ * Modifies the given insert entry to match the target column's type and typmod,
+ * then creates and appends a new target entry containing a casted expression
+ * to the projected list. If the original select entry is used by ORDER BY or GROUP BY,
+ * it is marked as junk to avoid ambiguity.
+ */
+static void
+append_casted_entry(TargetEntry *insertEntry, TargetEntry *selectEntry,
+					Oid castFromType, Oid targetType, Oid collation, int32 typmod,
+					int targetEntryIndex,
+					List **projectedEntries, List **nonProjectedEntries)
+{
+	/* Update the insert entry's Var to match the target column's type, typmod, and collation */
+	Assert(IsA(insertEntry->expr, Var));
+	{
+		Var *insertVar = (Var *) insertEntry->expr;
+		insertVar->vartype = targetType;
+		insertVar->vartypmod = typmod;
+		insertVar->varcollid = collation;
+	}
+
+	/* Create a new TargetEntry with the casted expression */
+	TargetEntry *coercedEntry = copyObject(selectEntry);
+	coercedEntry->expr = CastExpr((Expr *) selectEntry->expr,
+								  castFromType,
+								  targetType,
+								  collation,
+								  typmod);
+	coercedEntry->ressortgroupref = 0;
+
+	/* Assign a unique name to the coerced entry */
+	set_target_entry_name(coercedEntry, "auto_coerced_by_citus_%d", targetEntryIndex);
+	*projectedEntries = lappend(*projectedEntries, coercedEntry);
+
+	/* If the original select entry is referenced in ORDER BY or GROUP BY,
+	 * mark it as junk and rename it to avoid ambiguity.
+	 */
+	if (selectEntry->ressortgroupref != 0)
+	{
+		selectEntry->resjunk = true;
+		set_target_entry_name(selectEntry, "discarded_target_item_%d", targetEntryIndex);
+		*nonProjectedEntries = lappend(*nonProjectedEntries, selectEntry);
+	}
 }
 
 
