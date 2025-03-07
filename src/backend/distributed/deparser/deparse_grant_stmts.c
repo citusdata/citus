@@ -38,8 +38,6 @@ deparseGrantSql(StringInfoData	 *stringInfoData, GrantStmt *grantStmt)
 	bool			isFirst = true;
 	bool			defaultObjectDeparser = false;
 
-	// elog(WARNING, "grant TREE: %s", nodeToString(grantStmt));
-
 	initStringInfo(&objectsStringInfoData);
 
 	switch(objectType)
@@ -161,10 +159,7 @@ deparseGrantSql(StringInfoData	 *stringInfoData, GrantStmt *grantStmt)
 		case OBJECT_TABLESPACE:
 		case OBJECT_TYPE:
 		case OBJECT_ROLE:
-			elog(WARNING, "grant TREE: %s", nodeToString(grantStmt));
 			return;
-			// elog(ERROR, "GRANT statement not managed by citus YET");
-			break;
 
 		/* no GRANT for those: */
 		// case OBJECT_ACCESS_METHOD:
@@ -199,8 +194,6 @@ deparseGrantSql(StringInfoData	 *stringInfoData, GrantStmt *grantStmt)
 		// case OBJECT_TSTEMPLATE:
 		// case OBJECT_USER_MAPPING:
 		default:
-			elog(WARNING, "grant TREE: %s", nodeToString(grantStmt));
-			// elog(ERROR, "Cannot deparse unsupported GRANT statement");
 			return;
 	}
 
@@ -314,7 +307,6 @@ deparseGrantSql(StringInfoData	 *stringInfoData, GrantStmt *grantStmt)
 		}
 	}
 	appendStringInfo(stringInfoData, ";");
-	// elog(WARNING, "deparsed grant: %s", stringInfoData->data);
 }
 
 char *
