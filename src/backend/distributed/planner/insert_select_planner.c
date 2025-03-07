@@ -1760,7 +1760,6 @@ GetNextvalReturnTypeCatalog(void)
 {
 	Oid argTypes[1] = { REGCLASSOID };
 	List *nameList = list_make1(makeString("nextval"));
-	Oid nextvalReturnType;
 
 	/* Look up the nextval(regclass) function */
 	Oid nextvalFuncOid = LookupFuncName(nameList, 1, argTypes, false);
@@ -1772,7 +1771,7 @@ GetNextvalReturnTypeCatalog(void)
 	}
 
 	/* Retrieve and validate the return type of the nextval function */
-	nextvalReturnType = get_func_rettype(nextvalFuncOid);
+	Oid nextvalReturnType = get_func_rettype(nextvalFuncOid);
 	if (!OidIsValid(nextvalReturnType))
 	{
 		elog(ERROR, "could not determine return type of nextval(regclass)");
