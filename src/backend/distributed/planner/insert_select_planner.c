@@ -1640,6 +1640,20 @@ process_entry_pair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 	Oid sourceType = exprType((Node *) selectEntry->expr);
 	Oid targetType = attr->atttypid;
 
+	/*
+	* If the select expression is a NextValueExpr, use its actual return type.
+	*
+	* NextValueExpr represents a call to the nextval() function, which is used to
+	* obtain the next value from a sequence—commonly for populating auto-increment
+	* columns. In many cases, nextval() returns an INT8 (bigint), but the actual
+	* return type may differ depending on database configuration or custom implementations.
+	*
+	* Since the target column might have a different type (e.g., INT4), we need to
+	* obtain the real return type of nextval() to ensure that any type coercion is applied
+	* correctly. This is done by calling GetNextvalReturnTypeCatalog(), which looks up the
+	* function in the catalog and returns its return type. The effectiveCastFromType is then
+	* set to this value, ensuring that subsequent comparisons and casts use the correct type.
+	*/
 	if (IsA(selectEntry->expr, NextValueExpr))
 	{
 		Oid nextvalType = GetNextvalReturnTypeCatalog();
