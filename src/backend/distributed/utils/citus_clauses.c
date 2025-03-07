@@ -100,6 +100,7 @@ PartiallyEvaluateExpression(Node *expression,
 	}
 
 	NodeTag nodeTag = nodeTag(expression);
+
 	/* ExecInitExpr cannot handle some expressions (PARAM_MULTIEXPR and PARAM_SUBLINK) */
 	if (!CheckExprExecutorSafe(expression))
 	{
@@ -109,6 +110,8 @@ PartiallyEvaluateExpression(Node *expression,
 	/* ExecInitExpr cannot handle PARAM_MULTIEXPR and PARAM_SUBLINK but we have guards */
 	else if (nodeTag == T_Param)
 	{
+		Assert(((Param *) expression)->paramkind != PARAM_MULTIEXPR &&
+			   ((Param *) expression)->paramkind != PARAM_SUBLINK);
 		return (Node *) citus_evaluate_expr((Expr *) expression,
 											exprType(expression),
 											exprTypmod(expression),
@@ -261,7 +264,9 @@ ShouldEvaluateExpression(Expr *expression)
 		}
 
 		default:
+		{
 			return false;
+		}
 	}
 }
 
