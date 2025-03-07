@@ -355,7 +355,18 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
-			IncrementStatCounter(STAT_CONNECTION_REUSED);
+			/*
+			 * Increment the connection stat counter for the connections that are
+			 * reused only if the connection is in a good state. Here we don't
+			 * bother shutting down the connection or such if it is not in a good
+			 * state but we mostly want to avoid incrementing the connection stat
+			 * counter for a connection that the caller cannot really use.
+			 */
+			if (PQstatus(connection->pgConn) == CONNECTION_OK)
+			{
+				IncrementStatCounter(STAT_CONNECTION_REUSED);
+			}
+
 			return connection;
 		}
 	}
