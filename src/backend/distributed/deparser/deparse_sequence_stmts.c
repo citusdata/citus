@@ -4,7 +4,7 @@
  *
  *	  All routines to deparse sequence statements.
  *	  This file contains all entry points specific for sequence statement
- *    deparsing
+ *    deparsing, except grant.
  *
  * Copyright (c), Citus Data, Inc.
  *
@@ -31,8 +31,6 @@ static void AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt);
 #if (PG_VERSION_NUM >= PG_VERSION_15)
 static void AppendAlterSequencePersistenceStmt(StringInfo buf, AlterTableStmt *stmt);
 #endif
-static void AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantOnSequenceSequences(StringInfo buf, GrantStmt *stmt);
 
 /*
  * DeparseDropSequenceStmt builds and returns a string representing the DropStmt
@@ -350,83 +348,3 @@ AppendAlterSequencePersistenceStmt(StringInfo buf, AlterTableStmt *stmt)
 
 
 #endif
-
-
-/*
- * DeparseGrantOnSequenceStmt builds and returns a string representing the GrantOnSequenceStmt
- */
-char *
-DeparseGrantOnSequenceStmt(Node *node)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_SEQUENCE);
-
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendGrantOnSequenceStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-/*
- * AppendGrantOnSequenceStmt builds and returns an SQL command representing a
- * GRANT .. ON SEQUENCE command from given GrantStmt object.
- */
-static void
-AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt)
-{
-	Assert(stmt->objtype == OBJECT_SEQUENCE);
-
-	if (stmt->targtype == ACL_TARGET_ALL_IN_SCHEMA)
-	{
-		/*
-		 * Normally we shouldn't reach this
-		 * We deparse a GrantStmt with OBJECT_SEQUENCE after setting targtype
-		 * to ACL_TARGET_OBJECT
-		 */
-		elog(ERROR,
-			 "GRANT .. ALL SEQUENCES IN SCHEMA is not supported for formatting.");
-	}
-
-	AppendGrantSharedPrefix(buf, stmt);
-
-	AppendGrantOnSequenceSequences(buf, stmt);
-
-	AppendGrantSharedSuffix(buf, stmt);
-}
-
-
-/*
- * AppendGrantOnSequenceSequences appends the sequence names along with their arguments
- * to the given StringInfo from the given GrantStmt
- */
-static void
-AppendGrantOnSequenceSequences(StringInfo buf, GrantStmt *stmt)
-{
-	Assert(stmt->objtype == OBJECT_SEQUENCE);
-
-	appendStringInfoString(buf, " ON SEQUENCE ");
-
-	ListCell *cell = NULL;
-	foreach(cell, stmt->objects)
-	{
-		/*
-		 * GrantOnSequence statement keeps its objects (sequences) as
-		 * a list of RangeVar-s
-		 */
-		RangeVar *sequence = (RangeVar *) lfirst(cell);
-
-		/*
-		 * We have qualified the statement beforehand
-		 */
-		appendStringInfoString(buf, quote_qualified_identifier(sequence->schemaname,
-															   sequence->relname));
-
-		if (cell != list_tail(stmt->objects))
-		{
-			appendStringInfoString(buf, ", ");
-		}
-	}
-}

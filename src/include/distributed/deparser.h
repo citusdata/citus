@@ -67,16 +67,12 @@ extern void QualifyAlterDomainOwnerStmt(Node *node);
 extern void QualifyRenameDomainStmt(Node *node);
 extern void QualifyAlterDomainSchemaStmt(Node *node);
 
-/* forward declarations for deparse_foreign_data_wrapper_stmts.c */
-extern char * DeparseGrantOnFDWStmt(Node *node);
-
 /* forward declarations for deparse_foreign_server_stmts.c */
 extern char * DeparseCreateForeignServerStmt(Node *node);
 extern char * DeparseAlterForeignServerStmt(Node *node);
 extern char * DeparseAlterForeignServerRenameStmt(Node *node);
 extern char * DeparseAlterForeignServerOwnerStmt(Node *node);
 extern char * DeparseDropForeignServerStmt(Node *node);
-extern char * DeparseGrantOnForeignServerStmt(Node *node);
 
 /* forward declarations for deparse_grant_stmts.c */
 extern char * DeparseGrantStmt(Node *node);
@@ -106,23 +102,8 @@ extern char * DeparseTextSearchDictionaryCommentStmt(Node *node);
 /* forward declarations for deparse_schema_stmts.c */
 extern char * DeparseCreateSchemaStmt(Node *node);
 extern char * DeparseDropSchemaStmt(Node *node);
-extern char * DeparseGrantOnSchemaStmt(Node *stmt);
 extern char * DeparseAlterSchemaRenameStmt(Node *stmt);
 extern char * DeparseAlterSchemaOwnerStmt(Node *node);
-
-extern void AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt);
-extern void AppendGrantGrantees(StringInfo buf, GrantStmt *stmt);
-extern void AppendWithGrantOption(StringInfo buf, GrantStmt *stmt);
-extern void AppendGrantOptionFor(StringInfo buf, GrantStmt *stmt);
-extern void AppendGrantRestrictAndCascadeForRoleSpec(StringInfo buf, DropBehavior
-													 behavior, bool isGrant);
-extern void AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt);
-extern void AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool
-											  isGrant);
-extern void AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt);
-
-extern void AppendGrantSharedPrefix(StringInfo buf, GrantStmt *stmt);
-extern void AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt);
 
 extern void AppendColumnNameList(StringInfo buf, List *columns);
 
@@ -218,8 +199,6 @@ extern char * DeparseAlterFunctionSchemaStmt(Node *stmt);
 extern char * DeparseAlterFunctionOwnerStmt(Node *stmt);
 extern char * DeparseAlterFunctionDependsStmt(Node *stmt);
 
-extern char * DeparseGrantOnFunctionStmt(Node *node);
-
 extern void AppendVariableSet(StringInfo buf, VariableSetStmt *setStmt);
 
 extern void QualifyAlterFunctionStmt(Node *stmt);
@@ -254,7 +233,6 @@ extern char * DeparseAlterExtensionStmt(Node *stmt);
 
 /* forward declarations for deparse_database_stmts.c */
 extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
-extern char * DeparseGrantOnDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseRefreshCollStmt(Node *node);
 extern char * DeparseAlterDatabaseSetStmt(Node *node);
@@ -305,7 +283,6 @@ extern char * DeparseAlterSequenceOwnerStmt(Node *node);
 #if (PG_VERSION_NUM >= PG_VERSION_15)
 extern char * DeparseAlterSequencePersistenceStmt(Node *node);
 #endif
-extern char * DeparseGrantOnSequenceStmt(Node *node);
 
 /* forward declarations for qualify_sequence_stmt.c */
 extern void QualifyRenameSequenceStmt(Node *node);

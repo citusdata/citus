@@ -2015,57 +2015,6 @@ EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
 
 
 /*
- * PreprocessGrantOnFunctionStmt is executed before the statement is applied to the local
- * postgres instance.
- *
- * In this stage we can prepare the commands that need to be run on all workers to grant
- * on distributed functions, procedures, routines.
- */
-List *
-PreprocessGrantOnFunctionStmt(Node *node, const char *queryString,
-							  ProcessUtilityContext processUtilityContext)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(isFunction(stmt->objtype));
-
-	List *distributedFunctions = FilterDistributedFunctions(stmt);
-
-	if (list_length(distributedFunctions) == 0 || !ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	List *grantFunctionList = NIL;
-	ObjectAddress *functionAddress = NULL;
-	foreach_ptr(functionAddress, distributedFunctions)
-	{
-		ObjectWithArgs *distFunction = ObjectWithArgsFromOid(
-			functionAddress->objectId);
-		grantFunctionList = lappend(grantFunctionList, distFunction);
-	}
-
-	List *originalObjects = stmt->objects;
-	GrantTargetType originalTargtype = stmt->targtype;
-
-	stmt->objects = grantFunctionList;
-	stmt->targtype = ACL_TARGET_OBJECT;
-
-	char *sql = DeparseTreeNode((Node *) stmt);
-
-	stmt->objects = originalObjects;
-	stmt->targtype = originalTargtype;
-
-	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
-								   (void *) sql,
-								   ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
-}
-
-
-/*
  * PostprocessGrantOnFunctionStmt makes sure dependencies of each
  * distributed function in the statement exist on all nodes
  */

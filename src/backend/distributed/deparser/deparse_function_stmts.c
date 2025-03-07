@@ -4,7 +4,7 @@
  *
  *	  All routines to deparse function and procedure statements.
  *	  This file contains all entry points specific for function and procedure statement
- *    deparsing
+ *    deparsing, except grant.
  *
  *	  Functions that could move later are AppendDefElem, AppendDefElemStrict, etc. These
  *	  should be reused across multiple statements and should live in their own deparse
@@ -66,9 +66,6 @@ static void AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt);
-
-static void AppendGrantOnFunctionStmt(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantOnFunctionFunctions(StringInfo buf, GrantStmt *stmt);
 
 static char * CopyAndConvertToUpperCase(const char *str);
 
@@ -555,88 +552,6 @@ CopyAndConvertToUpperCase(const char *str)
 	}
 
 	return result;
-}
-
-
-/*
- * DeparseGrantOnFunctionStmt builds and returns a string representing the GrantOnFunctionStmt
- */
-char *
-DeparseGrantOnFunctionStmt(Node *node)
-{
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(isFunction(stmt->objtype));
-
-	StringInfoData str = { 0 };
-	initStringInfo(&str);
-
-	AppendGrantOnFunctionStmt(&str, stmt);
-
-	return str.data;
-}
-
-
-/*
- * AppendGrantOnFunctionStmt builds and returns an SQL command representing a
- * GRANT .. ON FUNCTION command from given GrantStmt object.
- */
-static void
-AppendGrantOnFunctionStmt(StringInfo buf, GrantStmt *stmt)
-{
-	Assert(isFunction(stmt->objtype));
-
-	if (stmt->targtype == ACL_TARGET_ALL_IN_SCHEMA)
-	{
-		elog(ERROR,
-			 "GRANT .. ALL FUNCTIONS/PROCEDURES IN SCHEMA is not supported for formatting.");
-	}
-
-	AppendGrantSharedPrefix(buf, stmt);
-
-	AppendGrantOnFunctionFunctions(buf, stmt);
-
-	AppendGrantSharedSuffix(buf, stmt);
-}
-
-
-/*
- * AppendGrantOnFunctionFunctions appends the function names along with their arguments
- * to the given StringInfo from the given GrantStmt
- */
-static void
-AppendGrantOnFunctionFunctions(StringInfo buf, GrantStmt *stmt)
-{
-	ListCell *cell = NULL;
-
-	/*
-	 * The FUNCTION syntax works for plain functions, aggregate functions, and window
-	 * functions, but not for procedures; use PROCEDURE for those. Alternatively, use
-	 * ROUTINE to refer to a function, aggregate function, window function, or procedure
-	 * regardless of its precise type.
-	 * https://www.postgresql.org/docs/current/sql-grant.html
-	 */
-	appendStringInfo(buf, " ON ROUTINE ");
-
-	foreach(cell, stmt->objects)
-	{
-		/*
-		 * GrantOnFunction statement keeps its objects (functions) as
-		 * a list of ObjectWithArgs
-		 */
-		ObjectWithArgs *function = (ObjectWithArgs *) lfirst(cell);
-
-		appendStringInfoString(buf, NameListToString(function->objname));
-		if (!function->args_unspecified)
-		{
-			/* if args are specified, we should append "(arg1, arg2, ...)" to the function name */
-			const char *args = TypeNameListToString(function->objargs);
-			appendStringInfo(buf, "(%s)", args);
-		}
-		if (cell != list_tail(stmt->objects))
-		{
-			appendStringInfoString(buf, ", ");
-		}
-	}
 }
 
 

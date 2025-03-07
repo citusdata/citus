@@ -182,50 +182,6 @@ get_database_owner(Oid dbId)
 
 
 /*
- * PreprocessGrantOnDatabaseStmt is executed before the statement is applied to the local
- * postgres instance.
- *
- * In this stage we can prepare the commands that need to be run on all workers to grant
- * on databases.
- */
-List *
-PreprocessGrantOnDatabaseStmt(Node *node, const char *queryString,
-							  ProcessUtilityContext processUtilityContext)
-{
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	GrantStmt *stmt = castNode(GrantStmt, node);
-	Assert(stmt->objtype == OBJECT_DATABASE);
-
-	List *distributedDatabases = FilterDistributedDatabases(stmt->objects);
-
-	if (list_length(distributedDatabases) == 0)
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	List *originalObjects = stmt->objects;
-
-	stmt->objects = distributedDatabases;
-
-	char *sql = DeparseTreeNode((Node *) stmt);
-
-	stmt->objects = originalObjects;
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * FilterDistributedDatabases filters the database list and returns the distributed ones,
  * as a list.
  */
