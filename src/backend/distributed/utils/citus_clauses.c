@@ -41,6 +41,7 @@ static bool ShouldEvaluateExpression(Expr *expression);
 static bool ShouldEvaluateFunctions(CoordinatorEvaluationContext *evaluationContext);
 static void FixFunctionArguments(Node *expr);
 static bool FixFunctionArgumentsWalker(Node *expr, void *context);
+static bool CheckExprExecutorSafe(Node *expr);
 
 
 /*
@@ -99,15 +100,18 @@ PartiallyEvaluateExpression(Node *expression,
 	}
 
 	NodeTag nodeTag = nodeTag(expression);
-	if (nodeTag == T_Param)
-	{
-		Param *param = (Param *) expression;
-		if (param->paramkind == PARAM_SUBLINK)
-		{
-			/* ExecInitExpr cannot handle PARAM_SUBLINK */
-			return expression;
-		}
 
+	/* ExecInitExpr cannot handle some expressions (PARAM_MULTIEXPR and PARAM_SUBLINK) */
+	if (!CheckExprExecutorSafe(expression))
+	{
+		return expression;
+	}
+
+	/* ExecInitExpr cannot handle PARAM_MULTIEXPR and PARAM_SUBLINK but we have guards */
+	else if (nodeTag == T_Param)
+	{
+		Assert(((Param *) expression)->paramkind != PARAM_MULTIEXPR &&
+			   ((Param *) expression)->paramkind != PARAM_SUBLINK);
 		return (Node *) citus_evaluate_expr((Expr *) expression,
 											exprType(expression),
 											exprTypmod(expression),
@@ -260,7 +264,9 @@ ShouldEvaluateExpression(Expr *expression)
 		}
 
 		default:
+		{
 			return false;
+		}
 	}
 }
 
@@ -536,4 +542,49 @@ FixFunctionArgumentsWalker(Node *expr, void *context)
 	}
 
 	return expression_tree_walker(expr, FixFunctionArgumentsWalker, NULL);
+}
+
+
+/*
+ * Recursively explore an expression to ensure it can be used in the PostgreSQL
+ * ExecInitExpr.
+ * Currently only search for PARAM_MULTIEXPR or PARAM_SUBLINK.
+ */
+static bool
+CheckExprExecutorSafe(Node *expr)
+{
+	if (expr == NULL)
+	{
+		return true;
+	}
+
+	/*
+	 * If it's a Param, we're done traversing the tree.
+	 * Just check if it contins a sublink or multiexpr.
+	 */
+	else if (IsA(expr, Param))
+	{
+		Param *param = (Param *) expr;
+		if (param->paramkind == PARAM_MULTIEXPR ||
+			param->paramkind == PARAM_SUBLINK)
+		{
+			return false;
+		}
+	}
+
+	/* If it's a FuncExpr, search in arguments */
+	else if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *func = (FuncExpr *) expr;
+		ListCell *lc;
+
+		foreach(lc, func->args)
+		{
+			if (!CheckExprExecutorSafe((Node *) lfirst(lc)))
+			{
+				return false;
+			}
+		}
+	}
+	return true;
 }
