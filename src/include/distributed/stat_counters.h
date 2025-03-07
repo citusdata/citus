@@ -11,11 +11,6 @@
 #ifndef STAT_COUNTERS_H
 #define STAT_COUNTERS_H
 
-#if PG_VERSION_NUM >= 170000
-#include <storage/proc.h>
-#else
-#include <storage/backendid.h>
-#endif
 #include <port/atomics.h>
 
 #define MAX_STAT_NAME_LENGTH 255
