@@ -170,12 +170,10 @@ static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 static void CopyLocalDataIntoShards(Oid distributedTableId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static bool DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 															 Var *distributionColumn);
 static int numeric_typmod_scale(int32 typmod);
 static bool is_valid_numeric_typmod(int32 typmod);
-#endif
 
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 														Var *distributionColumn);
@@ -1325,10 +1323,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	{
 		List *partitionList = PartitionList(relationId);
 		Oid partitionRelationId = InvalidOid;
-		Oid namespaceId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(namespaceId);
-		char *relationName = get_rel_name(relationId);
-		char *parentRelationName = quote_qualified_identifier(schemaName, relationName);
+		char *parentRelationName = generate_qualified_relation_name(relationId);
 
 		/*
 		 * when there are many partitions, each call to CreateDistributedTable
@@ -2117,8 +2112,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 								  "AS (...) STORED.")));
 	}
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 	/* verify target relation is not distributed by a column of type numeric with negative scale */
 	if (distributionMethod != DISTRIBUTE_BY_NONE &&
 		DistributionColumnUsesNumericColumnNegativeScale(relationDesc,
@@ -2129,7 +2122,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 						errdetail("Distribution column must not use numeric type "
 								  "with negative scale")));
 	}
-#endif
 
 	/* check for support function needed by specified partition method */
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
@@ -2847,8 +2839,6 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 }
 
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 /*
  * is_valid_numeric_typmod checks if the typmod value is valid
  *
@@ -2897,8 +2887,6 @@ DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 	return false;
 }
 
-
-#endif
 
 /*
  * DistributionColumnUsesGeneratedStoredColumn returns whether a given relation uses

@@ -68,8 +68,6 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	char *collcollate;
 	char *collctype;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 	/*
 	 * In PG15, there is an added option to use ICU as global locale provider.
 	 * pg_collation has three locale-related fields: collcollate and collctype,
@@ -112,16 +110,6 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	}
 
 	Assert((collcollate && collctype) || colllocale);
-#else
-
-	/*
-	 * In versions before 15, collcollate and collctype were type "name". Use
-	 * pstrdup() to match the interface of 15 so that we consistently free the
-	 * result later.
-	 */
-	collcollate = pstrdup(NameStr(collationForm->collcollate));
-	collctype = pstrdup(NameStr(collationForm->collctype));
-#endif
 
 	if (collowner != NULL)
 	{
@@ -147,7 +135,6 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 					 "CREATE COLLATION %s (provider = '%s'",
 					 *quotedCollationName, providerString);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	if (colllocale)
 	{
 		appendStringInfo(&collationNameDef,
@@ -173,24 +160,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 		pfree(collcollate);
 		pfree(collctype);
 	}
-#else
-	if (strcmp(collcollate, collctype) == 0)
-	{
-		appendStringInfo(&collationNameDef,
-						 ", locale = %s",
-						 quote_literal_cstr(collcollate));
-	}
-	else
-	{
-		appendStringInfo(&collationNameDef,
-						 ", lc_collate = %s, lc_ctype = %s",
-						 quote_literal_cstr(collcollate),
-						 quote_literal_cstr(collctype));
-	}
 
-	pfree(collcollate);
-	pfree(collctype);
-#endif
 #if PG_VERSION_NUM >= PG_VERSION_16
 	char *collicurules = NULL;
 	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_collicurules, &isnull);

@@ -1143,7 +1143,7 @@ ConflictWithIsolationTestingBeforeCopy(void)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	if (RunningUnderIsolationTest)
+	if (RunningUnderCitusTestSuite)
 	{
 		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
 							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY,
@@ -1177,7 +1177,7 @@ ConflictWithIsolationTestingAfterCopy(void)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	if (RunningUnderIsolationTest)
+	if (RunningUnderCitusTestSuite)
 	{
 		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
 							 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
@@ -1882,14 +1882,15 @@ WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
 										   GetCurrentTimestamp(),
 										   logicalReplicationProgressReportTimeout))
 			{
-				ereport(LOG, (errmsg(
-								  "The LSN of the target subscriptions on node %s:%d have "
-								  "increased from %ld to %ld at %s where the source LSN is %ld  ",
-								  superuserConnection->hostname,
-								  superuserConnection->port, previousTargetBeforeThisLoop,
-								  targetPosition,
-								  timestamptz_to_str(previousLSNIncrementTime),
-								  sourcePosition)));
+				ereport(LOG, (errmsg("The LSN of the target subscriptions on node %s:%d "
+									 "has increased from %X/%X to %X/%X at %s where the "
+									 "source LSN is %X/%X ",
+									 superuserConnection->hostname,
+									 superuserConnection->port,
+									 LSN_FORMAT_ARGS(previousTargetBeforeThisLoop),
+									 LSN_FORMAT_ARGS(targetPosition),
+									 timestamptz_to_str(previousLSNIncrementTime),
+									 LSN_FORMAT_ARGS(sourcePosition))));
 
 				previousReportTime = GetCurrentTimestamp();
 			}

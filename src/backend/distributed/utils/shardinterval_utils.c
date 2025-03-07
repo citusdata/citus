@@ -470,12 +470,11 @@ SingleReplicatedTable(Oid relationId)
 		return false;
 	}
 
-	List *shardIntervalList = LoadShardList(relationId);
 	uint64 *shardIdPointer = NULL;
-	foreach_declared_ptr(shardIdPointer, shardIntervalList)
+	foreach_declared_ptr(shardIdPointer, shardList)
 	{
 		uint64 shardId = *shardIdPointer;
-		shardPlacementList = ShardPlacementListSortedByWorker(shardId);
+		shardPlacementList = ShardPlacementList(shardId);
 
 		if (list_length(shardPlacementList) != 1)
 		{

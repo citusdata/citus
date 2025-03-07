@@ -259,14 +259,15 @@ extern void QualifyRenameTextSearchDictionaryStmt(Node *node);
 extern void QualifyTextSearchConfigurationCommentStmt(Node *node);
 extern void QualifyTextSearchDictionaryCommentStmt(Node *node);
 
+/* forward declarations for deparse_seclabel_stmts.c */
+extern char * DeparseSecLabelStmt(Node *node);
+
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *node);
 extern char * DeparseRenameSequenceStmt(Node *node);
 extern char * DeparseAlterSequenceSchemaStmt(Node *node);
 extern char * DeparseAlterSequenceOwnerStmt(Node *node);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 extern char * DeparseAlterSequencePersistenceStmt(Node *node);
-#endif
 extern char * DeparseGrantOnSequenceStmt(Node *node);
 
 /* forward declarations for qualify_sequence_stmt.c */
@@ -274,9 +275,7 @@ extern void QualifyRenameSequenceStmt(Node *node);
 extern void QualifyDropSequenceStmt(Node *node);
 extern void QualifyAlterSequenceSchemaStmt(Node *node);
 extern void QualifyAlterSequenceOwnerStmt(Node *node);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 extern void QualifyAlterSequencePersistenceStmt(Node *node);
-#endif
 extern void QualifyGrantOnSequenceStmt(Node *node);
 
 #endif /* CITUS_DEPARSER_H */

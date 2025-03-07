@@ -28,13 +28,13 @@ jobs:
       image: ${{ vars.build_image_name }}:${{ vars.pg15_version  }}${{ vars.image_suffix }}
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Configure, Build, and Install
       run: |
         echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
         ./ci/build-citus.sh
       shell: bash
-    - uses: actions/upload-artifact@v3.1.1
+    - uses: actions/upload-artifact@v4.6.0
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
@@ -46,7 +46,7 @@ jobs:
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
-      - uses: actions/checkout@v3.5.0
+      - uses: actions/checkout@v4
       - uses: "./.github/actions/parallelization"
         id: parallelization
         with:
@@ -67,7 +67,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix.outputs.json) }}
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-

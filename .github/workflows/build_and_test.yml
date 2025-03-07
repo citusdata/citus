@@ -26,13 +26,13 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "17.1"
-      image_suffix: "-v84c0cf8"
-      pg14_version: '{ "major": "14", "full": "14.14" }'
-      pg15_version: '{ "major": "15", "full": "15.9" }'
-      pg16_version: '{ "major": "16", "full": "16.5" }'
-      pg17_version: '{ "major": "17", "full": "17.1" }'
-      upgrade_pg_versions: "14.14-15.9-16.5-17.1"
+      sql_snapshot_pg_version: "17.2"
+      image_suffix: "-v889e4c1"
+      image_suffix_citus_upgrade: "-dev-2ad1f90"
+      pg15_version: '{ "major": "15", "full": "15.10" }'
+      pg16_version: '{ "major": "16", "full": "16.6" }'
+      pg17_version: '{ "major": "17", "full": "17.2" }'
+      upgrade_pg_versions: "14.15-15.10-16.6-17.2"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -44,7 +44,7 @@ jobs:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
@@ -58,7 +58,7 @@ jobs:
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: Check C Style
@@ -106,7 +106,6 @@ jobs:
         image_suffix:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
@@ -115,14 +114,14 @@ jobs:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - name: Expose $PG_MAJOR to Github Env
       run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
       shell: bash
     - name: Build
       run: "./ci/build-citus.sh"
       shell: bash
-    - uses: actions/upload-artifact@v3.1.1
+    - uses: actions/upload-artifact@v4.6.0
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
@@ -138,7 +137,6 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
@@ -160,10 +158,6 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
@@ -176,10 +170,6 @@ jobs:
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
@@ -189,10 +179,6 @@ jobs:
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg17_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg14_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
@@ -219,10 +205,6 @@ jobs:
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg17_version }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg14_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
@@ -246,7 +228,7 @@ jobs:
     - params
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
     - name: Run Test
       run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
@@ -275,13 +257,12 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg14_version }}
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
     - name: Test arbitrary configs
       run: |-
@@ -303,10 +284,12 @@ jobs:
             check-arbitrary-configs parallel=4 CONFIGS=$TESTS
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
@@ -321,23 +304,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - old_pg_major: 14
-            new_pg_major: 15
           - old_pg_major: 15
-            new_pg_major: 16
-          - old_pg_major: 14
             new_pg_major: 16
           - old_pg_major: 16
             new_pg_major: 17
           - old_pg_major: 15
             new_pg_major: 17
-          - old_pg_major: 14
-            new_pg_major: 17
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
       with:
         pg_major: "${{ env.old_pg_major }}"
@@ -360,22 +337,24 @@ jobs:
       if: failure()
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ fromJson(needs.params.outputs.pg14_version).major }} - check-citus-upgrade
+    name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg14_version).full }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix_citus_upgrade }}"
       options: --user root
     needs:
     - params
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
       with:
         skip_installation: true
@@ -405,10 +384,12 @@ jobs:
         done;
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
+      with:
+        folder: ${{ env.PG_MAJOR }}_citus_upgrade
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
-        flags: ${{ env.pg_major }}_upgrade
+        flags: ${{ env.PG_MAJOR }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
     if: always()
@@ -424,10 +405,11 @@ jobs:
       - test-citus-upgrade
       - test-pg-upgrade
     steps:
-      - uses: actions/download-artifact@v3.0.1
+      - uses: actions/download-artifact@v4.1.8
         with:
-          name: "codeclimate"
-          path: "codeclimate"
+          pattern: codeclimate*
+          path: codeclimate
+          merge-multiple: true
       - name: Upload coverage results to Code Climate
         run: |-
           cc-test-reporter sum-coverage codeclimate/*.json -o total.json
@@ -439,7 +421,7 @@ jobs:
     needs:
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -457,7 +439,7 @@ jobs:
     needs:
     - build
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
     - uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -476,7 +458,7 @@ jobs:
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
-      - uses: actions/checkout@v3.5.0
+      - uses: actions/checkout@v4
       - uses: "./.github/actions/parallelization"
         id: parallelization
         with:
@@ -489,7 +471,7 @@ jobs:
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
     steps:
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: Detect regression tests need to be ran
@@ -524,8 +506,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
     steps:
-    - uses: actions/checkout@v3.5.0
-    - uses: actions/download-artifact@v3.0.1
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4.1.8
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-

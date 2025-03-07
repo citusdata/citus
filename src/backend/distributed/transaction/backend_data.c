@@ -395,7 +395,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 		bool showCurrentBackendDetails = showAllBackends;
 		BackendData *currentBackend =
 			&backendManagementShmemData->backends[backendIndex];
-		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
+		PGPROC *currentProc = GetPGProcByNumber(backendIndex);
 
 		/* to work on data after releasing g spinlock to protect against errors */
 		uint64 transactionNumber = 0;
@@ -420,7 +420,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 		}
 
 		Oid databaseId = currentBackend->databaseId;
-		int backendPid = ProcGlobal->allProcs[backendIndex].pid;
+		int backendPid = GetPGProcByNumber(backendIndex)->pid;
 
 		/*
 		 * We prefer to use worker_query instead of distributedCommandOriginator in
@@ -519,15 +519,6 @@ UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 void
 InitializeBackendManagement(void)
 {
-/* on PG 15, we use shmem_request_hook_type */
-#if PG_VERSION_NUM < PG_VERSION_15
-
-	/* allocate shared memory */
-	if (!IsUnderPostmaster)
-	{
-		RequestAddinShmemSpace(BackendManagementShmemSize());
-	}
-#endif
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = BackendManagementShmemInit;
 }
@@ -855,6 +846,16 @@ GetCurrentDistributedTransactionId(void)
 void
 AssignDistributedTransactionId(void)
 {
+	/*
+	 * MyBackendData should always be available. However, we observed some
+	 * crashes where certain hooks were not executed.
+	 * Bug 3697586: Server crashes when assigning distributed transaction
+	 */
+	if (!MyBackendData)
+	{
+		ereport(ERROR, (errmsg("backend is not ready for distributed transactions")));
+	}
+
 	pg_atomic_uint64 *transactionNumberSequence =
 		&backendManagementShmemData->nextTransactionNumber;
 
@@ -960,6 +961,23 @@ SetBackendDataGlobalPID(uint64 gpid)
 	}
 	SpinLockAcquire(&MyBackendData->mutex);
 	MyBackendData->globalPID = gpid;
+	SpinLockRelease(&MyBackendData->mutex);
+}
+
+
+/*
+ * SetBackendDataDistributedCommandOriginator sets the distributedCommandOriginator
+ * field on MyBackendData.
+ */
+void
+SetBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
+{
+	if (!MyBackendData)
+	{
+		return;
+	}
+	SpinLockAcquire(&MyBackendData->mutex);
+	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
 	SpinLockRelease(&MyBackendData->mutex);
 }
 
@@ -1280,7 +1298,7 @@ ActiveDistributedTransactionNumbers(void)
 	/* build list of starting procs */
 	for (int curBackend = 0; curBackend < MaxBackends; curBackend++)
 	{
-		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
+		PGPROC *currentProc = GetPGProcByNumber(curBackend);
 		BackendData currentBackendData;
 
 		if (currentProc->pid == 0)

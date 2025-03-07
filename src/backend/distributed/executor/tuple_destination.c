@@ -109,7 +109,7 @@ TupleStoreTupleDestPutTuple(TupleDestination *self, Task *task,
 	uint64 tupleSize = tupleLibpqSize;
 	if (tupleSize == 0)
 	{
-		tupleSize = HeapTupleHeaderGetDatumLength(heapTuple);
+		tupleSize = heapTuple->t_len;
 	}
 
 	/*

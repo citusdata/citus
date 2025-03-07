@@ -561,7 +561,7 @@ BuildLocalWaitGraph(bool onlyDistributedTx)
 	/* build list of starting procs */
 	for (int curBackend = 0; curBackend < totalProcs; curBackend++)
 	{
-		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
+		PGPROC *currentProc = GetPGProcByNumber(curBackend);
 		BackendData currentBackendData;
 
 		if (currentProc->pid == 0)

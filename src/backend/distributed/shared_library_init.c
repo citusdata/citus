@@ -27,6 +27,7 @@
 #include "catalog/pg_extension.h"
 #include "commands/explain.h"
 #include "commands/extension.h"
+#include "commands/seclabel.h"
 #include "common/string.h"
 #include "executor/executor.h"
 #include "libpq/auth.h"
@@ -173,15 +174,11 @@ static bool FinishedStartupCitusBackend = false;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
-#endif
 
 void _PG_init(void);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void citus_shmem_request(void);
-#endif
 static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
 								  subId, void *arg);
 static void DoInitialCleanup(void);
@@ -474,10 +471,8 @@ _PG_init(void)
 	original_client_auth_hook = ClientAuthentication_hook;
 	ClientAuthentication_hook = CitusAuthHook;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	prev_shmem_request_hook = shmem_request_hook;
 	shmem_request_hook = citus_shmem_request;
-#endif
 
 	InitializeMaintenanceDaemon();
 
@@ -572,6 +567,16 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+
+	/*
+	 * This part is only for SECURITY LABEL tests
+	 * mimicking what an actual security label provider would do
+	 */
+	if (RunningUnderCitusTestSuite)
+	{
+		register_label_provider("citus '!tests_label_provider",
+								citus_test_object_relabel);
+	}
 }
 
 
@@ -591,8 +596,6 @@ AdjustDynamicLibraryPathForCdcDecoders(void)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 /*
  * Requests any additional shared memory required for citus.
  */
@@ -611,9 +614,6 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 }
-
-
-#endif
 
 
 /*
@@ -2293,13 +2293,14 @@ RegisterCitusConfigVariables(void)
 		WarnIfReplicationModelIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.running_under_isolation_test",
+		"citus.running_under_citus_test_suite",
 		gettext_noop(
 			"Only useful for testing purposes, when set to true, Citus does some "
-			"tricks to implement useful isolation tests with rebalancing. Should "
+			"tricks to implement useful isolation tests with rebalancing. It also "
+			"registers a dummy label provider for SECURITY LABEL tests. Should "
 			"never be set to true on production systems "),
 		gettext_noop("for details of the tricks implemented, refer to the source code"),
-		&RunningUnderIsolationTest,
+		&RunningUnderCitusTestSuite,
 		false,
 		PGC_SUSET,
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
@@ -2853,14 +2854,27 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	DetermineCitusBackendType(newval);
 
 	/*
-	 * AssignGlobalPID might read from catalog tables to get the the local
-	 * nodeid. But ApplicationNameAssignHook might be called before catalog
-	 * access is available to the backend (such as in early stages of
-	 * authentication). We use StartupCitusBackend to initialize the global pid
-	 * after catalogs are available. After that happens this hook becomes
-	 * responsible to update the global pid on later application_name changes.
-	 * So we set the FinishedStartupCitusBackend flag in StartupCitusBackend to
-	 * indicate when this responsibility handoff has happened.
+	 * We use StartupCitusBackend to initialize the global pid after catalogs
+	 * are available. After that happens this hook becomes responsible to update
+	 * the global pid on later application_name changes. So we set the
+	 * FinishedStartupCitusBackend flag in StartupCitusBackend to indicate when
+	 * this responsibility handoff has happened.
+	 *
+	 * Also note that when application_name changes, we don't actually need to
+	 * try re-assigning the global pid for external client backends and
+	 * background workers because application_name doesn't affect the global
+	 * pid for such backends - note that !IsExternalClientBackend() check covers
+	 * both types of backends. Plus,
+	 * trying to re-assign the global pid for such backends would unnecessarily
+	 * cause performing a catalog access when the cached local node id is
+	 * invalidated. However, accessing to the catalog tables is dangerous in
+	 * certain situations like when we're not in a transaction block. And for
+	 * the other types of backends, i.e., the Citus internal backends, we need
+	 * to re-assign the global pid when the application_name changes because for
+	 * such backends we simply extract the global pid inherited from the
+	 * originating backend from the application_name -that's specified by
+	 * originating backend when openning that connection- and this doesn't require
+	 * catalog access.
 	 *
 	 * Another solution to the catalog table acccess problem would be to update
 	 * global pid lazily, like we do for HideShards. But that's not possible
@@ -2870,7 +2884,7 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	 * as reasonably possible, which is also why we extract global pids in the
 	 * AuthHook already (extracting doesn't require catalog access).
 	 */
-	if (FinishedStartupCitusBackend)
+	if (FinishedStartupCitusBackend && !IsExternalClientBackend())
 	{
 		AssignGlobalPID(newval);
 	}
@@ -2905,6 +2919,9 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslcrl",
 		"sslkey",
 		"sslmode",
+#if PG_VERSION_NUM >= PG_VERSION_17
+		"sslnegotiation",
+#endif
 		"sslrootcert",
 		"tcp_user_timeout",
 	};

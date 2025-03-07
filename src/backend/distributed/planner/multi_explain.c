@@ -95,14 +95,24 @@ typedef struct
 	bool wal;
 	bool timing;
 	bool summary;
+#if PG_VERSION_NUM >= PG_VERSION_17
+	bool memory;
+	ExplainSerializeOption serialize;
+#endif
 	ExplainFormat format;
 } ExplainOptions;
 
 
 /* EXPLAIN flags of current distributed explain */
+#if PG_VERSION_NUM >= PG_VERSION_17
+static ExplainOptions CurrentDistributedQueryExplainOptions = {
+	0, 0, 0, 0, 0, 0, 0, EXPLAIN_SERIALIZE_NONE, EXPLAIN_FORMAT_TEXT
+};
+#else
 static ExplainOptions CurrentDistributedQueryExplainOptions = {
 	0, 0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT
 };
+#endif
 
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
@@ -124,6 +134,59 @@ typedef struct ExplainAnalyzeDestination
 	TupleDesc lastSavedExplainAnalyzeTupDesc;
 } ExplainAnalyzeDestination;
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+/*
+ * Various places within need to convert bytes to kilobytes.  Round these up
+ * to the next whole kilobyte.
+ * copied from explain.c
+ */
+#define BYTES_TO_KILOBYTES(b) (((b) + 1023) / 1024)
+
+/* copied from explain.c */
+/* Instrumentation data for SERIALIZE option */
+typedef struct SerializeMetrics
+{
+	uint64 bytesSent;           /* # of bytes serialized */
+	instr_time timeSpent;       /* time spent serializing */
+	BufferUsage bufferUsage;    /* buffers accessed during serialization */
+} SerializeMetrics;
+
+/* copied from explain.c */
+static bool peek_buffer_usage(ExplainState *es, const BufferUsage *usage);
+static void show_buffer_usage(ExplainState *es, const BufferUsage *usage);
+static void show_memory_counters(ExplainState *es,
+								 const MemoryContextCounters *mem_counters);
+static void ExplainIndentText(ExplainState *es);
+static void ExplainPrintSerialize(ExplainState *es,
+								  SerializeMetrics *metrics);
+static SerializeMetrics GetSerializationMetrics(DestReceiver *dest);
+
+/*
+ * DestReceiver functions for SERIALIZE option
+ *
+ * A DestReceiver for query tuples, that serializes passed rows into RowData
+ * messages while measuring the resources expended and total serialized size,
+ * while never sending the data to the client.  This allows measuring the
+ * overhead of deTOASTing and datatype out/sendfuncs, which are not otherwise
+ * exercisable without actually hitting the network.
+ *
+ * copied from explain.c
+ */
+typedef struct SerializeDestReceiver
+{
+	DestReceiver pub;
+	ExplainState *es;           /* this EXPLAIN statement's ExplainState */
+	int8 format;                /* text or binary, like pq wire protocol */
+	TupleDesc attrinfo;         /* the output tuple desc */
+	int nattrs;                 /* current number of columns */
+	FmgrInfo *finfos;           /* precomputed call info for output fns */
+	MemoryContext tmpcontext;   /* per-row temporary memory context */
+	StringInfoData buf;         /* buffer to hold the constructed message */
+	SerializeMetrics metrics;   /* collected metrics */
+} SerializeDestReceiver;
+#endif
+
 
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
@@ -144,14 +207,27 @@ static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOut
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
 static const char * ExplainFormatStr(ExplainFormat format);
+#if PG_VERSION_NUM >= PG_VERSION_17
+static const char * ExplainSerializeStr(ExplainSerializeOption serializeOption);
+#endif
 static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
 							  ExplainState *es,
 							  const char *queryString, ParamListInfo params,
 							  QueryEnvironment *queryEnv,
 							  const instr_time *planduration,
+#if PG_VERSION_NUM >= PG_VERSION_17
+							  const BufferUsage *bufusage,
+							  const MemoryContextCounters *mem_counters,
+#endif
 							  double *executionDurationMillisec);
 static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
 											   ExplainFormat defaultValue);
+#if PG_VERSION_NUM >= PG_VERSION_17
+static ExplainSerializeOption ExtractFieldExplainSerialize(Datum jsonbDoc,
+														   const char *fieldName,
+														   ExplainSerializeOption
+														   defaultValue);
+#endif
 static TupleDestination * CreateExplainAnlyzeDestination(Task *task,
 														 TupleDestination *taskDest);
 static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
@@ -190,6 +266,14 @@ PG_FUNCTION_INFO_V1(worker_save_query_explain_analyze);
 void
 CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es)
 {
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (es->generic)
+	{
+		ereport(ERROR, (errmsg(
+							"EXPLAIN GENERIC_PLAN is currently not supported for Citus tables")));
+	}
+#endif
+
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
@@ -1017,24 +1101,30 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 {
 	StringInfo explainQuery = makeStringInfo();
 	const char *formatStr = ExplainFormatStr(es->format);
+#if PG_VERSION_NUM >= PG_VERSION_17
+	const char *serializeStr = ExplainSerializeStr(es->serialize);
+#endif
+
 
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
 					 "COSTS %s, BUFFERS %s, WAL %s, "
-#if PG_VERSION_NUM >= PG_VERSION_16
-					 "GENERIC_PLAN %s, "
+					 "TIMING %s, SUMMARY %s, "
+#if PG_VERSION_NUM >= PG_VERSION_17
+					 "MEMORY %s, SERIALIZE %s, "
 #endif
-					 "TIMING %s, SUMMARY %s, FORMAT %s) %s",
+					 "FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
 					 es->costs ? "TRUE" : "FALSE",
 					 es->buffers ? "TRUE" : "FALSE",
 					 es->wal ? "TRUE" : "FALSE",
-#if PG_VERSION_NUM >= PG_VERSION_16
-					 es->generic ? "TRUE" : "FALSE",
-#endif
 					 es->timing ? "TRUE" : "FALSE",
 					 es->summary ? "TRUE" : "FALSE",
+#if PG_VERSION_NUM >= PG_VERSION_17
+					 es->memory ? "TRUE" : "FALSE",
+					 serializeStr,
+#endif
 					 formatStr,
 					 queryString);
 
@@ -1071,6 +1161,42 @@ ExplainFormatStr(ExplainFormat format)
 		}
 	}
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+/*
+ * ExplainSerializeStr converts the given explain serialize option to string.
+ */
+static const char *
+ExplainSerializeStr(ExplainSerializeOption serializeOption)
+{
+	switch (serializeOption)
+	{
+		case EXPLAIN_SERIALIZE_NONE:
+		{
+			return "none";
+		}
+
+		case EXPLAIN_SERIALIZE_TEXT:
+		{
+			return "text";
+		}
+
+		case EXPLAIN_SERIALIZE_BINARY:
+		{
+			return "binary";
+		}
+
+		default:
+		{
+			return "none";
+		}
+	}
+}
+
+
+#endif
 
 
 /*
@@ -1132,6 +1258,11 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	es->verbose = ExtractFieldBoolean(explainOptions, "verbose", es->verbose);
 	es->timing = ExtractFieldBoolean(explainOptions, "timing", es->timing);
 	es->format = ExtractFieldExplainFormat(explainOptions, "format", es->format);
+#if PG_VERSION_NUM >= PG_VERSION_17
+	es->memory = ExtractFieldBoolean(explainOptions, "memory", es->memory);
+	es->serialize = ExtractFieldExplainSerialize(explainOptions, "serialize",
+												 es->serialize);
+#endif
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
@@ -1158,8 +1289,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	}
 
 	/* resolve OIDs of unknown (user-defined) types */
-	Query *analyzedQuery = parse_analyze_varparams_compat(parseTree, queryString,
-														  &paramTypes, &numParams, NULL);
+	Query *analyzedQuery = parse_analyze_varparams(parseTree, queryString,
+												   &paramTypes, &numParams, NULL);
 
 	/* pg_rewrite_query is a wrapper around QueryRewrite with some debugging logic */
 	List *queryList = pg_rewrite_query(analyzedQuery);
@@ -1177,6 +1308,36 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	/* plan query and record planning stats */
 	instr_time planStart;
 	instr_time planDuration;
+#if PG_VERSION_NUM >= PG_VERSION_17
+	BufferUsage bufusage_start,
+				bufusage;
+	MemoryContextCounters mem_counters;
+	MemoryContext planner_ctx = NULL;
+	MemoryContext saved_ctx = NULL;
+
+	if (es->memory)
+	{
+		/*
+		 * Create a new memory context to measure planner's memory consumption
+		 * accurately.  Note that if the planner were to be modified to use a
+		 * different memory context type, here we would be changing that to
+		 * AllocSet, which might be undesirable.  However, we don't have a way
+		 * to create a context of the same type as another, so we pray and
+		 * hope that this is OK.
+		 *
+		 * copied from explain.c
+		 */
+		planner_ctx = AllocSetContextCreate(CurrentMemoryContext,
+											"explain analyze planner context",
+											ALLOCSET_DEFAULT_SIZES);
+		saved_ctx = MemoryContextSwitchTo(planner_ctx);
+	}
+
+	if (es->buffers)
+	{
+		bufusage_start = pgBufferUsage;
+	}
+#endif
 
 	INSTR_TIME_SET_CURRENT(planStart);
 
@@ -1185,9 +1346,32 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+	if (es->memory)
+	{
+		MemoryContextSwitchTo(saved_ctx);
+		MemoryContextMemConsumed(planner_ctx, &mem_counters);
+	}
+
+	/* calc differences of buffer counters. */
+	if (es->buffers)
+	{
+		memset(&bufusage, 0, sizeof(BufferUsage));
+		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+	}
+
+	/* do the actual EXPLAIN ANALYZE */
+	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, boundParams, NULL,
+					  &planDuration,
+					  (es->buffers ? &bufusage : NULL),
+					  (es->memory ? &mem_counters : NULL),
+					  &executionDurationMillisec);
+#else
+
 	/* do the actual EXPLAIN ANALYZE */
 	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, boundParams, NULL,
 					  &planDuration, &executionDurationMillisec);
+#endif
 
 	ExplainEndOutput(es);
 
@@ -1256,6 +1440,50 @@ ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName, ExplainFormat
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+/*
+ * ExtractFieldExplainSerialize gets value of fieldName from jsonbDoc, or returns
+ * defaultValue if it doesn't exist.
+ */
+static ExplainSerializeOption
+ExtractFieldExplainSerialize(Datum jsonbDoc, const char *fieldName, ExplainSerializeOption
+							 defaultValue)
+{
+	Datum jsonbDatum = 0;
+	bool found = ExtractFieldJsonbDatum(jsonbDoc, fieldName, &jsonbDatum);
+	if (!found)
+	{
+		return defaultValue;
+	}
+
+	const char *serializeStr = DatumGetCString(DirectFunctionCall1(jsonb_out,
+																   jsonbDatum));
+	if (pg_strcasecmp(serializeStr, "\"none\"") == 0)
+	{
+		return EXPLAIN_SERIALIZE_NONE;
+	}
+	else if (pg_strcasecmp(serializeStr, "\"off\"") == 0)
+	{
+		return EXPLAIN_SERIALIZE_NONE;
+	}
+	else if (pg_strcasecmp(serializeStr, "\"text\"") == 0)
+	{
+		return EXPLAIN_SERIALIZE_TEXT;
+	}
+	else if (pg_strcasecmp(serializeStr, "\"binary\"") == 0)
+	{
+		return EXPLAIN_SERIALIZE_BINARY;
+	}
+
+	ereport(ERROR, (errmsg("Invalid explain analyze serialize: %s", serializeStr)));
+	return 0;
+}
+
+
+#endif
+
+
 /*
  * CitusExplainOneQuery is the executor hook that is called when
  * postgres wants to explain a query.
@@ -1273,6 +1501,10 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	CurrentDistributedQueryExplainOptions.summary = es->summary;
 	CurrentDistributedQueryExplainOptions.timing = es->timing;
 	CurrentDistributedQueryExplainOptions.format = es->format;
+#if PG_VERSION_NUM >= PG_VERSION_17
+	CurrentDistributedQueryExplainOptions.memory = es->memory;
+	CurrentDistributedQueryExplainOptions.serialize = es->serialize;
+#endif
 
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,
@@ -1595,11 +1827,18 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
 	StringInfo explainOptions = makeStringInfo();
 	appendStringInfo(explainOptions,
 					 "{\"verbose\": %s, \"costs\": %s, \"buffers\": %s, \"wal\": %s, "
+#if PG_VERSION_NUM >= PG_VERSION_17
+					 "\"memory\": %s, \"serialize\": \"%s\", "
+#endif
 					 "\"timing\": %s, \"summary\": %s, \"format\": \"%s\"}",
 					 CurrentDistributedQueryExplainOptions.verbose ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.costs ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.buffers ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.wal ? "true" : "false",
+#if PG_VERSION_NUM >= PG_VERSION_17
+					 CurrentDistributedQueryExplainOptions.memory ? "true" : "false",
+					 ExplainSerializeStr(CurrentDistributedQueryExplainOptions.serialize),
+#endif
 					 CurrentDistributedQueryExplainOptions.timing ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.summary ? "true" : "false",
 					 ExplainFormatStr(CurrentDistributedQueryExplainOptions.format));
@@ -1824,7 +2063,12 @@ ExplainOneQuery(Query *query, int cursorOptions,
 static void
 ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es,
 				  const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv,
-				  const instr_time *planduration, double *executionDurationMillisec)
+				  const instr_time *planduration,
+#if PG_VERSION_NUM >= PG_VERSION_17
+				  const BufferUsage *bufusage,
+			      const MemoryContextCounters *mem_counters,
+#endif
+				  double *executionDurationMillisec)
 {
 	QueryDesc  *queryDesc;
 	instr_time	starttime;
@@ -1893,6 +2137,32 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	/* Create textual dump of plan tree */
 	ExplainPrintPlan(es, queryDesc);
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+	/* Show buffer and/or memory usage in planning */
+	if (peek_buffer_usage(es, bufusage) || mem_counters)
+	{
+		ExplainOpenGroup("Planning", "Planning", true, es);
+
+		if (es->format == EXPLAIN_FORMAT_TEXT)
+		{
+			ExplainIndentText(es);
+			appendStringInfoString(es->str, "Planning:\n");
+			es->indent++;
+		}
+
+		if (bufusage)
+			show_buffer_usage(es, bufusage);
+
+		if (mem_counters)
+			show_memory_counters(es, mem_counters);
+
+		if (es->format == EXPLAIN_FORMAT_TEXT)
+			es->indent--;
+
+		ExplainCloseGroup("Planning", "Planning", true, es);
+	}
+#endif
+
 	if (es->summary && planduration)
 	{
 		double		plantime = INSTR_TIME_GET_DOUBLE(*planduration);
@@ -1912,6 +2182,23 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	 */
 	if (es->costs)
 		ExplainPrintJITSummary(es, queryDesc);
+
+#if PG_VERSION_NUM >= PG_VERSION_17
+	if (es->serialize != EXPLAIN_SERIALIZE_NONE)
+	{
+		/* the SERIALIZE option requires its own tuple receiver */
+		DestReceiver *dest_serialize = CreateExplainSerializeDestReceiver(es);
+
+		/* grab serialization metrics before we destroy the DestReceiver */
+		SerializeMetrics serializeMetrics = GetSerializationMetrics(dest_serialize);
+
+		/* call the DestReceiver's destroy method even during explain */
+		dest_serialize->rDestroy(dest_serialize);
+
+		/* Print info about serialization of output */
+		ExplainPrintSerialize(es, &serializeMetrics);
+	}
+#endif
 
 	/*
 	 * Close down the query and free resources.  Include time for this in the
@@ -1961,3 +2248,351 @@ elapsed_time(instr_time *starttime)
 	INSTR_TIME_SUBTRACT(endtime, *starttime);
 	return INSTR_TIME_GET_DOUBLE(endtime);
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_17
+/*
+ * Return whether show_buffer_usage would have anything to print, if given
+ * the same 'usage' data.  Note that when the format is anything other than
+ * text, we print even if the counters are all zeroes.
+ *
+ * Copied from explain.c.
+ */
+static bool
+peek_buffer_usage(ExplainState *es, const BufferUsage *usage)
+{
+	bool		has_shared;
+	bool		has_local;
+	bool		has_temp;
+	bool		has_shared_timing;
+	bool		has_local_timing;
+	bool		has_temp_timing;
+
+	if (usage == NULL)
+		return false;
+
+	if (es->format != EXPLAIN_FORMAT_TEXT)
+		return true;
+
+	has_shared = (usage->shared_blks_hit > 0 ||
+				  usage->shared_blks_read > 0 ||
+				  usage->shared_blks_dirtied > 0 ||
+				  usage->shared_blks_written > 0);
+	has_local = (usage->local_blks_hit > 0 ||
+				 usage->local_blks_read > 0 ||
+				 usage->local_blks_dirtied > 0 ||
+				 usage->local_blks_written > 0);
+	has_temp = (usage->temp_blks_read > 0 ||
+				usage->temp_blks_written > 0);
+	has_shared_timing = (!INSTR_TIME_IS_ZERO(usage->shared_blk_read_time) ||
+						 !INSTR_TIME_IS_ZERO(usage->shared_blk_write_time));
+	has_local_timing = (!INSTR_TIME_IS_ZERO(usage->local_blk_read_time) ||
+						!INSTR_TIME_IS_ZERO(usage->local_blk_write_time));
+	has_temp_timing = (!INSTR_TIME_IS_ZERO(usage->temp_blk_read_time) ||
+					   !INSTR_TIME_IS_ZERO(usage->temp_blk_write_time));
+
+	return has_shared || has_local || has_temp || has_shared_timing ||
+		has_local_timing || has_temp_timing;
+}
+
+
+/*
+ * Show buffer usage details.  This better be sync with peek_buffer_usage.
+ *
+ * Copied from explain.c.
+ */
+static void
+show_buffer_usage(ExplainState *es, const BufferUsage *usage)
+{
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		bool		has_shared = (usage->shared_blks_hit > 0 ||
+								  usage->shared_blks_read > 0 ||
+								  usage->shared_blks_dirtied > 0 ||
+								  usage->shared_blks_written > 0);
+		bool		has_local = (usage->local_blks_hit > 0 ||
+								 usage->local_blks_read > 0 ||
+								 usage->local_blks_dirtied > 0 ||
+								 usage->local_blks_written > 0);
+		bool		has_temp = (usage->temp_blks_read > 0 ||
+								usage->temp_blks_written > 0);
+		bool		has_shared_timing = (!INSTR_TIME_IS_ZERO(usage->shared_blk_read_time) ||
+										 !INSTR_TIME_IS_ZERO(usage->shared_blk_write_time));
+		bool		has_local_timing = (!INSTR_TIME_IS_ZERO(usage->local_blk_read_time) ||
+										!INSTR_TIME_IS_ZERO(usage->local_blk_write_time));
+		bool		has_temp_timing = (!INSTR_TIME_IS_ZERO(usage->temp_blk_read_time) ||
+									   !INSTR_TIME_IS_ZERO(usage->temp_blk_write_time));
+
+		/* Show only positive counter values. */
+		if (has_shared || has_local || has_temp)
+		{
+			ExplainIndentText(es);
+			appendStringInfoString(es->str, "Buffers:");
+
+			if (has_shared)
+			{
+				appendStringInfoString(es->str, " shared");
+				if (usage->shared_blks_hit > 0)
+					appendStringInfo(es->str, " hit=%lld",
+									 (long long) usage->shared_blks_hit);
+				if (usage->shared_blks_read > 0)
+					appendStringInfo(es->str, " read=%lld",
+									 (long long) usage->shared_blks_read);
+				if (usage->shared_blks_dirtied > 0)
+					appendStringInfo(es->str, " dirtied=%lld",
+									 (long long) usage->shared_blks_dirtied);
+				if (usage->shared_blks_written > 0)
+					appendStringInfo(es->str, " written=%lld",
+									 (long long) usage->shared_blks_written);
+				if (has_local || has_temp)
+					appendStringInfoChar(es->str, ',');
+			}
+			if (has_local)
+			{
+				appendStringInfoString(es->str, " local");
+				if (usage->local_blks_hit > 0)
+					appendStringInfo(es->str, " hit=%lld",
+									 (long long) usage->local_blks_hit);
+				if (usage->local_blks_read > 0)
+					appendStringInfo(es->str, " read=%lld",
+									 (long long) usage->local_blks_read);
+				if (usage->local_blks_dirtied > 0)
+					appendStringInfo(es->str, " dirtied=%lld",
+									 (long long) usage->local_blks_dirtied);
+				if (usage->local_blks_written > 0)
+					appendStringInfo(es->str, " written=%lld",
+									 (long long) usage->local_blks_written);
+				if (has_temp)
+					appendStringInfoChar(es->str, ',');
+			}
+			if (has_temp)
+			{
+				appendStringInfoString(es->str, " temp");
+				if (usage->temp_blks_read > 0)
+					appendStringInfo(es->str, " read=%lld",
+									 (long long) usage->temp_blks_read);
+				if (usage->temp_blks_written > 0)
+					appendStringInfo(es->str, " written=%lld",
+									 (long long) usage->temp_blks_written);
+			}
+			appendStringInfoChar(es->str, '\n');
+		}
+
+		/* As above, show only positive counter values. */
+		if (has_shared_timing || has_local_timing || has_temp_timing)
+		{
+			ExplainIndentText(es);
+			appendStringInfoString(es->str, "I/O Timings:");
+
+			if (has_shared_timing)
+			{
+				appendStringInfoString(es->str, " shared");
+				if (!INSTR_TIME_IS_ZERO(usage->shared_blk_read_time))
+					appendStringInfo(es->str, " read=%0.3f",
+									 INSTR_TIME_GET_MILLISEC(usage->shared_blk_read_time));
+				if (!INSTR_TIME_IS_ZERO(usage->shared_blk_write_time))
+					appendStringInfo(es->str, " write=%0.3f",
+									 INSTR_TIME_GET_MILLISEC(usage->shared_blk_write_time));
+				if (has_local_timing || has_temp_timing)
+					appendStringInfoChar(es->str, ',');
+			}
+			if (has_local_timing)
+			{
+				appendStringInfoString(es->str, " local");
+				if (!INSTR_TIME_IS_ZERO(usage->local_blk_read_time))
+					appendStringInfo(es->str, " read=%0.3f",
+									 INSTR_TIME_GET_MILLISEC(usage->local_blk_read_time));
+				if (!INSTR_TIME_IS_ZERO(usage->local_blk_write_time))
+					appendStringInfo(es->str, " write=%0.3f",
+									 INSTR_TIME_GET_MILLISEC(usage->local_blk_write_time));
+				if (has_temp_timing)
+					appendStringInfoChar(es->str, ',');
+			}
+			if (has_temp_timing)
+			{
+				appendStringInfoString(es->str, " temp");
+				if (!INSTR_TIME_IS_ZERO(usage->temp_blk_read_time))
+					appendStringInfo(es->str, " read=%0.3f",
+									 INSTR_TIME_GET_MILLISEC(usage->temp_blk_read_time));
+				if (!INSTR_TIME_IS_ZERO(usage->temp_blk_write_time))
+					appendStringInfo(es->str, " write=%0.3f",
+									 INSTR_TIME_GET_MILLISEC(usage->temp_blk_write_time));
+			}
+			appendStringInfoChar(es->str, '\n');
+		}
+	}
+	else
+	{
+		ExplainPropertyInteger("Shared Hit Blocks", NULL,
+							   usage->shared_blks_hit, es);
+		ExplainPropertyInteger("Shared Read Blocks", NULL,
+							   usage->shared_blks_read, es);
+		ExplainPropertyInteger("Shared Dirtied Blocks", NULL,
+							   usage->shared_blks_dirtied, es);
+		ExplainPropertyInteger("Shared Written Blocks", NULL,
+							   usage->shared_blks_written, es);
+		ExplainPropertyInteger("Local Hit Blocks", NULL,
+							   usage->local_blks_hit, es);
+		ExplainPropertyInteger("Local Read Blocks", NULL,
+							   usage->local_blks_read, es);
+		ExplainPropertyInteger("Local Dirtied Blocks", NULL,
+							   usage->local_blks_dirtied, es);
+		ExplainPropertyInteger("Local Written Blocks", NULL,
+							   usage->local_blks_written, es);
+		ExplainPropertyInteger("Temp Read Blocks", NULL,
+							   usage->temp_blks_read, es);
+		ExplainPropertyInteger("Temp Written Blocks", NULL,
+							   usage->temp_blks_written, es);
+		if (track_io_timing)
+		{
+			ExplainPropertyFloat("Shared I/O Read Time", "ms",
+								 INSTR_TIME_GET_MILLISEC(usage->shared_blk_read_time),
+								 3, es);
+			ExplainPropertyFloat("Shared I/O Write Time", "ms",
+								 INSTR_TIME_GET_MILLISEC(usage->shared_blk_write_time),
+								 3, es);
+			ExplainPropertyFloat("Local I/O Read Time", "ms",
+								 INSTR_TIME_GET_MILLISEC(usage->local_blk_read_time),
+								 3, es);
+			ExplainPropertyFloat("Local I/O Write Time", "ms",
+								 INSTR_TIME_GET_MILLISEC(usage->local_blk_write_time),
+								 3, es);
+			ExplainPropertyFloat("Temp I/O Read Time", "ms",
+								 INSTR_TIME_GET_MILLISEC(usage->temp_blk_read_time),
+								 3, es);
+			ExplainPropertyFloat("Temp I/O Write Time", "ms",
+								 INSTR_TIME_GET_MILLISEC(usage->temp_blk_write_time),
+								 3, es);
+		}
+	}
+}
+
+
+/*
+ * Indent a text-format line.
+ *
+ * We indent by two spaces per indentation level.  However, when emitting
+ * data for a parallel worker there might already be data on the current line
+ * (cf. ExplainOpenWorker); in that case, don't indent any more.
+ *
+ * Copied from explain.c.
+ */
+static void
+ExplainIndentText(ExplainState *es)
+{
+	Assert(es->format == EXPLAIN_FORMAT_TEXT);
+	if (es->str->len == 0 || es->str->data[es->str->len - 1] == '\n')
+		appendStringInfoSpaces(es->str, es->indent * 2);
+}
+
+
+/*
+ * Show memory usage details.
+ *
+ * Copied from explain.c.
+ */
+static void
+show_memory_counters(ExplainState *es, const MemoryContextCounters *mem_counters)
+{
+	int64		memUsedkB = BYTES_TO_KILOBYTES(mem_counters->totalspace -
+											   mem_counters->freespace);
+	int64		memAllocatedkB = BYTES_TO_KILOBYTES(mem_counters->totalspace);
+
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		ExplainIndentText(es);
+		appendStringInfo(es->str,
+						 "Memory: used=" INT64_FORMAT "kB  allocated=" INT64_FORMAT "kB",
+						 memUsedkB, memAllocatedkB);
+		appendStringInfoChar(es->str, '\n');
+	}
+	else
+	{
+		ExplainPropertyInteger("Memory Used", "kB", memUsedkB, es);
+		ExplainPropertyInteger("Memory Allocated", "kB", memAllocatedkB, es);
+	}
+}
+
+
+/*
+ * ExplainPrintSerialize -
+ *	  Append information about query output volume to es->str.
+ *
+ * Copied from explain.c.
+ */
+static void
+ExplainPrintSerialize(ExplainState *es, SerializeMetrics *metrics)
+{
+	const char *format;
+
+	/* We shouldn't get called for EXPLAIN_SERIALIZE_NONE */
+	if (es->serialize == EXPLAIN_SERIALIZE_TEXT)
+		format = "text";
+	else
+	{
+		Assert(es->serialize == EXPLAIN_SERIALIZE_BINARY);
+		format = "binary";
+	}
+
+	ExplainOpenGroup("Serialization", "Serialization", true, es);
+
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		ExplainIndentText(es);
+		if (es->timing)
+			appendStringInfo(es->str, "Serialization: time=%.3f ms  output=" UINT64_FORMAT "kB  format=%s\n",
+							 1000.0 * INSTR_TIME_GET_DOUBLE(metrics->timeSpent),
+							 BYTES_TO_KILOBYTES(metrics->bytesSent),
+							 format);
+		else
+			appendStringInfo(es->str, "Serialization: output=" UINT64_FORMAT "kB  format=%s\n",
+							 BYTES_TO_KILOBYTES(metrics->bytesSent),
+							 format);
+
+		if (es->buffers && peek_buffer_usage(es, &metrics->bufferUsage))
+		{
+			es->indent++;
+			show_buffer_usage(es, &metrics->bufferUsage);
+			es->indent--;
+		}
+	}
+	else
+	{
+		if (es->timing)
+			ExplainPropertyFloat("Time", "ms",
+								 1000.0 * INSTR_TIME_GET_DOUBLE(metrics->timeSpent),
+								 3, es);
+		ExplainPropertyUInteger("Output Volume", "kB",
+								BYTES_TO_KILOBYTES(metrics->bytesSent), es);
+		ExplainPropertyText("Format", format, es);
+		if (es->buffers)
+			show_buffer_usage(es, &metrics->bufferUsage);
+	}
+
+	ExplainCloseGroup("Serialization", "Serialization", true, es);
+}
+
+
+/*
+ * GetSerializationMetrics - collect metrics
+ *
+ * We have to be careful here since the receiver could be an IntoRel
+ * receiver if the subject statement is CREATE TABLE AS.  In that
+ * case, return all-zeroes stats.
+ *
+ * Copied from explain.c.
+ */
+static SerializeMetrics
+GetSerializationMetrics(DestReceiver *dest)
+{
+	SerializeMetrics empty;
+
+	if (dest->mydest == DestExplainSerialize)
+		return ((SerializeDestReceiver *) dest)->metrics;
+
+	memset(&empty, 0, sizeof(SerializeMetrics));
+	INSTR_TIME_SET_ZERO(empty.timeSpent);
+
+	return empty;
+}
+#endif

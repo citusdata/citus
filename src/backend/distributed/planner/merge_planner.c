@@ -38,8 +38,6 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/shared_library_init.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 static int SourceResultPartitionColumnIndex(Query *mergeQuery,
 											List *sourceTargetList,
 											CitusTableCacheEntry *targetRelation);
@@ -100,8 +98,6 @@ static char * MergeCommandResultIdPrefix(uint64 planId);
 static void ErrorIfMergeHasReturningList(Query *query);
 static Node * GetMergeJoinCondition(Query *mergeQuery);
 
-#endif
-
 
 /*
  * CreateMergePlan
@@ -118,13 +114,6 @@ CreateMergePlan(uint64 planId, Query *originalQuery, Query *query,
 				PlannerRestrictionContext *plannerRestrictionContext,
 				ParamListInfo boundParams)
 {
-	/* function is void for pre-15 versions of Postgres */
-	#if PG_VERSION_NUM < PG_VERSION_15
-
-	ereport(ERROR, (errmsg("MERGE is not supported in pre-15 Postgres versions")));
-
-	#else
-
 	Oid targetRelationId = ModifyQueryResultRelationId(originalQuery);
 
 	/*
@@ -153,8 +142,6 @@ CreateMergePlan(uint64 planId, Query *originalQuery, Query *query,
 	}
 
 	return distributedPlan;
-
-	#endif
 }
 
 
@@ -182,9 +169,6 @@ GetMergeJoinTree(Query *mergeQuery)
 
 	return mergeJointree;
 }
-
-
-#if PG_VERSION_NUM >= PG_VERSION_15
 
 
 /*
@@ -904,7 +888,7 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 	newRangeTableRef->rtindex = SINGLE_RTE_INDEX;
 	sourceResultsQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 	sourceResultsQuery->targetList =
-		CreateAllTargetListForRelation(sourceRte->relid, requiredAttributes);
+		CreateFilteredTargetListForRelation(sourceRte->relid, requiredAttributes);
 	List *restrictionList =
 		GetRestrictInfoListForRelation(sourceRte, plannerRestrictionContext);
 	List *copyRestrictionList = copyObject(restrictionList);
@@ -1443,9 +1427,6 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 }
 
 
-#endif
-
-
 /*
  * ExtractMergeSourceRangeTableEntry returns the range table entry of source
  * table or source query in USING clause.
@@ -1453,13 +1434,6 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 RangeTblEntry *
 ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk)
 {
-	/* function is void for pre-15 versions of Postgres */
-	#if PG_VERSION_NUM < PG_VERSION_15
-
-	ereport(ERROR, (errmsg("MERGE is not supported in pre-15 Postgres versions")));
-
-	#else
-
 	Assert(IsMergeQuery(query));
 
 	List *fromList = query->jointree->fromlist;
@@ -1498,8 +1472,6 @@ ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk)
 	RangeTblEntry *subqueryRte = rt_fetch(reference->rtindex, query->rtable);
 
 	return subqueryRte;
-
-	#endif
 }
 
 
@@ -1516,13 +1488,6 @@ ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk)
 Var *
 FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 {
-	/* function is void for pre-15 versions of Postgres */
-	#if PG_VERSION_NUM < PG_VERSION_15
-
-	ereport(ERROR, (errmsg("MERGE is not supported in pre-15 Postgres versions")));
-
-	#else
-
 	Assert(IsMergeQuery(query));
 
 	if (!IsCitusTableType(targetRelationId, DISTRIBUTED_TABLE))
@@ -1546,8 +1511,8 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 			continue;
 		}
 
-		/* NOT MATCHED can have either INSERT or DO NOTHING */
-		if (action->commandType == CMD_NOTHING)
+		/* NOT MATCHED can have either INSERT, DO NOTHING or UPDATE(PG17) */
+		if (action->commandType == CMD_NOTHING || action->commandType == CMD_UPDATE)
 		{
 			return NULL;
 		}
@@ -1593,8 +1558,6 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 	}
 
 	return NULL;
-
-	#endif
 }
 
 
@@ -1620,7 +1583,7 @@ IsLocalTableModification(Oid targetRelationId, Query *query, uint64 shardId,
 		return true;
 	}
 
-	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalTables(rteProperties))
+	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalOrReferenceTables(rteProperties))
 	{
 		return true;
 	}

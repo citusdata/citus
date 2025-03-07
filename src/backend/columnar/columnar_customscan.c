@@ -1051,6 +1051,15 @@ FindCandidateRelids(PlannerInfo *root, RelOptInfo *rel, List *joinClauses)
 
 	candidateRelids = bms_del_members(candidateRelids, rel->relids);
 	candidateRelids = bms_del_members(candidateRelids, rel->lateral_relids);
+
+	/*
+	 * For the relevant PG16 commit requiring this addition:
+	 * postgres/postgres@2489d76
+	 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+	candidateRelids = bms_del_members(candidateRelids, root->outer_join_rels);
+#endif
+
 	return candidateRelids;
 }
 
@@ -1312,11 +1321,8 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 
 	cpath->methods = &ColumnarScanPathMethods;
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 	/* necessary to avoid extra Result node in PG15 */
 	cpath->flags = CUSTOMPATH_SUPPORT_PROJECTION;
-#endif
 
 	/*
 	 * populate generic path information

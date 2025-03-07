@@ -364,6 +364,15 @@ static DistributeObjectOps Any_Rename = {
 	.address = NULL,
 	.markDistributed = false,
 };
+static DistributeObjectOps Any_SecLabel = {
+	.deparse = DeparseSecLabelStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessSecLabelStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = SecLabelStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Attribute_Rename = {
 	.deparse = DeparseRenameAttributeStmt,
 	.qualify = QualifyRenameAttributeStmt,
@@ -456,7 +465,6 @@ static DistributeObjectOps Database_Alter = {
 	.markDistributed = false,
 };
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 static DistributeObjectOps Database_RefreshColl = {
 	.deparse = DeparseAlterDatabaseRefreshCollStmt,
 	.qualify = NULL,
@@ -467,7 +475,6 @@ static DistributeObjectOps Database_RefreshColl = {
 	.address = NULL,
 	.markDistributed = false,
 };
-#endif
 
 static DistributeObjectOps Domain_Alter = {
 	.deparse = DeparseAlterDomainStmt,
@@ -828,7 +835,6 @@ static DistributeObjectOps Sequence_AlterOwner = {
 	.address = AlterSequenceOwnerStmtObjectAddress,
 	.markDistributed = false,
 };
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static DistributeObjectOps Sequence_AlterPersistence = {
 	.deparse = DeparseAlterSequencePersistenceStmt,
 	.qualify = QualifyAlterSequencePersistenceStmt,
@@ -838,7 +844,6 @@ static DistributeObjectOps Sequence_AlterPersistence = {
 	.address = AlterSequencePersistenceStmtObjectAddress,
 	.markDistributed = false,
 };
-#endif
 static DistributeObjectOps Sequence_Drop = {
 	.deparse = DeparseDropSequenceStmt,
 	.qualify = QualifyDropSequenceStmt,
@@ -1290,7 +1295,7 @@ static DistributeObjectOps View_Rename = {
 static DistributeObjectOps Trigger_Rename = {
 	.deparse = NULL,
 	.qualify = NULL,
-	.preprocess = PreprocessAlterTriggerRenameStmt,
+	.preprocess = NULL,
 	.operationType = DIST_OPS_ALTER,
 	.postprocess = PostprocessAlterTriggerRenameStmt,
 	.address = NULL,
@@ -1312,13 +1317,11 @@ GetDistributeObjectOps(Node *node)
 			return &Database_Alter;
 		}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 		case T_AlterDatabaseRefreshCollStmt:
 		{
 			return &Database_RefreshColl;
 		}
 
-#endif
 		case T_AlterDomainStmt:
 		{
 			return &Domain_Alter;
@@ -1603,7 +1606,6 @@ GetDistributeObjectOps(Node *node)
 
 				case OBJECT_SEQUENCE:
 				{
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 					ListCell *cmdCell = NULL;
 					foreach(cmdCell, stmt->cmds)
 					{
@@ -1631,7 +1633,6 @@ GetDistributeObjectOps(Node *node)
 							}
 						}
 					}
-#endif
 
 					/*
 					 * Prior to PG15, the only Alter Table statement
@@ -1989,6 +1990,11 @@ GetDistributeObjectOps(Node *node)
 		case T_VacuumStmt:
 		{
 			return &Vacuum_Analyze;
+		}
+
+		case T_SecLabelStmt:
+		{
+			return &Any_SecLabel;
 		}
 
 		case T_RenameStmt:

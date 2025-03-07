@@ -1160,9 +1160,7 @@ DropIdentitiesOnTable(Oid relationId)
 
 		if (attributeForm->attidentity)
 		{
-			char *tableName = get_rel_name(relationId);
-			char *schemaName = get_namespace_name(get_rel_namespace(relationId));
-			char *qualifiedTableName = quote_qualified_identifier(schemaName, tableName);
+			char *qualifiedTableName = generate_qualified_relation_name(relationId);
 
 			StringInfo dropCommand = makeStringInfo();
 
@@ -1222,9 +1220,7 @@ DropViewsOnTable(Oid relationId)
 	Oid viewId = InvalidOid;
 	foreach_declared_oid(viewId, reverseOrderedViews)
 	{
-		char *viewName = get_rel_name(viewId);
-		char *schemaName = get_namespace_name(get_rel_namespace(viewId));
-		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+		char *qualifiedViewName = generate_qualified_relation_name(viewId);
 
 		StringInfo dropCommand = makeStringInfo();
 		appendStringInfo(dropCommand, "DROP %sVIEW IF EXISTS %s",
