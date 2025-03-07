@@ -107,7 +107,6 @@ static const CitusBackendType CitusBackendTypes[] = {
 
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
-static bool UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId);
 static uint64 CalculateGlobalPID(int32 nodeId, pid_t pid);
 static uint64 GenerateGlobalPID(void);
 
@@ -493,7 +492,6 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
  *
  * We follow the same approach with pg_stat_activity.
  */
-static
 bool
 UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 {
@@ -502,7 +500,7 @@ UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 		return true;
 	}
 
-	if (is_member_of_role(currentUserId,
+	if (has_privs_of_role(currentUserId,
 						  ROLE_PG_READ_ALL_STATS))
 	{
 		return true;
