@@ -17,6 +17,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
@@ -32,7 +33,6 @@ static List * CollectGrantTableIdList(GrantStmt *grantStmt);
  * needed during the worker node portion of DDL execution before returning the
  * DDLJobs in a List. If no distributed table is involved, this returns NIL.
  *
- * NB: So far column level privileges are not supported.
  */
 List *
 PreprocessGrantStmt(Node *node, const char *queryString,
@@ -96,9 +96,11 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 
 			if (priv->cols != NIL)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("grant/revoke on column list is currently "
-									   "unsupported")));
+				StringInfoData colsString;
+				initStringInfo(&colsString);
+
+				AppendColumnNameList(&colsString, priv->cols);
+				appendStringInfo(&privsString, "%s", colsString.data);
 			}
 		}
 	}
