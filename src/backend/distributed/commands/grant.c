@@ -90,16 +90,16 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			}
 			isFirst = false;
 
+			Assert(priv->priv_name != NULL);
+
+			appendStringInfo(&privsString, "%s", priv->priv_name);
+
 			if (priv->cols != NIL)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("grant/revoke on column list is currently "
 									   "unsupported")));
 			}
-
-			Assert(priv->priv_name != NULL);
-
-			appendStringInfo(&privsString, "%s", priv->priv_name);
 		}
 	}
 
