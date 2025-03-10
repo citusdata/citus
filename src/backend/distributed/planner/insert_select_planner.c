@@ -1628,6 +1628,68 @@ RelabelTargetEntryList(List *selectTargetList, List *insertTargetList)
 
 
 /*
+ * AddInsertSelectCasts ensures that the columns in the given target lists
+ * have the same type as the corresponding columns of the target relation.
+ * It adds casts when necessary.
+ *
+ * Returns the updated selectTargetList.
+ */
+static List *
+AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
+					 Oid targetRelationId)
+{
+	List *projectedEntries = NIL;
+	List *nonProjectedEntries = NIL;
+
+	/*
+	 * ReorderInsertSelectTargetLists() ensures that the first few columns of the
+	 * SELECT query match the insert targets. It might also include additional
+	 * items (for GROUP BY, etc.), so the insertTargetList is shorter.
+	 */
+	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
+
+	Relation distributedRelation = table_open(targetRelationId, RowExclusiveLock);
+	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
+
+	int targetEntryIndex = 0;
+	TargetEntry *insertEntry = NULL;
+	TargetEntry *selectEntry = NULL;
+
+	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
+	{
+		/*
+		 * Retrieve the target attribute corresponding to the insert entry.
+		 * The attribute is located at (resno - 1) in the tuple descriptor.
+		 */
+		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
+											   insertEntry->resno - 1);
+
+		process_entry_pair(insertEntry, selectEntry, attr, targetEntryIndex,
+						   &projectedEntries, &nonProjectedEntries);
+
+		targetEntryIndex++;
+	}
+
+	/* Append any additional non-projected entries from selectTargetList */
+	for (int entryIndex = list_length(insertTargetList);
+		 entryIndex < list_length(selectTargetList);
+		 entryIndex++)
+	{
+		nonProjectedEntries = lappend(nonProjectedEntries, list_nth(selectTargetList,
+																	entryIndex));
+	}
+
+	/* Concatenate projected and non-projected entries and reset resno numbering */
+	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
+	reset_target_entry_resno(selectTargetList);
+
+	table_close(distributedRelation, NoLock);
+
+	return selectTargetList;
+}
+
+
+/*
  * Processes a single pair of insert and select target entries.
  * It compares the source and target types and appends either the
  * original select entry or a casted version to the appropriate list.
@@ -1704,68 +1766,6 @@ reset_target_entry_resno(List *targetList)
 
 
 /*
- * AddInsertSelectCasts ensures that the columns in the given target lists
- * have the same type as the corresponding columns of the target relation.
- * It adds casts when necessary.
- *
- * Returns the updated selectTargetList.
- */
-static List *
-AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
-					 Oid targetRelationId)
-{
-	List *projectedEntries = NIL;
-	List *nonProjectedEntries = NIL;
-
-	/*
-	 * ReorderInsertSelectTargetLists() ensures that the first few columns of the
-	 * SELECT query match the insert targets. It might also include additional
-	 * items (for GROUP BY, etc.), so the insertTargetList is shorter.
-	 */
-	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
-
-	Relation distributedRelation = table_open(targetRelationId, RowExclusiveLock);
-	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
-
-	int targetEntryIndex = 0;
-	TargetEntry *insertEntry = NULL;
-	TargetEntry *selectEntry = NULL;
-
-	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
-	{
-		/*
-		 * Retrieve the target attribute corresponding to the insert entry.
-		 * The attribute is located at (resno - 1) in the tuple descriptor.
-		 */
-		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
-											   insertEntry->resno - 1);
-
-		process_entry_pair(insertEntry, selectEntry, attr, targetEntryIndex,
-						   &projectedEntries, &nonProjectedEntries);
-
-		targetEntryIndex++;
-	}
-
-	/* Append any additional non-projected entries from selectTargetList */
-	for (int entryIndex = list_length(insertTargetList);
-		 entryIndex < list_length(selectTargetList);
-		 entryIndex++)
-	{
-		nonProjectedEntries = lappend(nonProjectedEntries, list_nth(selectTargetList,
-																	entryIndex));
-	}
-
-	/* Concatenate projected and non-projected entries and reset resno numbering */
-	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
-	reset_target_entry_resno(selectTargetList);
-
-	table_close(distributedRelation, NoLock);
-
-	return selectTargetList;
-}
-
-
-/*
  * Looks up the nextval(regclass) function in pg_proc, returning its actual
  * rettype. In a standard build, that will be INT8OID, but this is more robust.
  */
@@ -1792,16 +1792,6 @@ GetNextvalReturnTypeCatalog(void)
 	}
 
 	return nextvalReturnType;
-}
-
-
-/* Helper function to set the target entry name using a formatted string */
-static void
-set_target_entry_name(TargetEntry *tle, const char *format, int index)
-{
-	StringInfo resnameString = makeStringInfo();
-	appendStringInfo(resnameString, format, index);
-	tle->resname = resnameString->data;
 }
 
 
@@ -1929,6 +1919,16 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 	}
 
 	return NULL; /* keep compiler happy */
+}
+
+
+/* Helper function to set the target entry name using a formatted string */
+static void
+set_target_entry_name(TargetEntry *tle, const char *format, int index)
+{
+	StringInfo resnameString = makeStringInfo();
+	appendStringInfo(resnameString, format, index);
+	tle->resname = resnameString->data;
 }
 
 
