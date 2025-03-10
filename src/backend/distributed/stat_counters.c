@@ -13,9 +13,7 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 
-#include "catalog/pg_authid_d.h"
 #include "storage/ipc.h"
-#include "utils/acl.h"
 #include "utils/builtins.h"
 
 #include "distributed/backend_data.h"
@@ -231,23 +229,12 @@ StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 static void
 AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
 {
-	const Oid userId = GetUserId();
-
 	for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
 	{
-		PGPROC *currentProc = GetPGProcByNumber(backendSlotIdx);
-
-		/*
-		 * We imitate pg_stat_activity such that if a user doesn't have enough
-		 * privileges, then we don't collect the stats for that backend.
-		 */
-		if (UserHasPermissionToViewStatsOf(userId, currentProc->roleId))
+		for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
 		{
-			for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
-			{
-				(*aggregatedStatCounters)[statIdx] +=
-					pg_atomic_read_u64(&SharedStatCountersArray[backendSlotIdx][statIdx]);
-			}
+			(*aggregatedStatCounters)[statIdx] +=
+				pg_atomic_read_u64(&SharedStatCountersArray[backendSlotIdx][statIdx]);
 		}
 	}
 }
