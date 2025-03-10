@@ -97,16 +97,16 @@ static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetLis
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 					   int targetTypeMod);
 static Oid GetNextvalReturnTypeCatalog(void);
-static void append_casted_entry(TargetEntry *insertEntry, TargetEntry *selectEntry,
-								Oid castFromType, Oid targetType, Oid collation, int32
-								typmod,
-								int targetEntryIndex,
-								List **projectedEntries, List **nonProjectedEntries);
-static void set_target_entry_name(TargetEntry *tle, const char *format, int index);
-static void reset_target_entry_resno(List *targetList);
-static void process_entry_pair(TargetEntry *insertEntry, TargetEntry *selectEntry,
-							   Form_pg_attribute attr, int targetEntryIndex,
-							   List **projectedEntries, List **nonProjectedEntries);
+static void AppendCastedEntry(TargetEntry *insertEntry, TargetEntry *selectEntry,
+							  Oid castFromType, Oid targetType, Oid collation, int32
+							  typmod,
+							  int targetEntryIndex,
+							  List **projectedEntries, List **nonProjectedEntries);
+static void SetTargetEntryName(TargetEntry *tle, const char *format, int index);
+static void ResetTargetEntryResno(List *targetList);
+static void ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
+							 Form_pg_attribute attr, int targetEntryIndex,
+							 List **projectedEntries, List **nonProjectedEntries);
 
 
 /* depth of current insert/select planner. */
@@ -1664,8 +1664,8 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
 											   insertEntry->resno - 1);
 
-		process_entry_pair(insertEntry, selectEntry, attr, targetEntryIndex,
-						   &projectedEntries, &nonProjectedEntries);
+		ProcessEntryPair(insertEntry, selectEntry, attr, targetEntryIndex,
+						 &projectedEntries, &nonProjectedEntries);
 
 		targetEntryIndex++;
 	}
@@ -1681,7 +1681,7 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 
 	/* Concatenate projected and non-projected entries and reset resno numbering */
 	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
-	reset_target_entry_resno(selectTargetList);
+	ResetTargetEntryResno(selectTargetList);
 
 	table_close(distributedRelation, NoLock);
 
@@ -1695,9 +1695,9 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
  * original select entry or a casted version to the appropriate list.
  */
 static void
-process_entry_pair(TargetEntry *insertEntry, TargetEntry *selectEntry,
-				   Form_pg_attribute attr, int targetEntryIndex,
-				   List **projectedEntries, List **nonProjectedEntries)
+ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
+				 Form_pg_attribute attr, int targetEntryIndex,
+				 List **projectedEntries, List **nonProjectedEntries)
 {
 	Oid effectiveSourceType = exprType((Node *) selectEntry->expr);
 	Oid targetType = attr->atttypid;
@@ -1723,11 +1723,11 @@ process_entry_pair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 
 	if (effectiveSourceType != targetType)
 	{
-		append_casted_entry(insertEntry, selectEntry,
-							effectiveSourceType, targetType,
-							attr->attcollation, attr->atttypmod,
-							targetEntryIndex,
-							projectedEntries, nonProjectedEntries);
+		AppendCastedEntry(insertEntry, selectEntry,
+						  effectiveSourceType, targetType,
+						  attr->attcollation, attr->atttypmod,
+						  targetEntryIndex,
+						  projectedEntries, nonProjectedEntries);
 	}
 	else
 	{
@@ -1742,7 +1742,7 @@ process_entry_pair(TargetEntry *insertEntry, TargetEntry *selectEntry,
  * they are numbered sequentially.
  */
 static void
-reset_target_entry_resno(List *targetList)
+ResetTargetEntryResno(List *targetList)
 {
 	int entryResNo = 1;
 	ListCell *lc = NULL;
@@ -1791,10 +1791,10 @@ GetNextvalReturnTypeCatalog(void)
  * it is marked as junk to avoid ambiguity.
  */
 static void
-append_casted_entry(TargetEntry *insertEntry, TargetEntry *selectEntry,
-					Oid castFromType, Oid targetType, Oid collation, int32 typmod,
-					int targetEntryIndex,
-					List **projectedEntries, List **nonProjectedEntries)
+AppendCastedEntry(TargetEntry *insertEntry, TargetEntry *selectEntry,
+				  Oid castFromType, Oid targetType, Oid collation, int32 typmod,
+				  int targetEntryIndex,
+				  List **projectedEntries, List **nonProjectedEntries)
 {
 	/* Update the insert entry's Var to match the target column's type, typmod, and collation */
 	Assert(IsA(insertEntry->expr, Var));
@@ -1815,7 +1815,7 @@ append_casted_entry(TargetEntry *insertEntry, TargetEntry *selectEntry,
 	coercedEntry->ressortgroupref = 0;
 
 	/* Assign a unique name to the coerced entry */
-	set_target_entry_name(coercedEntry, "auto_coerced_by_citus_%d", targetEntryIndex);
+	SetTargetEntryName(coercedEntry, "auto_coerced_by_citus_%d", targetEntryIndex);
 	*projectedEntries = lappend(*projectedEntries, coercedEntry);
 
 	/* If the original select entry is referenced in ORDER BY or GROUP BY,
@@ -1824,7 +1824,7 @@ append_casted_entry(TargetEntry *insertEntry, TargetEntry *selectEntry,
 	if (selectEntry->ressortgroupref != 0)
 	{
 		selectEntry->resjunk = true;
-		set_target_entry_name(selectEntry, "discarded_target_item_%d", targetEntryIndex);
+		SetTargetEntryName(selectEntry, "discarded_target_item_%d", targetEntryIndex);
 		*nonProjectedEntries = lappend(*nonProjectedEntries, selectEntry);
 	}
 }
@@ -1913,7 +1913,7 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 
 /* Helper function to set the target entry name using a formatted string */
 static void
-set_target_entry_name(TargetEntry *tle, const char *format, int index)
+SetTargetEntryName(TargetEntry *tle, const char *format, int index)
 {
 	StringInfo resnameString = makeStringInfo();
 	appendStringInfo(resnameString, format, index);
