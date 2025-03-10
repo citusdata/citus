@@ -233,9 +233,9 @@ AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
 {
 	const Oid userId = GetUserId();
 
-	for (int backendIndex = 0; backendIndex < GetStatCounterSlots(); ++backendIndex)
+	for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
 	{
-		PGPROC *currentProc = GetPGProcByNumber(backendIndex);
+		PGPROC *currentProc = GetPGProcByNumber(backendSlotIdx);
 
 		/*
 		 * We imitate pg_stat_activity such that if a user doesn't have enough
@@ -246,7 +246,7 @@ AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
 			for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
 			{
 				(*aggregatedStatCounters)[statIdx] +=
-					pg_atomic_read_u64(&SharedStatCountersArray[backendIndex][statIdx]);
+					pg_atomic_read_u64(&SharedStatCountersArray[backendSlotIdx][statIdx]);
 			}
 		}
 	}
@@ -264,11 +264,11 @@ ResetStatCounters(void)
 	 * and resetting the stats. However, we are okay with this since we don't want to block
 	 * the client backends that might be incrementing the stats.
 	 */
-	for (int backendIndex = 0; backendIndex < GetStatCounterSlots(); ++backendIndex)
+	for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
 	{
 		for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
 		{
-			pg_atomic_write_u64(&SharedStatCountersArray[backendIndex][statIdx], 0);
+			pg_atomic_write_u64(&SharedStatCountersArray[backendSlotIdx][statIdx], 0);
 		}
 	}
 }
@@ -307,11 +307,11 @@ SharedStatCountersArrayShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		for (int backendIndex = 0; backendIndex < GetStatCounterSlots(); ++backendIndex)
+		for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
 		{
 			for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
 			{
-				pg_atomic_init_u64(&SharedStatCountersArray[backendIndex][statIdx], 0);
+				pg_atomic_init_u64(&SharedStatCountersArray[backendSlotIdx][statIdx], 0);
 			}
 		}
 	}
