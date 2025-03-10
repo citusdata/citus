@@ -202,7 +202,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 	List *foreignKeyOids = GetForeignKeyOids(referencingTableId, flags);
 
 	Oid foreignKeyOid = InvalidOid;
-	foreach_oid(foreignKeyOid, foreignKeyOids)
+	foreach_declared_oid(foreignKeyOid, foreignKeyOids)
 	{
 		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyOid));
 
@@ -414,7 +414,7 @@ ForeignKeySetsNextValColumnToDefault(HeapTuple pgConstraintTuple)
 
 	List *setDefaultAttrs = ForeignKeyGetDefaultingAttrs(pgConstraintTuple);
 	AttrNumber setDefaultAttr = InvalidAttrNumber;
-	foreach_int(setDefaultAttr, setDefaultAttrs)
+	foreach_declared_int(setDefaultAttr, setDefaultAttrs)
 	{
 		if (ColumnDefaultsToNextVal(pgConstraintForm->conrelid, setDefaultAttr))
 		{
@@ -467,7 +467,6 @@ ForeignKeyGetDefaultingAttrs(HeapTuple pgConstraintTuple)
 	}
 
 	List *onDeleteSetDefColumnList = NIL;
-#if PG_VERSION_NUM >= PG_VERSION_15
 	Datum onDeleteSetDefColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
 													   Anum_pg_constraint_confdelsetcols,
 													   &isNull);
@@ -482,7 +481,6 @@ ForeignKeyGetDefaultingAttrs(HeapTuple pgConstraintTuple)
 		onDeleteSetDefColumnList =
 			IntegerArrayTypeToList(DatumGetArrayTypeP(onDeleteSetDefColumnsDatum));
 	}
-#endif
 
 	if (list_length(onDeleteSetDefColumnList) == 0)
 	{
@@ -727,7 +725,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 		GetForeignKeyIdsForColumn(columnName, relationId, searchForeignKeyColumnFlags);
 
 	Oid foreignKeyId = InvalidOid;
-	foreach_oid(foreignKeyId, foreignKeyIdsColumnAppeared)
+	foreach_declared_oid(foreignKeyId, foreignKeyIdsColumnAppeared)
 	{
 		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
 		if (IsCitusTableType(referencedTableId, REFERENCE_TABLE))
@@ -901,7 +899,7 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 	int saveNestLevel = PushEmptySearchPath();
 
 	Oid foreignKeyOid = InvalidOid;
-	foreach_oid(foreignKeyOid, foreignKeyOids)
+	foreach_declared_oid(foreignKeyOid, foreignKeyOids)
 	{
 		char *statementDef = pg_get_constraintdef_command(foreignKeyOid);
 
@@ -1157,7 +1155,7 @@ static Oid
 FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 {
 	Oid foreignKeyOid = InvalidOid;
-	foreach_oid(foreignKeyOid, foreignKeyOids)
+	foreach_declared_oid(foreignKeyOid, foreignKeyOids)
 	{
 		char *constraintName = get_constraint_name(foreignKeyOid);
 
@@ -1472,7 +1470,7 @@ RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId)
 	List *foreignKeysRelationInvolved = list_concat(referencingForeignKeys,
 													referencedForeignKeys);
 	Oid foreignKeyId = InvalidOid;
-	foreach_oid(foreignKeyId, foreignKeysRelationInvolved)
+	foreach_declared_oid(foreignKeyId, foreignKeysRelationInvolved)
 	{
 		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
 		if (!HeapTupleIsValid(heapTuple))

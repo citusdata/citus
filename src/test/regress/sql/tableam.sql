@@ -138,12 +138,6 @@ SELECT count(*) FROM test_partitioned;
 
 DROP TABLE test_partitioned;
 
--- Specifying access method in parent is not supported.
--- If the below statement ever succeeds, add more tests for
--- the case where children inherit access method from parent.
-CREATE TABLE test_partitioned(id int, p int, val int)
-PARTITION BY RANGE (p) USING fake_am;
-
 \set VERBOSITY terse
 ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
 drop schema test_tableam cascade;

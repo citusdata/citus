@@ -74,7 +74,9 @@ static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple,
 										   TupleDesc DbRoleSettingDescription);
 static char * GetDatabaseNameFromDbRoleSetting(HeapTuple tuple,
 											   TupleDesc DbRoleSettingDescription);
+#if PG_VERSION_NUM < PG_VERSION_17
 static Node * makeStringConst(char *str, int location);
+#endif
 static Node * makeIntConst(int val, int location);
 static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
@@ -163,7 +165,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
 	DefElem *option = NULL;
-	foreach_ptr(option, stmt->options)
+	foreach_declared_ptr(option, stmt->options)
 	{
 		if (strcasecmp(option->defname, "password") == 0)
 		{
@@ -564,7 +566,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 	{
 		List *grantRoleStmts = GenerateGrantRoleStmtsOfRole(roleOid);
 		Node *stmt = NULL;
-		foreach_ptr(stmt, grantRoleStmts)
+		foreach_declared_ptr(stmt, grantRoleStmts)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}
@@ -578,7 +580,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		 */
 		List *secLabelOnRoleStmts = GenerateSecLabelOnRoleStmts(roleOid, rolename);
 		stmt = NULL;
-		foreach_ptr(stmt, secLabelOnRoleStmts)
+		foreach_declared_ptr(stmt, secLabelOnRoleStmts)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}
@@ -787,7 +789,7 @@ MakeSetStatementArguments(char *configurationName, char *configurationValue)
 				}
 
 				char *configuration = NULL;
-				foreach_ptr(configuration, configurationList)
+				foreach_declared_ptr(configuration, configurationList)
 				{
 					Node *arg = makeStringConst(configuration, -1);
 					args = lappend(args, arg);
@@ -823,7 +825,7 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
 	List *stmts = NIL;
 
 	DefElem *option = NULL;
-	foreach_ptr(option, options)
+	foreach_declared_ptr(option, options)
 	{
 		if (strcmp(option->defname, "adminmembers") != 0 &&
 			strcmp(option->defname, "rolemembers") != 0 &&
@@ -1047,7 +1049,7 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 
 	/* deparse all grant statements and add them to the commands list */
 	Node *stmt = NULL;
-	foreach_ptr(stmt, grantRoleStmts)
+	foreach_declared_ptr(stmt, grantRoleStmts)
 	{
 		commands = lappend(commands, DeparseTreeNode(stmt));
 	}
@@ -1057,6 +1059,8 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
+
+#if PG_VERSION_NUM < PG_VERSION_17
 
 /*
  * makeStringConst creates a Const Node that stores a given string
@@ -1068,17 +1072,15 @@ makeStringConst(char *str, int location)
 {
 	A_Const *n = makeNode(A_Const);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	n->val.sval.type = T_String;
 	n->val.sval.sval = str;
-#else
-	n->val.type = T_String;
-	n->val.val.str = str;
-#endif
 	n->location = location;
 
 	return (Node *) n;
 }
+
+
+#endif
 
 
 /*
@@ -1091,13 +1093,8 @@ makeIntConst(int val, int location)
 {
 	A_Const *n = makeNode(A_Const);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	n->val.ival.type = T_Integer;
 	n->val.ival.ival = val;
-#else
-	n->val.type = T_Integer;
-	n->val.val.ival = val;
-#endif
 	n->location = location;
 
 	return (Node *) n;
@@ -1114,13 +1111,8 @@ makeFloatConst(char *str, int location)
 {
 	A_Const *n = makeNode(A_Const);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	n->val.fval.type = T_Float;
 	n->val.fval.fval = str;
-#else
-	n->val.type = T_Float;
-	n->val.val.str = str;
-#endif
 	n->location = location;
 
 	return (Node *) n;
@@ -1174,7 +1166,7 @@ void
 UnmarkRolesDistributed(List *roles)
 {
 	Node *roleNode = NULL;
-	foreach_ptr(roleNode, roles)
+	foreach_declared_ptr(roleNode, roles)
 	{
 		RoleSpec *role = castNode(RoleSpec, roleNode);
 		ObjectAddress roleAddress = { 0 };
@@ -1204,7 +1196,7 @@ FilterDistributedRoles(List *roles)
 {
 	List *distributedRoles = NIL;
 	Node *roleNode = NULL;
-	foreach_ptr(roleNode, roles)
+	foreach_declared_ptr(roleNode, roles)
 	{
 		RoleSpec *role = castNode(RoleSpec, roleNode);
 		Oid roleOid = get_rolespec_oid(role, true);
@@ -1282,7 +1274,7 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
 
 	RoleSpec *role = NULL;
-	foreach_ptr(role, stmt->grantee_roles)
+	foreach_declared_ptr(role, stmt->grantee_roles)
 	{
 		Oid roleOid = get_rolespec_oid(role, false);
 		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));

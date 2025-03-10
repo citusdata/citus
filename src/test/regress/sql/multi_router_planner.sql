@@ -15,7 +15,7 @@ SET search_path TO multi_router_planner;
 
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
-	author_id bigint NOT NULL,
+	author_id bigint,
 	title varchar(20) NOT NULL,
 	word_count integer
 );

@@ -33,11 +33,9 @@
 
 
 static CreatePublicationStmt * BuildCreatePublicationStmt(Oid publicationId);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static PublicationObjSpec * BuildPublicationRelationObjSpec(Oid relationId,
 															Oid publicationId,
 															bool tableOnly);
-#endif
 static void AppendPublishOptionList(StringInfo str, List *strings);
 static char * AlterPublicationOwnerCommand(Oid publicationId);
 static bool ShouldPropagateCreatePublication(CreatePublicationStmt *stmt);
@@ -154,11 +152,10 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 	ReleaseSysCache(publicationTuple);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	List *schemaIds = GetPublicationSchemas(publicationId);
 	Oid schemaId = InvalidOid;
 
-	foreach_oid(schemaId, schemaIds)
+	foreach_declared_oid(schemaId, schemaIds)
 	{
 		char *schemaName = get_namespace_name(schemaId);
 
@@ -170,7 +167,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
 	}
-#endif
 
 	List *relationIds = GetPublicationRelations(publicationId,
 												publicationForm->pubviaroot ?
@@ -181,9 +177,8 @@ BuildCreatePublicationStmt(Oid publicationId)
 	/* mainly for consistent ordering in test output */
 	relationIds = SortList(relationIds, CompareOids);
 
-	foreach_oid(relationId, relationIds)
+	foreach_declared_oid(relationId, relationIds)
 	{
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 		bool tableOnly = false;
 
 		/* since postgres 15, tables can have a column list and filter */
@@ -191,15 +186,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 			BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly);
 
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
-#else
-
-		/* before postgres 15, only full tables are supported */
-		char *schemaName = get_namespace_name(get_rel_namespace(relationId));
-		char *tableName = get_rel_name(relationId);
-		RangeVar *rangeVar = makeRangeVar(schemaName, tableName, -1);
-
-		createPubStmt->tables = lappend(createPubStmt->tables, rangeVar);
-#endif
 	}
 
 	/* WITH (publish_via_partition_root = true) option */
@@ -269,8 +255,6 @@ AppendPublishOptionList(StringInfo str, List *options)
 	}
 }
 
-
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 
 /*
  * BuildPublicationRelationObjSpec returns a PublicationObjSpec that
@@ -351,9 +335,6 @@ BuildPublicationRelationObjSpec(Oid relationId, Oid publicationId,
 }
 
 
-#endif
-
-
 /*
  * PreprocessAlterPublicationStmt handles ALTER PUBLICATION statements
  * in a way that is mostly similar to PreprocessAlterDistributedObjectStmt,
@@ -414,7 +395,7 @@ GetAlterPublicationDDLCommandsForTable(Oid relationId, bool isAdd)
 	List *publicationIds = GetRelationPublications(relationId);
 	Oid publicationId = InvalidOid;
 
-	foreach_oid(publicationId, publicationIds)
+	foreach_declared_oid(publicationId, publicationIds)
 	{
 		char *command = GetAlterPublicationTableDDLCommand(publicationId,
 														   relationId, isAdd);
@@ -452,7 +433,6 @@ GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 
 	ReleaseSysCache(pubTuple);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	bool tableOnly = !isAdd;
 
 	/* since postgres 15, tables can have a column list and filter */
@@ -461,16 +441,6 @@ GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 
 	alterPubStmt->pubobjects = lappend(alterPubStmt->pubobjects, publicationObject);
 	alterPubStmt->action = isAdd ? AP_AddObjects : AP_DropObjects;
-#else
-
-	/* before postgres 15, only full tables are supported */
-	char *schemaName = get_namespace_name(get_rel_namespace(relationId));
-	char *tableName = get_rel_name(relationId);
-	RangeVar *rangeVar = makeRangeVar(schemaName, tableName, -1);
-
-	alterPubStmt->tables = lappend(alterPubStmt->tables, rangeVar);
-	alterPubStmt->tableAction = isAdd ? DEFELEM_ADD : DEFELEM_DROP;
-#endif
 
 	/* we take the WHERE clause from the catalog where it is already transformed */
 	bool whereClauseNeedsTransform = false;

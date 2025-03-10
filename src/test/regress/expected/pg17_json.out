@@ -1,0 +1,578 @@
+--
+-- PG17_JSON
+-- PG17 has added basic JSON_TABLE() functionality
+-- JSON_TABLE() allows JSON data to be converted into a relational view
+-- and thus used, for example, in a FROM clause, like other tabular
+-- data. We treat JSON_TABLE the same as correlated functions (e.g., recurring tuples).
+-- In the end, for multi-shard JSON_TABLE commands, we apply the same
+-- restrictions as reference tables (e.g., cannot perform a lateral outer join
+-- when a distributed subquery references a (reference table)/JSON_TABLE etc.)
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/de3600452
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
+\gset
+\if :server_version_ge_17
+\else
+\q
+\endif
+CREATE SCHEMA pg17_json;
+SET search_path TO pg17_json;
+SET citus.next_shard_id TO 1687000;
+CREATE TABLE test_table(id bigserial, value text);
+SELECT create_distributed_table('test_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_table (value) SELECT i::text FROM generate_series(0,100)i;
+CREATE TABLE my_films(id bigserial, js jsonb);
+SELECT create_distributed_table('my_films', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO my_films(js) VALUES (
+'{ "favorites" : [
+   { "kind" : "comedy", "films" : [ { "title" : "Bananas", "director" : "Woody Allen"},
+                                    { "title" : "The Dinner Game", "director" : "Francis Veber" } ] },
+   { "kind" : "horror", "films" : [{ "title" : "Psycho", "director" : "Alfred Hitchcock" } ] },
+   { "kind" : "thriller", "films" : [{ "title" : "Vertigo", "director" : "Alfred Hitchcock" } ] },
+   { "kind" : "drama", "films" : [{ "title" : "Yojimbo", "director" : "Akira Kurosawa" } ] }
+  ] }');
+INSERT INTO my_films(js) VALUES (
+'{ "favorites" : [
+   { "kind" : "comedy", "films" : [ { "title" : "Bananas2", "director" : "Woody Allen"},
+                                    { "title" : "The Dinner Game2", "director" : "Francis Veber" } ] },
+   { "kind" : "horror", "films" : [{ "title" : "Psycho2", "director" : "Alfred Hitchcock" } ] },
+   { "kind" : "thriller", "films" : [{ "title" : "Vertigo2", "director" : "Alfred Hitchcock" } ] },
+   { "kind" : "drama", "films" : [{ "title" : "Yojimbo2", "director" : "Akira Kurosawa" } ] }
+  ] }');
+-- a router query
+SELECT jt.* FROM
+ my_films,
+ JSON_TABLE ( js, '$.favorites[*]' COLUMNS (
+   id FOR ORDINALITY,
+   kind text PATH '$.kind',
+   NESTED PATH '$.films[*]' COLUMNS (
+     title text PATH '$.title',
+     director text PATH '$.director'))) AS jt
+      WHERE my_films.id = 1
+    ORDER BY 1,2,3,4;
+ id |   kind   |      title      |     director
+---------------------------------------------------------------------
+  1 | comedy   | Bananas         | Woody Allen
+  1 | comedy   | The Dinner Game | Francis Veber
+  2 | horror   | Psycho          | Alfred Hitchcock
+  3 | thriller | Vertigo         | Alfred Hitchcock
+  4 | drama    | Yojimbo         | Akira Kurosawa
+(5 rows)
+
+-- router query with an explicit LATEREL SUBQUERY
+SELECT sub.*
+FROM my_films,
+     lateral(SELECT * FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                           kind text PATH '$.kind',
+                           NESTED PATH '$.films[*]' COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt) as sub
+WHERE my_films.id = 1;
+ id |   kind   |      title      |     director
+---------------------------------------------------------------------
+  1 | comedy   | Bananas         | Woody Allen
+  1 | comedy   | The Dinner Game | Francis Veber
+  2 | horror   | Psycho          | Alfred Hitchcock
+  3 | thriller | Vertigo         | Alfred Hitchcock
+  4 | drama    | Yojimbo         | Akira Kurosawa
+(5 rows)
+
+-- router query with an explicit LATEREL SUBQUERY and LIMIT
+SELECT sub.*
+FROM my_films,
+     lateral(SELECT * FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                           kind text PATH '$.kind',
+                           NESTED PATH '$.films[*]' COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt ORDER BY id DESC LIMIT 1) as sub
+WHERE my_films.id = 1;
+ id | kind  |  title  |    director
+---------------------------------------------------------------------
+  4 | drama | Yojimbo | Akira Kurosawa
+(1 row)
+
+-- set it DEBUG1 in case the plan changes
+-- we can see details
+SET client_min_messages TO DEBUG1;
+-- a mult-shard query
+SELECT jt.* FROM
+ my_films,
+ JSON_TABLE ( js, '$.favorites[*]' COLUMNS (
+   id FOR ORDINALITY,
+   kind text PATH '$.kind',
+   NESTED PATH '$.films[*]' COLUMNS (
+     title text PATH '$.title',
+     director text PATH '$.director'))) AS jt
+    ORDER BY 1,2,3,4;
+ id |   kind   |      title       |     director
+---------------------------------------------------------------------
+  1 | comedy   | Bananas          | Woody Allen
+  1 | comedy   | Bananas2         | Woody Allen
+  1 | comedy   | The Dinner Game  | Francis Veber
+  1 | comedy   | The Dinner Game2 | Francis Veber
+  2 | horror   | Psycho           | Alfred Hitchcock
+  2 | horror   | Psycho2          | Alfred Hitchcock
+  3 | thriller | Vertigo          | Alfred Hitchcock
+  3 | thriller | Vertigo2         | Alfred Hitchcock
+  4 | drama    | Yojimbo          | Akira Kurosawa
+  4 | drama    | Yojimbo2         | Akira Kurosawa
+(10 rows)
+
+-- recursively plan subqueries that has JSON_TABLE
+SELECT count(*) FROM
+(
+ SELECT jt.* FROM
+ my_films,
+ JSON_TABLE ( js, '$.favorites[*]' COLUMNS (
+   id FOR ORDINALITY,
+   kind text PATH '$.kind',
+   NESTED PATH '$.films[*]' COLUMNS (
+     title text PATH '$.title',
+     director text PATH '$.director'))) AS jt
+    LIMIT 1) as sub_with_json, test_table
+WHERE test_table.id = sub_with_json.id;
+DEBUG:  push down of limit count: 1
+DEBUG:  generating subplan XXX_1 for subquery SELECT jt.id, jt.kind, jt.title, jt.director FROM pg17_json.my_films, LATERAL JSON_TABLE(my_films.js, '$."favorites"[*]' AS json_table_path_0 COLUMNS (id FOR ORDINALITY, kind text PATH '$."kind"', NESTED PATH '$."films"[*]' AS json_table_path_1 COLUMNS (title text PATH '$."title"', director text PATH '$."director"'))) jt LIMIT 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.id, intermediate_result.kind, intermediate_result.title, intermediate_result.director FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, kind text, title text, director text)) sub_with_json, pg17_json.test_table WHERE (test_table.id OPERATOR(pg_catalog.=) sub_with_json.id)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- multi-shard query with an explicit LATEREL SUBQUERY
+SELECT sub.*
+FROM my_films JOIN
+     lateral
+  (SELECT *
+   FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+   												  kind text PATH '$.kind', NESTED PATH '$.films[*]'
+                            COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt
+   LIMIT 1000) AS sub ON (true)
+    ORDER BY 1,2,3,4;
+ id |   kind   |      title       |     director
+---------------------------------------------------------------------
+  1 | comedy   | Bananas          | Woody Allen
+  1 | comedy   | Bananas2         | Woody Allen
+  1 | comedy   | The Dinner Game  | Francis Veber
+  1 | comedy   | The Dinner Game2 | Francis Veber
+  2 | horror   | Psycho           | Alfred Hitchcock
+  2 | horror   | Psycho2          | Alfred Hitchcock
+  3 | thriller | Vertigo          | Alfred Hitchcock
+  3 | thriller | Vertigo2         | Alfred Hitchcock
+  4 | drama    | Yojimbo          | Akira Kurosawa
+  4 | drama    | Yojimbo2         | Akira Kurosawa
+(10 rows)
+
+-- JSON_TABLE can be on the inner part of an outer joion
+SELECT sub.*
+FROM my_films LEFT JOIN
+     lateral
+  (SELECT *
+   FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                            kind text PATH '$.kind', NESTED PATH '$.films[*]'
+                            COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt
+   LIMIT 1000) AS sub ON (true)
+    ORDER BY 1,2,3,4;
+ id |   kind   |      title       |     director
+---------------------------------------------------------------------
+  1 | comedy   | Bananas          | Woody Allen
+  1 | comedy   | Bananas2         | Woody Allen
+  1 | comedy   | The Dinner Game  | Francis Veber
+  1 | comedy   | The Dinner Game2 | Francis Veber
+  2 | horror   | Psycho           | Alfred Hitchcock
+  2 | horror   | Psycho2          | Alfred Hitchcock
+  3 | thriller | Vertigo          | Alfred Hitchcock
+  3 | thriller | Vertigo2         | Alfred Hitchcock
+  4 | drama    | Yojimbo          | Akira Kurosawa
+  4 | drama    | Yojimbo2         | Akira Kurosawa
+(10 rows)
+
+-- we can pushdown this correlated subquery in WHERE clause
+SELECT count(*)
+FROM my_films WHERE
+  (SELECT count(*) > 0
+   FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                            kind text PATH '$.kind', NESTED PATH '$.films[*]'
+                            COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt
+   LIMIT 1000);
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+-- we can pushdown this correlated subquery in SELECT clause
+ SELECT (SELECT count(*) > 0
+   FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                            kind text PATH '$.kind', NESTED PATH '$.films[*]'
+                            COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt)
+FROM my_films;
+ ?column?
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+-- multi-shard query with an explicit LATEREL SUBQUERY
+-- along with other tables
+SELECT sub.*
+FROM my_films JOIN
+     lateral
+  (SELECT *
+   FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                            kind text PATH '$.kind', NESTED PATH '$.films[*]'
+                            COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt
+   LIMIT 1000) AS sub ON (true) JOIN test_table ON(my_films.id = test_table.id)
+    ORDER BY 1,2,3,4;
+ id |   kind   |      title       |     director
+---------------------------------------------------------------------
+  1 | comedy   | Bananas          | Woody Allen
+  1 | comedy   | Bananas2         | Woody Allen
+  1 | comedy   | The Dinner Game  | Francis Veber
+  1 | comedy   | The Dinner Game2 | Francis Veber
+  2 | horror   | Psycho           | Alfred Hitchcock
+  2 | horror   | Psycho2          | Alfred Hitchcock
+  3 | thriller | Vertigo          | Alfred Hitchcock
+  3 | thriller | Vertigo2         | Alfred Hitchcock
+  4 | drama    | Yojimbo          | Akira Kurosawa
+  4 | drama    | Yojimbo2         | Akira Kurosawa
+(10 rows)
+
+-- non-colocated join fails
+SELECT sub.*
+FROM my_films JOIN
+     lateral
+  (SELECT *
+   FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                            kind text PATH '$.kind', NESTED PATH '$.films[*]'
+                            COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt
+   LIMIT 1000) AS sub ON (true) JOIN test_table ON(my_films.id != test_table.id)
+    ORDER BY 1,2,3,4;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- JSON_TABLE can be in the outer part of the join
+-- as long as there is a distributed table
+SELECT sub.*
+FROM my_films JOIN
+     lateral
+  (SELECT *
+   FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
+                            kind text PATH '$.kind', NESTED PATH '$.films[*]'
+                            COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt
+   LIMIT 1000) AS sub ON (true) LEFT JOIN test_table ON(my_films.id = test_table.id)
+    ORDER BY 1,2,3,4;
+ id |   kind   |      title       |     director
+---------------------------------------------------------------------
+  1 | comedy   | Bananas          | Woody Allen
+  1 | comedy   | Bananas2         | Woody Allen
+  1 | comedy   | The Dinner Game  | Francis Veber
+  1 | comedy   | The Dinner Game2 | Francis Veber
+  2 | horror   | Psycho           | Alfred Hitchcock
+  2 | horror   | Psycho2          | Alfred Hitchcock
+  3 | thriller | Vertigo          | Alfred Hitchcock
+  3 | thriller | Vertigo2         | Alfred Hitchcock
+  4 | drama    | Yojimbo          | Akira Kurosawa
+  4 | drama    | Yojimbo2         | Akira Kurosawa
+(10 rows)
+
+-- JSON_TABLE can be on the outer side of the join
+-- We support outer joins where the outer rel is a recurring one
+-- and the inner one is a non-recurring one if we don't reference the outer from the inner
+-- https://github.com/citusdata/citus/pull/6512
+SELECT *
+FROM json_table('[{"a":10,"b":20},{"a":30,"b":40}]'::JSONB, '$[*]'
+               COLUMNS (id FOR  ORDINALITY, column_a int4 PATH '$.a', column_b int4 PATH '$.b', a int4, b int4, c text))
+LEFT JOIN LATERAL
+  (SELECT *
+   FROM my_films) AS foo on(foo.id = a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, js FROM pg17_json.my_films
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "json_table".id, "json_table".column_a, "json_table".column_b, "json_table".a, "json_table".b, "json_table".c, foo.id, foo.js FROM (JSON_TABLE('[{"a": 10, "b": 20}, {"a": 30, "b": 40}]'::jsonb, '$[*]' AS json_table_path_0 COLUMNS (id FOR ORDINALITY, column_a integer PATH '$."a"', column_b integer PATH '$."b"', a integer PATH '$."a"', b integer PATH '$."b"', c text PATH '$."c"')) LEFT JOIN LATERAL (SELECT intermediate_result.id, intermediate_result.js FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, js jsonb)) foo ON ((foo.id OPERATOR(pg_catalog.=) "json_table".a)))
+ id | column_a | column_b | a  | b  | c | id | js
+---------------------------------------------------------------------
+  1 |       10 |       20 | 10 | 20 |   |    |
+  2 |       30 |       40 | 30 | 40 |   |    |
+(2 rows)
+
+-- However we don't support
+-- when we reference the JSON_TABLE from the non-recurring distributed table subquery
+SELECT *
+FROM json_table('[{"a":10,"b":20},{"a":30,"b":40}]'::JSONB, '$[*]'
+               COLUMNS (json_id FOR  ORDINALITY, column_a int4 PATH '$.a', column_b int4 PATH '$.b', a int4, b int4, c text))
+LEFT JOIN LATERAL
+  (SELECT *
+   FROM my_films WHERE id::text LIKE c) AS foo on(foo.id = a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a JSON_TABLE
+-- JSON_TABLE cannot be on the FROM clause alone
+SELECT *
+FROM json_table('[{"a":10,"b":20},{"a":30,"b":40}]'::JSONB, '$[*]'
+               COLUMNS (json_id FOR  ORDINALITY, column_a int4 PATH '$.a', column_b int4 PATH '$.b', a int4, b int4, c text)) as foo
+WHERE b >
+  (SELECT count(*)
+   FROM my_films WHERE id = foo.a);
+ERROR:  correlated subqueries are not supported when the FROM clause contains JSON_TABLE
+-- we can recursively plan json_tables on set operations
+(SELECT *
+FROM json_table('[{"a":10,"b":20},{"a":30,"b":40}]'::JSONB, '$[*]'
+               COLUMNS (id FOR  ORDINALITY))  ORDER BY id ASC LIMIT 1)
+UNION
+(SELECT *
+FROM json_table('[{"a":10,"b":20},{"a":30,"b":40}]'::JSONB, '$[*]'
+               COLUMNS (id FOR  ORDINALITY)) ORDER BY id ASC LIMIT 1)
+UNION
+(SELECT id FROM test_table ORDER BY id ASC LIMIT 1);
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM JSON_TABLE('[{"a": 10, "b": 20}, {"a": 30, "b": 40}]'::jsonb, '$[*]' AS json_table_path_0 COLUMNS (id FOR ORDINALITY)) ORDER BY id LIMIT 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM JSON_TABLE('[{"a": 10, "b": 20}, {"a": 30, "b": 40}]'::jsonb, '$[*]' AS json_table_path_0 COLUMNS (id FOR ORDINALITY)) ORDER BY id LIMIT 1
+DEBUG:  push down of limit count: 1
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM pg17_json.test_table ORDER BY id LIMIT 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer) UNION SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer) UNION SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)
+ id
+---------------------------------------------------------------------
+  1
+(1 row)
+
+-- LIMIT in subquery not supported when json_table exists
+SELECT *
+FROM json_table('[{"a":10,"b":20},{"a":30,"b":40}]'::JSONB, '$[*]'
+               COLUMNS (id FOR  ORDINALITY, column_a int4 PATH '$.a', column_b int4 PATH '$.b', a int4, b int4, c text))
+JOIN LATERAL
+  (SELECT *
+   FROM my_films WHERE json_table.id = a LIMIT 1) as foo ON (true);
+ERROR:  cannot push down this subquery
+DETAIL:  Limit clause is currently unsupported when a lateral subquery references a column from a JSON_TABLE
+RESET client_min_messages;
+-- we can use JSON_TABLE in modification queries as well
+-- use log level such that we can see trace changes
+SET client_min_messages TO DEBUG1;
+--the JSON_TABLE subquery is recursively planned
+UPDATE test_table SET VALUE = 'XXX' FROM(
+SELECT jt.* FROM
+ my_films,
+ JSON_TABLE ( js, '$.favorites[*]' COLUMNS (
+   id FOR ORDINALITY,
+   kind text PATH '$.kind',
+   NESTED PATH '$.films[*]' COLUMNS (
+     title text PATH '$.title',
+     director text PATH '$.director'))) AS jt) as foo  WHERE foo.id = test_table.id;
+DEBUG:  generating subplan XXX_1 for subquery SELECT jt.id, jt.kind, jt.title, jt.director FROM pg17_json.my_films, LATERAL JSON_TABLE(my_films.js, '$."favorites"[*]' AS json_table_path_0 COLUMNS (id FOR ORDINALITY, kind text PATH '$."kind"', NESTED PATH '$."films"[*]' AS json_table_path_1 COLUMNS (title text PATH '$."title"', director text PATH '$."director"'))) jt
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE pg17_json.test_table SET value = 'XXX'::text FROM (SELECT intermediate_result.id, intermediate_result.kind, intermediate_result.title, intermediate_result.director FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, kind text, title text, director text)) foo WHERE (foo.id OPERATOR(pg_catalog.=) test_table.id)
+-- Subquery with JSON table can be pushed down because two distributed tables
+-- in the query are joined on distribution column
+UPDATE test_table SET VALUE = 'XXX' FROM (
+SELECT my_films.id, jt.* FROM
+ my_films,
+ JSON_TABLE ( js, '$.favorites[*]' COLUMNS (
+   kind text PATH '$.kind',
+   NESTED PATH '$.films[*]' COLUMNS (
+     title text PATH '$.title',
+     director text PATH '$.director'))) AS jt) as foo  WHERE foo.id = test_table.id;
+-- we can pushdown with CTEs as well
+WITH json_cte AS
+(SELECT my_films.id, jt.* FROM
+ my_films,
+ JSON_TABLE ( js, '$.favorites[*]' COLUMNS (
+   kind text PATH '$.kind',
+   NESTED PATH '$.films[*]' COLUMNS (
+     title text PATH '$.title',
+     director text PATH '$.director'))) AS jt)
+UPDATE test_table SET VALUE = 'XYZ' FROM json_cte
+ WHERE json_cte.id = test_table.id;
+ -- we can recursively with CTEs as well
+WITH json_cte AS
+(SELECT my_films.id as film_id, jt.* FROM
+ my_films,
+ JSON_TABLE ( js, '$.favorites[*]' COLUMNS (
+   kind text PATH '$.kind',
+   NESTED PATH '$.films[*]' COLUMNS (
+      id FOR ORDINALITY,
+     title text PATH '$.title',
+     director text PATH '$.director'))) AS jt ORDER BY jt.id LIMIT 1)
+UPDATE test_table SET VALUE = 'XYZ' FROM json_cte
+ WHERE json_cte.film_id = test_table.id;
+DEBUG:  generating subplan XXX_1 for CTE json_cte: SELECT my_films.id AS film_id, jt.kind, jt.id, jt.title, jt.director FROM pg17_json.my_films, LATERAL JSON_TABLE(my_films.js, '$."favorites"[*]' AS json_table_path_0 COLUMNS (kind text PATH '$."kind"', NESTED PATH '$."films"[*]' AS json_table_path_1 COLUMNS (id FOR ORDINALITY, title text PATH '$."title"', director text PATH '$."director"'))) jt ORDER BY jt.id LIMIT 1
+DEBUG:  push down of limit count: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE pg17_json.test_table SET value = 'XYZ'::text FROM (SELECT intermediate_result.film_id, intermediate_result.kind, intermediate_result.id, intermediate_result.title, intermediate_result.director FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(film_id bigint, kind text, id integer, title text, director text)) json_cte WHERE (json_cte.film_id OPERATOR(pg_catalog.=) test_table.id)
+-- JSON_TABLE NESTED
+-- JSON_TABLE: plan execution
+-- Check output with Postgres table in sqljson_jsontable test
+-- https://github.com/postgres/postgres/blob/REL_17_0/src/test/regress/expected/sqljson_jsontable.out#L776-L814
+CREATE TABLE jsonb_table_test (id bigserial, js jsonb);
+DEBUG:  CREATE TABLE will create implicit sequence "jsonb_table_test_id_seq" for serial column "jsonb_table_test.id"
+SELECT create_distributed_table('jsonb_table_test', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO jsonb_table_test
+VALUES (1,
+	'[
+		{"a":  1,  "b": [], "c": []},
+		{"a":  2,  "b": [1, 2, 3], "c": [10, null, 20]},
+		{"a":  3,  "b": [1, 2], "c": []},
+		{"x": "4", "b": [1, 2], "c": 123}
+	 ]'
+);
+select
+	jt.*
+from
+	jsonb_table_test jtt,
+	json_table (
+		jtt.js,'strict $[*]' as p
+		columns (
+			n for ordinality,
+			a int path 'lax $.a' default -1 on empty,
+			nested path 'strict $.b[*]' as pb columns (b_id for ordinality, b int path '$' ),
+			nested path 'strict $.c[*]' as pc columns (c_id for ordinality, c int path '$' )
+		)
+	) jt;
+ n | a  | b_id | b | c_id | c
+---------------------------------------------------------------------
+ 1 |  1 |      |   |      |
+ 2 |  2 |    1 | 1 |      |
+ 2 |  2 |    2 | 2 |      |
+ 2 |  2 |    3 | 3 |      |
+ 2 |  2 |      |   |    1 | 10
+ 2 |  2 |      |   |    2 |
+ 2 |  2 |      |   |    3 | 20
+ 3 |  3 |    1 | 1 |      |
+ 3 |  3 |    2 | 2 |      |
+ 4 | -1 |    1 | 1 |      |
+ 4 | -1 |    2 | 2 |      |
+(11 rows)
+
+-- test some utility functions on the target list & where clause: json_exists()
+select jsonb_path_exists(js, '$.favorites') from my_films;
+ jsonb_path_exists
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+select bool_and(JSON_EXISTS(js, '$.favorites.films.title')) from my_films;
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) FROM my_films WHERE jsonb_path_exists(js, '$.favorites');
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+SELECT count(*) FROM my_films WHERE JSON_EXISTS(js, '$.favorites.films.title');
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+-- check constraint with json_exists, use json_scalar also
+SET citus.shard_replication_factor TO 1;
+create table user_profiles (
+    id bigserial,
+    addresses jsonb,
+    anyjson  jsonb,
+    serialized bytea,
+    check (json_exists( addresses, '$.main' )) -- we should insert a key named main
+);
+DEBUG:  CREATE TABLE will create implicit sequence "user_profiles_id_seq" for serial column "user_profiles.id"
+select create_distributed_table('user_profiles', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into user_profiles (addresses) VALUES (JSON_SCALAR('1'));
+ERROR:  new row for relation "user_profiles_1687012" violates check constraint "user_profiles_addresses_check"
+DETAIL:  Failing row contains (1, "1", null, null).
+CONTEXT:  while executing command on localhost:xxxxx
+insert into user_profiles (addresses, anyjson) VALUES ('{"main":"value"}', JSON_SCALAR('1')) RETURNING *;
+ id |     addresses     | anyjson | serialized
+---------------------------------------------------------------------
+  2 | {"main": "value"} | "1"     |
+(1 row)
+
+-- use json() - we cannot insert because WITH UNIQUE KEYS
+insert into user_profiles (addresses) VALUES (JSON ('{"main":"value", "main":"value"}' WITH UNIQUE KEYS));
+ERROR:  duplicate JSON object key value
+-- we can insert with
+insert into user_profiles (addresses) VALUES (JSON ('{"main":"value", "main":"value"}' WITHOUT UNIQUE KEYS)) RETURNING *;
+ id |     addresses     | anyjson | serialized
+---------------------------------------------------------------------
+  4 | {"main": "value"} |         |
+(1 row)
+
+-- JSON predicates
+TRUNCATE user_profiles;
+INSERT INTO user_profiles (anyjson) VALUES ('12'), ('"abc"'), ('[1,2,3]'), ('{"a":12}');
+select anyjson, anyjson is json array as json_array, anyjson is json object as json_object, anyjson is json scalar as json_scalar,
+anyjson is json with UNIQUE keys
+from user_profiles WHERE anyjson IS NOT NULL ORDER BY 1;
+  anyjson  | json_array | json_object | json_scalar | ?column?
+---------------------------------------------------------------------
+ "abc"     | f          | f           | t           | t
+ 12        | f          | f           | t           | t
+ [1, 2, 3] | t          | f           | f           | t
+ {"a": 12} | f          | t           | f           | t
+(4 rows)
+
+-- use json_serialize
+-- it is evaluated in the worker
+SELECT JSON_SERIALIZE('{ "a" : 1 } ' RETURNING bytea);
+       json_serialize
+---------------------------------------------------------------------
+ \x7b20226122203a2031207d20
+(1 row)
+
+SET citus.log_remote_commands TO on;
+INSERT INTO user_profiles (serialized) VALUES (JSON_SERIALIZE('{ "a" : 1 } ' RETURNING bytea)) RETURNING *;
+NOTICE:  issuing INSERT INTO pg17_json.user_profiles_1687015 (id, serialized) VALUES ('9'::bigint, JSON_SERIALIZE('{ "a" : 1 } '::text RETURNING bytea)) RETURNING id, addresses, anyjson, serialized
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ id | addresses | anyjson |         serialized
+---------------------------------------------------------------------
+  9 |           |         | \x7b20226122203a2031207d20
+(1 row)
+
+RESET citus.log_remote_commands;
+-- use json_query
+SELECT i,
+       json_query('[{"x": "aaa"},{"x": "bbb"},{"x": "ccc"}]'::JSONB, '$[$i].x' passing id AS i RETURNING text omit quotes)
+FROM generate_series(0, 3) i
+JOIN my_films ON(id = i) ORDER BY 1;
+ i | json_query
+---------------------------------------------------------------------
+ 1 | bbb
+ 2 | ccc
+(2 rows)
+
+-- use json_value
+-- check output with sqljson_queryfuncs test
+-- https://github.com/postgres/postgres/blob/REL_17_0/src/test/regress/expected/sqljson_queryfuncs.out#L439-L455
+SELECT i,
+       JSON_VALUE(
+		jsonb '{"a": 1, "b": 2}',
+		'$.* ? (@ > $i)' PASSING id AS i
+		RETURNING int
+		DEFAULT -1 ON EMPTY
+		DEFAULT -2 ON ERROR
+	)
+FROM generate_series(0, 3) i
+JOIN my_films ON(id = i) ORDER BY 1;
+ i | json_value
+---------------------------------------------------------------------
+ 1 |          2
+ 2 |         -1
+(2 rows)
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA pg17_json CASCADE;

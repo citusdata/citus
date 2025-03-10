@@ -105,6 +105,11 @@ alter database "regression!'4" set TABLESPACE "ts-needs\!escape";
 
 drop database "regression!'4";
 
+-- this database is not distributed so we will not see any remote commands
+CREATE DATABASE db_to_test;
+alter database db_to_test with CONNECTION LIMIT 100;
+DROP DATABASE db_to_test;
+
 set citus.log_remote_commands = false;
 set citus.enable_create_database_propagation=off;
 

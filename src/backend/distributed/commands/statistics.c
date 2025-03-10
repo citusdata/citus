@@ -184,7 +184,7 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 	List *ddlJobs = NIL;
 	List *processedStatsOids = NIL;
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	foreach_declared_ptr(objectNameList, dropStatisticsStmt->objects)
 	{
 		Oid statsOid = get_statistics_object_oid(objectNameList,
 												 dropStatisticsStmt->missing_ok);
@@ -234,7 +234,7 @@ DropStatisticsObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	List *objectAddresses = NIL;
 
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	foreach_declared_ptr(objectNameList, dropStatisticsStmt->objects)
 	{
 		Oid statsOid = get_statistics_object_oid(objectNameList,
 												 dropStatisticsStmt->missing_ok);
@@ -535,7 +535,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	int saveNestLevel = PushEmptySearchPath();
 
 	Oid statisticsId = InvalidOid;
-	foreach_oid(statisticsId, statisticsIdList)
+	foreach_declared_oid(statisticsId, statisticsIdList)
 	{
 		/* we need create commands for already created stats before distribution */
 		Datum commandText = DirectFunctionCall1(pg_get_statisticsobjdef,
@@ -606,7 +606,7 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 	RelationClose(relation);
 
 	Oid statsId = InvalidOid;
-	foreach_oid(statsId, statsIdList)
+	foreach_declared_oid(statsId, statsIdList)
 	{
 		HeapTuple heapTuple = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsId));
 		if (!HeapTupleIsValid(heapTuple))
@@ -651,14 +651,15 @@ GetAlterIndexStatisticsCommands(Oid indexOid)
 		}
 
 		Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(attTuple);
-		if (targetAttr->attstattarget != DEFAULT_STATISTICS_TARGET)
+		int32 targetAttstattarget = getAttstattarget_compat(attTuple);
+		if (targetAttstattarget != DEFAULT_STATISTICS_TARGET)
 		{
 			char *indexNameWithSchema = generate_qualified_relation_name(indexOid);
 
 			char *command =
 				GenerateAlterIndexColumnSetStatsCommand(indexNameWithSchema,
 														targetAttr->attnum,
-														targetAttr->attstattarget);
+														targetAttstattarget);
 
 			alterIndexStatisticsCommandList =
 				lappend(alterIndexStatisticsCommandList,
@@ -773,9 +774,10 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 	}
 
 	Form_pg_statistic_ext statisticsForm = (Form_pg_statistic_ext) GETSTRUCT(tup);
+	int16 currentStxstattarget = getStxstattarget_compat(tup);
 	ReleaseSysCache(tup);
 
-	if (statisticsForm->stxstattarget == -1)
+	if (currentStxstattarget == -1)
 	{
 		return NULL;
 	}
@@ -785,7 +787,8 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 	char *schemaName = get_namespace_name(statisticsForm->stxnamespace);
 	char *statName = NameStr(statisticsForm->stxname);
 
-	alterStatsStmt->stxstattarget = statisticsForm->stxstattarget;
+	alterStatsStmt->stxstattarget = getAlterStatsStxstattarget_compat(
+		currentStxstattarget);
 	alterStatsStmt->defnames = list_make2(makeString(schemaName), makeString(statName));
 
 	return DeparseAlterStatisticsStmt((Node *) alterStatsStmt);

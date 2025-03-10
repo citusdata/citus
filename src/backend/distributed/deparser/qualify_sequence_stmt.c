@@ -52,8 +52,6 @@ QualifyAlterSequenceOwnerStmt(Node *node)
 }
 
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 /*
  * QualifyAlterSequencePersistenceStmt transforms a
  * ALTER SEQUENCE .. SET LOGGED/UNLOGGED
@@ -78,9 +76,6 @@ QualifyAlterSequencePersistenceStmt(Node *node)
 		}
 	}
 }
-
-
-#endif
 
 
 /*
@@ -148,7 +143,7 @@ QualifyDropSequenceStmt(Node *node)
 
 	List *objectNameListWithSchema = NIL;
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, stmt->objects)
+	foreach_declared_ptr(objectNameList, stmt->objects)
 	{
 		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
 
@@ -192,7 +187,7 @@ QualifyGrantOnSequenceStmt(Node *node)
 	}
 	List *qualifiedSequenceRangeVars = NIL;
 	RangeVar *sequenceRangeVar = NULL;
-	foreach_ptr(sequenceRangeVar, stmt->objects)
+	foreach_declared_ptr(sequenceRangeVar, stmt->objects)
 	{
 		if (sequenceRangeVar->schemaname == NULL)
 		{

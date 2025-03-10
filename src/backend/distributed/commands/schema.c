@@ -162,7 +162,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	String *schemaVal = NULL;
-	foreach_ptr(schemaVal, distributedSchemas)
+	foreach_declared_ptr(schemaVal, distributedSchemas)
 	{
 		if (SchemaHasDistributedTableWithFKey(strVal(schemaVal)))
 		{
@@ -322,7 +322,7 @@ FilterDistributedSchemas(List *schemas)
 	List *distributedSchemas = NIL;
 
 	String *schemaValue = NULL;
-	foreach_ptr(schemaValue, schemas)
+	foreach_declared_ptr(schemaValue, schemas)
 	{
 		const char *schemaName = strVal(schemaValue);
 		Oid schemaOid = get_namespace_oid(schemaName, true);
@@ -443,7 +443,7 @@ GetGrantCommandsFromCreateSchemaStmt(Node *node)
 	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
 
 	Node *element = NULL;
-	foreach_ptr(element, stmt->schemaElts)
+	foreach_declared_ptr(element, stmt->schemaElts)
 	{
 		if (!IsA(element, GrantStmt))
 		{
@@ -480,7 +480,7 @@ static bool
 CreateSchemaStmtCreatesTable(CreateSchemaStmt *stmt)
 {
 	Node *element = NULL;
-	foreach_ptr(element, stmt->schemaElts)
+	foreach_declared_ptr(element, stmt->schemaElts)
 	{
 		/*
 		 * CREATE TABLE AS and CREATE FOREIGN TABLE commands cannot be
