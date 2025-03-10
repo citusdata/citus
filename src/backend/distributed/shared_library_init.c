@@ -2471,6 +2471,23 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
+	DefineCustomIntVariable(
+		"citus.stat_counter_slots",
+		gettext_noop(
+			"Determines the number of slots to use to track Citus stat counters."),
+		gettext_noop(
+			"Determines the number of slots to use to track Citus stat counters. "
+			"0 means each backend will have its own stats counters to avoid the "
+			"lock contention while updating the stats counters and any other "
+			"positive number N means that N slots will be used to track the stat "
+			"counters in a way that each backend will use one of the slots that is "
+			"determined by the backend's PID modulo N"),
+		&StatCounterSlots,
+		16, 0, 1024,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.stat_statements_track",
 		gettext_noop(

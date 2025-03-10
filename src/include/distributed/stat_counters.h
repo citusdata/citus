@@ -27,6 +27,8 @@ typedef enum
 	MAX_STAT_INDEX
 } StatType;
 
+extern int StatCounterSlots;
+
 typedef pg_atomic_uint64 CitusAtomicStatCounters[MAX_STAT_COUNT];
 
 extern void InitializeStatCountersArrayMem(void);

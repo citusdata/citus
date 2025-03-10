@@ -25,9 +25,13 @@ typedef uint64 CitusStatCounters[MAX_STAT_COUNT];
 
 #define STAT_COUNTERS_COLUMNS 2
 
+/* GUC value for citus.stat_counter_slots */
+int StatCounterSlots = 0;
+
 /* shared memory init & management */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static void SharedStatCountersArrayShmemInit(void);
+static int GetStatCounterSlots(void);
 
 /*
  * Pointer to the shared memory array for stat counters.
@@ -115,7 +119,7 @@ InitializeStatCountersArrayMem(void)
 Size
 StatCountersArrayShmemSize(void)
 {
-	return mul_size(sizeof(CitusAtomicStatCounters), MaxBackends);
+	return mul_size(sizeof(CitusAtomicStatCounters), GetStatCounterSlots());
 }
 
 
@@ -126,13 +130,15 @@ StatCountersArrayShmemSize(void)
 void
 IncrementStatCounter(int statId)
 {
-	#if PG_VERSION_NUM >= 170000
-	pg_atomic_uint64 *statPtr = &SharedStatCountersArray[MyProcNumber][statId];
+#if PG_VERSION_NUM >= 170000
+	int backendSlotIdx = MyProcNumber;
 #else
-	pg_atomic_uint64 *statPtr = &SharedStatCountersArray[MyBackendId - 1][statId];
+	int backendSlotIdx = MyBackendId - 1;
 #endif
 
-	pg_atomic_fetch_add_u64(statPtr, 1);
+	backendSlotIdx = backendSlotIdx % GetStatCounterSlots();
+
+	pg_atomic_fetch_add_u64(&SharedStatCountersArray[backendSlotIdx][statId], 1);
 }
 
 
@@ -227,7 +233,7 @@ AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
 {
 	const Oid userId = GetUserId();
 
-	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
+	for (int backendIndex = 0; backendIndex < GetStatCounterSlots(); ++backendIndex)
 	{
 		PGPROC *currentProc = GetPGProcByNumber(backendIndex);
 
@@ -257,11 +263,8 @@ ResetStatCounters(void)
 	 * Some stats might be lost between reading the stats for all the backend processes
 	 * and resetting the stats. However, we are okay with this since we don't want to block
 	 * the client backends that might be incrementing the stats.
-	 *
-	 * Also, we cannot use Memset() to reset the stats as it is not safe to reset the stats
-	 * while other processes are reading them, if any.
 	 */
-	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
+	for (int backendIndex = 0; backendIndex < GetStatCounterSlots(); ++backendIndex)
 	{
 		for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
 		{
@@ -304,13 +307,13 @@ SharedStatCountersArrayShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		/*
-		 * Can safely use MemSet() here as we are initializing the shared memory
-		 * for the first time.
-		 *
-		 * TODO: make sure that this assumption is correct.
-		 */
-		MemSet(SharedStatCountersArray, 0, statCountersBackendArrayShmemSize);
+		for (int backendIndex = 0; backendIndex < GetStatCounterSlots(); ++backendIndex)
+		{
+			for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
+			{
+				pg_atomic_init_u64(&SharedStatCountersArray[backendIndex][statIdx], 0);
+			}
+		}
 	}
 
 	LWLockRelease(AddinShmemInitLock);
@@ -319,4 +322,18 @@ SharedStatCountersArrayShmemInit(void)
 	{
 		prev_shmem_startup_hook();
 	}
+}
+
+
+/*
+ * GetStatCounterSlots returns the number of slots to store stat counters.
+ *
+ * Guarantees to return the same value in the run-time because StatCounterSlots
+ * enforces PGC_POSTMASTER.
+ */
+static int
+GetStatCounterSlots(void)
+{
+	Assert(StatCounterSlots >= 0);
+	return StatCounterSlots == 0 ? MaxBackends : StatCounterSlots;
 }
