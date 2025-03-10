@@ -1,11 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-\else
-\q
-\endif
-
 SET search_path TO merge_arbitrary_schema;
 INSERT INTO target_cj VALUES (1, 'target', 0);
 INSERT INTO target_cj VALUES (2, 'target', 0);

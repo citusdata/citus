@@ -246,20 +246,25 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
 
 -- PG16 added one more backend type B_STANDALONE_BACKEND
 -- and also alphabetized the backend types, hence the orders changed
--- Relevant PG commit:
+-- Relevant PG16 commit:
 -- https://github.com/postgres/postgres/commit/0c679464a837079acc75ff1d45eaa83f79e05690
+-- Relevant Pg17 commit:
+-- https://github.com/postgres/postgres/commit/067701f57758f9baed5bd9d868539738d77bfa92#diff-afc0ebd67534b71b5b94b29a1387aa6eedffe342a5539f52d686428be323e802
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
-\gset
-
-\if :server_version_ge_16
-SELECT 4 AS client_backend \gset
-SELECT 5 AS bgworker \gset
-SELECT 12 AS walsender \gset
+SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17 \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16 \gset
+\if :server_version_ge_17
+  SELECT 1 AS client_backend \gset
+  SELECT 4 AS bgworker \gset
+  SELECT 5 AS walsender \gset
+\elif :server_version_ge_16
+  SELECT 4 AS client_backend \gset
+  SELECT 5 AS bgworker \gset
+  SELECT 12 AS walsender \gset
 \else
-SELECT 3 AS client_backend \gset
-SELECT 4 AS bgworker \gset
-SELECT 9 AS walsender \gset
+  SELECT 3 AS client_backend \gset
+  SELECT 4 AS bgworker \gset
+  SELECT 9 AS walsender \gset
 \endif
 
 -- say, we set it to bgworker

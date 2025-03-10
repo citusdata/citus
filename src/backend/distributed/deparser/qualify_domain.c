@@ -67,7 +67,7 @@ QualifyDropDomainStmt(Node *node)
 	DropStmt *stmt = castNode(DropStmt, node);
 
 	TypeName *domainName = NULL;
-	foreach_ptr(domainName, stmt->objects)
+	foreach_declared_ptr(domainName, stmt->objects)
 	{
 		QualifyTypeName(domainName, stmt->missing_ok);
 	}
@@ -249,7 +249,7 @@ QualifyCollate(CollateClause *collClause, bool missing_ok)
 
 	collClause->collname = NIL;
 	char *name = NULL;
-	foreach_ptr(name, objName)
+	foreach_declared_ptr(name, objName)
 	{
 		collClause->collname = lappend(collClause->collname, makeString(name));
 	}

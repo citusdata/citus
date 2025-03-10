@@ -224,7 +224,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			 */
 			List *citusCustomScanStates = FindCitusCustomScanStates(queryDesc->planstate);
 			CitusScanState *citusScanState = NULL;
-			foreach_ptr(citusScanState, citusCustomScanStates)
+			foreach_declared_ptr(citusScanState, citusCustomScanStates)
 			{
 				if (citusScanState->PreExecScan)
 				{
@@ -512,7 +512,7 @@ SortTupleStore(CitusScanState *scanState)
 	 * for sorting the tuples.
 	 */
 	TargetEntry *returningEntry = NULL;
-	foreach_ptr(returningEntry, targetList)
+	foreach_declared_ptr(returningEntry, targetList)
 	{
 		Oid sortop = InvalidOid;
 

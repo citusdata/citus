@@ -36,7 +36,7 @@ typedef struct ListCellAndListWrapper
 } ListCellAndListWrapper;
 
 /*
- * foreach_ptr -
+ * foreach_declared_ptr -
  *	  a convenience macro which loops through a pointer list without needing a
  *	  ListCell, just a declared pointer variable to store the pointer of the
  *	  cell in.
@@ -50,7 +50,7 @@ typedef struct ListCellAndListWrapper
  *	  - || true is used to always enter the loop when cell is not null even if
  *	    var is NULL.
  */
-#define foreach_ptr(var, l) \
+#define foreach_declared_ptr(var, l) \
 	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
@@ -58,12 +58,12 @@ typedef struct ListCellAndListWrapper
 
 
 /*
- * foreach_int -
+ * foreach_declared_int -
  *	  a convenience macro which loops through an int list without needing a
  *	  ListCell, just a declared int variable to store the int of the cell in.
- *	  For explanation of how it works see foreach_ptr.
+ *	  For explanation of how it works see foreach_declared_ptr.
  */
-#define foreach_int(var, l) \
+#define foreach_declared_int(var, l) \
 	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst_int(var ## CellDoNotUse)) || true); \
@@ -71,12 +71,12 @@ typedef struct ListCellAndListWrapper
 
 
 /*
- * foreach_oid -
+ * foreach_declared_oid -
  *	  a convenience macro which loops through an oid list without needing a
  *	  ListCell, just a declared Oid variable to store the oid of the cell in.
- *	  For explanation of how it works see foreach_ptr.
+ *	  For explanation of how it works see foreach_declared_ptr.
  */
-#define foreach_oid(var, l) \
+#define foreach_declared_oid(var, l) \
 	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst_oid(var ## CellDoNotUse)) || true); \

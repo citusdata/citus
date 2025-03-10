@@ -42,6 +42,26 @@ CREATE TABLE multi_extension.prev_objects(description text);
 CREATE TABLE multi_extension.extension_diff(previous_object text COLLATE "C",
                             current_object text COLLATE "C");
 
+-- In PG17, Auto-generated array types, multirange types, and relation rowtypes
+-- are treated as dependent objects, hence changing the output of the
+-- print_extension_changes function.
+-- Relevant PG commit: e5bc9454e527b1cba97553531d8d4992892fdeef
+-- Here we create a table with only the basic extension types
+-- in order to avoid printing extra ones for now
+-- This can be removed when we drop PG16 support.
+
+CREATE TABLE multi_extension.extension_basic_types (description text);
+INSERT INTO multi_extension.extension_basic_types VALUES ('type citus.distribution_type'),
+                                                         ('type citus.shard_transfer_mode'),
+                                                         ('type citus_copy_format'),
+                                                         ('type noderole'),
+                                                         ('type citus_job_status'),
+                                                         ('type citus_task_status'),
+                                                         ('type replication_slot_info'),
+                                                         ('type split_copy_info'),
+                                                         ('type split_shard_info'),
+                                                         ('type cluster_clock');
+
 CREATE FUNCTION multi_extension.print_extension_changes()
 RETURNS TABLE(previous_object text, current_object text)
 AS $func$
@@ -57,7 +77,10 @@ BEGIN
 	WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
 		AND refobjid = e.oid
 		AND deptype = 'e'
-		AND e.extname='citus';
+		AND e.extname='citus'
+        AND (pg_catalog.pg_describe_object(classid, objid, 0) NOT LIKE 'type%'
+             OR
+             pg_catalog.pg_describe_object(classid, objid, 0) IN (SELECT * FROM extension_basic_types));
 
 	INSERT INTO extension_diff
 	SELECT p.description previous_object, c.description current_object
@@ -90,7 +113,8 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal') AND
+      pgio.type      != 'type'
 ORDER BY 1, 2;
 
 
@@ -296,14 +320,8 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- recreate public schema, and recreate citus_tables in the public schema by default
 CREATE SCHEMA public;
--- In PG15, public schema is owned by pg_database_owner role
--- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
+-- public schema is owned by pg_database_owner role
 ALTER SCHEMA public OWNER TO pg_database_owner;
-\endif
 GRANT ALL ON SCHEMA public TO public;
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 ALTER EXTENSION citus UPDATE TO '10.0-4';
@@ -634,14 +652,13 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '12.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 12.1-1 from 12.2-1
-ALTER EXTENSION citus UPDATE TO '12.2-1';
+-- Test downgrade to 12.1-1 from 13.0-1
+ALTER EXTENSION citus UPDATE TO '13.0-1';
 ALTER EXTENSION citus UPDATE TO '12.1-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
-
--- Snapshot of state at 12.2-1
-ALTER EXTENSION citus UPDATE TO '12.2-1';
+-- Snapshot of state at 13.0-1
+ALTER EXTENSION citus UPDATE TO '13.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
@@ -657,7 +674,8 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal') AND
+      pgio.type      != 'type'
 ORDER BY 1, 2;
 
 -- see incompatible version errors out
@@ -1025,4 +1043,5 @@ DROP EXTENSION citus;
 CREATE EXTENSION citus;
 
 DROP TABLE version_mismatch_table;
+DROP TABLE  multi_extension.extension_basic_types;
 DROP SCHEMA multi_extension;

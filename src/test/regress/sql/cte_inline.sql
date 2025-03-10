@@ -1,12 +1,6 @@
 --
 -- CTE_INLINE
 --
--- This test file has an alternative output because of the change in the
--- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
--- The alternative output can be deleted when we drop support for PG14
---
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
 
 CREATE SCHEMA cte_inline;
 SET search_path TO cte_inline;
@@ -350,12 +344,12 @@ WITH cte_1  AS (
           WITH cte_1 AS (
             WITH cte_1 AS (SELECT count(*), key FROM  test_table GROUP BY key)
             			   SELECT * FROM cte_1)
-          SELECT * FROM cte_1 WHERE key = 1)
-        SELECT * FROM cte_1 WHERE key = 2)
-      SELECT * FROM cte_1 WHERE key = 3)
-    SELECT * FROM cte_1 WHERE key = 4)
-  SELECT * FROM cte_1 WHERE key = 5)
-SELECT * FROM cte_1 WHERE key = 6;
+          SELECT * FROM cte_1 WHERE key >= 1)
+        SELECT * FROM cte_1 WHERE key >= 2)
+      SELECT * FROM cte_1 WHERE key >= 3)
+    SELECT * FROM cte_1 WHERE key >= 4)
+  SELECT * FROM cte_1 WHERE key >= 5)
+SELECT * FROM cte_1 WHERE key = 1;
 
 
 

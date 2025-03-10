@@ -50,13 +50,27 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 
+#include "pg_version_constants.h"
+
+#include "distributed/backend_data.h"
+#include "distributed/connection_management.h"
+#include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/pg_dist_transaction.h"
+#include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
+#include "distributed/transaction_recovery.h"
+#include "distributed/version_compat.h"
+#include "distributed/worker_manager.h"
+
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(recover_prepared_transactions);
 
 
 /* Local functions forward declarations */
-static int RecoverWorkerTransactions(WorkerNode *workerNode);
+static int RecoverWorkerTransactions(WorkerNode *workerNode,
+									 MultiConnection *connection);
 static List * PendingWorkerTransactionList(MultiConnection *connection);
 static bool IsTransactionInProgress(HTAB *activeTransactionNumberSet,
 									char *preparedTransactionName);
@@ -127,10 +141,51 @@ RecoverTwoPhaseCommits(void)
 	LockTransactionRecovery(ShareUpdateExclusiveLock);
 
 	List *workerList = ActivePrimaryNodeList(NoLock);
+	List *workerConnections = NIL;
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
+	MultiConnection *connection = NULL;
+
+	/*
+	 * Pre-establish all connections to worker nodes.
+	 *
+	 * We do this to enforce a consistent lock acquisition order and prevent deadlocks.
+	 * Currently, during extension updates, we take strong locks on the Citus
+	 * catalog tables in a specific order: first on pg_dist_authinfo, then on
+	 * pg_dist_transaction. It's critical that any operation locking these two
+	 * tables adheres to this order, or a deadlock could occur.
+	 *
+	 * Note that RecoverWorkerTransactions() retains its lock until the end
+	 * of the transaction, while GetNodeConnection() releases its lock after
+	 * the catalog lookup. So when there are multiple workers in the active primary
+	 * node list, the lock acquisition order may reverse in subsequent iterations
+	 * of the loop calling RecoverWorkerTransactions(), increasing the risk
+	 * of deadlock.
+	 *
+	 * By establishing all worker connections upfront, we ensure that
+	 * RecoverWorkerTransactions() deals with a single distributed catalog table,
+	 * thereby preventing deadlocks regardless of the lock acquisition sequence
+	 * used in the upgrade extension script.
+	 */
+
+	foreach_declared_ptr(workerNode, workerList)
 	{
-		recoveredTransactionCount += RecoverWorkerTransactions(workerNode);
+		int connectionFlags = 0;
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+
+		connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+		Assert(connection != NULL);
+
+		/*
+		 * We don't verify connection validity here.
+		 * Instead, RecoverWorkerTransactions() performs the necessary
+		 * sanity checks on the connection state.
+		 */
+		workerConnections = lappend(workerConnections, connection);
+	}
+	forboth_ptr(workerNode, workerList, connection, workerConnections)
+	{
+		recoveredTransactionCount += RecoverWorkerTransactions(workerNode, connection);
 	}
 
 	return recoveredTransactionCount;
@@ -142,7 +197,7 @@ RecoverTwoPhaseCommits(void)
  * started by this node on the specified worker.
  */
 static int
-RecoverWorkerTransactions(WorkerNode *workerNode)
+RecoverWorkerTransactions(WorkerNode *workerNode, MultiConnection *connection)
 {
 	int recoveredTransactionCount = 0;
 
@@ -160,8 +215,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 	bool recoveryFailed = false;
 
-	int connectionFlags = 0;
-	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+	Assert(connection != NULL);
 	if (connection->pgConn == NULL || PQstatus(connection->pgConn) != CONNECTION_OK)
 	{
 		ereport(WARNING, (errmsg("transaction recovery cannot connect to %s:%d",

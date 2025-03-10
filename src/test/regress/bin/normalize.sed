@@ -108,19 +108,13 @@ s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
 /^\s*invalid socket$/d
 
 # pg15 changes
-# can be removed when dropping PG13&14 support
-#if (PG_VERSION_NUM >= PG_VERSION_14) && (PG_VERSION_NUM < PG_VERSION_15)
-# (This is not preprocessor directive, but a reminder for the developer that will drop PG14 support )
-s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
 s/ AS "\?column\?"//g
-s/".*\.(.*)": (found .* removable)/"\1": \2/g
 # We ignore multiline error messages, and substitute first line with a single line
 # alternative that is used in some older libpq versions.
 s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
 /^\s*This probably means the server terminated abnormally$/d
 /^\s*before or while processing the request.$/d
 /^\s*connection not open$/d
-#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
@@ -309,3 +303,25 @@ s/permission denied to terminate process/must be a superuser to terminate superu
 s/permission denied to cancel query/must be a superuser to cancel superuser query/g
 
 #endif /* PG_VERSION_NUM < PG_VERSION_16 */
+
+# pg17 changes
+# can be removed when dropping PG15&16 support
+#if PG_VERSION_NUM < PG_VERSION_17
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG15&16 support )
+
+s/COPY DEFAULT only available using COPY FROM/COPY DEFAULT cannot be used with COPY TO/
+s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter character must not appear in the DEFAULT specification/
+
+#endif /* PG_VERSION_NUM < PG_VERSION_17 */
+
+# PG 17 Removes outer parentheses from CHECK constraints
+# we add them back for pg15,pg16 compatibility
+# e.g. change CHECK other_col >= 100 to CHECK (other_col >= 100)
+s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
+
+# pg17 change: this is a rule that ignores additional DEBUG logging
+# for CREATE MATERIALIZED VIEW (commit b4da732fd64). This could be
+# changed to a normalization rule when 17 becomes the minimum
+# supported Postgres version.
+
+/DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d

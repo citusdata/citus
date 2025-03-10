@@ -566,7 +566,7 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	List *funcCollations = NIL;
 
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, dependentTargetList)
+	foreach_declared_ptr(targetEntry, dependentTargetList)
 	{
 		Node *expr = (Node *) targetEntry->expr;
 
@@ -640,7 +640,7 @@ CreateTargetListForCombineQuery(List *targetList)
 
 	/* iterate over original target entries */
 	TargetEntry *originalTargetEntry = NULL;
-	foreach_ptr(originalTargetEntry, targetList)
+	foreach_declared_ptr(originalTargetEntry, targetList)
 	{
 		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
 
@@ -1571,7 +1571,7 @@ WrapSubquery(Query *subquery)
 
 	/* create a target list that matches the SELECT */
 	TargetEntry *selectTargetEntry = NULL;
-	foreach_ptr(selectTargetEntry, subquery->targetList)
+	foreach_declared_ptr(selectTargetEntry, subquery->targetList)
 	{
 		/* exactly 1 entry in FROM */
 		int indexInRangeTable = 1;
@@ -1723,7 +1723,7 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
 	int entryResNo = 1;
 	TargetEntry *selectTargetEntry = NULL;
-	foreach_ptr(selectTargetEntry, selectTargetList)
+	foreach_declared_ptr(selectTargetEntry, selectTargetList)
 	{
 		selectTargetEntry->resno = entryResNo++;
 	}

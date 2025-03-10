@@ -130,9 +130,9 @@ extern List * IdentitySequenceDependencyCommandList(Oid targetRelationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
-#if PG_VERSION_NUM < PG_VERSION_15
+
 ObjectAddress GetAttrDefaultColumnAddress(Oid attrdefoid);
-#endif
+
 extern List * GetAttrDefsFromSequence(Oid seqOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
 											  AttrNumber attnum, char depType);

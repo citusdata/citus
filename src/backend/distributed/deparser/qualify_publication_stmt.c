@@ -19,11 +19,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static void QualifyPublicationObjects(List *publicationObjects);
-#else
-static void QualifyTables(List *tables);
-#endif
 static void QualifyPublicationRangeVar(RangeVar *publication);
 
 
@@ -36,15 +32,9 @@ QualifyCreatePublicationStmt(Node *node)
 {
 	CreatePublicationStmt *stmt = castNode(CreatePublicationStmt, node);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	QualifyPublicationObjects(stmt->pubobjects);
-#else
-	QualifyTables(stmt->tables);
-#endif
 }
 
-
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 
 /*
  * QualifyPublicationObjects ensures all table names in a list of
@@ -55,7 +45,7 @@ QualifyPublicationObjects(List *publicationObjects)
 {
 	PublicationObjSpec *publicationObject = NULL;
 
-	foreach_ptr(publicationObject, publicationObjects)
+	foreach_declared_ptr(publicationObject, publicationObjects)
 	{
 		if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE)
 		{
@@ -68,26 +58,6 @@ QualifyPublicationObjects(List *publicationObjects)
 }
 
 
-#else
-
-/*
- * QualifyTables ensures all table names in a list are fully qualified.
- */
-static void
-QualifyTables(List *tables)
-{
-	RangeVar *rangeVar = NULL;
-
-	foreach_ptr(rangeVar, tables)
-	{
-		QualifyPublicationRangeVar(rangeVar);
-	}
-}
-
-
-#endif
-
-
 /*
  * QualifyPublicationObjects ensures all table names in a list of
  * publication objects are fully qualified.
@@ -97,11 +67,7 @@ QualifyAlterPublicationStmt(Node *node)
 {
 	AlterPublicationStmt *stmt = castNode(AlterPublicationStmt, node);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 	QualifyPublicationObjects(stmt->pubobjects);
-#else
-	QualifyTables(stmt->tables);
-#endif
 }
 
 

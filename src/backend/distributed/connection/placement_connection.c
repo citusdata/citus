@@ -370,7 +370,7 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 	const char *userName = connection->user;
 
 	ShardPlacementAccess *placementAccess = NULL;
-	foreach_ptr(placementAccess, placementAccessList)
+	foreach_declared_ptr(placementAccess, placementAccessList)
 	{
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
@@ -533,7 +533,7 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 	 * suitable connection found for a placement in the placementAccessList.
 	 */
 	ShardPlacementAccess *placementAccess = NULL;
-	foreach_ptr(placementAccess, placementAccessList)
+	foreach_declared_ptr(placementAccess, placementAccessList)
 	{
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;

@@ -1183,7 +1183,7 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM citus_local_table t2 WHERE t2.b = t1.a
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
@@ -1258,7 +1258,7 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM citus_local_table t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
@@ -1312,7 +1312,7 @@ DEBUG:  skipping recursive planning for the subquery since it contains reference
 ERROR:  direct joins between distributed and local tables are not supported
 HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM postgres_local_table t2 WHERE t2.b = t1.a
 );
 DEBUG:  found no worker with all shard placements
@@ -1344,7 +1344,7 @@ DEBUG:  skipping recursive planning for the subquery since it contains reference
 ERROR:  direct joins between distributed and local tables are not supported
 HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM postgres_local_table t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
 DEBUG:  found no worker with all shard placements

@@ -2,7 +2,7 @@
 
 * Drops support for PostgreSQL 14 (#7753)
 
-### citus v13.0.0 (January 17, 2025) ###
+### citus v13.0.0 (January 22, 2025) ###
 
 * Adds support for PostgreSQL 17 (#7699, #7661)
 
@@ -106,7 +106,7 @@
 
 * Fixes the incorrect column count after ALTER TABLE (#7379)
 
-### citus v12.0.1 (July 11, 2023) ###
+### citus v12.0.1 (February 12, 2024) ###
 
 * Fixes incorrect default value assumption for VACUUM(PROCESS_TOAST) #7122)
 

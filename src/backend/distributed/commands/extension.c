@@ -274,7 +274,7 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString,
 
 	/* unmark each distributed extension */
 	ObjectAddress *address = NULL;
-	foreach_ptr(address, distributedExtensionAddresses)
+	foreach_declared_ptr(address, distributedExtensionAddresses)
 	{
 		UnmarkObjectDistributed(address);
 	}
@@ -313,7 +313,7 @@ FilterDistributedExtensions(List *extensionObjectList)
 	List *extensionNameList = NIL;
 
 	String *objectName = NULL;
-	foreach_ptr(objectName, extensionObjectList)
+	foreach_declared_ptr(objectName, extensionObjectList)
 	{
 		const char *extensionName = strVal(objectName);
 		const bool missingOk = true;
@@ -351,7 +351,7 @@ ExtensionNameListToObjectAddressList(List *extensionObjectList)
 	List *extensionObjectAddressList = NIL;
 
 	String *objectName;
-	foreach_ptr(objectName, extensionObjectList)
+	foreach_declared_ptr(objectName, extensionObjectList)
 	{
 		/*
 		 * We set missingOk to false as we assume all the objects in
@@ -527,7 +527,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 
 	Oid citusTableId = InvalidOid;
-	foreach_oid(citusTableId, citusTableIdList)
+	foreach_declared_oid(citusTableId, citusTableIdList)
 	{
 		if (!ShouldMarkRelationDistributed(citusTableId))
 		{
@@ -571,7 +571,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	 */
 	List *viewList = GetAllViews();
 	Oid viewOid = InvalidOid;
-	foreach_oid(viewOid, viewList)
+	foreach_declared_oid(viewOid, viewList)
 	{
 		if (!ShouldMarkRelationDistributed(viewOid))
 		{
@@ -605,7 +605,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	List *distributedObjectAddressList = GetDistributedObjectAddressList();
 
 	ObjectAddress *distributedObjectAddress = NULL;
-	foreach_ptr(distributedObjectAddress, distributedObjectAddressList)
+	foreach_declared_ptr(distributedObjectAddress, distributedObjectAddressList)
 	{
 		List *distributableDependencyObjectAddresses =
 			GetDistributableDependenciesForObject(distributedObjectAddress);
@@ -627,7 +627,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	SetLocalEnableMetadataSync(false);
 
 	ObjectAddress *objectAddress = NULL;
-	foreach_ptr(objectAddress, uniqueObjectAddresses)
+	foreach_declared_ptr(objectAddress, uniqueObjectAddresses)
 	{
 		MarkObjectDistributed(objectAddress);
 	}
@@ -831,7 +831,7 @@ IsDropCitusExtensionStmt(Node *parseTree)
 
 	/* now that we have a DropStmt, check if citus extension is among the objects to dropped */
 	String *objectName;
-	foreach_ptr(objectName, dropStmt->objects)
+	foreach_declared_ptr(objectName, dropStmt->objects)
 	{
 		const char *extensionName = strVal(objectName);
 
@@ -1061,7 +1061,7 @@ GenerateGrantCommandsOnExtensionDependentFDWs(Oid extensionId)
 	List *FDWOids = GetDependentFDWsToExtension(extensionId);
 
 	Oid FDWOid = InvalidOid;
-	foreach_oid(FDWOid, FDWOids)
+	foreach_declared_oid(FDWOid, FDWOids)
 	{
 		Acl *aclEntry = GetPrivilegesForFDW(FDWOid);
 
