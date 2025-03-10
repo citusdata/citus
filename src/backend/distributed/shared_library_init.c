@@ -105,6 +105,7 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/stat_counters.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/time_constants.h"
@@ -511,6 +512,8 @@ _PG_init(void)
 
 	InitializeMultiTenantMonitorSMHandleManagement();
 
+	InitializeStatCountersArrayMem();
+
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
@@ -622,6 +625,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
+	RequestAddinShmemSpace(StatCountersArrayShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 }
 
@@ -2465,6 +2469,23 @@ RegisterCitusConfigVariables(void)
 		10, -1, INT_MAX,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stat_counter_slots",
+		gettext_noop(
+			"Determines the number of slots to use to track Citus stat counters."),
+		gettext_noop(
+			"Determines the number of slots to use to track Citus stat counters. "
+			"0 means each backend will have its own stats counters to avoid the "
+			"lock contention while updating the stats counters and any other "
+			"positive number N means that N slots will be used to track the stat "
+			"counters in a way that each backend will use one of the slots that is "
+			"determined by the backend's PID modulo N"),
+		&StatCounterSlots,
+		16, 0, 1024,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
