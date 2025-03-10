@@ -73,6 +73,7 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 	/* deparse the privileges */
 	if (grantStmt->privileges == NIL)
 	{
+		/* this is used for table only */
 		appendStringInfo(&privsString, "ALL");
 	}
 	else
@@ -88,11 +89,30 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			{
 				appendStringInfoString(&privsString, ", ");
 			}
+
+			if (priv->priv_name)
+			{
+				appendStringInfo(&privsString, "%s", priv->priv_name);
+			}
+			/*
+			 * ALL can only be set alone.
+			 * And ALL is not added as a keyword in priv_name by parser, but
+			 * because there are column(s) defined, a grantStmt->privileges is
+			 * defined. So we need to handle this special case here (see if
+			 * condition above).
+			 */
+			else if (isFirst)
+			{
+				/* this is used for column level only */
+				appendStringInfo(&privsString, "ALL");
+			}
+			else
+			{
+				ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+								errmsg("Cannot parse GRANT/REVOKE privileges")));
+			}
+
 			isFirst = false;
-
-			Assert(priv->priv_name != NULL);
-
-			appendStringInfo(&privsString, "%s", priv->priv_name);
 
 			if (priv->cols != NIL)
 			{
