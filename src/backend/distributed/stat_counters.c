@@ -305,13 +305,13 @@ SharedStatCountersArrayShmemInit(void)
 
 		bool alreadyInitialized;
 
-		size_t statCountersBackendArrayShmemSize = StatCountersArrayShmemSize();
+		size_t statCountersSharedArrayShmemSize = StatCountersArrayShmemSize();
 
 		LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 		SharedStatCountersArray = (CitusAtomicStatCounters *)
 								  ShmemInitStruct("Citus Stat Counters Array",
-												  statCountersBackendArrayShmemSize,
+												  statCountersSharedArrayShmemSize,
 												  &alreadyInitialized);
 
 		if (!alreadyInitialized)
