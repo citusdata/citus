@@ -13,6 +13,8 @@
 
 #include <port/atomics.h>
 
+#define DEFAULT_STAT_COUNTER_SLOTS 16
+
 #define MAX_STAT_NAME_LENGTH 255
 #define MAX_STAT_COUNT 4
 

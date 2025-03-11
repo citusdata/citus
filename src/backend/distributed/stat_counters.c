@@ -21,15 +21,12 @@
 
 typedef uint64 CitusStatCounters[MAX_STAT_COUNT];
 
-#define STAT_COUNTERS_COLUMNS 2
-
 /* GUC value for citus.stat_counter_slots */
-int StatCounterSlots = 0;
+int StatCounterSlots = DEFAULT_STAT_COUNTER_SLOTS;
 
 /* shared memory init & management */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static void SharedStatCountersArrayShmemInit(void);
-static int GetStatCounterSlots(void);
 
 /*
  * Pointer to the shared memory array for stat counters.
@@ -44,6 +41,8 @@ static void AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
 static Tuplestorestate * SetupStatCountersTuplestore(FunctionCallInfo fcinfo,
 													 TupleDesc *tupleDescriptor);
 static void ResetStatCounters(void);
+static int GetStatCounterSlots(void);
+static bool IsStatCountersEnabled(void);
 
 /*
  * Keep this in sync with StatType enum in stat_counters.h.
@@ -67,6 +66,14 @@ PG_FUNCTION_INFO_V1(citus_stat_counters_reset);
 Datum
 citus_stat_counters(PG_FUNCTION_ARGS)
 {
+	if (!IsStatCountersEnabled())
+	{
+		ereport(NOTICE,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("citus stat counters are not enabled")));
+		PG_RETURN_VOID();
+	}
+
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupStatCountersTuplestore(fcinfo, &tupleDescriptor);
 
@@ -82,6 +89,14 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 Datum
 citus_stat_counters_reset(PG_FUNCTION_ARGS)
 {
+	if (!IsStatCountersEnabled())
+	{
+		ereport(NOTICE,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("citus stat counters are not enabled")));
+		PG_RETURN_VOID();
+	}
+
 	ResetStatCounters();
 
 	PG_RETURN_VOID();
@@ -128,6 +143,11 @@ StatCountersArrayShmemSize(void)
 void
 IncrementStatCounter(int statId)
 {
+	if (!IsStatCountersEnabled())
+	{
+		return;
+	}
+
 #if PG_VERSION_NUM >= 170000
 	int backendSlotIdx = MyProcNumber;
 #else
@@ -200,8 +220,8 @@ SetupStatCountersTuplestore(FunctionCallInfo fcinfo, TupleDesc *tupleDescriptor)
 static void
 StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 {
-	Datum values[STAT_COUNTERS_COLUMNS] = { 0 };
-	bool isNulls[STAT_COUNTERS_COLUMNS] = { 0 };
+	Datum values[2] = { 0 };
+	bool isNulls[2] = { 0 };
 
 	CitusStatCounters aggregatedStatCounters;
 	MemSet(aggregatedStatCounters, 0, sizeof(CitusStatCounters));
@@ -268,47 +288,60 @@ ResetStatCounters(void)
 static void
 SharedStatCountersArrayShmemInit(void)
 {
-	StaticAssertExpr(MAX_STAT_INDEX < MAX_STAT_COUNT,
-					 "stat enums should be less than size - bump up MAX_STAT_COUNT");
-
-	/* validate that we have names for the stat counters as well */
-	for (int i = 0; i < MAX_STAT_INDEX; i++)
+	/* initialize the shared memory only if the stat counters are enabled */
+	if (IsStatCountersEnabled())
 	{
-		if (strlen(StatMapping[i]) == 0)
+		StaticAssertExpr(MAX_STAT_INDEX < MAX_STAT_COUNT,
+						"stat enums should be less than size - bump up MAX_STAT_COUNT");
+
+		/* validate that we have names for the stat counters as well */
+		for (int i = 0; i < MAX_STAT_INDEX; i++)
 		{
-			ereport(PANIC, (errmsg("Stat mapping for index %d not found",
-								   i)));
-		}
-	}
-
-	bool alreadyInitialized;
-
-	size_t statCountersBackendArrayShmemSize = StatCountersArrayShmemSize();
-
-	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
-
-	SharedStatCountersArray = (CitusAtomicStatCounters *)
-							  ShmemInitStruct("Citus Stat Counters Array",
-											  statCountersBackendArrayShmemSize,
-											  &alreadyInitialized);
-
-	if (!alreadyInitialized)
-	{
-		for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
-		{
-			for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
+			if (strlen(StatMapping[i]) == 0)
 			{
-				pg_atomic_init_u64(&SharedStatCountersArray[backendSlotIdx][statIdx], 0);
+				ereport(PANIC, (errmsg("Stat mapping for index %d not found", i)));
 			}
 		}
-	}
 
-	LWLockRelease(AddinShmemInitLock);
+		bool alreadyInitialized;
+
+		size_t statCountersBackendArrayShmemSize = StatCountersArrayShmemSize();
+
+		LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+		SharedStatCountersArray = (CitusAtomicStatCounters *)
+								ShmemInitStruct("Citus Stat Counters Array",
+												statCountersBackendArrayShmemSize,
+												&alreadyInitialized);
+
+		if (!alreadyInitialized)
+		{
+			for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
+			{
+				for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
+				{
+					pg_atomic_init_u64(&SharedStatCountersArray[backendSlotIdx][statIdx], 0);
+				}
+			}
+		}
+
+		LWLockRelease(AddinShmemInitLock);
+	}
 
 	if (prev_shmem_startup_hook != NULL)
 	{
 		prev_shmem_startup_hook();
 	}
+}
+
+
+/*
+ * IsStatCountersEnabled returns whether the stat counters are enabled.
+ */
+static bool
+IsStatCountersEnabled(void)
+{
+	return StatCounterSlots >= 0;
 }
 
 
@@ -321,6 +354,17 @@ SharedStatCountersArrayShmemInit(void)
 static int
 GetStatCounterSlots(void)
 {
-	Assert(StatCounterSlots >= 0);
-	return StatCounterSlots == 0 ? MaxBackends : StatCounterSlots;
+	if (StatCounterSlots == 0)
+	{
+		return MaxBackends;
+	}
+	else if (StatCounterSlots > 0)
+	{
+		return StatCounterSlots;
+	}
+	else
+	{
+		Assert(StatCounterSlots == -1);
+		return 0;
+	}
 }
