@@ -292,7 +292,7 @@ SharedStatCountersArrayShmemInit(void)
 	if (IsStatCountersEnabled())
 	{
 		StaticAssertExpr(MAX_STAT_INDEX < MAX_STAT_COUNT,
-						"stat enums should be less than size - bump up MAX_STAT_COUNT");
+						 "stat enums should be less than size - bump up MAX_STAT_COUNT");
 
 		/* validate that we have names for the stat counters as well */
 		for (int i = 0; i < MAX_STAT_INDEX; i++)
@@ -310,17 +310,19 @@ SharedStatCountersArrayShmemInit(void)
 		LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 		SharedStatCountersArray = (CitusAtomicStatCounters *)
-								ShmemInitStruct("Citus Stat Counters Array",
-												statCountersBackendArrayShmemSize,
-												&alreadyInitialized);
+								  ShmemInitStruct("Citus Stat Counters Array",
+												  statCountersBackendArrayShmemSize,
+												  &alreadyInitialized);
 
 		if (!alreadyInitialized)
 		{
-			for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
+			for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots();
+				 ++backendSlotIdx)
 			{
 				for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
 				{
-					pg_atomic_init_u64(&SharedStatCountersArray[backendSlotIdx][statIdx], 0);
+					pg_atomic_init_u64(&SharedStatCountersArray[backendSlotIdx][statIdx],
+									   0);
 				}
 			}
 		}
