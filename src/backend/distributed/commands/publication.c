@@ -186,15 +186,6 @@ BuildCreatePublicationStmt(Oid publicationId)
 			BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly);
 
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
-#else
-
-		/* before postgres 15, only full tables are supported */
-		char *schemaName = get_namespace_name(get_rel_namespace(relationId));
-		char *tableName = get_rel_name(relationId);
-		RangeVar *rangeVar = makeRangeVar(schemaName, tableName, -1);
-
-		createPubStmt->tables = lappend(createPubStmt->tables, rangeVar);
-#endif
 	}
 
 	/* WITH (publish_via_partition_root = true) option */

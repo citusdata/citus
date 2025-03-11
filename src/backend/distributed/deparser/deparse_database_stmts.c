@@ -227,8 +227,6 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 }
 
 
-#endif
-
 static void
 AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
 {
