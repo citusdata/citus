@@ -109,7 +109,7 @@ IsMetadataSynced(void)
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
+	foreach_declared_ptr(workerNode, workerList)
 	{
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{

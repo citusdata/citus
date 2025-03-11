@@ -932,7 +932,7 @@ TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePo
 	bool executeCommand = true;
 
 	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
+	foreach_declared_ptr(commandString, commandList)
 	{
 		/*
 		 * Cannot use SendOptionalCommandListToWorkerOutsideTransactionWithConnection()

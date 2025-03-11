@@ -1525,10 +1525,10 @@ NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
 {
 	List *ddlJobs = NodeDDLTaskList(targets, commands);
 	DDLJob *ddlJob = NULL;
-	foreach_ptr(ddlJob, ddlJobs)
+	foreach_declared_ptr(ddlJob, ddlJobs)
 	{
 		Task *task = NULL;
-		foreach_ptr(task, ddlJob->taskList)
+		foreach_declared_ptr(task, ddlJob->taskList)
 		{
 			task->cannotBeExecutedInTransaction = true;
 		}

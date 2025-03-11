@@ -580,7 +580,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		 */
 		List *secLabelOnRoleStmts = GenerateSecLabelOnRoleStmts(roleOid, rolename);
 		stmt = NULL;
-		foreach_ptr(stmt, secLabelOnRoleStmts)
+		foreach_declared_ptr(stmt, secLabelOnRoleStmts)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
 		}

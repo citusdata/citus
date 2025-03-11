@@ -162,7 +162,7 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	}
 
 	ObjectAddress *object = NULL;
-	foreach_ptr(object, objectsToBeCreated)
+	foreach_declared_ptr(object, objectsToBeCreated)
 	{
 		List *dependencyCommands = GetDependencyCreateDDLCommands(object);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);

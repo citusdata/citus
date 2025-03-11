@@ -193,7 +193,7 @@ void
 SendCommandListToRemoteNodesWithMetadata(List *commands)
 {
 	char *command = NULL;
-	foreach_ptr(command, commands)
+	foreach_declared_ptr(command, commands)
 	{
 		SendCommandToRemoteNodesWithMetadata(command);
 	}
