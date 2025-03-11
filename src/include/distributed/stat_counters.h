@@ -16,22 +16,20 @@
 #define DEFAULT_STAT_COUNTER_SLOTS 16
 
 #define MAX_STAT_NAME_LENGTH 255
-#define MAX_STAT_COUNT 4
 
-/* do not use MAX_STAT_INDEX and ensure it is the last entry */
 typedef enum
 {
 	STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED,
 	STAT_CONNECTION_ESTABLISHMENT_FAILED,
 	STAT_CONNECTION_REUSED,
 
-	/* this must be the last value in the StatType */
-	MAX_STAT_INDEX
+	/* do not use this and ensure it is the last entry */
+	N_CITUS_STAT_COUNTERS
 } StatType;
 
 extern int StatCounterSlots;
 
-typedef pg_atomic_uint64 CitusAtomicStatCounters[MAX_STAT_COUNT];
+typedef pg_atomic_uint64 CitusAtomicStatCounters[N_CITUS_STAT_COUNTERS];
 
 extern void InitializeStatCountersArrayMem(void);
 extern Size StatCountersArrayShmemSize(void);

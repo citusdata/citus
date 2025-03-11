@@ -19,7 +19,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/stat_counters.h"
 
-typedef uint64 CitusStatCounters[MAX_STAT_COUNT];
+typedef uint64 CitusStatCounters[N_CITUS_STAT_COUNTERS];
 
 /* GUC value for citus.stat_counter_slots */
 int StatCounterSlots = DEFAULT_STAT_COUNTER_SLOTS;
@@ -48,7 +48,7 @@ static bool IsStatCountersEnabled(void);
  * Keep this in sync with StatType enum in stat_counters.h.
  * For each StatType enum a StatMapping entry should exist.
  */
-static char StatMapping[MAX_STAT_COUNT][MAX_STAT_NAME_LENGTH] = {
+static char StatMapping[N_CITUS_STAT_COUNTERS][MAX_STAT_NAME_LENGTH] = {
 	[STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED] = "connection_establishment_succeeded",
 	[STAT_CONNECTION_ESTABLISHMENT_FAILED] = "connection_establishment_failed",
 	[STAT_CONNECTION_REUSED] = "connection_reused",
@@ -228,15 +228,10 @@ StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 
 	AggregateStatCountersInto(&aggregatedStatCounters);
 
-	for (int i = 0; i < MAX_STAT_COUNT; i++)
+	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 	{
-		if (aggregatedStatCounters[i] == 0)
-		{
-			continue;
-		}
-
-		values[0] = PointerGetDatum(cstring_to_text(StatMapping[i]));
-		values[1] = Int64GetDatum(aggregatedStatCounters[i]);
+		values[0] = PointerGetDatum(cstring_to_text(StatMapping[statIdx]));
+		values[1] = Int64GetDatum(aggregatedStatCounters[statIdx]);
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
 }
@@ -251,7 +246,7 @@ AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
 {
 	for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
 	{
-		for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
 			(*aggregatedStatCounters)[statIdx] +=
 				pg_atomic_read_u64(&SharedStatCountersArray[backendSlotIdx][statIdx]);
@@ -273,7 +268,7 @@ ResetStatCounters(void)
 	 */
 	for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
 	{
-		for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
 			pg_atomic_write_u64(&SharedStatCountersArray[backendSlotIdx][statIdx], 0);
 		}
@@ -291,15 +286,12 @@ SharedStatCountersArrayShmemInit(void)
 	/* initialize the shared memory only if the stat counters are enabled */
 	if (IsStatCountersEnabled())
 	{
-		StaticAssertExpr(MAX_STAT_INDEX < MAX_STAT_COUNT,
-						 "stat enums should be less than size - bump up MAX_STAT_COUNT");
-
 		/* validate that we have names for the stat counters as well */
-		for (int i = 0; i < MAX_STAT_INDEX; i++)
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
-			if (strlen(StatMapping[i]) == 0)
+			if (strlen(StatMapping[statIdx]) == 0)
 			{
-				ereport(PANIC, (errmsg("Stat mapping for index %d not found", i)));
+				ereport(PANIC, (errmsg("Stat mapping for index %d not found", statIdx)));
 			}
 		}
 
@@ -319,7 +311,7 @@ SharedStatCountersArrayShmemInit(void)
 			for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots();
 				 ++backendSlotIdx)
 			{
-				for (int statIdx = 0; statIdx < MAX_STAT_COUNT; statIdx++)
+				for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 				{
 					pg_atomic_init_u64(&SharedStatCountersArray[backendSlotIdx][statIdx],
 									   0);
