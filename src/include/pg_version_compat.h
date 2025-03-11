@@ -111,6 +111,7 @@ getStxstattarget_compat(HeapTuple tup)
 #else
 
 #define Anum_pg_collation_colllocale Anum_pg_collation_colliculocale
+#define Anum_pg_database_datlocale Anum_pg_database_daticulocale
 
 #include "access/htup_details.h"
 static inline int

@@ -839,7 +839,7 @@ GetDatabaseCollation(Oid dbOid)
 	Datum ctypeDatum = heap_getattr(tup, Anum_pg_database_datctype, tupdesc, &isNull);
 	info.datctype = TextDatumGetCString(ctypeDatum);
 
-	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_daticulocale, tupdesc,
+	Datum icuLocaleDatum = heap_getattr(tup, Anum_pg_database_datlocale, tupdesc,
 										&isNull);
 	if (!isNull)
 	{
