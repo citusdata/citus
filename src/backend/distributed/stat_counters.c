@@ -28,11 +28,7 @@ int StatCounterSlots = DEFAULT_STAT_COUNTER_SLOTS;
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static void SharedStatCountersArrayShmemInit(void);
 
-/*
- * Pointer to the shared memory array for stat counters.
- *
- * Each backend has its own slot in the array to store its stat counters.
- */
+/* pointer to the shared memory array for stat counters */
 CitusAtomicStatCounters *SharedStatCountersArray = NULL;
 
 /* other helper functions */
@@ -52,6 +48,9 @@ static char StatMapping[N_CITUS_STAT_COUNTERS][MAX_STAT_NAME_LENGTH] = {
 	[STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED] = "connection_establishment_succeeded",
 	[STAT_CONNECTION_ESTABLISHMENT_FAILED] = "connection_establishment_failed",
 	[STAT_CONNECTION_REUSED] = "connection_reused",
+
+	[STAT_ROUTER_QUERY_EXECUTION] = "single_router_query_execution",
+	[STAT_MULTI_SHARD_QUERY_EXECUTION] = "multi_shard_query_execution",
 };
 
 
