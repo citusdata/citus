@@ -81,7 +81,7 @@ BEGIN
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
 	WHERE (p.description is null OR c.description is null)
-		  AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
           AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
@@ -1440,12 +1440,54 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Test downgrade to 13.0-1 from 13.1-1
+ALTER EXTENSION citus UPDATE TO '13.1-1';
+ALTER EXTENSION citus UPDATE TO '13.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 13.1-1
+ALTER EXTENSION citus UPDATE TO '13.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                        previous_object                         |                                        current_object
+---------------------------------------------------------------------
+ function citus_unmark_object_distributed(oid,oid,integer) void |
+                                                                | function citus_internal.acquire_citus_advisory_object_class_lock(integer,cstring) void
+                                                                | function citus_internal.add_colocation_metadata(integer,integer,integer,regtype,oid) void
+                                                                | function citus_internal.add_object_metadata(text,text[],text[],integer,integer,boolean) void
+                                                                | function citus_internal.add_partition_metadata(regclass,"char",text,integer,"char") void
+                                                                | function citus_internal.add_placement_metadata(bigint,bigint,integer,bigint) void
+                                                                | function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text) void
+                                                                | function citus_internal.add_tenant_schema(oid,integer) void
+                                                                | function citus_internal.adjust_local_clock_to_remote(cluster_clock) void
+                                                                | function citus_internal.database_command(text) void
+                                                                | function citus_internal.delete_colocation_metadata(integer) void
+                                                                | function citus_internal.delete_partition_metadata(regclass) void
+                                                                | function citus_internal.delete_placement_metadata(bigint) void
+                                                                | function citus_internal.delete_shard_metadata(bigint) void
+                                                                | function citus_internal.delete_tenant_schema(oid) void
+                                                                | function citus_internal.global_blocked_processes() SETOF record
+                                                                | function citus_internal.is_replication_origin_tracking_active() boolean
+                                                                | function citus_internal.local_blocked_processes() SETOF record
+                                                                | function citus_internal.mark_node_not_synced(integer,integer) void
+                                                                | function citus_internal.start_replication_origin_tracking() void
+                                                                | function citus_internal.stop_replication_origin_tracking() void
+                                                                | function citus_internal.unregister_tenant_schema_globally(oid,text) void
+                                                                | function citus_internal.update_none_dist_table_metadata(oid,"char",bigint,boolean) void
+                                                                | function citus_internal.update_placement_metadata(bigint,integer,integer) void
+                                                                | function citus_internal.update_relation_colocation(oid,integer) void
+                                                                | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
+(26 rows)
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 13.0.1
+ 13.1devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -1480,7 +1522,7 @@ DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 13.0, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 13.1, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -1525,7 +1567,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 13.0, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 13.1, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
