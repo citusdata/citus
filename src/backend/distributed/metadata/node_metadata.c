@@ -1678,10 +1678,19 @@ citus_is_primary_node(PG_FUNCTION_ARGS)
 	bool isPrimary = false;
 	int32 groupId = GetLocalGroupId();
 	WorkerNode *workerNode = PrimaryNodeForGroup(groupId, NULL);
-	if (workerNode != NULL && workerNode->nodeId == GetLocalNodeId())
+	if (workerNode == NULL)
 	{
-		isPrimary = true;
+		ereport(WARNING, (errmsg("could not find the current node in pg_dist_node"),
+                          errdetail("If this is the coordinator node, consider adding it "
+                                    "into the metadata by using citus_set_coordinator_host() " 
+                                    "UDF. Otherwise, if you're going to use this node as a "
+                                    "worker node for a new cluster, make sure to add this "
+                                    "node into the metadata from the coordinator by using "
+                                    "citus_add_node() UDF."));
+		PG_RETURN_NULL();
 	}
+
+	isPrimary = workerNode->nodeId == GetLocalNodeId();
 
 	PG_RETURN_BOOL(isPrimary);
 }
