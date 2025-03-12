@@ -26,6 +26,7 @@ DROP FUNCTION citus_internal.commit_management_command_2pc();
 ALTER TABLE pg_catalog.pg_dist_transaction DROP COLUMN outer_xid;
 REVOKE USAGE ON SCHEMA citus_internal FROM PUBLIC;
 
+DROP FUNCTION pg_catalog.citus_is_primary_node();
 DROP FUNCTION citus_internal.add_colocation_metadata(int, int, int, regtype, oid);
 DROP FUNCTION citus_internal.add_object_metadata(text, text[], text[], integer, integer, boolean);
 DROP FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char");
@@ -53,5 +54,5 @@ DROP FUNCTION citus_internal.update_placement_metadata(bigint, integer, integer)
 DROP FUNCTION citus_internal.update_relation_colocation(oid, int);
 DROP FUNCTION citus_internal.start_replication_origin_tracking();
 DROP FUNCTION citus_internal.stop_replication_origin_tracking();
-DROP FUNCTION citus_internal.is_replication_origin_tracking_active();
+DROP FUNCTION citus_internal.is_replication_origin_tracking_active(); 
 #include "../udfs/citus_finish_pg_upgrade/12.1-1.sql"
