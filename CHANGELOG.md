@@ -1,4 +1,4 @@
-### citus v13.0.1 (March 12th, 2025) ###
+### citus v13.0.2 (March 12th, 2025) ###
 
 * Fixes a crash in columnar custom scan that happens when a columnar table is
   used in a join. (#7647)
