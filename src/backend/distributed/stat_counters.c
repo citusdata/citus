@@ -49,8 +49,8 @@ static char StatMapping[N_CITUS_STAT_COUNTERS][MAX_STAT_NAME_LENGTH] = {
 	[STAT_CONNECTION_ESTABLISHMENT_FAILED] = "connection_establishment_failed",
 	[STAT_CONNECTION_REUSED] = "connection_reused",
 
-	[STAT_ROUTER_QUERY_EXECUTION] = "single_router_query_execution",
-	[STAT_MULTI_SHARD_QUERY_EXECUTION] = "multi_shard_query_execution",
+	[STAT_QUERY_EXECUTION_SINGLE_SHARD] = "query_execution_single_shard",
+	[STAT_QUERY_EXECUTION_MULTI_SHARD] = "query_execution_multi_shard",
 };
 
 

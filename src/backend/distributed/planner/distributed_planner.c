@@ -1426,7 +1426,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 	if (IsMultiTaskPlan(distributedPlan))
 	{
-		IncrementStatCounter(STAT_MULTI_SHARD_QUERY_EXECUTION);
+		IncrementStatCounter(STAT_QUERY_EXECUTION_MULTI_SHARD);
 
 		/* if it is not a single task executable plan, inform user according to the log level */
 		if (MultiTaskQueryLogLevel != CITUS_LOG_LEVEL_OFF)
@@ -1441,7 +1441,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	}
 	else
 	{
-		IncrementStatCounter(STAT_ROUTER_QUERY_EXECUTION);
+		IncrementStatCounter(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 	}
 
 	distributedPlan->queryId = localPlan->queryId;
