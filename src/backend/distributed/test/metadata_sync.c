@@ -80,7 +80,7 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 												   sizeof(Datum));
 
 	const char *activateNodeSnapshotCommand = NULL;
-	foreach_ptr(activateNodeSnapshotCommand, activateNodeCommandList)
+	foreach_declared_ptr(activateNodeSnapshotCommand, activateNodeCommandList)
 	{
 		Datum activateNodeSnapshotCommandDatum = CStringGetTextDatum(
 			activateNodeSnapshotCommand);
@@ -109,7 +109,7 @@ IsMetadataSynced(void)
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
+	foreach_declared_ptr(workerNode, workerList)
 	{
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{

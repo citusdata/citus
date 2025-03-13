@@ -229,7 +229,7 @@ RecreateForeignServerStmt(Oid serverId)
 
 	int location = -1;
 	DefElem *option = NULL;
-	foreach_ptr(option, server->options)
+	foreach_declared_ptr(option, server->options)
 	{
 		DefElem *copyOption = makeDefElem(option->defname, option->arg, location);
 		createStmt->options = lappend(createStmt->options, copyOption);
@@ -247,7 +247,7 @@ static bool
 NameListHasDistributedServer(List *serverNames)
 {
 	String *serverValue = NULL;
-	foreach_ptr(serverValue, serverNames)
+	foreach_declared_ptr(serverValue, serverNames)
 	{
 		List *addresses = GetObjectAddressByServerName(strVal(serverValue), false);
 

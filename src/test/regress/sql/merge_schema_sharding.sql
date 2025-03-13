@@ -1,11 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-\else
-\q
-\endif
-
 -- MERGE command performs a join from data_source to target_table_name
 DROP SCHEMA IF EXISTS schema_shard_table1 CASCADE;
 DROP SCHEMA IF EXISTS schema_shard_table2 CASCADE;

@@ -1390,7 +1390,7 @@ DeepCopyShardIntervalList(List *originalShardIntervalList)
 	List *copiedShardIntervalList = NIL;
 
 	ShardInterval *originalShardInterval = NULL;
-	foreach_ptr(originalShardInterval, originalShardIntervalList)
+	foreach_declared_ptr(originalShardInterval, originalShardIntervalList)
 	{
 		ShardInterval *copiedShardInterval = CopyShardInterval(originalShardInterval);
 

@@ -23,15 +23,23 @@ SELECT create_distributed_table('t1', 'b');
 ALTER STATISTICS s3 SET STATISTICS 46;
 
 \c - - - :worker_1_port
-SELECT stxstattarget, stxrelid::regclass
+-- for stxstattarget, re-interpret -1 as null to avoid adding another test output for pg < 17
+-- Changed stxstattarget in pg_statistic_ext to use nullable representation, removing explicit -1 for default statistics target in PostgreSQL 17.
+-- https://github.com/postgres/postgres/commit/012460ee93c304fbc7220e5b55d9d0577fc766ab
+SELECT
+    nullif(stxstattarget, -1) AS stxstattarget,
+    stxrelid::regclass
 FROM pg_statistic_ext
 WHERE stxnamespace IN (
-	SELECT oid
-	FROM pg_namespace
-	WHERE nspname IN ('statistics''TestTarget')
+    SELECT oid
+    FROM pg_namespace
+    WHERE nspname IN ('statistics''TestTarget')
 )
 AND stxname SIMILAR TO '%\_\d+'
-ORDER BY stxstattarget, stxrelid::regclass ASC;
+ORDER BY
+    nullif(stxstattarget, -1) IS NULL DESC,  -- Make sure null values are handled consistently
+    nullif(stxstattarget, -1) NULLS FIRST,   -- Use NULLS FIRST to ensure consistent placement of nulls
+    stxrelid::regclass ASC;
 
 \c - - - :master_port
 -- the first one should log a notice that says statistics object does not exist

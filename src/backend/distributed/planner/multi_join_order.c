@@ -224,10 +224,10 @@ JoinOnColumns(List *currentPartitionColumnList, Var *candidateColumn,
 	}
 
 	Var *currentColumn = NULL;
-	foreach_ptr(currentColumn, currentPartitionColumnList)
+	foreach_declared_ptr(currentColumn, currentPartitionColumnList)
 	{
 		Node *joinClause = NULL;
-		foreach_ptr(joinClause, joinClauseList)
+		foreach_declared_ptr(joinClause, joinClauseList)
 		{
 			if (!NodeIsEqualsOpExpr(joinClause))
 			{
@@ -1094,10 +1094,10 @@ SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses
 	}
 
 	Var *partitionColumn = NULL;
-	foreach_ptr(partitionColumn, partitionColumnList)
+	foreach_declared_ptr(partitionColumn, partitionColumnList)
 	{
 		Node *applicableJoinClause = NULL;
-		foreach_ptr(applicableJoinClause, applicableJoinClauses)
+		foreach_declared_ptr(applicableJoinClause, applicableJoinClauses)
 		{
 			if (!NodeIsEqualsOpExpr(applicableJoinClause))
 			{
@@ -1177,7 +1177,7 @@ OpExpr *
 DualPartitionJoinClause(List *applicableJoinClauses)
 {
 	Node *applicableJoinClause = NULL;
-	foreach_ptr(applicableJoinClause, applicableJoinClauses)
+	foreach_declared_ptr(applicableJoinClause, applicableJoinClauses)
 	{
 		if (!NodeIsEqualsOpExpr(applicableJoinClause))
 		{
@@ -1262,7 +1262,7 @@ IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, Node *joinCla
 	List *varList = pull_var_clause_default(joinClause);
 	Var *var = NULL;
 	bool joinContainsRightTable = false;
-	foreach_ptr(var, varList)
+	foreach_declared_ptr(var, varList)
 	{
 		uint32 columnTableId = var->varno;
 		if (rightTableId == columnTableId)
@@ -1301,7 +1301,7 @@ ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId, List *joinClau
 	joinClauseList = JoinClauseList(joinClauseList);
 
 	Node *joinClause = NULL;
-	foreach_ptr(joinClause, joinClauseList)
+	foreach_declared_ptr(joinClause, joinClauseList)
 	{
 		if (IsApplicableJoinClause(leftTableIdList, rightTableId, joinClause))
 		{

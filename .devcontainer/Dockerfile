@@ -6,9 +6,12 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # install build tools
 RUN apt update && apt install -y \
+    bison \
     bzip2 \
     cpanminus \
     curl \
+    docbook-xml \
+    docbook-xsl \
     flex \
     gcc \
     git \
@@ -20,6 +23,7 @@ RUN apt update && apt install -y \
     libreadline-dev \
     libselinux1-dev \
     libssl-dev \
+    libxml2-utils \
     libxslt-dev \
     libzstd-dev \
     locales \
@@ -32,6 +36,7 @@ RUN apt update && apt install -y \
     sudo \
     uuid-dev \
     valgrind \
+    xsltproc \
     zlib1g-dev \
  && add-apt-repository ppa:deadsnakes/ppa -y \
  && apt install -y \
@@ -67,18 +72,6 @@ ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
 USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
-FROM base AS pg14
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 14.15
-RUN rm .pgenv/src/*.tar*
-RUN make -C .pgenv/src/postgresql-*/ clean
-RUN make -C .pgenv/src/postgresql-*/src/include install
-
-# create a staging directory with all files we want to copy from our pgenv build
-# we will copy the contents of the staged folder into the final image at once
-RUN mkdir .pgenv-staging/
-RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
-RUN rm .pgenv-staging/config/default.conf
-
 FROM base AS pg15
 RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.10
 RUN rm .pgenv/src/*.tar*
@@ -93,6 +86,18 @@ RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg16
 RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.6
+RUN rm .pgenv/src/*.tar*
+RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/src/include install
+
+# create a staging directory with all files we want to copy from our pgenv build
+# we will copy the contents of the staged folder into the final image at once
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+
+FROM base AS pg17
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.2
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -193,9 +198,9 @@ RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
 
 COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 
-COPY --link --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg17 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
 COPY --link --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
@@ -211,7 +216,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch 16.6
+RUN pgenv switch 17.2
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700

@@ -138,7 +138,7 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 		int varno = 0;
 		RangeTblEntry *rangeTableEntry = NULL;
 
-		foreach_ptr(rangeTableEntry, query->rtable)
+		foreach_declared_ptr(rangeTableEntry, query->rtable)
 		{
 			varno++;
 
@@ -243,12 +243,24 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 
 				if (OidIsValid(metaTableOid))
 				{
+					bool mergeJoinCondition = false;
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+					/*
+					 * In Postgres 17, the query tree has a specific field for the merge condition.
+					 * So we shouldn't modify the jointree, but rather the mergeJoinCondition here
+					 * Relevant PG17 commit: 0294df2f1
+					 */
+					mergeJoinCondition = query->mergeJoinCondition;
+#endif
+
 					/*
 					 * We found a valid pg meta class in query,
 					 * so we assert below conditions.
 					 */
-					Assert(query->jointree != NULL);
-					Assert(query->jointree->fromlist != NULL);
+					Assert(mergeJoinCondition ||
+						   (query->jointree != NULL &&
+							query->jointree->fromlist != NULL));
 
 					Node *citusDependentObjExpr =
 						CreateCitusDependentObjectExpr(varno, metaTableOid);
@@ -257,8 +269,18 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					 * We do not use security quals because a postgres vanilla test fails
 					 * with a change of order for its result.
 					 */
-					query->jointree->quals = make_and_qual(
-						query->jointree->quals, citusDependentObjExpr);
+					if (!mergeJoinCondition)
+					{
+						query->jointree->quals = make_and_qual(
+							query->jointree->quals, citusDependentObjExpr);
+					}
+					else
+					{
+#if PG_VERSION_NUM >= PG_VERSION_17
+						query->mergeJoinCondition = make_and_qual(
+							query->mergeJoinCondition, citusDependentObjExpr);
+#endif
+					}
 				}
 
 				MemoryContextSwitchTo(originalContext);
@@ -376,7 +398,7 @@ DistOpsValidityState(Node *node, const DistributeObjectOps *ops)
 		bool isPostprocess = false;
 		List *objectAddresses = ops->address(node, missingOk, isPostprocess);
 		ObjectAddress *objectAddress = NULL;
-		foreach_ptr(objectAddress, objectAddresses)
+		foreach_declared_ptr(objectAddress, objectAddresses)
 		{
 			if (OidIsValid(objectAddress->objectId))
 			{
@@ -478,7 +500,7 @@ AnyObjectViolatesOwnership(DropStmt *dropStmt)
 	PG_TRY();
 	{
 		Node *object = NULL;
-		foreach_ptr(object, dropStmt->objects)
+		foreach_declared_ptr(object, dropStmt->objects)
 		{
 			Relation rel = NULL;
 			objectAddress = get_object_address(objectType, object,

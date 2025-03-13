@@ -1,13 +1,6 @@
 --
 -- PG15
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-\else
-\q
-\endif
 CREATE SCHEMA pg15;
 SET search_path TO pg15;
 SET citus.next_shard_id TO 960000;
@@ -51,9 +44,32 @@ SELECT result FROM run_command_on_all_nodes('
 
 (3 rows)
 
-SELECT result FROM run_command_on_all_nodes('
-    SELECT colliculocale FROM pg_collation WHERE collname = ''german_phonebook_test'';
-');
+-- PG17 renamed colliculocale to colllocale
+-- Relevant PG commit:
+-- https://github.com/postgres/postgres/commit/f696c0cd5f299f1b51e214efc55a22a782cc175d
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
+\gset
+\if :server_version_ge_17
+SELECT '$$' ||
+       'SELECT colllocale FROM pg_collation WHERE collname = ''german_phonebook_test'';'
+       || '$$'
+    AS worker_query_1 \gset
+SELECT '$$' ||
+       'SELECT colllocale FROM pg_collation WHERE collname = ''default_provider'';'
+       || '$$'
+    AS worker_query_2 \gset
+\else
+SELECT '$$' ||
+       'SELECT colliculocale FROM pg_collation WHERE collname = ''german_phonebook_test'';'
+       || '$$'
+    AS worker_query_1 \gset
+SELECT '$$' ||
+       'SELECT colliculocale FROM pg_collation WHERE collname = ''default_provider'';'
+       || '$$'
+    AS worker_query_2 \gset
+\endif
+SELECT result FROM run_command_on_all_nodes(:worker_query_1);
      result
 ---------------------------------------------------------------------
  de-u-co-phonebk
@@ -83,9 +99,7 @@ SELECT result FROM run_command_on_all_nodes('
  POSIX
 (3 rows)
 
-SELECT result FROM run_command_on_all_nodes('
-    SELECT colliculocale FROM pg_collation WHERE collname = ''default_provider'';
-');
+SELECT result FROM run_command_on_all_nodes(:worker_query_2);
  result
 ---------------------------------------------------------------------
 
@@ -416,16 +430,6 @@ MERGE INTO tbl1 USING targq ON (true)
 WHEN MATCHED THEN DELETE;
 ERROR:  The required join operation is missing between the target's distribution column and any expression originating from the source. The issue may arise from a non-equi-join.
 DETAIL:  Without a equi-join condition on the target's distribution column, the source rows cannot be efficiently redistributed, and the NOT-MATCHED condition cannot be evaluated unambiguously. This can result in incorrect or unexpected results when attempting to merge tables in a distributed setting
-WITH foo AS (
-  MERGE INTO tbl1 USING tbl2 ON (true)
-  WHEN MATCHED THEN DELETE
-) SELECT * FROM foo;
-ERROR:  MERGE not supported in WITH query
-COPY (
-  MERGE INTO tbl1 USING tbl2 ON (true)
-  WHEN MATCHED THEN DELETE
-) TO stdout;
-ERROR:  MERGE not supported in COPY
 MERGE INTO tbl1 t
 USING tbl2
 ON (true)

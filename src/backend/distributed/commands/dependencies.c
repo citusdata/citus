@@ -162,7 +162,7 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	}
 
 	ObjectAddress *object = NULL;
-	foreach_ptr(object, objectsToBeCreated)
+	foreach_declared_ptr(object, objectsToBeCreated)
 	{
 		List *dependencyCommands = GetDependencyCreateDDLCommands(object);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
@@ -201,7 +201,7 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	 */
 	List *addressSortedDependencies = SortList(objectsWithCommands,
 											   ObjectAddressComparator);
-	foreach_ptr(object, addressSortedDependencies)
+	foreach_declared_ptr(object, addressSortedDependencies)
 	{
 		LockDatabaseObject(object->classId, object->objectId,
 						   object->objectSubId, ExclusiveLock);
@@ -240,7 +240,7 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	else
 	{
 		WorkerNode *workerNode = NULL;
-		foreach_ptr(workerNode, remoteNodeList)
+		foreach_declared_ptr(workerNode, remoteNodeList)
 		{
 			const char *nodeName = workerNode->workerName;
 			uint32 nodePort = workerNode->workerPort;
@@ -256,7 +256,7 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	 * that objects have been created on remote nodes before marking them
 	 * distributed, so MarkObjectDistributed wouldn't fail.
 	 */
-	foreach_ptr(object, objectsWithCommands)
+	foreach_declared_ptr(object, objectsWithCommands)
 	{
 		/*
 		 * pg_dist_object entries must be propagated with the super user, since
@@ -279,7 +279,7 @@ void
 EnsureAllObjectDependenciesExistOnAllNodes(const List *targets)
 {
 	ObjectAddress *target = NULL;
-	foreach_ptr(target, targets)
+	foreach_declared_ptr(target, targets)
 	{
 		EnsureDependenciesExistOnAllNodes(target);
 	}
@@ -336,7 +336,7 @@ DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 	List *dependencies = GetAllDependenciesForObject(objectAddress);
 
 	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		if (dependency->classId == objectAddress->classId &&
 			dependency->objectId == objectAddress->objectId &&
@@ -424,7 +424,7 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
 
 	/* filter the ones that can be distributed */
 	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		/*
 		 * TODO: maybe we can optimize the logic applied in below line. Actually we
@@ -508,7 +508,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 																		  INCLUDE_IDENTITY,
 																		  creatingShellTableOnRemoteNode);
 					TableDDLCommand *tableDDLCommand = NULL;
-					foreach_ptr(tableDDLCommand, tableDDLCommands)
+					foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
 					{
 						Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
 						commandList = lappend(commandList, GetTableDDLCommand(
@@ -683,7 +683,7 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
 	List *commands = NIL;
 
 	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, dependencies)
 	{
 		commands = list_concat(commands, GetDependencyCreateDDLCommands(dependency));
 	}
@@ -831,7 +831,7 @@ bool
 ShouldPropagateAnyObject(List *addresses)
 {
 	ObjectAddress *address = NULL;
-	foreach_ptr(address, addresses)
+	foreach_declared_ptr(address, addresses)
 	{
 		if (ShouldPropagateObject(address))
 		{
@@ -853,7 +853,7 @@ FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate pre
 	List *result = NIL;
 
 	ObjectAddress *address = NULL;
-	foreach_ptr(address, objectAddressList)
+	foreach_declared_ptr(address, objectAddressList)
 	{
 		if (predicate(address))
 		{

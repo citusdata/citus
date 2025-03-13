@@ -2,11 +2,16 @@
 --- do not cause issues for the postgres planner, in particular postgres versions 16+, where the
 --- varnullingrels field of a VAR node may contain relids of join relations that can make the var
 --- NULL; in a rewritten distributed query without a join such relids do not have a meaning.
---- Issue #7705: [SEGFAULT] Querying distributed tables with window partition causes segmentation fault
---- https://github.com/citusdata/citus/issues/7705
 
-CREATE SCHEMA issue_7705;
-SET search_path to 'issue_7705';
+-- This test has an alternative goldfile because of the following feature in Postgres 16:
+-- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
+--
+
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
+
+CREATE SCHEMA outer_join_columns_testing;
+SET search_path to 'outer_join_columns_testing';
 SET citus.next_shard_id TO 30070000;
 SET citus.shard_replication_factor TO 1;
 SET citus.enable_local_execution TO ON;
@@ -66,7 +71,43 @@ SELECT t1.id, CASE nextval('test_seq') %2 = 0 WHEN true THEN t2.a2 ELSE 1 END
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 ORDER BY t1.id;
 
+-- Issue #7787: count distinct of a column from the inner side of a
+-- left outer join will have a non-empty varnullingrels in the query
+-- tree returned by Postgres 16+, so ensure this is not reflected in
+-- the worker subquery constructed by Citus; it has just one relation,
+-- for the pushed down subquery.
+SELECT COUNT(DISTINCT a2)
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+SELECT COUNT(DISTINCT a2)
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
+
+-- Issue #7787 also occurs with a HAVING clause
+SELECT 1
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
+HAVING COUNT(DISTINCT a2) > 1;
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+SELECT 1
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
+HAVING COUNT(DISTINCT a2) > 1;
+
+-- Check right outer join
+SELECT COUNT(DISTINCT a2)
+FROM t2 RIGHT OUTER JOIN t1 ON t2.account_id = t1.id;
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+SELECT COUNT(DISTINCT a2)
+FROM t2 RIGHT OUTER JOIN t1 ON t2.account_id = t1.id;
+
+-- Check both count distinct and having clause
+SELECT COUNT(DISTINCT a2)
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
+HAVING COUNT(DISTINCT t2.id) > 1;
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+SELECT COUNT(DISTINCT a2)
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
+HAVING COUNT(DISTINCT t2.id) > 1;
+
 --- cleanup
 \set VERBOSITY TERSE
-DROP SCHEMA issue_7705 CASCADE;
+DROP SCHEMA outer_join_columns_testing CASCADE;
 RESET all;

@@ -1,3 +1,15 @@
+// Two alternative test outputs:
+// isolation_multiuser_locking_0.out for PG16 and before
+// isolation_multiuser_locking.out for PG17
+//
+// REINDEX TABLE now requires table ownership (PostgreSQL commit ecb0fd337).
+// UPDATE statements include <waiting ...> to reflect new lock waiting behavior.
+// Previous behavior: Transactions failed with "current transaction is aborted".
+// New behavior: Transactions wait for locks, ensuring proper isolation.
+// <... completed> tracks transaction states for clarity with locking changes.
+// Reference: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=ecb0fd337
+
+
 setup
 {
 	SET citus.max_cached_conns_per_worker to 0;

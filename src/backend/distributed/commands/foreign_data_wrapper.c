@@ -86,7 +86,7 @@ static bool
 NameListHasFDWOwnedByDistributedExtension(List *FDWNames)
 {
 	String *FDWValue = NULL;
-	foreach_ptr(FDWValue, FDWNames)
+	foreach_declared_ptr(FDWValue, FDWNames)
 	{
 		/* captures the extension address during lookup */
 		ObjectAddress *extensionAddress = palloc0(sizeof(ObjectAddress));

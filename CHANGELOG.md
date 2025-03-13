@@ -1,8 +1,33 @@
+### citus v13.0.2 (March 12th, 2025) ###
+
+* Fixes a crash in columnar custom scan that happens when a columnar table is
+  used in a join. (#7647)
+
+* Fixes a bug that breaks `UPDATE SET (...) = (SELECT some_func(),... )`
+  type of queries on Citus tables (#7914)
+
+* Fixes a planning error caused by a redundant WHERE clause (#7907)
+
+* Fixes a crash in left outer joins that can happen when there is an aggregate
+  on a column from the inner side of the join. (#7901)
+
+* Fixes deadlock with transaction recovery that is possible during Citus
+  upgrades. (#7910)
+
+* Fixes a bug that prevents inserting into Citus tables that uses
+  a GENERATED ALWAYS AS IDENTITY column. (#7920)
+
+* Ensures that a MERGE command on a distributed table with a WHEN NOT MATCHED BY
+  SOURCE clause runs against all shards of the distributed table. (#7900)
+
+* Fixes a bug that breaks router updates on distributed tables
+  when a reference table is used in the subquery (#7897)
+
 ### citus v13.0.1 (February 4th, 2025) ###
 
 * Drops support for PostgreSQL 14 (#7753)
 
-### citus v13.0.0 (January 17, 2025) ###
+### citus v13.0.0 (January 22, 2025) ###
 
 * Adds support for PostgreSQL 17 (#7699, #7661)
 
