@@ -48,7 +48,7 @@ CreatePolicyCommands(Oid relationId)
 	List *policyList = GetPolicyListForRelation(relationId);
 
 	RowSecurityPolicy *policy;
-	foreach_ptr(policy, policyList)
+	foreach_declared_ptr(policy, policyList)
 	{
 		char *createPolicyCommand = CreatePolicyCommandForPolicy(relationId, policy);
 		commands = lappend(commands, makeTableDDLCommandString(createPolicyCommand));
@@ -88,7 +88,7 @@ GetPolicyListForRelation(Oid relationId)
 	List *policyList = NIL;
 
 	RowSecurityPolicy *policy;
-	foreach_ptr(policy, relation->rd_rsdesc->policies)
+	foreach_declared_ptr(policy, relation->rd_rsdesc->policies)
 	{
 		policyList = lappend(policyList, policy);
 	}
@@ -310,7 +310,7 @@ GetPolicyByName(Oid relationId, const char *policyName)
 	List *policyList = GetPolicyListForRelation(relationId);
 
 	RowSecurityPolicy *policy = NULL;
-	foreach_ptr(policy, policyList)
+	foreach_declared_ptr(policy, policyList)
 	{
 		if (strncmp(policy->policy_name, policyName, NAMEDATALEN) == 0)
 		{

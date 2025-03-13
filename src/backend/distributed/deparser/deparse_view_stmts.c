@@ -88,7 +88,7 @@ AppendViewNameList(StringInfo buf, List *viewNamesList)
 {
 	bool isFirstView = true;
 	List *qualifiedViewName = NULL;
-	foreach_ptr(qualifiedViewName, viewNamesList)
+	foreach_declared_ptr(qualifiedViewName, viewNamesList)
 	{
 		char *quotedQualifiedVieName = NameListToQuotedString(qualifiedViewName);
 		if (!isFirstView)

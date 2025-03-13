@@ -565,13 +565,15 @@ CREATE OR REPLACE FUNCTION check_database_on_all_nodes(p_database_name text)
 RETURNS TABLE (node_type text, result text)
 AS $func$
 DECLARE
-  pg_ge_15_options text := '';
+  pg_ge_15_17_options text := '';
   pg_ge_16_options text := '';
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'datlocprovider') THEN
-    pg_ge_15_options := ', daticulocale, datcollversion, datlocprovider';
+  IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'daticulocale') THEN
+    pg_ge_15_17_options := ', daticulocale, datcollversion, datlocprovider';
+  ELSIF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'datlocale') THEN
+    pg_ge_15_17_options := ', datlocale as daticulocale, datcollversion, datlocprovider';
   ELSE
-    pg_ge_15_options := $$, null as daticulocale, null as datcollversion, 'c' as datlocprovider$$;
+    pg_ge_15_17_options := $$, null as daticulocale, null as datcollversion, 'c' as datlocprovider$$;
   END IF;
 
   IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'pg_database'::regclass AND attname = 'daticurules') THEN
@@ -601,7 +603,7 @@ BEGIN
                             pg_encoding_to_char(pd.encoding) as encoding,
                             datistemplate, datallowconn, datconnlimit, datacl,
                             pt.spcname AS tablespace, datcollate, datctype
-                            %2$s -- >= pg15 options
+                            %2$s -- >= pg15 & pg17 options
                             %3$s -- >= pg16 options
                         FROM pg_database pd
                         JOIN pg_authid pa ON pd.datdba = pa.oid
@@ -620,7 +622,7 @@ BEGIN
                 ) AS stale_pg_dist_object_record_for_a_db_exists
             ) q
             $$,
-            p_database_name, pg_ge_15_options, pg_ge_16_options
+            p_database_name, pg_ge_15_17_options, pg_ge_16_options
         )
     ) q2
     JOIN pg_dist_node USING (nodeid);
@@ -639,3 +641,108 @@ BEGIN
     END LOOP;
 END;
 $func$ LANGUAGE plpgsql;
+CREATE or REPLACE FUNCTION initplan_references_to_pg17(text) returns text AS $$
+DECLARE
+  expr_parts text[];
+  initplan_refs text[];
+  n_initplan_refs int = 0;
+  i int := 1;
+  rv text := '';
+  expr_part text;
+BEGIN
+  -- Split the line on each $x; there must be at least one
+  -- For example 'foo = $0 and bar < $1' is split to: [ 'foo =', 'bar <' ]
+  expr_parts := regexp_split_to_array($1, '\$\d+');
+
+  -- Construct the PG17 formatted names in the given text
+  -- for example 'foo = $0 and bar < $1' yields [ '(InitPlan1).col1', '(InitPlan2).col1' ]
+  initplan_refs := ARRAY(select '(InitPlan ' || substr(x[1],2)::int + 1  || ').col1' from regexp_matches($1, '\$\d', 'g')  x);
+  n_initplan_refs := array_length(initplan_refs, 1);
+
+  -- Combine expression parts with PG17 formatted names
+  FOREACH expr_part IN ARRAY expr_parts
+  LOOP
+    rv := rv || expr_part;
+    -- There should be more expr parts than init plan refs so
+    -- check init plan refs boundary each time
+    IF i <= n_initplan_refs THEN
+      rv := rv || initplan_refs[i];
+    END IF;
+    i := i + 1;
+  END LOOP;
+  RETURN rv;
+END;
+$$ LANGUAGE plpgsql;
+-- This function formats EXPLAIN output to conform to how PG17 EXPLAIN shows
+-- scalar subquery outputs if the pg version is less than 17 (*). When 17
+-- becomes the minimum supported pgversion this function can be retired.
+--
+-- (*) https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=fd0398fcb
+CREATE OR REPLACE FUNCTION explain_with_pg17_initplan_format(explain_command text, out query_plan text)
+RETURNS SETOF TEXT AS $$
+DECLARE
+  pgversion int = 0;
+BEGIN
+  pgversion = substring(version(), '\d+')::int ;
+  FOR query_plan IN execute explain_command LOOP
+    IF pgversion < 17 THEN
+      -- Two types of format changes are needed:
+      -- 1) 'Init Plan 1 (returns $0)' becomes just 'Init Plan 1'
+      -- 2) 'foo = $0' becomes 'foo = (InitPlan 1).col1'
+      IF query_plan ~ 'InitPlan \d \(returns' THEN
+    	  query_plan = regexp_replace(query_plan, '\(returns \$\d\)', '', 'g');
+      ELSIF query_plan ~ '\$\d' THEN
+        -- This line contains at least one InitPlan reference
+        -- Replace it to have PG17 style InitPlan references
+	      query_plan = public.initplan_references_to_pg17(query_plan);
+      END IF;
+    END IF;
+    RETURN NEXT;
+  END LOOP;
+END; $$ language plpgsql;
+-- This function formats EXPLAIN output to conform to how pg <= 16 EXPLAIN
+-- shows ANY <subquery> in an expression the pg version >= 17. When 17 is
+-- the minimum supported pgversion this function can be retired. The commit
+-- that changed how ANY <subquery> exrpressions appear in EXPLAIN is:
+-- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=fd0398fcb
+CREATE OR REPLACE FUNCTION explain_with_pg16_subplan_format(explain_command text, out query_plan text)
+RETURNS SETOF TEXT AS $$
+DECLARE
+  pgversion int = 0;
+BEGIN
+  pgversion = substring(version(), '\d+')::int ;
+  FOR query_plan IN execute explain_command LOOP
+    IF pgversion >= 17 THEN
+      IF query_plan ~ 'SubPlan \d+\).col' THEN
+    	  query_plan = regexp_replace(query_plan, '\(ANY \(\w+ = \(SubPlan (\d+)\).col1\)\)', '(SubPlan \1)', 'g');
+      END IF;
+    END IF;
+    RETURN NEXT;
+  END LOOP;
+END; $$ language plpgsql;
+-- To produce stable regression test output, it's usually necessary to
+-- ignore details such as exact costs or row counts.  These filter
+-- functions replace changeable output details with fixed strings.
+-- Copied from PG explain.sql
+create function explain_filter(text) returns setof text
+language plpgsql as
+$$
+declare
+    ln text;
+begin
+    for ln in execute $1
+    loop
+        -- Replace any numeric word with just 'N'
+        ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
+        -- In sort output, the above won't match units-suffixed numbers
+        ln := regexp_replace(ln, '\m\d+kB', 'NkB', 'g');
+        -- Ignore text-mode buffers output because it varies depending
+        -- on the system state
+        CONTINUE WHEN (ln ~ ' +Buffers: .*');
+        -- Ignore text-mode "Planning:" line because whether it's output
+        -- varies depending on the system state
+        CONTINUE WHEN (ln = 'Planning:');
+        return next ln;
+    end loop;
+end;
+$$;

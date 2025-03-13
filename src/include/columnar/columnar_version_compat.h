@@ -14,14 +14,6 @@
 
 #include "pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-#define ExecARDeleteTriggers_compat(a, b, c, d, e, f) \
-	ExecARDeleteTriggers(a, b, c, d, e, f)
-#else
-#define ExecARDeleteTriggers_compat(a, b, c, d, e, f) \
-	ExecARDeleteTriggers(a, b, c, d, e)
-#endif
-
 #define ACLCHECK_OBJECT_TABLE OBJECT_TABLE
 
 #define ExplainPropertyLong(qlabel, value, es) \

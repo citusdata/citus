@@ -503,7 +503,7 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	DropOrphanedResourcesInSeparateTransaction();
 
 	ShardInterval *colocatedShard = NULL;
-	foreach_ptr(colocatedShard, colocatedShardList)
+	foreach_declared_ptr(colocatedShard, colocatedShardList)
 	{
 		/*
 		 * This is to prevent any race condition possibility among the shard moves.
@@ -530,7 +530,7 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	 * metadata workers.
 	 */
 	colocatedShard = NULL;
-	foreach_ptr(colocatedShard, colocatedShardList)
+	foreach_declared_ptr(colocatedShard, colocatedShardList)
 	{
 		uint64 colocatedShardId = colocatedShard->shardId;
 		uint32 groupId = GroupForNode(targetNodeName, targetNodePort);
@@ -623,7 +623,7 @@ InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
 											 int32 groupId)
 {
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		/* get shard name */
 		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
@@ -659,7 +659,7 @@ IsShardListOnNode(List *colocatedShardList, char *targetNodeName, uint32 targetN
 	 * We exhaustively search all co-located shards
 	 */
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, colocatedShardList)
+	foreach_declared_ptr(shardInterval, colocatedShardList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		List *placementList = ActiveShardPlacementListOnGroup(shardId,
@@ -682,7 +682,7 @@ static void
 LockColocatedRelationsForMove(List *colocatedTableList)
 {
 	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
 		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
 	}
@@ -698,7 +698,7 @@ ErrorIfForeignTableForShardTransfer(List *colocatedTableList,
 									ShardTransferType transferType)
 {
 	Oid colocatedTableId = InvalidOid;
-	foreach_oid(colocatedTableId, colocatedTableList)
+	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
 		if (IsForeignTable(colocatedTableId))
 		{
@@ -724,7 +724,7 @@ EnsureAllShardsCanBeCopied(List *colocatedShardList,
 						   char *targetNodeName, uint32 targetNodePort)
 {
 	ShardInterval *colocatedShard = NULL;
-	foreach_ptr(colocatedShard, colocatedShardList)
+	foreach_declared_ptr(colocatedShard, colocatedShardList)
 	{
 		uint64 colocatedShardId = colocatedShard->shardId;
 
@@ -1124,7 +1124,7 @@ void
 BlockWritesToShardList(List *shardList)
 {
 	ShardInterval *shard = NULL;
-	foreach_ptr(shard, shardList)
+	foreach_declared_ptr(shard, shardList)
 	{
 		/*
 		 * We need to lock the referenced reference table metadata to avoid
@@ -1295,7 +1295,7 @@ static void
 EnsureTableListOwner(List *tableIdList)
 {
 	Oid tableId = InvalidOid;
-	foreach_oid(tableId, tableIdList)
+	foreach_declared_oid(tableId, tableIdList)
 	{
 		EnsureTableOwner(tableId);
 	}
@@ -1310,7 +1310,7 @@ static void
 ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList)
 {
 	Oid tableId = InvalidOid;
-	foreach_oid(tableId, tableIdList)
+	foreach_declared_oid(tableId, tableIdList)
 	{
 		List *foreignConstraintCommandList =
 			GetReferencingForeignConstaintCommands(tableId);
@@ -1381,7 +1381,7 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 	 * target node. We do not create the indexes yet.
 	 */
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		Oid relationId = shardInterval->relationId;
 		uint64 shardId = shardInterval->shardId;
@@ -1449,7 +1449,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 	/* iterate through the colocated shards and copy each */
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		/*
 		 * For each shard we first create the shard table in a separate
@@ -1492,7 +1492,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		sourceNodePort,
 		PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS);
 
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		List *ddlCommandList =
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
@@ -1509,7 +1509,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 	 * Create DDL commands to Attach child tables to their parents in a partitioning hierarchy.
 	 */
 	List *shardIntervalWithDDCommandsList = NIL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		if (PartitionTable(shardInterval->relationId))
 		{
@@ -1534,7 +1534,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 	 * Iterate through the colocated shards and create DDL commamnds
 	 * to create the foreign constraints.
 	 */
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		List *shardForeignConstraintCommandList = NIL;
 		List *referenceTableForeignConstraintList = NIL;
@@ -1553,7 +1553,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 	/* Now execute the Partitioning & Foreign constraints creation commads. */
 	ShardCommandList *shardCommandList = NULL;
-	foreach_ptr(shardCommandList, shardIntervalWithDDCommandsList)
+	foreach_declared_ptr(shardCommandList, shardIntervalWithDDCommandsList)
 	{
 		char *tableOwner = TableOwner(shardCommandList->shardInterval->relationId);
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
@@ -1583,7 +1583,7 @@ CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode, List *shardInte
 	int taskId = 0;
 	List *copyTaskList = NIL;
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		/*
 		 * Skip copying data for partitioned tables, because they contain no
@@ -1716,7 +1716,7 @@ SearchShardPlacementInList(List *shardPlacementList, const char *nodeName,
 						   uint32 nodePort)
 {
 	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, shardPlacementList)
+	foreach_declared_ptr(shardPlacement, shardPlacementList)
 	{
 		if (strncmp(nodeName, shardPlacement->nodeName, MAX_NODE_LENGTH) == 0 &&
 			nodePort == shardPlacement->nodePort)
@@ -1837,7 +1837,7 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 	*referenceTableForeignConstraintList = NIL;
 
 	const char *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		char *escapedCommand = quote_literal_cstr(command);
 
@@ -2002,7 +2002,7 @@ DropShardPlacementsFromMetadata(List *shardList,
 								char *nodeName, int32 nodePort)
 {
 	ShardInterval *shardInverval = NULL;
-	foreach_ptr(shardInverval, shardList)
+	foreach_declared_ptr(shardInverval, shardList)
 	{
 		uint64 shardId = shardInverval->shardId;
 		List *shardPlacementList = ShardPlacementList(shardId);
@@ -2066,7 +2066,7 @@ WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
 	List *applyDDLCommandList = NIL;
 
 	TableDDLCommand *ddlCommand = NULL;
-	foreach_ptr(ddlCommand, ddlCommandList)
+	foreach_declared_ptr(ddlCommand, ddlCommandList)
 	{
 		Assert(CitusIsA(ddlCommand, TableDDLCommand));
 		char *applyDDLCommand = GetShardedTableDDLCommand(ddlCommand, shardId, NULL);
@@ -2100,7 +2100,7 @@ UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
 	}
 
 	ProgressMonitorData *monitor = NULL;
-	foreach_ptr(monitor, rebalanceMonitorList)
+	foreach_declared_ptr(monitor, rebalanceMonitorList)
 	{
 		PlacementUpdateEventProgress *steps = ProgressMonitorSteps(monitor);
 
@@ -2111,7 +2111,7 @@ UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
 			bool foundInList = false;
 
 			ShardInterval *candidateShard = NULL;
-			foreach_ptr(candidateShard, shardIntervalList)
+			foreach_declared_ptr(candidateShard, shardIntervalList)
 			{
 				if (candidateShard->shardId == currentShardId)
 				{

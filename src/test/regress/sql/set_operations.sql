@@ -134,7 +134,7 @@ SELECT * FROM test a WHERE x NOT IN (SELECT x FROM test b WHERE y = 1 UNION SELE
 SELECT * FROM test a WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c) ORDER BY 1,2;
 
 -- correlated subquery with union in WHERE clause
-SELECT * FROM test a WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x) ORDER BY 1,2;
+SELECT * FROM test a WHERE (x + random()) IN (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x) ORDER BY 1,2;
 
 -- force unions to be planned while subqueries are being planned
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test) ORDER BY 1,2 LIMIT 5) as foo ORDER BY 1 DESC LIMIT 3;

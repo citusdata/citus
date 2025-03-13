@@ -524,7 +524,7 @@ static bool
 AnchorShardsInTaskListExist(List *taskList)
 {
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (!ShardExists(task->anchorShardId))
 		{

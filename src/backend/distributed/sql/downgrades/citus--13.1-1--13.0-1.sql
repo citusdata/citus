@@ -1,4 +1,4 @@
--- citus--12.2-1--12.1-1
+-- citus--13.1-1--13.0-1
 
 DROP FUNCTION citus_internal.database_command(text);
 DROP FUNCTION citus_internal.acquire_citus_advisory_object_class_lock(int, cstring);

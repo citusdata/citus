@@ -18,7 +18,7 @@ SET citus.enable_fast_path_router_planner TO true;
 
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
-	author_id bigint NOT NULL,
+	author_id bigint,
 	title varchar(20) NOT NULL,
 	word_count integer
 );
@@ -802,7 +802,6 @@ SELECT * FROM test_view;
 CREATE MATERIALIZED VIEW mv_articles_hash_empty AS
 	SELECT * FROM articles_hash WHERE author_id = 1;
 SELECT * FROM mv_articles_hash_empty;
-
 
 SELECT id
 	FROM articles_hash

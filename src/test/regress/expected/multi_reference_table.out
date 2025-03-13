@@ -1574,9 +1574,11 @@ ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 ROLLBACK;
 -- Previous issue failed to rename reference tables in subqueries
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF) SELECT value_1, count(*) FROM colocated_table_test GROUP BY value_1
 HAVING (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2) > 0
 ORDER BY 1;
+$Q$) as "QUERY PLAN";
                                          QUERY PLAN
 ---------------------------------------------------------------------
  Sort
@@ -1596,10 +1598,10 @@ ORDER BY 1;
                Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: colocated_table_test.value_1
-                     InitPlan 1 (returns $0)
+                     InitPlan 1
                        ->  Function Scan on read_intermediate_result intermediate_result
                      ->  Result
-                           One-Time Filter: ($0 > '0'::double precision)
+                           One-Time Filter: ((InitPlan 1).col1 > '0'::double precision)
                            ->  Seq Scan on colocated_table_test_1250005 colocated_table_test
 (22 rows)
 

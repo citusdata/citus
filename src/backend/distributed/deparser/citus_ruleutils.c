@@ -258,10 +258,8 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	char *typeName = format_type_be(pgSequenceForm->seqtypid);
 
 	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND,
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 								 get_rel_persistence(sequenceRelationId) ==
 								 RELPERSISTENCE_UNLOGGED ? "UNLOGGED " : "",
-#endif
 								 qualifiedSequenceName,
 								 typeName,
 								 pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
@@ -315,6 +313,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 	AttrNumber defaultValueIndex = 0;
 	AttrNumber constraintIndex = 0;
 	AttrNumber constraintCount = 0;
+	bool relIsPartition = false;
 	StringInfoData buffer = { NULL, 0, 0, 0 };
 
 	/*
@@ -342,6 +341,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 		}
 
 		appendStringInfo(&buffer, "TABLE %s (", relationName);
+
+		relIsPartition = relation->rd_rel->relispartition;
 	}
 	else
 	{
@@ -392,10 +393,18 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 								 GetCompressionMethodName(attributeForm->attcompression));
 			}
 
-			if (attributeForm->attidentity && includeIdentityDefaults)
+			/*
+			 * If this is an identity column include its identity definition in the
+			 * DDL only if its relation is not a partition. If it is a partition, any
+			 * identity is inherited from the parent table by ATTACH PARTITION. This
+			 * is Postgres 17+ behavior (commit 699586315); prior PG versions did not
+			 * support identity columns in partitioned tables.
+			 */
+			if (attributeForm->attidentity && includeIdentityDefaults && !relIsPartition)
 			{
 				bool missing_ok = false;
-				Oid seqOid = getIdentitySequence(RelationGetRelid(relation),
+				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(
+													 relation),
 												 attributeForm->attnum, missing_ok);
 
 				if (includeIdentityDefaults == INCLUDE_IDENTITY)
@@ -738,7 +747,18 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 			 * If the user changed the column's statistics target, create
 			 * alter statement and add statement to a list for later processing.
 			 */
-			if (attributeForm->attstattarget >= 0)
+			HeapTuple atttuple = SearchSysCache2(ATTNUM,
+												 ObjectIdGetDatum(tableRelationId),
+												 Int16GetDatum(attributeForm->attnum));
+			if (!HeapTupleIsValid(atttuple))
+			{
+				elog(ERROR, "cache lookup failed for attribute %d of relation %u",
+					 attributeForm->attnum, tableRelationId);
+			}
+
+			int32 targetAttstattarget = getAttstattarget_compat(atttuple);
+			ReleaseSysCache(atttuple);
+			if (targetAttstattarget >= 0)
 			{
 				StringInfoData statement = { NULL, 0, 0, 0 };
 				initStringInfo(&statement);
@@ -746,7 +766,7 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 				appendStringInfo(&statement, "ALTER COLUMN %s ",
 								 quote_identifier(attributeName));
 				appendStringInfo(&statement, "SET STATISTICS %d",
-								 attributeForm->attstattarget);
+								 targetAttstattarget);
 
 				columnOptionList = lappend(columnOptionList, statement.data);
 			}
@@ -835,12 +855,10 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 		appendStringInfoString(buffer, ") ");
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	if (indexStmt->nulls_not_distinct)
 	{
 		appendStringInfoString(buffer, "NULLS NOT DISTINCT ");
 	}
-#endif /* PG_VERSION_15 */
 
 	if (indexStmt->options != NIL)
 	{
@@ -938,7 +956,7 @@ bool
 IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
 {
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, param) == 0)
 		{
@@ -963,7 +981,7 @@ AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
 
 	char *tableSpaceName = NULL;
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, "tablespace") == 0)
 		{
@@ -1347,6 +1365,10 @@ convert_aclright_to_string(int aclright)
 			return "TEMPORARY";
 		case ACL_CONNECT:
 			return "CONNECT";
+#if PG_VERSION_NUM >= PG_VERSION_17
+		case ACL_MAINTAIN:
+			return "MAINTAIN";
+#endif
 		default:
 			elog(ERROR, "unrecognized aclright: %d", aclright);
 			return NULL;

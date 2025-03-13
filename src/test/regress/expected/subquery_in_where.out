@@ -30,12 +30,12 @@ WITH event_id
          FROM   events_table)
 SELECT Count(*)
 FROM   event_id
-WHERE  events_user_id IN (SELECT user_id
+WHERE  (events_user_id, random()) IN (SELECT user_id, 1
                           FROM   users_table
                           WHERE  users_table.time = events_time);
 DEBUG:  CTE event_id is going to be inlined via distributed planning
 DEBUG:  generating subplan XXX_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id WHERE (events_user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM public.users_table WHERE (users_table."time" OPERATOR(pg_catalog.=) event_id.events_time)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id WHERE ((events_user_id, random()) OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id, 1 FROM public.users_table WHERE (users_table."time" OPERATOR(pg_catalog.=) event_id.events_time)))
 ERROR:  correlated subqueries are not supported when the FROM clause contains a CTE or subquery
 -- Recurring tuples as empty join tree
 SELECT *
@@ -1146,7 +1146,117 @@ WHERE (SELECT COUNT(DISTINCT e1.value_2)
 
 (1 row)
 
+-- Test redundant WHERE clause (fix #7782, #7783)
+CREATE TABLE t0 (vkey int4, pkey int4, c0 timestamp);
+CREATE TABLE t1 (vkey int4, pkey int4, c4 timestamp, c5 text, c6 text);
+CREATE TABLE t3 (vkey int4, pkey int4, c9 timestamp);
+CREATE TABLE t7 (vkey int4, pkey int4);
+-- DEBUG messages not needed for these tests
 SET client_min_messages TO DEFAULT;
+INSERT INTO t0 (vkey, pkey, c0) values
+(3, 13000, make_timestamp(2032, 9, 4, 13, 38, 0));
+INSERT INTO t7 (vkey, pkey) values
+(3, 59525);
+SELECT create_reference_table('t1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('t3', 'c9');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+UPDATE t0 set vkey = 117
+where (((t0.pkey) in (select t7.vkey from t7 where false
+        union all
+        select t3.pkey from t3 where false
+        )))
+  or TRUE;
+-- Local table t0 is updated
+SELECT vkey, pkey, c0 FROM t0;
+ vkey | pkey  |            c0
+---------------------------------------------------------------------
+  117 | 13000 | Sat Sep 04 13:38:00 2032
+(1 row)
+
+-- MERGE command with redundant join can be planned locally
+EXPLAIN (costs off, timing off)
+MERGE INTO t0 USING t7 ON
+ (((t0.pkey) in (select t7.vkey from t7 where false
+        union all
+        select t1.pkey from t1 where false
+        )))
+  or TRUE
+WHEN MATCHED THEN
+   UPDATE SET vkey = 113;
+            QUERY PLAN
+---------------------------------------------------------------------
+ Merge on t0
+   ->  Nested Loop
+         ->  Seq Scan on t7
+         ->  Materialize
+               ->  Seq Scan on t0
+(5 rows)
+
+-- UPDATE via MERGE with redundant join clause:
+MERGE INTO t0 USING t7 ON
+ (((t0.pkey) in (select t7.vkey from t7 where false
+        union all
+        select t1.pkey from t1 where false
+        )))
+  or TRUE
+WHEN MATCHED THEN
+   UPDATE SET vkey = 113;
+-- Local table t0 is updated
+SELECT vkey, pkey, c0 FROM t0;
+ vkey | pkey  |            c0
+---------------------------------------------------------------------
+  113 | 13000 | Sat Sep 04 13:38:00 2032
+(1 row)
+
+DELETE FROM t0
+where TRUE or (((t0.vkey) >= (select
+          pg_catalog.regexp_count(ref_0.c5, ref_0.c6)
+        from t1 as ref_0 where true)));
+-- Local table t0 is now empty (0 rows)
+SELECT vkey, pkey, c0 FROM t0;
+ vkey | pkey | c0
+---------------------------------------------------------------------
+(0 rows)
+
+INSERT INTO t3 (vkey, pkey, c9) values
+(3, 13000, make_timestamp(2032, 9, 4, 13, 38, 0));
+-- Distributed table update with redundant WHERE
+UPDATE t3 set vkey = 117
+where (((t3.pkey) in (select t1.vkey from t1 where false
+        union all
+        select t0.pkey from t0 join t7 on t0.pkey=t7.vkey where false
+        )))
+  or TRUE;
+SELECT vkey, pkey FROM t3;
+ vkey | pkey
+---------------------------------------------------------------------
+  117 | 13000
+(1 row)
+
+-- Distributed table delete with redundant WHERE
+DELETE FROM t3
+where TRUE or (((t3.vkey) >= (select
+          pg_catalog.regexp_count(ref_0.c5, ref_0.c6)
+        from  t1 as ref_0  where true)) and (select max(vkey) from t0) > 0);
+-- Distributed table t3 is now empty
+SELECT vkey, pkey FROM t3;
+ vkey | pkey
+---------------------------------------------------------------------
+(0 rows)
+
 DROP TABLE local_table;
+DROP TABLE t0;
+DROP TABLE t1;
+DROP TABLE t3;
+DROP TABLE t7;
 DROP SCHEMA subquery_in_where CASCADE;
 SET search_path TO public;

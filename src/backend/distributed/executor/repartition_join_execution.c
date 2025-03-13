@@ -93,7 +93,7 @@ TraverseJobTree(Job *curJob, List **jobIds)
 	*jobIds = lappend(*jobIds, jobIdPointer);
 
 	Job *childJob = NULL;
-	foreach_ptr(childJob, curJob->dependentJobList)
+	foreach_declared_ptr(childJob, curJob->dependentJobList)
 	{
 		TraverseJobTree(childJob, jobIds);
 	}

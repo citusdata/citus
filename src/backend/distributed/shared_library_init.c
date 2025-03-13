@@ -176,15 +176,11 @@ static bool FinishedStartupCitusBackend = false;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
-#endif
 
 void _PG_init(void);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void citus_shmem_request(void);
-#endif
 static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
 								  subId, void *arg);
 static void DoInitialCleanup(void);
@@ -477,10 +473,8 @@ _PG_init(void)
 	original_client_auth_hook = ClientAuthentication_hook;
 	ClientAuthentication_hook = CitusAuthHook;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	prev_shmem_request_hook = shmem_request_hook;
 	shmem_request_hook = citus_shmem_request;
-#endif
 
 	InitializeMaintenanceDaemon();
 	InitializeMaintenanceDaemonForMainDb();
@@ -607,8 +601,6 @@ AdjustDynamicLibraryPathForCdcDecoders(void)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 /*
  * Requests any additional shared memory required for citus.
  */
@@ -628,9 +620,6 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(StatCountersArrayShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 }
-
-
-#endif
 
 
 /*
@@ -2853,7 +2842,7 @@ ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource sou
 	}
 
 	char *appNamePrefix = NULL;
-	foreach_ptr(appNamePrefix, prefixList)
+	foreach_declared_ptr(appNamePrefix, prefixList)
 	{
 		int prefixLength = strlen(appNamePrefix);
 		if (prefixLength >= NAMEDATALEN)
@@ -2966,6 +2955,9 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslcrl",
 		"sslkey",
 		"sslmode",
+#if PG_VERSION_NUM >= PG_VERSION_17
+		"sslnegotiation",
+#endif
 		"sslrootcert",
 		"tcp_user_timeout",
 	};

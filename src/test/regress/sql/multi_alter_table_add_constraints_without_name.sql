@@ -158,14 +158,8 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
 
 
 -- Check "ADD UNIQUE NULLS NOT DISTICT"
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE NULLS NOT DISTINCT (product_no, price);
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_price_key;
-\endif
 
 -- Check "ADD UNIQUE ... DEFERRABLE"
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no) INCLUDE(price) DEFERRABLE;
@@ -784,9 +778,6 @@ SELECT con.conname
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
-
--- Check "ADD EXCLUDE" errors out for partitioned table since the postgres does not allow it
-ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD EXCLUDE(partition_col WITH =);
 
 -- Check "ADD CHECK"
 SET client_min_messages TO DEBUG1;

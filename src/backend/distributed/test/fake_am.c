@@ -310,7 +310,7 @@ fake_relation_set_new_filenode(Relation rel,
 	 */
 	*minmulti = GetOldestMultiXactId();
 
-	SMgrRelation srel = RelationCreateStorage_compat(*newrnode, persistence, true);
+	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence, true);
 
 	/*
 	 * If required, set up an init fork for an unlogged table so that it can
@@ -372,8 +372,13 @@ fake_vacuum(Relation onerel, VacuumParams *params,
 
 
 static bool
-fake_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
+fake_scan_analyze_next_block(TableScanDesc scan,
+#if PG_VERSION_NUM >= PG_VERSION_17
+							 ReadStream *stream)
+#else
+							 BlockNumber blockno,
 							 BufferAccessStrategy bstrategy)
+#endif
 {
 	/* we don't support analyze, so return false */
 	return false;

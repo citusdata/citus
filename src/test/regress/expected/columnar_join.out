@@ -56,5 +56,333 @@ GROUP BY u1.id, u2.id;
                Columnar Projected Columns: id
 (10 rows)
 
+-- ================================
+-- join COLUMNAR with HEAP
+-- ================================
+-- Left Join with Mixed Table Types
+CREATE TABLE tbl_left_heap1 (id integer);
+CREATE TABLE tbl_left_heap2 (id integer);
+CREATE TABLE tbl_left_columnar (id integer) USING columnar;
+INSERT INTO tbl_left_heap1 VALUES (1), (2), (3), (4);
+INSERT INTO tbl_left_heap2 VALUES (2), (3), (5), (6);
+INSERT INTO tbl_left_columnar VALUES (3), (5), (7);
+SELECT *
+FROM tbl_left_heap1 h1
+LEFT JOIN tbl_left_heap2 h2 ON h1.id = h2.id
+LEFT JOIN tbl_left_columnar c ON h2.id = c.id
+ORDER BY 1;
+ id | id | id
+---------------------------------------------------------------------
+  1 |    |
+  2 |  2 |
+  3 |  3 |  3
+  4 |    |
+(4 rows)
+
+-- Left Join with Filter
+CREATE TABLE tbl_left_filter_heap1 (id integer);
+CREATE TABLE tbl_left_filter_heap2 (id integer);
+CREATE TABLE tbl_left_filter_columnar (id integer) USING columnar;
+INSERT INTO tbl_left_filter_heap1 VALUES (1), (2), (3), (4);
+INSERT INTO tbl_left_filter_heap2 VALUES (2), (3), (5), (6);
+INSERT INTO tbl_left_filter_columnar VALUES (3), (5), (7);
+SELECT *
+FROM tbl_left_filter_heap1 h1
+LEFT JOIN tbl_left_filter_heap2 h2 ON h1.id = h2.id
+LEFT JOIN tbl_left_filter_columnar c ON h2.id = c.id
+WHERE h1.id > 2
+ORDER BY 1;
+ id | id | id
+---------------------------------------------------------------------
+  3 |  3 |  3
+  4 |    |
+(2 rows)
+
+-- Right Join with Mixed Table Types
+CREATE TABLE tbl_right_heap1 (id integer);
+CREATE TABLE tbl_right_heap2 (id integer);
+CREATE TABLE tbl_right_columnar (id integer) USING columnar;
+INSERT INTO tbl_right_heap1 VALUES (1), (2), (3), (4);
+INSERT INTO tbl_right_heap2 VALUES (2), (3), (5), (6);
+INSERT INTO tbl_right_columnar VALUES (3), (5), (7);
+SELECT *
+FROM tbl_right_heap1 h1
+RIGHT JOIN tbl_right_heap2 h2 ON h1.id = h2.id
+RIGHT JOIN tbl_right_columnar c ON h2.id = c.id
+ORDER BY 3;
+ id | id | id
+---------------------------------------------------------------------
+  3 |  3 |  3
+    |  5 |  5
+    |    |  7
+(3 rows)
+
+-- Right Join with Filters
+CREATE TABLE tbl_right_filter_heap1 (id integer);
+CREATE TABLE tbl_right_filter_heap2 (id integer);
+CREATE TABLE tbl_right_filter_columnar (id integer) USING columnar;
+INSERT INTO tbl_right_filter_heap1 VALUES (1), (2), (3), (4);
+INSERT INTO tbl_right_filter_heap2 VALUES (2), (3), (5), (6);
+INSERT INTO tbl_right_filter_columnar VALUES (3), (5), (7);
+SELECT *
+FROM tbl_right_filter_heap1 h1
+RIGHT JOIN tbl_right_filter_heap2 h2 ON h1.id = h2.id
+RIGHT JOIN tbl_right_filter_columnar c ON h2.id = c.id
+WHERE c.id < 6
+ORDER BY 3;
+ id | id | id
+---------------------------------------------------------------------
+  3 |  3 |  3
+    |  5 |  5
+(2 rows)
+
+-- Inner Join with Mixed Table Types
+CREATE TABLE tbl_heap1 (id serial primary key, val integer);
+CREATE TABLE tbl_heap2 (id serial primary key, val integer);
+CREATE TABLE tbl_columnar (id integer, val integer) USING columnar;
+INSERT INTO tbl_heap1 (val) SELECT generate_series(1, 100);
+INSERT INTO tbl_heap2 (val) SELECT generate_series(50, 150);
+INSERT INTO tbl_columnar SELECT generate_series(75, 125), generate_series(200, 250);
+SELECT h1.id, h1.val, h2.val, c.val
+FROM tbl_heap1 h1
+JOIN tbl_heap2 h2 ON h1.val = h2.val
+JOIN tbl_columnar c ON h1.val = c.id
+ORDER BY 1;
+ id  | val | val | val
+---------------------------------------------------------------------
+  75 |  75 |  75 | 200
+  76 |  76 |  76 | 201
+  77 |  77 |  77 | 202
+  78 |  78 |  78 | 203
+  79 |  79 |  79 | 204
+  80 |  80 |  80 | 205
+  81 |  81 |  81 | 206
+  82 |  82 |  82 | 207
+  83 |  83 |  83 | 208
+  84 |  84 |  84 | 209
+  85 |  85 |  85 | 210
+  86 |  86 |  86 | 211
+  87 |  87 |  87 | 212
+  88 |  88 |  88 | 213
+  89 |  89 |  89 | 214
+  90 |  90 |  90 | 215
+  91 |  91 |  91 | 216
+  92 |  92 |  92 | 217
+  93 |  93 |  93 | 218
+  94 |  94 |  94 | 219
+  95 |  95 |  95 | 220
+  96 |  96 |  96 | 221
+  97 |  97 |  97 | 222
+  98 |  98 |  98 | 223
+  99 |  99 |  99 | 224
+ 100 | 100 | 100 | 225
+(26 rows)
+
+-- Outer Join with NULLs
+CREATE TABLE tbl_null_heap (id integer, val integer);
+CREATE TABLE tbl_null_columnar (id integer, val integer) USING columnar;
+INSERT INTO tbl_null_heap VALUES (1, NULL), (2, 20), (3, 30);
+INSERT INTO tbl_null_columnar VALUES (1, 100), (NULL, 200), (3, 300);
+SELECT nh.id, nh.val, nc.val
+FROM tbl_null_heap nh
+FULL OUTER JOIN tbl_null_columnar nc ON nh.id = nc.id
+ORDER BY 1;
+ id | val | val
+---------------------------------------------------------------------
+  1 |     | 100
+  2 |  20 |
+  3 |  30 | 300
+    |     | 200
+(4 rows)
+
+-- Join with Aggregates
+CREATE TABLE tbl_agg_heap (id serial primary key, val integer);
+CREATE TABLE tbl_agg_columnar (id integer, val integer) USING columnar;
+INSERT INTO tbl_agg_heap (val) SELECT generate_series(1, 100);
+INSERT INTO tbl_agg_columnar SELECT generate_series(50, 150), generate_series(200, 300);
+SELECT ah.val AS heap_val, COUNT(ac.val) AS columnar_count
+FROM tbl_agg_heap ah
+LEFT JOIN tbl_agg_columnar ac ON ah.val = ac.id
+GROUP BY ah.val
+ORDER BY ah.val;
+ heap_val | columnar_count
+---------------------------------------------------------------------
+        1 |              0
+        2 |              0
+        3 |              0
+        4 |              0
+        5 |              0
+        6 |              0
+        7 |              0
+        8 |              0
+        9 |              0
+       10 |              0
+       11 |              0
+       12 |              0
+       13 |              0
+       14 |              0
+       15 |              0
+       16 |              0
+       17 |              0
+       18 |              0
+       19 |              0
+       20 |              0
+       21 |              0
+       22 |              0
+       23 |              0
+       24 |              0
+       25 |              0
+       26 |              0
+       27 |              0
+       28 |              0
+       29 |              0
+       30 |              0
+       31 |              0
+       32 |              0
+       33 |              0
+       34 |              0
+       35 |              0
+       36 |              0
+       37 |              0
+       38 |              0
+       39 |              0
+       40 |              0
+       41 |              0
+       42 |              0
+       43 |              0
+       44 |              0
+       45 |              0
+       46 |              0
+       47 |              0
+       48 |              0
+       49 |              0
+       50 |              1
+       51 |              1
+       52 |              1
+       53 |              1
+       54 |              1
+       55 |              1
+       56 |              1
+       57 |              1
+       58 |              1
+       59 |              1
+       60 |              1
+       61 |              1
+       62 |              1
+       63 |              1
+       64 |              1
+       65 |              1
+       66 |              1
+       67 |              1
+       68 |              1
+       69 |              1
+       70 |              1
+       71 |              1
+       72 |              1
+       73 |              1
+       74 |              1
+       75 |              1
+       76 |              1
+       77 |              1
+       78 |              1
+       79 |              1
+       80 |              1
+       81 |              1
+       82 |              1
+       83 |              1
+       84 |              1
+       85 |              1
+       86 |              1
+       87 |              1
+       88 |              1
+       89 |              1
+       90 |              1
+       91 |              1
+       92 |              1
+       93 |              1
+       94 |              1
+       95 |              1
+       96 |              1
+       97 |              1
+       98 |              1
+       99 |              1
+      100 |              1
+(100 rows)
+
+-- Join with Filters
+CREATE TABLE tbl_filter_heap (id integer, val integer);
+CREATE TABLE tbl_filter_columnar (id integer, val integer) USING columnar;
+INSERT INTO tbl_filter_heap SELECT generate_series(1, 100), generate_series(1001, 1100);
+INSERT INTO tbl_filter_columnar SELECT generate_series(90, 120), generate_series(2001, 2031);
+SELECT fh.id, fh.val, fc.val
+FROM tbl_filter_heap fh
+INNER JOIN tbl_filter_columnar fc ON fh.id = fc.id
+WHERE fh.val > 1050 AND fc.val < 2025
+ORDER BY 1;
+ id  | val  | val
+---------------------------------------------------------------------
+  90 | 1090 | 2001
+  91 | 1091 | 2002
+  92 | 1092 | 2003
+  93 | 1093 | 2004
+  94 | 1094 | 2005
+  95 | 1095 | 2006
+  96 | 1096 | 2007
+  97 | 1097 | 2008
+  98 | 1098 | 2009
+  99 | 1099 | 2010
+ 100 | 1100 | 2011
+(11 rows)
+
+-- Cross Join
+CREATE TABLE tbl_cross_heap (id integer, val integer);
+CREATE TABLE tbl_cross_columnar (id integer, val integer) USING columnar;
+INSERT INTO tbl_cross_heap VALUES (1, 10), (2, 20), (3, 30);
+INSERT INTO tbl_cross_columnar VALUES (4, 40), (5, 50), (6, 60);
+SELECT h.id AS heap_id, h.val AS heap_val, c.id AS columnar_id, c.val AS columnar_val
+FROM tbl_cross_heap h
+CROSS JOIN tbl_cross_columnar c
+ORDER BY 3,4,1,2;
+ heap_id | heap_val | columnar_id | columnar_val
+---------------------------------------------------------------------
+       1 |       10 |           4 |           40
+       2 |       20 |           4 |           40
+       3 |       30 |           4 |           40
+       1 |       10 |           5 |           50
+       2 |       20 |           5 |           50
+       3 |       30 |           5 |           50
+       1 |       10 |           6 |           60
+       2 |       20 |           6 |           60
+       3 |       30 |           6 |           60
+(9 rows)
+
+-- Left Join with Mixed Table Types and columnar in the middle
+CREATE TABLE tbl_middle_left_heap1 (id integer);
+CREATE TABLE tbl_middle_left_heap2 (id integer);
+CREATE TABLE tbl_middle_left_columnar (id integer) USING columnar;
+INSERT INTO tbl_middle_left_heap1 VALUES (1), (2), (3), (4);
+INSERT INTO tbl_middle_left_heap2 VALUES (2), (3), (5), (6);
+INSERT INTO tbl_middle_left_columnar VALUES (3), (5), (7);
+EXPLAIN (COSTS OFF)
+SELECT h1.*, h2.*, c.*
+FROM tbl_middle_left_heap1 h1
+LEFT JOIN tbl_middle_left_columnar c ON h1.id = c.id
+LEFT JOIN tbl_middle_left_heap2 h2 ON c.id = h2.id
+ORDER BY 1;
+                        QUERY PLAN
+---------------------------------------------------------------------
+Sort
+  Sort Key: h1.id
+  ->  Nested Loop Left Join
+        Join Filter: (c.id = h2.id)
+        ->  Nested Loop Left Join
+              Join Filter: (h1.id = c.id)
+              ->  Seq Scan on tbl_middle_left_heap1 h1
+              ->  Custom Scan (ColumnarScan) on tbl_middle_left_columnar c
+                    Columnar Projected Columns: id
+        ->  Seq Scan on tbl_middle_left_heap2 h2
+(10 rows)
+
+-- End test case
 SET client_min_messages TO warning;
 DROP SCHEMA am_columnar_join CASCADE;

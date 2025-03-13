@@ -68,8 +68,6 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	char *collcollate;
 	char *collctype;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 	/*
 	 * In PG15, there is an added option to use ICU as global locale provider.
 	 * pg_collation has three locale-related fields: collcollate and collctype,
@@ -77,7 +75,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	 * ICU-related field. Only the libc-related fields or the ICU-related field
 	 * is set, never both.
 	 */
-	char *colliculocale;
+	char *colllocale;
 	bool isnull;
 
 	Datum datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_collcollate,
@@ -101,27 +99,17 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 		collctype = NULL;
 	}
 
-	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_colliculocale, &isnull);
+	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_colllocale, &isnull);
 	if (!isnull)
 	{
-		colliculocale = TextDatumGetCString(datum);
+		colllocale = TextDatumGetCString(datum);
 	}
 	else
 	{
-		colliculocale = NULL;
+		colllocale = NULL;
 	}
 
-	Assert((collcollate && collctype) || colliculocale);
-#else
-
-	/*
-	 * In versions before 15, collcollate and collctype were type "name". Use
-	 * pstrdup() to match the interface of 15 so that we consistently free the
-	 * result later.
-	 */
-	collcollate = pstrdup(NameStr(collationForm->collcollate));
-	collctype = pstrdup(NameStr(collationForm->collctype));
-#endif
+	Assert((collcollate && collctype) || colllocale);
 
 	if (collowner != NULL)
 	{
@@ -132,6 +120,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	char *schemaName = get_namespace_name(collnamespace);
 	*quotedCollationName = quote_qualified_identifier(schemaName, collname);
 	const char *providerString =
+		collprovider == COLLPROVIDER_BUILTIN ? "builtin" :
 		collprovider == COLLPROVIDER_DEFAULT ? "default" :
 		collprovider == COLLPROVIDER_ICU ? "icu" :
 		collprovider == COLLPROVIDER_LIBC ? "libc" : NULL;
@@ -146,13 +135,12 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 					 "CREATE COLLATION %s (provider = '%s'",
 					 *quotedCollationName, providerString);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-	if (colliculocale)
+	if (colllocale)
 	{
 		appendStringInfo(&collationNameDef,
 						 ", locale = %s",
-						 quote_literal_cstr(colliculocale));
-		pfree(colliculocale);
+						 quote_literal_cstr(colllocale));
+		pfree(colllocale);
 	}
 	else
 	{
@@ -172,24 +160,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 		pfree(collcollate);
 		pfree(collctype);
 	}
-#else
-	if (strcmp(collcollate, collctype) == 0)
-	{
-		appendStringInfo(&collationNameDef,
-						 ", locale = %s",
-						 quote_literal_cstr(collcollate));
-	}
-	else
-	{
-		appendStringInfo(&collationNameDef,
-						 ", lc_collate = %s, lc_ctype = %s",
-						 quote_literal_cstr(collcollate),
-						 quote_literal_cstr(collctype));
-	}
 
-	pfree(collcollate);
-	pfree(collctype);
-#endif
 #if PG_VERSION_NUM >= PG_VERSION_16
 	char *collicurules = NULL;
 	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_collicurules, &isnull);

@@ -256,7 +256,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 						 createFunctionSQL, alterFunctionOwnerSQL);
 		List *grantDDLCommands = GrantOnFunctionDDLCommands(funcOid);
 		char *grantOnFunctionSQL = NULL;
-		foreach_ptr(grantOnFunctionSQL, grantDDLCommands)
+		foreach_declared_ptr(grantOnFunctionSQL, grantDDLCommands)
 		{
 			appendStringInfo(&ddlCommand, ";%s", grantOnFunctionSQL);
 		}
@@ -370,7 +370,7 @@ ErrorIfAnyNodeDoesNotHaveMetadata(void)
 		ActivePrimaryNonCoordinatorNodeList(ShareLock);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		if (!workerNode->hasMetadata)
 		{
@@ -1476,7 +1476,7 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	objectWithArgs->objname = stmt->funcname;
 
 	FunctionParameter *funcParam = NULL;
-	foreach_ptr(funcParam, stmt->parameters)
+	foreach_declared_ptr(funcParam, stmt->parameters)
 	{
 		if (ShouldAddFunctionSignature(funcParam->mode))
 		{
@@ -1519,7 +1519,7 @@ DefineAggregateStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess
 	if (stmt->args != NIL)
 	{
 		FunctionParameter *funcParam = NULL;
-		foreach_ptr(funcParam, linitial(stmt->args))
+		foreach_declared_ptr(funcParam, linitial(stmt->args))
 		{
 			objectWithArgs->objargs = lappend(objectWithArgs->objargs,
 											  funcParam->argType);
@@ -1528,7 +1528,7 @@ DefineAggregateStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess
 	else
 	{
 		DefElem *defItem = NULL;
-		foreach_ptr(defItem, stmt->definition)
+		foreach_declared_ptr(defItem, stmt->definition)
 		{
 			/*
 			 * If no explicit args are given, pg includes basetype in the signature.
@@ -1933,7 +1933,7 @@ static void
 ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
 	DefElem *action = NULL;
-	foreach_ptr(action, stmt->actions)
+	foreach_declared_ptr(action, stmt->actions)
 	{
 		if (strcmp(action->defname, "set") == 0)
 		{
@@ -2040,7 +2040,7 @@ PreprocessGrantOnFunctionStmt(Node *node, const char *queryString,
 
 	List *grantFunctionList = NIL;
 	ObjectAddress *functionAddress = NULL;
-	foreach_ptr(functionAddress, distributedFunctions)
+	foreach_declared_ptr(functionAddress, distributedFunctions)
 	{
 		ObjectWithArgs *distFunction = ObjectWithArgsFromOid(
 			functionAddress->objectId);
@@ -2083,7 +2083,7 @@ PostprocessGrantOnFunctionStmt(Node *node, const char *queryString)
 	}
 
 	ObjectAddress *functionAddress = NULL;
-	foreach_ptr(functionAddress, distributedFunctions)
+	foreach_declared_ptr(functionAddress, distributedFunctions)
 	{
 		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(functionAddress));
 	}
@@ -2120,7 +2120,7 @@ FilterDistributedFunctions(GrantStmt *grantStmt)
 
 		/* iterate over all namespace names provided to get their oid's */
 		String *namespaceValue = NULL;
-		foreach_ptr(namespaceValue, grantStmt->objects)
+		foreach_declared_ptr(namespaceValue, grantStmt->objects)
 		{
 			char *nspname = strVal(namespaceValue);
 			bool missing_ok = false;
@@ -2132,7 +2132,7 @@ FilterDistributedFunctions(GrantStmt *grantStmt)
 		 * iterate over all distributed functions to filter the ones
 		 * that belong to one of the namespaces from above
 		 */
-		foreach_ptr(distributedFunction, distributedFunctionList)
+		foreach_declared_ptr(distributedFunction, distributedFunctionList)
 		{
 			Oid namespaceOid = get_func_namespace(distributedFunction->objectId);
 
@@ -2151,7 +2151,7 @@ FilterDistributedFunctions(GrantStmt *grantStmt)
 	{
 		bool missingOk = false;
 		ObjectWithArgs *objectWithArgs = NULL;
-		foreach_ptr(objectWithArgs, grantStmt->objects)
+		foreach_declared_ptr(objectWithArgs, grantStmt->objects)
 		{
 			ObjectAddress *functionAddress = palloc0(sizeof(ObjectAddress));
 			functionAddress->classId = ProcedureRelationId;

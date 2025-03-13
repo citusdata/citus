@@ -877,7 +877,7 @@ columnar_relation_set_new_filelocator(Relation rel,
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
-	SMgrRelation srel = RelationCreateStorage_compat(*newrlocator, persistence, true);
+	SMgrRelation srel = RelationCreateStorage(*newrlocator, persistence, true);
 
 	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
@@ -1424,15 +1424,32 @@ ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode, int timeout,
 
 
 static bool
-columnar_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
+columnar_scan_analyze_next_block(TableScanDesc scan,
+#if PG_VERSION_NUM >= PG_VERSION_17
+								 ReadStream *stream)
+#else
+								 BlockNumber blockno,
 								 BufferAccessStrategy bstrategy)
+#endif
 {
 	/*
 	 * Our access method is not pages based, i.e. tuples are not confined
 	 * to pages boundaries. So not much to do here. We return true anyway
 	 * so acquire_sample_rows() in analyze.c would call our
 	 * columnar_scan_analyze_next_tuple() callback.
+	 * In PG17, we return false in case there is no buffer left, since
+	 * the outer loop changed in acquire_sample_rows(), and it is
+	 * expected for the scan_analyze_next_block function to check whether
+	 * there are any blocks left in the block sampler.
 	 */
+#if PG_VERSION_NUM >= PG_VERSION_17
+	Buffer buf = read_stream_next_buffer(stream, NULL);
+	if (!BufferIsValid(buf))
+	{
+		return false;
+	}
+	ReleaseBuffer(buf);
+#endif
 	return true;
 }
 
@@ -2228,7 +2245,6 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 				columnarRangeVar = alterTableStmt->relation;
 			}
 		}
-#if PG_VERSION_NUM >= PG_VERSION_15
 		else if (alterTableCmd->subtype == AT_SetAccessMethod)
 		{
 			if (columnarRangeVar || *columnarOptions)
@@ -2239,14 +2255,15 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 									"Specify SET ACCESS METHOD before storage parameters, or use separate ALTER TABLE commands.")));
 			}
 
-			destIsColumnar = (strcmp(alterTableCmd->name, COLUMNAR_AM_NAME) == 0);
+			destIsColumnar = (strcmp(alterTableCmd->name ? alterTableCmd->name :
+									 default_table_access_method,
+									 COLUMNAR_AM_NAME) == 0);
 
 			if (srcIsColumnar && !destIsColumnar)
 			{
 				DeleteColumnarTableOptions(RelationGetRelid(rel), true);
 			}
 		}
-#endif /* PG_VERSION_15 */
 	}
 
 	relation_close(rel, NoLock);
@@ -2630,21 +2647,12 @@ ColumnarCheckLogicalReplication(Relation rel)
 		return;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	{
 		PublicationDesc pubdesc;
 
 		RelationBuildPublicationDesc(rel, &pubdesc);
 		pubActionInsert = pubdesc.pubactions.pubinsert;
 	}
-#else
-	if (rel->rd_pubactions == NULL)
-	{
-		GetRelationPublicationActions(rel);
-		Assert(rel->rd_pubactions != NULL);
-	}
-	pubActionInsert = rel->rd_pubactions->pubinsert;
-#endif
 
 	if (pubActionInsert)
 	{
@@ -3085,7 +3093,7 @@ DefElem *
 GetExtensionOption(List *extensionOptions, const char *defname)
 {
 	DefElem *defElement = NULL;
-	foreach_ptr(defElement, extensionOptions)
+	foreach_declared_ptr(defElement, extensionOptions)
 	{
 		if (IsA(defElement, DefElem) &&
 			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)

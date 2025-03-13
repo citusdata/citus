@@ -502,7 +502,7 @@ WHERE NOT EXISTS (
 );
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM citus_local_table t2 WHERE t2.b = t1.a
 );
 
@@ -543,7 +543,7 @@ WHERE EXISTS (
 );
 
 SELECT COUNT(*) FROM citus_local_table t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
 
@@ -573,7 +573,7 @@ WHERE NOT EXISTS (
 );
 
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM postgres_local_table t2 WHERE t2.b = t1.a
 );
 
@@ -593,7 +593,7 @@ WHERE EXISTS (
 );
 
 SELECT COUNT(*) FROM postgres_local_table t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
 
