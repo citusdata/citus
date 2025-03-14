@@ -228,7 +228,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	}
 
 	WorkerNode *newWorkerNode = NULL;
-	foreach_ptr(newWorkerNode, newWorkersList)
+	foreach_declared_ptr(newWorkerNode, newWorkersList)
 	{
 		ereport(NOTICE, (errmsg("replicating reference table '%s' to %s:%d ...",
 								referenceTableName, newWorkerNode->workerName,
@@ -360,7 +360,7 @@ AnyRelationsModifiedInTransaction(List *relationIdList)
 {
 	Oid relationId = InvalidOid;
 
-	foreach_oid(relationId, relationIdList)
+	foreach_declared_oid(relationId, relationIdList)
 	{
 		if (GetRelationDDLAccessMode(relationId) != RELATION_NOT_ACCESSED ||
 			GetRelationDMLAccessMode(relationId) != RELATION_NOT_ACCESSED)
@@ -389,7 +389,7 @@ WorkersWithoutReferenceTablePlacement(uint64 shardId, LOCKMODE lockMode)
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
@@ -538,7 +538,7 @@ ReplicatedPlacementsForNodeGroup(int32 groupId)
 
 	List *replicatedPlacementsForNodeGroup = NIL;
 	Oid replicatedTableId = InvalidOid;
-	foreach_oid(replicatedTableId, replicatedTableList)
+	foreach_declared_oid(replicatedTableId, replicatedTableList)
 	{
 		List *placements =
 			GroupShardPlacementsForTableOnGroup(replicatedTableId, groupId);
@@ -591,7 +591,7 @@ DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool localOnly)
 	}
 
 	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, replicatedPlacementListForGroup)
+	foreach_declared_ptr(placement, replicatedPlacementListForGroup)
 	{
 		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
 
@@ -627,7 +627,7 @@ DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext(
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
 	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, replicatedPlacementListForGroup)
+	foreach_declared_ptr(placement, replicatedPlacementListForGroup)
 	{
 		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
 
@@ -663,7 +663,7 @@ ReplicatedMetadataSyncedDistributedTableList(void)
 	List *replicatedHashDistributedTableList = NIL;
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, distributedRelationList)
+	foreach_declared_oid(relationId, distributedRelationList)
 	{
 		if (ShouldSyncTableMetadata(relationId) && !SingleReplicatedTable(relationId))
 		{
@@ -707,7 +707,7 @@ ErrorIfNotAllNodesHaveReferenceTableReplicas(List *workerNodeList)
 {
 	WorkerNode *workerNode = NULL;
 
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		if (!NodeHasAllReferenceTableReplicas(workerNode))
 		{
@@ -763,7 +763,7 @@ NodeHasAllReferenceTableReplicas(WorkerNode *workerNode)
 	List *shardPlacementList = ActiveShardPlacementList(shardInterval->shardId);
 
 	ShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacementList)
+	foreach_declared_ptr(placement, shardPlacementList)
 	{
 		if (placement->groupId == workerNode->groupId)
 		{

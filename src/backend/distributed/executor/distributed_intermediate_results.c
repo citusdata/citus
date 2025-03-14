@@ -206,7 +206,7 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 													 intervalTypeMod);
 
 	Task *selectTask = NULL;
-	foreach_ptr(selectTask, selectTaskList)
+	foreach_declared_ptr(selectTask, selectTaskList)
 	{
 		char *taskPrefix = SourceShardPrefix(resultIdPrefix, selectTask->anchorShardId);
 		char *partitionMethodString = targetRelation->partitionMethod == 'h' ?
@@ -490,7 +490,7 @@ ColocateFragmentsWithRelation(List *fragmentList, CitusTableCacheEntry *targetRe
 	List **shardResultIdList = palloc0(shardCount * sizeof(List *));
 
 	DistributedResultFragment *sourceFragment = NULL;
-	foreach_ptr(sourceFragment, fragmentList)
+	foreach_declared_ptr(sourceFragment, fragmentList)
 	{
 		int shardIndex = sourceFragment->targetShardIndex;
 
@@ -520,11 +520,11 @@ ColocationTransfers(List *fragmentList, CitusTableCacheEntry *targetRelation)
 									 HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	DistributedResultFragment *fragment = NULL;
-	foreach_ptr(fragment, fragmentList)
+	foreach_declared_ptr(fragment, fragmentList)
 	{
 		List *placementList = ActiveShardPlacementList(fragment->targetShardId);
 		ShardPlacement *placement = NULL;
-		foreach_ptr(placement, placementList)
+		foreach_declared_ptr(placement, placementList)
 		{
 			NodePair transferKey = {
 				.sourceNodeId = fragment->nodeId,
@@ -576,7 +576,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 	List *fetchTaskList = NIL;
 
 	NodeToNodeFragmentsTransfer *fragmentsTransfer = NULL;
-	foreach_ptr(fragmentsTransfer, fragmentListTransfers)
+	foreach_declared_ptr(fragmentsTransfer, fragmentListTransfers)
 	{
 		uint32 targetNodeId = fragmentsTransfer->nodes.targetNodeId;
 
@@ -629,7 +629,7 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 	appendStringInfoString(fragmentNamesArrayString, "ARRAY[");
 
 	DistributedResultFragment *fragment = NULL;
-	foreach_ptr(fragment, fragmentsTransfer->fragmentList)
+	foreach_declared_ptr(fragment, fragmentsTransfer->fragmentList)
 	{
 		const char *fragmentName = fragment->resultId;
 

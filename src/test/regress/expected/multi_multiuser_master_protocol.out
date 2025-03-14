@@ -1,6 +1,11 @@
 --
 -- MULTI_MULTIUSER_MASTER_PROTOCOL
 --
+-- Test multi_multiuser_master_protocol has an alternative output file because
+-- PG17's support for the MAINTAIN privilege:
+-- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=ecb0fd337
+-- means that calls of master_get_table_ddl_events() can show MAINTAIN and the
+-- pg_class.relacl column may have 'm' for MAINTAIN
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 109079;
 -- Tests that check the metadata returned by the master node. At the
 -- same time ensure that any user, not just a superuser, can call
@@ -19,6 +24,8 @@ SELECT * FROM master_get_table_ddl_events('lineitem') order by 1;
  GRANT DELETE ON public.lineitem TO postgres
  GRANT INSERT ON public.lineitem TO full_access
  GRANT INSERT ON public.lineitem TO postgres
+ GRANT MAINTAIN ON public.lineitem TO full_access
+ GRANT MAINTAIN ON public.lineitem TO postgres
  GRANT REFERENCES ON public.lineitem TO full_access
  GRANT REFERENCES ON public.lineitem TO postgres
  GRANT SELECT ON public.lineitem TO full_access
@@ -31,7 +38,7 @@ SELECT * FROM master_get_table_ddl_events('lineitem') order by 1;
  GRANT UPDATE ON public.lineitem TO full_access
  GRANT UPDATE ON public.lineitem TO postgres
  REVOKE ALL ON public.lineitem FROM PUBLIC
-(20 rows)
+(22 rows)
 
 SELECT * FROM master_get_new_shardid();
  master_get_new_shardid
@@ -75,8 +82,9 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRUNCATE ON public.checkperm TO postgres
  GRANT REFERENCES ON public.checkperm TO postgres
  GRANT TRIGGER ON public.checkperm TO postgres
+ GRANT MAINTAIN ON public.checkperm TO postgres
  ALTER TABLE public.checkperm OWNER TO postgres
-(10 rows)
+(11 rows)
 
 GRANT SELECT ON checkperm TO read_access;
 GRANT ALL ON checkperm TO full_access;
@@ -92,6 +100,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRUNCATE ON public.checkperm TO postgres
  GRANT REFERENCES ON public.checkperm TO postgres
  GRANT TRIGGER ON public.checkperm TO postgres
+ GRANT MAINTAIN ON public.checkperm TO postgres
  GRANT SELECT ON public.checkperm TO read_access
  GRANT INSERT ON public.checkperm TO full_access
  GRANT SELECT ON public.checkperm TO full_access
@@ -100,8 +109,9 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRUNCATE ON public.checkperm TO full_access
  GRANT REFERENCES ON public.checkperm TO full_access
  GRANT TRIGGER ON public.checkperm TO full_access
+ GRANT MAINTAIN ON public.checkperm TO full_access
  ALTER TABLE public.checkperm OWNER TO postgres
-(18 rows)
+(20 rows)
 
 REVOKE ALL ON checkperm FROM read_access;
 GRANT SELECT ON checkperm TO PUBLIC;
@@ -117,6 +127,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRUNCATE ON public.checkperm TO postgres
  GRANT REFERENCES ON public.checkperm TO postgres
  GRANT TRIGGER ON public.checkperm TO postgres
+ GRANT MAINTAIN ON public.checkperm TO postgres
  GRANT INSERT ON public.checkperm TO full_access
  GRANT SELECT ON public.checkperm TO full_access
  GRANT UPDATE ON public.checkperm TO full_access
@@ -124,9 +135,10 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRUNCATE ON public.checkperm TO full_access
  GRANT REFERENCES ON public.checkperm TO full_access
  GRANT TRIGGER ON public.checkperm TO full_access
+ GRANT MAINTAIN ON public.checkperm TO full_access
  GRANT SELECT ON public.checkperm TO PUBLIC
  ALTER TABLE public.checkperm OWNER TO postgres
-(18 rows)
+(20 rows)
 
 GRANT ALL ON checkperm TO full_access WITH GRANT OPTION;
 SELECT * FROM master_get_table_ddl_events('checkperm');
@@ -141,6 +153,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRUNCATE ON public.checkperm TO postgres
  GRANT REFERENCES ON public.checkperm TO postgres
  GRANT TRIGGER ON public.checkperm TO postgres
+ GRANT MAINTAIN ON public.checkperm TO postgres
  GRANT INSERT ON public.checkperm TO full_access WITH GRANT OPTION
  GRANT SELECT ON public.checkperm TO full_access WITH GRANT OPTION
  GRANT UPDATE ON public.checkperm TO full_access WITH GRANT OPTION
@@ -148,9 +161,10 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRUNCATE ON public.checkperm TO full_access WITH GRANT OPTION
  GRANT REFERENCES ON public.checkperm TO full_access WITH GRANT OPTION
  GRANT TRIGGER ON public.checkperm TO full_access WITH GRANT OPTION
+ GRANT MAINTAIN ON public.checkperm TO full_access WITH GRANT OPTION
  GRANT SELECT ON public.checkperm TO PUBLIC
  ALTER TABLE public.checkperm OWNER TO postgres
-(18 rows)
+(20 rows)
 
 -- create table as superuser/postgres
 CREATE TABLE trivial_postgres (id int);
@@ -172,10 +186,10 @@ SELECT create_distributed_table('trivial_full_access', 'id', 'append');
 
 RESET ROLE;
 SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = pg_class.relowner) WHERE relname LIKE 'trivial%' ORDER BY relname;
-       relname       |   rolname   |                          relacl
+       relname       |   rolname   |                           relacl
 ---------------------------------------------------------------------
  trivial_full_access | full_access |
- trivial_postgres    | postgres    | {postgres=arwdDxt/postgres,full_access=arwdDxt/postgres}
+ trivial_postgres    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
 (2 rows)
 
 SET citus.shard_replication_factor = 2; -- on all workers...
@@ -222,26 +236,26 @@ SELECT master_create_empty_shard('trivial_full_access');
 RESET ROLE;
 \c - - - :worker_1_port
 SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = pg_class.relowner) WHERE relname LIKE 'trivial%' ORDER BY relname;
-          relname           |   rolname   |                          relacl
+          relname           |   rolname   |                           relacl
 ---------------------------------------------------------------------
  trivial_full_access_109081 | full_access |
  trivial_full_access_109083 | full_access |
  trivial_full_access_109085 | full_access |
- trivial_postgres_109080    | postgres    | {postgres=arwdDxt/postgres,full_access=arwdDxt/postgres}
- trivial_postgres_109082    | postgres    | {postgres=arwdDxt/postgres,full_access=arwdDxt/postgres}
- trivial_postgres_109084    | postgres    | {postgres=arwdDxt/postgres,full_access=arwdDxt/postgres}
+ trivial_postgres_109080    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
+ trivial_postgres_109082    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
+ trivial_postgres_109084    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
 (6 rows)
 
 \c - - - :worker_2_port
 SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = pg_class.relowner) WHERE relname LIKE 'trivial%' ORDER BY relname;
-          relname           |   rolname   |                          relacl
+          relname           |   rolname   |                           relacl
 ---------------------------------------------------------------------
  trivial_full_access_109081 | full_access |
  trivial_full_access_109083 | full_access |
  trivial_full_access_109085 | full_access |
- trivial_postgres_109080    | postgres    | {postgres=arwdDxt/postgres,full_access=arwdDxt/postgres}
- trivial_postgres_109082    | postgres    | {postgres=arwdDxt/postgres,full_access=arwdDxt/postgres}
- trivial_postgres_109084    | postgres    | {postgres=arwdDxt/postgres,full_access=arwdDxt/postgres}
+ trivial_postgres_109080    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
+ trivial_postgres_109082    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
+ trivial_postgres_109084    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
 (6 rows)
 
 \c - - - :master_port

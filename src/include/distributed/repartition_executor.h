@@ -28,5 +28,10 @@ extern List * GenerateTaskListWithRedistributedResults(
 	bool useBinaryFormat);
 extern bool IsSupportedRedistributionTarget(Oid targetRelationId);
 extern bool IsRedistributablePlan(Plan *selectPlan);
+extern bool HasMergeNotMatchedBySource(Query *query);
+extern void AdjustTaskQueryForEmptySource(Oid targetRelationId,
+										  Query *mergeQuery,
+										  List *emptySourceTaskList,
+										  char *resultIdPrefix);
 
 #endif /* REPARTITION_EXECUTOR_H */

@@ -61,7 +61,8 @@ typedef enum RecurringTuplesType
 	RECURRING_TUPLES_FUNCTION,
 	RECURRING_TUPLES_EMPTY_JOIN_TREE,
 	RECURRING_TUPLES_RESULT_FUNCTION,
-	RECURRING_TUPLES_VALUES
+	RECURRING_TUPLES_VALUES,
+	RECURRING_TUPLES_JSON_TABLE
 } RecurringTuplesType;
 
 /*
@@ -347,7 +348,8 @@ IsFunctionOrValuesRTE(Node *node)
 		RangeTblEntry *rangeTblEntry = (RangeTblEntry *) node;
 
 		if (rangeTblEntry->rtekind == RTE_FUNCTION ||
-			rangeTblEntry->rtekind == RTE_VALUES)
+			rangeTblEntry->rtekind == RTE_VALUES ||
+			IsJsonTableRTE(rangeTblEntry))
 		{
 			return true;
 		}
@@ -698,6 +700,13 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "correlated subqueries are not supported when "
 							 "the FROM clause contains VALUES", NULL,
+							 NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_JSON_TABLE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "correlated subqueries are not supported when "
+							 "the FROM clause contains JSON_TABLE", NULL,
 							 NULL);
 	}
 
@@ -1187,7 +1196,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 	ExtractRangeTableIndexWalker((Node *) queryTree->jointree,
 								 &joinTreeTableIndexList);
 
-	foreach_int(joinTreeTableIndex, joinTreeTableIndexList)
+	foreach_declared_int(joinTreeTableIndex, joinTreeTableIndexList)
 	{
 		/*
 		 * Join tree's range table index starts from 1 in the query tree. But,
@@ -1204,7 +1213,8 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
 			rangeTableEntry->rtekind == RTE_SUBQUERY ||
-			rangeTableEntry->rtekind == RTE_RESULT)
+			rangeTableEntry->rtekind == RTE_RESULT ||
+			IsJsonTableRTE(rangeTableEntry))
 		{
 			/* accepted */
 		}
@@ -1372,6 +1382,13 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 							 "VALUES is not supported within a "
 							 "UNION", NULL);
 	}
+	else if (recurType == RECURRING_TUPLES_JSON_TABLE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot push down this subquery",
+							 "JSON_TABLE is not supported within a "
+							 "UNION", NULL);
+	}
 
 	return NULL;
 }
@@ -1475,6 +1492,11 @@ RecurringTypeDescription(RecurringTuplesType recurType)
 		case RECURRING_TUPLES_VALUES:
 		{
 			return "a VALUES clause";
+		}
+
+		case RECURRING_TUPLES_JSON_TABLE:
+		{
+			return "a JSON_TABLE";
 		}
 
 		case RECURRING_TUPLES_INVALID:
@@ -1673,7 +1695,8 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 				 * strings anyway.
 				 */
 				if (recurType != RECURRING_TUPLES_VALUES &&
-					recurType != RECURRING_TUPLES_RESULT_FUNCTION)
+					recurType != RECURRING_TUPLES_RESULT_FUNCTION &&
+					recurType != RECURRING_TUPLES_JSON_TABLE)
 				{
 					recurTypeDescription = psprintf("%s (%s)", recurTypeDescription,
 													recurringRangeTableEntry->eref->
@@ -1751,6 +1774,26 @@ ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 
 
 /*
+ * IsJsonTableRTE checks whether the RTE refers to a JSON_TABLE
+ * table function, which was introduced in PostgreSQL 17.
+ */
+bool
+IsJsonTableRTE(RangeTblEntry *rte)
+{
+#if PG_VERSION_NUM >= PG_VERSION_17
+	if (rte == NULL)
+	{
+		return false;
+	}
+	return (rte->rtekind == RTE_TABLEFUNC &&
+			rte->tablefunc->functype == TFT_JSON_TABLE);
+#endif
+
+	return false;
+}
+
+
+/*
  * HasRecurringTuples returns whether any part of the expression will generate
  * the same set of tuples in every query on shards when executing a distributed
  * query.
@@ -1809,6 +1852,11 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		else if (rangeTableEntry->rtekind == RTE_VALUES)
 		{
 			*recurType = RECURRING_TUPLES_VALUES;
+			return true;
+		}
+		else if (IsJsonTableRTE(rangeTableEntry))
+		{
+			*recurType = RECURRING_TUPLES_JSON_TABLE;
 			return true;
 		}
 
@@ -2010,7 +2058,7 @@ CreateSubqueryTargetListAndAdjustVars(List *columnList)
 	Var *column = NULL;
 	List *subqueryTargetEntryList = NIL;
 
-	foreach_ptr(column, columnList)
+	foreach_declared_ptr(column, columnList)
 	{
 		/*
 		 * To avoid adding the same column multiple times, we first check whether there
@@ -2049,6 +2097,16 @@ CreateSubqueryTargetListAndAdjustVars(List *columnList)
 		 */
 		column->varno = 1;
 		column->varattno = resNo;
+
+		/*
+		 * 1 subquery means there is one range table entry so with Postgres 16+ we need
+		 * to ensure that column's varnullingrels - the set of join rels that can null
+		 * the var - is empty. Otherwise, when given the query, the Postgres planner
+		 * may attempt to access a non-existent range table and segfault, as in #7787.
+		 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+		column->varnullingrels = NULL;
+#endif
 	}
 
 	return subqueryTargetEntryList;
@@ -2064,7 +2122,7 @@ static AttrNumber
 FindResnoForVarInTargetList(List *targetList, int varno, int varattno)
 {
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, targetList)
+	foreach_declared_ptr(targetEntry, targetList)
 	{
 		if (!IsA(targetEntry->expr, Var))
 		{
@@ -2127,7 +2185,7 @@ PartitionColumnForPushedDownSubquery(Query *query)
 	List *targetEntryList = query->targetList;
 
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, targetEntryList)
+	foreach_declared_ptr(targetEntry, targetEntryList)
 	{
 		if (targetEntry->resjunk)
 		{

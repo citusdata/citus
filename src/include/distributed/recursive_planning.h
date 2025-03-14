@@ -40,6 +40,7 @@ extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 													  List *columnAliasList,
 													  List *resultIdList,
 													  bool useBinaryCopyFormat);
+extern Query * BuildEmptyResultQuery(List *targetEntryList, char *resultId);
 extern bool GeneratingSubplans(void);
 extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
 extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,

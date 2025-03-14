@@ -67,7 +67,7 @@ RebuildQueryStrings(Job *workerJob)
 		AddInsertAliasIfNeeded(originalQuery);
 	}
 
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		Query *query = originalQuery;
 
@@ -298,7 +298,7 @@ FindRelationShard(Oid inputRelationId, List *relationShardList)
 	 * some, otherwise this query wouldn't be eligible as a router query.
 	 * FIXME: We should probably use a hashtable here, to do efficient lookup.
 	 */
-	foreach_ptr(relationShard, relationShardList)
+	foreach_declared_ptr(relationShard, relationShardList)
 	{
 		if (inputRelationId == relationShard->relationId)
 		{

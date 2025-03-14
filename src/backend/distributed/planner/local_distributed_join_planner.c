@@ -328,7 +328,7 @@ static void
 ConvertRTEsToSubquery(List *rangeTableEntryDetailsList, RecursivePlanningContext *context)
 {
 	RangeTableEntryDetails *rangeTableEntryDetails = NULL;
-	foreach_ptr(rangeTableEntryDetails, rangeTableEntryDetailsList)
+	foreach_declared_ptr(rangeTableEntryDetails, rangeTableEntryDetailsList)
 	{
 		RangeTblEntry *rangeTableEntry = rangeTableEntryDetails->rangeTableEntry;
 		List *requiredAttributeNumbers = rangeTableEntryDetails->requiredAttributeNumbers;
@@ -351,7 +351,7 @@ static bool
 AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList)
 {
 	RangeTableEntryDetails *rangeTableEntryDetails = NULL;
-	foreach_ptr(rangeTableEntryDetails, rangeTableEntryDetailsList)
+	foreach_declared_ptr(rangeTableEntryDetails, rangeTableEntryDetailsList)
 	{
 		if (!rangeTableEntryDetails->hasConstantFilterOnUniqueColumn)
 		{
@@ -420,7 +420,7 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 																   AppendUniqueIndexColumnsToList,
 																   INCLUDE_INDEX_ALL_STATEMENTS);
 	IndexColumns *indexColumns = NULL;
-	foreach_ptr(indexColumns, uniqueIndexColumnsList)
+	foreach_declared_ptr(indexColumns, uniqueIndexColumnsList)
 	{
 		List *uniqueIndexColumnNos = indexColumns->indexColumnNos;
 		if (FirstIsSuperSetOfSecond(rteEqualityColumnsNos,
@@ -441,7 +441,7 @@ static bool
 FirstIsSuperSetOfSecond(List *firstIntList, List *secondIntList)
 {
 	int curInt = 0;
-	foreach_int(curInt, secondIntList)
+	foreach_declared_int(curInt, secondIntList)
 	{
 		if (!list_member_int(firstIntList, curInt))
 		{
@@ -526,7 +526,7 @@ RequiredAttrNumbersForRelationInternal(Query *queryToProcess, int rteIndex)
 	List *requiredAttrNumbers = NIL;
 
 	Var *var = NULL;
-	foreach_ptr(var, allVarsInQuery)
+	foreach_declared_ptr(var, allVarsInQuery)
 	{
 		if (var->varno == rteIndex)
 		{
@@ -554,7 +554,7 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		/* we're only interested in tables */
 		if (!IsRecursivelyPlannableRelation(rangeTableEntry))

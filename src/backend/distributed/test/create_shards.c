@@ -46,7 +46,7 @@ sort_names(PG_FUNCTION_ARGS)
 	StringInfo sortedNames = makeStringInfo();
 
 	const char *name = NULL;
-	foreach_ptr(name, nameList)
+	foreach_declared_ptr(name, nameList)
 	{
 		appendStringInfo(sortedNames, "%s\n", name);
 	}

@@ -993,9 +993,11 @@ INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 ROLLBACK;
 
 -- Previous issue failed to rename reference tables in subqueries
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF) SELECT value_1, count(*) FROM colocated_table_test GROUP BY value_1
 HAVING (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2) > 0
 ORDER BY 1;
+$Q$) as "QUERY PLAN";
 
 WITH a as (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2)
 SELECT ct.value_1, count(*) FROM colocated_table_test ct join a on ct.value_1 = a.value_2

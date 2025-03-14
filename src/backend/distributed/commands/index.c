@@ -337,7 +337,7 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 
 	List *indexIdList = RelationGetIndexList(relation);
 	Oid indexId = InvalidOid;
-	foreach_oid(indexId, indexIdList)
+	foreach_declared_oid(indexId, indexIdList)
 	{
 		HeapTuple indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexId));
 		if (!HeapTupleIsValid(indexTuple))
@@ -708,7 +708,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 
 	/* check if any of the indexes being dropped belong to a distributed table */
 	List *objectNameList = NULL;
-	foreach_ptr(objectNameList, dropIndexStatement->objects)
+	foreach_declared_ptr(objectNameList, dropIndexStatement->objects)
 	{
 		struct DropRelationCallbackState state;
 		uint32 rvrFlags = RVR_MISSING_OK;
@@ -880,7 +880,7 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 	/* error out if any of the subcommands are unsupported */
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
 
@@ -932,7 +932,7 @@ CreateIndexTaskList(IndexStmt *indexStmt)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 
@@ -977,7 +977,7 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 
@@ -1115,6 +1115,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 	char		relkind;
 	struct ReindexIndexCallbackState *state = arg;
 	LOCKMODE	table_lockmode;
+	Oid			table_oid;
 
 	/*
 	 * Lock level here should match table lock in reindex_index() for
@@ -1152,13 +1153,24 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 				 errmsg("\"%s\" is not an index", relation->relname)));
 
 	/* Check permissions */
+
+	#if PG_VERSION_NUM >= PG_VERSION_17
+	table_oid = IndexGetRelation(relId, true);
+	if (OidIsValid(table_oid))
+	{
+		AclResult aclresult = pg_class_aclcheck(table_oid, GetUserId(), ACL_MAINTAIN);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_INDEX, relation->relname);
+	}
+	#else
 	if (!object_ownercheck(RelationRelationId, relId, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_INDEX, relation->relname);
+	#endif
 
 	/* Lock heap before index to avoid deadlock. */
 	if (relId != oldRelId)
 	{
-		Oid			table_oid = IndexGetRelation(relId, true);
+		table_oid = IndexGetRelation(relId, true);
 
 		/*
 		 * If the OID isn't valid, it means the index was concurrently
@@ -1226,7 +1238,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		Var *partitionKey = DistPartitionKeyOrError(relationId);
 		List *indexParameterList = createIndexStatement->indexParams;
 		IndexElem *indexElement = NULL;
-		foreach_ptr(indexElement, indexParameterList)
+		foreach_declared_ptr(indexElement, indexParameterList)
 		{
 			const char *columnName = indexElement->name;
 
@@ -1295,7 +1307,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
 		char *shardIndexName = pstrdup(indexName);
