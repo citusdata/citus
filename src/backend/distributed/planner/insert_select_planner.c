@@ -28,6 +28,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/fmgroids.h"
 
 #include "pg_version_constants.h"
 
@@ -107,6 +108,7 @@ static void ResetTargetEntryResno(List *targetList);
 static void ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 							 Form_pg_attribute attr, int targetEntryIndex,
 							 List **projectedEntries, List **nonProjectedEntries);
+static bool IsNextvalExpression(Expr *expr);							 
 
 
 /* depth of current insert/select planner. */
@@ -1699,6 +1701,44 @@ ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 				 Form_pg_attribute attr, int targetEntryIndex,
 				 List **projectedEntries, List **nonProjectedEntries)
 {
+	
+	/* Check if it's nextval(...) */
+	if (IsNextvalExpression((Expr *) selectEntry->expr))
+	{									
+
+		/*
+			* The real nextval(...) TLE belongs in nonProjectedEntries
+			* so that the coordinator (not the worker) will evaluate it.
+			*/
+		TargetEntry *coordinatorEntry = copyObject(selectEntry);
+
+		/*
+			* If there's a type mismatch, we might still do a cast. For now, assume
+			* nextval returns INT8. If your target column is INT4, you can do a cast
+			* as well. Or rely on subsequent code to do that if needed.
+			*/
+		if (attr->atttypid != exprType((Node *) coordinatorEntry->expr))
+		{
+			coordinatorEntry->expr =
+				CastExpr((Expr *) coordinatorEntry->expr,
+							exprType((Node *) coordinatorEntry->expr),
+							attr->atttypid,
+							attr->attcollation,
+							attr->atttypmod);
+		}
+
+		/* Optionally rename the coordinator entry so it won't conflict with placeholders */
+		coordinatorEntry->resname = pstrdup("coordinator_nextval");
+
+		/*
+			* (C) Add them to the respective lists:
+			*   - real nextval entry goes to nonProjectedEntries (the coordinator aggregator).
+			*/
+		*nonProjectedEntries = lappend(*nonProjectedEntries, coordinatorEntry);
+
+		return; /* done handling nextval */
+	}
+
 	Oid effectiveSourceType = exprType((Node *) selectEntry->expr);
 	Oid targetType = attr->atttypid;
 
@@ -1751,6 +1791,38 @@ ResetTargetEntryResno(List *targetList)
 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
 		tle->resno = entryResNo++;
 	}
+}
+
+
+/*
+ * IsNextvalExpression returns true if `expr` is either a NextValueExpr
+ * or a FuncExpr calling nextval(...).
+ */
+static bool
+IsNextvalExpression(Expr *expr)
+{
+	if (expr == NULL)
+	{
+		return false;
+	}
+
+	/* e.g. identity column usage */
+	if (IsA(expr, NextValueExpr))
+	{
+		return true;
+	}
+
+	/* or an explicit nextval() call */
+	if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *funcExpr = (FuncExpr *) expr;
+		if (funcExpr->funcid == F_NEXTVAL)  /* #include "utils/builtins.h" for F_NEXTVAL */
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
