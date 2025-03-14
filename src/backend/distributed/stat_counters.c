@@ -13,45 +13,72 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 
+#include "common/hashfn.h"
 #include "storage/ipc.h"
-#include "utils/builtins.h"
+#include "storage/lwlock.h"
+#include "storage/shmem.h"
 
-#include "distributed/backend_data.h"
 #include "distributed/stat_counters.h"
 
-typedef uint64 CitusStatCounters[N_CITUS_STAT_COUNTERS];
 
-/* GUC value for citus.stat_counter_slots */
-int StatCounterSlots = DEFAULT_STAT_COUNTER_SLOTS;
+/*
+ * Shared hash constants.
+ *
+ * The places where STAT_COUNTERS_MAX_DATABASES is used do not impose a hard
+ * limit on the number of databases that can be tracked but in ShmemInitHash()
+ * it's documented that the access efficiency will degrade if it is exceeded
+ * substantially.
+ *
+ * XXX: Consider using dshash_table instead (shared) HTAB.
+ */
+#define STAT_COUNTERS_INIT_DATABASES 8
+#define STAT_COUNTERS_MAX_DATABASES 1024
+
+
+typedef pg_atomic_uint64 CitusAtomicStatCounters[N_CITUS_STAT_COUNTERS];
+
+/* shared hash table key */
+typedef struct StatCountersHashKey
+{
+	Oid dbid;
+} StatCountersHashKey;
+
+/* shared hash table entry */
+typedef struct StatCountersHashEntry
+{
+	StatCountersHashKey key;
+	CitusAtomicStatCounters counters;
+} StatCountersHashEntry;
+
+/* shared memory state */
+typedef struct StatCountersState
+{
+	LWLockId lock;
+} StatCountersState;
+
+
+/* GUC value for citus.enable_stat_counters */
+bool EnableStatCounters = true;
+
+
+/* shared memory variables */
+static StatCountersState *StatCountersSharedState = NULL;
+static HTAB *StatCountersHash = NULL;
+
 
 /* shared memory init & management */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static void SharedStatCountersArrayShmemInit(void);
 
-/* pointer to the shared memory array for stat counters */
-CitusAtomicStatCounters *SharedStatCountersArray = NULL;
+/* shared hash utilities */
+static uint32 CitusStatCountersHashFn(const void *key, Size keysize);
+static int CitusStatCountersMatchFn(const void *key1, const void *key2, Size keysize);
 
 /* other helper functions */
 static void StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor);
-static void AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters);
 static Tuplestorestate * SetupStatCountersTuplestore(FunctionCallInfo fcinfo,
 													 TupleDesc *tupleDescriptor);
 static void ResetStatCounters(void);
-static int GetStatCounterSlots(void);
-static bool IsStatCountersEnabled(void);
-
-/*
- * Keep this in sync with StatType enum in stat_counters.h.
- * For each StatType enum a StatMapping entry should exist.
- */
-static char StatMapping[N_CITUS_STAT_COUNTERS][MAX_STAT_NAME_LENGTH] = {
-	[STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED] = "connection_establishment_succeeded",
-	[STAT_CONNECTION_ESTABLISHMENT_FAILED] = "connection_establishment_failed",
-	[STAT_CONNECTION_REUSED] = "connection_reused",
-
-	[STAT_QUERY_EXECUTION_SINGLE_SHARD] = "query_execution_single_shard",
-	[STAT_QUERY_EXECUTION_MULTI_SHARD] = "query_execution_multi_shard",
-};
 
 
 PG_FUNCTION_INFO_V1(citus_stat_counters);
@@ -59,19 +86,29 @@ PG_FUNCTION_INFO_V1(citus_stat_counters_reset);
 
 
 /*
- * citus_stat_counters returns all the available information about all
- * Citus stat counters.
+ * citus_stat_counters returns all Citus stat counters.
  */
 Datum
 citus_stat_counters(PG_FUNCTION_ARGS)
 {
-	if (!IsStatCountersEnabled())
+	if (!EnableStatCounters)
 	{
 		ereport(NOTICE,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("citus stat counters are not enabled")));
+				 errmsg("citus stat counters are not enabled, consider setting "
+						"citus.enable_stat_counters to true and restarting the "
+						"server")));
+
 		PG_RETURN_VOID();
 	}
+
+	if (!StatCountersSharedState || !StatCountersHash)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("shared memory is not initialized for citus stat counters")));
+	}
+
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupStatCountersTuplestore(fcinfo, &tupleDescriptor);
@@ -83,17 +120,27 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_stat_counters_reset resets all the Citus stat counters for all backends.
+ * citus_stat_counters_reset resets all the Citus stat counters.
  */
 Datum
 citus_stat_counters_reset(PG_FUNCTION_ARGS)
 {
-	if (!IsStatCountersEnabled())
+	if (!EnableStatCounters)
 	{
 		ereport(NOTICE,
 				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("citus stat counters are not enabled")));
+				 errmsg("citus stat counters are not enabled, consider setting "
+						"citus.enable_stat_counters to true and restarting the "
+						"server")));
+
 		PG_RETURN_VOID();
+	}
+
+	if (!StatCountersSharedState || !StatCountersHash)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("shared memory is not initialized for citus stat counters")));
 	}
 
 	ResetStatCounters();
@@ -116,6 +163,10 @@ InitializeStatCountersArrayMem(void)
 	if (!IsUnderPostmaster)
 	{
 		RequestAddinShmemSpace(StatCountersArrayShmemSize());
+
+		elog(LOG, "requesting named LWLockTranch for %s",
+			 STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME);
+		RequestNamedLWLockTranche(STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME, 1);
 	}
 #endif
 
@@ -131,37 +182,78 @@ InitializeStatCountersArrayMem(void)
 Size
 StatCountersArrayShmemSize(void)
 {
-	return mul_size(sizeof(CitusAtomicStatCounters), GetStatCounterSlots());
+	Size size = MAXALIGN(sizeof(StatCountersState));
+	size = add_size(size, hash_estimate_size(STAT_COUNTERS_MAX_DATABASES,
+											 sizeof(StatCountersHashEntry)));
+
+	return size;
 }
 
 
 /*
  * IncrementStatCounter increments the stat counter for the given statId
- * for this backend.
+ * of the current database.
  */
 void
 IncrementStatCounter(int statId)
 {
-	if (!IsStatCountersEnabled())
+	if (!EnableStatCounters)
 	{
 		return;
 	}
 
-#if PG_VERSION_NUM >= 170000
-	int backendSlotIdx = MyProcNumber;
-#else
-	int backendSlotIdx = MyBackendId - 1;
-#endif
+	if (!StatCountersSharedState || !StatCountersHash)
+	{
+		return;
+	}
 
-	backendSlotIdx = backendSlotIdx % GetStatCounterSlots();
+	StatCountersHashKey key;
+	key.dbid = MyDatabaseId;
 
-	pg_atomic_fetch_add_u64(&SharedStatCountersArray[backendSlotIdx][statId], 1);
+	LWLockAcquire(StatCountersSharedState->lock, LW_SHARED);
+
+	StatCountersHashEntry *dbEntry = (StatCountersHashEntry *) hash_search(
+		StatCountersHash,
+		(void *) &key,
+		HASH_FIND,
+		NULL);
+	if (!dbEntry)
+	{
+		/* promote the lock to exclusive to insert the new entry for this database */
+		LWLockRelease(StatCountersSharedState->lock);
+		LWLockAcquire(StatCountersSharedState->lock, LW_EXCLUSIVE);
+
+		bool councurrentlyInserted = false;
+		dbEntry = (StatCountersHashEntry *) hash_search(StatCountersHash, (void *) &key,
+														HASH_ENTER,
+														&councurrentlyInserted);
+
+		/*
+		 * Initialize the counters to 0 if someone else didn't race while we
+		 * were promoting the lock.
+		 */
+		if (!councurrentlyInserted)
+		{
+			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+			{
+				pg_atomic_init_u64(&dbEntry->counters[statIdx], 0);
+			}
+		}
+
+		/* downgrade the lock to shared */
+		LWLockRelease(StatCountersSharedState->lock);
+		LWLockAcquire(StatCountersSharedState->lock, LW_SHARED);
+	}
+
+	pg_atomic_fetch_add_u64(&dbEntry->counters[statId], 1);
+
+	LWLockRelease(StatCountersSharedState->lock);
 }
 
 
 /*
  * SetupStatCountersTuplestore returns a Tuplestorestate for returning the
- * stat counters aggregated across all the backends.
+ * stat counters.
  */
 static Tuplestorestate *
 SetupStatCountersTuplestore(FunctionCallInfo fcinfo, TupleDesc *tupleDescriptor)
@@ -214,109 +306,75 @@ SetupStatCountersTuplestore(FunctionCallInfo fcinfo, TupleDesc *tupleDescriptor)
 
 /*
  * StoreAllStatCounters returns all the available information about all the stat
- * counters aggregated across all the backends into the given tuple store.
+ * into the given tuple store.
  */
 static void
 StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 {
-	Datum values[2] = { 0 };
-	bool isNulls[2] = { 0 };
+	LWLockAcquire(StatCountersSharedState->lock, LW_SHARED);
 
-	CitusStatCounters aggregatedStatCounters;
-	MemSet(aggregatedStatCounters, 0, sizeof(CitusStatCounters));
+	HASH_SEQ_STATUS hashSeq;
+	hash_seq_init(&hashSeq, StatCountersHash);
 
-	AggregateStatCountersInto(&aggregatedStatCounters);
-
-	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+	StatCountersHashEntry *entry;
+	while ((entry = hash_seq_search(&hashSeq)) != NULL)
 	{
-		values[0] = PointerGetDatum(cstring_to_text(StatMapping[statIdx]));
-		values[1] = Int64GetDatum(aggregatedStatCounters[statIdx]);
+		Datum values[6] = { 0 };
+		bool isNulls[6] = { 0 };
+		MemSet(values, 0, sizeof(values));
+		MemSet(isNulls, false, sizeof(isNulls));
+
+		values[0] = ObjectIdGetDatum(entry->key.dbid);
+
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		{
+			uint64 statCounter = pg_atomic_read_u64(&entry->counters[statIdx]);
+			values[statIdx + 1] = UInt64GetDatum(statCounter);
+		}
+
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
-}
 
-
-/*
- * AggregateStatCountersInto aggregates the stat counters of all the backends into
- * the given aggregatedStatCounters.
- */
-static void
-AggregateStatCountersInto(CitusStatCounters *aggregatedStatCounters)
-{
-	for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
-	{
-		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
-		{
-			(*aggregatedStatCounters)[statIdx] +=
-				pg_atomic_read_u64(&SharedStatCountersArray[backendSlotIdx][statIdx]);
-		}
-	}
-}
-
-
-/*
- * ResetStatCounters resets all the stat counters for all the backends.
- */
-static void
-ResetStatCounters(void)
-{
-	/*
-	 * Some stats might be lost between reading the stats for all the backend processes
-	 * and resetting the stats. However, we are okay with this since we don't want to block
-	 * the client backends that might be incrementing the stats.
-	 */
-	for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots(); ++backendSlotIdx)
-	{
-		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
-		{
-			pg_atomic_write_u64(&SharedStatCountersArray[backendSlotIdx][statIdx], 0);
-		}
-	}
+	LWLockRelease(StatCountersSharedState->lock);
 }
 
 
 /*
  * SharedStatCountersArrayShmemInit initializes the shared memory used
- * for keeping track of stat counters across backends.
+ * for keeping track of stat counters.
  */
 static void
 SharedStatCountersArrayShmemInit(void)
 {
 	/* initialize the shared memory only if the stat counters are enabled */
-	if (IsStatCountersEnabled())
+	if (EnableStatCounters)
 	{
-		/* validate that we have names for the stat counters as well */
-		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
-		{
-			if (strlen(StatMapping[statIdx]) == 0)
-			{
-				ereport(PANIC, (errmsg("Stat mapping for index %d not found", statIdx)));
-			}
-		}
-
-		bool alreadyInitialized;
-
-		size_t statCountersSharedArrayShmemSize = StatCountersArrayShmemSize();
-
 		LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
-		SharedStatCountersArray = (CitusAtomicStatCounters *)
-								  ShmemInitStruct("Citus Stat Counters Array",
-												  statCountersSharedArrayShmemSize,
+		bool alreadyInitialized;
+		StatCountersSharedState = ShmemInitStruct(STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME,
+												  sizeof(StatCountersState),
 												  &alreadyInitialized);
+
 
 		if (!alreadyInitialized)
 		{
-			for (int backendSlotIdx = 0; backendSlotIdx < GetStatCounterSlots();
-				 ++backendSlotIdx)
-			{
-				for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
-				{
-					pg_atomic_init_u64(&SharedStatCountersArray[backendSlotIdx][statIdx],
-									   0);
-				}
-			}
+			StatCountersSharedState->lock = &(GetNamedLWLockTranche(
+												  STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME))
+											->lock;
 		}
+
+		HASHCTL info;
+		memset(&info, 0, sizeof(info));
+		info.keysize = sizeof(StatCountersHashKey);
+		info.entrysize = sizeof(StatCountersHashEntry);
+		info.hash = CitusStatCountersHashFn;
+		info.match = CitusStatCountersMatchFn;
+
+		StatCountersHash = ShmemInitHash("Citus Stat Counters Hash",
+										 STAT_COUNTERS_INIT_DATABASES,
+										 STAT_COUNTERS_MAX_DATABASES, &info,
+										 HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
 
 		LWLockRelease(AddinShmemInitLock);
 	}
@@ -329,35 +387,54 @@ SharedStatCountersArrayShmemInit(void)
 
 
 /*
- * IsStatCountersEnabled returns whether the stat counters are enabled.
+ * CitusStatCountersHashFn is the hash function for the stat counters hash table.
  */
-static bool
-IsStatCountersEnabled(void)
+static uint32
+CitusStatCountersHashFn(const void *key, Size keysize)
 {
-	return StatCounterSlots >= 0;
+	const StatCountersHashKey *k = (const StatCountersHashKey *) key;
+
+	return hash_uint32((uint32) k->dbid);
 }
 
 
 /*
- * GetStatCounterSlots returns the number of slots to store stat counters.
- *
- * Guarantees to return the same value in the run-time because StatCounterSlots
- * enforces PGC_POSTMASTER.
+ * CitusStatCountersMatchFn is the match function for the stat counters hash table.
  */
 static int
-GetStatCounterSlots(void)
+CitusStatCountersMatchFn(const void *key1, const void *key2, Size keysize)
 {
-	if (StatCounterSlots == 0)
+	const StatCountersHashKey *k1 = (const StatCountersHashKey *) key1;
+	const StatCountersHashKey *k2 = (const StatCountersHashKey *) key2;
+
+	if (k1->dbid == k2->dbid)
 	{
-		return MaxBackends;
-	}
-	else if (StatCounterSlots > 0)
-	{
-		return StatCounterSlots;
-	}
-	else
-	{
-		Assert(StatCounterSlots == -1);
 		return 0;
 	}
+
+	return 1;
+}
+
+
+/*
+ * ResetStatCounters resets all the stat counters.
+ */
+static void
+ResetStatCounters(void)
+{
+	LWLockAcquire(StatCountersSharedState->lock, LW_SHARED);
+
+	HASH_SEQ_STATUS hashSeq;
+	hash_seq_init(&hashSeq, StatCountersHash);
+
+	StatCountersHashEntry *entry;
+	while ((entry = hash_seq_search(&hashSeq)) != NULL)
+	{
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		{
+			pg_atomic_write_u64(&entry->counters[statIdx], 0);
+		}
+	}
+
+	LWLockRelease(StatCountersSharedState->lock);
 }

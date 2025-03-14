@@ -13,10 +13,12 @@
 
 #include <port/atomics.h>
 
-#define DEFAULT_STAT_COUNTER_SLOTS 16
+#define STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME "citus_stat_counters_lock_tranche"
 
-#define MAX_STAT_NAME_LENGTH 255
-
+/*
+ * Must be in the same order as the columns defined in citus_stat_counters view,
+ * see src/backend/distributed/sql/udfs/citus_stat_counters/latest.sql
+ */
 typedef enum
 {
 	STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED,
@@ -30,9 +32,7 @@ typedef enum
 	N_CITUS_STAT_COUNTERS
 } StatType;
 
-extern int StatCounterSlots;
-
-typedef pg_atomic_uint64 CitusAtomicStatCounters[N_CITUS_STAT_COUNTERS];
+extern bool EnableStatCounters;
 
 extern void InitializeStatCountersArrayMem(void);
 extern Size StatCountersArrayShmemSize(void);
