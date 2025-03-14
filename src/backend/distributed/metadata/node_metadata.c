@@ -1665,6 +1665,7 @@ citus_is_coordinator(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(isCoordinator);
 }
 
+
 /*
  * citus_is_primary_node returns whether the current node is a primary for
  * a given group_id. We consider the node a primary if it has
@@ -1675,14 +1676,13 @@ citus_is_primary_node(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	bool isPrimary = false;
 	int32 groupId = GetLocalGroupId();
 	WorkerNode *workerNode = PrimaryNodeForGroup(groupId, NULL);
 	if (workerNode == NULL)
 	{
 		ereport(WARNING, (errmsg("could not find the current node in pg_dist_node"),
 						  errdetail("If this is the coordinator node, consider adding it "
-									"into the metadata by using citus_set_coordinator_host() " 
+									"into the metadata by using citus_set_coordinator_host() "
 									"UDF. Otherwise, if you're going to use this node as a "
 									"worker node for a new cluster, make sure to add this "
 									"node into the metadata from the coordinator by using "
@@ -1690,10 +1690,11 @@ citus_is_primary_node(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	isPrimary = workerNode->nodeId == GetLocalNodeId();
+	bool isPrimary = workerNode->nodeId == GetLocalNodeId();
 
 	PG_RETURN_BOOL(isPrimary);
 }
+
 
 /*
  * EnsureParentSessionHasExclusiveLockOnPgDistNode ensures given session id
