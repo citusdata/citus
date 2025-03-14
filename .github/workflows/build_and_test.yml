@@ -32,8 +32,7 @@ jobs:
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
       sql_snapshot_pg_version: "17.4"
-      image_suffix: "-dev-eab367a"
-      image_suffix_citus_upgrade: "-dev-eab367a"
+      image_suffix: "-veab367a"
       pg15_version: '{ "major": "15", "full": "15.12" }'
       pg16_version: '{ "major": "16", "full": "16.8" }'
       pg17_version: '{ "major": "17", "full": "17.4" }'
@@ -353,7 +352,7 @@ jobs:
     name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
     runs-on: ubuntu-20.04
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix_citus_upgrade }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
     - params
