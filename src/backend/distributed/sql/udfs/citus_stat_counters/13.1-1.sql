@@ -1,14 +1,10 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
-	/*
-	 * If you change the order of database_oid column, make sure to update
-	 * StoreAllStatCounters() in src/backend/distributed/stat_counters.c
-	 */
+	-- If you change the order of database_oid column, make sure to update
+	-- StoreAllStatCounters() in src/backend/distributed/stat_counters.c
 	OUT database_oid oid,
 
-	/*
-	 * Following stat counter columns must be in the same order as the
-	 * StatType enum defined in src/include/distributed/stat_counters.h
-	 */
+	-- Following stat counter columns must be in the same order as the
+	-- StatType enum defined in src/include/distributed/stat_counters.h
 	OUT connection_establishment_succeeded bigint,
 	OUT connection_establishment_failed bigint,
 	OUT connection_reused bigint,
