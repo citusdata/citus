@@ -136,11 +136,8 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 	path->custom_path.path.pathtarget = relOptInfo->reltarget;
 	path->custom_path.path.parent = relOptInfo;
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 	/* necessary to avoid extra Result node in PG15 */
 	path->custom_path.flags = CUSTOMPATH_SUPPORT_PROJECTION;
-#endif
 
 	/*
 	 * The 100k rows we put on the cost of the path is kind of arbitrary and could be
@@ -217,7 +214,7 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 	{
 		TargetEntry *targetEntry = NULL;
 
-		foreach_ptr(targetEntry, citusPath->remoteScan->custom_scan_tlist)
+		foreach_declared_ptr(targetEntry, citusPath->remoteScan->custom_scan_tlist)
 		{
 			/* we created this list, so we know it only contains Var */
 			Assert(IsA(targetEntry->expr, Var));
@@ -231,7 +228,7 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 	/* clauses might have been added by the planner, need to add them to our scan */
 	RestrictInfo *restrictInfo = NULL;
 	List **quals = &citusPath->remoteScan->scan.plan.qual;
-	foreach_ptr(restrictInfo, clauses)
+	foreach_declared_ptr(restrictInfo, clauses)
 	{
 		*quals = lappend(*quals, restrictInfo->clause);
 	}
@@ -273,7 +270,7 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
 		/* extract column names from the remoteScanTargetList */
 		List *columnNameList = NIL;
 		TargetEntry *targetEntry = NULL;
-		foreach_ptr(targetEntry, remoteScanTargetList)
+		foreach_declared_ptr(targetEntry, remoteScanTargetList)
 		{
 			columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
 		}

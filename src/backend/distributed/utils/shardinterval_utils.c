@@ -471,7 +471,7 @@ SingleReplicatedTable(Oid relationId)
 	}
 
 	uint64 *shardIdPointer = NULL;
-	foreach_ptr(shardIdPointer, shardList)
+	foreach_declared_ptr(shardIdPointer, shardList)
 	{
 		uint64 shardId = *shardIdPointer;
 		shardPlacementList = ShardPlacementList(shardId);

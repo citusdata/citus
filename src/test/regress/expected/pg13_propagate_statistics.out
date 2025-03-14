@@ -24,33 +24,41 @@ SELECT create_distributed_table('t1', 'b');
 -- test alter target before distribution
 ALTER STATISTICS s3 SET STATISTICS 46;
 \c - - - :worker_1_port
-SELECT stxstattarget, stxrelid::regclass
+-- for stxstattarget, re-interpret -1 as null to avoid adding another test output for pg < 17
+-- Changed stxstattarget in pg_statistic_ext to use nullable representation, removing explicit -1 for default statistics target in PostgreSQL 17.
+-- https://github.com/postgres/postgres/commit/012460ee93c304fbc7220e5b55d9d0577fc766ab
+SELECT
+    nullif(stxstattarget, -1) AS stxstattarget,
+    stxrelid::regclass
 FROM pg_statistic_ext
 WHERE stxnamespace IN (
-	SELECT oid
-	FROM pg_namespace
-	WHERE nspname IN ('statistics''TestTarget')
+    SELECT oid
+    FROM pg_namespace
+    WHERE nspname IN ('statistics''TestTarget')
 )
 AND stxname SIMILAR TO '%\_\d+'
-ORDER BY stxstattarget, stxrelid::regclass ASC;
+ORDER BY
+    nullif(stxstattarget, -1) IS NULL DESC,  -- Make sure null values are handled consistently
+    nullif(stxstattarget, -1) NULLS FIRST,   -- Use NULLS FIRST to ensure consistent placement of nulls
+    stxrelid::regclass ASC;
  stxstattarget |             stxrelid
 ---------------------------------------------------------------------
-            -1 | "statistics'TestTarget".t1_980000
-            -1 | "statistics'TestTarget".t1_980002
-            -1 | "statistics'TestTarget".t1_980004
-            -1 | "statistics'TestTarget".t1_980006
-            -1 | "statistics'TestTarget".t1_980008
-            -1 | "statistics'TestTarget".t1_980010
-            -1 | "statistics'TestTarget".t1_980012
-            -1 | "statistics'TestTarget".t1_980014
-            -1 | "statistics'TestTarget".t1_980016
-            -1 | "statistics'TestTarget".t1_980018
-            -1 | "statistics'TestTarget".t1_980020
-            -1 | "statistics'TestTarget".t1_980022
-            -1 | "statistics'TestTarget".t1_980024
-            -1 | "statistics'TestTarget".t1_980026
-            -1 | "statistics'TestTarget".t1_980028
-            -1 | "statistics'TestTarget".t1_980030
+               | "statistics'TestTarget".t1_980000
+               | "statistics'TestTarget".t1_980002
+               | "statistics'TestTarget".t1_980004
+               | "statistics'TestTarget".t1_980006
+               | "statistics'TestTarget".t1_980008
+               | "statistics'TestTarget".t1_980010
+               | "statistics'TestTarget".t1_980012
+               | "statistics'TestTarget".t1_980014
+               | "statistics'TestTarget".t1_980016
+               | "statistics'TestTarget".t1_980018
+               | "statistics'TestTarget".t1_980020
+               | "statistics'TestTarget".t1_980022
+               | "statistics'TestTarget".t1_980024
+               | "statistics'TestTarget".t1_980026
+               | "statistics'TestTarget".t1_980028
+               | "statistics'TestTarget".t1_980030
              3 | "statistics'TestTarget".t1_980000
              3 | "statistics'TestTarget".t1_980002
              3 | "statistics'TestTarget".t1_980004

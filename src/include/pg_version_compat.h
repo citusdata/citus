@@ -13,6 +13,425 @@
 
 #include "pg_version_constants.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+#include "catalog/pg_am.h"
+#include "catalog/pg_amop.h"
+#include "catalog/pg_amproc.h"
+#include "catalog/pg_attrdef.h"
+#include "catalog/pg_auth_members.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_cast.h"
+#include "catalog/pg_class.h"
+#include "catalog/pg_collation.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_conversion.h"
+#include "catalog/pg_database.h"
+#include "catalog/pg_default_acl.h"
+#include "catalog/pg_depend.h"
+#include "catalog/pg_event_trigger.h"
+#include "catalog/pg_extension.h"
+#include "catalog/pg_foreign_data_wrapper.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/pg_init_privs.h"
+#include "catalog/pg_language.h"
+#include "catalog/pg_largeobject.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_opclass.h"
+#include "catalog/pg_operator.h"
+#include "catalog/pg_opfamily.h"
+#include "catalog/pg_parameter_acl.h"
+#include "catalog/pg_policy.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_publication.h"
+#include "catalog/pg_publication_namespace.h"
+#include "catalog/pg_publication_rel.h"
+#include "catalog/pg_rewrite.h"
+#include "catalog/pg_statistic_ext.h"
+#include "catalog/pg_subscription.h"
+#include "catalog/pg_tablespace.h"
+#include "catalog/pg_transform.h"
+#include "catalog/pg_trigger.h"
+#include "catalog/pg_ts_config.h"
+#include "catalog/pg_ts_dict.h"
+#include "catalog/pg_ts_parser.h"
+#include "catalog/pg_ts_template.h"
+#include "catalog/pg_type.h"
+#include "catalog/pg_user_mapping.h"
+
+/*
+ * This enum covers all system catalogs whose OIDs can appear in
+ * pg_depend.classId or pg_shdepend.classId.
+ */
+typedef enum ObjectClass
+{
+	OCLASS_CLASS,               /* pg_class */
+	OCLASS_PROC,                /* pg_proc */
+	OCLASS_TYPE,                /* pg_type */
+	OCLASS_CAST,                /* pg_cast */
+	OCLASS_COLLATION,           /* pg_collation */
+	OCLASS_CONSTRAINT,          /* pg_constraint */
+	OCLASS_CONVERSION,          /* pg_conversion */
+	OCLASS_DEFAULT,             /* pg_attrdef */
+	OCLASS_LANGUAGE,            /* pg_language */
+	OCLASS_LARGEOBJECT,         /* pg_largeobject */
+	OCLASS_OPERATOR,            /* pg_operator */
+	OCLASS_OPCLASS,             /* pg_opclass */
+	OCLASS_OPFAMILY,            /* pg_opfamily */
+	OCLASS_AM,                  /* pg_am */
+	OCLASS_AMOP,                /* pg_amop */
+	OCLASS_AMPROC,              /* pg_amproc */
+	OCLASS_REWRITE,             /* pg_rewrite */
+	OCLASS_TRIGGER,             /* pg_trigger */
+	OCLASS_SCHEMA,              /* pg_namespace */
+	OCLASS_STATISTIC_EXT,       /* pg_statistic_ext */
+	OCLASS_TSPARSER,            /* pg_ts_parser */
+	OCLASS_TSDICT,              /* pg_ts_dict */
+	OCLASS_TSTEMPLATE,          /* pg_ts_template */
+	OCLASS_TSCONFIG,            /* pg_ts_config */
+	OCLASS_ROLE,                /* pg_authid */
+	OCLASS_ROLE_MEMBERSHIP,     /* pg_auth_members */
+	OCLASS_DATABASE,            /* pg_database */
+	OCLASS_TBLSPACE,            /* pg_tablespace */
+	OCLASS_FDW,                 /* pg_foreign_data_wrapper */
+	OCLASS_FOREIGN_SERVER,      /* pg_foreign_server */
+	OCLASS_USER_MAPPING,        /* pg_user_mapping */
+	OCLASS_DEFACL,              /* pg_default_acl */
+	OCLASS_EXTENSION,           /* pg_extension */
+	OCLASS_EVENT_TRIGGER,       /* pg_event_trigger */
+	OCLASS_PARAMETER_ACL,       /* pg_parameter_acl */
+	OCLASS_POLICY,              /* pg_policy */
+	OCLASS_PUBLICATION,         /* pg_publication */
+	OCLASS_PUBLICATION_NAMESPACE,   /* pg_publication_namespace */
+	OCLASS_PUBLICATION_REL,     /* pg_publication_rel */
+	OCLASS_SUBSCRIPTION,        /* pg_subscription */
+	OCLASS_TRANSFORM,           /* pg_transform */
+} ObjectClass;
+
+#define LAST_OCLASS OCLASS_TRANSFORM
+
+/*
+ * Determine the class of a given object identified by objectAddress.
+ *
+ * We implement it as a function instead of an array because the OIDs aren't
+ * consecutive.
+ */
+static inline ObjectClass
+getObjectClass(const ObjectAddress *object)
+{
+	/* only pg_class entries can have nonzero objectSubId */
+	if (object->classId != RelationRelationId &&
+		object->objectSubId != 0)
+	{
+		elog(ERROR, "invalid non-zero objectSubId for object class %u",
+			 object->classId);
+	}
+
+	switch (object->classId)
+	{
+		case RelationRelationId:
+		{
+			/* caller must check objectSubId */
+			return OCLASS_CLASS;
+		}
+
+		case ProcedureRelationId:
+		{
+			return OCLASS_PROC;
+		}
+
+		case TypeRelationId:
+		{
+			return OCLASS_TYPE;
+		}
+
+		case CastRelationId:
+		{
+			return OCLASS_CAST;
+		}
+
+		case CollationRelationId:
+		{
+			return OCLASS_COLLATION;
+		}
+
+		case ConstraintRelationId:
+		{
+			return OCLASS_CONSTRAINT;
+		}
+
+		case ConversionRelationId:
+		{
+			return OCLASS_CONVERSION;
+		}
+
+		case AttrDefaultRelationId:
+		{
+			return OCLASS_DEFAULT;
+		}
+
+		case LanguageRelationId:
+		{
+			return OCLASS_LANGUAGE;
+		}
+
+		case LargeObjectRelationId:
+		{
+			return OCLASS_LARGEOBJECT;
+		}
+
+		case OperatorRelationId:
+		{
+			return OCLASS_OPERATOR;
+		}
+
+		case OperatorClassRelationId:
+		{
+			return OCLASS_OPCLASS;
+		}
+
+		case OperatorFamilyRelationId:
+		{
+			return OCLASS_OPFAMILY;
+		}
+
+		case AccessMethodRelationId:
+		{
+			return OCLASS_AM;
+		}
+
+		case AccessMethodOperatorRelationId:
+		{
+			return OCLASS_AMOP;
+		}
+
+		case AccessMethodProcedureRelationId:
+		{
+			return OCLASS_AMPROC;
+		}
+
+		case RewriteRelationId:
+		{
+			return OCLASS_REWRITE;
+		}
+
+		case TriggerRelationId:
+		{
+			return OCLASS_TRIGGER;
+		}
+
+		case NamespaceRelationId:
+		{
+			return OCLASS_SCHEMA;
+		}
+
+		case StatisticExtRelationId:
+		{
+			return OCLASS_STATISTIC_EXT;
+		}
+
+		case TSParserRelationId:
+		{
+			return OCLASS_TSPARSER;
+		}
+
+		case TSDictionaryRelationId:
+		{
+			return OCLASS_TSDICT;
+		}
+
+		case TSTemplateRelationId:
+		{
+			return OCLASS_TSTEMPLATE;
+		}
+
+		case TSConfigRelationId:
+		{
+			return OCLASS_TSCONFIG;
+		}
+
+		case AuthIdRelationId:
+		{
+			return OCLASS_ROLE;
+		}
+
+		case AuthMemRelationId:
+		{
+			return OCLASS_ROLE_MEMBERSHIP;
+		}
+
+		case DatabaseRelationId:
+		{
+			return OCLASS_DATABASE;
+		}
+
+		case TableSpaceRelationId:
+		{
+			return OCLASS_TBLSPACE;
+		}
+
+		case ForeignDataWrapperRelationId:
+		{
+			return OCLASS_FDW;
+		}
+
+		case ForeignServerRelationId:
+		{
+			return OCLASS_FOREIGN_SERVER;
+		}
+
+		case UserMappingRelationId:
+		{
+			return OCLASS_USER_MAPPING;
+		}
+
+		case DefaultAclRelationId:
+		{
+			return OCLASS_DEFACL;
+		}
+
+		case ExtensionRelationId:
+		{
+			return OCLASS_EXTENSION;
+		}
+
+		case EventTriggerRelationId:
+		{
+			return OCLASS_EVENT_TRIGGER;
+		}
+
+		case ParameterAclRelationId:
+		{
+			return OCLASS_PARAMETER_ACL;
+		}
+
+		case PolicyRelationId:
+		{
+			return OCLASS_POLICY;
+		}
+
+		case PublicationNamespaceRelationId:
+		{
+			return OCLASS_PUBLICATION_NAMESPACE;
+		}
+
+		case PublicationRelationId:
+		{
+			return OCLASS_PUBLICATION;
+		}
+
+		case PublicationRelRelationId:
+		{
+			return OCLASS_PUBLICATION_REL;
+		}
+
+		case SubscriptionRelationId:
+		{
+			return OCLASS_SUBSCRIPTION;
+		}
+
+		case TransformRelationId:
+			return OCLASS_TRANSFORM;
+	}
+
+	/* shouldn't get here */
+	elog(ERROR, "unrecognized object class: %u", object->classId);
+	return OCLASS_CLASS;        /* keep compiler quiet */
+}
+
+
+#include "commands/tablecmds.h"
+
+static inline void
+RangeVarCallbackOwnsTable(const RangeVar *relation,
+						  Oid relId, Oid oldRelId, void *arg)
+{
+	return RangeVarCallbackMaintainsTable(relation, relId, oldRelId, arg);
+}
+
+
+#include "catalog/pg_attribute.h"
+#include "utils/syscache.h"
+
+static inline int
+getAttstattarget_compat(HeapTuple attTuple)
+{
+	bool isnull;
+	Datum dat = SysCacheGetAttr(ATTNUM, attTuple,
+								Anum_pg_attribute_attstattarget, &isnull);
+	return (isnull ? -1 : DatumGetInt16(dat));
+}
+
+
+#include "catalog/pg_statistic_ext.h"
+
+static inline int
+getStxstattarget_compat(HeapTuple tup)
+{
+	bool isnull;
+	Datum dat = SysCacheGetAttr(STATEXTOID, tup,
+								Anum_pg_statistic_ext_stxstattarget, &isnull);
+	return (isnull ? -1 : DatumGetInt16(dat));
+}
+
+
+#define getAlterStatsStxstattarget_compat(a) ((Node *) makeInteger(a))
+#define getIntStxstattarget_compat(a) (intVal(a))
+
+#define WaitEventSetTracker_compat CurrentResourceOwner
+
+#define identitySequenceRelation_compat(a) (a)
+
+#define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
+
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
+									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
+																  i, j, k)
+
+#define getProcNo_compat(a) (a->vxid.procNumber)
+#define getLxid_compat(a) (a->vxid.lxid)
+
+#else
+
+#define Anum_pg_collation_colllocale Anum_pg_collation_colliculocale
+#define Anum_pg_database_datlocale Anum_pg_database_daticulocale
+
+#include "access/htup_details.h"
+static inline int
+getAttstattarget_compat(HeapTuple attTuple)
+{
+	return ((Form_pg_attribute) GETSTRUCT(attTuple))->attstattarget;
+}
+
+
+#include "catalog/pg_statistic_ext.h"
+static inline int
+getStxstattarget_compat(HeapTuple tup)
+{
+	return ((Form_pg_statistic_ext) GETSTRUCT(tup))->stxstattarget;
+}
+
+
+#define getAlterStatsStxstattarget_compat(a) (a)
+#define getIntStxstattarget_compat(a) (a)
+
+#define WaitEventSetTracker_compat CurrentMemoryContext
+
+#define identitySequenceRelation_compat(a) (RelationGetRelid(a))
+
+#define matched_compat(a) (a->matched)
+
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
+									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
+																  i, k)
+
+#define getProcNo_compat(a) (a->pgprocno)
+#define getLxid_compat(a) (a->lxid)
+
+#define COLLPROVIDER_BUILTIN 'b'
+
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_16
 
 #include "utils/guc_tables.h"
@@ -185,76 +604,6 @@ typedef RangeTblEntry RTEPermissionInfo;
 
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-#define ProcessCompletedNotifies()
-#define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b, c)
-#define parse_analyze_varparams_compat(a, b, c, d, e) parse_analyze_varparams(a, b, c, d, \
-																			  e)
-#define CREATE_SEQUENCE_COMMAND \
-	"CREATE %sSEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
-	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
-	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
-#else
-
-#include "nodes/value.h"
-#include "storage/smgr.h"
-#include "utils/int8.h"
-#include "utils/rel.h"
-
-typedef Value String;
-
-#ifdef HAVE_LONG_INT_64
-#define strtoi64(str, endptr, base) ((int64) strtol(str, endptr, base))
-#define strtou64(str, endptr, base) ((uint64) strtoul(str, endptr, base))
-#else
-#define strtoi64(str, endptr, base) ((int64) strtoll(str, endptr, base))
-#define strtou64(str, endptr, base) ((uint64) strtoull(str, endptr, base))
-#endif
-#define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b)
-#define parse_analyze_varparams_compat(a, b, c, d, e) parse_analyze_varparams(a, b, c, d)
-#define pgstat_init_relation(r) pgstat_initstats(r)
-#define pg_analyze_and_rewrite_fixedparams(a, b, c, d, e) pg_analyze_and_rewrite(a, b, c, \
-																				 d, e)
-#define boolVal(v) intVal(v)
-#define makeBoolean(val) makeInteger(val)
-
-static inline int64
-pg_strtoint64(char *s)
-{
-	int64 result;
-	(void) scanint8(s, false, &result);
-	return result;
-}
-
-
-/*
- * RelationGetSmgr got backported in 13.10 and 14.7 so redefining it for any
- * version higher causes compilation errors due to redefining of the function.
- * We want to use it in all versions. So we backport it ourselves in earlier
- * versions, and rely on the Postgres provided version in the later versions.
- */
-#if PG_VERSION_NUM < 140007
-static inline SMgrRelation
-RelationGetSmgr(Relation rel)
-{
-	if (unlikely(rel->rd_smgr == NULL))
-	{
-		smgrsetowner(&(rel->rd_smgr), smgropen(rel->rd_node, rel->rd_backend));
-	}
-	return rel->rd_smgr;
-}
-
-
-#endif
-
-
-#define CREATE_SEQUENCE_COMMAND \
-	"CREATE SEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
-	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
-	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
-
-#endif
-
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)
 #define fcGetArgValue(fc, n) ((fc)->args[n].value)
@@ -263,5 +612,10 @@ RelationGetSmgr(Relation rel)
 	(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
 #define fcSetArg(fc, n, value) fcSetArgExt(fc, n, value, false)
 #define fcSetArgNull(fc, n) fcSetArgExt(fc, n, (Datum) 0, true)
+
+#define CREATE_SEQUENCE_COMMAND \
+	"CREATE %sSEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
+	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
+	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
 
 #endif   /* PG_VERSION_COMPAT_H */

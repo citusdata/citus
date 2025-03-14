@@ -81,7 +81,7 @@ AddDistributionColumnForRelation(DistributionColumnMap *distributionColumnMap,
 		List *partitionList = PartitionList(relationId);
 		Oid partitionRelationId = InvalidOid;
 
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			AddDistributionColumnForRelation(distributionColumnMap, partitionRelationId,
 											 distributionColumnName);
