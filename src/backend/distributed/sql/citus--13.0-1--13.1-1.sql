@@ -47,3 +47,6 @@ DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
 #include "udfs/citus_internal_update_relation_colocation/13.1-1.sql"
 #include "udfs/repl_origin_helper/13.1-1.sql"
 #include "udfs/citus_finish_pg_upgrade/13.1-1.sql"
+
+#include "udfs/citus_stat_counters/13.1-1.sql"
+#include "udfs/citus_stat_counters_reset/13.1-1.sql"

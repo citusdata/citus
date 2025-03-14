@@ -105,6 +105,7 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/stat_counters.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/time_constants.h"
@@ -505,6 +506,8 @@ _PG_init(void)
 
 	InitializeMultiTenantMonitorSMHandleManagement();
 
+	InitializeStatCountersArrayMem();
+
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
@@ -615,6 +618,12 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
+
+	if (EnableStatCounters)
+	{
+		RequestAddinShmemSpace(StatCountersArrayShmemSize());
+		RequestNamedLWLockTranche(STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME, 1);
+	}
 }
 
 
@@ -1449,6 +1458,17 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_stat_counters",
+		gettext_noop(
+			"Determines whether the statistics counters are enabled for Citus."),
+		NULL,
+		&EnableStatCounters,
+		true,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
