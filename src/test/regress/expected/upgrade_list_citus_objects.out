@@ -133,6 +133,7 @@ ORDER BY 1;
  function citus_internal_update_relation_colocation(oid,integer)
  function citus_is_clock_after(cluster_clock,cluster_clock)
  function citus_is_coordinator()
+ function citus_is_primary_node()
  function citus_isolation_test_session_is_blocked(integer,integer[])
  function citus_job_cancel(bigint)
  function citus_job_list()
@@ -388,6 +389,6 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(357 rows)
+(358 rows)
 
 DROP TABLE extension_basic_types;

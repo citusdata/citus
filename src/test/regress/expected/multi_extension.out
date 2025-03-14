@@ -1479,8 +1479,9 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                 | function citus_internal.update_none_dist_table_metadata(oid,"char",bigint,boolean) void
                                                                 | function citus_internal.update_placement_metadata(bigint,integer,integer) void
                                                                 | function citus_internal.update_relation_colocation(oid,integer) void
+                                                                | function citus_is_primary_node() boolean
                                                                 | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
-(26 rows)
+(27 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
