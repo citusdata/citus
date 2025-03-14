@@ -1461,6 +1461,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_stat_counters",
+		gettext_noop(
+			"Determines whether the statistics counters are enabled for Citus."),
+		NULL,
+		&EnableStatCounters,
+		true,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_statistics_collection",
 		gettext_noop("Enables sending basic usage statistics to Citus."),
 		gettext_noop("Citus uploads daily anonymous usage reports containing "
@@ -1477,18 +1488,6 @@ RegisterCitusConfigVariables(void)
 		GUC_SUPERUSER_ONLY,
 		&StatisticsCollectionGucCheckHook,
 		NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.enable_stat_counters",
-		gettext_noop(
-			"Determines whether the statistics counters are enabled for Citus."),
-		NULL,
-		&EnableStatCounters,
-		true,
-		PGC_POSTMASTER,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 
 	DefineCustomBoolVariable(
 		"citus.enable_unique_job_ids",
