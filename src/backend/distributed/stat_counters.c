@@ -5,6 +5,8 @@
  * This file contains functions to track various statistic counters for
  * Citus.
  *
+ * XXX: Need to handle dropped databases.
+ *
  *-------------------------------------------------------------------------
  */
 
@@ -21,6 +23,10 @@
 #include "distributed/stat_counters.h"
 
 
+/* file path for dumping the stat counters */
+#define CITUS_STAT_COUNTERS_DUMP_FILE "pg_stat/citus_stat_counters.stat"
+#define CITUS_STAT_COUNTERS_TMP_DUMP_FILE (CITUS_STAT_COUNTERS_DUMP_FILE ".tmp")
+
 /*
  * Shared hash constants.
  *
@@ -29,25 +35,20 @@
  * it's documented that the access efficiency will degrade if it is exceeded
  * substantially.
  *
- * XXX: Consider using dshash_table instead (shared) HTAB.
+ * XXX: Consider using dshash_table instead of (shared) HTAB if that becomes
+ *      a concern.
  */
 #define STAT_COUNTERS_INIT_DATABASES 8
 #define STAT_COUNTERS_MAX_DATABASES 1024
 
 
-typedef pg_atomic_uint64 CitusAtomicStatCounters[N_CITUS_STAT_COUNTERS];
-
-/* shared hash table key */
-typedef struct StatCountersHashKey
-{
-	Oid dbid;
-} StatCountersHashKey;
-
 /* shared hash table entry */
 typedef struct StatCountersHashEntry
 {
-	StatCountersHashKey key;
-	CitusAtomicStatCounters counters;
+	/* must be the first field since this is used as the key */
+	Oid dbId;
+
+	pg_atomic_uint64 counters[N_CITUS_STAT_COUNTERS];
 } StatCountersHashEntry;
 
 /* shared memory state */
@@ -60,19 +61,23 @@ typedef struct StatCountersState
 /* GUC value for citus.enable_stat_counters */
 bool EnableStatCounters = true;
 
+/* stat counters dump file version */
+static const uint32 CITUS_STAT_COUNTERS_FILE_VERSION = 1;
 
 /* shared memory variables */
 static StatCountersState *StatCountersSharedState = NULL;
-static HTAB *StatCountersHash = NULL;
+static HTAB *StatCountersSharedHash = NULL;
 
 
 /* shared memory init & management */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static void SharedStatCountersArrayShmemInit(void);
+static void CitusStatCountersShmemShutdown(int code, Datum arg);
 
-/* shared hash utilities */
+/* shared hash callbacks & utilities */
 static uint32 CitusStatCountersHashFn(const void *key, Size keysize);
 static int CitusStatCountersMatchFn(const void *key1, const void *key2, Size keysize);
+static StatCountersHashEntry * CitusStatCountersHashEntryAllocIfNotExists(Oid dbId, bool init);
 
 /* other helper functions */
 static void StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor);
@@ -102,7 +107,7 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	if (!StatCountersSharedState || !StatCountersHash)
+	if (!StatCountersSharedState || !StatCountersSharedHash)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -136,7 +141,7 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	if (!StatCountersSharedState || !StatCountersHash)
+	if (!StatCountersSharedState || !StatCountersSharedHash)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -202,19 +207,18 @@ IncrementStatCounter(int statId)
 		return;
 	}
 
-	if (!StatCountersSharedState || !StatCountersHash)
+	if (!StatCountersSharedState || !StatCountersSharedHash)
 	{
 		return;
 	}
 
-	StatCountersHashKey key;
-	key.dbid = MyDatabaseId;
-
 	LWLockAcquire(StatCountersSharedState->lock, LW_SHARED);
 
+	Oid dbId = MyDatabaseId;
+
 	StatCountersHashEntry *dbEntry = (StatCountersHashEntry *) hash_search(
-		StatCountersHash,
-		(void *) &key,
+		StatCountersSharedHash,
+		(void *) &dbId,
 		HASH_FIND,
 		NULL);
 	if (!dbEntry)
@@ -223,22 +227,12 @@ IncrementStatCounter(int statId)
 		LWLockRelease(StatCountersSharedState->lock);
 		LWLockAcquire(StatCountersSharedState->lock, LW_EXCLUSIVE);
 
-		bool councurrentlyInserted = false;
-		dbEntry = (StatCountersHashEntry *) hash_search(StatCountersHash, (void *) &key,
-														HASH_ENTER,
-														&councurrentlyInserted);
-
 		/*
-		 * Initialize the counters to 0 if someone else didn't race while we
-		 * were promoting the lock.
+		 * Seems we don't have an entry for this database, so need to
+		 * initialize the counters as well.
 		 */
-		if (!councurrentlyInserted)
-		{
-			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
-			{
-				pg_atomic_init_u64(&dbEntry->counters[statIdx], 0);
-			}
-		}
+		bool init = true;
+		dbEntry = CitusStatCountersHashEntryAllocIfNotExists(dbId, init);
 
 		/* downgrade the lock to shared */
 		LWLockRelease(StatCountersSharedState->lock);
@@ -313,18 +307,18 @@ StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 {
 	LWLockAcquire(StatCountersSharedState->lock, LW_SHARED);
 
-	HASH_SEQ_STATUS hashSeq;
-	hash_seq_init(&hashSeq, StatCountersHash);
+	HASH_SEQ_STATUS hashSeqState;
+	hash_seq_init(&hashSeqState, StatCountersSharedHash);
 
 	StatCountersHashEntry *entry;
-	while ((entry = hash_seq_search(&hashSeq)) != NULL)
+	while ((entry = hash_seq_search(&hashSeqState)) != NULL)
 	{
 		Datum values[6] = { 0 };
 		bool isNulls[6] = { 0 };
 		MemSet(values, 0, sizeof(values));
 		MemSet(isNulls, false, sizeof(isNulls));
 
-		values[0] = ObjectIdGetDatum(entry->key.dbid);
+		values[0] = ObjectIdGetDatum(entry->dbId);
 
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
@@ -346,45 +340,236 @@ StoreAllStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 static void
 SharedStatCountersArrayShmemInit(void)
 {
-	/* initialize the shared memory only if the stat counters are enabled */
-	if (EnableStatCounters)
-	{
-		LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
-
-		bool alreadyInitialized;
-		StatCountersSharedState = ShmemInitStruct(STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME,
-												  sizeof(StatCountersState),
-												  &alreadyInitialized);
-
-
-		if (!alreadyInitialized)
-		{
-			StatCountersSharedState->lock = &(GetNamedLWLockTranche(
-												  STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME))
-											->lock;
-		}
-
-		HASHCTL info;
-		memset(&info, 0, sizeof(info));
-		info.keysize = sizeof(StatCountersHashKey);
-		info.entrysize = sizeof(StatCountersHashEntry);
-		info.hash = CitusStatCountersHashFn;
-		info.match = CitusStatCountersMatchFn;
-
-		StatCountersHash = ShmemInitHash("Citus Stat Counters Hash",
-										 STAT_COUNTERS_INIT_DATABASES,
-										 STAT_COUNTERS_MAX_DATABASES, &info,
-										 HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
-
-		LWLockRelease(AddinShmemInitLock);
-	}
-
 	if (prev_shmem_startup_hook != NULL)
 	{
 		prev_shmem_startup_hook();
 	}
+
+	if (!EnableStatCounters)
+	{
+		return;
+	}
+
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	bool alreadyInitialized = false;
+	StatCountersSharedState = ShmemInitStruct(STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME,
+												sizeof(StatCountersState),
+												&alreadyInitialized);
+
+
+	if (!alreadyInitialized)
+	{
+		StatCountersSharedState->lock = &(GetNamedLWLockTranche(
+												STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME))
+										->lock;
+	}
+
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(Oid);
+	info.entrysize = sizeof(StatCountersHashEntry);
+	info.hash = CitusStatCountersHashFn;
+	info.match = CitusStatCountersMatchFn;
+
+	StatCountersSharedHash = ShmemInitHash("Citus Stat Counters Hash",
+										STAT_COUNTERS_INIT_DATABASES,
+										STAT_COUNTERS_MAX_DATABASES, &info,
+										HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
+
+	LWLockRelease(AddinShmemInitLock);
+
+	if (!IsUnderPostmaster)
+	{
+		on_shmem_exit(CitusStatCountersShmemShutdown, (Datum) 0);
+	}
+
+	if (alreadyInitialized)
+	{
+		return;
+	}
+
+	/* Load stat file, don't care about locking */
+	FILE *file = AllocateFile(CITUS_STAT_COUNTERS_DUMP_FILE, PG_BINARY_R);
+	if (file == NULL)
+	{
+		if (errno == ENOENT)
+		{
+			return;         /* ignore not-found error */
+		}
+		goto error;
+	}
+
+	uint32 fileVersion = 0;
+	if (fread(&fileVersion, sizeof(uint32), 1, file) != 1)
+	{
+		goto error;
+	}
+
+	/* check if version is correct, atm we only have one */
+	if (fileVersion != CITUS_STAT_COUNTERS_FILE_VERSION)
+	{
+		ereport(LOG,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("citus_stat_counters file version mismatch: expected %u, got %u",
+						CITUS_STAT_COUNTERS_FILE_VERSION, fileVersion)));
+
+		goto error;
+	}
+
+	/* get number of entries */
+	int32 numEntries = 0;
+	if (fread(&numEntries, sizeof(int32), 1, file) != 1)
+	{
+		goto error;
+	}
+
+	for (int i = 0; i < numEntries; i++)
+	{
+		Oid dbId = InvalidOid;
+		if (fread(&dbId, sizeof(Oid), 1, file) != 1)
+		{
+			goto error;
+		}
+
+		uint64 statCounters[N_CITUS_STAT_COUNTERS] = { 0 };
+		if (fread(&statCounters, sizeof(uint64), N_CITUS_STAT_COUNTERS, file) != N_CITUS_STAT_COUNTERS)
+		{
+			goto error;
+		}
+
+		/*
+		 * We don't need to initialize the counters since we'll set them to the
+		 * values read from the file soon.
+		 */
+		bool init = false;
+		StatCountersHashEntry *entry = CitusStatCountersHashEntryAllocIfNotExists(dbId, init);
+
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		{
+			pg_atomic_write_u64(&entry->counters[statIdx], statCounters[statIdx]);
+		}
+	}
+
+	FreeFile(file);
+
+	/*
+	 * Remove the file so it's not included in backups/replicas, etc. A new file will be
+	 * written on next shutdown.
+	 */
+	unlink(CITUS_STAT_COUNTERS_DUMP_FILE);
+
+	return;
+
+error:
+	ereport(LOG,
+			(errcode_for_file_access(),
+			 errmsg("could not read citus_stat_counters file \"%s\": %m",
+					CITUS_STAT_COUNTERS_DUMP_FILE)));
+
+	if (file)
+	{
+		FreeFile(file);
+	}
+
+	/* delete bogus file, don't care of errors in this case */
+	unlink(CITUS_STAT_COUNTERS_DUMP_FILE);
 }
 
+
+/*
+ * CitusStatCountersShmemShutdown is called on shutdown to dump the stat counters
+ * to CITUS_STAT_COUNTERS_DUMP_FILE.
+ */
+static void
+CitusStatCountersShmemShutdown(int code, Datum arg)
+{
+	/* don't try to dump during a crash */
+	if (code)
+	{
+		return;
+	}
+
+	if (!EnableStatCounters || !StatCountersSharedState)
+	{
+		return;
+	}
+
+	FILE *file = AllocateFile(CITUS_STAT_COUNTERS_TMP_DUMP_FILE , PG_BINARY_W);
+	if (file == NULL)
+	{
+		goto error;
+	}
+
+	if (fwrite(&CITUS_STAT_COUNTERS_FILE_VERSION, sizeof(uint32), 1, file) != 1)
+	{
+		goto error;
+	}
+
+	int32 numEntries = hash_get_num_entries(StatCountersSharedHash);
+	if (fwrite(&numEntries, sizeof(int32), 1, file) != 1)
+	{
+		goto error;
+	}
+
+	StatCountersHashEntry *entry = NULL;
+
+	HASH_SEQ_STATUS hashSeqState;
+	hash_seq_init(&hashSeqState, StatCountersSharedHash);
+	while ((entry = hash_seq_search(&hashSeqState)) != NULL)
+	{
+		if (fwrite(&entry->dbId, sizeof(Oid), 1, file) != 1)
+		{
+			/* we assume hash_seq_term won't change errno */
+			hash_seq_term(&hashSeqState);
+			goto error;
+		}
+
+		uint64 statCounters[N_CITUS_STAT_COUNTERS] = { 0 };
+
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		{
+			statCounters[statIdx] = pg_atomic_read_u64(&entry->counters[statIdx]);
+		}
+
+		if (fwrite(&statCounters, sizeof(uint64), N_CITUS_STAT_COUNTERS, file) != N_CITUS_STAT_COUNTERS)
+		{
+			/* we assume hash_seq_term won't change errno */
+			hash_seq_term(&hashSeqState);
+			goto error;
+		}
+	}
+
+	if (FreeFile(file))
+	{
+		file = NULL;
+		goto error;
+	}
+
+	/* rename the file inplace */
+	if (rename(CITUS_STAT_COUNTERS_TMP_DUMP_FILE , CITUS_STAT_COUNTERS_DUMP_FILE) != 0)
+	{
+		ereport(LOG,
+				(errcode_for_file_access(),
+				 errmsg("could not rename citus_stat_counters file \"%s\": %m",
+					    CITUS_STAT_COUNTERS_TMP_DUMP_FILE )));
+	}
+
+	return;
+
+error:
+	ereport(LOG,
+			(errcode_for_file_access(),
+			 errmsg("could not write citus_stat_counters file \"%s\": %m",
+				    CITUS_STAT_COUNTERS_DUMP_FILE)));
+
+	if (file)
+	{
+		FreeFile(file);
+	}
+
+	unlink(CITUS_STAT_COUNTERS_DUMP_FILE);
+}
 
 /*
  * CitusStatCountersHashFn is the hash function for the stat counters hash table.
@@ -392,9 +577,9 @@ SharedStatCountersArrayShmemInit(void)
 static uint32
 CitusStatCountersHashFn(const void *key, Size keysize)
 {
-	const StatCountersHashKey *k = (const StatCountersHashKey *) key;
+	const Oid *k = (const Oid *) key;
 
-	return hash_uint32((uint32) k->dbid);
+	return hash_uint32((uint32) *k);
 }
 
 
@@ -404,15 +589,45 @@ CitusStatCountersHashFn(const void *key, Size keysize)
 static int
 CitusStatCountersMatchFn(const void *key1, const void *key2, Size keysize)
 {
-	const StatCountersHashKey *k1 = (const StatCountersHashKey *) key1;
-	const StatCountersHashKey *k2 = (const StatCountersHashKey *) key2;
+	const Oid *k1 = (const Oid *) key1;
+	const Oid *k2 = (const Oid *) key2;
 
-	if (k1->dbid == k2->dbid)
+	if (*k1 == *k2)
 	{
 		return 0;
 	}
 
 	return 1;
+}
+
+/*
+ * CitusStatCountersHashEntryAllocIfNotExists allocates a new entry in the
+ * stat counters hash table if it doesn't already exist.
+ *
+ * Assumes that the caller holds LW_EXCLUSIVE on StatCountersSharedState->lock.
+ */
+static StatCountersHashEntry *
+CitusStatCountersHashEntryAllocIfNotExists(Oid dbId, bool init)
+{
+	bool councurrentlyInserted = false;
+	StatCountersHashEntry * dbEntry =
+		(StatCountersHashEntry *) hash_search(StatCountersSharedHash, (void *) &dbId,
+											  HASH_ENTER,
+											  &councurrentlyInserted);
+
+	/*
+	* Initialize the counters to 0 if someone else didn't race while we
+	* were promoting the lock.
+	*/
+	if (!councurrentlyInserted && init)
+	{
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		{
+			pg_atomic_init_u64(&dbEntry->counters[statIdx], 0);
+		}
+	}
+
+	return dbEntry;
 }
 
 
@@ -424,11 +639,11 @@ ResetStatCounters(void)
 {
 	LWLockAcquire(StatCountersSharedState->lock, LW_SHARED);
 
-	HASH_SEQ_STATUS hashSeq;
-	hash_seq_init(&hashSeq, StatCountersHash);
+	HASH_SEQ_STATUS hashSeqState;
+	hash_seq_init(&hashSeqState, StatCountersSharedHash);
 
 	StatCountersHashEntry *entry;
-	while ((entry = hash_seq_search(&hashSeq)) != NULL)
+	while ((entry = hash_seq_search(&hashSeqState)) != NULL)
 	{
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
