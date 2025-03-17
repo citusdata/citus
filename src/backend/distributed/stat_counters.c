@@ -234,7 +234,7 @@ IncrementStatCounter(int statId)
 	/*
 	 * XXX: We can cache the entry for the current database if that becomes a
 	 *      performance concern. Doing so should be fine since we never remove
-	 * 	    entries.
+	 *      entries.
 	 */
 	StatCountersHashEntry *dbEntry = (StatCountersHashEntry *) hash_search(
 		CitusStatCountersSharedHash,
