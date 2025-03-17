@@ -81,18 +81,19 @@ static void CitusStatCountersShmemShutdown(int code, Datum arg);
 /* shared hash callbacks & utilities */
 static uint32 CitusStatCountersHashFn(const void *key, Size keysize);
 static int CitusStatCountersMatchFn(const void *key1, const void *key2, Size keysize);
-static StatCountersHashEntry * CitusStatCountersHashEntryAllocIfNotExists(Oid dbId,
-																		  bool init);
+static StatCountersHashEntry * CitusStatCountersHashEntryAllocIfNotExists(Oid dbId);
 
 /* helper functions for citus_stat_counters() and citus_stat_counters_reset() */
 static Tuplestorestate * SetupStatCountersTuplestore(FunctionCallInfo fcinfo,
 													 TupleDesc *tupleDescriptor);
-static void StoreStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
-							  Oid dbId);
-static void StoreStatCountersOne(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
-								 pg_atomic_uint64 *counters);
-static void ResetStatCounters(Oid dbId);
-static void ResetStatCountersOne(pg_atomic_uint64 *counters);
+static void StoreStatCountersForDbId(Tuplestorestate *tupleStore,
+									 TupleDesc tupleDescriptor,
+									 Oid dbId);
+static void StoreStatCountersFromArray(Tuplestorestate *tupleStore,
+									   TupleDesc tupleDescriptor,
+									   pg_atomic_uint64 *counters);
+static void ResetStatCountersForDbId(Oid dbId);
+static void ResetStatCounterArray(pg_atomic_uint64 *counters);
 
 
 PG_FUNCTION_INFO_V1(citus_stat_counters);
@@ -138,7 +139,7 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupStatCountersTuplestore(fcinfo, &tupleDescriptor);
 
-	StoreStatCounters(tupleStore, tupleDescriptor, dbId);
+	StoreStatCountersForDbId(tupleStore, tupleDescriptor, dbId);
 
 	PG_RETURN_VOID();
 }
@@ -180,7 +181,7 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 				 errmsg("shared memory is not initialized for Citus stat counters")));
 	}
 
-	ResetStatCounters(dbId);
+	ResetStatCountersForDbId(dbId);
 
 	PG_RETURN_VOID();
 }
@@ -266,12 +267,7 @@ IncrementStatCounter(int statId)
 		LWLockRelease(CitusStatCountersSharedState->lock);
 		LWLockAcquire(CitusStatCountersSharedState->lock, LW_EXCLUSIVE);
 
-		/*
-		 * Since we don't have an entry for this database, so need to
-		 * initialize the counters as well.
-		 */
-		bool init = true;
-		dbEntry = CitusStatCountersHashEntryAllocIfNotExists(dbId, init);
+		dbEntry = CitusStatCountersHashEntryAllocIfNotExists(dbId);
 
 		/* downgrade the lock to shared */
 		LWLockRelease(CitusStatCountersSharedState->lock);
@@ -392,18 +388,32 @@ CitusStatCountersShmemInit(void)
 			goto error;
 		}
 
-		/*
-		 * We don't need to initialize the counters since we'll set them to the
-		 * values read from the file soon.
-		 */
-		bool init = false;
-		StatCountersHashEntry *dbEntry = CitusStatCountersHashEntryAllocIfNotExists(dbId,
-																					init);
+		LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
+
+		StatCountersHashEntry *dbEntry = (StatCountersHashEntry *) hash_search(
+			CitusStatCountersSharedHash,
+			(void *) &dbId,
+			HASH_FIND,
+			NULL);
+		if (!dbEntry)
+		{
+			/* promote the lock to exclusive to insert the new entry for this database */
+			LWLockRelease(CitusStatCountersSharedState->lock);
+			LWLockAcquire(CitusStatCountersSharedState->lock, LW_EXCLUSIVE);
+
+			dbEntry = CitusStatCountersHashEntryAllocIfNotExists(dbId);
+
+			/* downgrade the lock to shared */
+			LWLockRelease(CitusStatCountersSharedState->lock);
+			LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
+		}
 
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
-			pg_atomic_write_u64(&dbEntry->counters[statIdx], statCounters[statIdx]);
+			pg_atomic_fetch_add_u64(&dbEntry->counters[statIdx], statCounters[statIdx]);
 		}
+
+		LWLockRelease(CitusStatCountersSharedState->lock);
 	}
 
 	FreeFile(file);
@@ -445,10 +455,12 @@ CitusStatCountersShmemShutdown(int code, Datum arg)
 		return;
 	}
 
-	if (!EnableStatCounters || !CitusStatCountersSharedState)
+	if (!EnableStatCounters)
 	{
 		return;
 	}
+
+	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 
 	FILE *file = AllocateFile(CITUS_STAT_COUNTERS_TMP_DUMP_FILE, PG_BINARY_W);
 	if (file == NULL)
@@ -512,9 +524,12 @@ CitusStatCountersShmemShutdown(int code, Datum arg)
 						CITUS_STAT_COUNTERS_DUMP_FILE)));
 	}
 
+	LWLockRelease(CitusStatCountersSharedState->lock);
+
 	return;
 
 error:
+
 	ereport(LOG,
 			(errcode_for_file_access(),
 			 errmsg("could not write citus_stat_counters file \"%s\": %m",
@@ -524,6 +539,8 @@ error:
 	{
 		FreeFile(file);
 	}
+
+	LWLockRelease(CitusStatCountersSharedState->lock);
 
 	unlink(CITUS_STAT_COUNTERS_DUMP_FILE);
 }
@@ -566,7 +583,7 @@ CitusStatCountersMatchFn(const void *key1, const void *key2, Size keysize)
  * Assumes that the caller has exclusive access to the hash table.
  */
 static StatCountersHashEntry *
-CitusStatCountersHashEntryAllocIfNotExists(Oid dbId, bool init)
+CitusStatCountersHashEntryAllocIfNotExists(Oid dbId)
 {
 	bool councurrentlyInserted = false;
 	StatCountersHashEntry *dbEntry =
@@ -578,7 +595,7 @@ CitusStatCountersHashEntryAllocIfNotExists(Oid dbId, bool init)
 	 * Initialize the counters to 0 if someone else didn't race while we
 	 * were promoting the lock.
 	 */
-	if (!councurrentlyInserted && init)
+	if (!councurrentlyInserted)
 	{
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
@@ -644,11 +661,11 @@ SetupStatCountersTuplestore(FunctionCallInfo fcinfo, TupleDesc *tupleDescriptor)
 
 
 /*
- * StoreStatCounters fetches the stat counters for the specified database and
- * stores them into the given tuple store.
+ * StoreStatCountersForDbId fetches the stat counters for the specified database
+ * and stores them into the given tuple store.
  */
 static void
-StoreStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor, Oid dbId)
+StoreStatCountersForDbId(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor, Oid dbId)
 {
 	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 
@@ -657,15 +674,15 @@ StoreStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor, Oid db
 												 HASH_FIND, NULL);
 	if (dbEntry)
 	{
-		StoreStatCountersOne(tupleStore, tupleDescriptor, dbEntry->counters);
+		StoreStatCountersFromArray(tupleStore, tupleDescriptor, dbEntry->counters);
 	}
 	else
 	{
 		/* use a zeroed entry if the database doesn't exist */
 		pg_atomic_uint64 zeroedCounters[N_CITUS_STAT_COUNTERS] = { 0 };
-		ResetStatCountersOne(zeroedCounters);
+		ResetStatCounterArray(zeroedCounters);
 
-		StoreStatCountersOne(tupleStore, tupleDescriptor, zeroedCounters);
+		StoreStatCountersFromArray(tupleStore, tupleDescriptor, zeroedCounters);
 	}
 
 	LWLockRelease(CitusStatCountersSharedState->lock);
@@ -673,14 +690,14 @@ StoreStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor, Oid db
 
 
 /*
- * StoreStatCountersOne stores the stat counters stored in given
+ * StoreStatCountersFromArray stores the stat counters stored in given
  * counter array into the given tuple store.
  *
  * Given counter array is assumed to be of length N_CITUS_STAT_COUNTERS.
  */
 static void
-StoreStatCountersOne(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
-					 pg_atomic_uint64 *counters)
+StoreStatCountersFromArray(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
+						   pg_atomic_uint64 *counters)
 {
 	Datum values[N_CITUS_STAT_COUNTERS] = { 0 };
 	bool isNulls[N_CITUS_STAT_COUNTERS] = { 0 };
@@ -695,11 +712,11 @@ StoreStatCountersOne(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
 
 
 /*
- * ResetStatCounters resets the stat counters for the specified database or for
- * all databases if InvalidOid is provided.
+ * ResetStatCountersForDbId resets the stat counters for the specified database or
+ * for all databases if InvalidOid is provided.
  */
 static void
-ResetStatCounters(Oid dbId)
+ResetStatCountersForDbId(Oid dbId)
 {
 	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 
@@ -712,7 +729,7 @@ ResetStatCounters(Oid dbId)
 		/* skip if we don't have an entry for this database */
 		if (dbEntry)
 		{
-			ResetStatCountersOne(dbEntry->counters);
+			ResetStatCounterArray(dbEntry->counters);
 		}
 	}
 	else
@@ -723,7 +740,7 @@ ResetStatCounters(Oid dbId)
 		StatCountersHashEntry *dbEntry = NULL;
 		while ((dbEntry = hash_seq_search(&hashSeqState)) != NULL)
 		{
-			ResetStatCountersOne(dbEntry->counters);
+			ResetStatCounterArray(dbEntry->counters);
 		}
 	}
 
@@ -732,13 +749,13 @@ ResetStatCounters(Oid dbId)
 
 
 /*
- * ResetStatCountersOne resets the stat counters stored in the given
+ * ResetStatCounterArray resets the stat counters stored in the given
  * counter array.
  *
  * Given counter array is assumed to be of length N_CITUS_STAT_COUNTERS.
  */
 static void
-ResetStatCountersOne(pg_atomic_uint64 *counters)
+ResetStatCounterArray(pg_atomic_uint64 *counters)
 {
 	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 	{
