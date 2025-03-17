@@ -25,11 +25,27 @@ SELECT citus_is_coordinator();
  t
 (1 row)
 
+-- I am primary node (fails beacuse not set in pg_dist)
+select citus_is_primary_node();
+WARNING:  could not find the current node in pg_dist_node
+DETAIL:  If this is the coordinator node, consider adding it into the metadata by using citus_set_coordinator_host() UDF. Otherwise, if you're going to use this node as a worker node for a new cluster, make sure to add this node into the metadata from the coordinator by using citus_add_node() UDF.
+ citus_is_primary_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- make sure coordinator is always in metadata.
 SELECT citus_set_coordinator_host('localhost');
  citus_set_coordinator_host
 ---------------------------------------------------------------------
 
+(1 row)
+
+-- I am primary node
+select citus_is_primary_node();
+ citus_is_primary_node
+---------------------------------------------------------------------
+ t
 (1 row)
 
 -- workers are not coordinator
@@ -38,6 +54,14 @@ SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
 ---------------------------------------------------------------------
  f
  f
+(2 rows)
+
+-- primary workers are primary node
+SELECT result FROM run_command_on_workers('SELECT citus_is_primary_node()');
+ result
+---------------------------------------------------------------------
+ t
+ t
 (2 rows)
 
 -- get the active nodes
