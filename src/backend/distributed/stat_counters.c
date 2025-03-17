@@ -397,12 +397,12 @@ CitusStatCountersShmemInit(void)
 		 * values read from the file soon.
 		 */
 		bool init = false;
-		StatCountersHashEntry *entry = CitusStatCountersHashEntryAllocIfNotExists(dbId,
-																				  init);
+		StatCountersHashEntry *dbEntry = CitusStatCountersHashEntryAllocIfNotExists(dbId,
+																					init);
 
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
-			pg_atomic_write_u64(&entry->counters[statIdx], statCounters[statIdx]);
+			pg_atomic_write_u64(&dbEntry->counters[statIdx], statCounters[statIdx]);
 		}
 	}
 
@@ -467,13 +467,13 @@ CitusStatCountersShmemShutdown(int code, Datum arg)
 		goto error;
 	}
 
-	StatCountersHashEntry *entry = NULL;
+	StatCountersHashEntry *dbEntry = NULL;
 
 	HASH_SEQ_STATUS hashSeqState = { 0 };
 	hash_seq_init(&hashSeqState, CitusStatCountersSharedHash);
-	while ((entry = hash_seq_search(&hashSeqState)) != NULL)
+	while ((dbEntry = hash_seq_search(&hashSeqState)) != NULL)
 	{
-		if (fwrite(&entry->dbId, sizeof(Oid), 1, file) != 1)
+		if (fwrite(&dbEntry->dbId, sizeof(Oid), 1, file) != 1)
 		{
 			/* we assume hash_seq_term won't change errno */
 			hash_seq_term(&hashSeqState);
@@ -484,7 +484,7 @@ CitusStatCountersShmemShutdown(int code, Datum arg)
 
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
-			statCounters[statIdx] = pg_atomic_read_u64(&entry->counters[statIdx]);
+			statCounters[statIdx] = pg_atomic_read_u64(&dbEntry->counters[statIdx]);
 		}
 
 		if (fwrite(&statCounters, sizeof(uint64), N_CITUS_STAT_COUNTERS, file) !=
@@ -652,12 +652,12 @@ StoreStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor, Oid db
 {
 	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 
-	StatCountersHashEntry *entry = hash_search(CitusStatCountersSharedHash,
-											   (void *) &dbId,
-											   HASH_FIND, NULL);
-	if (entry)
+	StatCountersHashEntry *dbEntry = hash_search(CitusStatCountersSharedHash,
+												 (void *) &dbId,
+												 HASH_FIND, NULL);
+	if (dbEntry)
 	{
-		StoreStatCountersOne(tupleStore, tupleDescriptor, entry->counters);
+		StoreStatCountersOne(tupleStore, tupleDescriptor, dbEntry->counters);
 	}
 	else
 	{
@@ -705,14 +705,14 @@ ResetStatCounters(Oid dbId)
 
 	if (OidIsValid(dbId))
 	{
-		StatCountersHashEntry *entry = hash_search(CitusStatCountersSharedHash,
-												   (void *) &dbId,
-												   HASH_FIND, NULL);
+		StatCountersHashEntry *dbEntry = hash_search(CitusStatCountersSharedHash,
+													 (void *) &dbId,
+													 HASH_FIND, NULL);
 
 		/* skip if we don't have an entry for this database */
-		if (entry)
+		if (dbEntry)
 		{
-			ResetStatCountersOne(entry->counters);
+			ResetStatCountersOne(dbEntry->counters);
 		}
 	}
 	else
@@ -720,10 +720,10 @@ ResetStatCounters(Oid dbId)
 		HASH_SEQ_STATUS hashSeqState = { 0 };
 		hash_seq_init(&hashSeqState, CitusStatCountersSharedHash);
 
-		StatCountersHashEntry *entry = NULL;
-		while ((entry = hash_seq_search(&hashSeqState)) != NULL)
+		StatCountersHashEntry *dbEntry = NULL;
+		while ((dbEntry = hash_seq_search(&hashSeqState)) != NULL)
 		{
-			ResetStatCountersOne(entry->counters);
+			ResetStatCountersOne(dbEntry->counters);
 		}
 	}
 
