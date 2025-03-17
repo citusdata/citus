@@ -42,5 +42,5 @@ DROP FUNCTION citus_internal.is_replication_origin_tracking_active();
 #include "../udfs/citus_finish_pg_upgrade/12.1-1.sql"
 
 DROP VIEW pg_catalog.citus_stat_counters;
-DROP FUNCTION pg_catalog.citus_stat_counters();
-DROP FUNCTION pg_catalog.citus_stat_counters_reset();
+DROP FUNCTION pg_catalog.citus_stat_counters(oid);
+DROP FUNCTION pg_catalog.citus_stat_counters_reset(oid);
