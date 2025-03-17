@@ -6,6 +6,7 @@
  * Citus.
  *
  * XXX: Need to handle dropped databases.
+ * XXX: Maybe add last_reset_time?
  *
  *-------------------------------------------------------------------------
  */
