@@ -11,6 +11,8 @@
  *-------------------------------------------------------------------------
  */
 
+#include <unistd.h>
+
 #include "postgres.h"
 
 #include "funcapi.h"
@@ -106,6 +108,13 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
+	if (PG_ARGISNULL(0))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("database oid cannot be NULL")));
+	}
+
 	Oid dbId = PG_GETARG_OID(0);
 
 	if (!EnableStatCounters)
@@ -143,6 +152,13 @@ Datum
 citus_stat_counters_reset(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
+
+	if (PG_ARGISNULL(0))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("database oid cannot be NULL")));
+	}
 
 	Oid dbId = PG_GETARG_OID(0);
 
@@ -235,7 +251,9 @@ IncrementStatCounter(int statId)
 	/*
 	 * XXX: We can cache the entry for the current database if that becomes a
 	 *      performance concern. Doing so should be fine since we never remove
-	 *      entries.
+	 *      entries. And if we remove them, dropping a database succeeds only
+	 *      after all the backends are disconnected, so we cannot have a backend
+	 *      that has a dangling entry.
 	 */
 	StatCountersHashEntry *dbEntry = (StatCountersHashEntry *) hash_search(
 		CitusStatCountersSharedHash,
@@ -626,43 +644,28 @@ SetupStatCountersTuplestore(FunctionCallInfo fcinfo, TupleDesc *tupleDescriptor)
 
 
 /*
- * StoreStatCounters fetches the stat counters for the specified database -or for
- * all databases if InvalidOid is provided- and stores them into the given tuple
- * store.
+ * StoreStatCounters fetches the stat counters for the specified database and
+ * stores them into the given tuple store.
  */
 static void
 StoreStatCounters(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor, Oid dbId)
 {
 	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 
-	if (OidIsValid(dbId))
+	StatCountersHashEntry *entry = hash_search(CitusStatCountersSharedHash,
+											   (void *) &dbId,
+											   HASH_FIND, NULL);
+	if (entry)
 	{
-		StatCountersHashEntry *entry = hash_search(CitusStatCountersSharedHash,
-												   (void *) &dbId,
-												   HASH_FIND, NULL);
-		if (entry)
-		{
-			StoreStatCountersOne(tupleStore, tupleDescriptor, entry->counters);
-		}
-		else
-		{
-			/* use a zeroed entry if the database doesn't exist */
-			pg_atomic_uint64 zeroedCounters[N_CITUS_STAT_COUNTERS] = { 0 };
-			ResetStatCountersOne(zeroedCounters);
-
-			StoreStatCountersOne(tupleStore, tupleDescriptor, zeroedCounters);
-		}
+		StoreStatCountersOne(tupleStore, tupleDescriptor, entry->counters);
 	}
 	else
 	{
-		HASH_SEQ_STATUS hashSeqState = { 0 };
-		hash_seq_init(&hashSeqState, CitusStatCountersSharedHash);
+		/* use a zeroed entry if the database doesn't exist */
+		pg_atomic_uint64 zeroedCounters[N_CITUS_STAT_COUNTERS] = { 0 };
+		ResetStatCountersOne(zeroedCounters);
 
-		StatCountersHashEntry *entry;
-		while ((entry = hash_seq_search(&hashSeqState)) != NULL)
-		{
-			StoreStatCountersOne(tupleStore, tupleDescriptor, entry->counters);
-		}
+		StoreStatCountersOne(tupleStore, tupleDescriptor, zeroedCounters);
 	}
 
 	LWLockRelease(CitusStatCountersSharedState->lock);

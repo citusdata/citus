@@ -13,7 +13,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
 RETURNS SETOF RECORD
 LANGUAGE C VOLATILE PARALLEL UNSAFE
 AS 'MODULE_PATHNAME', $$citus_stat_counters$$;
-COMMENT ON FUNCTION pg_catalog.citus_stat_counters(oid) IS 'Returns Citus stat counters for the given database or all databases if database_oid is 0';
+COMMENT ON FUNCTION pg_catalog.citus_stat_counters(oid) IS 'Returns Citus stat counters for the given database';
 
 CREATE VIEW citus.citus_stat_counters AS
 SELECT oid, datname, (pg_catalog.citus_stat_counters(oid)).* FROM pg_catalog.pg_database;
