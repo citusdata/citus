@@ -62,8 +62,8 @@ typedef struct StatCountersState
 } StatCountersState;
 
 
-/* GUC value for citus.enable_stat_counters */
-bool EnableStatCounters = true;
+/* GUC value for citus.stat_counters_flush_timeout */
+int StatCountersFlushTimeout = DEFAULT_STAT_COUNTERS_FLUSH_TIMEOUT;
 
 /* stat counters dump file version */
 static const uint32 CITUS_STAT_COUNTERS_FILE_VERSION = 1;
@@ -118,13 +118,13 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 
 	Oid dbId = PG_GETARG_OID(0);
 
-	if (!EnableStatCounters)
+	if (!IsCitusStatCountersEnabled())
 	{
 		ereport(NOTICE,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("Citus stat counters are not enabled, consider setting "
-						"citus.enable_stat_counters to true and restarting the "
-						"server")));
+						"citus.stat_counters_flush_timeout to a non-negative value "
+						"and restarting the server")));
 
 		PG_RETURN_VOID();
 	}
@@ -163,13 +163,13 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 
 	Oid dbId = PG_GETARG_OID(0);
 
-	if (!EnableStatCounters)
+	if (!IsCitusStatCountersEnabled())
 	{
 		ereport(NOTICE,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("Citus stat counters are not enabled, consider setting "
-						"citus.enable_stat_counters to true and restarting the "
-						"server")));
+						"citus.stat_counters_flush_timeout to a non-negative value "
+						"and restarting the server")));
 
 		PG_RETURN_VOID();
 	}
@@ -229,13 +229,27 @@ StatCountersArrayShmemSize(void)
 
 
 /*
+ * IsCitusStatCountersEnabled returns whether the stat counters are enabled.
+ */
+bool
+IsCitusStatCountersEnabled(void)
+{
+	Assert(StatCountersFlushTimeout >= DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT);
+	return StatCountersFlushTimeout != DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT;
+}
+
+
+/*
  * IncrementStatCounter increments the stat counter for the given statId
  * of the current database.
  */
 void
 IncrementStatCounter(int statId)
 {
-	if (!EnableStatCounters)
+	static instr_time LastFlushTime = { 0 };
+	static uint64 LocalStatCounters[N_CITUS_STAT_COUNTERS] = { 0 };
+
+	if (!IsCitusStatCountersEnabled())
 	{
 		return;
 	}
@@ -243,6 +257,29 @@ IncrementStatCounter(int statId)
 	if (!CitusStatCountersSharedState || !CitusStatCountersSharedHash)
 	{
 		return;
+	}
+
+	LocalStatCounters[statId]++;
+
+	if (INSTR_TIME_IS_ZERO(LastFlushTime))
+	{
+		/* assume that the first increment is the start of the flush interval */
+		INSTR_TIME_SET_CURRENT(LastFlushTime);
+		return;
+	}
+
+	instr_time now = { 0 };
+	INSTR_TIME_SET_CURRENT(now);
+	INSTR_TIME_SUBTRACT(now, LastFlushTime);
+	if (INSTR_TIME_GET_MILLISEC(now) < StatCountersFlushTimeout)
+	{
+		/* not time to flush yet */
+		return;
+	}
+	else
+	{
+		/* reset the flush interval since we'll flush now */
+		INSTR_TIME_SET_CURRENT(LastFlushTime);
 	}
 
 	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
@@ -274,7 +311,18 @@ IncrementStatCounter(int statId)
 		LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 	}
 
-	pg_atomic_fetch_add_u64(&dbEntry->counters[statId], 1);
+	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+	{
+		if (LocalStatCounters[statIdx] == 0)
+		{
+			/* nothing to flush for this stat, avoid unnecessary lock contention */
+			continue;
+		}
+
+		pg_atomic_fetch_add_u64(&dbEntry->counters[statIdx], LocalStatCounters[statIdx]);
+
+		LocalStatCounters[statIdx] = 0;
+	}
 
 	LWLockRelease(CitusStatCountersSharedState->lock);
 }
@@ -293,7 +341,7 @@ CitusStatCountersShmemInit(void)
 		prev_shmem_startup_hook();
 	}
 
-	if (!EnableStatCounters)
+	if (!IsCitusStatCountersEnabled())
 	{
 		return;
 	}
@@ -470,7 +518,7 @@ CitusStatCountersShmemShutdown(int code, Datum arg)
 		return;
 	}
 
-	if (!EnableStatCounters)
+	if (!IsCitusStatCountersEnabled())
 	{
 		return;
 	}

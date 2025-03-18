@@ -619,7 +619,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 
-	if (EnableStatCounters)
+	if (IsCitusStatCountersEnabled())
 	{
 		RequestAddinShmemSpace(StatCountersArrayShmemSize());
 		RequestNamedLWLockTranche(STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME, 1);
@@ -1458,17 +1458,6 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.enable_stat_counters",
-		gettext_noop(
-			"Determines whether the statistics counters are enabled for Citus."),
-		NULL,
-		&EnableStatCounters,
-		true,
-		PGC_POSTMASTER,
-		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2447,6 +2436,27 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_SUSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stat_counters_flush_timeout",
+		gettext_noop("Sets the timeout to flush the local stat counters into "
+					 "the shared memory."),
+		gettext_noop("Stat counters are used to track the number of certain "
+					 "operations in Citus. While setting this GUC to -1 disables "
+					 "stat counters, setting it to a positive value will flush "
+					 "the local stat counters into the shared memory every "
+					 "timeout milliseconds instead of flushing them immediately "
+					 "after the operation, as it is done when the value is 0. "
+					 "Higher values reduce the overhead of flushing the stat "
+					 "counters but increase the time it takes to see the updated "
+					 "stat counters."),
+		&StatCountersFlushTimeout,
+		DEFAULT_STAT_COUNTERS_FLUSH_TIMEOUT,
+		DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT,
+		5 * MS_PER_MINUTE,
+		PGC_POSTMASTER,
+		GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
 	/*

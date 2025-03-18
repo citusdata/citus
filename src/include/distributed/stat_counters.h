@@ -13,7 +13,12 @@
 
 #include <port/atomics.h>
 
+#include "distributed/time_constants.h"
+
 #define STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME "citus_stat_counters_lock_tranche"
+
+#define DEFAULT_STAT_COUNTERS_FLUSH_TIMEOUT (30 * MS_PER_SECOND)
+#define DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT -1
 
 /*
  * Must be in the same order as the columns defined in citus_stat_counters view,
@@ -32,10 +37,12 @@ typedef enum
 	N_CITUS_STAT_COUNTERS
 } StatType;
 
-extern bool EnableStatCounters;
+extern int StatCountersFlushTimeout;
+
+extern bool IsCitusStatCountersEnabled(void);
+extern void IncrementStatCounter(int statId);
 
 extern void InitializeStatCountersArrayMem(void);
 extern Size StatCountersArrayShmemSize(void);
-extern void IncrementStatCounter(int statId);
 
 #endif /* STAT_COUNTERS_H */
