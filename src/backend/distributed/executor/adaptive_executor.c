@@ -2036,7 +2036,7 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 			else
 			{
 				connection->connectionState = MULTI_CONNECTION_FAILED;
-				IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+				IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 			}
 
 
@@ -3013,7 +3013,7 @@ ConnectionStateMachine(WorkerSession *session)
 				 * connection, clear any state associated with it.
 				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
-				IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+				IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				break;
 			}
 
@@ -3035,7 +3035,7 @@ ConnectionStateMachine(WorkerSession *session)
 				else if (status == CONNECTION_BAD)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
-					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					break;
 				}
 
@@ -3051,7 +3051,7 @@ ConnectionStateMachine(WorkerSession *session)
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
-					IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{

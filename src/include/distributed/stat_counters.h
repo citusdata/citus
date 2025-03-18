@@ -40,7 +40,7 @@ typedef enum
 extern int StatCountersFlushTimeout;
 
 extern bool IsCitusStatCountersEnabled(void);
-extern void IncrementStatCounter(int statId);
+extern void IncrementStatCounterForMyDb(int statId);
 
 extern void InitializeStatCountersArrayMem(void);
 extern Size StatCountersArrayShmemSize(void);

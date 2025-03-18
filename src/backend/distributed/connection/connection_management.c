@@ -364,7 +364,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 			 */
 			if (PQstatus(connection->pgConn) == CONNECTION_OK)
 			{
-				IncrementStatCounter(STAT_CONNECTION_REUSED);
+				IncrementStatCounterForMyDb(STAT_CONNECTION_REUSED);
 			}
 
 			return connection;
@@ -1102,7 +1102,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 											 eventMask, NULL);
 					if (!success)
 					{
-						IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+						IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 						ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 										errmsg("connection establishment for node %s:%d "
 											   "failed", connection->hostname,
@@ -1212,7 +1212,7 @@ CloseNotReadyMultiConnectionStates(List *connectionStates)
 		/* close connection, otherwise we take up resource on the other side */
 		CitusPQFinish(connection);
 
-		IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+		IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 	}
 }
 
@@ -1636,7 +1636,7 @@ MarkConnectionConnected(MultiConnection *connection, bool newConnection)
 
 	if (newConnection)
 	{
-		IncrementStatCounter(STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED);
+		IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED);
 	}
 }
 
