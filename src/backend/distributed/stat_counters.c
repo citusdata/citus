@@ -5,6 +5,21 @@
  * This file contains functions to track various statistic counters for
  * Citus.
  *
+ * Each backend increments the local counters (PendingStatCounters) and
+ * flushes them to the shared memory at the end of the flush interval
+ * (StatCountersFlushTimeout). The shared memory is used to keep track
+ * of the stat counters across backends for all databases.
+ *
+ * We don't have a good way to enforce that we flush the pending counters
+ * always at the end of the flush interval because we only check for the
+ * interval at the time of incrementing a counter. And, if a backend exits
+ * before the interval elapses, then we still flush the pending counters at
+ * the time of exit via CitusStatCountersFlushAtExit().
+ *
+ * Also, we store the stat counters in CITUS_STAT_COUNTERS_DUMP_FILE on
+ * shutdown via postmaster and restore them on startup via the first backend
+ * that initializes the shared memory for stat counters.
+ *
  * XXX: Need to handle dropped databases.
  * XXX: Maybe add last_reset_time?
  *
