@@ -72,16 +72,25 @@ static const uint32 CITUS_STAT_COUNTERS_FILE_VERSION = 1;
 static StatCountersState *CitusStatCountersSharedState = NULL;
 static HTAB *CitusStatCountersSharedHash = NULL;
 
+/* local stat counters that are pending to be flushed */
+static uint64 PendingStatCounters[N_CITUS_STAT_COUNTERS] = { 0 };
+
 
 /* shared memory init & management */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static void CitusStatCountersShmemInit(void);
+static void CitusStatCountersFlushAtExit(int code, Datum arg);
 static void CitusStatCountersShmemShutdown(int code, Datum arg);
 
 /* shared hash callbacks & utilities */
 static uint32 CitusStatCountersHashFn(const void *key, Size keysize);
 static int CitusStatCountersMatchFn(const void *key1, const void *key2, Size keysize);
 static StatCountersHashEntry * CitusStatCountersHashEntryAllocIfNotExists(Oid dbId);
+
+/* helper functions to increment and flush stat counters */
+static bool ShouldByPassLocalCounters(void);
+static void IncrementSharedStatCounter(int statId);
+static void FlushPendingCounters(void);
 
 /* helper functions for citus_stat_counters() and citus_stat_counters_reset() */
 static Tuplestorestate * SetupStatCountersTuplestore(FunctionCallInfo fcinfo,
@@ -247,7 +256,6 @@ void
 IncrementStatCounter(int statId)
 {
 	static instr_time LastFlushTime = { 0 };
-	static uint64 LocalStatCounters[N_CITUS_STAT_COUNTERS] = { 0 };
 
 	if (!IsCitusStatCountersEnabled())
 	{
@@ -259,40 +267,103 @@ IncrementStatCounter(int statId)
 		return;
 	}
 
-	LocalStatCounters[statId]++;
-
-	if (INSTR_TIME_IS_ZERO(LastFlushTime))
+	if (ShouldByPassLocalCounters())
 	{
-		/* assume that the first increment is the start of the flush interval */
-		INSTR_TIME_SET_CURRENT(LastFlushTime);
-		return;
-	}
-
-	instr_time now = { 0 };
-	INSTR_TIME_SET_CURRENT(now);
-	INSTR_TIME_SUBTRACT(now, LastFlushTime);
-	if (INSTR_TIME_GET_MILLISEC(now) < StatCountersFlushTimeout)
-	{
-		/* not time to flush yet */
-		return;
+		IncrementSharedStatCounter(statId);
 	}
 	else
 	{
-		/* reset the flush interval since we'll flush now */
-		INSTR_TIME_SET_CURRENT(LastFlushTime);
+		PendingStatCounters[statId]++;
+
+		if (INSTR_TIME_IS_ZERO(LastFlushTime))
+		{
+			/* assume that the first increment is the start of the flush interval */
+			INSTR_TIME_SET_CURRENT(LastFlushTime);
+			return;
+		}
+
+		instr_time now = { 0 };
+		INSTR_TIME_SET_CURRENT(now);
+		INSTR_TIME_SUBTRACT(now, LastFlushTime);
+		if (INSTR_TIME_GET_MILLISEC(now) >= StatCountersFlushTimeout)
+		{
+			FlushPendingCounters();
+
+			INSTR_TIME_SET_CURRENT(LastFlushTime);
+		}
 	}
+}
+
+
+/*
+ * ShouldByPassLocalCounters returns true if we should immediately increment
+ * the shared memory counters without buffering them in the local counters.
+ */
+static bool
+ShouldByPassLocalCounters(void)
+{
+	Assert(IsCitusStatCountersEnabled());
+	return StatCountersFlushTimeout == 0;
+}
+
+
+/*
+ * IncrementSharedStatCounter increments the stat counter for the given statId
+ * of the current database in the shared memory.
+ */
+static void
+IncrementSharedStatCounter(int statId)
+{
+	Oid dbId = MyDatabaseId;
 
 	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 
+	/*
+	 * XXX: Can we cache the entry for the current database?
+	 *
+	 *      From one perspective, doing so should be fine since we never
+	 *      remove entries. And if we were removing them, dropping a database
+	 *      succeeds only after all the backends are disconnected, so we cannot
+	 *      have a backend that has a dangling entry.
+	 *
+	 *      On the other hand, we're not sure if a potential hash table resize
+	 *      would invalidate the cached entry.
+	 */
+	StatCountersHashEntry *dbEntry = (StatCountersHashEntry *) hash_search(
+		CitusStatCountersSharedHash,
+		(void *) &dbId,
+		HASH_FIND,
+		NULL);
+	if (!dbEntry)
+	{
+		/* promote the lock to exclusive to insert the new entry for this database */
+		LWLockRelease(CitusStatCountersSharedState->lock);
+		LWLockAcquire(CitusStatCountersSharedState->lock, LW_EXCLUSIVE);
+
+		dbEntry = CitusStatCountersHashEntryAllocIfNotExists(dbId);
+
+		/* downgrade the lock to shared */
+		LWLockRelease(CitusStatCountersSharedState->lock);
+		LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
+	}
+
+	pg_atomic_fetch_add_u64(&dbEntry->counters[statId], 1);
+
+	LWLockRelease(CitusStatCountersSharedState->lock);
+}
+
+
+/*
+ * FlushPendingCounters flushes PendingStatCounters to the shared memory.
+ */
+static void
+FlushPendingCounters(void)
+{
 	Oid dbId = MyDatabaseId;
 
-	/*
-	 * XXX: We can cache the entry for the current database if that becomes a
-	 *      performance concern. Doing so should be fine since we never remove
-	 *      entries. And if we remove them, dropping a database succeeds only
-	 *      after all the backends are disconnected, so we cannot have a backend
-	 *      that has a dangling entry.
-	 */
+	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
+
+	/* XXX: Same here, can we cache the entry for the current database? */
 	StatCountersHashEntry *dbEntry = (StatCountersHashEntry *) hash_search(
 		CitusStatCountersSharedHash,
 		(void *) &dbId,
@@ -313,15 +384,16 @@ IncrementStatCounter(int statId)
 
 	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 	{
-		if (LocalStatCounters[statIdx] == 0)
+		if (PendingStatCounters[statIdx] == 0)
 		{
 			/* nothing to flush for this stat, avoid unnecessary lock contention */
 			continue;
 		}
 
-		pg_atomic_fetch_add_u64(&dbEntry->counters[statIdx], LocalStatCounters[statIdx]);
+		pg_atomic_fetch_add_u64(&dbEntry->counters[statIdx],
+								PendingStatCounters[statIdx]);
 
-		LocalStatCounters[statIdx] = 0;
+		PendingStatCounters[statIdx] = 0;
 	}
 
 	LWLockRelease(CitusStatCountersSharedState->lock);
@@ -375,8 +447,14 @@ CitusStatCountersShmemInit(void)
 
 	LWLockRelease(AddinShmemInitLock);
 
-	if (!IsUnderPostmaster)
+	if (IsUnderPostmaster)
 	{
+		/* postmaster dumps the stat counters on shutdown */
+		before_shmem_exit(CitusStatCountersFlushAtExit, (Datum) 0);
+	}
+	else
+	{
+		/* other backends flush their pending counters on exit, if needed */
 		on_shmem_exit(CitusStatCountersShmemShutdown, (Datum) 0);
 	}
 
@@ -506,8 +584,24 @@ error:
 
 
 /*
- * CitusStatCountersShmemShutdown is called on shutdown to dump the stat counters
- * to CITUS_STAT_COUNTERS_DUMP_FILE.
+ * CitusStatCountersFlushAtExit is called on backend exit to flush the local
+ * stat counters to the shared memory, if there are any pending.
+ */
+static void
+CitusStatCountersFlushAtExit(int code, Datum arg)
+{
+	if (!IsCitusStatCountersEnabled())
+	{
+		return;
+	}
+
+	FlushPendingCounters();
+}
+
+
+/*
+ * CitusStatCountersShmemShutdown is called on shutdown by postmaster to dump the
+ * stat counters to CITUS_STAT_COUNTERS_DUMP_FILE.
  */
 static void
 CitusStatCountersShmemShutdown(int code, Datum arg)
