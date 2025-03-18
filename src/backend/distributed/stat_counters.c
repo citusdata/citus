@@ -337,7 +337,13 @@ CitusStatCountersShmemInit(void)
 		return;
 	}
 
-	/* load stat file, don't care about locking */
+	/*
+	 * We know that only one backend can be here at this point, so we're
+	 * the only one that restores the stat counters from the dump file.
+	 *
+	 * However, we don't block other backends from accessing the shared
+	 * memory while we're restoring the stat counters - need to be careful.
+	 */
 	FILE *file = AllocateFile(CITUS_STAT_COUNTERS_DUMP_FILE, PG_BINARY_R);
 	if (file == NULL)
 	{
@@ -410,6 +416,15 @@ CitusStatCountersShmemInit(void)
 
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
+			/*
+			 * If no other backend has created the entry for us, then we do that
+			 * via the above call made to CitusStatCountersHashEntryAllocIfNotExists()
+			 * and there we init the counters if we just created the entry.
+			 *
+			 * So here we always "fetch_add" instead of "write" or "init" to avoid
+			 * overwriting the counters-increments made by other backends, if it's not
+			 * us who created the entry.
+			 */
 			pg_atomic_fetch_add_u64(&dbEntry->counters[statIdx], statCounters[statIdx]);
 		}
 
