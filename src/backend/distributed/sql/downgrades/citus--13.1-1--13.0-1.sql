@@ -11,6 +11,7 @@ DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid,oid,int,boolean);
 ALTER TABLE pg_catalog.pg_dist_transaction DROP COLUMN outer_xid;
 REVOKE USAGE ON SCHEMA citus_internal FROM PUBLIC;
 
+DROP FUNCTION pg_catalog.citus_is_primary_node();
 DROP FUNCTION citus_internal.add_colocation_metadata(int, int, int, regtype, oid);
 DROP FUNCTION citus_internal.add_object_metadata(text, text[], text[], integer, integer, boolean);
 DROP FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char");
