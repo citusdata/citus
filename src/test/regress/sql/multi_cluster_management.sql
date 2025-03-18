@@ -14,11 +14,20 @@ RESET citus.metadata_sync_mode;
 -- I am coordinator
 SELECT citus_is_coordinator();
 
+-- I am primary node (fails beacuse not set in pg_dist)
+select citus_is_primary_node();
+
 -- make sure coordinator is always in metadata.
 SELECT citus_set_coordinator_host('localhost');
 
+-- I am primary node
+select citus_is_primary_node();
+
 -- workers are not coordinator
 SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
+
+-- primary workers are primary node
+SELECT result FROM run_command_on_workers('SELECT citus_is_primary_node()');
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
