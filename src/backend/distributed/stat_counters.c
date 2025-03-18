@@ -475,6 +475,13 @@ CitusStatCountersShmemInit(void)
 
 	if (alreadyInitialized)
 	{
+		/*
+		 * alreadyInitialized being true doesn't necessarily mean that the
+		 * backend that initialized the shared memory has completed restoring
+		 * the stat counters from the dump file.
+		 *
+		 * However, it's still fine to return here as commented below.
+		 */
 		return;
 	}
 
