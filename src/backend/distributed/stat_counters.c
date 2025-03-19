@@ -7,7 +7,7 @@
  *
  * Each backend increments the local counters (PendingStatCounters) and
  * flushes them to the shared memory at the end of the flush interval
- * (StatCountersFlushTimeout). The shared memory is used to keep track
+ * (StatCountersFlushInterval). The shared memory is used to keep track
  * of the stat counters across backends for all databases.
  *
  * We don't have a good way to enforce that we flush the pending counters
@@ -20,8 +20,15 @@
  * shutdown via postmaster and restore them on startup via the first backend
  * that initializes the shared memory for stat counters.
  *
- * XXX: Need to handle dropped databases.
- * XXX: Maybe add last_reset_time?
+ * And for the dropped databases, Citus maintenance daemon removes the stat
+ * counters from the shared memory periodically, which is controlled by
+ * StatCountersPurgeInterval. When the feature is disabled, removal of the
+ * stat counters is automatically disabled. Instead of inserting a cleanup
+ * record into pg_dist_cleanup, we choose to remove the stat counters via
+ * the maintenance daemon because inserting a cleanup record wouldn't work
+ * when the current database is dropped. And if there were other databases
+ * where Citus is installed, then they would still continue to have the
+ * dropped database's stat counters in the shared memory.
  *
  *-------------------------------------------------------------------------
  */
@@ -37,7 +44,9 @@
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
+#include "utils/syscache.h"
 
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/stat_counters.h"
 
@@ -68,6 +77,8 @@ typedef struct StatCountersHashEntry
 	Oid dbId;
 
 	pg_atomic_uint64 counters[N_CITUS_STAT_COUNTERS];
+
+	TimestampTz statsResetTimestamp;
 } StatCountersHashEntry;
 
 /* shared memory state */
@@ -77,8 +88,11 @@ typedef struct StatCountersState
 } StatCountersState;
 
 
-/* GUC value for citus.stat_counters_flush_timeout */
-int StatCountersFlushTimeout = DEFAULT_STAT_COUNTERS_FLUSH_TIMEOUT;
+/* GUC value for citus.stat_counters_flush_interval */
+int StatCountersFlushInterval = DEFAULT_STAT_COUNTERS_FLUSH_INTERVAL;
+
+/* GUC value for citus.stat_counters_purge_interval */
+int StatCountersPurgeInterval = DEFAULT_STAT_COUNTERS_PURGE_INTERVAL;
 
 /* stat counters dump file version */
 static const uint32 CITUS_STAT_COUNTERS_FILE_VERSION = 1;
@@ -100,9 +114,10 @@ static Tuplestorestate * SetupStatCountersTuplestore(FunctionCallInfo fcinfo,
 static void StoreStatCountersForDbId(Tuplestorestate *tupleStore,
 									 TupleDesc tupleDescriptor,
 									 Oid dbId);
-static void StoreStatCountersFromArray(Tuplestorestate *tupleStore,
-									   TupleDesc tupleDescriptor,
-									   pg_atomic_uint64 *counters);
+static void StoreStatCountersFromValues(Tuplestorestate *tupleStore,
+										TupleDesc tupleDescriptor,
+										pg_atomic_uint64 *counters,
+										TimestampTz statsResetTimestamp);
 static void ResetStatCountersForDbId(Oid dbId);
 static void ResetStatCounterArray(pg_atomic_uint64 *counters);
 
@@ -146,7 +161,7 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 		ereport(NOTICE,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("Citus stat counters are not enabled, consider setting "
-						"citus.stat_counters_flush_timeout to a non-negative value "
+						"citus.stat_counters_flush_interval to a non-negative value "
 						"and restarting the server")));
 
 		PG_RETURN_VOID();
@@ -191,7 +206,7 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 		ereport(NOTICE,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("Citus stat counters are not enabled, consider setting "
-						"citus.stat_counters_flush_timeout to a non-negative value "
+						"citus.stat_counters_flush_interval to a non-negative value "
 						"and restarting the server")));
 
 		PG_RETURN_VOID();
@@ -216,8 +231,8 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 bool
 IsCitusStatCountersEnabled(void)
 {
-	Assert(StatCountersFlushTimeout >= DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT);
-	return StatCountersFlushTimeout != DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT;
+	Assert(StatCountersFlushInterval >= DISABLE_STAT_COUNTERS_FLUSH_INTERVAL);
+	return StatCountersFlushInterval != DISABLE_STAT_COUNTERS_FLUSH_INTERVAL;
 }
 
 
@@ -310,6 +325,57 @@ StatCountersArrayShmemSize(void)
 
 
 /*
+ * CitusStatCountersRemoveDroppedDatabases removes the stat counters for the
+ * databases that are dropped.
+ */
+void
+CitusStatCountersRemoveDroppedDatabases(void)
+{
+	Assert(IsCitusStatCountersEnabled());
+
+	List *droppedDatabaseIdList = NIL;
+
+	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
+
+	HASH_SEQ_STATUS hashSeqState = { 0 };
+	hash_seq_init(&hashSeqState, CitusStatCountersSharedHash);
+
+	StatCountersHashEntry *dbEntry = NULL;
+	while ((dbEntry = hash_seq_search(&hashSeqState)) != NULL)
+	{
+		HeapTuple dbTuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(dbEntry->dbId));
+		if (!HeapTupleIsValid(dbTuple))
+		{
+			droppedDatabaseIdList = lappend_oid(droppedDatabaseIdList, dbEntry->dbId);
+		}
+		else
+		{
+			ReleaseSysCache(dbTuple);
+		}
+	}
+
+	LWLockRelease(CitusStatCountersSharedState->lock);
+
+	if (list_length(droppedDatabaseIdList) == 0)
+	{
+		return;
+	}
+
+	/* acquire exclusive lock to quickly remove the entries */
+	LWLockAcquire(CitusStatCountersSharedState->lock, LW_EXCLUSIVE);
+
+	Oid droppedDatabaseId = InvalidOid;
+	foreach_declared_oid(droppedDatabaseId, droppedDatabaseIdList)
+	{
+		hash_search(CitusStatCountersSharedHash, (void *) &droppedDatabaseId,
+					HASH_REMOVE, NULL);
+	}
+
+	LWLockRelease(CitusStatCountersSharedState->lock);
+}
+
+
+/*
  * SetupStatCountersTuplestore returns a Tuplestorestate for returning the
  * stat counters and setups the provided TupleDesc.
  */
@@ -376,15 +442,19 @@ StoreStatCountersForDbId(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
 												 HASH_FIND, NULL);
 	if (dbEntry)
 	{
-		StoreStatCountersFromArray(tupleStore, tupleDescriptor, dbEntry->counters);
+		StoreStatCountersFromValues(tupleStore, tupleDescriptor, dbEntry->counters,
+									dbEntry->statsResetTimestamp);
 	}
 	else
 	{
 		/* use a zeroed entry if the database doesn't exist */
+		TimestampTz zeroedTimestamp = 0;
+
 		pg_atomic_uint64 zeroedCounters[N_CITUS_STAT_COUNTERS] = { 0 };
 		ResetStatCounterArray(zeroedCounters);
 
-		StoreStatCountersFromArray(tupleStore, tupleDescriptor, zeroedCounters);
+		StoreStatCountersFromValues(tupleStore, tupleDescriptor, zeroedCounters,
+									zeroedTimestamp);
 	}
 
 	LWLockRelease(CitusStatCountersSharedState->lock);
@@ -392,21 +462,30 @@ StoreStatCountersForDbId(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
 
 
 /*
- * StoreStatCountersFromArray stores the stat counters stored in given
- * counter array into the given tuple store.
+ * StoreStatCountersFromValues stores the stat counters stored in given
+ * counter array and the timestamp into the given tuple store.
  *
  * Given counter array is assumed to be of length N_CITUS_STAT_COUNTERS.
  */
 static void
-StoreStatCountersFromArray(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
-						   pg_atomic_uint64 *counters)
+StoreStatCountersFromValues(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor,
+							pg_atomic_uint64 *counters, TimestampTz statsResetTimestamp)
 {
-	Datum values[N_CITUS_STAT_COUNTERS] = { 0 };
-	bool isNulls[N_CITUS_STAT_COUNTERS] = { 0 };
+	Datum values[N_CITUS_STAT_COUNTERS + 1] = { 0 };
+	bool isNulls[N_CITUS_STAT_COUNTERS + 1] = { 0 };
 
 	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 	{
 		values[statIdx] = UInt64GetDatum(pg_atomic_read_u64(&counters[statIdx]));
+	}
+
+	if (statsResetTimestamp == 0)
+	{
+		isNulls[N_CITUS_STAT_COUNTERS] = true;
+	}
+	else
+	{
+		values[N_CITUS_STAT_COUNTERS] = TimestampTzGetDatum(statsResetTimestamp);
 	}
 
 	tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
@@ -432,6 +511,7 @@ ResetStatCountersForDbId(Oid dbId)
 		if (dbEntry)
 		{
 			ResetStatCounterArray(dbEntry->counters);
+			dbEntry->statsResetTimestamp = GetCurrentTimestamp();
 		}
 	}
 	else
@@ -443,6 +523,7 @@ ResetStatCountersForDbId(Oid dbId)
 		while ((dbEntry = hash_seq_search(&hashSeqState)) != NULL)
 		{
 			ResetStatCounterArray(dbEntry->counters);
+			dbEntry->statsResetTimestamp = GetCurrentTimestamp();
 		}
 	}
 
@@ -474,7 +555,7 @@ static bool
 ShouldByPassLocalCounters(void)
 {
 	Assert(IsCitusStatCountersEnabled());
-	return StatCountersFlushTimeout == 0;
+	return StatCountersFlushInterval == 0;
 }
 
 
@@ -526,7 +607,7 @@ IncrementSharedStatCounterForMyDb(int statId)
 
 /*
  * FlushPendingCountersIfNeeded flushes PendingStatCounters to the shared
- * memory if StatCountersFlushTimeout has elapsed since the last flush
+ * memory if StatCountersFlushInterval has elapsed since the last flush
  * or if force is true.
  */
 static void
@@ -546,7 +627,7 @@ FlushPendingCountersIfNeeded(bool force)
 		instr_time now = { 0 };
 		INSTR_TIME_SET_CURRENT(now);
 		INSTR_TIME_SUBTRACT(now, LastFlushTime);
-		if (INSTR_TIME_GET_MILLISEC(now) < StatCountersFlushTimeout)
+		if (INSTR_TIME_GET_MILLISEC(now) < StatCountersFlushInterval)
 		{
 			return;
 		}
@@ -902,6 +983,8 @@ CitusStatCountersHashEntryAllocIfNotExists(Oid dbId)
 		{
 			pg_atomic_init_u64(&dbEntry->counters[statIdx], 0);
 		}
+
+		dbEntry->statsResetTimestamp = 0;
 	}
 
 	return dbEntry;

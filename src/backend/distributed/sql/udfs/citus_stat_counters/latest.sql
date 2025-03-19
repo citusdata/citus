@@ -8,7 +8,11 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
 	OUT connection_reused bigint,
 
 	OUT query_execution_single_shard bigint,
-	OUT query_execution_multi_shard bigint
+	OUT query_execution_multi_shard bigint,
+
+	-- Must always be the last column or you should accordingly update
+	-- StoreStatCountersFromArray() function in src/backend/distributed/stat_counters.c
+	OUT stats_reset timestamp with time zone
 )
 RETURNS SETOF RECORD
 LANGUAGE C VOLATILE PARALLEL UNSAFE

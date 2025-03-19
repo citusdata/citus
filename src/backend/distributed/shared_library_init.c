@@ -2466,24 +2466,38 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.stat_counters_flush_timeout",
-		gettext_noop("Sets the timeout to flush the local stat counters into "
+		"citus.stat_counters_flush_interval",
+		gettext_noop("Sets the interval to flush the local stat counters into "
 					 "the shared memory."),
 		gettext_noop("Stat counters are used to track the number of certain "
 					 "operations in Citus. While setting this GUC to -1 disables "
 					 "stat counters, setting it to a positive value will flush "
 					 "the local stat counters into the shared memory every "
-					 "timeout milliseconds instead of flushing them immediately "
+					 "interval milliseconds instead of flushing them immediately "
 					 "after the operation, as it is done when the value is 0. "
 					 "Higher values reduce the overhead of flushing the stat "
 					 "counters but increase the time it takes to see the updated "
 					 "stat counters."),
-		&StatCountersFlushTimeout,
-		DEFAULT_STAT_COUNTERS_FLUSH_TIMEOUT,
-		DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT,
+		&StatCountersFlushInterval,
+		DEFAULT_STAT_COUNTERS_FLUSH_INTERVAL,
+		DISABLE_STAT_COUNTERS_FLUSH_INTERVAL,
 		5 * MS_PER_MINUTE,
 		PGC_POSTMASTER,
 		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stat_counters_purge_interval",
+		gettext_noop("Determines time interval for citus_stat_counters to remove "
+					 "the shared memory entries for the databases that were dropped."),
+		gettext_noop("This is automatically disabled when the stat counters are disabled "
+					 "(citus.stat_counters_flush_interval = -1) and there is no explicit "
+					 "way to disable purging the shared memory entries while the stat "
+					 "counters are enabled."),
+		&StatCountersPurgeInterval,
+		DEFAULT_STAT_COUNTERS_PURGE_INTERVAL, 1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*

@@ -17,8 +17,10 @@
 
 #define STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME "citus_stat_counters_lock_tranche"
 
-#define DEFAULT_STAT_COUNTERS_FLUSH_TIMEOUT (30 * MS_PER_SECOND)
-#define DISABLE_STAT_COUNTERS_FLUSH_TIMEOUT -1
+#define DEFAULT_STAT_COUNTERS_FLUSH_INTERVAL (30 * MS_PER_SECOND)
+#define DISABLE_STAT_COUNTERS_FLUSH_INTERVAL -1
+
+#define DEFAULT_STAT_COUNTERS_PURGE_INTERVAL (5 * MS_PER_MINUTE)
 
 /*
  * Must be in the same order as the columns defined in citus_stat_counters view,
@@ -37,7 +39,8 @@ typedef enum
 	N_CITUS_STAT_COUNTERS
 } StatType;
 
-extern int StatCountersFlushTimeout;
+extern int StatCountersFlushInterval;
+extern int StatCountersPurgeInterval;
 
 extern bool IsCitusStatCountersEnabled(void);
 extern void IncrementStatCounterForMyDb(int statId);
@@ -45,5 +48,6 @@ extern void IncrementStatCounterForMyDb(int statId);
 extern void InitializeStatCountersArrayMem(void);
 extern void CitusStatCountersFlushAtExit(int code, Datum arg);
 extern Size StatCountersArrayShmemSize(void);
+extern void CitusStatCountersRemoveDroppedDatabases(void);
 
 #endif /* STAT_COUNTERS_H */
