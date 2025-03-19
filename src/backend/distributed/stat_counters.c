@@ -568,10 +568,10 @@ IncrementSharedStatCounterForMyDb(int statId)
 	/*
 	 * XXX: Can we cache the entry for the current database?
 	 *
-	 *      From one perspective, doing so should be fine since we never
-	 *      remove entries. And if we were removing them, dropping a database
-	 *      succeeds only after all the backends are disconnected, so we cannot
-	 *      have a backend that has a dangling entry.
+	 *      From one perspective, doing so should be fine since dropping a
+	 *      database succeeds only after all the backends connected to it
+	 *      are disconnected, so we cannot have a backend that has a dangling
+	 *      entry.
 	 *
 	 *      On the other hand, we're not sure if a potential hash table resize
 	 *      would invalidate the cached entry.
@@ -817,8 +817,8 @@ CitusStatCountersShmemInit(void)
 			 * and there we init the counters if we just created the entry.
 			 *
 			 * So here we always "fetch_add" instead of "write" or "init" to avoid
-			 * overwriting the counters-increments made by other backends, if it's not
-			 * us who created the entry.
+			 * overwriting the counters-increments made by other backends so far, if
+			 * it's not us who created the entry.
 			 */
 			pg_atomic_fetch_add_u64(&dbEntry->counters[statIdx], statCounters[statIdx]);
 		}
