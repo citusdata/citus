@@ -248,11 +248,6 @@ IncrementStatCounterForMyDb(int statId)
 		return;
 	}
 
-	if (!CitusStatCountersSharedState || !CitusStatCountersSharedHash)
-	{
-		return;
-	}
-
 	if (ShouldByPassLocalCounters())
 	{
 		IncrementSharedStatCounterForMyDb(statId);
