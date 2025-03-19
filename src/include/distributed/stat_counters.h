@@ -43,6 +43,7 @@ extern bool IsCitusStatCountersEnabled(void);
 extern void IncrementStatCounterForMyDb(int statId);
 
 extern void InitializeStatCountersArrayMem(void);
+extern void CitusStatCountersFlushAtExit(int code, Datum arg);
 extern Size StatCountersArrayShmemSize(void);
 
 #endif /* STAT_COUNTERS_H */

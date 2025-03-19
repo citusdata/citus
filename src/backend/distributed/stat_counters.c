@@ -113,7 +113,6 @@ static void FlushPendingCountersIfNeeded(bool force);
 
 /* shared memory init & management */
 static void CitusStatCountersShmemInit(void);
-static void CitusStatCountersFlushAtExit(int code, Datum arg);
 static void CitusStatCountersShmemShutdown(int code, Datum arg);
 
 /* shared hash utilities */
@@ -261,6 +260,8 @@ IncrementStatCounterForMyDb(int statId)
 void
 InitializeStatCountersArrayMem(void)
 {
+	Assert(IsCitusStatCountersEnabled());
+
 /* on the versions older than PG 15, we use shmem_request_hook_type */
 #if PG_VERSION_NUM < PG_VERSION_15
 
@@ -276,6 +277,20 @@ InitializeStatCountersArrayMem(void)
 
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = CitusStatCountersShmemInit;
+}
+
+
+/*
+ * CitusStatCountersFlushAtExit is called on backend exit to flush the local
+ * stat counters to the shared memory, if there are any pending.
+ */
+void
+CitusStatCountersFlushAtExit(int code, Datum arg)
+{
+	Assert(IsCitusStatCountersEnabled());
+
+	bool force = true;
+	FlushPendingCountersIfNeeded(force);
 }
 
 
@@ -593,10 +608,7 @@ CitusStatCountersShmemInit(void)
 		prev_shmem_startup_hook();
 	}
 
-	if (!IsCitusStatCountersEnabled())
-	{
-		return;
-	}
+	Assert(IsCitusStatCountersEnabled());
 
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
@@ -626,12 +638,7 @@ CitusStatCountersShmemInit(void)
 
 	LWLockRelease(AddinShmemInitLock);
 
-	if (IsUnderPostmaster)
-	{
-		/* other backends flush their pending counters on exit, if needed */
-		before_shmem_exit(CitusStatCountersFlushAtExit, (Datum) 0);
-	}
-	else
+	if (!IsUnderPostmaster)
 	{
 		/* postmaster dumps the stat counters on shutdown */
 		on_shmem_exit(CitusStatCountersShmemShutdown, (Datum) 0);
@@ -770,23 +777,6 @@ error:
 
 
 /*
- * CitusStatCountersFlushAtExit is called on backend exit to flush the local
- * stat counters to the shared memory, if there are any pending.
- */
-static void
-CitusStatCountersFlushAtExit(int code, Datum arg)
-{
-	if (!IsCitusStatCountersEnabled())
-	{
-		return;
-	}
-
-	bool force = true;
-	FlushPendingCountersIfNeeded(force);
-}
-
-
-/*
  * CitusStatCountersShmemShutdown is called on shutdown by postmaster to dump the
  * stat counters to CITUS_STAT_COUNTERS_DUMP_FILE.
  */
@@ -799,10 +789,7 @@ CitusStatCountersShmemShutdown(int code, Datum arg)
 		return;
 	}
 
-	if (!IsCitusStatCountersEnabled())
-	{
-		return;
-	}
+	Assert(IsCitusStatCountersEnabled());
 
 	LWLockAcquire(CitusStatCountersSharedState->lock, LW_SHARED);
 

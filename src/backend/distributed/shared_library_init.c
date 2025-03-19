@@ -189,6 +189,7 @@ static void multi_log_hook(ErrorData *edata);
 static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
+static void RegisterCitusStatCountersFlush(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
@@ -506,7 +507,10 @@ _PG_init(void)
 
 	InitializeMultiTenantMonitorSMHandleManagement();
 
-	InitializeStatCountersArrayMem();
+	if (IsCitusStatCountersEnabled())
+	{
+		InitializeStatCountersArrayMem();
+	}
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -796,6 +800,12 @@ StartupCitusBackend(void)
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
+
+	if (IsCitusStatCountersEnabled())
+	{
+		RegisterCitusStatCountersFlush();
+	}
+
 	FinishedStartupCitusBackend = true;
 }
 
@@ -844,6 +854,23 @@ RegisterExternalClientBackendCounterDecrement(void)
 	if (registeredCleanup == false)
 	{
 		before_shmem_exit(DecrementExternalClientBackendCounterAtExit, 0);
+
+		registeredCleanup = true;
+	}
+}
+
+
+/*
+ * RegisterCitusStatCountersFlush registers CitusStatCountersFlushAtExit()
+ * to be called before the backend exits.
+ */
+static void
+RegisterCitusStatCountersFlush(void)
+{
+	static bool registeredCleanup = false;
+	if (registeredCleanup == false)
+	{
+		before_shmem_exit(CitusStatCountersFlushAtExit, 0);
 
 		registeredCleanup = true;
 	}
