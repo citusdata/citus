@@ -825,6 +825,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			TimestampDifferenceExceeds(lastStatCountersPurgeTime, GetCurrentTimestamp(),
 									   StatCountersPurgeInterval))
 		{
+			StartTransactionCommand();
+
 			if (!LockCitusExtension())
 			{
 				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
@@ -842,6 +844,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 				CitusStatCountersRemoveDroppedDatabases();
 			}
+
+			CommitTransactionCommand();
 
 			/* make sure we don't wait too long */
 			timeout = Min(timeout, (StatCountersPurgeInterval));
