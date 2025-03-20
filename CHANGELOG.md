@@ -1,3 +1,7 @@
+### citus v13.0.3 (March 20th, 2025) ###
+
+* Fixes a version bump issue in 13.0.2
+
 ### citus v13.0.2 (March 12th, 2025) ###
 
 * Fixes a crash in columnar custom scan that happens when a columnar table is
