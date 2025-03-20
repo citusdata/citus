@@ -54,6 +54,9 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 
+/* Config variables managed via guc */
+bool EnableSingleShardTableMultiNodePlacement = false;
+
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_create_worker_shards);
@@ -81,7 +84,8 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
  */
 void
 CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
-								 int32 replicationFactor, bool useExclusiveConnections)
+								 int32 replicationFactor, bool useExclusiveConnections,
+								 uint32 colocationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	List *insertedShardPlacements = NIL;
@@ -163,9 +167,19 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
 
+	int64 shardOffset = 0;
+	if (EnableSingleShardTableMultiNodePlacement && shardCount == 1 &&
+		shardStorageType == SHARD_STORAGE_TABLE)
+	{
+		/* For single shard distributed tables, use the colocationId to offset
+		 * where the shard is placed.
+		 */
+		shardOffset = colocationId;
+	}
+
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
-		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
+		uint32 roundRobinNodeIndex = (shardIndex + shardOffset) % workerNodeCount;
 
 		/* initialize the hash token space for this shard */
 		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
