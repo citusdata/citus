@@ -2428,13 +2428,26 @@ UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 coloca
 
 
 /*
- * Check that the current user has `mode` permissions on relationId, error out
- * if not. Superusers always have such permissions.
+ * Check that the current user has `mode` permissions on relationId or on at
+ * least one relationId's attribute, error out if not.
+ * Superusers always have such permissions.
  */
 void
 EnsureTablePermissions(Oid relationId, AclMode mode)
 {
 	AclResult aclresult = pg_class_aclcheck(relationId, GetUserId(), mode);
+
+	if (aclresult == ACLCHECK_OK)
+	{
+		return;
+	}
+
+	/*
+	 * Also check the attributes: for example "GRANT ALL(a)" has no table level
+	 * right but user is still allowed to lock table as needed. PostgreSQL will
+	 * still enforce ACL later so it's safe.
+	 */
+	aclresult = pg_attribute_aclcheck_all(relationId, GetUserId(), mode, ACLMASK_ANY);
 
 	if (aclresult != ACLCHECK_OK)
 	{
