@@ -63,4 +63,65 @@ SELECT *
   ORDER BY a, d;
 
 RESET citus.log_remote_commands;
+
+-- test everything on https://github.com/citusdata/citus/issues/7684
+CREATE TABLE test_name_prefix (
+attribute1 varchar(255),
+attribute2 varchar(255),
+attribute3 varchar(255)
+);
+
+INSERT INTO test_name_prefix (attribute1, attribute2, attribute3)
+VALUES ('Phone', 'John', 'A'),
+('Phone', 'Eric', 'A'),
+('Tablet','Eric', 'B');
+
+-- vanilla Postgres result
+-- with DISTINCT ON (T.attribute1, T.attribute2)
+-- we have 3 distinct groups of 1 row each
+-- (Phone, John) (Phone, Eric) and (Tablet, Eric)
+SELECT DISTINCT ON (T.attribute1, T.attribute2)
+T.attribute1 AS attribute1,
+T.attribute3 AS attribute2,
+T.attribute2 AS attribute3
+FROM test_name_prefix T ORDER BY T.attribute1, T.attribute2;
+
+-- vanilla Postgres result
+-- changes when we remove the table-name prefix to attribute2
+-- in this case it uses the output column name,
+-- which is actually T.attribute3 (AS attribute2)
+-- so, with DISTINCT ON (T.attribute1, T.attribute3)
+-- we have only 2 distinct groups
+-- (Phone, A) and (Tablet, B)
+SELECT DISTINCT ON (T.attribute1, attribute2)
+T.attribute1 AS attribute1,
+T.attribute3 AS attribute2, -- name match in output column name
+T.attribute2 AS attribute3
+FROM test_name_prefix T ORDER BY T.attribute1, attribute2;
+
+-- now, let's verify the distributed query scenario
+SELECT create_distributed_table('test_name_prefix', 'attribute1');
+
+SET citus.log_remote_commands TO on;
+
+-- make sure we preserve the table-name prefix to attribute2
+-- when building the shard query
+-- (before this patch we wouldn't preserve T.attribute2)
+-- note that we only need to preserve T.attribute2, not T.attribute1
+-- because there is no confusion there
+SELECT DISTINCT ON (T.attribute1, T.attribute2)
+T.attribute1 AS attribute1,
+T.attribute3 AS attribute2,
+T.attribute2 AS attribute3
+FROM test_name_prefix T ORDER BY T.attribute1, T.attribute2;
+
+-- here Citus will replace attribute2 with T.attribute3
+SELECT DISTINCT ON (T.attribute1, attribute2)
+T.attribute1 AS attribute1,
+T.attribute3 AS attribute2,
+T.attribute2 AS attribute3
+FROM test_name_prefix T ORDER BY T.attribute1, attribute2;
+
+RESET citus.log_remote_commands;
+
 DROP SCHEMA alias CASCADE;
