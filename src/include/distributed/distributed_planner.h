@@ -36,6 +36,7 @@ extern int PlannerLevel;
 typedef struct RelationRestrictionContext
 {
 	bool allReferenceTables;
+	bool hasPseudoConstantQuals;
 	List *relationRestrictionList;
 } RelationRestrictionContext;
 

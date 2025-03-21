@@ -2002,6 +2002,8 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	relationRestriction->outerPlanParamsList = OuterPlanParamsList(root);
 	relationRestriction->translatedVars = TranslatedVars(root,
 														 relationRestriction->index);
+	plannerRestrictionContext->relationRestrictionContext->hasPseudoConstantQuals =
+		root->hasPseudoConstantQuals;
 
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
