@@ -170,6 +170,109 @@ RESET client_min_messages;
 RESET search_path;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
 
+-- Queries with outer joins with pseudoconstant quals work only in PG17
+-- Relevant PG17 commit:
+-- https://github.com/postgres/postgres/commit/9e9931d2b
+
+CREATE SCHEMA pg17_outerjoin;
+SET search_path to pg17_outerjoin, public;
+SET citus.next_shard_id TO 20250321;
+
+-- issue https://github.com/citusdata/citus/issues/7697
+create table t0 (vkey int4 , c3 timestamp);
+create table t3 ( vkey int4 ,c26 timestamp);
+create table t4 ( vkey int4 );
+insert into t0 (vkey, c3) values (13,make_timestamp(2019, 10, 23, 15, 34, 50));
+insert into t3 (vkey,c26) values (1, make_timestamp(2024, 3, 26, 17, 36, 53));
+insert into t4 (vkey) values (1);
+
+select * from
+  (t0 full outer join t3
+    on (t0.c3 = t3.c26 ))
+where (exists (select  * from t4)) order by 1, 2, 3;
+
+SELECT create_distributed_table('t0', 'vkey');
+
+select * from
+  (t0 full outer join t3
+    on (t0.c3 = t3.c26 ))
+where (exists (select  * from t4)) order by 1, 2, 3;
+
+-- issue https://github.com/citusdata/citus/issues/7696
+create table t1 ( vkey int4 );
+create table t2 ( vkey int4 );
+insert into t2 (vkey) values (5);
+
+select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
+where not((85) in (select 1 from t2));
+
+SELECT create_distributed_table('t1', 'vkey');
+SELECT create_reference_table('t2');
+
+select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
+where not((85) in (select 1 from t2));
+
+-- issue https://github.com/citusdata/citus/issues/7698
+create table t5 ( vkey int4, c10 int4 );
+create table t6 ( vkey int4 );
+insert into t5 (vkey,c10) values (4, -70);
+insert into t6 (vkey) values (1);
+
+select t6.vkey
+from (t5 right outer join t6
+    on (t5.c10 = t6.vkey))
+where exists (select * from t6);
+
+SELECT create_distributed_table('t5', 'vkey');
+
+select t6.vkey
+from (t5 right outer join t6
+    on (t5.c10 = t6.vkey))
+where exists (select * from t6);
+
+-- issue https://github.com/citusdata/citus/issues/7119
+-- this test was removed in
+-- https://github.com/citusdata/citus/commit/a5ce601c0
+-- Citus doesn't support it in PG15 and PG16, but supports it in PG17
+CREATE TABLE users_table_local AS SELECT * FROM users_table;
+CREATE TABLE events_table_local AS SELECT * FROM events_table;
+
+SET client_min_messages TO DEBUG1;
+-- subquery in FROM -> FROM -> WHERE -> WHERE should be replaced if
+-- it contains onle local tables
+-- Later the upper level query is also recursively planned due to LIMIT
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT
+      u.user_id, e.event_type::text AS event, e.time
+    FROM
+        users_table AS u,
+        events_table AS e
+    WHERE u.user_id = e.user_id AND
+        u.user_id IN
+        (
+          SELECT
+            user_id
+          FROM
+            users_table
+          WHERE value_2 >= 5
+			    AND  EXISTS (SELECT user_id FROM events_table_local WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1)
+				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
+				LIMIT 5
+      )
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1;
+
+RESET search_path;
+SET citus.next_shard_id TO 20240023;
+SET client_min_messages TO ERROR;
+DROP SCHEMA pg17_outerjoin CASCADE;
+RESET client_min_messages;
+
 \if :server_version_ge_17
 \else
 \q
