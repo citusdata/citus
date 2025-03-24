@@ -173,6 +173,8 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
 static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
+static bool
+QueryContainsNextval(Query *query);
 
 
 /*
@@ -3810,7 +3812,7 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 	 * then the query will anyway happen on the coordinator, so we can
 	 * allow nextval.
 	 */
-	if (contain_nextval_expression_walker((Node *) query->targetList, NULL) &&
+	if (QueryContainsNextval(query) &&
 		(hasDistributedTable || hasReferenceTable))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3834,6 +3836,62 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 	}
 
 	return ErrorIfQueryHasUnroutableModifyingCTE(query);
+}
+
+
+/*
+ * QueryContainsNextval returns true if the entire query (including subqueries
+ * in the rtable) has a nextval() call or NextValueExpr.
+ */
+bool
+QueryContainsNextval(Query *query)
+{
+    /* 1) Check the top-level targetList */
+    if (contain_nextval_expression_walker((Node *) query->targetList, NULL))
+        return true;
+
+    /* 2) Check WHERE/JOINTREE, HAVING, limitCount, offset, etc. if relevant */
+    if (query->jointree &&
+        contain_nextval_expression_walker((Node *) query->jointree->quals, NULL))
+        return true;
+
+    if (query->havingQual &&
+        contain_nextval_expression_walker((Node *) query->havingQual, NULL))
+        return true;
+
+    /* 3) Recurse into subqueries/CTEs in rtable. */
+    ListCell *lc = NULL;
+    foreach(lc, query->rtable)
+    {
+        RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+        if (rte->rtekind == RTE_SUBQUERY && rte->subquery != NULL)
+        {
+            if (QueryContainsNextval(rte->subquery))
+                return true;
+        }
+        else if (rte->rtekind == RTE_CTE && rte->subquery != NULL)
+        {
+            if (QueryContainsNextval(rte->subquery))
+                return true;
+        }
+    }
+
+    /* 4) Also check if query->cteList exists, each CommonTableExpr might have a subquery */
+    foreach(lc, query->cteList)
+    {
+        CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+        if (cte->ctequery && IsA(cte->ctequery, Query))
+        {
+            if (QueryContainsNextval((Query *) cte->ctequery))
+                return true;
+        }
+    }
+
+    /* 5) Possibly check setOperations, windowClause offsets, etc. in a more robust approach. */
+
+    /* If none found, return false */
+    return false;
 }
 
 
