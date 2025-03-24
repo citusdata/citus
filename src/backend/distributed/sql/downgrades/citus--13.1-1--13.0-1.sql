@@ -41,3 +41,9 @@ DROP FUNCTION citus_internal.start_replication_origin_tracking();
 DROP FUNCTION citus_internal.stop_replication_origin_tracking();
 DROP FUNCTION citus_internal.is_replication_origin_tracking_active();
 #include "../udfs/citus_finish_pg_upgrade/12.1-1.sql"
+DROP FUNCTION pg_catalog.citus_node_list(
+    IN active BOOL,
+    IN role citus_noderole,
+    OUT node_name text,
+    OUT node_port bigint);
+DROP TYPE pg_catalog.citus_noderole;

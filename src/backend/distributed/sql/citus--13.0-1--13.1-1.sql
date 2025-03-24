@@ -48,3 +48,4 @@ DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
 #include "udfs/repl_origin_helper/13.1-1.sql"
 #include "udfs/citus_finish_pg_upgrade/13.1-1.sql"
 #include "udfs/citus_is_primary_node/13.1-1.sql"
+#include "udfs/citus_node_list/13.1-1.sql"

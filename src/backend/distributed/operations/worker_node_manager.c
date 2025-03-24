@@ -82,8 +82,9 @@ WorkerGetRoundRobinCandidateNode(List *workerNodeList, uint64 shardId,
 
 
 /*
- * ActivePrimaryNonCoordinatorNodeCount returns the number of groups with a primary in the cluster.
- * This method excludes coordinator even if it is added as a worker to cluster.
+ * ActivePrimaryNonCoordinatorNodeCount returns the number of groups with a primary
+ * in the cluster. This method excludes coordinator even if it is added as a worker
+ * to cluster.
  */
 uint32
 ActivePrimaryNonCoordinatorNodeCount(void)
@@ -117,7 +118,7 @@ NodeIsCoordinator(WorkerNode *node)
 
 
 /*
- * ActiveNodeListFilterFunc returns a list of all active nodes that checkFunction
+ * FilterActiveNodeListFunc returns a list of all active nodes that checkFunction
  * returns true for.
  * lockMode specifies which lock to use on pg_dist_node, this is necessary when
  * the caller wouldn't want nodes to be added concurrent to their use of this list
@@ -154,10 +155,87 @@ FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 
 
 /*
- * ActivePrimaryNonCoordinatorNodeList returns a list of all active primary worker nodes
- * in workerNodeHash. lockMode specifies which lock to use on pg_dist_node,
- * this is necessary when the caller wouldn't want nodes to be added concurrent
- * to their use of this list.
+ * FilterNodeListFunc returns a list of all active nodes that match the given
+ * active and role filters.
+ * 'active' specifies whether to return only active nodes or all nodes
+ * 'role' specifies whether to return coordinator nodes, worker nodes,
+ * or all nodes. 'lockMode' specifies which lock to use on pg_dist_node,
+ * this is necessary when the caller wouldn't want nodes to be added
+ * concurrent to their use of this list.
+ */
+List *
+FilterNodeListFunc(LOCKMODE lockMode, ActiveFilterEnum active,
+				   CitusNodeRoleEnum role)
+{
+	List *workerNodeList = NIL;
+	WorkerNode *workerNode = NULL;
+	HASH_SEQ_STATUS status;
+
+	if (lockMode != NoLock)
+	{
+		LockRelationOid(DistNodeRelationId(), lockMode);
+	}
+
+	HTAB *workerNodeHash = GetWorkerNodeHash();
+	hash_seq_init(&status, workerNodeHash);
+
+	while ((workerNode = hash_seq_search(&status)) != NULL)
+	{
+		bool activeCond = true;
+		if (active == ACTIVE_FILTER_ACTIVE)
+		{
+			activeCond = workerNode->isActive;
+		}
+		else if (active == ACTIVE_FILTER_INACTIVE)
+		{
+			activeCond = !workerNode->isActive;
+		}
+		else if (active == ACTIVE_FILTER_ALL)
+		{
+			activeCond = true;
+		}
+		else
+		{
+			/* This should never happen */
+			Assert(false);
+		}
+
+		bool roleCond = true;
+		if (role == CITUS_NODE_ROLE_COORDINATOR)
+		{
+			roleCond = NodeIsCoordinator(workerNode);
+		}
+		else if (role == CITUS_NODE_ROLE_WORKER)
+		{
+			roleCond = !NodeIsCoordinator(workerNode);
+		}
+		else if (role == CITUS_NODE_ROLE_ALL)
+		{
+			roleCond = true;
+		}
+		else
+		{
+			/* This should never happen */
+			Assert(false);
+		}
+
+		if (activeCond && roleCond)
+		{
+			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
+			*workerNodeCopy = *workerNode;
+			workerNodeList = lappend(workerNodeList, workerNodeCopy);
+		}
+	}
+
+	return workerNodeList;
+}
+
+
+/*
+ * ActivePrimaryNonCoordinatorNodeList returns a list of all active primary
+ * worker nodes in workerNodeHash. lockMode specifies which lock to use on
+ * pg_dist_node, this is necessary when the caller wouldn't want nodes to
+ * be added concurrent to their use of this list.
  * This method excludes coordinator even if it is added as a worker to cluster.
  */
 List *

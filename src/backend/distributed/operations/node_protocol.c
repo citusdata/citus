@@ -83,6 +83,7 @@ static char * CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 											   const ColumnarOptions *options);
 static char * GetTableDDLCommandColumnar(void *context);
 static TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);
+static CitusNodeRoleEnum LookupCitusNodeRole(Oid roleOid);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_get_table_metadata);
@@ -94,7 +95,7 @@ PG_FUNCTION_INFO_V1(citus_get_active_worker_nodes);
 PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_stage_shard_row);
 PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
-
+PG_FUNCTION_INFO_V1(citus_node_list);
 
 /*
  * master_get_table_metadata is a deprecated UDF.
@@ -435,6 +436,114 @@ Datum
 master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
 	return citus_get_active_worker_nodes(fcinfo);
+}
+
+
+/*
+ * citus_node_list returns a set of node host names and port numbers
+ * using the provided arguments. The arguments are: active boolean, and role
+ * (enum). The active boolean indicates whether to return only active nodes
+ * or all nodes (when provided as null). The role indicates whether to return
+ * only nodes with a specific role (worker or coordinator) or all nodes (when
+ * provided as null). Default values for both arguments are null.
+ */
+Datum
+citus_node_list(PG_FUNCTION_ARGS)
+{
+	ActiveFilterEnum activeFilter = ACTIVE_FILTER_ALL;
+	if (PG_NARGS() > 0 && !PG_ARGISNULL(0))
+	{
+		bool active = PG_GETARG_BOOL(0);
+		activeFilter = active ? ACTIVE_FILTER_ACTIVE : ACTIVE_FILTER_INACTIVE;
+	}
+
+	CitusNodeRoleEnum roleFilter = CITUS_NODE_ROLE_ALL;
+	if (PG_NARGS() > 1 && !PG_ARGISNULL(1))
+	{
+		Oid roleOid = PG_GETARG_OID(1);
+		roleFilter = LookupCitusNodeRole(roleOid);
+	}
+
+	CheckCitusVersion(ERROR);
+
+	FuncCallContext *functionContext = NULL;
+	uint32 workerNodeCount = 0;
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		/* create a function context for cross-call persistence */
+		functionContext = SRF_FIRSTCALL_INIT();
+
+		/* switch to memory context appropriate for multiple function calls */
+		MemoryContext oldContext = MemoryContextSwitchTo(
+			functionContext->multi_call_memory_ctx);
+
+		List *workerNodeList = FilterNodeListFunc(NoLock,
+												  activeFilter,
+												  roleFilter);
+		workerNodeCount = (uint32) list_length(workerNodeList);
+
+		functionContext->user_fctx = workerNodeList;
+		functionContext->max_calls = workerNodeCount;
+
+		/*
+		 * This tuple descriptor must match the output parameters declared for
+		 * the function in pg_proc.
+		 */
+		TupleDesc tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS);
+		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "node_name",
+						   TEXTOID, -1, 0);
+		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 2, "node_port",
+						   INT8OID, -1, 0);
+
+		functionContext->tuple_desc = BlessTupleDesc(tupleDescriptor);
+
+		MemoryContextSwitchTo(oldContext);
+	}
+
+	functionContext = SRF_PERCALL_SETUP();
+	uint32 workerNodeIndex = functionContext->call_cntr;
+	workerNodeCount = functionContext->max_calls;
+
+	if (workerNodeIndex < workerNodeCount)
+	{
+		List *workerNodeList = functionContext->user_fctx;
+		WorkerNode *workerNode = list_nth(workerNodeList, workerNodeIndex);
+
+		Datum workerNodeDatum = WorkerNodeGetDatum(workerNode,
+												   functionContext->tuple_desc);
+
+		SRF_RETURN_NEXT(functionContext, workerNodeDatum);
+	}
+	else
+	{
+		SRF_RETURN_DONE(functionContext);
+	}
+}
+
+
+static CitusNodeRoleEnum
+LookupCitusNodeRole(Oid roleOid)
+{
+	CitusNodeRoleEnum roleFilter = CITUS_NODE_ROLE_ALL;
+
+	Datum enumLabelDatum = DirectFunctionCall1(enum_out, roleOid);
+	char *enumLabel = DatumGetCString(enumLabelDatum);
+
+	if (strncmp(enumLabel, "coordinator", NAMEDATALEN) == 0)
+	{
+		roleFilter = CITUS_NODE_ROLE_COORDINATOR;
+	}
+	else if (strncmp(enumLabel, "worker", NAMEDATALEN) == 0)
+	{
+		roleFilter = CITUS_NODE_ROLE_WORKER;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("invalid label for enum: %s", enumLabel)));
+	}
+
+	return roleFilter;
 }
 
 

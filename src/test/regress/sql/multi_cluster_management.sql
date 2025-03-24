@@ -32,6 +32,10 @@ SELECT result FROM run_command_on_workers('SELECT citus_is_primary_node()');
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 
+SELECT * from citus_node_list();
+
+SELECT * from citus_node_list(active := NULL);
+
 -- try to add a node that is already in the cluster
 SELECT * FROM master_add_node('localhost', :worker_1_port);
 
@@ -50,6 +54,22 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT citus_disable_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync(20000);
 SELECT master_get_active_worker_nodes();
+
+SELECT * from citus_node_list(active := TRUE);
+
+SELECT * from citus_node_list(active := FALSE);
+
+SELECT * from citus_node_list(role := 'worker');
+
+SELECT * from citus_node_list(role := 'coordinator');
+
+SELECT * from citus_node_list(role := NULL);
+
+SELECT * from citus_node_list(role := 'foo');
+
+SELECT * from citus_node_list(active := FALSE, role := 'coordinator');
+
+SELECT * from citus_node_list(active := FALSE, role := 'worker');
 
 -- add some shard placements to the cluster
 SET citus.shard_count TO 16;
