@@ -93,8 +93,6 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static bool ListContainsDistributedTableRTE(List *rangeTableList,
-											bool *maybeHasForeignDistributedTable);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -156,6 +154,11 @@ static bool CheckPostPlanDistribution(bool isDistributedQuery,
 									  Query *origQuery,
 									  List *rangeTableList,
 									  Query *plannedQuery);
+static bool
+ListContainsDistributedTableRTERecursive(Query *outerQuery, List *rangeTableList,
+											bool *maybeHasForeignDistributedTable);
+static Query *
+FindCTEQueryByName(Query *outerQuery, const char *cteName);												 
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -358,70 +361,144 @@ ExtractRangeTableEntryList(Query *query)
 bool
 NeedsDistributedPlanning(Query *query)
 {
-	if (!CitusHasBeenLoaded())
-	{
-		return false;
-	}
+    if (!CitusHasBeenLoaded())
+        return false;
 
-	CmdType commandType = query->commandType;
+    CmdType commandType = query->commandType;
+    if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
+        commandType != CMD_UPDATE && commandType != CMD_DELETE)
+        return false;
 
-	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
-		commandType != CMD_UPDATE && commandType != CMD_DELETE)
-	{
-		return false;
-	}
-
-	List *allRTEs = ExtractRangeTableEntryList(query);
-
-	return ListContainsDistributedTableRTE(allRTEs, NULL);
+    List *allRTEs = ExtractRangeTableEntryList(query);
+    return ListContainsDistributedTableRTE(allRTEs, NULL);
 }
 
 
 /*
- * ListContainsDistributedTableRTE gets a list of range table entries
- * and returns true if there is at least one distributed relation range
- * table entry in the list. The boolean maybeHasForeignDistributedTable
- * variable is set to true if the list contains a foreign table.
+ * Wrapper for top-level calls.
+ */
+bool
+ListContainsDistributedTableRTE(List *rangeTableList, bool *maybeHasForeignDistributedTable)
+{
+    return ListContainsDistributedTableRTERecursive(NULL, rangeTableList, maybeHasForeignDistributedTable);
+}
+
+
+/*
+ * FindCTEQueryByName
+ *
+ *   Given an outer query and a CTE name, returns the corresponding
+ *   CTE's query definition from outerQuery->cteList, or NULL if not found.
+ *   (In PG17, ctelevelsup is removed so we match only on cte name.)
+ */
+static Query *
+FindCTEQueryByName(Query *outerQuery, const char *cteName)
+{
+    ListCell   *lc;
+    foreach(lc, outerQuery->cteList)
+    {
+        CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+        if (strcmp(cte->ctename, cteName) == 0)
+        {
+            return (Query *) cte->ctequery;
+        }
+    }
+    return NULL;
+}
+
+/*
+ * ListContainsDistributedTableRTERecursive
+ *
+ * Recursively checks the given range table list for an RTE that represents a
+ * distributed table. For RTE_SUBQUERY and RTE_CTE, it extracts all RTEs from the
+ * subquery (or CTE definition, if the subquery pointer is NULL) and recurses.
+ *
+ * The outerQuery parameter is the top-level query; it is used to look up CTE
+ * definitions if an RTE_CTE does not have its subquery pointer set.
  */
 static bool
-ListContainsDistributedTableRTE(List *rangeTableList,
-								bool *maybeHasForeignDistributedTable)
+ListContainsDistributedTableRTERecursive(Query *outerQuery, List *rangeTableList,
+                                           bool *maybeHasForeignDistributedTable)
 {
-	ListCell *rangeTableCell = NULL;
+    ListCell *rangeTableCell = NULL;
 
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+    foreach(rangeTableCell, rangeTableList)
+    {
+        RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableCell);
 
-		if (rangeTableEntry->rtekind != RTE_RELATION)
-		{
-			continue;
-		}
+        /* For base relations, check as before */
+        if (rte->rtekind == RTE_RELATION)
+        {
+            if (HideCitusDependentObjects &&
+                IsolationIsSerializable() &&
+                IsPgLocksTable(rte))
+            {
+                continue;
+            }
+            if (IsCitusTable(rte->relid))
+            {
+                if (maybeHasForeignDistributedTable != NULL &&
+                    IsForeignTable(rte->relid))
+                {
+                    *maybeHasForeignDistributedTable = true;
+                }
+                return true;
+            }
+        }
+        /* For subqueries, check their internal range table */
+        else if (rte->rtekind == RTE_SUBQUERY)
+        {
+            Query *subquery = rte->subquery;
+            if (subquery != NULL)
+            {
+                List *allRTEs = ExtractRangeTableEntryList(subquery);
+                if (ListContainsDistributedTableRTERecursive(outerQuery, allRTEs,
+                                                             maybeHasForeignDistributedTable))
+                {
+                    return true;
+                }
+                /* Also check any CTEs defined inside the subquery */
+                if (subquery->cteList)
+                {
+                    ListCell *cteCell;
+                    foreach(cteCell, subquery->cteList)
+                    {
+                        CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
+                        if (cte && cte->ctequery)
+                        {
+                            List *cteRTEs = ExtractRangeTableEntryList((Query *) cte->ctequery);
+                            if (ListContainsDistributedTableRTERecursive(outerQuery, cteRTEs,
+                                                                         maybeHasForeignDistributedTable))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        /* For CTE entries, if rte->subquery is NULL then look up its definition */
+        else if (rte->rtekind == RTE_CTE)
+        {
+            Query *cteQuery = rte->subquery;
+            if (cteQuery == NULL && outerQuery != NULL)
+            {
+                cteQuery = FindCTEQueryByName(outerQuery, rte->ctename);
+            }
+            if (cteQuery != NULL)
+            {
+                List *cteRTEs = ExtractRangeTableEntryList(cteQuery);
+                if (ListContainsDistributedTableRTERecursive(outerQuery, cteRTEs,
+                                                             maybeHasForeignDistributedTable))
+                {
+                    return true;
+                }
+            }
+        }
+        /* Optionally: handle other RTE kinds if necessary */
+    }
 
-		if (HideCitusDependentObjects && IsolationIsSerializable() && IsPgLocksTable(
-				rangeTableEntry))
-		{
-			/*
-			 * Postgres tidscan.sql test fails if we do not filter pg_locks table because
-			 * test results, which show taken locks in serializable isolation mode,
-			 * fails by showing extra lock taken by IsCitusTable below.
-			 */
-			continue;
-		}
-
-		if (IsCitusTable(rangeTableEntry->relid))
-		{
-			if (maybeHasForeignDistributedTable != NULL &&
-				IsForeignTable(rangeTableEntry->relid))
-			{
-				*maybeHasForeignDistributedTable = true;
-			}
-
-			return true;
-		}
-	}
-
-	return false;
+    return false;
 }
 
 

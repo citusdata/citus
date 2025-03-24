@@ -46,6 +46,8 @@ extern DistributedPlan * CreateInsertSelectIntoLocalTablePlan(uint64 planId,
 extern char * InsertSelectResultIdPrefix(uint64 planId);
 extern bool PlanningInsertSelect(void);
 extern Query * WrapSubquery(Query *subquery);
+extern Query *
+RewriteInsertSelectForPartialNextval(Query *originalQuery);
 
 
 #endif /* INSERT_SELECT_PLANNER_H */
