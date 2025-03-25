@@ -181,7 +181,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -213,7 +213,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -242,7 +242,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -287,7 +287,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -313,7 +313,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -338,7 +338,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -370,7 +370,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -396,7 +396,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
@@ -421,7 +421,7 @@ WHERE relname IN ('dist_table', 'ref_table', 'local_table') ORDER BY 1;
 ---------------------------------------------------------------------
  dist_table  |
  local_table |
- ref_table   | {postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
+ ref_table   | {postgres=arwdDxt/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}
 (3 rows)
 
 SELECT attrelid::regclass, attname, attacl FROM pg_attribute
