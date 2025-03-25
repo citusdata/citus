@@ -70,6 +70,8 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	/* deparse the privileges */
 	if (grantStmt->privileges == NIL)
 	{
