@@ -16,7 +16,6 @@
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
 #include "rewrite/rewriteManip.h"
-#include "distributed/citus_ruleutils.h"   /* Ensure this header declares contain_nextval_expression_walker */
 
 #include "pg_version_compat.h"
 #include "pg_version_constants.h"
@@ -48,9 +47,6 @@ static bool contain_dml_walker(Node *node, void *context);
 static bool RecursivelyInlineCteWalker(Node *node, void *context);
 static void InlineCTEsInQueryTree(Query *query);
 static bool QueryTreeContainsInlinableCteWalker(Node *node, void *context);
-
-static bool
-QueryContainsNextval2(Query *q);
 
 
 /*
@@ -97,75 +93,42 @@ RecursivelyInlineCteWalker(Node *node, void *context)
 }
 
 
+/*
+ * InlineCTEsInQueryTree gets a query tree and tries to inline CTEs as subqueries
+ * in the query tree.
+ *
+ * Most of the code is coming from PostgreSQL's CTE inlining logic, there are very
+ * few additions that Citus added, which are already commented in the code.
+ */
 void
 InlineCTEsInQueryTree(Query *query)
 {
-    ListCell *cteCell = NULL;
-    List *copyOfCteList = list_copy(query->cteList);
+	ListCell *cteCell = NULL;
 
-    foreach(cteCell, copyOfCteList)
-    {
-        CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
+	/* iterate on the copy of the list because we'll be modifying query->cteList */
+	List *copyOfCteList = list_copy(query->cteList);
+	foreach(cteCell, copyOfCteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
 
-        /* Extra check: if the CTE query contains nextval, do not inline it */
-        if (QueryContainsNextval2((Query *) cte->ctequery))
-        {
-            elog(DEBUG1, "CTE \"%s\" contains nextval; materializing it instead of inlining", cte->ctename);
-            continue;
-        }
+		/*
+		 * First, make sure that Postgres is OK to inline the CTE. Later, check for
+		 * distributed query planning constraints that might prevent inlining.
+		 */
+		if (PostgreSQLCTEInlineCondition(cte, query->commandType))
+		{
+			elog(DEBUG1, "CTE %s is going to be inlined via "
+						 "distributed planning", cte->ctename);
 
-        /* Standard PostgreSQL inline condition */
-        if (PostgreSQLCTEInlineCondition(cte, query->commandType))
-        {
-            elog(DEBUG1, "CTE \"%s\" is going to be inlined via distributed planning", cte->ctename);
-            inline_cte(query, cte);
+			/* do the hard work of cte inlining */
+			inline_cte(query, cte);
 
-            /* Reset reference count and remove from cteList */
-            cte->cterefcount = 0;
-            query->cteList = list_delete_ptr(query->cteList, cte);
-        }
-    }
+			/* clean-up the necessary fields for distributed planning */
+			cte->cterefcount = 0;
+			query->cteList = list_delete_ptr(query->cteList, cte);
+		}
+	}
 }
-
-
-static bool
-QueryContainsNextval2(Query *q)
-{
-    ListCell *lc = NULL;
-
-    /* Check the target list */
-    foreach(lc, q->targetList)
-    {
-        TargetEntry *tle = (TargetEntry *) lfirst(lc);
-        if (contain_nextval_expression_walker((Node *) tle->expr, NULL))
-            return true;
-    }
-
-    /* Check the WHERE clause (jointree quals) */
-    if (q->jointree && q->jointree->quals &&
-        contain_nextval_expression_walker((Node *) q->jointree->quals, NULL))
-        return true;
-
-    /* Recursively check subqueries in the range table */
-    foreach(lc, q->rtable)
-    {
-        RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
-        if (rte->rtekind == RTE_SUBQUERY && rte->subquery != NULL)
-        {
-            if (QueryContainsNextval2(rte->subquery))
-                return true;
-        }
-    }
-
-    /* Optionally, check havingQual if needed */
-    if (q->havingQual &&
-        contain_nextval_expression_walker((Node *) q->havingQual, NULL))
-        return true;
-
-    return false;
-}
-
-
 
 
 /*

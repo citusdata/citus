@@ -3888,8 +3888,6 @@ QueryContainsNextval(Query *query)
         }
     }
 
-    /* 5) Possibly check setOperations, windowClause offsets, etc. in a more robust approach. */
-
     /* If none found, return false */
     return false;
 }
