@@ -462,3 +462,74 @@ DROP SCHEMA grant_on_table CASCADE;
 DROP ROLE grant_user_0, grant_user_1, nogrant_user;
 RESET client_min_messages;
 RESET search_path;
+-- test propagation on columns when adding a node after GRANT has been executed
+CREATE SCHEMA grant_on_table;
+SET search_path TO grant_on_table;
+CREATE ROLE grant_role_propagated;
+CREATE TABLE grant_table_propagated (id int primary key);
+GRANT ALL(id) ON grant_table_propagated TO grant_role_propagated;
+SELECT create_distributed_table('grant_table_propagated', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT '$$SELECT array_agg((attname, attacl) order by attname) FROM pg_attribute
+WHERE attrelid  = ''grant_on_table.grant_table_propagated''::regclass
+AND attacl IS NOT NULL$$' AS verify_grant_query \gset
+SELECT result FROM run_command_on_all_nodes(:verify_grant_query);
+                     result
+---------------------------------------------------------------------
+ {"(id,{grant_role_propagated=arwx/postgres})"}
+ {"(id,{grant_role_propagated=arwx/postgres})"}
+ {"(id,{grant_role_propagated=arwx/postgres})"}
+(3 rows)
+
+-- cleanup
+-- prevent useless messages on DROP objects.
+SET client_min_messages TO ERROR;
+DROP TABLE grant_table_propagated;
+DROP ROLE grant_role_propagated;
+RESET client_min_messages;
+-- similar test but just adding a node after the fact
+-- remove one of the worker nodes:
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE ROLE grant_role_propagated_after;
+CREATE TABLE grant_table_propagated_after (id int primary key);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('grant_on_table.grant_table_propagated_after', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_replication_factor TO 2;
+GRANT ALL(id) ON grant_table_propagated_after TO grant_role_propagated_after;
+-- add back the worker node
+SELECT FROM citus_add_node('localhost', :worker_2_port);
+--
+(1 row)
+
+SELECT '$$SELECT array_agg((attname, attacl) order by attname) FROM pg_attribute
+WHERE attrelid  = ''grant_on_table.grant_table_propagated_after''::regclass
+AND attacl IS NOT NULL$$' AS verify_grant_query \gset
+SELECT result FROM run_command_on_all_nodes(:verify_grant_query);
+                        result
+---------------------------------------------------------------------
+ {"(id,{grant_role_propagated_after=arwx/postgres})"}
+ {"(id,{grant_role_propagated_after=arwx/postgres})"}
+ {"(id,{grant_role_propagated_after=arwx/postgres})"}
+(3 rows)
+
+-- cleanup
+-- prevent useless messages on DROP objects.
+SET client_min_messages TO ERROR;
+DROP SCHEMA grant_on_table CASCADE;
+DROP ROLE grant_role_propagated_after;
+RESET client_min_messages;
+RESET search_path;
