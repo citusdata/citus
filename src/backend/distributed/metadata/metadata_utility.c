@@ -2431,7 +2431,7 @@ UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 coloca
  * Check that the current user has `mode` permissions on relationId.
  * If not, also check relationId's attributes with `mask`, error out
  * privileges are not defined.
- * ACL mask is used because we assume that user has enought privilege
+ * ACL mask is used because we assume that user has enough privilege
  * to distribute a table when either ACL_INSERT on the TABLE or
  * ACL_INSERT on ALL attributes.
  * In other situations, having a single attribute privilege is enough.
