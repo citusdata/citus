@@ -2428,12 +2428,17 @@ UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 coloca
 
 
 /*
- * Check that the current user has `mode` permissions on relationId or on at
- * least one relationId's attribute, error out if not.
+ * Check that the current user has `mode` permissions on relationId.
+ * If not, also check relationId's attributes with `mask`, error out
+ * privileges are not defined.
+ * ACL mask is used because we assume that user has enought privilege
+ * to distribute a table when either ACL_INSERT on the TABLE or
+ * ACL_INSERT on ALL attributes.
+ * In other situations, having a single attribute privilege is enough.
  * Superusers always have such permissions.
  */
 void
-EnsureTablePermissions(Oid relationId, AclMode mode)
+EnsureTablePermissions(Oid relationId, AclMode mode, AclMaskHow mask)
 {
 	AclResult aclresult = pg_class_aclcheck(relationId, GetUserId(), mode);
 
