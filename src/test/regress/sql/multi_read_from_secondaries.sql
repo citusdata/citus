@@ -20,7 +20,7 @@ INSERT INTO source_table (a, b) VALUES (1, 5);
 INSERT INTO source_table (a, b) VALUES (10, 10);
 
 -- simulate actually having secondary nodes
-SELECT nodeid, groupid, nodename, nodeport, noderack, isactive, noderole, nodecluster FROM pg_dist_node ORDER BY 1, 2;
+SELECT nodename, nodeport, noderack, isactive, noderole, nodecluster FROM pg_dist_node ORDER BY 1, 2;
 UPDATE pg_dist_node SET noderole = 'secondary';
 
 \c "dbname=regression options='-c\ citus.use_secondary_nodes=always'"
