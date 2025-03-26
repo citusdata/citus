@@ -83,6 +83,8 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 static const char * convert_aclright_to_string(int aclright);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
+static void process_acl_items(Acl *acl, const char *relationName,
+							  const char *attributeName, List **defs);
 
 
 /*
@@ -1112,7 +1114,6 @@ pg_get_indexclusterdef_string(Oid indexRelationId)
  * pg_get_table_grants returns a list of sql statements which recreate the
  * permissions for a specific table, including attributes privileges.
  *
- * This function is modeled after aclexplode(), don't change too heavily.
  */
 List *
 pg_get_table_grants(Oid relationId)
@@ -1164,73 +1165,8 @@ pg_get_table_grants(Oid relationId)
 		/* iterate through the acl datastructure, emit GRANTs */
 
 		Acl *acl = DatumGetAclP(aclDatum);
-		AclItem *aidat = ACL_DAT(acl);
 
-		int offtype = -1;
-		int i = 0;
-		while (i < ACL_NUM(acl))
-		{
-			AclItem    *aidata = NULL;
-			AclMode		priv_bit = 0;
-
-			offtype++;
-
-			if (offtype == N_ACL_RIGHTS)
-			{
-				offtype = 0;
-				i++;
-				if (i >= ACL_NUM(acl)) /* done */
-				{
-					break;
-				}
-			}
-
-			aidata = &aidat[i];
-			priv_bit = 1 << offtype;
-
-			if (ACLITEM_GET_PRIVS(*aidata) & priv_bit)
-			{
-				const char *roleName = NULL;
-				const char *withGrant = "";
-
-				if (aidata->ai_grantee != 0)
-				{
-
-					HeapTuple htup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(aidata->ai_grantee));
-					if (HeapTupleIsValid(htup))
-					{
-						Form_pg_authid authForm = ((Form_pg_authid) GETSTRUCT(htup));
-
-						roleName = quote_identifier(NameStr(authForm->rolname));
-
-						ReleaseSysCache(htup);
-					}
-					else
-					{
-						elog(ERROR, "cache lookup failed for role %u", aidata->ai_grantee);
-					}
-				}
-				else
-				{
-					roleName = "PUBLIC";
-				}
-
-				if ((ACLITEM_GET_GOPTIONS(*aidata) & priv_bit) != 0)
-				{
-					withGrant = " WITH GRANT OPTION";
-				}
-
-				appendStringInfo(&buffer, "GRANT %s ON %s TO %s%s",
-								 convert_aclright_to_string(priv_bit),
-								 relationName,
-								 roleName,
-								 withGrant);
-
-				defs = lappend(defs, pstrdup(buffer.data));
-
-				resetStringInfo(&buffer);
-			}
-		}
+		process_acl_items(acl, relationName, NULL, &defs);
 
 		/* if we have a detoasted copy, free it */
 		if ((Pointer) acl != DatumGetPointer(aclDatum))
@@ -1267,74 +1203,8 @@ pg_get_table_grants(Oid relationId)
 		{
 			/* iterate through the acl datastructure, emit GRANTs */
 			Acl *acl = DatumGetAclP(aclAttDatum);
-			AclItem *aidat = ACL_DAT(acl);
 
-			int offtype = -1;
-			int i = 0;
-			while (i < ACL_NUM(acl))
-			{
-				AclItem    *aidata = NULL;
-				AclMode		priv_bit = 0;
-
-				offtype++;
-
-				if (offtype == N_ACL_RIGHTS)
-				{
-					offtype = 0;
-					i++;
-					if (i >= ACL_NUM(acl)) /* done */
-					{
-						break;
-					}
-				}
-
-				aidata = &aidat[i];
-				priv_bit = 1 << offtype;
-
-				if (ACLITEM_GET_PRIVS(*aidata) & priv_bit)
-				{
-					const char *roleName = NULL;
-					const char *withGrant = "";
-
-					if (aidata->ai_grantee != 0)
-					{
-
-						HeapTuple htup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(aidata->ai_grantee));
-						if (HeapTupleIsValid(htup))
-						{
-							Form_pg_authid authForm = ((Form_pg_authid) GETSTRUCT(htup));
-
-							roleName = quote_identifier(NameStr(authForm->rolname));
-
-							ReleaseSysCache(htup);
-						}
-						else
-						{
-							elog(ERROR, "cache lookup failed for role %u", aidata->ai_grantee);
-						}
-					}
-					else
-					{
-						roleName = "PUBLIC";
-					}
-
-					if ((ACLITEM_GET_GOPTIONS(*aidata) & priv_bit) != 0)
-					{
-						withGrant = " WITH GRANT OPTION";
-					}
-
-					appendStringInfo(&buffer, "GRANT %s(%s) ON %s TO %s%s",
-									convert_aclright_to_string(priv_bit),
-									quote_identifier(NameStr(thisAttribute->attname)),
-									relationName,
-									roleName,
-									withGrant);
-
-					defs = lappend(defs, pstrdup(buffer.data));
-
-					resetStringInfo(&buffer);
-				}
-			}
+			process_acl_items(acl, relationName, NameStr(thisAttribute->attname), &defs);
 
 			/* if we have a detoasted copy, free it */
 			if ((Pointer) acl != DatumGetPointer(aclAttDatum))
@@ -1345,7 +1215,82 @@ pg_get_table_grants(Oid relationId)
 
 	relation_close(relation, NoLock);
 	return defs;
-	/* *INDENT-ON* */
+}
+
+
+/*
+ * Helper function to process ACL items.
+ * If attributeName is NULL, the function emits table-level GRANT commands;
+ * otherwise it emits column-level GRANT commands.
+ * This function was modeled after aclexplode(), previously in pg_get_table_grants().
+ */
+static void
+process_acl_items(Acl *acl, const char *relationName, const char *attributeName,
+				  List **defs)
+{
+	AclItem *aidat = ACL_DAT(acl);
+	int i = 0;
+	int offtype = -1;
+	StringInfoData buffer;
+
+	initStringInfo(&buffer);
+
+	while (i < ACL_NUM(acl))
+	{
+		offtype++;
+		if (offtype == N_ACL_RIGHTS)
+		{
+			offtype = 0;
+			i++;
+			if (i >= ACL_NUM(acl)) /* done */
+			{
+				break;
+			}
+		}
+
+		AclItem *aidata = &aidat[i];
+		AclMode priv_bit = 1 << offtype;
+
+		if (ACLITEM_GET_PRIVS(*aidata) & priv_bit)
+		{
+			const char *roleName = NULL;
+			const char *withGrant = "";
+
+			if (aidata->ai_grantee != 0)
+			{
+				roleName = quote_identifier(GetUserNameFromId(aidata->ai_grantee, false));
+			}
+			else
+			{
+				roleName = "PUBLIC";
+			}
+
+			if ((ACLITEM_GET_GOPTIONS(*aidata) & priv_bit) != 0)
+			{
+				withGrant = " WITH GRANT OPTION";
+			}
+
+			if (attributeName)
+			{
+				appendStringInfo(&buffer, "GRANT %s(%s) ON %s TO %s%s",
+								 convert_aclright_to_string(priv_bit),
+								 quote_identifier(attributeName),
+								 relationName,
+								 roleName,
+								 withGrant);
+			}
+			else
+			{
+				appendStringInfo(&buffer, "GRANT %s ON %s TO %s%s",
+								 convert_aclright_to_string(priv_bit),
+								 relationName,
+								 roleName,
+								 withGrant);
+			}
+			*defs = lappend(*defs, pstrdup(buffer.data));
+			resetStringInfo(&buffer);
+		}
+	}
 }
 
 
