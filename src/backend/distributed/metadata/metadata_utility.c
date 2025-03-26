@@ -2452,7 +2452,7 @@ EnsureTablePermissions(Oid relationId, AclMode mode, AclMaskHow mask)
 	 * right but user is still allowed to lock table as needed. PostgreSQL will
 	 * still enforce ACL later so it's safe.
 	 */
-	aclresult = pg_attribute_aclcheck_all(relationId, GetUserId(), mode, ACLMASK_ANY);
+	aclresult = pg_attribute_aclcheck_all(relationId, GetUserId(), mode, mask);
 
 	if (aclresult != ACLCHECK_OK)
 	{
