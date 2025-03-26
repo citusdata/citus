@@ -1230,6 +1230,10 @@ pg_get_table_grants(Oid relationId)
 				resetStringInfo(&buffer);
 			}
 		}
+
+		/* if we have a detoasted copy, free it */
+		if ((Pointer) acl != DatumGetPointer(aclDatum))
+			pfree(acl);
 	}
 
 	resetStringInfo(&buffer);
