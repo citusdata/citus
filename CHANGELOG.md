@@ -1,3 +1,7 @@
+### citus v13.0.3 (March 20th, 2025) ###
+
+* Fixes a version bump issue in 13.0.2
+
 ### citus v13.0.2 (March 12th, 2025) ###
 
 * Fixes a crash in columnar custom scan that happens when a columnar table is
@@ -22,6 +26,14 @@
 
 * Fixes a bug that breaks router updates on distributed tables
   when a reference table is used in the subquery (#7897)
+
+### citus v12.1.7 (Feb 6, 2025) ###
+
+* Fixes a crash that happens because of unsafe catalog access when re-assigning
+  the global pid after `application_name` changes (#7791)
+
+* Prevents crashes when another extension skips executing the
+  `ClientAuthentication_hook` of Citus. (#7836)
 
 ### citus v13.0.1 (February 4th, 2025) ###
 
