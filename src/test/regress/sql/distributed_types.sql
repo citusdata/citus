@@ -245,6 +245,8 @@ SELECT create_distributed_table('field_indirection_test_1', 'int_col');
 -- not supported (field indirection in single row insert)
 INSERT INTO field_indirection_test_1 (int_col, ct1_col.int_1, ct1_col.int_2) VALUES (0, 1, 2);
 INSERT INTO field_indirection_test_1 (int_col, ct1_col.int_1) VALUES (0, 1);
+INSERT INTO field_indirection_test_1 (int_col, ct1_col.int_1, ct1_col.int_2) SELECT 0, 1, 2;
+INSERT INTO field_indirection_test_1 (int_col, ct1_col.int_1) SELECT 0, 1;
 
 CREATE TYPE ct2 as (int_2 int, text_1 text, int_1 int);
 CREATE TABLE field_indirection_test_2 (int_col int, ct2_col ct2, ct1_col ct1);
@@ -253,9 +255,12 @@ SELECT create_distributed_table('field_indirection_test_2', 'int_col');
 -- not supported (field indirection in multi row insert)
 INSERT INTO field_indirection_test_2 (ct2_col.int_1, int_col, ct2_col.text_1, ct1_col.int_2)
 VALUES (0, 1, 'text1', 2), (3, 4, 'text1', 5);
+INSERT INTO field_indirection_test_2 (ct2_col.int_1, int_col, ct2_col.text_1, ct1_col.int_2)
+SELECT * FROM (VALUES (0, 1, 'text1', 2), (3, 4, 'text1', 5)) qq(int_1, int_col2, text_1, int_2);
 
 -- not supported (field indirection in update)
 UPDATE field_indirection_test_2 SET (ct2_col.text_1, ct1_col.int_2) = ('text2', 10) WHERE int_col=4;
+UPDATE field_indirection_test_2 SET (ct2_col.text_1, ct1_col.int_2) = (SELECT 'text2', 10) WHERE int_col=4;
 
 CREATE TYPE two_ints as (if1 int, if2 int);
 CREATE DOMAIN domain AS two_ints CHECK ((VALUE).if1 > 0);
@@ -264,13 +269,19 @@ SELECT create_distributed_table('domain_indirection_test', 'f1');
 
 -- not supported (field indirection to underlying composite type)
 INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);
+INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) SELECT 0, 1, 2;
 INSERT INTO domain_indirection_test (f1,f3.if1) VALUES (0, 1);
+INSERT INTO domain_indirection_test (f1,f3.if1) SELECT 0, 1;
 UPDATE domain_indirection_test SET domain_array[0].if2 = 5;
+UPDATE domain_indirection_test SET domain_array[0].if2 = (SELECT 5);
 
 -- below are supported as we don't do any field indirection
 INSERT INTO field_indirection_test_2 (ct2_col, int_col, ct1_col)
 VALUES ('(1, "text1", 2)', 3, '(4, 5)'), ('(6, "text2", 7)', 8, '(9, 10)');
+INSERT INTO field_indirection_test_2 (ct2_col, int_col, ct1_col)
+SELECT * FROM (VALUES ('(1, "text1", 2)'::ct2, 3, '(4, 5)'::ct1), ('(6, "text2", 7)'::ct2, 8, '(9, 10)'::ct1)) qq(ct2_col, int_col, ct1_col);
 UPDATE field_indirection_test_2 SET (ct2_col, ct1_col) = ('(10, "text10", 20)', '(40, 50)') WHERE int_col=8;
+UPDATE field_indirection_test_2 SET (ct2_col, ct1_col) = (SELECT '(10, "text10", 20)'::ct2, '(40, 50)'::ct1) WHERE int_col=8;
 
 SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
 
@@ -355,3 +366,19 @@ SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
 DROP SCHEMA type_tests2 CASCADE;
 DROP USER typeuser;
+
+RESET client_min_messages;
+CREATE SCHEMA issue_4704;
+SET search_path TO issue_4704;
+
+-- https://github.com/citusdata/citus/issues/4704
+-- known to have crash citus before
+CREATE TYPE comptype as (r float8, i float8);
+CREATE DOMAIN dcomptypea as comptype[];
+CREATE TABLE dcomptable (d1 dcomptypea unique);
+SELECT create_distributed_table('dcomptable', 'd1');
+insert into dcomptable values (array[row(1,2)]::dcomptypea);
+
+SET client_min_messages TO error; -- suppress cascading objects dropping
+DROP TABLE dcomptable;
+DROP SCHEMA issue_4704 CASCADE;
