@@ -59,6 +59,7 @@
 #include "distributed/shard_cleaner.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/utils/restore_interval.h"
 #include "distributed/version_compat.h"
 
 /*
@@ -953,6 +954,11 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			 * this entry still exists, and it getting deleted just after.
 			 * Doesn't seem worth catering for that.
 			 */
+		}
+
+		if ( restorePointIntervalMode && IsCoordinator() && !RecoveryInProgress())
+		{
+			CheckRestoreInterval(MyDatabaseId, myDbData->userOid);
 		}
 
 		if (got_SIGHUP)
