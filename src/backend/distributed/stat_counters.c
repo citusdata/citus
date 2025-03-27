@@ -158,13 +158,12 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 
 	if (!IsCitusStatCountersEnabled())
 	{
-		ereport(NOTICE,
+		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("Citus stat counters are not enabled, consider setting "
 						"citus.stat_counters_flush_interval to a non-negative value "
 						"and restarting the server")));
 
-		PG_RETURN_VOID();
 	}
 
 	if (!CitusStatCountersSharedState || !CitusStatCountersSharedHash)
@@ -203,13 +202,12 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 
 	if (!IsCitusStatCountersEnabled())
 	{
-		ereport(NOTICE,
+		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("Citus stat counters are not enabled, consider setting "
 						"citus.stat_counters_flush_interval to a non-negative value "
 						"and restarting the server")));
 
-		PG_RETURN_VOID();
 	}
 
 	if (!CitusStatCountersSharedState || !CitusStatCountersSharedHash)
