@@ -121,4 +121,6 @@ extern Job * RouterJob(Query *originalQuery,
 extern bool ContainsOnlyLocalOrReferenceTables(RTEListProperties *rteProperties);
 extern RangeTblEntry * ExtractSourceResultRangeTableEntry(Query *query);
 
+extern bool
+QueryContainsNextval(Query *query);
 #endif /* MULTI_ROUTER_PLANNER_H */
