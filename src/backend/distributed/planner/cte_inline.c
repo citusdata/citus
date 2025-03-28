@@ -187,13 +187,13 @@ QueryTreeContainsInlinableCteWalker(Node *node, void *context)
 static bool
 PostgreSQLCTEInlineCondition(CommonTableExpr *cte, CmdType cmdType)
 {
-    /* Prevent inlining if the CTE's query references any distributed table */
-    List *cteRTEs = ExtractRangeTableEntryList((Query *) cte->ctequery);
-    if (ListContainsDistributedTableRTE(cteRTEs, NULL))
-    {
-        elog(DEBUG1, "CTE %s references a distributed table; skipping inlining", cte->ctename);
-        return false;
-    }
+    // /* Prevent inlining if the CTE's query references any distributed table */
+    // List *cteRTEs = ExtractRangeTableEntryList((Query *) cte->ctequery);
+    // if (ListContainsDistributedTableRTE(cteRTEs, NULL))
+    // {
+    //     elog(DEBUG1, "CTE %s references a distributed table; skipping inlining", cte->ctename);
+    //     return false;
+    // }
 	
 	/*
 	 * Consider inlining the CTE (creating RTE_SUBQUERY RTE(s)) instead of

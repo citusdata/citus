@@ -173,8 +173,8 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
 static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
-static bool
-QueryContainsNextval(Query *query);
+// static bool
+// QueryContainsNextval(Query *query);
 
 
 /*
@@ -3812,7 +3812,8 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 	 * then the query will anyway happen on the coordinator, so we can
 	 * allow nextval.
 	 */
-	if (QueryContainsNextval(query) &&
+	// if (QueryContainsNextval(query) &&
+	if (contain_nextval_expression_walker((Node *) query->targetList, NULL) &&
 		(hasDistributedTable || hasReferenceTable))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
