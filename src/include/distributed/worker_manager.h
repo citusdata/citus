@@ -126,6 +126,7 @@ typedef enum CitusNodeRoleEnum
 	CITUS_NODE_ROLE_WORKER = 2
 } CitusNodeRoleEnum;
 
-extern List * FilterNodeListFunc(LOCKMODE lockMode, ActiveFilterEnum active, CitusNodeRoleEnum role);
+extern List * FilterNodeListFunc(LOCKMODE lockMode, ActiveFilterEnum active,
+								 CitusNodeRoleEnum role);
 
 #endif   /* WORKER_MANAGER_H */

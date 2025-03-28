@@ -440,11 +440,11 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_node_list returns a set of node host names and port numbers  
- * using the provided arguments. The arguments are: active boolean, and role 
+ * citus_node_list returns a set of node host names and port numbers
+ * using the provided arguments. The arguments are: active boolean, and role
  * (enum). The active boolean indicates whether to return only active nodes
- * or all nodes (when provided as null). The role indicates whether to return 
- * only nodes with a specific role (worker or coordinator) or all nodes (when 
+ * or all nodes (when provided as null). The role indicates whether to return
+ * only nodes with a specific role (worker or coordinator) or all nodes (when
  * provided as null). Default values for both arguments are null.
  */
 Datum
@@ -462,8 +462,8 @@ citus_node_list(PG_FUNCTION_ARGS)
 	{
 		Oid roleOid = PG_GETARG_OID(1);
 		roleFilter = LookupCitusNodeRole(roleOid);
-	} 
-	
+	}
+
 	CheckCitusVersion(ERROR);
 
 	FuncCallContext *functionContext = NULL;
@@ -478,8 +478,8 @@ citus_node_list(PG_FUNCTION_ARGS)
 		MemoryContext oldContext = MemoryContextSwitchTo(
 			functionContext->multi_call_memory_ctx);
 
-		List *workerNodeList = FilterNodeListFunc(NoLock, 
-												  activeFilter, 
+		List *workerNodeList = FilterNodeListFunc(NoLock,
+												  activeFilter,
 												  roleFilter);
 		workerNodeCount = (uint32) list_length(workerNodeList);
 
@@ -522,7 +522,8 @@ citus_node_list(PG_FUNCTION_ARGS)
 }
 
 
-static CitusNodeRoleEnum LookupCitusNodeRole(Oid roleOid)
+static CitusNodeRoleEnum
+LookupCitusNodeRole(Oid roleOid)
 {
 	CitusNodeRoleEnum roleFilter = CITUS_NODE_ROLE_ALL;
 

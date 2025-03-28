@@ -82,8 +82,8 @@ WorkerGetRoundRobinCandidateNode(List *workerNodeList, uint64 shardId,
 
 
 /*
- * ActivePrimaryNonCoordinatorNodeCount returns the number of groups with a primary 
- * in the cluster. This method excludes coordinator even if it is added as a worker 
+ * ActivePrimaryNonCoordinatorNodeCount returns the number of groups with a primary
+ * in the cluster. This method excludes coordinator even if it is added as a worker
  * to cluster.
  */
 uint32
@@ -155,17 +155,17 @@ FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 
 
 /*
- * FilterNodeListFunc returns a list of all active nodes that match the given 
+ * FilterNodeListFunc returns a list of all active nodes that match the given
  * active and role filters.
  * 'active' specifies whether to return only active nodes or all nodes
- * 'role' specifies whether to return coordinator nodes, worker nodes, 
- * or all nodes. 'lockMode' specifies which lock to use on pg_dist_node, 
- * this is necessary when the caller wouldn't want nodes to be added 
+ * 'role' specifies whether to return coordinator nodes, worker nodes,
+ * or all nodes. 'lockMode' specifies which lock to use on pg_dist_node,
+ * this is necessary when the caller wouldn't want nodes to be added
  * concurrent to their use of this list.
  */
 List *
-FilterNodeListFunc(LOCKMODE lockMode, ActiveFilterEnum active, 
-	CitusNodeRoleEnum role)
+FilterNodeListFunc(LOCKMODE lockMode, ActiveFilterEnum active,
+				   CitusNodeRoleEnum role)
 {
 	List *workerNodeList = NIL;
 	WorkerNode *workerNode = NULL;
@@ -232,9 +232,9 @@ FilterNodeListFunc(LOCKMODE lockMode, ActiveFilterEnum active,
 
 
 /*
- * ActivePrimaryNonCoordinatorNodeList returns a list of all active primary 
+ * ActivePrimaryNonCoordinatorNodeList returns a list of all active primary
  * worker nodes in workerNodeHash. lockMode specifies which lock to use on
- * pg_dist_node, this is necessary when the caller wouldn't want nodes to 
+ * pg_dist_node, this is necessary when the caller wouldn't want nodes to
  * be added concurrent to their use of this list.
  * This method excludes coordinator even if it is added as a worker to cluster.
  */
