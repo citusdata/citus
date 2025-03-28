@@ -4,6 +4,9 @@
 -- Alternative "grant_on_table_propagation_0.out" and this comment can be
 -- removed when support for PostgreSQL versions < 17 is dropped.
 
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17;
+
 --
 -- GRANT_ON_TABLE_PROPAGATION
 --
