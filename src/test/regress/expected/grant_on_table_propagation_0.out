@@ -1,3 +1,8 @@
+-- PostgreSQL 17 introduces MAINTAIN privilege, this change the default output
+-- of some test queries.
+--
+-- Alternative "grant_on_table_propagation_0.out" and this comment can be
+-- removed when support for PostgreSQL versions < 17 is dropped.
 --
 -- GRANT_ON_TABLE_PROPAGATION
 --
