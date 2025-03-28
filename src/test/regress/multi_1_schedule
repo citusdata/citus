@@ -49,7 +49,6 @@ test: multi_test_catalog_views
 test: multi_table_ddl
 test: multi_alias
 test: multi_sequence_default
-test: grant_on_table_propagation
 test: grant_on_sequence_propagation
 test: multi_name_lengths
 test: multi_name_resolution
@@ -58,6 +57,7 @@ test: multi_metadata_attributes
 
 test: multi_read_from_secondaries
 
+test: grant_on_table_propagation
 test: grant_on_database_propagation
 test: alter_database_propagation
 
