@@ -24,12 +24,12 @@ INSERT INTO dest_table (a, b) VALUES (2, 1);
 INSERT INTO source_table (a, b) VALUES (1, 5);
 INSERT INTO source_table (a, b) VALUES (10, 10);
 -- simulate actually having secondary nodes
-SELECT nodename, nodeport, noderack, isactive, noderole, nodecluster FROM pg_dist_node ORDER BY 1, 2;
- nodename  | nodeport | noderack | isactive | noderole | nodecluster
+SELECT nodeid, groupid, nodename, nodeport, noderack, isactive, noderole, nodecluster FROM pg_dist_node ORDER BY 1, 2;
+ nodeid | groupid | nodename  | nodeport | noderack | isactive | noderole | nodecluster
 ---------------------------------------------------------------------
- localhost |    57636 | default  | t        | primary  | default
- localhost |    57637 | default  | t        | primary  | default
- localhost |    57638 | default  | t        | primary  | default
+      1 |       0 | localhost |    57636 | default  | t        | primary  | default
+      2 |       1 | localhost |    57637 | default  | t        | primary  | default
+      3 |       2 | localhost |    57638 | default  | t        | primary  | default
 (3 rows)
 
 UPDATE pg_dist_node SET noderole = 'secondary';
