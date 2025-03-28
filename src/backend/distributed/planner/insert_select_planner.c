@@ -310,11 +310,11 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 	distributedPlan->modLevel = RowModifyLevelForQuery(originalQuery);
 
-	if (QueryContainsNextval(originalQuery))
-	{
-		/* rewrite the query to partial pushdown form */
-		originalQuery = RewriteInsertSelectForPartialNextval(originalQuery);
-	}
+	// if (QueryContainsNextval(originalQuery))
+	// {
+	// 	/* rewrite the query to partial pushdown form */
+	// 	originalQuery = RewriteInsertSelectForPartialNextval(originalQuery);
+	// }
 	
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
