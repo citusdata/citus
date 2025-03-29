@@ -1142,6 +1142,7 @@ pg_get_table_grants(Oid relationId)
 
 	Datum aclDatum = SysCacheGetAttr(RELOID, classTuple, Anum_pg_class_relacl,
 							   &isNull);
+
 	ReleaseSysCache(classTuple);
 
 	if (!isNull)
