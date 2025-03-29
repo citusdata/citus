@@ -108,7 +108,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 	Oid relationId = ResolveRelationId(relationNameText, false);
 
-	EnsureTablePermissions(relationId, ACL_INSERT);
+	EnsureTablePermissions(relationId, ACL_INSERT, ACLMASK_ALL);
 	CheckDistributedTable(relationId);
 
 	/*
