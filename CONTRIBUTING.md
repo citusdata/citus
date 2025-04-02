@@ -247,6 +247,38 @@ Any other SQL you can put directly in the main sql file, e.g.
    for a review.
 8. After the tests pass on CI, fast-forward the release branch `git push origin release-11.3-<yourname>:release-11.3`
 
+### Deprecating features
+Udf's and other API functions can be deprecated using the following mechanism: 
+#### 1. Update the docs and mark the related function as "deprecated"
+Update the related documentation about the function/udf and indicate that the function has been deprecated. 
+Additionally, add the name of the function to the "Deprecated features" section of release notes. 
+
+#### 2. Mark the function as deprecated and emit a warning from the implementation
+Use `ereport(WARNING, ...)` to raise a warning when the function is used. Additionally, add the keyword `<deprecated>` to the related comments. 
+
+Example: 
+```
+/*
+ * <deprecated>
+ * master_get_active_worker_nodes is a wrapper function for old UDF name.
+ */
+Datum 
+master_get_active_worker_nodes(PG_FUNCTION_ARGS)
+{
+  if (SRF_IS_FIRSTCALL())
+  {
+     ereport(WARNING, (errmsg("master_get_active_worker_nodes is deprecated "
+                              "and will be removed in future releases. "
+                              "Please use citus_get_active_worker_nodes "
+                              "instead")));
+  }
+  return citus_get_active_worker_nodes(fcinfo);
+}
+```
+
+#### 3. Remove the deprecated function in the second major release since deprecation
+To allow the users to adopt their apps and automation accordingly, only remove the deprecated functions in the second major release since deprecation. Before each major relase.
+
 ### Running tests
 
 See [`src/test/regress/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/README.md)
