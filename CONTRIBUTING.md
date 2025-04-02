@@ -248,21 +248,21 @@ Any other SQL you can put directly in the main sql file, e.g.
 8. After the tests pass on CI, fast-forward the release branch `git push origin release-11.3-<yourname>:release-11.3`
 
 ### Deprecating features
-Udf's and other API functions can be deprecated using the following mechanism: 
+Udf's and other API functions can be deprecated using the following mechanism:
 #### 1. Update the docs and mark the related function as "deprecated"
-Update the related documentation about the function/udf and indicate that the function has been deprecated. 
-Additionally, add the name of the function to the "Deprecated features" section of release notes. 
+Update the related documentation about the function/udf and indicate that the function has been deprecated.
+Additionally, add the name of the function to the "Deprecated features" section of release notes.
 
 #### 2. Mark the function as deprecated and emit a warning from the implementation
-Use `ereport(WARNING, ...)` to raise a warning when the function is used. Additionally, add the keyword `<deprecated>` to the related comments. 
+Use `ereport(WARNING, ...)` to raise a warning when the function is used. Additionally, add the keyword `<deprecated>` to the related comments.
 
-Example: 
+Example:
 ```
 /*
  * <deprecated>
  * master_get_active_worker_nodes is a wrapper function for old UDF name.
  */
-Datum 
+Datum
 master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
   if (SRF_IS_FIRSTCALL())
