@@ -346,12 +346,12 @@ CdcIsReferenceTableViaCatalog(Oid relationId)
 		return false;
 	}
 
-	Datum datumArray[Natts_pg_dist_partition];
-	bool isNullArray[Natts_pg_dist_partition];
-
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
 	if (isNullArray[Anum_pg_dist_partition_partmethod - 1] ||
@@ -363,6 +363,8 @@ CdcIsReferenceTableViaCatalog(Oid relationId)
 		 */
 		heap_freetuple(partitionTuple);
 		table_close(pgDistPartition, NoLock);
+		pfree(datumArray);
+		pfree(isNullArray);
 		return false;
 	}
 
@@ -374,6 +376,8 @@ CdcIsReferenceTableViaCatalog(Oid relationId)
 
 	heap_freetuple(partitionTuple);
 	table_close(pgDistPartition, NoLock);
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	/*
 	 * A table is a reference table when its partition method is 'none'
