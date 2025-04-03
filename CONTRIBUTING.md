@@ -257,7 +257,7 @@ Additionally, add the name of the function to the "Deprecated features" section 
 Use `ereport(WARNING, ...)` to raise a warning when the function is used. Additionally, add the keyword `<deprecated>` to the related comments.
 
 Example:
-```
+```c
 /*
  * <deprecated>
  * master_get_active_worker_nodes is a wrapper function for old UDF name.
