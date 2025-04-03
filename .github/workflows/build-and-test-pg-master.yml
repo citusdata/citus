@@ -29,7 +29,6 @@ jobs:
 
       - name: Clone PostgreSQL Repository
         run: |
-          # Clone PostgreSQL master branch
           git clone https://github.com/postgres/postgres.git
           cd postgres
           git checkout master
@@ -41,20 +40,32 @@ jobs:
           make -j$(nproc)
           sudo make install
 
-      - name: Set PG Binaries Path
+      - name: Add PostgreSQL to PATH
         run: echo "/usr/local/pgmaster/bin" >> $GITHUB_PATH
 
       - name: Verify PostgreSQL Build
         run: |
           pg_config --version
 
-      - name: Build Citus
+      - name: Set up PG config for Citus build
         run: |
-          # Ensure the newly built PostgreSQL is used
+          # Set PG_MAJOR to "master"
+          export PG_MAJOR=master
+          echo "PG_MAJOR is set to $PG_MAJOR"
+          # Create the directory structure expected by build-citus.sh and symlink the pg_config
+          sudo mkdir -p /usr/lib/postgresql/$PG_MAJOR/bin
+          sudo ln -sf /usr/local/pgmaster/bin/pg_config /usr/lib/postgresql/$PG_MAJOR/bin/pg_config
+
+      - name: Build Citus
+        env:
+          PG_MAJOR: master
+        run: |
+          # Confirm that the expected pg_config is being used
           which pg_config
+          ls -l /usr/lib/postgresql/$PG_MAJOR/bin/pg_config
           ./ci/build-citus.sh
 
       - name: Run Citus Tests
         run: |
-          # Example test – adjust the make target and test directory as needed
+          # Adjust the test target as needed.
           make -C src/test/regress check-vanilla
