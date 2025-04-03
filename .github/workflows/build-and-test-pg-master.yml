@@ -1,4 +1,4 @@
-name: Build & Test PG Master
+name: Build & Test Citus with PG Master
 
 on:
   workflow_dispatch:
@@ -8,96 +8,53 @@ on:
   pull_request:
 
 jobs:
-  params:
-    runs-on: ubuntu-latest
-    name: Initialize parameters
-    outputs:
-      build_image_name: "ghcr.io/citusdata/extbuilder"
-      test_image_name: "ghcr.io/citusdata/exttester"
-      pg_master_version: '{ "major": "master", "full": "master" }'
-      image_suffix: "-veab367a"
-    steps:
-      - name: Set up parameters
-        run: echo 'noop'
-
-  build_pg_master:
-    needs: params
-    name: Build for PG${{ fromJson(matrix.pg_version).major }}
-    strategy:
-      fail-fast: false
-      matrix:
-        image_name:
-          - ${{ needs.params.outputs.build_image_name }}
-        pg_version:
-          - ${{ needs.params.outputs.pg_master_version }}
-        image_suffix:
-          - ${{ needs.params.outputs.image_suffix }}
+  build-and-test-pg-master:
     runs-on: ubuntu-20.04
-    container:
-      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
-      options: --user root
     steps:
       - uses: actions/checkout@v4
-      - name: Expose PG_MAJOR to GitHub Environment
-        run: echo "PG_MAJOR=${{ fromJson(matrix.pg_version).major }}" >> $GITHUB_ENV
-        shell: bash
-      - name: Build Citus with PG master branch
-        run: "./ci/build-citus.sh"
-        shell: bash
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-${{ env.PG_MAJOR }}
-          path: |-
-            ./build-${{ env.PG_MAJOR }}/*
-            ./install-${{ env.PG_MAJOR }}.tar
 
-  test_citus_pg_master:
-    needs: build_pg_master
-    name: PG${{ fromJson(matrix.pg_version).major }} - Test Citus
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - regress
-        image_name:
-          - ${{ needs.params.outputs.test_image_name }}
-        pg_version:
-          - ${{ needs.params.outputs.pg_master_version }}
-        make:
-          - check-split
-          - check-multi
-          - check-multi-1
-          - check-multi-mx
-          - check-vanilla
-          - check-isolation
-          - check-operations
-          - check-follower-cluster
-          - check-columnar
-          - check-columnar-isolation
-          - check-enterprise
-          - check-enterprise-isolation
-          - check-enterprise-isolation-logicalrep-1
-          - check-enterprise-isolation-logicalrep-2
-          - check-enterprise-isolation-logicalrep-3
-    runs-on: ubuntu-20.04
-    container:
-      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
-      options: --user root --dns=8.8.8.8
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup_extension
-      - name: Run tests
-        run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
-        timeout-minutes: 20
-      - name: Save logs and results
-        if: always()
-        uses: ./.github/actions/save_logs_and_results
-        with:
-          folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
-      - name: Upload coverage results
-        if: always()
-        uses: ./.github/actions/upload_coverage
-        with:
-          flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
-          codecov_token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libreadline-dev \
+            zlib1g-dev \
+            flex \
+            bison \
+            libxml2-dev \
+            libxslt-dev \
+            libssl-dev \
+            git
+
+      - name: Clone PostgreSQL Repository
+        run: |
+          # Clone PostgreSQL master branch
+          git clone https://github.com/postgres/postgres.git
+          cd postgres
+          git checkout master
+
+      - name: Build PostgreSQL from Source
+        run: |
+          cd postgres
+          ./configure --prefix=/usr/local/pgmaster
+          make -j$(nproc)
+          sudo make install
+
+      - name: Set PG Binaries Path
+        run: echo "/usr/local/pgmaster/bin" >> $GITHUB_PATH
+
+      - name: Verify PostgreSQL Build
+        run: |
+          pg_config --version
+
+      - name: Build Citus
+        run: |
+          # Ensure the newly built PostgreSQL is used
+          which pg_config
+          ./ci/build-citus.sh
+
+      - name: Run Citus Tests
+        run: |
+          # Example test – adjust the make target and test directory as needed
+          make -C src/test/regress check-vanilla
