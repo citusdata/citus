@@ -2549,21 +2549,19 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		/* check whether parameter is available (and valid) */
 		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
 		{
-			ParamExternData *externParam = NULL;
-
+			Oid paramType;
 			/* give hook a chance in case parameter is dynamic */
 			if (boundParams->paramFetch != NULL)
 			{
 				ParamExternData externParamPlaceholder;
-				externParam = (*boundParams->paramFetch)(boundParams, paramId, false,
-														 &externParamPlaceholder);
+				paramType = (*boundParams->paramFetch)(boundParams, paramId, false,
+														 &externParamPlaceholder)->ptype;
 			}
 			else
 			{
-				externParam = &boundParams->params[paramId - 1];
+				paramType = boundParams->params[paramId - 1].ptype;
 			}
 
-			Oid paramType = externParam->ptype;
 			if (OidIsValid(paramType))
 			{
 				return false;
