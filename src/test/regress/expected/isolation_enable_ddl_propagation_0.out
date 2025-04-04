@@ -1,0 +1,14 @@
+Parsed test spec with 1 sessions
+
+starting permutation: s1-begin s1-commit
+result
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-commit:
+ COMMIT;
+
