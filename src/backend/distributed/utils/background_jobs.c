@@ -343,7 +343,7 @@ citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
 		MemoryContextSwitchTo(TopMemoryContext);
 
 		/* Attempt to cancel the job; if it's already in a terminal state, that's okay. */
-		citus_cancel_job(jobid);
+		(void) DirectFunctionCall1(citus_job_cancel, Int64GetDatum(jobid));
 
 		/* Re-throw the original error so Postgres knows this statement was canceled. */
 		PG_RE_THROW();
