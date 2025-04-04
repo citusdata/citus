@@ -2549,7 +2549,7 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		/* check whether parameter is available (and valid) */
 		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
 		{
-			Oid paramType;
+			Oid paramType = InvalidOid;
 
 			/* give hook a chance in case parameter is dynamic */
 			if (boundParams->paramFetch != NULL)
