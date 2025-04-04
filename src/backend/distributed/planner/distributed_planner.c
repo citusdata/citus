@@ -2550,12 +2550,13 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
 		{
 			Oid paramType;
+
 			/* give hook a chance in case parameter is dynamic */
 			if (boundParams->paramFetch != NULL)
 			{
 				ParamExternData externParamPlaceholder;
 				paramType = (*boundParams->paramFetch)(boundParams, paramId, false,
-														 &externParamPlaceholder)->ptype;
+													   &externParamPlaceholder)->ptype;
 			}
 			else
 			{
