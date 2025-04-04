@@ -3024,6 +3024,8 @@ CreateBackgroundJob(const char *jobType, const char *description)
 	/* insert new job */
 	Datum values[Natts_pg_dist_background_job] = { 0 };
 	bool isnull[Natts_pg_dist_background_job] = { 0 };
+
+	NameData jobTypeName = { 0 };
 	memset(isnull, true, sizeof(isnull));
 
 	int64 jobId = GetNextBackgroundJobsJobId();
@@ -3036,7 +3038,6 @@ CreateBackgroundJob(const char *jobType, const char *description)
 
 	if (jobType)
 	{
-		NameData jobTypeName = { 0 };
 		namestrcpy(&jobTypeName, jobType);
 		InitFieldValue(Anum_pg_dist_background_job_job_type, values, isnull,
 					   NameGetDatum(&jobTypeName));
