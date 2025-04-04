@@ -222,10 +222,12 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 	 * on the executor. However, for INSERTs, the user might have only
 	 * INSERTs granted, so add a special case for it.
 	 */
-	AclMode aclMask = ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
+	AclMode aclMode = ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
+	AclMaskHow aclMaskHow = ACLMASK_ANY;
+
 	if (lockMode == RowExclusiveLock)
 	{
-		aclMask |= ACL_INSERT;
+		aclMode |= ACL_INSERT;
 	}
 
 	for (int shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
@@ -254,7 +256,7 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 
 		if (!SkipAdvisoryLockPermissionChecks)
 		{
-			EnsureTablePermissions(relationId, aclMask);
+			EnsureTablePermissions(relationId, aclMode, aclMaskHow);
 		}
 
 		LockShardResource(shardId, lockMode);
