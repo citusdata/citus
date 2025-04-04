@@ -117,7 +117,6 @@ static void QueueMonitorSigTermHandler(SIGNAL_ARGS);
 static void QueueMonitorSigIntHandler(SIGNAL_ARGS);
 static void QueueMonitorSigHupHandler(SIGNAL_ARGS);
 static void DecrementParallelTaskCountForNodesInvolved(BackgroundTask *task);
-static bool citus_cancel_job(int64 jobid);
 
 /* flags set by signal handlers */
 static volatile sig_atomic_t GotSigterm = false;
@@ -349,43 +348,6 @@ citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-}
-
-
-/*
- * citus_cancel_job - forcibly cancels a background job by setting its status
- * to BACKGROUND_JOB_STATUS_CANCELLED in memory, then updates the
- * pg_dist_background_job table.
- */
-bool
-citus_cancel_job(int64 jobId)
-{
-	BackgroundJob *job = GetBackgroundJobByJobId(jobId);
-	if (!job)
-	{
-		/* No such job ID */
-		return false;
-	}
-
-	/*
-	 * If the job is already in a terminal state, or is scheduled,
-	 * decide if you want to do anything special.
-	 * But typically you just check if it is still "running" or "cancelling".
-	 */
-	if (IsBackgroundJobStatusTerminal(job->state))
-	{
-		return false;
-	}
-
-	/* Mark job as canceled, then update the catalog */
-	job->state = BACKGROUND_JOB_STATUS_CANCELLED;
-
-	/* This projects the tasks states into the job's new state,
-	 * and updates the row in pg_dist_background_job.
-	 */
-	UpdateBackgroundJob(job->jobid);
-
-	return true;
 }
 
 
