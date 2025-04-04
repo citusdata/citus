@@ -112,4 +112,21 @@ extern int WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySiz
 extern int NodeNamePortCompare(const char *workerLhsName, const char *workerRhsName,
 							   int workerLhsPort, int workerRhsPort);
 
+typedef enum ActiveFilterEnum
+{
+	ACTIVE_FILTER_ALL = 0,
+	ACTIVE_FILTER_ACTIVE = 1,
+	ACTIVE_FILTER_INACTIVE = 2
+} ActiveFilterEnum;
+
+typedef enum CitusNodeRoleEnum
+{
+	CITUS_NODE_ROLE_ALL = 0,
+	CITUS_NODE_ROLE_COORDINATOR = 1,
+	CITUS_NODE_ROLE_WORKER = 2
+} CitusNodeRoleEnum;
+
+extern List * FilterNodeListFunc(LOCKMODE lockMode, ActiveFilterEnum active,
+								 CitusNodeRoleEnum role);
+
 #endif   /* WORKER_MANAGER_H */
