@@ -573,9 +573,13 @@ FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple, TupleDesc tupleDesc
 {
 	Assert(heapTuple->t_tableOid == DistPartitionRelationId());
 
-	bool isNullArray[Natts_pg_dist_partition];
-	Datum datumArray[Natts_pg_dist_partition];
+	Datum* datumArray = (Datum *) palloc0(tupleDesc->natts * sizeof(Datum));
+	bool* isNullArray = (bool *) palloc0(tupleDesc->natts * sizeof(bool));
+
 	heap_deform_tuple(heapTuple, tupleDesc, datumArray, isNullArray);
+
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 	Oid relationId = DatumGetObjectId(relationIdDatum);
