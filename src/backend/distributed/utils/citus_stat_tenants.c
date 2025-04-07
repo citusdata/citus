@@ -48,6 +48,9 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 #define ATTRIBUTE_STRING_FORMAT_WITHOUT_TID "/*{\"cId\":%d}*/"
 #define STAT_TENANTS_COLUMNS 9
 #define ONE_QUERY_SCORE 1000000000
+#define BYTE_TO_BIT 3               /* 2^3 bits/byte */
+#define TENANTS_STATS_FIELD_BIT_LENGTH(tenantStats, field) (sizeof((tenantStats)->field) \
+	<< BYTE_TO_BIT)
 
 static char AttributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
 static CmdType AttributeToCommandType = CMD_UNKNOWN;
@@ -605,8 +608,12 @@ ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 	 */
 	if (periodCountAfterLastScoreReduction > 0)
 	{
-		tenantStats->score >>= periodCountAfterLastScoreReduction;
 		tenantStats->lastScoreReduction = queryTime;
+		/*addtional check to avoid undefined behavior */
+		tenantStats->score = (periodCountAfterLastScoreReduction <
+							  TENANTS_STATS_FIELD_BIT_LENGTH(tenantStats, score))
+			? tenantStats->score >> periodCountAfterLastScoreReduction
+			: 0;
 	}
 }
 
