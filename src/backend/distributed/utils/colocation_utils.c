@@ -557,8 +557,8 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 			continue;
 		}
 
-		if (colocationId == INVALID_COLOCATION_ID || colocationId >
-			colocationForm->colocationid)
+		if (colocationId == INVALID_COLOCATION_ID || colocationId > colocationForm->
+			colocationid)
 		{
 			/*
 			 * We assign the smallest colocation id among all the matches so that we
@@ -819,9 +819,9 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId,
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 
-	Datum* values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
-	bool* isNull = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
-	bool* replace = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	Datum *values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNull = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributedRelationId));
@@ -999,18 +999,18 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 	while (HeapTupleIsValid(heapTuple))
 	{
-		Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-		bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+		memset(datumArray, 0, tupleDescriptor->natts * sizeof(Datum));
+		memset(isNullArray, 0, tupleDescriptor->natts * sizeof(bool));
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 		Oid colocatedTableId = DatumGetObjectId(
 			datumArray[Anum_pg_dist_partition_logicalrelid - 1]);
 
 		colocatedTableList = lappend_oid(colocatedTableList, colocatedTableId);
 		heapTuple = systable_getnext(scanDescriptor);
-		pfree(datumArray);
-		pfree(isNullArray);
 
 		if (count == 0)
 		{
@@ -1023,6 +1023,8 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 			break;
 		}
 	}
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
@@ -1075,8 +1077,8 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		 * Since we iterate over co-located tables, shard count of each table should be
 		 * same and greater than shardIntervalIndex.
 		 */
-		Assert(cacheEntry->shardIntervalArrayLength ==
-			   colocatedTableCacheEntry->shardIntervalArrayLength);
+		Assert(cacheEntry->shardIntervalArrayLength == colocatedTableCacheEntry->
+			   shardIntervalArrayLength);
 
 		ShardInterval *colocatedShardInterval =
 			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
@@ -1146,8 +1148,8 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
 		 * Since we iterate over co-located tables, shard count of each table should be
 		 * same and greater than shardIntervalIndex.
 		 */
-		Assert(cacheEntry->shardIntervalArrayLength ==
-			   colocatedTableCacheEntry->shardIntervalArrayLength);
+		Assert(cacheEntry->shardIntervalArrayLength == colocatedTableCacheEntry->
+			   shardIntervalArrayLength);
 
 		ShardInterval *colocatedShardInterval =
 			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
@@ -1195,10 +1197,12 @@ ColocatedTableId(int32 colocationId)
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 	while (HeapTupleIsValid(heapTuple))
 	{
-		Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-		bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+		memset(datumArray, 0, tupleDescriptor->natts * sizeof(Datum));
+		memset(isNullArray, 0, tupleDescriptor->natts * sizeof(bool));
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 		colocatedTableId = DatumGetObjectId(
 			datumArray[Anum_pg_dist_partition_logicalrelid - 1]);
@@ -1225,9 +1229,9 @@ ColocatedTableId(int32 colocationId)
 		colocatedTableId = InvalidOid;
 
 		heapTuple = systable_getnext(scanDescriptor);
-		pfree(datumArray);
-		pfree(isNullArray);
 	}
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);

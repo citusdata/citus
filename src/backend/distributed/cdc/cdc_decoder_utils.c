@@ -349,8 +349,8 @@ CdcIsReferenceTableViaCatalog(Oid relationId)
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
-	Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-	bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 

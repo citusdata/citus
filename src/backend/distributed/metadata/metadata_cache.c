@@ -320,9 +320,10 @@ static void CachedRelationNamespaceLookup(const char *relationName, Oid relnames
 static void CachedRelationNamespaceLookupExtended(const char *relationName,
 												  Oid renamespace, Oid *cachedOid,
 												  bool missing_ok);
-static ShardPlacement * ResolveGroupShardPlacement(
-	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
-	int shardIndex);
+static ShardPlacement * ResolveGroupShardPlacement(GroupShardPlacement *
+												   groupShardPlacement,
+												   CitusTableCacheEntry *tableEntry,
+												   int shardIndex);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
@@ -733,8 +734,8 @@ PartitionMethodViaCatalog(Oid relationId)
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 
-	Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-	bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
@@ -776,8 +777,8 @@ PartitionColumnViaCatalog(Oid relationId)
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
-	Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-	bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
@@ -826,8 +827,8 @@ ColocationIdViaCatalog(Oid relationId)
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 
-	Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-	bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
@@ -1757,8 +1758,8 @@ BuildCitusTableCacheEntry(Oid relationId)
 	MemoryContext oldContext = NULL;
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
-	Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-	bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 
 	heap_deform_tuple(distPartitionTuple, tupleDescriptor, datumArray, isNullArray);
 
@@ -5029,10 +5030,12 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 	while (HeapTupleIsValid(heapTuple))
 	{
-		Datum* datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-		bool* isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+		memset(datumArray, 0, tupleDescriptor->natts * sizeof(Datum));
+		memset(isNullArray, 0, tupleDescriptor->natts * sizeof(bool));
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
@@ -5054,9 +5057,9 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
-		pfree(datumArray);
-		pfree(isNullArray);
 	}
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);

@@ -40,7 +40,7 @@
 #define WORKER_PARTITIONED_TABLE_SIZE_FUNCTION "worker_partitioned_table_size(%s)"
 #define WORKER_PARTITIONED_RELATION_SIZE_FUNCTION "worker_partitioned_relation_size(%s)"
 #define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
-	"worker_partitioned_relation_total_size(%s)"
+		"worker_partitioned_relation_total_size(%s)"
 
 #define SHARD_SIZES_COLUMN_COUNT (2)
 
@@ -302,12 +302,12 @@ typedef struct BackgroundTask
 } BackgroundTask;
 
 #define SET_NULLABLE_FIELD(ptr, field, value) \
-	(ptr)->__nullable_storage.field = (value); \
-	(ptr)->field = &((ptr)->__nullable_storage.field)
+		(ptr)->__nullable_storage.field = (value); \
+		(ptr)->field = &((ptr)->__nullable_storage.field)
 
 #define UNSET_NULLABLE_FIELD(ptr, field) \
-	(ptr)->field = NULL; \
-	memset_struct_0((ptr)->__nullable_storage.field)
+		(ptr)->field = NULL; \
+		memset_struct_0((ptr)->__nullable_storage.field)
 
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);
@@ -345,7 +345,8 @@ extern bool IsDummyPlacement(ShardPlacement *taskPlacement);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 														Oid indexId,
 														SizeQueryType sizeQueryType,
-														bool optimizePartitionCalculations);
+														bool optimizePartitionCalculations
+														);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */

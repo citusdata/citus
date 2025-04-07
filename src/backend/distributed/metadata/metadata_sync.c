@@ -573,8 +573,8 @@ FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple, TupleDesc tupleDesc
 {
 	Assert(heapTuple->t_tableOid == DistPartitionRelationId());
 
-	Datum* datumArray = (Datum *) palloc0(tupleDesc->natts * sizeof(Datum));
-	bool* isNullArray = (bool *) palloc0(tupleDesc->natts * sizeof(bool));
+	Datum *datumArray = (Datum *) palloc0(tupleDesc->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc0(tupleDesc->natts * sizeof(bool));
 
 	heap_deform_tuple(heapTuple, tupleDesc, datumArray, isNullArray);
 
