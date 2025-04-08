@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------
--- Regression Test: Simulate zombie replication slot when 
+-- Regression Test: Simulate zombie replication slot when
 -- citus_rebalance_wait() is canceled.
 --
 -- In the buggy behavior, canceling citus_rebalance_wait()
@@ -7,12 +7,12 @@
 -- replication slot on a worker. This, in turn, prevents DROP DATABASE
 -- (with FORCE) from succeeding.
 --
--- With your fix applied, the underlying rebalance job is canceled,
--- no zombie slot remains, and DROP DATABASE succeeds.
+-- With the fix applied, the underlying rebalance job is canceled,
+-- no zombie slot remains.
 ---------------------------------------------------------------------
 
 ---------------------------------------------------------------------
--- 1) Create an isolated schema for this test.
+-- 1) Setup the test environment.
 ---------------------------------------------------------------------
 CREATE SCHEMA issue_7896;
 SET search_path TO issue_7896;
@@ -20,8 +20,6 @@ SET search_path TO issue_7896;
 ---------------------------------------------------------------------
 -- 2) Set cluster parameters and initialize environment.
 ---------------------------------------------------------------------
--- We assume a coordinator with at least two workers.
--- Set replication factor to 2 and enable repartition joins.
 SET citus.shard_replication_factor TO 2;
 SET citus.enable_repartition_joins TO ON;
 -- For faster background task processing, set a short background task queue interval.
@@ -64,7 +62,6 @@ SELECT citus_rebalance_start(
          shard_transfer_mode   := 'force_logical'
        );
 -- Expected: Notice that moves are scheduled as a background job.
--- (You may verify with: SELECT * FROM citus_rebalance_status();)
 
 ---------------------------------------------------------------------
 -- 8) Attempt to wait on the rebalance with a short timeout so that the wait
@@ -113,5 +110,6 @@ SELECT * FROM pg_replication_slots;
 ---------------------------------------------------------------------
 \c - - - :master_port
 SET search_path TO issue_7896;
+SET client_min_messages TO WARNING;
 DROP SCHEMA IF EXISTS issue_7896 CASCADE;
 

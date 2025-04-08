@@ -7,19 +7,17 @@
 -- replication slot on a worker. This, in turn, prevents DROP DATABASE
 -- (with FORCE) from succeeding.
 --
--- With your fix applied, the underlying rebalance job is canceled,
--- no zombie slot remains, and DROP DATABASE succeeds.
+-- With the fix applied, the underlying rebalance job is canceled,
+-- no zombie slot remains.
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
--- 1) Create an isolated schema for this test.
+-- 1) Setup the test environment.
 ---------------------------------------------------------------------
 CREATE SCHEMA issue_7896;
 SET search_path TO issue_7896;
 ---------------------------------------------------------------------
 -- 2) Set cluster parameters and initialize environment.
 ---------------------------------------------------------------------
--- We assume a coordinator with at least two workers.
--- Set replication factor to 2 and enable repartition joins.
 SET citus.shard_replication_factor TO 2;
 SET citus.enable_repartition_joins TO ON;
 -- For faster background task processing, set a short background task queue interval.
@@ -98,7 +96,6 @@ HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
 (1 row)
 
 -- Expected: Notice that moves are scheduled as a background job.
--- (You may verify with: SELECT * FROM citus_rebalance_status();)
 ---------------------------------------------------------------------
 -- 8) Attempt to wait on the rebalance with a short timeout so that the wait
 --    is canceled. The PG_CATCH block in citus_job_wait_internal should then
@@ -129,7 +126,7 @@ SET statement_timeout = '0';
 CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 5 orphaned resources
 ---------------------------------------------------------------------
--- 12) Traverse nodes and check for active replication slots.
+-- 10) Traverse nodes and check for active replication slots.
 --
 -- Connect to the coordinator and worker nodes, then query for replication slots.
 -- Expected Outcome (with the fix applied): No active replication slots.
@@ -157,5 +154,5 @@ SELECT * FROM pg_replication_slots;
 ---------------------------------------------------------------------
 \c - - - :master_port
 SET search_path TO issue_7896;
+SET client_min_messages TO WARNING;
 DROP SCHEMA IF EXISTS issue_7896 CASCADE;
-NOTICE:  drop cascades to table t1
