@@ -313,9 +313,8 @@ SELECT * FROM trivial_full_access ORDER BY id;
 (4 rows)
 
 RESET ROLE;
--- verify column level grants are not supported
+-- verify column level grants are supported
 GRANT UPDATE (id) ON trivial_postgres TO read_access;
-ERROR:  grant/revoke on column list is currently unsupported
 DROP TABLE trivial_full_access;
 DROP TABLE trivial_postgres;
 DROP TABLE stage_full_access;
