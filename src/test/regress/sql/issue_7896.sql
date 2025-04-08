@@ -14,6 +14,7 @@
 ---------------------------------------------------------------------
 -- 1) Setup the test environment.
 ---------------------------------------------------------------------
+SET citus.next_shard_id TO 17560000;
 CREATE SCHEMA issue_7896;
 SET search_path TO issue_7896;
 
