@@ -578,11 +578,11 @@ FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple, TupleDesc tupleDesc
 
 	heap_deform_tuple(heapTuple, tupleDesc, datumArray, isNullArray);
 
-	pfree(datumArray);
-	pfree(isNullArray);
-
 	Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 	Oid relationId = DatumGetObjectId(relationIdDatum);
+
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	return relationId;
 }
