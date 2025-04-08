@@ -1522,7 +1522,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	}
 
 	Oid relationId = PG_GETARG_OID(0);
-	EnsureTablePermissions(relationId, ACL_SELECT);
+	EnsureTablePermissions(relationId, ACL_SELECT, ACLMASK_ANY);
 
 	if (!IsCitusTable(relationId))
 	{
