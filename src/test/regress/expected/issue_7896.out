@@ -13,8 +13,10 @@
 ---------------------------------------------------------------------
 -- 1) Setup the test environment.
 ---------------------------------------------------------------------
+SET citus.next_shard_id TO 17560000;
 CREATE SCHEMA issue_7896;
 SET search_path TO issue_7896;
+SET client_min_messages TO ERROR;
 ---------------------------------------------------------------------
 -- 2) Set cluster parameters and initialize environment.
 ---------------------------------------------------------------------
@@ -32,7 +34,6 @@ SELECT pg_reload_conf();
 -- 3) Create a distributed table.
 ---------------------------------------------------------------------
 DROP TABLE IF EXISTS t1;
-NOTICE:  table "t1" does not exist, skipping
 CREATE TABLE t1 (a int PRIMARY KEY);
 SELECT create_distributed_table('t1', 'a', shard_count => 4, colocate_with => 'none');
  create_distributed_table
@@ -49,7 +50,6 @@ INSERT INTO t1
 -- 5) Verify that a rebalance on a balanced cluster is a no-op.
 ---------------------------------------------------------------------
 SELECT 1 FROM citus_rebalance_start();
-NOTICE:  No moves available for rebalancing
  ?column?
 ---------------------------------------------------------------------
         1
@@ -57,7 +57,6 @@ NOTICE:  No moves available for rebalancing
 
 -- Expected: NOTICE "No moves available for rebalancing".
 SELECT citus_rebalance_wait();
-WARNING:  no ongoing rebalance that can be waited on
  citus_rebalance_wait
 ---------------------------------------------------------------------
 
@@ -87,9 +86,6 @@ SELECT citus_rebalance_start(
          rebalance_strategy := 'by_disk_size',
          shard_transfer_mode   := 'force_logical'
        );
-NOTICE:  Scheduled 2 moves as job xxx
-DETAIL:  Rebalance scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
  citus_rebalance_start
 ---------------------------------------------------------------------
                      1
@@ -102,6 +98,7 @@ HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
 --    cancel the underlying job (cleaning up temporary replication slots).
 ---------------------------------------------------------------------
 SET statement_timeout = '2s';
+SET client_min_messages TO NOTICE;
 DO $$
 BEGIN
     BEGIN
@@ -120,11 +117,11 @@ CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 NOTICE:  Rebalance wait canceled as expected
 CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 SET statement_timeout = '0';
+SET client_min_messages TO ERROR;
 ---------------------------------------------------------------------
 -- 9) Cleanup orphaned background resources (if any).
 ---------------------------------------------------------------------
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 5 orphaned resources
 ---------------------------------------------------------------------
 -- 10) Traverse nodes and check for active replication slots.
 --

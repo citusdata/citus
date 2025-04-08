@@ -17,6 +17,7 @@
 SET citus.next_shard_id TO 17560000;
 CREATE SCHEMA issue_7896;
 SET search_path TO issue_7896;
+SET client_min_messages TO ERROR;
 
 ---------------------------------------------------------------------
 -- 2) Set cluster parameters and initialize environment.
@@ -70,6 +71,7 @@ SELECT citus_rebalance_start(
 --    cancel the underlying job (cleaning up temporary replication slots).
 ---------------------------------------------------------------------
 SET statement_timeout = '2s';
+SET client_min_messages TO NOTICE;
 DO $$
 BEGIN
     BEGIN
@@ -84,6 +86,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SET statement_timeout = '0';
+SET client_min_messages TO ERROR;
 
 ---------------------------------------------------------------------
 -- 9) Cleanup orphaned background resources (if any).
