@@ -121,7 +121,7 @@ SELECT * FROM trivial_postgres ORDER BY id;
 SELECT * FROM trivial_full_access ORDER BY id;
 RESET ROLE;
 
--- verify column level grants are not supported
+-- verify column level grants are supported
 GRANT UPDATE (id) ON trivial_postgres TO read_access;
 
 DROP TABLE trivial_full_access;
