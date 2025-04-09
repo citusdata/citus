@@ -39,6 +39,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/stat_counters.h"
 #include "distributed/time_constants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
@@ -354,6 +355,18 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
+			/*
+			 * Increment the connection stat counter for the connections that are
+			 * reused only if the connection is in a good state. Here we don't
+			 * bother shutting down the connection or such if it is not in a good
+			 * state but we mostly want to avoid incrementing the connection stat
+			 * counter for a connection that the caller cannot really use.
+			 */
+			if (PQstatus(connection->pgConn) == CONNECTION_OK)
+			{
+				IncrementStatCounterForMyDb(STAT_CONNECTION_REUSED);
+			}
+
 			return connection;
 		}
 	}
@@ -395,6 +408,12 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 			dlist_delete(&connection->connectionNode);
 			pfree(connection);
 
+			/*
+			 * Here we don't increment the connection stat counter for the optional
+			 * connections that we gave up establishing due to connection throttling
+			 * because the callers who request optional connections know how to
+			 * survive without them.
+			 */
 			return NULL;
 		}
 	}
@@ -1026,6 +1045,11 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 
 			if (event->events & WL_POSTMASTER_DEATH)
 			{
+				/*
+				 * Here we don't increment the connection stat counter for the
+				 * optional failed connections because this is not a connection
+				 * failure, but a postmaster death in the local node.
+				 */
 				ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
 			}
 
@@ -1042,6 +1066,12 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 					 * reset the memory context
 					 */
 					MemoryContextDelete(MemoryContextSwitchTo(oldContext));
+
+					/*
+					 * Similarly, we don't increment the connection stat counter for the
+					 * failed connections here because this is not a connection failure
+					 * but a cancellation request is received.
+					 */
 					return;
 				}
 
@@ -1072,6 +1102,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 											 eventMask, NULL);
 					if (!success)
 					{
+						IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 						ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 										errmsg("connection establishment for node %s:%d "
 											   "failed", connection->hostname,
@@ -1088,7 +1119,15 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				 */
 				if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTED)
 				{
-					MarkConnectionConnected(connectionState->connection);
+					/*
+					 * Since WaitEventSetFromMultiConnectionStates() only adds the
+					 * connections that we haven't completed the connection
+					 * establishment yet, here we always have a new connection.
+					 * In other words, at this point, we surely know that we're
+					 * not dealing with a cached connection.
+					 */
+					bool newConnection = true;
+					MarkConnectionConnected(connectionState->connection, newConnection);
 				}
 			}
 		}
@@ -1172,6 +1211,8 @@ CloseNotReadyMultiConnectionStates(List *connectionStates)
 
 		/* close connection, otherwise we take up resource on the other side */
 		CitusPQFinish(connection);
+
+		IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 	}
 }
 
@@ -1584,13 +1625,18 @@ RemoteTransactionIdle(MultiConnection *connection)
  * establishment time when necessary.
  */
 void
-MarkConnectionConnected(MultiConnection *connection)
+MarkConnectionConnected(MultiConnection *connection, bool newConnection)
 {
 	connection->connectionState = MULTI_CONNECTION_CONNECTED;
 
 	if (INSTR_TIME_IS_ZERO(connection->connectionEstablishmentEnd))
 	{
 		INSTR_TIME_SET_CURRENT(connection->connectionEstablishmentEnd);
+	}
+
+	if (newConnection)
+	{
+		IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED);
 	}
 }
 

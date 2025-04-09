@@ -105,6 +105,7 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/stat_counters.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/time_constants.h"
@@ -187,8 +188,10 @@ static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
+static void RegisterSaveBackendStatsIntoExitedBackendStatsHash(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
+static void SaveBackendStatsIntoExitedBackendStatsHashAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
@@ -504,6 +507,8 @@ _PG_init(void)
 	InitializeShardSplitSMHandleManagement();
 
 	InitializeMultiTenantMonitorSMHandleManagement();
+	InitializeStatCountersShmem();
+
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -615,6 +620,8 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
+	RequestAddinShmemSpace(StatCountersShmemSize());
+	RequestNamedLWLockTranche(EXITED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
 }
 
 
@@ -787,6 +794,8 @@ StartupCitusBackend(void)
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
+	RegisterSaveBackendStatsIntoExitedBackendStatsHash();
+
 	FinishedStartupCitusBackend = true;
 }
 
@@ -820,6 +829,23 @@ RegisterConnectionCleanup(void)
 		before_shmem_exit(CitusCleanupConnectionsAtExit, 0);
 
 		registeredCleanup = true;
+	}
+}
+
+
+/*
+ * RegisterSaveBackendStatsIntoExitedBackendStatsHash registers the function
+ * that saves the backend stats into the exited_backend_stats hash.
+ */
+static void
+RegisterSaveBackendStatsIntoExitedBackendStatsHash(void)
+{
+	static bool registeredSaveBackendStats = false;
+	if (registeredSaveBackendStats == false)
+	{
+		before_shmem_exit(SaveBackendStatsIntoExitedBackendStatsHashAtExit, 0);
+
+		registeredSaveBackendStats = true;
 	}
 }
 
@@ -861,6 +887,24 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	/* we don't want any monitoring view/udf to show already exited backends */
 	SetActiveMyBackend(false);
 	UnSetGlobalPID();
+}
+
+
+/*
+ * SaveBackendStatsIntoExitedBackendStatsHashAtExit is called before_shmem_exit()
+ * of the backend for the purposes of saving the backend stats into the
+ * exited_backend_stats hash.
+ */
+static void
+SaveBackendStatsIntoExitedBackendStatsHashAtExit(int code, Datum arg)
+{
+	if (code)
+	{
+		/* don't try to save the stats during a crash */
+		return;
+	}
+
+	SaveBackendStatsIntoExitedBackendStatsHash();
 }
 
 
