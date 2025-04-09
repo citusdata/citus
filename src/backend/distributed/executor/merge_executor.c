@@ -26,6 +26,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/repartition_executor.h"
+#include "distributed/stat_counters.h"
 #include "distributed/subplan_execution.h"
 
 static void ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState);
@@ -125,6 +126,16 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 		GetDistributedPlan((CustomScan *) sourcePlan->planTree);
 	Job *distSourceJob = distSourcePlan->workerJob;
 	List *distSourceTaskList = distSourceJob->taskList;
+
+	if (list_length(distSourceTaskList) <= 1)
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
+
 	bool binaryFormat =
 		CanUseBinaryCopyFormatForTargetList(sourceQuery->targetList);
 
@@ -180,6 +191,15 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 												 targetRelation,
 												 redistributedResults,
 												 binaryFormat);
+
+	if (list_length(taskList) <= 1)
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
 
 	scanState->tuplestorestate =
 		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
@@ -285,6 +305,15 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 		prunedTaskList = list_concat(prunedTaskList, emptySourceTaskList);
 	}
 
+	if (list_length(prunedTaskList) <= 1)
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
+
 	if (prunedTaskList == NIL)
 	{
 		/* No task to execute */
@@ -345,6 +374,29 @@ ExecuteMergeSourcePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	copyDest->skipCoercions = true;
 
 	ExecutePlanIntoDestReceiver(sourcePlan, paramListInfo, (DestReceiver *) copyDest);
+
+	/*
+	 * At this point, we already incremented the query counters for the SELECT
+	 * query indirectly via ExecutePlanIntoDestReceiver() (if needed), so now we
+	 * need to increment the counters for the MERGE query as well.
+	 */
+	if (IsCitusTable(targetRelationId))
+	{
+		if (HasDistributionKey(targetRelationId))
+		{
+			/*
+			 * We assume it's a multi-shard insert if the table has a
+			 * distribution column. Although this may not be true, e.g.,
+			 * when all the data we read from source goes to the same
+			 * shard of the target table, we cannot know that in advance.
+			 */
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+	}
 
 	executorState->es_processed = copyDest->tuplesSent;
 	XactModificationLevel = XACT_MODIFICATION_DATA;

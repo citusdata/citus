@@ -50,6 +50,7 @@
 #include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
@@ -115,6 +116,16 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				GetDistributedPlan((CustomScan *) selectPlan->planTree);
 			Job *distSelectJob = distSelectPlan->workerJob;
 			List *distSelectTaskList = distSelectJob->taskList;
+
+			if (list_length(distSelectTaskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+
 			bool randomAccess = true;
 			bool interTransactions = false;
 			bool binaryFormat =
@@ -189,6 +200,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 																	  redistributedResults,
 																	  binaryFormat);
 
+			if (list_length(taskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
@@ -251,6 +271,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				}
 			}
 
+			if (list_length(prunedTaskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+
 			if (prunedTaskList != NIL)
 			{
 				bool randomAccess = true;
@@ -280,6 +309,29 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 
 			ExecutePlanIntoRelation(targetRelationId, insertTargetList, selectPlan,
 									executorState);
+
+			/*
+			 * At this point, we already incremented the query counters for the SELECT
+			 * query indirectly via ExecutePlanIntoRelation() (if needed), so now we
+			 * need to increment the counters for the INSERT query as well.
+			 */
+			if (IsCitusTable(targetRelationId))
+			{
+				if (HasDistributionKey(targetRelationId))
+				{
+					/*
+					 * We assume it's a multi-shard insert if the table has a
+					 * distribution column. Although this may not be true, e.g.,
+					 * when all the data we read from source goes to the same
+					 * shard of the target table, we cannot know that in advance.
+					 */
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				}
+				else
+				{
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+				}
+			}
 		}
 
 		scanState->finishedRemoteScan = true;
