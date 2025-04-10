@@ -251,6 +251,8 @@ extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  struct DistributedPlan *distributedPlan);
 extern bool ContainsSingleShardTable(Query *query);
 extern RTEListProperties * GetRTEListPropertiesForQuery(Query *query);
+extern bool ListContainsDistributedTableRTE(List *rangeTableList, bool *maybeHasForeignDistributedTable);
+
 
 
 extern struct DistributedPlan * CreateDistributedPlan(uint64 planId,

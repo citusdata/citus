@@ -93,8 +93,6 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static bool ListContainsDistributedTableRTE(List *rangeTableList,
-											bool *maybeHasForeignDistributedTable);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -383,7 +381,7 @@ NeedsDistributedPlanning(Query *query)
  * table entry in the list. The boolean maybeHasForeignDistributedTable
  * variable is set to true if the list contains a foreign table.
  */
-static bool
+bool
 ListContainsDistributedTableRTE(List *rangeTableList,
 								bool *maybeHasForeignDistributedTable)
 {
