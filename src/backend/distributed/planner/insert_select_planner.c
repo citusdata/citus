@@ -527,8 +527,6 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
-	bool isWrapped = false;
-
 	if (selectRte->subquery->setOperations != NULL)
 	{
 		/*
@@ -536,7 +534,6 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 		 * wrapping it in a subquery to have a single target list.
 		 */
 		selectRte->subquery = WrapSubquery(selectRte->subquery);
-		isWrapped = true;
 	}
 
 	/* this is required for correct deparsing of the query */
