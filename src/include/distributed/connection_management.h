@@ -334,7 +334,7 @@ extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ForceConnectionCloseAtTransactionEnd(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
-extern void MarkConnectionConnected(MultiConnection *connection, bool newConnection);
+extern void MarkConnectionConnected(MultiConnection *connection);
 
 /* waiteventset utilities */
 extern int CitusAddWaitEventSetToSet(WaitEventSet *set, uint32 events, pgsocket fd,
