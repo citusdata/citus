@@ -45,8 +45,6 @@
 
 #include "postgres.h"
 
-#include "pg_version_compat.h"
-
 #include "funcapi.h"
 #include "miscadmin.h"
 
@@ -54,6 +52,8 @@
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "utils/hsearch.h"
+
+#include "pg_version_compat.h"
 
 #include "distributed/argutils.h"
 #include "distributed/metadata_cache.h"

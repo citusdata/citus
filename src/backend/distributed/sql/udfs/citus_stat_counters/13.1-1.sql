@@ -21,7 +21,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
 RETURNS SETOF RECORD
 LANGUAGE C VOLATILE PARALLEL UNSAFE
 AS 'MODULE_PATHNAME', $$citus_stat_counters$$;
-COMMENT ON FUNCTION pg_catalog.citus_stat_counters(oid) IS 'Returns Citus stat counters for the given database';
+COMMENT ON FUNCTION pg_catalog.citus_stat_counters(oid) IS 'Returns Citus stat counters for the given database OID, or for all databases if 0 is passed. Includes only databases with at least one connection since last restart. Zero counters are replaced with NULL.';
 
 -- Returns the stat counters for all the databases in local node, possibly
 -- with NULL values for the counters which we haven't observed any counter
