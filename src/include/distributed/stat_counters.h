@@ -14,7 +14,11 @@
 
 /* exited backend stats - constants */
 #define EXITED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME \
-	"exited_backend_stats_hash_lock_tranche"
+	"citus_stat_counters exited backend stats hash"
+
+/* default value for the GUC variable */
+#define ENABLE_STAT_COUNTERS_DEFAULT false
+
 
 /*
  * Must be in the same order as the columns defined in citus_stat_counters view,
@@ -32,6 +36,11 @@ typedef enum
 	/* do not use this and ensure it is the last entry */
 	N_CITUS_STAT_COUNTERS
 } StatType;
+
+
+/* GUC variable */
+extern bool EnableStatCounters;
+
 
 /* shared memory init */
 extern void InitializeStatCountersShmem(void);

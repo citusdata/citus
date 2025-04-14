@@ -74,6 +74,7 @@
 #define EXITED_BACKEND_STATS_HASH_INIT_DATABASES 8
 #define EXITED_BACKEND_STATS_HASH_MAX_DATABASES 1024
 
+
 /* fixed size array type to store the stat counters various types */
 typedef uint64 StatCounters[N_CITUS_STAT_COUNTERS];
 
@@ -91,7 +92,7 @@ typedef struct ExitedBackendStatsHashEntry
 	slock_t mutex;
 
 	/*
-     * resetTimestamp doesn't only represent the reset timestamp for exited
+	 * resetTimestamp doesn't only represent the reset timestamp for exited
 	 * backends' stat counters but also for the active backends. This is because,
 	 * when citus_stat_counters_reset() is called, we reset the stat counters for
 	 * both active backends and the exited backends whose stats are aggregated
@@ -124,6 +125,19 @@ typedef struct BackendStatsSlot
 	StatCounters counters;
 } BackendStatsSlot;
 
+
+/*
+ * GUC variable
+ *
+ * This only controls whether we track the stat counters or not, via
+ * IncrementStatCounterForMyDb() and
+ * SaveBackendStatsIntoExitedBackendStatsHash(). In other words, even
+ * when the GUC is disabled, we still allocate the shared memory
+ * structures etc. and citus_stat_counters() / citus_stat_counters_reset()
+ * will still work.
+ */
+bool EnableStatCounters = ENABLE_STAT_COUNTERS_DEFAULT;
+
 /* exited backend stats - shared memory variables */
 static LWLockId *SharedExitedBackendStatsHashLock = NULL;
 static HTAB *SharedExitedBackendStatsHash = NULL;
@@ -133,6 +147,7 @@ BackendStatsSlot *SharedBackendStatsSlotArray = NULL;
 
 /* saved shmem_startup_hook */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+
 
 /* shared memory init & management */
 static void StatCountersShmemInit(void);
@@ -279,6 +294,11 @@ StatCountersShmemSize(void)
 void
 IncrementStatCounterForMyDb(int statId)
 {
+	if (!EnableStatCounters)
+	{
+		return;
+	}
+
 	int backendSlotIdx = getProcNo_compat(MyProc);
 
 	BackendStatsSlot *backendStatCounters =
@@ -305,6 +325,11 @@ IncrementStatCounterForMyDb(int statId)
 void
 SaveBackendStatsIntoExitedBackendStatsHash(void)
 {
+	if (!EnableStatCounters)
+	{
+		return;
+	}
+
 	Oid databaseId = MyDatabaseId;
 
 	LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);

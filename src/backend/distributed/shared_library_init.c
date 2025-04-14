@@ -2473,6 +2473,21 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
+
+	DefineCustomBoolVariable(
+		"citus.enable_stat_counters",
+		gettext_noop("Enables the collection of statistic counters for Citus."),
+		gettext_noop("When enabled, Citus maintains a set of statistic "
+					 "counters for the Citus extension. These statistics are "
+					 "available in the citus_stat_counters view and are "
+					 "lost on server shutdown and can be reset by executing "
+					 "the function citus_stat_counters_reset() on demand."),
+		&EnableStatCounters,
+		ENABLE_STAT_COUNTERS_DEFAULT,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	/*
 	 * It takes about 140 bytes of shared memory to store one row, therefore
 	 * this setting should be used responsibly. setting it to 10M will require
