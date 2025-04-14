@@ -110,9 +110,9 @@ static void ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 
 /*
  * DecrementCteLevelWalkerContext
- * 
+ *
  *   'offset' is how much we shift ctelevelsup by (e.g. -1),
- *   'level' tracks the current query nesting level, 
+ *   'level' tracks the current query nesting level,
  *   so we know if RTE_CTE is referencing this level.
  */
 typedef struct DecrementCteLevelWalkerContext
@@ -122,10 +122,8 @@ typedef struct DecrementCteLevelWalkerContext
 } DecrementCteLevelWalkerContext;
 
 
-static void
-DecrementCteLevelForQuery(Query *query, int oldLevel, int newLevel);
-static bool
-DecrementCteLevelWalker(Node *node, DecrementCteLevelWalkerContext *context);
+static void DecrementCteLevelForQuery(Query *query, int oldLevel, int newLevel);
+static bool DecrementCteLevelWalker(Node *node, DecrementCteLevelWalkerContext *context);
 
 /* depth of current insert/select planner. */
 static int insertSelectPlannerLevel = 0;
@@ -555,9 +553,9 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 
 	if (list_length(insertSelectQuery->cteList) > 0)
 	{
-		/* we physically unify ctes from top-level into subquery, 
-		* then want references in the subquery from ctelevelsup=1 => 0 
-		*/
+		/* we physically unify ctes from top-level into subquery,
+		 * then want references in the subquery from ctelevelsup=1 => 0
+		 */
 		elog(DEBUG1, "Unifying top-level cteList with subquery cteList");
 
 		selectRte->subquery->cteList =
@@ -568,53 +566,55 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 		DecrementCteLevelForQuery(selectRte->subquery, 1, 0);
 		elog(DEBUG1, "Done shifting ctelevelsup 1->0 for subquery references");
 	}
-
 }
+
 
 /*
  * DecrementCteLevelWalker
- * 
+ *
  */
 static bool
 DecrementCteLevelWalker(Node *node, DecrementCteLevelWalkerContext *context)
 {
-    if (node == NULL)
-        return false;
+	if (node == NULL)
+	{
+		return false;
+	}
 
-    if (IsA(node, RangeTblEntry))
-    {
-        RangeTblEntry *rte = (RangeTblEntry *) node;
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
 
-        if (rte->rtekind == RTE_CTE && rte->ctelevelsup == context->oldLevel)
-        {
-            rte->ctelevelsup = context->newLevel;
-        }
+		if (rte->rtekind == RTE_CTE && rte->ctelevelsup == context->oldLevel)
+		{
+			rte->ctelevelsup = context->newLevel;
+		}
 
-        return false; 
-    }
-    else if (IsA(node, Query))
-    {
-        Query *query = (Query *) node;
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
 
-        /*
-         * Use QTW_EXAMINE_RTES_BEFORE so that this walker is called 
-         * on each RangeTblEntry in query->rtable, giving us a chance 
-         * to adjust ctelevelsup before we do the rest of the query tree.
-         */
-        query_tree_walker(query,
-                          DecrementCteLevelWalker,
-                          (void *) context,
-                          QTW_EXAMINE_RTES_BEFORE);
+		/*
+		 * Use QTW_EXAMINE_RTES_BEFORE so that this walker is called
+		 * on each RangeTblEntry in query->rtable, giving us a chance
+		 * to adjust ctelevelsup before we do the rest of the query tree.
+		 */
+		query_tree_walker(query,
+						  DecrementCteLevelWalker,
+						  (void *) context,
+						  QTW_EXAMINE_RTES_BEFORE);
 
-        return false;
-    }
-    else
-    {
-        /* fallback for expression nodes, etc. */
-        return expression_tree_walker(node,
-                                      DecrementCteLevelWalker,
-                                      (void *) context);
-    }
+		return false;
+	}
+	else
+	{
+		/* fallback for expression nodes, etc. */
+		return expression_tree_walker(node,
+									  DecrementCteLevelWalker,
+									  (void *) context);
+	}
 }
 
 
@@ -624,18 +624,16 @@ DecrementCteLevelWalker(Node *node, DecrementCteLevelWalkerContext *context)
 static void
 DecrementCteLevelForQuery(Query *query, int oldLevel, int newLevel)
 {
-    DecrementCteLevelWalkerContext ctx;
+	DecrementCteLevelWalkerContext ctx;
 
 	ctx.oldLevel = oldLevel;
 	ctx.newLevel = newLevel;
 
-    query_tree_walker(query,
-                      DecrementCteLevelWalker,
-                      (void *) &ctx,
-                      QTW_EXAMINE_RTES_BEFORE);
+	query_tree_walker(query,
+					  DecrementCteLevelWalker,
+					  (void *) &ctx,
+					  QTW_EXAMINE_RTES_BEFORE);
 }
-
-
 
 
 /*
