@@ -66,7 +66,6 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardinterval_utils.h"
-#include "distributed/stat_counters.h"
 #include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
@@ -1434,8 +1433,6 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 	if (IsMultiTaskPlan(distributedPlan))
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-
 		/* if it is not a single task executable plan, inform user according to the log level */
 		if (MultiTaskQueryLogLevel != CITUS_LOG_LEVEL_OFF)
 		{
@@ -1446,10 +1443,6 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 												 "if they have to be split into several"
 												 " queries on the workers.")));
 		}
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 	}
 
 	distributedPlan->queryId = localPlan->queryId;

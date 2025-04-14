@@ -171,7 +171,6 @@
 #include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
-#include "distributed/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"
@@ -691,7 +690,7 @@ static bool SendNextQuery(TaskPlacementExecution *placementExecution,
 						  WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
 static bool HasUnfinishedTaskForSession(WorkerSession *session);
-static void HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection);
+static void HandleMultiConnectionSuccess(WorkerSession *session);
 static bool HasAnyConnectionFailure(WorkerPool *workerPool);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
@@ -2036,7 +2035,6 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 			else
 			{
 				connection->connectionState = MULTI_CONNECTION_FAILED;
-				IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 			}
 
 
@@ -3013,7 +3011,6 @@ ConnectionStateMachine(WorkerSession *session)
 				 * connection, clear any state associated with it.
 				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
-				IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				break;
 			}
 
@@ -3022,12 +3019,7 @@ ConnectionStateMachine(WorkerSession *session)
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
 				{
-					/*
-					 * Connection was already established, possibly a cached
-					 * connection.
-					 */
-					bool newConnection = false;
-					HandleMultiConnectionSuccess(session, newConnection);
+					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 					break;
@@ -3035,7 +3027,6 @@ ConnectionStateMachine(WorkerSession *session)
 				else if (status == CONNECTION_BAD)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
-					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					break;
 				}
 
@@ -3051,7 +3042,6 @@ ConnectionStateMachine(WorkerSession *session)
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
-					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{
@@ -3069,12 +3059,7 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					/*
-					 * Connection was not established befoore (!= CONNECTION_OK)
-					 * but PQconnectPoll() did so now.
-					 */
-					bool newConnection = true;
-					HandleMultiConnectionSuccess(session, newConnection);
+					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
@@ -3152,11 +3137,6 @@ ConnectionStateMachine(WorkerSession *session)
 					break;
 				}
 
-				/*
-				 * Here we don't increment the connection stat counter for failed
-				 * connections because we don't track the connections that we could
-				 * establish but lost later.
-				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
 				break;
 			}
@@ -3319,12 +3299,12 @@ HasUnfinishedTaskForSession(WorkerSession *session)
  * connection's state.
  */
 static void
-HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection)
+HandleMultiConnectionSuccess(WorkerSession *session)
 {
 	MultiConnection *connection = session->connection;
 	WorkerPool *workerPool = session->workerPool;
 
-	MarkConnectionConnected(connection, newConnection);
+	MarkConnectionConnected(connection);
 
 	ereport(DEBUG4, (errmsg("established connection to %s:%d for "
 							"session %ld in %ld microseconds",

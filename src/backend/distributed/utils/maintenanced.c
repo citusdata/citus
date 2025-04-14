@@ -57,7 +57,6 @@
 #include "distributed/query_stats.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
-#include "distributed/stat_counters.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
@@ -490,7 +489,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	TimestampTz lastRecoveryTime = 0;
 	TimestampTz lastShardCleanTime = 0;
 	TimestampTz lastStatStatementsPurgeTime = 0;
-	TimestampTz lastStatCountersPurgeTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
 	/* state kept for the background tasks queue monitor */
@@ -819,36 +817,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 			/* make sure we don't wait too long, need to convert seconds to milliseconds */
 			timeout = Min(timeout, (StatStatementsPurgeInterval * 1000));
-		}
-
-		if (IsCitusStatCountersEnabled() &&
-			TimestampDifferenceExceeds(lastStatCountersPurgeTime, GetCurrentTimestamp(),
-									   StatCountersPurgeInterval))
-		{
-			StartTransactionCommand();
-
-			if (!LockCitusExtension())
-			{
-				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
-										"skipping to purge the stat counter "
-										"shared memory entries for dropped "
-										"databases")));
-			}
-			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
-			{
-				/*
-				 * Record last time we perform the purge to ensure we run once per
-				 * StatCountersPurgeInterval.
-				 */
-				lastStatCountersPurgeTime = GetCurrentTimestamp();
-
-				CitusStatCountersRemoveDroppedDatabases();
-			}
-
-			CommitTransactionCommand();
-
-			/* make sure we don't wait too long */
-			timeout = Min(timeout, (StatCountersPurgeInterval));
 		}
 
 		pid_t backgroundTaskQueueWorkerPid = 0;

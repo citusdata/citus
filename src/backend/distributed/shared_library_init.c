@@ -105,7 +105,6 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
-#include "distributed/stat_counters.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/time_constants.h"
@@ -189,7 +188,6 @@ static void multi_log_hook(ErrorData *edata);
 static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
-static void RegisterCitusStatCountersFlush(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
@@ -507,11 +505,6 @@ _PG_init(void)
 
 	InitializeMultiTenantMonitorSMHandleManagement();
 
-	if (IsCitusStatCountersEnabled())
-	{
-		InitializeStatCountersArrayMem();
-	}
-
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
@@ -622,12 +615,6 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
-
-	if (IsCitusStatCountersEnabled())
-	{
-		RequestAddinShmemSpace(StatCountersArrayShmemSize());
-		RequestNamedLWLockTranche(STAT_COUNTERS_STATE_LOCK_TRANCHE_NAME, 1);
-	}
 }
 
 
@@ -800,12 +787,6 @@ StartupCitusBackend(void)
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
-
-	if (IsCitusStatCountersEnabled())
-	{
-		RegisterCitusStatCountersFlush();
-	}
-
 	FinishedStartupCitusBackend = true;
 }
 
@@ -854,23 +835,6 @@ RegisterExternalClientBackendCounterDecrement(void)
 	if (registeredCleanup == false)
 	{
 		before_shmem_exit(DecrementExternalClientBackendCounterAtExit, 0);
-
-		registeredCleanup = true;
-	}
-}
-
-
-/*
- * RegisterCitusStatCountersFlush registers CitusStatCountersFlushAtExit()
- * to be called before the backend exits.
- */
-static void
-RegisterCitusStatCountersFlush(void)
-{
-	static bool registeredCleanup = false;
-	if (registeredCleanup == false)
-	{
-		before_shmem_exit(CitusStatCountersFlushAtExit, 0);
 
 		registeredCleanup = true;
 	}
@@ -2463,41 +2427,6 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_SUSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.stat_counters_flush_interval",
-		gettext_noop("Sets the interval to flush the local stat counters into "
-					 "the shared memory."),
-		gettext_noop("Stat counters are used to track the number of certain "
-					 "operations in Citus. While setting this GUC to -1 disables "
-					 "stat counters, setting it to a positive value will flush "
-					 "the local stat counters into the shared memory every "
-					 "interval milliseconds instead of flushing them immediately "
-					 "after the operation, as it is done when the value is 0. "
-					 "Higher values reduce the overhead of flushing the stat "
-					 "counters but increase the time it takes to see the updated "
-					 "stat counters."),
-		&StatCountersFlushInterval,
-		DEFAULT_STAT_COUNTERS_FLUSH_INTERVAL,
-		DISABLE_STAT_COUNTERS_FLUSH_INTERVAL,
-		5 * MS_PER_MINUTE,
-		PGC_POSTMASTER,
-		GUC_UNIT_MS,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.stat_counters_purge_interval",
-		gettext_noop("Determines time interval for citus_stat_counters to remove "
-					 "the shared memory entries for the databases that were dropped."),
-		gettext_noop("This is automatically disabled when the stat counters are disabled "
-					 "(citus.stat_counters_flush_interval = -1) and there is no explicit "
-					 "way to disable purging the shared memory entries while the stat "
-					 "counters are enabled."),
-		&StatCountersPurgeInterval,
-		DEFAULT_STAT_COUNTERS_PURGE_INTERVAL, 1, INT_MAX,
-		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*
