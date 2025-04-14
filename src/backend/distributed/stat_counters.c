@@ -214,7 +214,7 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 	info.hash = oid_hash;
 	info.entrysize = sizeof(DatabaseStatsHashEntry);
 
-	HTAB *databaseStats = hash_create("Citus Database Stats Hash", 8, &info, hashFlags);
+	HTAB *databaseStats = hash_create("Citus Database Stats Collect Hash", 8, &info, hashFlags);
 
 	CollectDbStatsFromActiveBackendsIntoHTAB(databaseId, databaseStats);
 	CollectDbStatsFromExitedBackendsIntoHTAB(databaseId, databaseStats);
