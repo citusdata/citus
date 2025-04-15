@@ -3,8 +3,8 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
 	database_id oid DEFAULT 0,
 
-	-- must always be the first column
-	OUT database_id oid,
+	-- must always be the first column or you should accordingly update
+	-- StoreStatCountersFromArray() function in src/backend/distributed/stat_counters.c
 
 	-- Following stat counter columns must be in the same order as the
 	-- StatType enum defined in src/include/distributed/stat_counters.h
@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
 	OUT query_execution_single_shard bigint,
 	OUT query_execution_multi_shard bigint,
 
-	-- Must always be the last column or you should accordingly update
+	-- must always be the last column or you should accordingly update
 	-- StoreStatCountersFromArray() function in src/backend/distributed/stat_counters.c
 	OUT stats_reset timestamp with time zone
 )
