@@ -7,19 +7,20 @@
  *
  * We create an array of "BackendStatsSlot"s in shared memory, one for
  * each backend. Each backend increments its own stat counters in its
- * own slot. And when a backend exits, it saves its stat counters from its
- * slot into a hash table in shared memory, whose entries are
- * "ExitedBackendStatsHashEntry"s and the key is the database id. In other
- * words, each entry of the hash table is used to aggregate the stat counters
- * for backends that were connected to that database and exited since the
- * last server restart.
+ * own slot via IncrementStatCounterForMyDb(). And when a backend exits,
+ * it saves its stat counters from its slot via
+ * SaveBackendStatsIntoExitedBackendStatsHash() into a hash table in
+ * shared memory, whose entries are "ExitedBackendStatsHashEntry"s and
+ * the key is the database id. In other words, each entry of the hash
+ * table is used to aggregate the stat counters for backends that were
+ * connected to that database and exited since the last server restart.
  *
  * The reason why we save the stat counters for exited backends in the
- * shared hash table is that we cannot guarantee that the backend slot that
- * was used by the exited backend will be reused by another backend
+ * shared hash table is that we cannot guarantee that the backend slot
+ * that was used by the exited backend will be reused by another backend
  * connected to the same database. For this reason, we need to save the
- * stat counters for exited backends in a shared hash table, so that we can
- * reset the backend slots for the exited backend.
+ * stat counters for exited backends in a shared hash table, so that we
+ * can reset the backend slots for the exited backend.
  *
  * So, when citus_stat_counters() is called, we first aggregate the stat
  * counters from the backend slots of all the active backends and then
@@ -37,8 +38,8 @@
  * backends. This is because, when citus_stat_counters_reset() is called,
  * we reset the stat counters for both active backends and the exited
  * backends whose stats are stored in the shared hash table. Similarly,
- * when citus_stat_counters() is called, we just report resetTimestamp as
- * stats_reset column.
+ * when citus_stat_counters() is called, we just report resetTimestamp
+ * as stats_reset column.
  *
  *-------------------------------------------------------------------------
  */
