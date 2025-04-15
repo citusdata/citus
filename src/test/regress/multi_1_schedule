@@ -44,6 +44,9 @@ test: comment_on_role
 test: single_shard_table_udfs
 test: schema_based_sharding
 test: citus_schema_distribute_undistribute
+# Don't parallelize stat_counters with others because we don't want statistics
+# to be updated by other tests.
+test: stat_counters
 
 test: multi_test_catalog_views
 test: multi_table_ddl
