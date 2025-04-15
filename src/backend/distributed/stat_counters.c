@@ -45,7 +45,6 @@
 
 #include "postgres.h"
 
-#include "funcapi.h"
 #include "miscadmin.h"
 
 #include "common/hashfn.h"
@@ -58,6 +57,8 @@
 #include "distributed/argutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/stat_counters.h"
+#include "distributed/tuplestore.h"
+
 
 /*
  * exited backend stats - hash table constants
@@ -142,20 +143,32 @@ bool EnableStatCounters = ENABLE_STAT_COUNTERS_DEFAULT;
 static LWLockId *SharedExitedBackendStatsHashLock = NULL;
 static HTAB *SharedExitedBackendStatsHash = NULL;
 
-/* per-backend stat counter slots - shared memory variables */
+/* per-backend stat counter slots - shared memory array */
 BackendStatsSlot *SharedBackendStatsSlotArray = NULL;
+
+/*
+ * We don't expect the callsites that check this (via
+ * EnsureStatCountersShmemInitDone()) to be executed before
+ * StatCountersShmemInit() is done. Plus, once StatCountersShmemInit()
+ * is done, we also don't expect shared memory variables to be
+ * initialized improperly. However, we still set this to true only
+ * once StatCountersShmemInit() is done and if all three of the shared
+ * memory variables above are initialized properly. And in the callsites
+ * where these shared memory variables are accessed, we check this
+ * variable first just to be on the safe side.
+ */
+static bool StatCountersShmemInitDone = false;
 
 /* saved shmem_startup_hook */
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 
 /* shared memory init & management */
+static bool EnsureStatCountersShmemInitDone(void);
 static void StatCountersShmemInit(void);
 static Size SharedBackendStatsSlotArrayShmemSize(void);
 
 /* helper functions for citus_stat_counters() */
-static Tuplestorestate * SetupStatCountersTuplestore(FunctionCallInfo fcinfo,
-													 TupleDesc *tupleDescriptor);
 static void CollectDbStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats);
 static void CollectDbStatsFromExitedBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats);
 static void StoreDatabaseStatsIntoTupStore(HTAB *databaseStats,
@@ -204,8 +217,14 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "database_id");
 	Oid databaseId = PG_GETARG_OID(0);
 
+	/* just to be on the safe side */
+	if (!EnsureStatCountersShmemInitDone())
+	{
+		PG_RETURN_VOID();
+	}
+
 	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = SetupStatCountersTuplestore(fcinfo, &tupleDescriptor);
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	HASHCTL info;
 	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
@@ -214,7 +233,8 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 	info.hash = oid_hash;
 	info.entrysize = sizeof(DatabaseStatsHashEntry);
 
-	HTAB *databaseStats = hash_create("Citus Database Stats Collect Hash", 8, &info, hashFlags);
+	HTAB *databaseStats = hash_create("Citus Database Stats Collect Hash", 8, &info,
+									  hashFlags);
 
 	CollectDbStatsFromActiveBackendsIntoHTAB(databaseId, databaseStats);
 	CollectDbStatsFromExitedBackendsIntoHTAB(databaseId, databaseStats);
@@ -248,6 +268,12 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 
 	PG_ENSURE_ARGNOTNULL(0, "database_id");
 	Oid databaseId = PG_GETARG_OID(0);
+
+	/* just to be on the safe side */
+	if (!EnsureStatCountersShmemInitDone())
+	{
+		PG_RETURN_VOID();
+	}
 
 	ResetStatCountersForActiveBackends(databaseId);
 	ResetStatCountersForExitedBackends(databaseId);
@@ -299,6 +325,12 @@ IncrementStatCounterForMyDb(int statId)
 		return;
 	}
 
+	/* just to be on the safe side */
+	if (!EnsureStatCountersShmemInitDone())
+	{
+		return;
+	}
+
 	int backendSlotIdx = getProcNo_compat(MyProc);
 
 	BackendStatsSlot *backendStatCounters =
@@ -326,6 +358,12 @@ void
 SaveBackendStatsIntoExitedBackendStatsHash(void)
 {
 	if (!EnableStatCounters)
+	{
+		return;
+	}
+
+	/* just to be on the safe side */
+	if (!EnsureStatCountersShmemInitDone())
 	{
 		return;
 	}
@@ -404,6 +442,26 @@ SaveBackendStatsIntoExitedBackendStatsHash(void)
 
 
 /*
+ * EnsureStatCountersShmemInitDone returns true if the shared memory
+ * data structures used for keeping track of stat counters have been
+ * properly initialized, otherwise, returns false and emits a warning.
+ */
+static bool
+EnsureStatCountersShmemInitDone(void)
+{
+	if (!StatCountersShmemInitDone)
+	{
+		ereport(WARNING,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("shared memory for stat counters was not properly initialized")));
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * StatCountersShmemInit initializes the shared memory data structures used
  * for keeping track of stat counters.
  */
@@ -467,6 +525,17 @@ StatCountersShmemInit(void)
 	}
 
 	LWLockRelease(AddinShmemInitLock);
+
+	/*
+	 * At this point, they should have been set to non-null values already,
+	 * but we still check them just to be sure.
+	 */
+	if (SharedBackendStatsSlotArray &&
+		SharedExitedBackendStatsHashLock &&
+		SharedExitedBackendStatsHash)
+	{
+		StatCountersShmemInitDone = true;
+	}
 }
 
 
@@ -478,59 +547,6 @@ static Size
 SharedBackendStatsSlotArrayShmemSize(void)
 {
 	return mul_size(sizeof(BackendStatsSlot), MaxBackends);
-}
-
-
-/*
- * SetupStatCountersTuplestore returns a Tuplestorestate for returning the
- * stat counters.
- */
-static Tuplestorestate *
-SetupStatCountersTuplestore(FunctionCallInfo fcinfo, TupleDesc *tupleDescriptor)
-{
-	ReturnSetInfo *resultSet = (ReturnSetInfo *) fcinfo->resultinfo;
-	switch (get_call_result_type(fcinfo, NULL, tupleDescriptor))
-	{
-		case TYPEFUNC_COMPOSITE:
-		{
-			/* success */
-			break;
-		}
-
-		case TYPEFUNC_RECORD:
-		{
-			/* failed to determine actual type of RECORD */
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("function returning record called in context "
-							"that cannot accept type record")));
-			break;
-		}
-
-		default:
-		{
-			/* result type isn't composite */
-			elog(ERROR, "return type must be a row type");
-			break;
-		}
-	}
-
-	MemoryContext perQueryContext = resultSet->econtext->ecxt_per_query_memory;
-
-	MemoryContext oldContext = MemoryContextSwitchTo(perQueryContext);
-
-	bool randomAccess = true;
-	bool interTransactions = false;
-	Tuplestorestate *tupstore = tuplestore_begin_heap(randomAccess, interTransactions,
-													  work_mem);
-
-	resultSet->returnMode = SFRM_Materialize;
-	resultSet->setResult = tupstore;
-	resultSet->setDesc = *tupleDescriptor;
-
-	MemoryContextSwitchTo(oldContext);
-
-	return tupstore;
 }
 
 
