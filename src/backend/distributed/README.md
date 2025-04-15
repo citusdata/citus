@@ -58,7 +58,7 @@ The purpose of this document is to provide comprehensive technical documentation
   - [Why didn’t we have dedicated Query Nodes and Data Nodes?](#why-didnt-we-have-dedicated-query-nodes-and-data-nodes)
   - [Shard visibility](#shard-visibility)
 - [Statistic tracking](#statistic-tracking)
-  - [Statistics](#stat-counters)
+  - [Citus stat counters](#citus-stat-counters)
 
 # Citus Concepts
 
@@ -2715,7 +2715,7 @@ And beside these, Citus itself also provides some additional statistics views to
 - `citus_stat_statements` (needs documentation)
 - `citus_stat_counters`
 
-### Stat counters
+### Citus stat counters
 
 Citus keeps track of several stat counters and exposes them via the `citus_stat_counters` view. The counters are tracked once `citus.enable_stat_counters` is set to true. Also, `citus_stat_counters_reset()` can be used to reset the counters for a single database if a database id different than 0 (default, InvalidOid) is provided, otherwise, it resets the counters for all databases.
 
@@ -2723,10 +2723,10 @@ Details about the implementation can be found in the header comment of [stat_cou
 1. We allocate a shared memory array of length `MaxBackends` so that each backend has its own counter slots to reduce the contention while incrementing the counters at the runtime.
 2. We also allocate a shared hash, whose entries correspond to different databases,
    Then, when a backend exits, it first aggregates its counters to the relevant entry in the shared hash, and then it resets its own counters because the same counter slot might be reused by another backend later.
-3. So, when `citus_stat_counters` is queried, we first aggregate the counters from the shared memory array and then we add this with the shared hash entry for the relevant database.
+3. So, when `citus_stat_counters` is queried, we first aggregate the counters from the shared memory array and then we add this with the counters aggregated so far in the relevant shared hash entry for the database.
    This means that if we weren't aggregating the counters in the shared hash when exiting, counters `citus_stat_counters` could drift backwards in time.
 4. Finally, when `citus_stat_counters_reset()` is called, we reset the shared hash entry for the relevant database and also reset the shared memory array, either for all databases or for a specific database, depending on the input.
-5. As of today, we don't persist stat counters on server shutdown. Although it seems quite straightforward to do so, we skipped doing that at v1. Once we decide to persist the counters, one can check the relevant functions that we have for `citus_stat_statements`, namely, `CitusQueryStatsShmemShutdown` and `CitusQueryStatsShmemStartup`. And since it has been quite a long time since we wrote these two functions, we should also make sure to check `pgstat_write_statsfile` and `pgstat_read_statsfile` in Postgres to double check if we're missing anything.
+5. As of today, we don't persist stat counters on server shutdown. Although it seems quite straightforward to do so, we skipped doing that at v1. Once we decide to persist the counters, one can check the relevant functions that we have for `citus_stat_statements`, namely, `CitusQueryStatsShmemShutdown` and `CitusQueryStatsShmemStartup`. And since it has been quite a long time since we wrote these two functions, we should also make sure to check `pgstat_write_statsfile` and `pgstat_read_statsfile` in Postgres to double check if we're missing anything -it definitely seems we have a few!-.
 
 The reason why we don't just use a shared hash table for the counters is that it could be more expensive to do hash lookups for each increment. Plus, using a single counter slot for all the backends that are connected to the same database could lead to contention.
 
