@@ -57,6 +57,8 @@ The purpose of this document is to provide comprehensive technical documentation
 - [Query from any node](#query-from-any-node)
   - [Why didn’t we have dedicated Query Nodes and Data Nodes?](#why-didnt-we-have-dedicated-query-nodes-and-data-nodes)
   - [Shard visibility](#shard-visibility)
+- [Statistic tracking](#statistic-tracking)
+  - [Statistics](#stat-counters)
 
 # Citus Concepts
 
@@ -2702,3 +2704,31 @@ Shards can be revealed via two settings:
 
 - `citus.override_shard_visibility = off` disables shard hiding entirely
 - `citus.show_shards_for_app_name_prefixes`= 'pgAdmin,psql'` disables shard hiding only for specific application_name values, by prefix
+
+## Statistic tracking
+
+Statistic views defined by Postgres already work well for one Citus node, like `pg_stat_database`, `pg_stat_activity`, `pg_stat_statements`, etc. And for some of them, we even provide wrapper views in Citus to have a global (i.e., cluster-wide) view of the statistics, like `citus_stat_activity`.
+
+And beside these, Citus itself also provides some additional statistics views to track the Citus-specific activities. Note that the way we collect statastics for each is quite different.
+
+- `citus_stat_tenants` (needs documentation)
+- `citus_stat_statements` (needs documentation)
+- `citus_stat_counters`
+
+### Stat counters
+
+Citus keeps track of several stat counters and exposes them via the `citus_stat_counters` view. The counters are tracked once `citus.enable_stat_counters` is set to true. Also, `citus_stat_counters_reset()` can be used to reset the counters for a single database if a database id different than 0 (default, InvalidOid) is provided, otherwise, it resets the counters for all databases.
+
+Details about the implementation can be found in the header comment of [stat_counters.c](/src/backend/distributed/stat_counters.c). However, at the high level;
+1. We allocate a shared memory array of length `MaxBackends` so that each backend has its own counter slots to reduce the contention while incrementing the counters at the runtime.
+2. We also allocate a shared hash, whose entries correspond to different databases,
+   Then, when a backend exits, it first aggregates its counters to the relevant entry in the shared hash, and then it resets its own counters because the same counter slot might be reused by another backend later.
+3. So, when `citus_stat_counters` is queried, we first aggregate the counters from the shared memory array and then we add this with the shared hash entry for the relevant database.
+   This means that if we weren't aggregating the counters in the shared hash when exiting, counters `citus_stat_counters` could drift backwards in time.
+4. Finally, when `citus_stat_counters_reset()` is called, we reset the shared hash entry for the relevant database and also reset the shared memory array, either for all databases or for a specific database, depending on the input.
+5. As of today, we don't persist stat counters on server shutdown. Although it seems quite straightforward to do so, we skipped doing that at v1. Once we decide to persist the counters, one can check the relevant functions that we have for `citus_stat_statements`, namely, `CitusQueryStatsShmemShutdown` and `CitusQueryStatsShmemStartup`. And since it has been quite a long time since we wrote these two functions, we should also make sure to check `pgstat_write_statsfile` and `pgstat_read_statsfile` in Postgres to double check if we're missing anything.
+
+The reason why we don't just use a shared hash table for the counters is that it could be more expensive to do hash lookups for each increment. Plus, using a single counter slot for all the backends that are connected to the same database could lead to contention.
+
+As of writing section, it seems quite likely that Postgres will expose their Cumulative Statistics infra starting with Postgres 18, see https://github.com/postgres/postgres/commit/7949d9594582ab49dee221e1db1aa5401ace49d4.
+So, once this happens, we can also consider using the same infra to track Citus stat counters. However, we can only do that once we drop support for Postgres versions older than 18.
