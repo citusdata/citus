@@ -20,26 +20,46 @@
  * that was used by the exited backend will be reused by another backend
  * connected to the same database. For this reason, we need to save the
  * stat counters for exited backends in a shared hash table, so that we
- * can reset the backend slots for the exited backend.
+ * can reset the counters in the backend slot for the exited backends.
  *
- * So, when citus_stat_counters() is called, we first aggregate the stat
- * counters from the backend slots of all the active backends and then
- * we add the aggregated stat counters from the exited backends that are
- * stored in the shared hash table. Also, we don't persist backend stats
- * on server shutdown, but we might want to do that in the future.
+ * So, citus_stat_counters() is called, we first aggregate the
+ * stat counters from the backend slots of all the active backends and
+ * then we add the aggregated stat counters from the exited backends that
+ * are stored in the shared hash table. Also, we don't persist backend
+ * stats on server shutdown, but we might want to do that in the future.
  *
- * And, when citus_stat_counters_reset() is called, we reset the stat
- * counters for the active backends and the exited backends that are
- * stored in the shared hash table.
+ * Similarly, when citus_stat_counters_reset() is called, we reset the
+ * stat counters for the active backends and the exited backends that are
+ * stored in the shared hash table. Also, although we have resetTimestamp
+ * as part of "ExitedBackendStatsHashEntry"s, it doesn't only represent
+ * the reset timestamp for exited backends' stat counters but also for
+ * the active backends. This is because, when citus_stat_counters_reset()
+ * is called, we reset the stat counters for both active backends and the
+ * exited backends whose stats are stored in the shared hash table.
+ * Similarly, when citus_stat_counters() is called, we just report
+ * resetTimestamp as stats_reset column.
  *
- * Also, although we have resetTimestamp as part of
- * "ExitedBackendStatsHashEntry"s, it doesn't only represent the reset
- * timestamp for exited backends' stat counters but also for the active
- * backends. This is because, when citus_stat_counters_reset() is called,
- * we reset the stat counters for both active backends and the exited
- * backends whose stats are stored in the shared hash table. Similarly,
- * when citus_stat_counters() is called, we just report resetTimestamp
- * as stats_reset column.
+ * One downside of having two different data structures (shared
+ * "BackendStatsSlot" array and the shared hash table that's made of
+ * "ExitedBackendStatsHashEntry"s) to track stat counters is that there
+ * is a chance that a user of citus_stat_counters() might see a sudden
+ * jump for a stat counter while a backend is exiting. For instance,
+ * assume that citus_stat_counters() have already seen the counter value
+ * for the stat counter S as C for the backend B. Then, user of B decided
+ * to disconnect and so the backend B added C to the value of S in the
+ * relevant entry of the shared hash table. In the mean time,
+ * citus_stat_counters() was continuing and now it saw the incremented
+ * value for S, which contains X as well, while looking at the relevant
+ * shared hash table entry. As a result, we've observed the stat counter
+ * S for the exiting backend twice. However, we don't expect such cases
+ * to be common, so we don't bother to handle them. But if such cases
+ * become a concern, then we can consider adding a spinlock to
+ * "BackendStatsSlot" to ensure exclusive access to either
+ * SaveBackendStatsIntoExitedBackendStatsHash() or
+ * CollectDbStatsFromActiveBackendsIntoHTAB() at a time. Still, we
+ * wouldn't want to acquire that spinlock in IncrementStatCounterForMyDb()
+ * because it cannot cause such a problem and it might hurt the
+ * performance a bit.
  *
  *-------------------------------------------------------------------------
  */
@@ -49,6 +69,7 @@
 #include "miscadmin.h"
 
 #include "common/hashfn.h"
+#include "port/atomics.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "utils/hsearch.h"
@@ -77,7 +98,8 @@
 #define EXITED_BACKEND_STATS_HASH_MAX_DATABASES 1024
 
 
-/* fixed size array type to store the stat counters various types */
+/* fixed size array types to store the stat counters */
+typedef pg_atomic_uint64 AtomicStatCounters[N_CITUS_STAT_COUNTERS];
 typedef uint64 StatCounters[N_CITUS_STAT_COUNTERS];
 
 /*
@@ -122,9 +144,7 @@ typedef struct DatabaseStatsHashEntry
 /* definition of a one per-backend stat counters slot in shared memory */
 typedef struct BackendStatsSlot
 {
-	slock_t mutex;
-
-	StatCounters counters;
+	AtomicStatCounters counters;
 } BackendStatsSlot;
 
 
@@ -165,7 +185,6 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 
 /* shared memory init & management */
-static bool EnsureStatCountersShmemInitDone(void);
 static void StatCountersShmemInit(void);
 static Size SharedBackendStatsSlotArrayShmemSize(void);
 
@@ -185,8 +204,29 @@ static ExitedBackendStatsHashEntry * ExitedBackendStatsHashEntryAllocIfNotExists
 																				 dbId);
 
 
+/* sql exports */
 PG_FUNCTION_INFO_V1(citus_stat_counters);
 PG_FUNCTION_INFO_V1(citus_stat_counters_reset);
+
+
+/*
+ * EnsureStatCountersShmemInitDone returns true if the shared memory
+ * data structures used for keeping track of stat counters have been
+ * properly initialized, otherwise, returns false and emits a warning.
+ */
+static inline bool
+EnsureStatCountersShmemInitDone(void)
+{
+	if (!StatCountersShmemInitDone)
+	{
+		ereport(WARNING,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("shared memory for stat counters was not properly initialized")));
+		return false;
+	}
+
+	return true;
+}
 
 
 /*
@@ -336,12 +376,16 @@ IncrementStatCounterForMyDb(int statId)
 
 	BackendStatsSlot *backendStatCounters =
 		&SharedBackendStatsSlotArray[backendSlotIdx];
+	pg_atomic_uint64 *statPtr = &backendStatCounters->counters[statId];
 
-	SpinLockAcquire(&backendStatCounters->mutex);
-
-	backendStatCounters->counters[statId] += 1;
-
-	SpinLockRelease(&backendStatCounters->mutex);
+	/*
+	 * Incrementing a stat counter by using pg_atomic_read_u64() and
+	 * pg_atomic_write_u64() is cheaper than directly using
+	 * pg_atomic_fetch_add_u64(). And, since we're sure that no one
+	 * else can write to this backend's slot, the prior approach is
+	 * safe.
+	 */
+	pg_atomic_write_u64(statPtr, pg_atomic_read_u64(statPtr) + 1);
 }
 
 
@@ -412,53 +456,19 @@ SaveBackendStatsIntoExitedBackendStatsHash(void)
 	BackendStatsSlot *myBackendStatsSlot =
 		&SharedBackendStatsSlotArray[myBackendSlotIdx];
 
-	SpinLockAcquire(&myBackendStatsSlot->mutex);
 	SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
 
 	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 	{
 		dbExitedBackendStatsEntry->counters[statIdx] +=
-			myBackendStatsSlot->counters[statIdx];
-	}
+			pg_atomic_read_u64(&myBackendStatsSlot->counters[statIdx]);
 
-	/*
-	 * Given that this function is only called when a backend exits, later on
-	 * another backend might be assigned to the same slot. So, we reset the
-	 * stat counters for this slot to 0.
-	 *
-	 * Also, we could actually release the spin lock for the exited backend
-	 * stats hash entry before resetting the stat counters for this backend
-	 * slot, but that would cause a concurrent citus_stat_counters() call to
-	 * see the stat counters for this backend twice; once as aggregated into
-	 * the relevant exited backend stats hash entry and once in this backend
-	 * slot. So, we don't do that, hoping that memset() completes very quickly.
-	 */
-	memset(myBackendStatsSlot->counters, 0, sizeof(StatCounters));
+		pg_atomic_write_u64(&myBackendStatsSlot->counters[statIdx], 0);
+	}
 
 	SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
-	SpinLockRelease(&myBackendStatsSlot->mutex);
 
 	LWLockRelease(*SharedExitedBackendStatsHashLock);
-}
-
-
-/*
- * EnsureStatCountersShmemInitDone returns true if the shared memory
- * data structures used for keeping track of stat counters have been
- * properly initialized, otherwise, returns false and emits a warning.
- */
-static bool
-EnsureStatCountersShmemInitDone(void)
-{
-	if (!StatCountersShmemInitDone)
-	{
-		ereport(WARNING,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("shared memory for stat counters was not properly initialized")));
-		return false;
-	}
-
-	return true;
 }
 
 
@@ -504,19 +514,15 @@ StatCountersShmemInit(void)
 		   sharedExitedBackendStatsHashLockAlreadyInit);
 	if (!sharedBackendStatsSlotArrayAlreadyInit)
 	{
-		/*
-		 * memset the whole SharedBackendStatsSlotArray at once instead of
-		 * memset'ing StatCounters for each slot separately because doing so
-		 * is supposed to be faster.
-		 */
-		memset(SharedBackendStatsSlotArray, 0, SharedBackendStatsSlotArrayShmemSize());
-
 		for (int backendSlotIdx = 0; backendSlotIdx < MaxBackends; ++backendSlotIdx)
 		{
 			BackendStatsSlot *backendStatsSlot =
 				&SharedBackendStatsSlotArray[backendSlotIdx];
 
-			SpinLockInit(&backendStatsSlot->mutex);
+			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+			{
+				pg_atomic_init_u64(&backendStatsSlot->counters[statIdx], 0);
+			}
 		}
 
 		*SharedExitedBackendStatsHashLock = &(
@@ -598,22 +604,18 @@ CollectDbStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 														   HASH_ENTER, &found);
 		if (!found)
 		{
-			MemSet(dbStatsEntry->counters, 0, sizeof(StatCounters));
+			MemSet(dbStatsEntry->counters, 0, sizeof(AtomicStatCounters));
 			dbStatsEntry->resetTimestamp = 0;
 		}
 
 		BackendStatsSlot *backendStatsSlot =
 			&SharedBackendStatsSlotArray[backendSlotIdx];
 
-		SpinLockAcquire(&backendStatsSlot->mutex);
-
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
 			dbStatsEntry->counters[statIdx] +=
-				backendStatsSlot->counters[statIdx];
+				pg_atomic_read_u64(&backendStatsSlot->counters[statIdx]);
 		}
-
-		SpinLockRelease(&backendStatsSlot->mutex);
 	}
 }
 
@@ -787,11 +789,10 @@ ResetStatCountersForActiveBackends(Oid databaseId)
 		BackendStatsSlot *backendStatsSlot =
 			&SharedBackendStatsSlotArray[backendSlotIdx];
 
-		SpinLockAcquire(&backendStatsSlot->mutex);
-
-		memset(backendStatsSlot->counters, 0, sizeof(StatCounters));
-
-		SpinLockRelease(&backendStatsSlot->mutex);
+		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		{
+			pg_atomic_write_u64(&backendStatsSlot->counters[statIdx], 0);
+		}
 	}
 }
 
@@ -825,7 +826,7 @@ ResetStatCountersForExitedBackends(Oid databaseId)
 		{
 			SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
 
-			memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+			memset(dbExitedBackendStatsEntry->counters, 0, sizeof(AtomicStatCounters));
 			dbExitedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
 
 			SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
@@ -841,7 +842,7 @@ ResetStatCountersForExitedBackends(Oid databaseId)
 		{
 			SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
 
-			memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+			memset(dbExitedBackendStatsEntry->counters, 0, sizeof(AtomicStatCounters));
 			dbExitedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
 
 			SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
@@ -887,7 +888,7 @@ ExitedBackendStatsHashEntryAllocIfNotExists(Oid databaseId)
 	 */
 	if (!councurrentlyInserted)
 	{
-		memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+		memset(dbExitedBackendStatsEntry->counters, 0, sizeof(AtomicStatCounters));
 
 		dbExitedBackendStatsEntry->resetTimestamp = 0;
 

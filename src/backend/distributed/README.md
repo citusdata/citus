@@ -2732,3 +2732,5 @@ The reason why we don't just use a shared hash table for the counters is that it
 
 As of writing section, it seems quite likely that Postgres will expose their Cumulative Statistics infra starting with Postgres 18, see https://github.com/postgres/postgres/commit/7949d9594582ab49dee221e1db1aa5401ace49d4.
 So, once this happens, we can also consider using the same infra to track Citus stat counters. However, we can only do that once we drop support for Postgres versions older than 18.
+
+Also, one downside of having two different data structures (shared per-backend array and the shared hash table) to track stat counters is that there is a chance that a user of `citus_stat_counters()` (or the wrapper view) might see a sudden jump for a stat counter while a backend is exiting, due to the reasons explained in the last part of the header comment of [stat_counters.c](/src/backend/distributed/stat_counters.c). The same comment also suggests a potential solution to this issue.
