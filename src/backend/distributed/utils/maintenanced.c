@@ -57,7 +57,6 @@
 #include "distributed/query_stats.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
-#include "distributed/stat_counters.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
