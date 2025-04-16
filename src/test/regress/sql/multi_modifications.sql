@@ -234,6 +234,7 @@ SELECT kind, limit_price FROM limit_orders WHERE id = 246;
 
 -- multi-column UPDATE with RETURNING
 UPDATE limit_orders SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURNING *;
+UPDATE limit_orders SET (kind, limit_price) = (SELECT 'buy'::order_side, 999) WHERE id = 246 RETURNING *;
 
 -- Test that on unique contraint violations, we fail fast
 \set VERBOSITY terse
@@ -335,6 +336,9 @@ UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 
 -- should succeed with a CTE
 WITH deleted_orders AS (INSERT INTO limit_orders VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
+UPDATE limit_orders SET symbol = 'GM';
+
+WITH deleted_orders AS (INSERT INTO limit_orders SELECT 400, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43)
 UPDATE limit_orders SET symbol = 'GM';
 
 SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
@@ -584,6 +588,13 @@ WHERE id = 2;
 
 SELECT * FROM summary_table ORDER BY id;
 
+--- TODO this one is a silent corruption:
+-- UPDATE summary_table SET (average_value, min_value) =
+-- 	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
+-- WHERE id = 2;
+
+SELECT * FROM summary_table ORDER BY id;
+
 UPDATE summary_table SET min_value = 100
 	WHERE id IN (SELECT id FROM raw_table WHERE id = 1 and value > 100) AND id = 1;
 
@@ -709,6 +720,13 @@ WHERE id = 1;
 UPDATE reference_summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM reference_raw_table WHERE id = 2)
 WHERE id = 2;
+
+SELECT * FROM reference_summary_table ORDER BY id;
+
+--- TODO this one is a silent corruption:
+-- UPDATE reference_summary_table SET (average_value, min_value) =
+-- 	(SELECT avg(value), min(value) FROM reference_raw_table WHERE id = 2)
+-- WHERE id = 2;
 
 SELECT * FROM reference_summary_table ORDER BY id;
 
