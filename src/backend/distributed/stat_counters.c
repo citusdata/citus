@@ -141,7 +141,7 @@ typedef struct DatabaseStatsHashEntry
 typedef struct BackendStatsSlot
 {
 	/*
-	 * Since we sue atomic counters for the stat counters in this struct,
+	 * Since we use atomic counters for the stat counters in this struct,
 	 * we don't alway need to lock this struct when we read / write the
 	 * counters. So, the purpose of this mutex is just to prevent
 	 * citus_stat_counters() to observe the same counter value twice or
@@ -205,8 +205,8 @@ static void StoreDatabaseStatsIntoTupStore(HTAB *databaseStats,
 										   TupleDesc tupleDescriptor);
 
 /* helper functions for citus_stat_counters_reset() */
-static void ResetStatCountersForActiveBackends(Oid databaseId);
-static void ResetStatCountersForExitedBackends(Oid databaseId);
+static bool ResetStatCountersForActiveBackends(Oid databaseId);
+static void ResetStatCountersForExitedBackends(Oid databaseId, bool force);
 
 /* exited backend stats */
 static ExitedBackendStatsHashEntry * ExitedBackendStatsHashEntryAllocIfNotExists(Oid
@@ -254,16 +254,18 @@ EnsureStatCountersShmemInitDone(void)
  * restart, or, if we didn't ever have such a database, then the function
  * returns an empty set.
  *
- * Finally, counters with 0 are returned as NULLs to make this function
- * suitable for building citus_stat_counters view.
- *
- * Throws an error if provided database id is NULL.
+ * Finally, stats_reset column is set to NULL if the stat counters for the
+ * database were never reset since the last server restart.
  */
 Datum
 citus_stat_counters(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
+	/*
+	 * Function's sql definition allows Postgres to silently
+	 * ignore NULL, but we still check.
+	 */
 	PG_ENSURE_ARGNOTNULL(0, "database_id");
 	Oid databaseId = PG_GETARG_OID(0);
 
@@ -301,21 +303,21 @@ citus_stat_counters(PG_FUNCTION_ARGS)
  * citus_stat_counters_reset resets Citus stat counters for given database
  * id.
  *
- * If a valid database id is provided, only the stat counters for that
- * database are reset, even if it was dropped later.
+ * If a valid database id is provided, stat counters for that database are
+ * reset, even if it was dropped later.
  *
- * If InvalidOid is provided, stat counters for all databases are reset.
- *
- * Otherwise, if the provided database id is not valid and is different than
- * InvalidOid, then the function effectively does nothing.
- *
- * Throws an error if provided database id is NULL.
+ * Otherwise, if the provided database id is not valid, then the function
+ * effectively does nothing.
  */
 Datum
 citus_stat_counters_reset(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
+	/*
+	 * Function's sql definition allows Postgres to silently
+	 * ignore NULL, but we still check.
+	 */
 	PG_ENSURE_ARGNOTNULL(0, "database_id");
 	Oid databaseId = PG_GETARG_OID(0);
 
@@ -325,8 +327,22 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	ResetStatCountersForActiveBackends(databaseId);
-	ResetStatCountersForExitedBackends(databaseId);
+	bool foundAnyActiveBackends = ResetStatCountersForActiveBackends(databaseId);
+
+	/*
+	 * Even when we don't have an entry for the given database id in the
+	 * exited backend stats hash table, we still want to create one for
+	 * it to save the resetTimestamp, if we currently have at least backend
+	 * connected to it. By providing foundAnyActiveBackends, we let the
+	 * function do that.
+	 *
+	 * That way, we can save the resetTimestamp for the active backends
+	 * into the relevant entry of the exited backend stats hash table.
+	 * Note that we don't do that for the databases that don't have
+	 * any active backends connected to them because we actually don't
+	 * reset anything for such databases.
+	 */
+	ResetStatCountersForExitedBackends(databaseId, foundAnyActiveBackends);
 
 	PG_RETURN_VOID();
 }
@@ -763,16 +779,10 @@ StoreDatabaseStatsIntoTupStore(HTAB *databaseStats, Tuplestorestate *tupleStore,
 		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 		{
 			uint64 statCounter = dbStatsEntry->counters[statIdx];
-			if (statCounter == 0)
-			{
-				isNulls[statIdx + 1] = true;
-			}
-			else
-			{
-				values[statIdx + 1] = UInt64GetDatum(statCounter);
-			}
+			values[statIdx + 1] = UInt64GetDatum(statCounter);
 		}
 
+		/* set stats_reset column to NULL if it was never reset */
 		if (dbStatsEntry->resetTimestamp == 0)
 		{
 			isNulls[N_CITUS_STAT_COUNTERS + 1] = true;
@@ -792,16 +802,16 @@ StoreDatabaseStatsIntoTupStore(HTAB *databaseStats, Tuplestorestate *tupleStore,
  * ResetStatCountersForActiveBackends resets the stat counters for the
  * given database id for all the active backends.
  *
- * If the database id is InvalidOid, then all the active backends will be
- * considered regardless of the database they are connected to.
- *
- * Otherwise, if the database id is different than InvalidOid, then only
- * the active backends whose PGPROC->databaseId is the same as the given
+ * Only active backends whose PGPROC->databaseId is the same as the given
  * database id will be considered, if any.
+ *
+ * Returns true if any active backend was found.
  */
-static void
+static bool
 ResetStatCountersForActiveBackends(Oid databaseId)
 {
+	bool foundAny = false;
+
 	for (int backendSlotIdx = 0; backendSlotIdx < MaxBackends; ++backendSlotIdx)
 	{
 		PGPROC *backendProc = GetPGProcByNumber(backendSlotIdx);
@@ -822,11 +832,13 @@ ResetStatCountersForActiveBackends(Oid databaseId)
 			continue;
 		}
 
-		if (databaseId != InvalidOid && databaseId != procDatabaseId)
+		if (databaseId != procDatabaseId)
 		{
 			/* not a database we are interested in */
 			continue;
 		}
+
+		foundAny = true;
 
 		BackendStatsSlot *backendStatsSlot =
 			&SharedBackendStatsSlotArray[backendSlotIdx];
@@ -841,6 +853,8 @@ ResetStatCountersForActiveBackends(Oid databaseId)
 			pg_atomic_write_u64(&backendStatsSlot->counters[statIdx], 0);
 		}
 	}
+
+	return foundAny;
 }
 
 
@@ -848,52 +862,59 @@ ResetStatCountersForActiveBackends(Oid databaseId)
  * ResetStatCountersForExitedBackends resets the stat counters for the
  * given database id for all the exited backends.
  *
- * If the database id is InvalidOid, then all the databases that present in
- * the exited backend stats hash table will be considered.
+ * Only the entry that belongs to given database will be considered, if
+ * there is such an entry.
  *
- * Otherwise, if the database id is different than InvalidOid, then only the
- * entry that belongs to given database will be considered, if there is such
- * an entry.
+ * If force is true, then we make sure that we have an entry for the
+ * given database id in the exited backend stats hash table.
  */
 static void
-ResetStatCountersForExitedBackends(Oid databaseId)
+ResetStatCountersForExitedBackends(Oid databaseId, bool force)
 {
 	LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);
 
-	if (databaseId != InvalidOid)
+	ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry =
+		(ExitedBackendStatsHashEntry *) hash_search(
+			SharedExitedBackendStatsHash,
+			(void *) &databaseId,
+			HASH_FIND,
+			NULL);
+
+	if (!dbExitedBackendStatsEntry && force)
 	{
-		ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry =
-			(ExitedBackendStatsHashEntry *) hash_search(
-				SharedExitedBackendStatsHash,
-				(void *) &databaseId,
-				HASH_FIND,
-				NULL);
+		/* promote the lock to exclusive to insert the new entry for this database */
+		LWLockRelease(*SharedExitedBackendStatsHashLock);
+		LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_EXCLUSIVE);
 
-		if (dbExitedBackendStatsEntry)
+		dbExitedBackendStatsEntry =
+			ExitedBackendStatsHashEntryAllocIfNotExists(databaseId);
+
+		LWLockRelease(*SharedExitedBackendStatsHashLock);
+
+		if (!dbExitedBackendStatsEntry)
 		{
-			SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
-
-			memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
-			dbExitedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
-
-			SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
+			/*
+			 * Couldn't allocate a new hash entry because we're out of
+			 * (shared) memory.
+			 */
+			ereport(ERROR,
+					(errcode(ERRCODE_OUT_OF_MEMORY),
+					 errmsg("failed to allocate exited backend stats hash entry")));
+			return;
 		}
+
+		/* re-acquire the shared lock */
+		LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);
 	}
-	else
+
+	if (dbExitedBackendStatsEntry)
 	{
-		HASH_SEQ_STATUS hashSeqStatus;
-		hash_seq_init(&hashSeqStatus, SharedExitedBackendStatsHash);
+		SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
 
-		ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry = NULL;
-		while ((dbExitedBackendStatsEntry = hash_seq_search(&hashSeqStatus)) != NULL)
-		{
-			SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
+		memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+		dbExitedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
 
-			memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
-			dbExitedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
-
-			SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
-		}
+		SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
 	}
 
 	LWLockRelease(*SharedExitedBackendStatsHashLock);
@@ -905,7 +926,8 @@ ResetStatCountersForExitedBackends(Oid databaseId)
  * exited backend stats hash table for the given database id if it doesn't
  * already exist.
  *
- * Assumes that the caller has exclusive access to the hash table.
+ * Assumes that the caller has exclusive access to the hash table since it
+ * performs HASH_ENTER_NULL.
  *
  * Returns NULL if the entry didn't exist and couldn't be allocated since
  * we're out of (shared) memory.
@@ -913,12 +935,12 @@ ResetStatCountersForExitedBackends(Oid databaseId)
 static ExitedBackendStatsHashEntry *
 ExitedBackendStatsHashEntryAllocIfNotExists(Oid databaseId)
 {
-	bool councurrentlyInserted = false;
+	bool found = false;
 	ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry =
 		(ExitedBackendStatsHashEntry *) hash_search(SharedExitedBackendStatsHash,
 													(void *) &databaseId,
 													HASH_ENTER_NULL,
-													&councurrentlyInserted);
+													&found);
 
 	if (!dbExitedBackendStatsEntry)
 	{
@@ -929,11 +951,7 @@ ExitedBackendStatsHashEntryAllocIfNotExists(Oid databaseId)
 		return NULL;
 	}
 
-	/*
-	 * Act only if someone else didn't race creating the entry before the
-	 * caller grabbed exclusive access to the hash table.
-	 */
-	if (!councurrentlyInserted)
+	if (!found)
 	{
 		memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
 

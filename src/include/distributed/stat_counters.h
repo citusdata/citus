@@ -21,7 +21,7 @@
 
 
 /*
- * Must be in the same order as the columns defined in citus_stat_counters view,
+ * Must be in the same order as the output columns defined in citus_stat_counters() UDF,
  * see src/backend/distributed/sql/udfs/citus_stat_counters/latest.sql
  */
 typedef enum
@@ -50,7 +50,7 @@ extern Size StatCountersShmemSize(void);
 extern void IncrementStatCounterForMyDb(int statId);
 
 /*
- * Exported to define a before_shmem_exit callback that saves
+ * Exported to define a before_shmem_exit() callback that saves
  * the stat counters for exited backends into the shared memory.
  */
 extern void SaveBackendStatsIntoExitedBackendStatsHash(void);

@@ -835,7 +835,7 @@ RegisterConnectionCleanup(void)
 
 /*
  * RegisterSaveBackendStatsIntoExitedBackendStatsHash registers the function
- * that saves the backend stats into the exited_backend_stats hash.
+ * that saves the backend stats into the exited backend stats hash.
  */
 static void
 RegisterSaveBackendStatsIntoExitedBackendStatsHash(void)
@@ -893,7 +893,7 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 /*
  * SaveBackendStatsIntoExitedBackendStatsHashAtExit is called before_shmem_exit()
  * of the backend for the purposes of saving the backend stats into the
- * exited_backend_stats hash.
+ * exited backend stats hash.
  */
 static void
 SaveBackendStatsIntoExitedBackendStatsHashAtExit(int code, Datum arg)
