@@ -386,18 +386,19 @@ IncrementStatCounterForMyDb(int statId)
 		&SharedBackendStatsSlotArray[myBackendSlotIdx];
 
 	/*
-	 * Since we're sure that there cannot be any other backends that calls
-	 * this function to increment the same stat counter at the same time,
-	 * we use pg_atomic_read_u64() and pg_atomic_write_u64() to increment
-	 * the stat counter instead of pg_atomic_fetch_add_u64().
-	 * Moreover, the latter is more expensive than the former because it
-	 * has to deal with concurrent writers, which we cannot have any.
+	 * When there cannot be any other writers, incrementing an atomic
+	 * counter via pg_atomic_read_u64() and pg_atomic_write_u64() is
+	 * same as incrementing it via pg_atomic_fetch_add_u64(). Plus, the
+	 * former is cheaper than the latter because the latter has to do
+	 * extra work to deal with concurrent writers.
 	 *
-	 * So, there is chance that we read the counter value, then it gets
-	 * reset by a concurrent call made to citus_stat_counters_reset() and
-	 * then we write the incremented value back, by effectively overriding
-	 * the reset value. But this should be a rare case and we can live with
-	 * that.
+	 * In our case, the only concurrent writer could be the backend that
+	 * is executing citus_stat_counters_reset(). So, there is chance that
+	 * we read the counter value, then it gets reset by a concurrent call
+	 * made to citus_stat_counters_reset() and then we write the
+	 * incremented value back, by effectively overriding the reset value.
+	 * But this should be a rare case and we can live with that, for the
+	 * sake of lock-free implementation of this function.
 	 */
 	pg_atomic_uint64 *statPtr = &myBackendStatsSlot->counters[statId];
 	pg_atomic_write_u64(statPtr, pg_atomic_read_u64(statPtr) + 1);
@@ -472,8 +473,6 @@ SaveBackendStatsIntoExitedBackendStatsHash(void)
 		&SharedBackendStatsSlotArray[myBackendSlotIdx];
 
 	/*
-	 * TODO: check lock order everywhere
-	 *
 	 * We want to prevent a concurrent call to citus_stat_counters() from
 	 * observing the same counter value twice or perhaps losing it while
 	 * we're saving our stat counters into the exited backend stats hash.
