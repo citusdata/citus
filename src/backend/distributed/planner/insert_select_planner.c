@@ -108,16 +108,25 @@ static void ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 							 Form_pg_attribute attr, int targetEntryIndex,
 							 List **projectedEntries, List **nonProjectedEntries);
 
-typedef struct ShiftAllLevelsContext
+typedef struct ShiftReferencesWalkerContext
 {
-	int baseLevel;  /* we shift ctelevelsup if it’s >= this number */
-} ShiftAllLevelsContext;
-							 
+	/* current nesting depth, 0 for top-level query, increments each time we go one Query deeper */
+	int levelsup;
+
+	/* how much to shift ctelevelsup by if it matches levelsup+1 (typically -1) */
+	int offset;
+
+	/* optional: if we want to check ctename is in top-level list */
+	List *topLevelCteList;
+} ShiftReferencesWalkerContext;		 
 
 static bool
-ShiftAllLevelsWalker(Node *node, ShiftAllLevelsContext *ctx);
+inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context);
+
 static void
-ShiftAllCteLevelsInQuery(Query *subquery, int baseLevel);
+DecrementInsertLevelReferences(Query *subquery, 
+							   int offset, /* typically -1 */
+							   List *topLevelCteList);
 
 
 /* depth of current insert/select planner. */
@@ -550,6 +559,8 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 		 */
 		elog(DEBUG1, "Unifying top-level cteList with subquery cteList");
 
+		List *topLevelCteListCopy = copyObject(insertSelectQuery->cteList);
+
 		selectRte->subquery->cteList =
 			list_concat(selectRte->subquery->cteList,
 						copyObject(insertSelectQuery->cteList));
@@ -558,71 +569,126 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 		/* Suppose we physically appended the top-level cteList into the subquery, 
    		so references are at ctelevelsup=1, 2, etc. We want them all to shift by -1. */
 
-		   ShiftAllCteLevelsInQuery(selectRte->subquery,
-			1       /* baseLevel => anything >= 1 is shifted */);
+		DecrementInsertLevelReferences(selectRte->subquery, -1, topLevelCteListCopy /* for ctename check */);
 
 		elog(DEBUG1, "Done shifting ctelevelsup X->X-1 for subquery references");
 	}
 }
 
 /*
- * ShiftAllLevelsWalker:
- *   Recursively visits each Query using QTW_EXAMINE_RTES_BEFORE so it
- *   receives RangeTblEntry nodes. If an RTE_CTE has ctelevelsup >= baseLevel,
- *   do ctelevelsup -= 1.
+ * inline_cte_walker
+ *
+ *   If node is a Query, we increase context->levelsup by 1,
+ *   recursively walk the Query, then restore it.
+ *
+ *   If node is a RangeTblEntry with RTE_CTE and ctelevelsup == (levelsup + 1),
+ *   we do ctelevelsup += offset (e.g. -1 => so k+1 → k).
+ *
+ *   We do expression_tree_walker for fallback on expressions.
  */
 static bool
-ShiftAllLevelsWalker(Node *node, ShiftAllLevelsContext *ctx)
+inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context)
 {
-    if (node == NULL)
-        return false;
+	if (node == NULL)
+		return false;
 
-    if (IsA(node, RangeTblEntry))
-    {
-        RangeTblEntry *rte = (RangeTblEntry *) node;
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
 
-        if (rte->rtekind == RTE_CTE &&
-            rte->ctelevelsup >= ctx->baseLevel)
-        {
-            elog(DEBUG2, "Shifting ctelevelsup from %d to %d",
-                 rte->ctelevelsup, rte->ctelevelsup - 1);
-            rte->ctelevelsup -= 1;
-        }
+		/* descend one query level deeper */
+		context->levelsup++;
 
-        return false;
-    }
-    else if (IsA(node, Query))
-    {
-        /* For each Query, we call query_tree_walker with QTW_EXAMINE_RTES_BEFORE */
-        Query *query = (Query *) node;
+		/*
+		 * Use QTW_EXAMINE_RTES_AFTER or QTW_EXAMINE_RTES_BEFORE – your snippet
+		 * used AFTER, so let's keep that. This means we'll handle the rtable
+		 * after the rest, which is okay. 
+		 *
+		 * Or we can do QTW_EXAMINE_RTES_BEFORE so we see RangeTblEntry first.
+		 * The key is being consistent with your scenario.
+		 */
+		query_tree_walker(query,
+						  inline_cte_walker,
+						  context,
+						  QTW_EXAMINE_RTES_AFTER);
 
-        query_tree_walker(query,
-                          ShiftAllLevelsWalker,
-                          (void *) ctx,
-                          QTW_EXAMINE_RTES_BEFORE);
+		context->levelsup--;
 
-        return false;
-    }
+		return false;
+	}
+	else if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
 
-    /* fallback for expressions, etc. */
-    return expression_tree_walker(node, ShiftAllLevelsWalker, (void *) ctx);
+		if (rte->rtekind == RTE_CTE)
+		{
+			/*
+			 * If RTE_CTE's ctelevelsup == (current nesting level + 1),
+			 * we do ctelevelsup += offset. 
+			 * e.g. if offset=-1, and ctelevelsup= (levelsup + 1), 
+			 * that effectively does "k+1 → k".
+			 */
+			if (rte->ctelevelsup == (context->levelsup + 1))
+			{
+				/* optionally verify ctename is in topLevelCteList */
+				bool foundName = false;
+				if (context->topLevelCteList != NULL)
+				{
+					ListCell *lc = NULL;
+					foreach(lc, context->topLevelCteList)
+					{
+						CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+						if (strcmp(cte->ctename, rte->ctename) == 0)
+						{
+							foundName = true;
+							break;
+						}
+					}
+				}
+				else
+				{
+					foundName = true; /* if we don't need a name check */
+				}
+
+				if (foundName)
+				{
+					int oldSup = rte->ctelevelsup;
+					rte->ctelevelsup += context->offset; /* e.g. -1 => (k+1) → k */
+					elog(DEBUG2, "Shifting ctelevelsup for ctename=%s from %d to %d",
+						 rte->ctename, oldSup, rte->ctelevelsup);
+				}
+				else
+				{
+					elog(DEBUG2, "ctename=%s not found in top-level list, skipping shift",
+						 rte->ctename);
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/* fallback for expressions, e.g. scanning function calls, sublinks, etc. */
+	return expression_tree_walker(node, inline_cte_walker, (void *) context);
 }
 
-/*
- * ShiftAllCteLevelsInQuery
- *   A convenience wrapper to shift ctelevelsup by 1 for any references >= baseLevel
- */
+
 static void
-ShiftAllCteLevelsInQuery(Query *subquery, int baseLevel)
+DecrementInsertLevelReferences(Query *subquery, 
+							   int offset, /* typically -1 */
+							   List *topLevelCteList)
 {
-    ShiftAllLevelsContext ctx;
-    ctx.baseLevel = baseLevel;
+	ShiftReferencesWalkerContext ctx;
+	ctx.levelsup = 0;  /* so that top-level query => 0, subquery => 1, etc. */
+	ctx.offset = offset;
+	ctx.topLevelCteList = topLevelCteList;
 
-    (void) query_tree_walker(subquery,
-                             ShiftAllLevelsWalker,
-                             (void *) &ctx,
-                             QTW_EXAMINE_RTES_BEFORE);
+	query_tree_walker(subquery,
+					  inline_cte_walker,
+					  (void *) &ctx,
+					  QTW_EXAMINE_RTES_AFTER /* or BEFORE, but snippet used AFTER */);
 }
+
 
 
 
