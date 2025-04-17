@@ -9,11 +9,13 @@
  * each backend. Each backend increments its own stat counters in its
  * own slot via IncrementStatCounterForMyDb(). And when a backend exits,
  * it saves its stat counters from its slot via
- * SaveBackendStatsIntoExitedBackendStatsHash() into a hash table in
- * shared memory, whose entries are "ExitedBackendStatsHashEntry"s and
+ * SaveBackendStatsIntoSavedBackendStatsHash() into a hash table in
+ * shared memory, whose entries are "SavedBackendStatsHashEntry"s and
  * the key is the database id. In other words, each entry of the hash
  * table is used to aggregate the stat counters for backends that were
  * connected to that database and exited since the last server restart.
+ * Plus, each entry is responsible for keeping track of the reset
+ * timestamp for both active and exited backends too.
  * Note that today we don't evict the entries of the said hash table
  * that point to dropped databases because the wrapper view anyway
  * filters them out (thanks to LEFT JOIN) and we don't expect a
@@ -36,13 +38,9 @@
  *
  * Similarly, when citus_stat_counters_reset() is called, we reset the
  * stat counters for the active backends and the exited backends that are
- * stored in the shared hash table. Also, although we have resetTimestamp
- * as part of "ExitedBackendStatsHashEntry"s, it doesn't only represent
- * the reset timestamp for exited backends' stat counters but also for
- * the active backends. This is because, when citus_stat_counters_reset()
- * is called, we reset the stat counters for both active backends and the
- * exited backends whose stats are stored in the shared hash table.
- * Similarly, when citus_stat_counters() is called, we just report
+ * stored in the shared hash table. Then, it also updates the
+ * resetTimestamp in the shared hash table entry appropriately. So,
+ * similarly, when citus_stat_counters() is called, we just report
  * resetTimestamp as stats_reset column.
  *
  * As a last note, there is chance that citus_stat_counters_reset() might
@@ -74,10 +72,10 @@
 
 
 /*
- * exited backend stats - hash table constants
+ * saved backend stats - hash table constants
  *
- * Configurations used to create the hash table for exited backend stats.
- * The places where EXITED_BACKEND_STATS_HASH_MAX_DATABASES is used do not
+ * Configurations used to create the hash table for saved backend stats.
+ * The places where SAVED_BACKEND_STATS_HASH_MAX_DATABASES is used do not
  * impose a hard limit on the number of databases that can be tracked but
  * in ShmemInitHash() it's documented that the access efficiency will degrade
  * if it is exceeded substantially.
@@ -85,8 +83,8 @@
  * XXX: Consider using dshash_table instead of (shared) HTAB if that becomes
  *      a concern.
  */
-#define EXITED_BACKEND_STATS_HASH_INIT_DATABASES 8
-#define EXITED_BACKEND_STATS_HASH_MAX_DATABASES 1024
+#define SAVED_BACKEND_STATS_HASH_INIT_DATABASES 8
+#define SAVED_BACKEND_STATS_HASH_MAX_DATABASES 1024
 
 
 /* fixed size array types to store the stat counters */
@@ -94,12 +92,13 @@ typedef pg_atomic_uint64 AtomicStatCounters[N_CITUS_STAT_COUNTERS];
 typedef uint64 StatCounters[N_CITUS_STAT_COUNTERS];
 
 /*
- * exited backend stats - hash entry definition
+ * saved backend stats - hash entry definition
  *
  * This is used to define & access the shared hash table used to aggregate the stat
- * counters for the backends exited so far since last server restart.
+ * counters for the backends exited so far since last server restart. It's also
+ * responsible for keeping track of the reset timestamp.
  */
-typedef struct ExitedBackendStatsHashEntry
+typedef struct SavedBackendStatsHashEntry
 {
 	/* hash entry key, must always be the first */
 	Oid databaseId;
@@ -112,16 +111,13 @@ typedef struct ExitedBackendStatsHashEntry
 	slock_t mutex;
 
 	/*
-	 * resetTimestamp doesn't only represent the reset timestamp for exited
-	 * backends' stat counters but also for the active backends. This is because,
-	 * when citus_stat_counters_reset() is called, we reset the stat counters for
-	 * both active backends and the exited backends whose stats are aggregated
-	 * in the shared hash table. Similarly, when citus_stat_counters() is called,
-	 * we just report this as stats_reset column.
+	 * While "counters" only represents the stat counters for exited backends,
+	 * the "resetTimestamp" doesn't only represent the reset timestamp for exited
+	 * backends' stat counters but also for the active backends.
 	 */
 	StatCounters counters;
 	TimestampTz resetTimestamp;
-} ExitedBackendStatsHashEntry;
+} SavedBackendStatsHashEntry;
 
 /*
  * Hash entry definition used for the local hash table created by
@@ -146,7 +142,7 @@ typedef struct BackendStatsSlot
 	 * counters. So, the purpose of this mutex is just to prevent
 	 * citus_stat_counters() to observe the same counter value twice or
 	 * perhaps losing it while a backend was "saving" its stat counters
-	 * into the exited backend stats hash table. For this reason, we
+	 * into the saved backend stats hash table. For this reason, we
 	 * either acquire the mutex while saving the stat counters into the
 	 * shared memory or when we want to prevent them being saved & reset
 	 * subsequently.
@@ -162,16 +158,16 @@ typedef struct BackendStatsSlot
  *
  * This only controls whether we track the stat counters or not, via
  * IncrementStatCounterForMyDb() and
- * SaveBackendStatsIntoExitedBackendStatsHash(). In other words, even
+ * SaveBackendStatsIntoSavedBackendStatsHash(). In other words, even
  * when the GUC is disabled, we still allocate the shared memory
  * structures etc. and citus_stat_counters() / citus_stat_counters_reset()
  * will still work.
  */
 bool EnableStatCounters = ENABLE_STAT_COUNTERS_DEFAULT;
 
-/* exited backend stats - shared memory variables */
-static LWLockId *SharedExitedBackendStatsHashLock = NULL;
-static HTAB *SharedExitedBackendStatsHash = NULL;
+/* saved backend stats - shared memory variables */
+static LWLockId *SharedSavedBackendStatsHashLock = NULL;
+static HTAB *SharedSavedBackendStatsHash = NULL;
 
 /* per-backend stat counter slots - shared memory array */
 BackendStatsSlot *SharedBackendStatsSlotArray = NULL;
@@ -198,19 +194,19 @@ static void StatCountersShmemInit(void);
 static Size SharedBackendStatsSlotArrayShmemSize(void);
 
 /* helper functions for citus_stat_counters() */
-static void CollectDbStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats);
-static void CollectDbStatsFromExitedBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats);
+static void CollectStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats);
+static void CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats);
 static void StoreDatabaseStatsIntoTupStore(HTAB *databaseStats,
 										   Tuplestorestate *tupleStore,
 										   TupleDesc tupleDescriptor);
 
 /* helper functions for citus_stat_counters_reset() */
-static bool ResetStatCountersForActiveBackends(Oid databaseId);
-static void ResetStatCountersForExitedBackends(Oid databaseId, bool force);
+static bool ResetStatsForActiveBackends(Oid databaseId);
+static void ResetSavedBackendStats(Oid databaseId, bool force);
 
-/* exited backend stats */
-static ExitedBackendStatsHashEntry * ExitedBackendStatsHashEntryAllocIfNotExists(Oid
-																				 dbId);
+/* saved backend stats */
+static SavedBackendStatsHashEntry * SavedBackendStatsHashEntryAllocIfNotExists(Oid
+																			   databaseId);
 
 
 /* sql exports */
@@ -288,8 +284,8 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 	HTAB *databaseStats = hash_create("Citus Database Stats Collect Hash", 8, &info,
 									  hashFlags);
 
-	CollectDbStatsFromActiveBackendsIntoHTAB(databaseId, databaseStats);
-	CollectDbStatsFromExitedBackendsIntoHTAB(databaseId, databaseStats);
+	CollectStatsFromActiveBackendsIntoHTAB(databaseId, databaseStats);
+	CollectSavedBackendStatsIntoHTAB(databaseId, databaseStats);
 
 	StoreDatabaseStatsIntoTupStore(databaseStats, tupleStore, tupleDescriptor);
 
@@ -327,22 +323,22 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	bool foundAnyActiveBackends = ResetStatCountersForActiveBackends(databaseId);
+	bool foundAnyActiveBackends = ResetStatsForActiveBackends(databaseId);
 
 	/*
 	 * Even when we don't have an entry for the given database id in the
-	 * exited backend stats hash table, we still want to create one for
-	 * it to save the resetTimestamp, if we currently have at least backend
+	 * saved backend stats hash table, we still want to create one for
+	 * it to save the resetTimestamp if we currently have at least backend
 	 * connected to it. By providing foundAnyActiveBackends, we let the
 	 * function do that.
 	 *
 	 * That way, we can save the resetTimestamp for the active backends
-	 * into the relevant entry of the exited backend stats hash table.
+	 * into the relevant entry of the saved backend stats hash table.
 	 * Note that we don't do that for the databases that don't have
 	 * any active backends connected to them because we actually don't
 	 * reset anything for such databases.
 	 */
-	ResetStatCountersForExitedBackends(databaseId, foundAnyActiveBackends);
+	ResetSavedBackendStats(databaseId, foundAnyActiveBackends);
 
 	PG_RETURN_VOID();
 }
@@ -370,12 +366,12 @@ Size
 StatCountersShmemSize(void)
 {
 	Size backendStatsSlotArraySize = SharedBackendStatsSlotArrayShmemSize();
-	Size exitedBackendStatsHashLockSize = MAXALIGN(sizeof(LWLockId));
-	Size exitedBackendStatsHashSize = hash_estimate_size(
-		EXITED_BACKEND_STATS_HASH_MAX_DATABASES, sizeof(ExitedBackendStatsHashEntry));
+	Size savedBackendStatsHashLockSize = MAXALIGN(sizeof(LWLockId));
+	Size savedBackendStatsHashSize = hash_estimate_size(
+		SAVED_BACKEND_STATS_HASH_MAX_DATABASES, sizeof(SavedBackendStatsHashEntry));
 
-	return add_size(add_size(backendStatsSlotArraySize, exitedBackendStatsHashLockSize),
-					exitedBackendStatsHashSize);
+	return add_size(add_size(backendStatsSlotArraySize, savedBackendStatsHashLockSize),
+					savedBackendStatsHashSize);
 }
 
 
@@ -422,8 +418,8 @@ IncrementStatCounterForMyDb(int statId)
 
 
 /*
- * SaveBackendStatsIntoExitedBackendStatsHash saves the stat counters
- * for this backend into the exited backend stats hash table.
+ * SaveBackendStatsIntoSavedBackendStatsHash saves the stat counters
+ * for this backend into the saved backend stats hash table.
  *
  * So, this is only supposed to be called when a backend exits.
  *
@@ -432,7 +428,7 @@ IncrementStatCounterForMyDb(int statId)
  * at that point will cause the backend to crash.
  */
 void
-SaveBackendStatsIntoExitedBackendStatsHash(void)
+SaveBackendStatsIntoSavedBackendStatsHash(void)
 {
 	if (!EnableStatCounters)
 	{
@@ -447,26 +443,26 @@ SaveBackendStatsIntoExitedBackendStatsHash(void)
 
 	Oid databaseId = MyDatabaseId;
 
-	LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);
+	LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_SHARED);
 
-	ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry =
-		(ExitedBackendStatsHashEntry *) hash_search(
-			SharedExitedBackendStatsHash,
+	SavedBackendStatsHashEntry *dbSavedBackendStatsEntry =
+		(SavedBackendStatsHashEntry *) hash_search(
+			SharedSavedBackendStatsHash,
 			(void *) &databaseId,
 			HASH_FIND,
 			NULL);
-	if (!dbExitedBackendStatsEntry)
+	if (!dbSavedBackendStatsEntry)
 	{
 		/* promote the lock to exclusive to insert the new entry for this database */
-		LWLockRelease(*SharedExitedBackendStatsHashLock);
-		LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_EXCLUSIVE);
+		LWLockRelease(*SharedSavedBackendStatsHashLock);
+		LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_EXCLUSIVE);
 
-		dbExitedBackendStatsEntry =
-			ExitedBackendStatsHashEntryAllocIfNotExists(databaseId);
+		dbSavedBackendStatsEntry =
+			SavedBackendStatsHashEntryAllocIfNotExists(databaseId);
 
-		LWLockRelease(*SharedExitedBackendStatsHashLock);
+		LWLockRelease(*SharedSavedBackendStatsHashLock);
 
-		if (!dbExitedBackendStatsEntry)
+		if (!dbSavedBackendStatsEntry)
 		{
 			/*
 			 * Couldn't allocate a new hash entry because we're out of
@@ -476,12 +472,12 @@ SaveBackendStatsIntoExitedBackendStatsHash(void)
 			 */
 			ereport(WARNING,
 					(errcode(ERRCODE_OUT_OF_MEMORY),
-					 errmsg("failed to allocate exited backend stats hash entry")));
+					 errmsg("failed to allocate saved backend stats hash entry")));
 			return;
 		}
 
 		/* re-acquire the shared lock */
-		LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);
+		LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_SHARED);
 	}
 
 	int myBackendSlotIdx = getProcNo_compat(MyProc);
@@ -491,15 +487,15 @@ SaveBackendStatsIntoExitedBackendStatsHash(void)
 	/*
 	 * We want to prevent a concurrent call to citus_stat_counters() from
 	 * observing the same counter value twice or perhaps losing it while
-	 * we're saving our stat counters into the exited backend stats hash.
+	 * we're saving our stat counters into the saved backend stats hash.
 	 * So here we acquire saveMutex of the backend stats slot as well.
 	 */
 	SpinLockAcquire(&myBackendStatsSlot->saveMutex);
-	SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
+	SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
 	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 	{
-		dbExitedBackendStatsEntry->counters[statIdx] +=
+		dbSavedBackendStatsEntry->counters[statIdx] +=
 			pg_atomic_read_u64(&myBackendStatsSlot->counters[statIdx]);
 
 		/*
@@ -510,10 +506,10 @@ SaveBackendStatsIntoExitedBackendStatsHash(void)
 		pg_atomic_write_u64(&myBackendStatsSlot->counters[statIdx], 0);
 	}
 
-	SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
+	SpinLockRelease(&dbSavedBackendStatsEntry->mutex);
 	SpinLockRelease(&myBackendStatsSlot->saveMutex);
 
-	LWLockRelease(*SharedExitedBackendStatsHashLock);
+	LWLockRelease(*SharedSavedBackendStatsHashLock);
 }
 
 
@@ -537,26 +533,26 @@ StatCountersShmemInit(void)
 												  SharedBackendStatsSlotArrayShmemSize(),
 												  &sharedBackendStatsSlotArrayAlreadyInit);
 
-	bool sharedExitedBackendStatsHashLockAlreadyInit = false;
-	SharedExitedBackendStatsHashLock = ShmemInitStruct(
-		EXITED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME,
+	bool sharedSavedBackendStatsHashLockAlreadyInit = false;
+	SharedSavedBackendStatsHashLock = ShmemInitStruct(
+		SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME,
 		sizeof(LWLockId),
 		&
-		sharedExitedBackendStatsHashLockAlreadyInit);
+		sharedSavedBackendStatsHashLockAlreadyInit);
 
 	HASHCTL hashInfo = {
 		.keysize = sizeof(Oid),
-		.entrysize = sizeof(ExitedBackendStatsHashEntry),
+		.entrysize = sizeof(SavedBackendStatsHashEntry),
 		.hash = oid_hash,
 	};
-	SharedExitedBackendStatsHash = ShmemInitHash("Citus Shared Exited Backend Stats Hash",
-												 EXITED_BACKEND_STATS_HASH_INIT_DATABASES,
-												 EXITED_BACKEND_STATS_HASH_MAX_DATABASES,
-												 &hashInfo,
-												 HASH_ELEM | HASH_FUNCTION);
+	SharedSavedBackendStatsHash = ShmemInitHash("Citus Shared Saved Backend Stats Hash",
+												SAVED_BACKEND_STATS_HASH_INIT_DATABASES,
+												SAVED_BACKEND_STATS_HASH_MAX_DATABASES,
+												&hashInfo,
+												HASH_ELEM | HASH_FUNCTION);
 
 	Assert(sharedBackendStatsSlotArrayAlreadyInit ==
-		   sharedExitedBackendStatsHashLockAlreadyInit);
+		   sharedSavedBackendStatsHashLockAlreadyInit);
 	if (!sharedBackendStatsSlotArrayAlreadyInit)
 	{
 		for (int backendSlotIdx = 0; backendSlotIdx < MaxBackends; ++backendSlotIdx)
@@ -572,9 +568,9 @@ StatCountersShmemInit(void)
 			}
 		}
 
-		*SharedExitedBackendStatsHashLock = &(
+		*SharedSavedBackendStatsHashLock = &(
 			GetNamedLWLockTranche(
-				EXITED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME)
+				SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME)
 			)->lock;
 	}
 
@@ -585,8 +581,8 @@ StatCountersShmemInit(void)
 	 * but we still check them just to be sure.
 	 */
 	if (SharedBackendStatsSlotArray &&
-		SharedExitedBackendStatsHashLock &&
-		SharedExitedBackendStatsHash)
+		SharedSavedBackendStatsHashLock &&
+		SharedSavedBackendStatsHash)
 	{
 		StatCountersShmemInitDone = true;
 	}
@@ -605,9 +601,9 @@ SharedBackendStatsSlotArrayShmemSize(void)
 
 
 /*
- * CollectDbStatsFromActiveBackendsIntoHTAB aggregates the stat counters
- * for the given database id from all the active backends into the
- * databaseStats hash table.
+ * CollectStatsFromActiveBackendsIntoHTAB aggregates the stat
+ * counters for the given database id from all the active backends into
+ * the databaseStats hash table.
  *
  * If the database id is InvalidOid, then all the active backends will be
  * considered regardless of the database they are connected to.
@@ -617,7 +613,7 @@ SharedBackendStatsSlotArrayShmemSize(void)
  * database id will be considered, if any.
  */
 static void
-CollectDbStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats)
+CollectStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 {
 	for (int backendSlotIdx = 0; backendSlotIdx < MaxBackends; ++backendSlotIdx)
 	{
@@ -660,7 +656,7 @@ CollectDbStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 
 		/*
 		 * Since we want to wait for a concurrent call to
-		 * SaveBackendStatsIntoExitedBackendStatsHash() to finish, we
+		 * SaveBackendStatsIntoSavedBackendStatsHash() to finish, we
 		 * acquire the saveMutex here. We want to wait for it because
 		 * otherwise we might observe the same counter value twice or
 		 * perhaps lose it.
@@ -679,80 +675,81 @@ CollectDbStatsFromActiveBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 
 
 /*
- * CollectDbStatsFromExitedBackendsIntoHTAB fetches the stat counters for the
- * given database id from the exited backend stats hash table and saves them
- * into the databaseStats hash table.
+ * CollectSavedBackendStatsIntoHTAB fetches the saved stat counters and
+ * resetTimestamp for the given database id from the saved backend stats
+ * hash table and saves them into the databaseStats hash table.
  *
- * If the database id is InvalidOid, then all the databases that present in the
- * exited backend stats hash table will be considered.
+ * If the database id is InvalidOid, then all the databases that present
+ * in the saved backend stats hash table will be considered.
  *
- * Otherwise, if the database id is different than InvalidOid, then only the entry
- * that belongs to given database will be considered, if there is such an entry.
+ * Otherwise, if the database id is different than InvalidOid, then only
+ * the entry that belongs to given database will be considered, if there
+ * is such an entry.
  */
 static void
-CollectDbStatsFromExitedBackendsIntoHTAB(Oid databaseId, HTAB *databaseStats)
+CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 {
-	LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);
+	LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_SHARED);
 
 	if (databaseId != InvalidOid)
 	{
-		ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry =
-			(ExitedBackendStatsHashEntry *) hash_search(
-				SharedExitedBackendStatsHash,
+		SavedBackendStatsHashEntry *dbSavedBackendStatsEntry =
+			(SavedBackendStatsHashEntry *) hash_search(
+				SharedSavedBackendStatsHash,
 				(void *) &databaseId,
 				HASH_FIND,
 				NULL);
 
-		if (dbExitedBackendStatsEntry)
+		if (dbSavedBackendStatsEntry)
 		{
 			DatabaseStatsHashEntry *dbStatsEntry = (DatabaseStatsHashEntry *)
 												   hash_search(databaseStats, &databaseId,
 															   HASH_ENTER, NULL);
 
-			SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
+			SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
 			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 			{
 				dbStatsEntry->counters[statIdx] +=
-					dbExitedBackendStatsEntry->counters[statIdx];
+					dbSavedBackendStatsEntry->counters[statIdx];
 			}
 
 			dbStatsEntry->resetTimestamp =
-				dbExitedBackendStatsEntry->resetTimestamp;
+				dbSavedBackendStatsEntry->resetTimestamp;
 
-			SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
+			SpinLockRelease(&dbSavedBackendStatsEntry->mutex);
 		}
 	}
 	else
 	{
 		HASH_SEQ_STATUS hashSeqStatus;
-		hash_seq_init(&hashSeqStatus, SharedExitedBackendStatsHash);
+		hash_seq_init(&hashSeqStatus, SharedSavedBackendStatsHash);
 
-		ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry = NULL;
-		while ((dbExitedBackendStatsEntry = hash_seq_search(&hashSeqStatus)) != NULL)
+		SavedBackendStatsHashEntry *dbSavedBackendStatsEntry = NULL;
+		while ((dbSavedBackendStatsEntry = hash_seq_search(&hashSeqStatus)) != NULL)
 		{
 			DatabaseStatsHashEntry *dbStatsEntry = (DatabaseStatsHashEntry *)
 												   hash_search(databaseStats,
-															   &dbExitedBackendStatsEntry
+															   &dbSavedBackendStatsEntry
 															   ->databaseId, HASH_ENTER,
 															   NULL);
 
-			SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
+			SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
 			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
 			{
 				dbStatsEntry->counters[statIdx] +=
-					dbExitedBackendStatsEntry->counters[statIdx];
+					dbSavedBackendStatsEntry->counters[statIdx];
 			}
 
 			dbStatsEntry->resetTimestamp =
-				dbExitedBackendStatsEntry->resetTimestamp;
+				dbSavedBackendStatsEntry->resetTimestamp;
 
-			SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
+			SpinLockRelease(&dbSavedBackendStatsEntry->mutex);
 		}
 	}
 
-	LWLockRelease(*SharedExitedBackendStatsHashLock);
+	LWLockRelease(*SharedSavedBackendStatsHashLock);
 }
 
 
@@ -799,8 +796,8 @@ StoreDatabaseStatsIntoTupStore(HTAB *databaseStats, Tuplestorestate *tupleStore,
 
 
 /*
- * ResetStatCountersForActiveBackends resets the stat counters for the
- * given database id for all the active backends.
+ * ResetStatsForActiveBackends resets the stat counters for the given
+ * database id for all the active backends.
  *
  * Only active backends whose PGPROC->databaseId is the same as the given
  * database id will be considered, if any.
@@ -808,7 +805,7 @@ StoreDatabaseStatsIntoTupStore(HTAB *databaseStats, Tuplestorestate *tupleStore,
  * Returns true if any active backend was found.
  */
 static bool
-ResetStatCountersForActiveBackends(Oid databaseId)
+ResetStatsForActiveBackends(Oid databaseId)
 {
 	bool foundAny = false;
 
@@ -859,39 +856,36 @@ ResetStatCountersForActiveBackends(Oid databaseId)
 
 
 /*
- * ResetStatCountersForExitedBackends resets the stat counters for the
- * given database id for all the exited backends.
+ * ResetSavedBackendStats resets the saved stat counters for the given
+ * database id and sets the resetTimestamp for it to the current timestamp.
  *
- * Only the entry that belongs to given database will be considered, if
- * there is such an entry.
- *
- * If force is true, then we make sure that we have an entry for the
- * given database id in the exited backend stats hash table.
+ * If force is true, then we first make sure that we have an entry for
+ * the given database id in the saved backend stats hash table.
  */
 static void
-ResetStatCountersForExitedBackends(Oid databaseId, bool force)
+ResetSavedBackendStats(Oid databaseId, bool force)
 {
-	LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);
+	LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_SHARED);
 
-	ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry =
-		(ExitedBackendStatsHashEntry *) hash_search(
-			SharedExitedBackendStatsHash,
+	SavedBackendStatsHashEntry *dbSavedBackendStatsEntry =
+		(SavedBackendStatsHashEntry *) hash_search(
+			SharedSavedBackendStatsHash,
 			(void *) &databaseId,
 			HASH_FIND,
 			NULL);
 
-	if (!dbExitedBackendStatsEntry && force)
+	if (!dbSavedBackendStatsEntry && force)
 	{
 		/* promote the lock to exclusive to insert the new entry for this database */
-		LWLockRelease(*SharedExitedBackendStatsHashLock);
-		LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_EXCLUSIVE);
+		LWLockRelease(*SharedSavedBackendStatsHashLock);
+		LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_EXCLUSIVE);
 
-		dbExitedBackendStatsEntry =
-			ExitedBackendStatsHashEntryAllocIfNotExists(databaseId);
+		dbSavedBackendStatsEntry =
+			SavedBackendStatsHashEntryAllocIfNotExists(databaseId);
 
-		LWLockRelease(*SharedExitedBackendStatsHashLock);
+		LWLockRelease(*SharedSavedBackendStatsHashLock);
 
-		if (!dbExitedBackendStatsEntry)
+		if (!dbSavedBackendStatsEntry)
 		{
 			/*
 			 * Couldn't allocate a new hash entry because we're out of
@@ -899,31 +893,36 @@ ResetStatCountersForExitedBackends(Oid databaseId, bool force)
 			 */
 			ereport(ERROR,
 					(errcode(ERRCODE_OUT_OF_MEMORY),
-					 errmsg("failed to allocate exited backend stats hash entry")));
+					 errmsg("failed to allocate saved backend stats hash entry")));
 			return;
 		}
 
 		/* re-acquire the shared lock */
-		LWLockAcquire(*SharedExitedBackendStatsHashLock, LW_SHARED);
+		LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_SHARED);
 	}
 
-	if (dbExitedBackendStatsEntry)
+	/*
+	 * Actually reset the stat counters for the exited backends and set
+	 * the resetTimestamp to the current timestamp if we already had
+	 * an entry for it or if we just created it.
+	 */
+	if (dbSavedBackendStatsEntry)
 	{
-		SpinLockAcquire(&dbExitedBackendStatsEntry->mutex);
+		SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
-		memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
-		dbExitedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
+		memset(dbSavedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+		dbSavedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
 
-		SpinLockRelease(&dbExitedBackendStatsEntry->mutex);
+		SpinLockRelease(&dbSavedBackendStatsEntry->mutex);
 	}
 
-	LWLockRelease(*SharedExitedBackendStatsHashLock);
+	LWLockRelease(*SharedSavedBackendStatsHashLock);
 }
 
 
 /*
- * ExitedBackendStatsHashEntryAllocIfNotExists allocates a new entry in the
- * exited backend stats hash table for the given database id if it doesn't
+ * SavedBackendStatsHashEntryAllocIfNotExists allocates a new entry in the
+ * saved backend stats hash table for the given database id if it doesn't
  * already exist.
  *
  * Assumes that the caller has exclusive access to the hash table since it
@@ -932,17 +931,17 @@ ResetStatCountersForExitedBackends(Oid databaseId, bool force)
  * Returns NULL if the entry didn't exist and couldn't be allocated since
  * we're out of (shared) memory.
  */
-static ExitedBackendStatsHashEntry *
-ExitedBackendStatsHashEntryAllocIfNotExists(Oid databaseId)
+static SavedBackendStatsHashEntry *
+SavedBackendStatsHashEntryAllocIfNotExists(Oid databaseId)
 {
 	bool found = false;
-	ExitedBackendStatsHashEntry *dbExitedBackendStatsEntry =
-		(ExitedBackendStatsHashEntry *) hash_search(SharedExitedBackendStatsHash,
-													(void *) &databaseId,
-													HASH_ENTER_NULL,
-													&found);
+	SavedBackendStatsHashEntry *dbSavedBackendStatsEntry =
+		(SavedBackendStatsHashEntry *) hash_search(SharedSavedBackendStatsHash,
+												   (void *) &databaseId,
+												   HASH_ENTER_NULL,
+												   &found);
 
-	if (!dbExitedBackendStatsEntry)
+	if (!dbSavedBackendStatsEntry)
 	{
 		/*
 		 * As we provided HASH_ENTER_NULL, returning NULL means OOM.
@@ -953,12 +952,12 @@ ExitedBackendStatsHashEntryAllocIfNotExists(Oid databaseId)
 
 	if (!found)
 	{
-		memset(dbExitedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+		memset(dbSavedBackendStatsEntry->counters, 0, sizeof(StatCounters));
 
-		dbExitedBackendStatsEntry->resetTimestamp = 0;
+		dbSavedBackendStatsEntry->resetTimestamp = 0;
 
-		SpinLockInit(&dbExitedBackendStatsEntry->mutex);
+		SpinLockInit(&dbSavedBackendStatsEntry->mutex);
 	}
 
-	return dbExitedBackendStatsEntry;
+	return dbSavedBackendStatsEntry;
 }

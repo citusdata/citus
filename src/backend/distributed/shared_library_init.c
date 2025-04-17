@@ -188,10 +188,10 @@ static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
-static void RegisterSaveBackendStatsIntoExitedBackendStatsHash(void);
+static void RegisterSaveBackendStatsIntoSavedBackendStatsHash(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
-static void SaveBackendStatsIntoExitedBackendStatsHashAtExit(int code, Datum arg);
+static void SaveBackendStatsIntoSavedBackendStatsHashAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
@@ -621,7 +621,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 	RequestAddinShmemSpace(StatCountersShmemSize());
-	RequestNamedLWLockTranche(EXITED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
+	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
 }
 
 
@@ -794,7 +794,7 @@ StartupCitusBackend(void)
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
-	RegisterSaveBackendStatsIntoExitedBackendStatsHash();
+	RegisterSaveBackendStatsIntoSavedBackendStatsHash();
 
 	FinishedStartupCitusBackend = true;
 }
@@ -834,16 +834,17 @@ RegisterConnectionCleanup(void)
 
 
 /*
- * RegisterSaveBackendStatsIntoExitedBackendStatsHash registers the function
- * that saves the backend stats into the exited backend stats hash.
+ * RegisterSaveBackendStatsIntoSavedBackendStatsHash registers the function
+ * that saves the backend stats for the exited backends into the saved backend
+ * stats hash.
  */
 static void
-RegisterSaveBackendStatsIntoExitedBackendStatsHash(void)
+RegisterSaveBackendStatsIntoSavedBackendStatsHash(void)
 {
 	static bool registeredSaveBackendStats = false;
 	if (registeredSaveBackendStats == false)
 	{
-		before_shmem_exit(SaveBackendStatsIntoExitedBackendStatsHashAtExit, 0);
+		before_shmem_exit(SaveBackendStatsIntoSavedBackendStatsHashAtExit, 0);
 
 		registeredSaveBackendStats = true;
 	}
@@ -891,12 +892,12 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 
 
 /*
- * SaveBackendStatsIntoExitedBackendStatsHashAtExit is called before_shmem_exit()
- * of the backend for the purposes of saving the backend stats into the
- * exited backend stats hash.
+ * SaveBackendStatsIntoSavedBackendStatsHashAtExit is called before_shmem_exit()
+ * of the backend for the purposes of saving the backend stats for the exited
+ * backends into the saved backend stats hash.
  */
 static void
-SaveBackendStatsIntoExitedBackendStatsHashAtExit(int code, Datum arg)
+SaveBackendStatsIntoSavedBackendStatsHashAtExit(int code, Datum arg)
 {
 	if (code)
 	{
@@ -904,7 +905,7 @@ SaveBackendStatsIntoExitedBackendStatsHashAtExit(int code, Datum arg)
 		return;
 	}
 
-	SaveBackendStatsIntoExitedBackendStatsHash();
+	SaveBackendStatsIntoSavedBackendStatsHash();
 }
 
 

@@ -12,9 +12,9 @@
 #define STAT_COUNTERS_H
 
 
-/* exited backend stats - constants */
-#define EXITED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME \
-	"citus_stat_counters exited backend stats hash"
+/* saved backend stats - constants */
+#define SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME \
+	"citus_stat_counters saved backend stats hash"
 
 /* default value for the GUC variable */
 #define ENABLE_STAT_COUNTERS_DEFAULT false
@@ -53,6 +53,6 @@ extern void IncrementStatCounterForMyDb(int statId);
  * Exported to define a before_shmem_exit() callback that saves
  * the stat counters for exited backends into the shared memory.
  */
-extern void SaveBackendStatsIntoExitedBackendStatsHash(void);
+extern void SaveBackendStatsIntoSavedBackendStatsHash(void);
 
 #endif /* STAT_COUNTERS_H */
