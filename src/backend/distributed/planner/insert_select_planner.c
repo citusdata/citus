@@ -128,6 +128,9 @@ DecrementInsertLevelReferences(Query *subquery,
 							   int offset, /* typically -1 */
 							   List *topLevelCteList);
 
+static bool
+CteNameExists(List *cteList, const char *ctename);
+
 
 /* depth of current insert/select planner. */
 static int insertSelectPlannerLevel = 0;
@@ -554,26 +557,46 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 
 	if (list_length(insertSelectQuery->cteList) > 0)
 	{
-		/* we physically unify ctes from top-level into subquery,
-		 * then want references in the subquery from ctelevelsup=1 => 0
-		 */
-		elog(DEBUG1, "Unifying top-level cteList with subquery cteList");
+		List       *topCopy = copyObject(insertSelectQuery->cteList);
+		ListCell   *lc;
+	
+		elog(DEBUG1, "Unifying top‑level CTEs into subquery");
+	
+		/* append only the *new* ones */
+		foreach(lc, topCopy)
+		{
+			CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+			if (!CteNameExists(selectRte->subquery->cteList, cte->ctename))
+				selectRte->subquery->cteList =
+					lappend(selectRte->subquery->cteList, cte);
+		}
 
-		List *topLevelCteListCopy = copyObject(insertSelectQuery->cteList);
-
-		selectRte->subquery->cteList =
-			list_concat(selectRte->subquery->cteList,
-						copyObject(insertSelectQuery->cteList));
 		insertSelectQuery->cteList = NIL;
 
 		/* Suppose we physically appended the top-level cteList into the subquery, 
    		so references are at ctelevelsup=1, 2, etc. We want them all to shift by -1. */
 
-		DecrementInsertLevelReferences(selectRte->subquery, -1, topLevelCteListCopy /* for ctename check */);
+		DecrementInsertLevelReferences(selectRte->subquery, -1, topCopy  /* for ctename check */);
 
 		elog(DEBUG1, "Done shifting ctelevelsup X->X-1 for subquery references");
 	}
 }
+
+
+static bool
+CteNameExists(List *cteList, const char *ctename)
+{
+    ListCell *lc;
+    foreach(lc, cteList)
+    {
+        CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+        if (strcmp(cte->ctename, ctename) == 0)
+            return true;
+    }
+    return false;
+}
+
+
 
 /*
  * inline_cte_walker
@@ -630,32 +653,13 @@ inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context)
 			 */
 			if (rte->ctelevelsup == (context->levelsup + 1))
 			{
-				/* optionally verify ctename is in topLevelCteList */
-				bool foundName = false;
-				if (context->topLevelCteList != NULL)
+				if (context->topLevelCteList == NULL ||
+					CteNameExists(context->topLevelCteList, rte->ctename))
 				{
-					ListCell *lc = NULL;
-					foreach(lc, context->topLevelCteList)
-					{
-						CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
-						if (strcmp(cte->ctename, rte->ctename) == 0)
-						{
-							foundName = true;
-							break;
-						}
-					}
-				}
-				else
-				{
-					foundName = true; /* if we don't need a name check */
-				}
-
-				if (foundName)
-				{
-					int oldSup = rte->ctelevelsup;
-					rte->ctelevelsup += context->offset; /* e.g. -1 => (k+1) → k */
-					elog(DEBUG2, "Shifting ctelevelsup for ctename=%s from %d to %d",
-						 rte->ctename, oldSup, rte->ctelevelsup);
+					int old = rte->ctelevelsup;
+					rte->ctelevelsup += context->offset;       /* usually ‑1 */
+					elog(DEBUG2, "Shifted ctelevelsup for %s from %d to %d",
+						 rte->ctename, old, rte->ctelevelsup);
 				}
 				else
 				{
@@ -664,6 +668,10 @@ inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context)
 				}
 			}
 		}
+
+		/* look into sub‑queries held inside an RTE */
+		if (rte->rtekind == RTE_SUBQUERY && rte->subquery)
+			inline_cte_walker((Node *) rte->subquery, context);
 
 		return false;
 	}
