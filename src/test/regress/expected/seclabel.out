@@ -1,8 +1,10 @@
 --
 -- SECLABEL
 --
--- Test suite for SECURITY LABEL ON ROLE statements
+-- Test suite for SECURITY LABEL statements:
+-- SECURITY LABEL ON <object> IS <definition>
 --
+-- Citus can propagate ROLE, TABLE and COLUMN objects
 -- first we remove one of the worker nodes to be able to test
 -- citus_add_node later
 SELECT citus_remove_node('localhost', :worker_2_port);
@@ -28,7 +30,8 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORD
 (2 rows)
 
 RESET citus.enable_metadata_sync;
--- check that we only support propagating for roles
+-- check that we only support propagating for roles, tables and columns;
+-- support for VIEW and FUNCTION is not there (yet)
 SET citus.shard_replication_factor to 1;
 -- distributed table
 CREATE TABLE a (a int);
@@ -43,22 +46,12 @@ CREATE VIEW v_dist AS SELECT * FROM a;
 -- distributed function
 CREATE FUNCTION notice(text) RETURNS void LANGUAGE plpgsql AS $$
     BEGIN RAISE NOTICE '%', $1; END; $$;
-SECURITY LABEL ON TABLE a IS 'citus_classified';
-NOTICE:  not propagating SECURITY LABEL commands whose object type is not role
-HINT:  Connect to worker nodes directly to manually run the same SECURITY LABEL command.
 SECURITY LABEL ON FUNCTION notice IS 'citus_unclassified';
-NOTICE:  not propagating SECURITY LABEL commands whose object type is not role
+NOTICE:  not propagating SECURITY LABEL commands whose object type is not role or table or table column
 HINT:  Connect to worker nodes directly to manually run the same SECURITY LABEL command.
 SECURITY LABEL ON VIEW v_dist IS 'citus_classified';
-NOTICE:  not propagating SECURITY LABEL commands whose object type is not role
+NOTICE:  not propagating SECURITY LABEL commands whose object type is not role or table or table column
 HINT:  Connect to worker nodes directly to manually run the same SECURITY LABEL command.
-SELECT node_type, result FROM get_citus_tests_label_provider_labels('a') ORDER BY node_type;
-  node_type  |                                            result
----------------------------------------------------------------------
- coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
- worker_1    |
-(2 rows)
-
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('notice(text)') ORDER BY node_type;
   node_type  |                                               result
 ---------------------------------------------------------------------
@@ -74,17 +67,9 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('v_dist') OR
 (2 rows)
 
 \c - - - :worker_1_port
-SECURITY LABEL ON TABLE a IS 'citus_classified';
 SECURITY LABEL ON FUNCTION notice IS 'citus_unclassified';
 SECURITY LABEL ON VIEW v_dist IS 'citus_classified';
 \c - - - :master_port
-SELECT node_type, result FROM get_citus_tests_label_provider_labels('a') ORDER BY node_type;
-  node_type  |                                            result
----------------------------------------------------------------------
- coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
- worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
-(2 rows)
-
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('notice(text)') ORDER BY node_type;
   node_type  |                                               result
 ---------------------------------------------------------------------
@@ -99,10 +84,8 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('v_dist') OR
  worker_1    | {"label": "citus_classified", "objtype": "view", "provider": "citus '!tests_label_provider"}
 (2 rows)
 
-DROP TABLE a CASCADE;
-NOTICE:  drop cascades to view v_dist
 DROP FUNCTION notice;
--- test that SECURITY LABEL statement is actually propagated for ROLES
+-- test that SECURITY LABEL statement is actually propagated for ROLES, TABLES and COLUMNS
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
 -- we have exactly one provider loaded, so we may not include the provider in the command
@@ -118,6 +101,41 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SECURITY LABEL for "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus_classified';
 NOTICE:  issuing SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus_classified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SECURITY LABEL ON TABLE a IS 'citus_classified';
+NOTICE:  issuing SECURITY LABEL ON TABLE a IS 'citus_classified'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SECURITY LABEL for "citus '!tests_label_provider" ON COLUMN a.a IS 'citus_classified';
+NOTICE:  issuing SECURITY LABEL FOR "citus '!tests_label_provider" ON COLUMN a.a IS 'citus_classified'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- ROLE, TABLE and COLUMN should be propagated to the worker
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a.a') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
 \c - - - :worker_1_port
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
@@ -139,6 +157,23 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORD
  worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (2 rows)
 
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a.a') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SECURITY LABEL for "citus '!tests_label_provider" ON COLUMN a.a IS 'citus ''!unclassified';
+NOTICE:  issuing SECURITY LABEL FOR "citus '!tests_label_provider" ON COLUMN a.a IS 'citus ''!unclassified'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a.a') ORDER BY node_type;
+  node_type  |                                               result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
 RESET citus.log_remote_commands;
 SECURITY LABEL for "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified';
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
@@ -150,19 +185,152 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') 
 
 \c - - - :master_port
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
-  node_type  |                                             result
+  node_type  |                                            result
 ---------------------------------------------------------------------
  coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
  worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (2 rows)
 
-SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') ORDER BY node_type;
-  node_type  |                                              result
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a') ORDER BY node_type;
+  node_type  |                                            result
 ---------------------------------------------------------------------
- coordinator | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
- worker_1    | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
 (2 rows)
 
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a.a') ORDER BY node_type;
+  node_type  |                                               result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SET citus.shard_replication_factor to 1;
+-- Distributed table with delimited identifiers
+CREATE TABLE "Dist T" ("col.1" int);
+SELECT create_distributed_table('"Dist T"', 'col.1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SECURITY LABEL ON TABLE "Dist T" IS 'citus_classified';
+SECURITY LABEL ON COLUMN "Dist T"."col.1" IS 'citus_classified';
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T"') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T".col.1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+-- Add and Drop column
+CREATE TABLE tddl (a1 int, b1 int, c1 int);
+SELECT create_distributed_table('tddl', 'c1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE tddl ADD COLUMN d1 varchar(128);
+-- Security label on tddl.d1 is propagated to all nodes
+SECURITY LABEL ON COLUMN tddl.d1 IS 'citus_classified';
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tddl.d1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+-- Drop column d1, security label should be removed from all nodes
+ALTER TABLE tddl DROP COLUMN d1;
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tddl.d1') ORDER BY node_type;
+  node_type  | result
+---------------------------------------------------------------------
+ coordinator |
+ worker_1    |
+(2 rows)
+
+-- Define security labels before distributed table creation
+CREATE TABLE tb (a1 int, b1 int, c1 int);
+SECURITY LABEL ON TABLE tb IS 'citus_classified';
+SECURITY LABEL ON COLUMN tb.a1 IS 'citus_classified';
+SELECT create_distributed_table('tb', 'a1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tb') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tb.a1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+-- Similar test with reference table; security labels should be propagated to the worker.
+CREATE TABLE tref (a1 int, b1 int, c1 int);
+SECURITY LABEL ON TABLE tref IS 'citus_classified';
+SECURITY LABEL ON COLUMN tref.b1 IS 'citus_classified';
+SELECT create_reference_table('tref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tref') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tref.b1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+-- Distributed table with delimited identifiers - 2
+CREATE TABLE "Dist T2" ("col one" int);
+SELECT create_distributed_table('"Dist T2"', 'col one');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SECURITY LABEL ON TABLE "Dist T2" IS 'citus_classified';
+SECURITY LABEL ON COLUMN "Dist T2"."col one" IS 'citus_classified';
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T2"') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T2".col one') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(2 rows)
+
+-- TODO: repeat the table and column tests using an explicit schema
+-- eg CREATE SCHEMA label_test; SET search_path TO label_test; -- repeat tests
 -- add a new node and check that it also propagates the SECURITY LABEL statement to the new node
 SET citus.log_remote_commands TO on;
 SET citus.grep_remote_commands = '%SECURITY LABEL%';
@@ -171,13 +339,23 @@ NOTICE:  issuing SELECT worker_create_or_alter_role('user1', 'CREATE ROLE user1 
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_create_or_alter_role('user 2', 'CREATE ROLE "user 2" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL', 'ALTER ROLE "user 2" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT -1 PASSWORD NULL');SECURITY LABEL FOR "citus '!tests_label_provider" ON ROLE "user 2" IS 'citus ''!unclassified'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.worker_drop_sequence_dependency('public.a');;DROP TABLE IF EXISTS public.a CASCADE;CREATE TABLE public.a (a integer) USING heap;ALTER TABLE public.a OWNER TO postgres;SECURITY LABEL FOR "citus '!tests_label_provider" ON TABLE public.a IS 'citus_classified';SECURITY LABEL FOR "citus '!tests_label_provider" ON COLUMN public.a.a IS 'citus ''!unclassified';SELECT worker_create_truncate_trigger('public.a')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.worker_drop_sequence_dependency('public."Dist T"');;DROP TABLE IF EXISTS public."Dist T" CASCADE;CREATE TABLE public."Dist T" ("col.1" integer) USING heap;ALTER TABLE public."Dist T" OWNER TO postgres;SECURITY LABEL FOR "citus '!tests_label_provider" ON TABLE public."Dist T" IS 'citus_classified';SECURITY LABEL FOR "citus '!tests_label_provider" ON COLUMN public."Dist T"."col.1" IS 'citus_classified';SELECT worker_create_truncate_trigger('public."Dist T"')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.worker_drop_sequence_dependency('public.tb');;DROP TABLE IF EXISTS public.tb CASCADE;CREATE TABLE public.tb (a1 integer, b1 integer, c1 integer) USING heap;ALTER TABLE public.tb OWNER TO postgres;SECURITY LABEL FOR "citus '!tests_label_provider" ON TABLE public.tb IS 'citus_classified';SECURITY LABEL FOR "citus '!tests_label_provider" ON COLUMN public.tb.a1 IS 'citus_classified';SELECT worker_create_truncate_trigger('public.tb')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.worker_drop_sequence_dependency('public.tref');;DROP TABLE IF EXISTS public.tref CASCADE;CREATE TABLE public.tref (a1 integer, b1 integer, c1 integer) USING heap;ALTER TABLE public.tref OWNER TO postgres;SECURITY LABEL FOR "citus '!tests_label_provider" ON TABLE public.tref IS 'citus_classified';SECURITY LABEL FOR "citus '!tests_label_provider" ON COLUMN public.tref.b1 IS 'citus_classified';SELECT worker_create_truncate_trigger('public.tref')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.worker_drop_sequence_dependency('public."Dist T2"');;DROP TABLE IF EXISTS public."Dist T2" CASCADE;CREATE TABLE public."Dist T2" ("col one" integer) USING heap;ALTER TABLE public."Dist T2" OWNER TO postgres;SECURITY LABEL FOR "citus '!tests_label_provider" ON TABLE public."Dist T2" IS 'citus_classified';SECURITY LABEL FOR "citus '!tests_label_provider" ON COLUMN public."Dist T2"."col one" IS 'citus_classified';SELECT worker_create_truncate_trigger('public."Dist T2"')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
-  node_type  |                                             result
+  node_type  |                                            result
 ---------------------------------------------------------------------
  coordinator | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
  worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
@@ -192,9 +370,79 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('"user 2"') 
  worker_2    | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (3 rows)
 
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a.a') ORDER BY node_type;
+  node_type  |                                               result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T"') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T".col.1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T2"') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('"Dist T2"."col one"') ORDER BY node_type;
+  node_type  | result
+---------------------------------------------------------------------
+ coordinator |
+ worker_1    |
+ worker_2    |
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tb') ORDER BY node_type;
+  node_type  |                                            result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('tb.a1') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
 -- disable the GUC and check that the command is not propagated
 SET citus.enable_alter_role_propagation TO off;
 SECURITY LABEL ON ROLE user1 IS 'citus_unclassified';
+NOTICE:  not propagating SECURITY LABEL commands to other nodes
+HINT:  Connect to other nodes directly to manually assign necessary labels.
+SECURITY LABEL ON TABLE a IS 'citus_unclassified';
+NOTICE:  not propagating SECURITY LABEL commands to other nodes
+HINT:  Connect to other nodes directly to manually assign necessary labels.
+SECURITY LABEL ON COLUMN a.a IS 'citus_classified';
 NOTICE:  not propagating SECURITY LABEL commands to other nodes
 HINT:  Connect to other nodes directly to manually assign necessary labels.
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
@@ -203,6 +451,22 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORD
  coordinator | {"label": "citus_unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
  worker_1    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
  worker_2    | {"label": "citus_classified", "objtype": "role", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a') ORDER BY node_type;
+  node_type  |                                             result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a.a') ORDER BY node_type;
+  node_type  |                                               result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
 (3 rows)
 
 \c - - - :worker_2_port
@@ -212,6 +476,12 @@ SET citus.enable_alter_role_propagation TO off;
 SECURITY LABEL ON ROLE user1 IS 'citus ''!unclassified';
 NOTICE:  not propagating SECURITY LABEL commands to other nodes
 HINT:  Connect to other nodes directly to manually assign necessary labels.
+SECURITY LABEL ON TABLE a IS 'citus ''!unclassified';
+NOTICE:  not propagating SECURITY LABEL commands to other nodes
+HINT:  Connect to other nodes directly to manually assign necessary labels.
+SECURITY LABEL ON COLUMN a.a IS 'citus_unclassified';
+NOTICE:  not propagating SECURITY LABEL commands to other nodes
+HINT:  Connect to other nodes directly to manually assign necessary labels.
 SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORDER BY node_type;
   node_type  |                                              result
 ---------------------------------------------------------------------
@@ -220,7 +490,31 @@ SELECT node_type, result FROM get_citus_tests_label_provider_labels('user1') ORD
  worker_2    | {"label": "citus '!unclassified", "objtype": "role", "provider": "citus '!tests_label_provider"}
 (3 rows)
 
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a') ORDER BY node_type;
+  node_type  |                                              result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_unclassified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus_classified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus '!unclassified", "objtype": "table", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
+SELECT node_type, result FROM get_citus_tests_label_provider_labels('a.a') ORDER BY node_type;
+  node_type  |                                               result
+---------------------------------------------------------------------
+ coordinator | {"label": "citus_classified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_1    | {"label": "citus '!unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+ worker_2    | {"label": "citus_unclassified", "objtype": "column", "provider": "citus '!tests_label_provider"}
+(3 rows)
+
 RESET citus.enable_alter_role_propagation;
+\c - - - :master_port
 -- cleanup
+DROP TABLE a CASCADE;
+NOTICE:  drop cascades to view v_dist
+DROP TABLE "Dist T" CASCADE;
+DROP TABLE "Dist T2" CASCADE;
+DROP TABLE tb CASCADE;
+DROP TABLE tref CASCADE;
+DROP TABLE tddl CASCADE;
 RESET citus.log_remote_commands;
 DROP ROLE user1, "user 2";
