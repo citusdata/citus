@@ -108,6 +108,29 @@ static void ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 							 Form_pg_attribute attr, int targetEntryIndex,
 							 List **projectedEntries, List **nonProjectedEntries);
 
+typedef struct ShiftReferencesWalkerContext
+{
+	/* current nesting depth, 0 for top-level query, increments each time we go one Query deeper */
+	int levelsup;
+
+	/* how much to shift ctelevelsup by if it matches levelsup+1 (typically -1) */
+	int offset;
+
+	/* optional: if we want to check ctename is in top-level list */
+	List *topLevelCteList;
+} ShiftReferencesWalkerContext;		 
+
+static bool
+inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context);
+
+static void
+DecrementInsertLevelReferences(Query *subquery, 
+							   int offset, /* typically -1 */
+							   List *topLevelCteList);
+
+static bool
+CteNameExists(List *cteList, const char *ctename);
+
 
 /* depth of current insert/select planner. */
 static int insertSelectPlannerLevel = 0;
@@ -511,8 +534,6 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
-	bool isWrapped = false;
-
 	if (selectRte->subquery->setOperations != NULL)
 	{
 		/*
@@ -520,7 +541,6 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 		 * wrapping it in a subquery to have a single target list.
 		 */
 		selectRte->subquery = WrapSubquery(selectRte->subquery);
-		isWrapped = true;
 	}
 
 	/* this is required for correct deparsing of the query */
@@ -537,21 +557,148 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 
 	if (list_length(insertSelectQuery->cteList) > 0)
 	{
-		if (!isWrapped)
+		List       *topCopy = copyObject(insertSelectQuery->cteList);
+		ListCell   *lc;
+	
+		elog(DEBUG1, "Unifying top‑level CTEs into subquery");
+	
+		/* append only the *new* ones */
+		foreach(lc, topCopy)
 		{
-			/*
-			 * By wrapping the SELECT in a subquery, we can avoid adjusting
-			 * ctelevelsup in RTE's that point to the CTEs.
-			 */
-			selectRte->subquery = WrapSubquery(selectRte->subquery);
+			CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+			if (!CteNameExists(selectRte->subquery->cteList, cte->ctename))
+				selectRte->subquery->cteList =
+					lappend(selectRte->subquery->cteList, cte);
 		}
 
-		/* copy CTEs from the INSERT ... SELECT statement into outer SELECT */
-		selectRte->subquery->cteList = copyObject(insertSelectQuery->cteList);
-		selectRte->subquery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
 		insertSelectQuery->cteList = NIL;
+
+		/* Suppose we physically appended the top-level cteList into the subquery, 
+   		so references are at ctelevelsup=1, 2, etc. We want them all to shift by -1. */
+
+		DecrementInsertLevelReferences(selectRte->subquery, -1, topCopy  /* for ctename check */);
+
+		elog(DEBUG1, "Done shifting ctelevelsup X->X-1 for subquery references");
 	}
 }
+
+
+static bool
+CteNameExists(List *cteList, const char *ctename)
+{
+    ListCell *lc;
+    foreach(lc, cteList)
+    {
+        CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+        if (strcmp(cte->ctename, ctename) == 0)
+            return true;
+    }
+    return false;
+}
+
+
+
+/*
+ * inline_cte_walker
+ *
+ *   If node is a Query, we increase context->levelsup by 1,
+ *   recursively walk the Query, then restore it.
+ *
+ *   If node is a RangeTblEntry with RTE_CTE and ctelevelsup == (levelsup + 1),
+ *   we do ctelevelsup += offset (e.g. -1 => so k+1 → k).
+ *
+ *   We do expression_tree_walker for fallback on expressions.
+ */
+static bool
+inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context)
+{
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		/* descend one query level deeper */
+		context->levelsup++;
+
+		/*
+		 * Use QTW_EXAMINE_RTES_AFTER or QTW_EXAMINE_RTES_BEFORE – your snippet
+		 * used AFTER, so let's keep that. This means we'll handle the rtable
+		 * after the rest, which is okay. 
+		 *
+		 * Or we can do QTW_EXAMINE_RTES_BEFORE so we see RangeTblEntry first.
+		 * The key is being consistent with your scenario.
+		 */
+		query_tree_walker(query,
+						  inline_cte_walker,
+						  context,
+						  QTW_EXAMINE_RTES_AFTER);
+
+		context->levelsup--;
+
+		return false;
+	}
+	else if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
+
+		if (rte->rtekind == RTE_CTE)
+		{
+			/*
+			 * If RTE_CTE's ctelevelsup == (current nesting level + 1),
+			 * we do ctelevelsup += offset. 
+			 * e.g. if offset=-1, and ctelevelsup= (levelsup + 1), 
+			 * that effectively does "k+1 → k".
+			 */
+			if (rte->ctelevelsup == (context->levelsup + 1))
+			{
+				if (context->topLevelCteList == NULL ||
+					CteNameExists(context->topLevelCteList, rte->ctename))
+				{
+					int old = rte->ctelevelsup;
+					rte->ctelevelsup += context->offset;       /* usually ‑1 */
+					elog(DEBUG2, "Shifted ctelevelsup for %s from %d to %d",
+						 rte->ctename, old, rte->ctelevelsup);
+				}
+				else
+				{
+					elog(DEBUG2, "ctename=%s not found in top-level list, skipping shift",
+						 rte->ctename);
+				}
+			}
+		}
+
+		/* look into sub‑queries held inside an RTE */
+		if (rte->rtekind == RTE_SUBQUERY && rte->subquery)
+			inline_cte_walker((Node *) rte->subquery, context);
+
+		return false;
+	}
+
+	/* fallback for expressions, e.g. scanning function calls, sublinks, etc. */
+	return expression_tree_walker(node, inline_cte_walker, (void *) context);
+}
+
+
+static void
+DecrementInsertLevelReferences(Query *subquery, 
+							   int offset, /* typically -1 */
+							   List *topLevelCteList)
+{
+	ShiftReferencesWalkerContext ctx;
+	ctx.levelsup = 0;  /* so that top-level query => 0, subquery => 1, etc. */
+	ctx.offset = offset;
+	ctx.topLevelCteList = topLevelCteList;
+
+	query_tree_walker(subquery,
+					  inline_cte_walker,
+					  (void *) &ctx,
+					  QTW_EXAMINE_RTES_AFTER /* or BEFORE, but snippet used AFTER */);
+}
+
+
+
 
 
 /*
