@@ -633,7 +633,7 @@ inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context)
 		query_tree_walker(query,
 						  inline_cte_walker,
 						  context,
-						  QTW_EXAMINE_RTES_AFTER);
+						  QTW_EXAMINE_RTES_BEFORE);
 
 		context->levelsup--;
 
@@ -668,10 +668,6 @@ inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context)
 				}
 			}
 		}
-
-		/* look into sub‑queries held inside an RTE */
-		if (rte->rtekind == RTE_SUBQUERY && rte->subquery)
-			inline_cte_walker((Node *) rte->subquery, context);
 
 		return false;
 	}
