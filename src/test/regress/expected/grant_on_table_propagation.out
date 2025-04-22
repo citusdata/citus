@@ -902,8 +902,42 @@ SELECT id FROM grant_table_propagated_after;
     57638 | (grant_on_table.grant_table_propagated_after,id,{grant_user_0=r/postgres})
 (3 rows)
 
--- cleanup
-REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0;
+-- cleanup and test revoke
+SET citus.log_remote_commands TO on;
+set citus.grep_remote_commands = '%REVOKE%';
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 CASCADE;
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102017, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102018, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102019, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102020, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+-- cleanup and test revoke
+SET citus.log_remote_commands TO on;
+set citus.grep_remote_commands = '%REVOKE%';
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 RESTRICT;
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102017, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102018, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102019, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102020, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
 :verify_grant_table ;
  nodeport |             unnest
 ---------------------------------------------------------------------

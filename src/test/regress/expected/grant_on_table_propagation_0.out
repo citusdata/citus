@@ -100,7 +100,7 @@ ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -125,7 +125,7 @@ RESET ROLE;
 REVOKE SELECT (test_r) ON ref_table FROM grant_user_0;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -171,7 +171,7 @@ UPDATE dist_table SET test_w = 3, test_mix = 3;
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -217,7 +217,7 @@ RESET ROLE;
 REVOKE INSERT (id, test_a), UPDATE (test_w, test_mix) ON ref_table, dist_table FROM grant_user_0, grant_user_1;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -264,7 +264,7 @@ ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                                           unnest
+ nodeport |                                          unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -292,7 +292,7 @@ RESET ROLE;
 REVOKE SELECT (test_r, test_mix), DELETE ON ref_table FROM grant_user_0, grant_user_1;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -333,7 +333,7 @@ ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -361,7 +361,7 @@ RESET ROLE;
 REVOKE SELECT (ctid, xmin) ON ref_table FROM grant_user_0;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -427,7 +427,7 @@ ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -457,7 +457,7 @@ REVOKE ALL (id, test_mix) ON ref_table FROM grant_user_1;
 TRUNCATE ref_table;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -518,7 +518,7 @@ RESET ROLE;
 -- check on coordinator and workers
 -- we pay special attention to local_table privileges here:
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -559,7 +559,7 @@ REVOKE INSERT (test_mix) ON local_table FROM grant_user_0;
 REVOKE SELECT (test_r, test_mix) ON local_table, dist_table FROM grant_user_1;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -599,7 +599,7 @@ ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -631,7 +631,7 @@ HINT:  Connect to the coordinator and run it again.
 SET search_path TO grant_on_table;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -678,7 +678,7 @@ SELECT test_r, test_mix FROM ref_table;
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -709,7 +709,7 @@ REVOKE SELECT (test_r, test_mix) ON ref_table FROM grant_user_1;
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -737,7 +737,7 @@ RESET ROLE;
 REVOKE GRANT OPTION FOR SELECT (test_r, test_mix) ON ref_table FROM grant_user_0;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -765,7 +765,7 @@ REVOKE GRANT OPTION FOR SELECT (test_r, test_mix) ON ref_table FROM grant_user_0
 REVOKE SELECT (test_r, test_mix) ON ref_table FROM grant_user_0;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                 unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -902,8 +902,42 @@ SELECT id FROM grant_table_propagated_after;
     57638 | (grant_on_table.grant_table_propagated_after,id,{grant_user_0=r/postgres})
 (3 rows)
 
--- cleanup
-REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0;
+-- cleanup and test revoke
+SET citus.log_remote_commands TO on;
+set citus.grep_remote_commands = '%REVOKE%';
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 CASCADE;
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102017, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102018, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102019, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102020, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+-- cleanup and test revoke
+SET citus.log_remote_commands TO on;
+set citus.grep_remote_commands = '%REVOKE%';
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 RESTRICT;
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102017, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102018, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102019, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102020, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
 :verify_grant_table ;
  nodeport |             unnest
 ---------------------------------------------------------------------
