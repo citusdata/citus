@@ -2,14 +2,14 @@ SET search_path = 'pg_catalog';
 DROP VIEW IF EXISTS pg_catalog.citus_nodes;
 
 CREATE OR REPLACE VIEW citus.citus_nodes AS
-SELECT 
-    nodename, 
-    nodeport, 
-    CASE 
+SELECT
+    nodename,
+    nodeport,
+    CASE
         WHEN groupid = 0 THEN 'coordinator'
         ELSE 'worker'
-    END AS role, 
-    isactive AS active 
+    END AS role,
+    isactive AS active
 FROM pg_dist_node;
 
 ALTER VIEW citus.citus_nodes SET SCHEMA pg_catalog;
