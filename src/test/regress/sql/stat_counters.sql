@@ -62,18 +62,13 @@ SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_d
 SELECT stats_reset IS NOT NULL FROM citus_stat_counters WHERE name = current_database();
 
 -- multi_1_schedule has this test in an individual line, so there cannot be any other backends
--- -except Citus maintenance daemon- that can update the stat counters other than us. We also
--- know that Citus maintenance daemon cannot update query related stats.
+-- that can update the stat counters other than us.
 --
 -- So, no one could have incremented query related stats so far.
 SELECT query_execution_single_shard = 0, query_execution_multi_shard = 0 FROM citus_stat_counters;
 
 -- Even further, for the databases that don't have Citus extension installed,
 -- we should get 0 for other stats too.
---
--- For the databases that have Citus extension installed, we might or might not
--- get 0 for connection related stats, depending on whether the Citus maintenance
--- daemon has done any work so far, so we don't check them.
 SELECT connection_establishment_succeeded = 0,
        connection_establishment_failed = 0,
        connection_reused = 0
@@ -175,13 +170,16 @@ SET client_min_messages TO NOTICE;
 
 SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
 
--- no one could have incremented query related stats so far
-SELECT query_execution_single_shard = 0, query_execution_multi_shard = 0 FROM citus_stat_counters;
+-- No one could have incremented query related stats and connection_reused so far.
+SELECT query_execution_single_shard = 0, query_execution_multi_shard = 0, connection_reused = 0 FROM citus_stat_counters WHERE name = current_database();
 
 SET citus.enable_stat_counters TO true;
 
 SELECT * FROM stat_counters.dist_table WHERE a = 1;
 SELECT * FROM stat_counters.dist_table WHERE a = 1;
+
+-- first one establishes a connection, the second one reuses it
+SELECT connection_reused = 1 FROM citus_stat_counters WHERE name = current_database();
 
 SET citus.force_max_query_parallelization TO ON;
 SELECT * FROM stat_counters.dist_table;
@@ -515,6 +513,28 @@ CALL exec_query_and_check_query_counters($$
     $$,
     1, 1
 );
+
+-- safe to push-down
+CALL exec_query_and_check_query_counters($$
+    SELECT * FROM (SELECT * FROM dist_table UNION SELECT * FROM dist_table) as foo
+    $$,
+    0, 1
+);
+
+-- weird but not safe to pushdown because the set operation is NOT wrapped into a subquery.
+CALL exec_query_and_check_query_counters($$
+    SELECT * FROM dist_table UNION SELECT * FROM dist_table
+    $$,
+    1, 2
+);
+
+SET citus.local_table_join_policy TO "prefer-local";
+CALL exec_query_and_check_query_counters($$
+    SELECT * FROM dist_table, local_table WHERE dist_table.a = local_table.a
+    $$,
+    0, 1
+);
+RESET citus.local_table_join_policy;
 
 -- citus_stat_counters lists all the databases that currently exist,
 -- so we should get 5 rows here.

@@ -2812,21 +2812,21 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 				logLevel = ERROR;
 			}
 
-			ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-							   errmsg("could not establish any connections to the node "
-									  "%s:%d after %u ms", workerPool->nodeName,
-									  workerPool->nodePort,
-									  NodeConnectionTimeout)));
-
 			/*
 			 * We hit the connection timeout. In that case, we should not let the
 			 * connection establishment to continue because the execution logic
 			 * pretends that failed sessions are not going to be used anymore.
 			 *
 			 * That's why we mark the connection as timed out to trigger the state
-			 * changes in the executor.
+			 * changes in the executor, if we don't throw an error below.
 			 */
 			MarkEstablishingSessionsTimedOut(workerPool);
+
+			ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+							   errmsg("could not establish any connections to the node "
+									  "%s:%d after %u ms", workerPool->nodeName,
+									  workerPool->nodePort,
+									  NodeConnectionTimeout)));
 		}
 		else
 		{
@@ -2854,6 +2854,7 @@ MarkEstablishingSessionsTimedOut(WorkerPool *workerPool)
 			connection->connectionState == MULTI_CONNECTION_INITIAL)
 		{
 			connection->connectionState = MULTI_CONNECTION_TIMED_OUT;
+			IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 		}
 	}
 }
@@ -3011,9 +3012,12 @@ ConnectionStateMachine(WorkerSession *session)
 				 * the state machines might have already progressed and used
 				 * new pools/sessions instead. That's why we terminate the
 				 * connection, clear any state associated with it.
+				 *
+				 * Note that here we don't increment the failed connection
+				 * stat counter because MarkEstablishingSessionsTimedOut()
+				 * already did that.
 				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
-				IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				break;
 			}
 

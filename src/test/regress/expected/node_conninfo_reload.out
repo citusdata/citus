@@ -48,6 +48,43 @@ show citus.node_conninfo;
 -- Should give a connection error because of bad sslmode
 select count(*) from test where a = 0;
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+SELECT (citus_stat_counters(oid)).connection_establishment_failed AS old_connection_establishment_failed
+FROM pg_database WHERE datname = current_database() \gset
+SET citus.enable_stat_counters TO true;
+select count(*) from test;
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+RESET citus.enable_stat_counters;
+-- make sure that we properly updated the connection_establishment_failed counter
+SELECT (citus_stat_counters(oid)).connection_establishment_failed - :old_connection_establishment_failed > 0
+FROM pg_database WHERE datname = current_database();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT (citus_stat_counters(oid)).connection_establishment_failed AS old_connection_establishment_failed
+FROM pg_database WHERE datname = current_database() \gset
+-- Test a function that tries to establish parallel node connections.
+SET citus.enable_stat_counters TO true;
+-- we don't care about the result, hence make it always return true
+SELECT COUNT(*) > -1 FROM get_global_active_transactions();
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+WARNING:  connection to the remote node postgres@localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+RESET citus.enable_stat_counters;
+-- make sure that we properly updated the connection_establishment_failed counter
+SELECT (citus_stat_counters(oid)).connection_establishment_failed - :old_connection_establishment_failed = 2
+FROM pg_database WHERE datname = current_database();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();

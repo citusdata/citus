@@ -1001,6 +1001,14 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 		{
 			waitCount++;
 		}
+		else if (connectionState->phase == MULTI_CONNECTION_PHASE_ERROR)
+		{
+			/*
+			 * Here we count the connections establishments that failed and that
+			 * we won't wait anymore.
+			 */
+			IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+		}
 	}
 
 	/* prepare space for socket events */

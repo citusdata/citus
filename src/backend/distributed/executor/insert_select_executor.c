@@ -119,6 +119,13 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 
 			if (list_length(distSelectTaskList) <= 1)
 			{
+				/*
+				 * Probably we will never get here for a repartitioned
+				 * INSERT..SELECT because when the source is a single shard
+				 * table, we should most probably choose to use
+				 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
+				 * here.
+				 */
 				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 			}
 			else
