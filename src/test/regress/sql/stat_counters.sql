@@ -38,9 +38,8 @@ SET citus.enable_stat_counters TO false;
 SELECT citus_stat_counters(null);
 SELECT citus_stat_counters_reset(null);
 
--- citus_stat_counters lists all the databases that currently exist,
--- so we should get 5 rows here.
-SELECT COUNT(*) = 5 FROM citus_stat_counters;
+-- citus_stat_counters lists all the databases that currently exist
+SELECT (SELECT COUNT(*) FROM citus_stat_counters) = (SELECT COUNT(*) FROM pg_database);
 
 -- Verify that providing an oid that doesn't correspond to any database
 -- returns an empty set. We know that "SELECT MAX(oid)+1 FROM pg_database"
@@ -245,6 +244,113 @@ SELECT citus_add_local_table_to_metadata('citus_local');
 
 GRANT ALL ON ALL TABLES IN SCHEMA stat_counters TO stat_counters_test_user;
 
+-- test copy while we're superuser
+-- cannot call copy via exec_query_and_check_query_counters
+
+SET citus.enable_stat_counters TO true;
+
+SELECT query_execution_single_shard AS old_query_execution_single_shard,
+       query_execution_multi_shard AS old_query_execution_multi_shard
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q \gset
+
+copy dist_table(a) from program 'seq 1'; -- single shard
+
+SELECT query_execution_single_shard - :old_query_execution_single_shard AS query_execution_single_shard_diff,
+       query_execution_multi_shard - :old_query_execution_multi_shard AS query_execution_multi_shard_diff
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q;
+
+SELECT query_execution_single_shard AS old_query_execution_single_shard,
+       query_execution_multi_shard AS old_query_execution_multi_shard
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q \gset
+
+copy dist_table(a) from program 'seq 2'; -- multi-shard
+
+SELECT query_execution_single_shard - :old_query_execution_single_shard AS query_execution_single_shard_diff,
+       query_execution_multi_shard - :old_query_execution_multi_shard AS query_execution_multi_shard_diff
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q;
+
+-- load some data
+insert into dist_table (a, b) select i, i from generate_series(1, 2) as i;
+
+SELECT query_execution_single_shard AS old_query_execution_single_shard,
+       query_execution_multi_shard AS old_query_execution_multi_shard
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q \gset
+
+copy dist_table to stdout;
+
+SELECT query_execution_single_shard - :old_query_execution_single_shard AS query_execution_single_shard_diff,
+       query_execution_multi_shard - :old_query_execution_multi_shard AS query_execution_multi_shard_diff
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q;
+
+SELECT query_execution_single_shard AS old_query_execution_single_shard,
+       query_execution_multi_shard AS old_query_execution_multi_shard
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q \gset
+
+copy (select * from dist_table join citus_local on dist_table.a = citus_local.a) to stdout;
+
+SELECT query_execution_single_shard - :old_query_execution_single_shard AS query_execution_single_shard_diff,
+       query_execution_multi_shard - :old_query_execution_multi_shard AS query_execution_multi_shard_diff
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q;
+
+SELECT query_execution_single_shard AS old_query_execution_single_shard,
+       query_execution_multi_shard AS old_query_execution_multi_shard
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q \gset
+
+copy dist_table to :'temp_dir''stat_counters_dist_table_dump';
+
+SELECT query_execution_single_shard - :old_query_execution_single_shard AS query_execution_single_shard_diff,
+       query_execution_multi_shard - :old_query_execution_multi_shard AS query_execution_multi_shard_diff
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q;
+
+SELECT query_execution_single_shard AS old_query_execution_single_shard,
+       query_execution_multi_shard AS old_query_execution_multi_shard
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q \gset
+
+copy dist_table from :'temp_dir''stat_counters_dist_table_dump';
+
+SELECT query_execution_single_shard - :old_query_execution_single_shard AS query_execution_single_shard_diff,
+       query_execution_multi_shard - :old_query_execution_multi_shard AS query_execution_multi_shard_diff
+FROM (
+    SELECT (citus_stat_counters(oid)).*
+    FROM pg_database WHERE datname = current_database()
+) q;
+
+-- empty the table before rest of the tests
+truncate dist_table;
+
 \c stat_counters_test_db postgres - :master_port
 
 -- reset from another database as superuser
@@ -308,6 +414,25 @@ CALL exec_query_and_check_query_counters($$
     0, 1
 );
 
+-- same with explain
+--
+-- Explain without analyze should never increment the counters.
+-- This also applies to all such tests in this file.
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN
+    SELECT * FROM dist_table JOIN dist_table_1 ON dist_table.a = dist_table_1.a
+    $$,
+    0, 0
+);
+
+-- same with explain analyze
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
+    SELECT * FROM dist_table JOIN dist_table_1 ON dist_table.a = dist_table_1.a
+    $$,
+    0, 1
+);
+
 SET citus.enable_repartition_joins TO true;
 -- A repartition join only increments query_execution_multi_shard once, although
 -- this doesn't feel so much ideal.
@@ -336,6 +461,24 @@ CALL exec_query_and_check_query_counters($$
     SELECT * FROM (SELECT * FROM dist_table OFFSET 0) q
     $$,
     1, 1
+);
+
+-- same with explain
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN
+    SELECT * FROM (SELECT * FROM dist_table OFFSET 0) q
+    $$,
+    0, 0
+);
+
+-- same with explain analyze
+--
+-- this time, query_execution_multi_shard is incremented twice because of #4212
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
+    SELECT * FROM (SELECT * FROM dist_table OFFSET 0) q
+    $$,
+    1, 2
 );
 
 CALL exec_query_and_check_query_counters($$
@@ -369,14 +512,14 @@ CALL exec_query_and_check_query_counters($$
     0, 1
 );
 
--- single-shard inserts
-
+-- multi-shard insert
 CALL exec_query_and_check_query_counters($$
     INSERT INTO dist_table (a, b) VALUES (-1, -1), (-2, -2), (-3, -3)
     $$,
-    1, 0
+    0, 1
 );
 
+-- single-shard insert
 CALL exec_query_and_check_query_counters($$
     INSERT INTO dist_table (a, b) VALUES (-4, -4)
     $$,
@@ -425,7 +568,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- Select query is multi-shard and the same is also true for the final insert
 -- but only if it doesn't prune to zero shards, which happens when the source
--- table is empty. So here, we both query_execution_multi_shard and
+-- table is empty. So here, both query_execution_multi_shard and
 -- query_execution_single_shard are incremented by 1.
 CALL exec_query_and_check_query_counters($$
     INSERT INTO dist_table SELECT * FROM uncolocated_dist_table
@@ -444,6 +587,22 @@ CALL exec_query_and_check_query_counters($$
 );
 
 CALL exec_query_and_check_query_counters($$
+    INSERT INTO single_shard SELECT * FROM single_shard_1
+    $$,
+    1, 0
+);
+
+-- same with explain
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN
+    INSERT INTO single_shard SELECT * FROM single_shard_1
+    $$,
+    0, 0
+);
+
+-- same with explain analyze
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
     INSERT INTO single_shard SELECT * FROM single_shard_1
     $$,
     1, 0
@@ -514,6 +673,155 @@ CALL exec_query_and_check_query_counters($$
     1, 1
 );
 
+-- same with explain
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN
+    INSERT INTO citus_local (a, b) SELECT * FROM dist_table
+    $$,
+    0, 0
+);
+
+-- same with explain analyze, not supported today
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
+    INSERT INTO citus_local (a, b) SELECT * FROM dist_table
+    $$,
+    1, 1
+);
+
+insert into dist_table_1 (a, b) values (1, 1), (2, 2), (3, 3);
+
+-- First, we pull the select (multi-shard) query to the query node and create an
+-- intermediate results for it because we cannot pushdown the whole INSERT query.
+-- Then, the select query becomes of the form:
+--   SELECT .. FROM (SELECT .. FROM read_intermediate_result(..)) intermediate_result
+--
+-- So, while repartitioning the select query, we perform a single-shard read
+-- query because we read from an intermediate result and we then partition it
+-- across the nodes. For the read part, we increment query_execution_single_shard
+-- because we go through distributed planning if there are read_intermediate_result()
+-- calls in a query, so it happens to be a distributed plan and goes through our
+-- CustomScan callbacks. For the repartitioning of the intermediate result, just
+-- as usual, we don't increment any counters.
+--
+-- Then, the final insert query happens between the distributed table and the
+-- colocated intermediate result, so this increments query_execution_multi_shard
+-- by 1.
+CALL exec_query_and_check_query_counters($$
+    INSERT INTO dist_table SELECT * FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q RETURNING *
+    $$,
+    1, 2
+);
+
+-- Same query but without RETURNING - this goes through a different code path, but
+-- the counters are still incremented the same way as above.
+CALL exec_query_and_check_query_counters($$
+    INSERT INTO dist_table SELECT * FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q
+    $$,
+    1, 2
+);
+
+-- Same query but inserting a single row makes the final query single-shard too.
+CALL exec_query_and_check_query_counters($$
+    INSERT INTO dist_table SELECT * FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 1) q
+    $$,
+    2, 1
+);
+
+-- A similar query but with a cte.
+-- Subplan execution for the cte, additionally, first increments query_execution_multi_shard
+-- for "SELECT * FROM dist_table" when creating the intermediate result for it and then
+-- query_execution_single_shard for;
+--   <intermediate-result>
+--   EXCEPT
+--   SELECT i as a, i as b FROM generate_series(10, 32) AS i
+CALL exec_query_and_check_query_counters($$
+    WITH cte AS (
+        SELECT * FROM dist_table
+        EXCEPT
+        SELECT i as a, i as b FROM generate_series(10, 32) AS i
+    )
+    INSERT INTO dist_table
+    SELECT q.a, q.b
+    FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q
+    JOIN cte ON q.a = cte.a
+    RETURNING *
+    $$,
+    2, 3
+);
+
+-- the same query but this time the cte is part of the select, not the insert
+CALL exec_query_and_check_query_counters($$
+    INSERT INTO dist_table
+    WITH cte AS (
+        SELECT * FROM dist_table
+        EXCEPT
+        SELECT i as a, i as b FROM generate_series(10, 32) AS i
+    )
+    SELECT q.a, q.b
+    FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q
+    JOIN cte ON q.a = cte.a
+    RETURNING *
+    $$,
+    2, 3
+);
+
+-- same with explain
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN
+    INSERT INTO dist_table
+    WITH cte AS (
+        SELECT * FROM dist_table
+        EXCEPT
+        SELECT i as a, i as b FROM generate_series(10, 32) AS i
+    )
+    SELECT q.a, q.b
+    FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q
+    JOIN cte ON q.a = cte.a
+    RETURNING *
+    $$,
+    0, 0
+);
+
+-- same with explain analyze, not supported today
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
+    INSERT INTO dist_table
+    WITH cte AS (
+        SELECT * FROM dist_table
+        EXCEPT
+        SELECT i as a, i as b FROM generate_series(10, 32) AS i
+    )
+    SELECT q.a, q.b
+    FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q
+    JOIN cte ON q.a = cte.a
+    RETURNING *
+    $$,
+    2, 3
+);
+
+-- A similar one but without the insert, so we would normally expect 2 increments
+-- for query_execution_single_shard and 2 for query_execution_multi_shard instead
+-- of 3 since the insert is not there anymore.
+--
+-- But this time we observe more counter increments because we execute the subplans
+-- twice because of #4212.
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
+    -- single-shard subplan (whole cte)
+    WITH cte AS (
+        -- multi-shard subplan (lhs of EXCEPT)
+        SELECT * FROM dist_table
+        EXCEPT
+        SELECT i as a, i as b FROM generate_series(10, 32) AS i
+    )
+    SELECT q.a, q.b
+    FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q -- multi-shard subplan (subquery q)
+    JOIN cte ON q.a = cte.a
+    $$,
+    3, 4
+);
+
 -- safe to push-down
 CALL exec_query_and_check_query_counters($$
     SELECT * FROM (SELECT * FROM dist_table UNION SELECT * FROM dist_table) as foo
@@ -536,9 +844,206 @@ CALL exec_query_and_check_query_counters($$
 );
 RESET citus.local_table_join_policy;
 
--- citus_stat_counters lists all the databases that currently exist,
--- so we should get 5 rows here.
-SELECT COUNT(*) = 5 FROM citus_stat_counters;
+CALL exec_query_and_check_query_counters($$
+    MERGE INTO dist_table AS t
+    USING dist_table_1 AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 1
+);
+
+-- First, we pull the merge (multi-shard) query to the query node and create an
+-- intermediate results for it because we cannot pushdown the whole INSERT query.
+-- Then, the merge query becomes of the form:
+--   SELECT .. FROM (SELECT .. FROM read_intermediate_result(..)) citus_insert_select_subquery
+--
+-- So, while repartitioning the source query, we perform a single-shard read
+-- query because we read from an intermediate result and we then partition it
+-- across the nodes. For the read part, we increment query_execution_single_shard
+-- because we go through distributed planning if there are read_intermediate_result()
+-- calls in a query, so it happens to be a distributed plan and goes through our
+-- CustomScan callbacks. For the repartitioning of the intermediate result, just
+-- as usual, we don't increment any counters.
+--
+-- Then, the final merge query happens between the distributed table and the
+-- colocated intermediate result, so this increments query_execution_multi_shard
+-- by 1.
+CALL exec_query_and_check_query_counters($$
+    MERGE INTO dist_table AS t
+    USING (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    1, 2
+);
+
+truncate dist_table;
+
+CALL exec_query_and_check_query_counters($$
+    insert into dist_table (a, b) select i, i from generate_series(1, 128) as i
+    $$,
+    0, 1
+);
+
+CALL exec_query_and_check_query_counters($$
+    MERGE INTO dist_table AS t
+    USING uncolocated_dist_table AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 2
+);
+
+-- same with explain
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN
+    MERGE INTO dist_table AS t
+    USING uncolocated_dist_table AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 0
+);
+
+-- same with explain analyze, not supported today
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
+    MERGE INTO dist_table AS t
+    USING uncolocated_dist_table AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 2
+);
+
+truncate dist_table, ref_table, uncolocated_dist_table;
+
+insert into dist_table (a, b) select i, i from generate_series(1, 128) as i;
+insert into uncolocated_dist_table (a, b) select i, i from generate_series(1, 95) as i;
+insert into ref_table (a, b) select i, i from generate_series(33, 128) as i;
+
+CALL exec_query_and_check_query_counters($$
+    WITH cte AS (
+        SELECT uncolocated_dist_table.a, uncolocated_dist_table.b
+        FROM uncolocated_dist_table JOIN ref_table ON uncolocated_dist_table.a = ref_table.a
+    )
+    MERGE INTO dist_table AS t
+    USING cte AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 2
+);
+
+truncate dist_table, dist_table_1;
+
+insert into dist_table (a, b) select i, i from generate_series(1, 128) as i;
+insert into dist_table_1 (a, b) select i, i from generate_series(1, 95) as i;
+
+-- Not ideal but since this contains both distributed and reference tables,
+-- we directly decide partitioning for the source instead of pulling it to
+-- the query node and repartitioning from there.
+CALL exec_query_and_check_query_counters($$
+    WITH cte AS (
+        SELECT dist_table_1.a, dist_table_1.b
+        FROM dist_table_1 JOIN ref_table ON dist_table_1.a = ref_table.a
+    )
+    MERGE INTO dist_table AS t
+    USING cte AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 2
+);
+
+-- pushable
+CALL exec_query_and_check_query_counters($$
+    WITH cte AS (
+        SELECT dist_table_1.a, dist_table_1.b * 2 as b FROM dist_table_1
+    )
+    MERGE INTO dist_table AS t
+    USING cte AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 1
+);
+
+-- same with explain
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN
+    WITH cte AS (
+        SELECT dist_table_1.a, dist_table_1.b * 2 as b FROM dist_table_1
+    )
+    MERGE INTO dist_table AS t
+    USING cte AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 0
+);
+
+-- same with explain analyze
+CALL exec_query_and_check_query_counters($$
+    EXPLAIN (ANALYZE)
+    WITH cte AS (
+        SELECT dist_table_1.a, dist_table_1.b * 2 as b FROM dist_table_1
+    )
+    MERGE INTO dist_table AS t
+    USING cte AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 1
+);
+
+-- pushable
+CALL exec_query_and_check_query_counters($$
+    MERGE INTO dist_table AS t
+    USING (SELECT dist_table_1.a, dist_table_1.b * 2 as b FROM dist_table_1) AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 1
+);
+
+-- pushable
+CALL exec_query_and_check_query_counters($$
+    MERGE INTO dist_table AS t
+    USING dist_table_1 AS s ON t.a = s.a
+    WHEN MATCHED THEN
+        UPDATE SET b = s.b
+    WHEN NOT MATCHED THEN
+        INSERT (a, b) VALUES (s.a, s.b)
+    $$,
+    0, 1
+);
+
+-- citus_stat_counters lists all the databases that currently exist
+SELECT (SELECT COUNT(*) FROM citus_stat_counters) = (SELECT COUNT(*) FROM pg_database);
 
 -- verify that we cannot execute citus_stat_counters_reset() from a non-superuser
 SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();

@@ -126,16 +126,6 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 		GetDistributedPlan((CustomScan *) sourcePlan->planTree);
 	Job *distSourceJob = distSourcePlan->workerJob;
 	List *distSourceTaskList = distSourceJob->taskList;
-
-	if (list_length(distSourceTaskList) <= 1)
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-	}
-
 	bool binaryFormat =
 		CanUseBinaryCopyFormatForTargetList(sourceQuery->targetList);
 
@@ -177,6 +167,21 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 									distSourceTaskList, partitionColumnIndex,
 									targetRelation, binaryFormat);
 
+	if (list_length(distSourceTaskList) <= 1)
+	{
+		/*
+		 * Probably we will never get here for a repartitioned MERGE
+		 * because when the source is a single shard table, we should
+		 * most probably choose to use ExecuteSourceAtCoordAndRedistribution(),
+		 * but we still keep this here.
+		 */
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
+
 	ereport(DEBUG1, (errmsg("Executing final MERGE on workers using "
 							"intermediate results")));
 
@@ -192,15 +197,6 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 												 redistributedResults,
 												 binaryFormat);
 
-	if (list_length(taskList) <= 1)
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-	}
-
 	scanState->tuplestorestate =
 		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
@@ -213,6 +209,16 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 											  tupleDest,
 											  hasReturning,
 											  paramListInfo);
+
+	if (list_length(taskList) <= 1)
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
+
 	executorState->es_processed = rowsMerged;
 }
 
@@ -305,18 +311,13 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 		prunedTaskList = list_concat(prunedTaskList, emptySourceTaskList);
 	}
 
-	if (list_length(prunedTaskList) <= 1)
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-	}
-
 	if (prunedTaskList == NIL)
 	{
-		/* No task to execute */
+		/*
+		 * No task to execute, but we still increment STAT_QUERY_EXECUTION_SINGLE_SHARD
+		 * as per our convention.
+		 */
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 		return;
 	}
 
@@ -336,6 +337,16 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 											  tupleDest,
 											  hasReturning,
 											  paramListInfo);
+
+	if (list_length(prunedTaskList) == 1)
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
+
 	executorState->es_processed = rowsMerged;
 }
 
@@ -361,6 +372,12 @@ ExecuteMergeSourcePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	List *columnNameList =
 		BuildColumnNameListFromTargetList(targetRelationId, sourceTargetList);
 
+	/*
+	 * We don't track query counters for the COPY commands that are executed to
+	 * prepare intermediate results.
+	 */
+	const bool trackQueryCounters = false;
+
 	/* set up a DestReceiver that copies into the intermediate file */
 	const bool publishableData = false;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
@@ -368,35 +385,13 @@ ExecuteMergeSourcePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  partitionColumnIndex,
 																  executorState,
 																  intermediateResultIdPrefix,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	/* We can skip when writing to intermediate files */
 	copyDest->skipCoercions = true;
 
 	ExecutePlanIntoDestReceiver(sourcePlan, paramListInfo, (DestReceiver *) copyDest);
-
-	/*
-	 * At this point, we already incremented the query counters for the SELECT
-	 * query indirectly via ExecutePlanIntoDestReceiver() (if needed), so now we
-	 * need to increment the counters for the MERGE query as well.
-	 */
-	if (IsCitusTable(targetRelationId))
-	{
-		if (HasDistributionKey(targetRelationId))
-		{
-			/*
-			 * We assume it's a multi-shard insert if the table has a
-			 * distribution column. Although this may not be true, e.g.,
-			 * when all the data we read from source goes to the same
-			 * shard of the target table, we cannot know that in advance.
-			 */
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-		}
-		else
-		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-		}
-	}
 
 	executorState->es_processed = copyDest->tuplesSent;
 	XactModificationLevel = XACT_MODIFICATION_DATA;

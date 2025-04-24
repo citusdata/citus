@@ -116,23 +116,6 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				GetDistributedPlan((CustomScan *) selectPlan->planTree);
 			Job *distSelectJob = distSelectPlan->workerJob;
 			List *distSelectTaskList = distSelectJob->taskList;
-
-			if (list_length(distSelectTaskList) <= 1)
-			{
-				/*
-				 * Probably we will never get here for a repartitioned
-				 * INSERT..SELECT because when the source is a single shard
-				 * table, we should most probably choose to use
-				 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
-				 * here.
-				 */
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-			}
-			else
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-			}
-
 			bool randomAccess = true;
 			bool interTransactions = false;
 			bool binaryFormat =
@@ -196,6 +179,22 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 																	  targetRelation,
 																	  binaryFormat);
 
+			if (list_length(distSelectTaskList) <= 1)
+			{
+				/*
+				 * Probably we will never get here for a repartitioned
+				 * INSERT..SELECT because when the source is a single shard
+				 * table, we should most probably choose to use
+				 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
+				 * here.
+				 */
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+
 			/*
 			 * At this point select query has been executed on workers and results
 			 * have been fetched in such a way that they are colocated with corresponding
@@ -207,15 +206,6 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 																	  redistributedResults,
 																	  binaryFormat);
 
-			if (list_length(taskList) <= 1)
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-			}
-			else
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-			}
-
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
@@ -224,6 +214,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			uint64 rowsInserted = ExecuteTaskListIntoTupleDest(ROW_MODIFY_COMMUTATIVE,
 															   taskList, tupleDest,
 															   hasReturning);
+
+			if (list_length(taskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
 
 			executorState->es_processed = rowsInserted;
 
@@ -278,15 +277,6 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				}
 			}
 
-			if (list_length(prunedTaskList) <= 1)
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-			}
-			else
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-			}
-
 			if (prunedTaskList != NIL)
 			{
 				bool randomAccess = true;
@@ -308,6 +298,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 					SortTupleStore(scanState);
 				}
 			}
+
+			if (list_length(prunedTaskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
 		}
 		else
 		{
@@ -316,29 +315,6 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 
 			ExecutePlanIntoRelation(targetRelationId, insertTargetList, selectPlan,
 									executorState);
-
-			/*
-			 * At this point, we already incremented the query counters for the SELECT
-			 * query indirectly via ExecutePlanIntoRelation() (if needed), so now we
-			 * need to increment the counters for the INSERT query as well.
-			 */
-			if (IsCitusTable(targetRelationId))
-			{
-				if (HasDistributionKey(targetRelationId))
-				{
-					/*
-					 * We assume it's a multi-shard insert if the table has a
-					 * distribution column. Although this may not be true, e.g.,
-					 * when all the data we read from source goes to the same
-					 * shard of the target table, we cannot know that in advance.
-					 */
-					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-				}
-				else
-				{
-					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-				}
-			}
 		}
 
 		scanState->finishedRemoteScan = true;
@@ -372,6 +348,12 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
 																  columnNameList);
 
+	/*
+	 * We don't track query counters for the COPY commands that are executed to
+	 * prepare intermediate results.
+	 */
+	const bool trackQueryCounters = false;
+
 	/* set up a DestReceiver that copies into the intermediate table */
 	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
@@ -379,7 +361,8 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  partitionColumnIndex,
 																  executorState,
 																  intermediateResultIdPrefix,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
@@ -408,13 +391,20 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
 																  columnNameList);
 
+	/*
+	 * We want to track query counters for the COPY commands that are executed to
+	 * perform the final INSERT for such INSERT..SELECT queries.
+	 */
+	const bool trackQueryCounters = true;
+
 	/* set up a DestReceiver that copies into the distributed table */
 	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
 																  executorState, NULL,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 

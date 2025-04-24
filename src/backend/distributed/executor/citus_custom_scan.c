@@ -221,18 +221,6 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 		CitusBeginModifyScan(node, estate, eflags);
 	}
 
-	/*
-	 * For INSERT..SELECT / MERGE via coordinator or re-partitioning, we
-	 * increment the stat counters in the respective ExecCustomScan functions.
-	 */
-	if (IsMultiTaskPlan(distributedPlan))
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-	}
 
 	/*
 	 * If there is force_delgation functions' distribution argument set,
@@ -275,7 +263,18 @@ CitusExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
+		bool isMultiTaskPlan = IsMultiTaskPlan(scanState->distributedPlan);
+
 		AdaptiveExecutor(scanState);
+
+		if (isMultiTaskPlan)
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
 
 		scanState->finishedRemoteScan = true;
 	}

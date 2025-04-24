@@ -26,10 +26,24 @@
  */
 typedef enum
 {
+	/*
+	 * These are mainly tracked by connection_management.c and
+	 * adaptive_executor.c.
+	 */
 	STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED,
 	STAT_CONNECTION_ESTABLISHMENT_FAILED,
 	STAT_CONNECTION_REUSED,
 
+	/*
+	 * These are maintained by ExecCustomScan methods implemented
+	 * for CustomScan nodes provided by Citus to account for actual
+	 * execution of the queries and subplans. By maintaining these
+	 * counters in ExecCustomScan callbacks, we ensure avoid
+	 * incrementing them for plain EXPLAIN (i.e., without ANALYZE).
+	 * queries. And, prefering the executor methods rather than the
+	 * planner methods helps us capture the execution of prepared
+	 * statements too.
+	 */
 	STAT_QUERY_EXECUTION_SINGLE_SHARD,
 	STAT_QUERY_EXECUTION_MULTI_SHARD,
 
