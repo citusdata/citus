@@ -424,8 +424,19 @@ SELECT id FROM grant_table_propagated_after;
 :verify_grant_table ;
 :verify_grant_attributes ;
 
--- cleanup
-REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0;
+-- cleanup and test revoke
+SET citus.log_remote_commands TO on;
+set citus.grep_remote_commands = '%REVOKE%';
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 CASCADE;
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+
+-- cleanup and test revoke
+SET citus.log_remote_commands TO on;
+set citus.grep_remote_commands = '%REVOKE%';
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 RESTRICT;
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
 
 :verify_grant_table ;
 :verify_grant_attributes ;

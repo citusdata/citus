@@ -182,6 +182,7 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s",
 							 grantOption, privsString.data, targetString.data,
 							 granteesString.data);
+<<<<<<< HEAD
 
 			if (grantStmt->behavior == DROP_CASCADE)
 			{
@@ -192,7 +193,23 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 				appendStringInfoString(&ddlString, " RESTRICT");
 			}
 		}
+=======
+>>>>>>> b233b0a2a6d590e6b2565eb8278aeec4e6021773
 
+							 appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s",
+								grantOption, privsString.data, targetString.data,
+								granteesString.data);
+   
+			if (grantStmt->behavior == DROP_CASCADE)
+			{
+				appendStringInfoString(&ddlString, " CASCADE");
+			}
+			else
+			{
+				appendStringInfoString(&ddlString, " RESTRICT");
+			}
+		}
+		
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 		ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 		ddlJob->metadataSyncCommand = pstrdup(ddlString.data);
