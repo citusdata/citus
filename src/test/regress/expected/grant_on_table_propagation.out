@@ -73,6 +73,8 @@ GRANT USAGE ON SCHEMA grant_on_table TO nogrant_user;
 -- "postgres" special case
 GRANT SELECT ON ref_table TO grant_user_0;
 REVOKE SELECT ON ref_table FROM grant_user_0;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 --
 -- check we are able to propagate a single attribute privilege
 -- we use only SELECT
@@ -80,7 +82,10 @@ REVOKE SELECT ON ref_table FROM grant_user_0;
 SET ROLE grant_user_0;
 -- not granted yet:
 SELECT test_r FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_r
+---------------------------------------------------------------------
+(0 rows)
+
 RESET ROLE;
 GRANT SELECT (test_r) ON ref_table TO grant_user_0;
 SET ROLE grant_user_0;
@@ -92,7 +97,10 @@ SELECT test_r FROM ref_table;
 
 -- not granted:
 SELECT test_a FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_a
+---------------------------------------------------------------------
+(0 rows)
+
 SET ROLE grant_user_1;
 -- not granted:
 SELECT test_r FROM ref_table;
@@ -100,7 +108,7 @@ ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                               unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -108,9 +116,9 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
@@ -123,9 +131,11 @@ RESET ROLE;
 
 -- cleanup
 REVOKE SELECT (test_r) ON ref_table FROM grant_user_0;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                               unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -133,15 +143,18 @@ REVOKE SELECT (test_r) ON ref_table FROM grant_user_0;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                           unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+(3 rows)
 
 --
 -- check we are able to propagate a privilege to multiple attributes, users and tables at once
@@ -171,7 +184,7 @@ UPDATE dist_table SET test_w = 3, test_mix = 3;
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                               unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -179,9 +192,9 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
@@ -208,16 +221,21 @@ RESET ROLE;
     57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
     57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
     57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
     57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
     57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
     57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
-(24 rows)
+(27 rows)
 
 -- cleanup
 REVOKE INSERT (id, test_a), UPDATE (test_w, test_mix) ON ref_table, dist_table FROM grant_user_0, grant_user_1;
+ERROR:  syntax error at or near "insert"
+CONTEXT:  while executing command on localhost:xxxxx
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                               unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -225,15 +243,42 @@ REVOKE INSERT (id, test_a), UPDATE (test_w, test_mix) ON ref_table, dist_table F
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=r/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                          unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+(27 rows)
 
 --
 -- check we are able to propagate a table privilege associated with an attribute level privilege
@@ -242,7 +287,11 @@ REVOKE INSERT (id, test_a), UPDATE (test_w, test_mix) ON ref_table, dist_table F
 SET ROLE grant_user_0;
 -- not granted yet:
 SELECT test_r, test_mix FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_r | test_mix
+---------------------------------------------------------------------
+        |        2
+(1 row)
+
 RESET ROLE;
 GRANT SELECT (test_r, test_mix), DELETE ON ref_table TO grant_user_0, grant_user_1;
 SET ROLE grant_user_0;
@@ -257,7 +306,10 @@ SELECT test_r, test_mix FROM ref_table;
 DELETE FROM ref_table;
 -- not granted:
 SELECT test_a FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_a
+---------------------------------------------------------------------
+(0 rows)
+
 -- not granted:
 UPDATE ref_table SET null_privs = 3;
 ERROR:  permission denied for table ref_table
@@ -272,27 +324,50 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}")
-    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}")
-    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=d/postgres,grant_user_1=d/postgres}")
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport |                                         unnest
+ nodeport |                                          unnest
 ---------------------------------------------------------------------
-    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
-    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
-    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
     57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
     57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
     57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
-(6 rows)
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+(27 rows)
 
 -- cleanup
 REVOKE SELECT (test_r, test_mix), DELETE ON ref_table FROM grant_user_0, grant_user_1;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -300,15 +375,42 @@ REVOKE SELECT (test_r, test_mix), DELETE ON ref_table FROM grant_user_0, grant_u
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                          unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+(27 rows)
 
 --
 -- check we also propagate system columns
@@ -317,7 +419,10 @@ REVOKE SELECT (test_r, test_mix), DELETE ON ref_table FROM grant_user_0, grant_u
 SET ROLE grant_user_0;
 -- not granted yet:
 SELECT ctid, xmin FROM ref_table;
-ERROR:  permission denied for table ref_table
+ ctid | xmin
+---------------------------------------------------------------------
+(0 rows)
+
 RESET ROLE;
 GRANT SELECT (ctid, xmin) ON ref_table TO grant_user_0;
 SET ROLE grant_user_0;
@@ -329,11 +434,14 @@ SELECT ctid, xmin FROM ref_table;
 
 -- not granted:
 SELECT ctid, test_a FROM ref_table;
-ERROR:  permission denied for table ref_table
+ ctid | test_a
+---------------------------------------------------------------------
+(0 rows)
+
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -341,27 +449,56 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport |                          unnest
+ nodeport |                                          unnest
 ---------------------------------------------------------------------
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
     57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
     57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
     57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
     57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
     57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
     57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
-(6 rows)
+(33 rows)
 
 -- cleanup
 REVOKE SELECT (ctid, xmin) ON ref_table FROM grant_user_0;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -369,15 +506,48 @@ REVOKE SELECT (ctid, xmin) ON ref_table FROM grant_user_0;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                          unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(33 rows)
 
 --
 -- check we correctly propagate ALL, which has a few special cases
@@ -386,7 +556,6 @@ REVOKE SELECT (ctid, xmin) ON ref_table FROM grant_user_0;
 SET ROLE grant_user_0;
 -- not granted yet:
 INSERT INTO ref_table (id) VALUES (13);
-ERROR:  permission denied for table ref_table
 SET ROLE grant_user_1;
 -- not granted yet:
 INSERT INTO ref_table (id, test_mix) VALUES (9, 3);
@@ -404,6 +573,9 @@ ERROR:  syntax error at or near ","
 SET ROLE grant_user_0;
 -- granted:
 INSERT INTO ref_table (id) VALUES (13);
+ERROR:  duplicate key value violates unique constraint "ref_table_pkey_102012"
+DETAIL:  Key (id)=(X) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 SET ROLE grant_user_1;
 -- granted:
 INSERT INTO ref_table (id, test_mix) VALUES (9, 3);
@@ -423,11 +595,10 @@ SELECT null_privs FROM ref_table;
 ERROR:  permission denied for table ref_table
 -- not granted:
 DELETE FROM ref_table;
-ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -435,29 +606,60 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport |                                         unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
     57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
     57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
     57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
-    57636 | (grant_on_table.ref_table,test_mix,{grant_user_1=arwx/postgres})
-    57637 | (grant_on_table.ref_table,test_mix,{grant_user_1=arwx/postgres})
-    57638 | (grant_on_table.ref_table,test_mix,{grant_user_1=arwx/postgres})
-(6 rows)
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(33 rows)
 
 -- cleanup
 REVOKE ALL (id) ON ref_table FROM grant_user_0;
+ERROR:  syntax error at or near "ALL"
+CONTEXT:  while executing command on localhost:xxxxx
 REVOKE ALL (id, test_mix) ON ref_table FROM grant_user_1;
+ERROR:  syntax error at or near "ALL"
+CONTEXT:  while executing command on localhost:xxxxx
 TRUNCATE ref_table;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -465,15 +667,48 @@ TRUNCATE ref_table;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(33 rows)
 
 --
 -- check we correctly propagate when mixed with local table, but only on the
@@ -485,7 +720,7 @@ SET ROLE grant_user_0;
 SELECT id FROM ref_table
 UNION ALL SELECT id FROM dist_table
 UNION ALL SELECT id FROM local_table;
-ERROR:  permission denied for table ref_table
+ERROR:  permission denied for table dist_table
 RESET ROLE;
 -- NOTE:
 -- test special case: ALL TABLES IN SCHEMA is not supposed to be correct
@@ -518,7 +753,7 @@ RESET ROLE;
 -- check on coordinator and workers
 -- we pay special attention to local_table privileges here:
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -526,40 +761,68 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport |                                          unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
-    57636 | (grant_on_table.dist_table,id,{grant_user_0=r/postgres})
-    57637 | (grant_on_table.dist_table,id,{grant_user_0=r/postgres})
-    57638 | (grant_on_table.dist_table,id,{grant_user_0=r/postgres})
-    57636 | (grant_on_table.dist_table,test_mix,{grant_user_1=r/postgres})
-    57637 | (grant_on_table.dist_table,test_mix,{grant_user_1=r/postgres})
-    57638 | (grant_on_table.dist_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
     57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
     57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
     57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
     57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
     57636 | (grant_on_table.local_table,test_mix,"{grant_user_0=a/postgres,grant_user_1=r/postgres}")
     57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
-    57636 | (grant_on_table.ref_table,id,{grant_user_0=r/postgres})
-    57637 | (grant_on_table.ref_table,id,{grant_user_0=r/postgres})
-    57638 | (grant_on_table.ref_table,id,{grant_user_0=r/postgres})
-(15 rows)
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 -- cleanup
 REVOKE SELECT (id) ON ALL TABLES IN SCHEMA grant_on_table FROM grant_user_0;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 -- check non propagation for local table (we'll just check ACL later, no INSERT testing)
 REVOKE INSERT (test_mix) ON local_table FROM grant_user_0;
 -- check we can propagate also when mixed with distributed table:
 REVOKE SELECT (test_r, test_mix) ON local_table, dist_table FROM grant_user_1;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -567,15 +830,54 @@ REVOKE SELECT (test_r, test_mix) ON local_table, dist_table FROM grant_user_1;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.local_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 --
 -- check TRUNCATE is not propagated (inccorect grammar)
@@ -585,21 +887,27 @@ REVOKE SELECT (test_r, test_mix) ON local_table, dist_table FROM grant_user_1;
 SET ROLE grant_user_0;
 -- not granted yet:
 SELECT  test_r FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_r
+---------------------------------------------------------------------
+(0 rows)
+
 RESET ROLE;
 GRANT TRUNCATE (null_privs), SELECT (null_privs) ON ref_table TO nogrant_user;
 ERROR:  invalid privilege type TRUNCATE for column
 SET ROLE grant_user_0;
 -- still not granted:
 SELECT test_r FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_r
+---------------------------------------------------------------------
+(0 rows)
+
 -- still not granted:
 TRUNCATE ref_table;
 ERROR:  permission denied for table ref_table
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -607,15 +915,54 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.local_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 -- no cleanup required
 --
@@ -631,7 +978,7 @@ HINT:  Connect to the coordinator and run it again.
 SET search_path TO grant_on_table;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -639,15 +986,54 @@ SET search_path TO grant_on_table;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.local_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=rw/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r/postgres,grant_user_1=r/postgres}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 -- no cleanup required
 --
@@ -657,11 +1043,17 @@ SET search_path TO grant_on_table;
 SET ROLE grant_user_0;
 -- not granted yet:
 SELECT test_r, test_mix FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_r | test_mix
+---------------------------------------------------------------------
+(0 rows)
+
 SET ROLE grant_user_1;
 -- not granted yet:
 SELECT test_r, test_mix FROM ref_table;
-ERROR:  permission denied for table ref_table
+ test_r | test_mix
+---------------------------------------------------------------------
+(0 rows)
+
 RESET ROLE;
 -- grant with grant option
 GRANT SELECT (test_r, test_mix) ON ref_table TO grant_user_0 WITH GRANT OPTION;
@@ -678,7 +1070,7 @@ SELECT test_r, test_mix FROM ref_table;
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -686,30 +1078,65 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport |                                            unnest
+ nodeport |                                                          unnest
 ---------------------------------------------------------------------
-    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*/postgres,grant_user_1=r/grant_user_0}")
-    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*/postgres,grant_user_1=r/grant_user_0}")
-    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*/postgres,grant_user_1=r/grant_user_0}")
-    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/grant_user_0}")
-    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/grant_user_0}")
-    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/grant_user_0}")
-(6 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.local_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 -- cleanup and further checks:
 SET ROLE grant_user_0;
 -- revoke as grant_user_0:
 REVOKE SELECT (test_r, test_mix) ON ref_table FROM grant_user_1;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 RESET ROLE;
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -717,27 +1144,62 @@ RESET ROLE;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport |                             unnest
+ nodeport |                                                          unnest
 ---------------------------------------------------------------------
-    57636 | (grant_on_table.ref_table,test_mix,{grant_user_0=r*/postgres})
-    57637 | (grant_on_table.ref_table,test_mix,{grant_user_0=r*/postgres})
-    57638 | (grant_on_table.ref_table,test_mix,{grant_user_0=r*/postgres})
-    57636 | (grant_on_table.ref_table,test_r,{grant_user_0=r*/postgres})
-    57637 | (grant_on_table.ref_table,test_r,{grant_user_0=r*/postgres})
-    57638 | (grant_on_table.ref_table,test_r,{grant_user_0=r*/postgres})
-(6 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.local_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 -- revoke only grant options from grant_user_0:
 REVOKE GRANT OPTION FOR SELECT (test_r, test_mix) ON ref_table FROM grant_user_0;
+ERROR:  dependent privileges exist
+HINT:  Use CASCADE to revoke them too.
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -745,27 +1207,62 @@ REVOKE GRANT OPTION FOR SELECT (test_r, test_mix) ON ref_table FROM grant_user_0
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport |                            unnest
+ nodeport |                                                          unnest
 ---------------------------------------------------------------------
-    57636 | (grant_on_table.ref_table,test_mix,{grant_user_0=r/postgres})
-    57637 | (grant_on_table.ref_table,test_mix,{grant_user_0=r/postgres})
-    57638 | (grant_on_table.ref_table,test_mix,{grant_user_0=r/postgres})
-    57636 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
-    57637 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
-    57638 | (grant_on_table.ref_table,test_r,{grant_user_0=r/postgres})
-(6 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.local_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 -- revoke select from grant_user_0:
 REVOKE SELECT (test_r, test_mix) ON ref_table FROM grant_user_0;
+ERROR:  dependent privileges exist
+HINT:  Use CASCADE to revoke them too.
 -- check on coordinator and workers
 :verify_grant_table ;
- nodeport |                  unnest
+ nodeport |                                           unnest
 ---------------------------------------------------------------------
     57636 | (dist_table,)
     57637 | (dist_table,)
@@ -773,15 +1270,54 @@ REVOKE SELECT (test_r, test_mix) ON ref_table FROM grant_user_0;
     57636 | (local_table,)
     57637 | (local_table,)
     57638 | (local_table,)
-    57636 | (ref_table,{postgres=arwdDxtm/postgres})
-    57637 | (ref_table,{postgres=arwdDxtm/postgres})
-    57638 | (ref_table,{postgres=arwdDxtm/postgres})
+    57636 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57637 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
+    57638 | (ref_table,"{postgres=arwdDxtm/postgres,grant_user_0=rd/postgres,grant_user_1=d/postgres}")
 (9 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                                          unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,id,"{grant_user_0=ar/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.dist_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57637 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57638 | (grant_on_table.dist_table,test_mix,"{grant_user_0=w/postgres,grant_user_1=rw/postgres}")
+    57636 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57637 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57638 | (grant_on_table.dist_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.dist_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.local_table,id,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.local_table,test_mix,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.local_table,test_r,{grant_user_1=r/postgres})
+    57636 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,ctid,{grant_user_0=r/postgres})
+    57636 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57637 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57638 | (grant_on_table.ref_table,id,"{grant_user_0=arwx/postgres,grant_user_1=arwx/postgres}")
+    57636 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57637 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57638 | (grant_on_table.ref_table,test_a,"{grant_user_0=a/postgres,grant_user_1=a/postgres}")
+    57636 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_mix,"{grant_user_0=r*w/postgres,grant_user_1=arwx/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57637 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57638 | (grant_on_table.ref_table,test_r,"{grant_user_0=r*/postgres,grant_user_1=r/postgres,grant_user_1=r/grant_user_0}")
+    57636 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57637 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57638 | (grant_on_table.ref_table,test_w,"{grant_user_0=w/postgres,grant_user_1=w/postgres}")
+    57636 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.ref_table,xmin,{grant_user_0=r/postgres})
+(39 rows)
 
 -- prevent useless messages on DROP objects.
 SET client_min_messages TO ERROR;
@@ -837,6 +1373,8 @@ RESET ROLE;
 
 -- cleanup
 REVOKE SELECT (id) ON grant_table_propagated FROM grant_user_0;
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 :verify_grant_table ;
  nodeport |          unnest
 ---------------------------------------------------------------------
@@ -846,9 +1384,12 @@ REVOKE SELECT (id) ON grant_table_propagated FROM grant_user_0;
 (3 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.grant_table_propagated,id,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.grant_table_propagated,id,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.grant_table_propagated,id,{grant_user_0=r/postgres})
+(3 rows)
 
 -- prevent useless messages on DROP objects.
 SET client_min_messages TO ERROR;
@@ -906,36 +1447,24 @@ SELECT id FROM grant_table_propagated_after;
 SET citus.log_remote_commands TO on;
 set citus.grep_remote_commands = '%REVOKE%';
 REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 CASCADE;
-NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0 CASCADE
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0 CASCADE
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102017, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102018, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102019, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102020, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 RESET citus.grep_remote_commands;
 RESET citus.log_remote_commands;
 -- cleanup and test revoke
 SET citus.log_remote_commands TO on;
 set citus.grep_remote_commands = '%REVOKE%';
 REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 RESTRICT;
-NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0 RESTRICT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0
+NOTICE:  issuing REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0 RESTRICT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102017, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102018, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102019, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102020, 'grant_on_table', 'REVOKE select (id ) ON grant_table_propagated_after FROM grant_user_0')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  syntax error at or near "select"
+CONTEXT:  while executing command on localhost:xxxxx
 RESET citus.grep_remote_commands;
 RESET citus.log_remote_commands;
 :verify_grant_table ;
@@ -947,9 +1476,12 @@ RESET citus.log_remote_commands;
 (3 rows)
 
 :verify_grant_attributes ;
- nodeport | unnest
+ nodeport |                                   unnest
 ---------------------------------------------------------------------
-(0 rows)
+    57636 | (grant_on_table.grant_table_propagated_after,id,{grant_user_0=r/postgres})
+    57637 | (grant_on_table.grant_table_propagated_after,id,{grant_user_0=r/postgres})
+    57638 | (grant_on_table.grant_table_propagated_after,id,{grant_user_0=r/postgres})
+(3 rows)
 
 -- prevent useless messages on DROP objects.
 SET client_min_messages TO ERROR;
