@@ -124,6 +124,7 @@ RESET citus.force_max_query_parallelization;
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
 
+SET citus.enable_stat_counters TO true;
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 900;
 SELECT citus.mitmproxy('conn.connect_delay(1400)');
@@ -148,6 +149,7 @@ FROM pg_database WHERE datname = current_database();
 
 RESET citus.force_max_query_parallelization;
 RESET citus.node_connection_timeout;
+RESET citus.enable_stat_counters;
 SELECT citus.mitmproxy('conn.allow()');
 
 -- one similar test, and this time on modification queries
