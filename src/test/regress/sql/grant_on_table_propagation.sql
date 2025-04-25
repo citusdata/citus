@@ -405,6 +405,7 @@ RESET client_min_messages;
 -- similar test but adding a node after the fact
 -- remove one of the worker nodes:
 SELECT citus_remove_node('localhost', :worker_2_port);
+SET citus.next_shard_id to 2000000;
 CREATE TABLE grant_table_propagated_after (id int primary key);
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('grant_table_propagated_after', 'id');
@@ -446,6 +447,6 @@ RESET client_min_messages;
 -- prevent useless messages on DROP objects.
 SET client_min_messages TO ERROR;
 DROP SCHEMA grant_on_table CASCADE;
-DROP ROLE grant_user_0, grant_user_1;
+DROP ROLE grant_user_0, grant_user_1, nogrant_user;
 RESET client_min_messages;
 RESET search_path;
