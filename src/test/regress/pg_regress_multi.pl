@@ -492,6 +492,7 @@ push(@pgOptions, "citus.stat_statements_track = 'all'");
 push(@pgOptions, "citus.enable_change_data_capture=on");
 push(@pgOptions, "citus.stat_tenants_limit = 2");
 push(@pgOptions, "citus.stat_tenants_track = 'ALL'");
+push(@pgOptions, "citus.enable_stat_counters=on");
 push(@pgOptions, "citus.superuser = 'postgres'");
 
 # Some tests look at shards in pg_class, make sure we can usually see them:
