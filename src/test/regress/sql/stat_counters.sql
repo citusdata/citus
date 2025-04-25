@@ -213,7 +213,7 @@ GRANT ALL PRIVILEGES ON SCHEMA stat_counters TO stat_counters_test_user;
 ALTER USER stat_counters_test_user SET citus.enable_stat_counters TO true;
 
 SET search_path TO stat_counters;
-SET citus.next_shard_id to 1980000;
+SET citus.next_shard_id to 2010000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 
