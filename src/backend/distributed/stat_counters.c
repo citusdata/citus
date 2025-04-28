@@ -295,7 +295,7 @@ citus_stat_counters(PG_FUNCTION_ARGS)
 
 /*
  * citus_stat_counters_reset resets Citus stat counters for given database
- * id.
+ * id or for the current database if InvalidOid is provided.
  *
  * If a valid database id is provided, stat counters for that database are
  * reset, even if it was dropped later.
