@@ -317,6 +317,36 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
 
 
 /*
+ * FindCitusExtradataContainerRTE is a helper function that finds the
+ * citus_extradata_container in range table entry.
+ *
+ * The function returns true if it finds the RTE, and false otherwise.
+ */
+bool
+ExtractCitusExtradataContainerRTE(RangeTblEntry *rangeTblEntry, RangeTblEntry **result)
+{
+        if (rangeTblEntry->rtekind == RTE_FUNCTION &&
+                list_length(rangeTblEntry->functions) == 1)
+        {
+                RangeTblFunction *rangeTblFunction = (RangeTblFunction *) linitial(
+                        rangeTblEntry->functions);
+                if (!IsA(rangeTblFunction->funcexpr, FuncExpr))
+                {
+                        return false;
+                }
+                FuncExpr *funcExpr = castNode(FuncExpr, rangeTblFunction->funcexpr);
+                if (funcExpr->funcid == CitusExtraDataContainerFuncId())
+                {
+                        *result = rangeTblEntry;
+                        return true;
+                }
+        }
+
+        return false;
+}
+
+
+/*
  * Finds the rangetable entry in the query that refers to the citus_extradata_container
  * and stores the pointer in result.
  */
@@ -331,25 +361,7 @@ FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
 	if (IsA(node, RangeTblEntry))
 	{
 		RangeTblEntry *rangeTblEntry = castNode(RangeTblEntry, node);
-		if (rangeTblEntry->rtekind == RTE_FUNCTION &&
-			list_length(rangeTblEntry->functions) == 1)
-		{
-			RangeTblFunction *rangeTblFunction = (RangeTblFunction *) linitial(
-				rangeTblEntry->functions);
-			if (!IsA(rangeTblFunction->funcexpr, FuncExpr))
-			{
-				return false;
-			}
-			FuncExpr *funcExpr = castNode(FuncExpr, rangeTblFunction->funcexpr);
-			if (funcExpr->funcid == CitusExtraDataContainerFuncId())
-			{
-				*result = rangeTblEntry;
-				return true;
-			}
-		}
-
-		/* query_tree_walker descends into RTEs */
-		return false;
+		return ExtractCitusExtradataContainerRTE(rangeTblEntry, result);
 	}
 	else if (IsA(node, Query))
 	{
