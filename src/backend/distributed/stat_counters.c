@@ -192,6 +192,8 @@ static Size SharedBackendStatsSlotArrayShmemSize(void);
 /* helper functions for citus_stat_counters() */
 static void CollectActiveBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats);
 static void CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats);
+static DatabaseStatsHashEntry * DatabaseStatsHashEntryFindOrCreate(Oid databaseId,
+																   HTAB *databaseStats);
 static void StoreDatabaseStatsIntoTupStore(HTAB *databaseStats,
 										   Tuplestorestate *tupleStore,
 										   TupleDesc tupleDescriptor);
@@ -201,8 +203,8 @@ static bool ResetActiveBackendStats(Oid databaseId);
 static void ResetSavedBackendStats(Oid databaseId, bool force);
 
 /* saved backend stats */
-static SavedBackendStatsHashEntry * SavedBackendStatsHashEntryAllocIfNotExists(Oid
-																			   databaseId);
+static SavedBackendStatsHashEntry * SavedBackendStatsHashEntryCreateIfNotExists(Oid
+																				databaseId);
 
 
 /* sql exports */
@@ -312,6 +314,16 @@ citus_stat_counters_reset(PG_FUNCTION_ARGS)
 	 */
 	PG_ENSURE_ARGNOTNULL(0, "database_id");
 	Oid databaseId = PG_GETARG_OID(0);
+
+	/*
+	 * If the database id is InvalidOid, then we assume that
+	 * the caller wants to reset the stat counters for the
+	 * current database.
+	 */
+	if (databaseId == InvalidOid)
+	{
+		databaseId = MyDatabaseId;
+	}
 
 	/* just to be on the safe side */
 	if (!EnsureStatCountersShmemInitDone())
@@ -464,7 +476,7 @@ SaveBackendStatsIntoSavedBackendStatsHash(void)
 		LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_EXCLUSIVE);
 
 		dbSavedBackendStatsEntry =
-			SavedBackendStatsHashEntryAllocIfNotExists(databaseId);
+			SavedBackendStatsHashEntryCreateIfNotExists(databaseId);
 
 		LWLockRelease(*SharedSavedBackendStatsHashLock);
 
@@ -639,15 +651,8 @@ CollectActiveBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 			continue;
 		}
 
-		bool found = false;
-		DatabaseStatsHashEntry *dbStatsEntry = (DatabaseStatsHashEntry *)
-											   hash_search(databaseStats, &procDatabaseId,
-														   HASH_ENTER, &found);
-		if (!found)
-		{
-			MemSet(dbStatsEntry->counters, 0, sizeof(StatCounters));
-			dbStatsEntry->resetTimestamp = 0;
-		}
+		DatabaseStatsHashEntry *dbStatsEntry =
+			DatabaseStatsHashEntryFindOrCreate(procDatabaseId, databaseStats);
 
 		BackendStatsSlot *backendStatsSlot =
 			&SharedBackendStatsSlotArray[backendSlotIdx];
@@ -689,9 +694,8 @@ CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 
 		if (dbSavedBackendStatsEntry)
 		{
-			DatabaseStatsHashEntry *dbStatsEntry = (DatabaseStatsHashEntry *)
-												   hash_search(databaseStats, &databaseId,
-															   HASH_ENTER, NULL);
+			DatabaseStatsHashEntry *dbStatsEntry =
+				DatabaseStatsHashEntryFindOrCreate(databaseId, databaseStats);
 
 			SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
@@ -715,11 +719,9 @@ CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 		SavedBackendStatsHashEntry *dbSavedBackendStatsEntry = NULL;
 		while ((dbSavedBackendStatsEntry = hash_seq_search(&hashSeqStatus)) != NULL)
 		{
-			DatabaseStatsHashEntry *dbStatsEntry = (DatabaseStatsHashEntry *)
-												   hash_search(databaseStats,
-															   &dbSavedBackendStatsEntry
-															   ->databaseId, HASH_ENTER,
-															   NULL);
+			DatabaseStatsHashEntry *dbStatsEntry =
+				DatabaseStatsHashEntryFindOrCreate(dbSavedBackendStatsEntry->databaseId,
+												   databaseStats);
 
 			SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
@@ -737,6 +739,29 @@ CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 	}
 
 	LWLockRelease(*SharedSavedBackendStatsHashLock);
+}
+
+
+/*
+ * DatabaseStatsHashEntryFindOrCreate creates a new entry in databaseStats
+ * hash table for the given database id if it doesn't already exist and
+ * initializes it, or just returns the existing entry if it does.
+ */
+static DatabaseStatsHashEntry *
+DatabaseStatsHashEntryFindOrCreate(Oid databaseId, HTAB *databaseStats)
+{
+	bool found = false;
+	DatabaseStatsHashEntry *dbStatsEntry = (DatabaseStatsHashEntry *)
+										   hash_search(databaseStats, &databaseId,
+													   HASH_ENTER, &found);
+
+	if (!found)
+	{
+		MemSet(dbStatsEntry->counters, 0, sizeof(StatCounters));
+		dbStatsEntry->resetTimestamp = 0;
+	}
+
+	return dbStatsEntry;
 }
 
 
@@ -866,7 +891,7 @@ ResetSavedBackendStats(Oid databaseId, bool force)
 		LWLockAcquire(*SharedSavedBackendStatsHashLock, LW_EXCLUSIVE);
 
 		dbSavedBackendStatsEntry =
-			SavedBackendStatsHashEntryAllocIfNotExists(databaseId);
+			SavedBackendStatsHashEntryCreateIfNotExists(databaseId);
 
 		LWLockRelease(*SharedSavedBackendStatsHashLock);
 
@@ -906,9 +931,9 @@ ResetSavedBackendStats(Oid databaseId, bool force)
 
 
 /*
- * SavedBackendStatsHashEntryAllocIfNotExists allocates a new entry in the
+ * SavedBackendStatsHashEntryCreateIfNotExists creates a new entry in the
  * saved backend stats hash table for the given database id if it doesn't
- * already exist.
+ * already exist and initializes it.
  *
  * Assumes that the caller has exclusive access to the hash table since it
  * performs HASH_ENTER_NULL.
@@ -917,7 +942,7 @@ ResetSavedBackendStats(Oid databaseId, bool force)
  * we're out of (shared) memory.
  */
 static SavedBackendStatsHashEntry *
-SavedBackendStatsHashEntryAllocIfNotExists(Oid databaseId)
+SavedBackendStatsHashEntryCreateIfNotExists(Oid databaseId)
 {
 	bool found = false;
 	SavedBackendStatsHashEntry *dbSavedBackendStatsEntry =

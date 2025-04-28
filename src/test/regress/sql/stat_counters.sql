@@ -61,7 +61,9 @@ SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_d
 SELECT stats_reset IS NOT NULL FROM citus_stat_counters WHERE name = current_database();
 
 -- multi_1_schedule has this test in an individual line, so there cannot be any other backends
--- that can update the stat counters other than us.
+-- that can update the stat counters other than us except Citus Maintenance Daemon, but
+-- Citus Maintenance Daemon is not supposed to update the query related stats, so we can
+-- ensure that query related stats are 0.
 --
 -- So, no one could have incremented query related stats so far.
 SELECT query_execution_single_shard = 0, query_execution_multi_shard = 0 FROM citus_stat_counters;
@@ -91,7 +93,8 @@ SET citus.enable_stat_counters TO true;
 SELECT * FROM dist_table WHERE a = 1;
 SELECT query_execution_single_shard = 1 FROM (SELECT (citus_stat_counters(oid)).* FROM pg_database WHERE datname = current_database()) q;
 
-SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+-- reset the stat counters for the current database by providing nothing to citus_stat_counters_reset()
+SELECT citus_stat_counters_reset();
 
 SELECT query_execution_single_shard = 0 FROM (SELECT (citus_stat_counters(oid)).* FROM pg_database WHERE datname = current_database()) q;
 
@@ -167,7 +170,8 @@ SET citus.enable_stat_counters TO false;
 
 SET client_min_messages TO NOTICE;
 
-SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+-- reset the stat counters for the current database by providing 0 to citus_stat_counters_reset()
+SELECT citus_stat_counters_reset(0);
 
 -- No one could have incremented query related stats and connection_reused so far.
 SELECT query_execution_single_shard = 0, query_execution_multi_shard = 0, connection_reused = 0 FROM citus_stat_counters WHERE name = current_database();
