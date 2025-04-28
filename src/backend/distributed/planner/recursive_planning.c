@@ -743,7 +743,12 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 			case JOIN_LEFT:
 			{
 				/* <recurring> left join <distributed> */
-				if (leftNodeRecurs && !rightNodeRecurs)
+
+				/* TODO: For now, just disable the recursive planning here. 
+				 * However, we should add further checks, i.e., left node is a subquery
+				 * that can not be pushed down with additional constrains. 
+				 */
+				if (leftNodeRecurs && !rightNodeRecurs && false)				
 				{
 					ereport(DEBUG1, (errmsg("recursively planning right side of "
 											"the left join since the outer side "

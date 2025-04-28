@@ -16,6 +16,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_operator.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -201,6 +202,299 @@ static void
 UpdateTaskQueryString(Query *query, Task *task)
 {
 	SetTaskQueryIfShouldLazyDeparse(task, query);
+}
+
+
+/*
+ * ExtractRangeTableIds walks over the given node, and finds all range
+ * table entries.
+ */
+bool
+ExtractRangeTableIds(Node *node, ExtractRangeTableIdsContext *context)
+{
+	List **rangeTableList = context->result;
+	List *rtable = context->rtable;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblRef))
+	{
+		int rangeTableIndex = ((RangeTblRef *) node)->rtindex;
+
+		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rtable);
+		if (rte->rtekind == RTE_SUBQUERY)
+		{
+			Query *subquery = rte->subquery;
+			context->rtable = subquery->rtable;
+			ExtractRangeTableIds((Node *) subquery, context);
+			context->rtable = rtable; /* restore original rtable */
+		}
+		else if (rte->rtekind == RTE_RELATION || rte->rtekind == RTE_FUNCTION)
+		{
+			(*rangeTableList) = lappend(*rangeTableList, rte);
+			ereport(DEBUG4, (errmsg("ExtractRangeTableIds: found range table id %d", rte->relid)));
+		}
+		else
+		{
+			ereport(DEBUG4, (errmsg("Unsupported RTE kind in ExtractRangeTableIds %d", rte->rtekind)));
+		}
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+		context->rtable = ((Query *) node)->rtable;
+		query_tree_walker((Query *) node, ExtractRangeTableIds, context, 0);
+		context->rtable = rtable; /* restore original rtable */
+		return false;
+	}
+	else
+	{
+		return expression_tree_walker(node, ExtractRangeTableIds, context);
+	}
+}
+
+
+/* 
+ * Iterates through the FROM clause of the query and checks if there is a join
+ * clause with a reference and distributed table. 
+ * If there is, it returns the index of the range table entry of the outer
+ * table in the join clause. It also sets the innerRte to point to the
+ * range table entry inner table. If there is no join clause with a distributed 
+ * table, it returns -1.
+ */
+int 
+GetRepresentativeTablesFromJoinClause(List *fromlist, List *rtable, RangeTblEntry **innerRte)
+{
+	ListCell *fromExprCell;
+
+	/* TODO: is this case even possible | fromlist | > 1, no test cases yet */
+	if(list_length(fromlist) > 1)
+	{
+		ereport(DEBUG5, (errmsg("GetRepresentativeTablesFromJoinClause: Fromlist length > 1")));
+		return -1;
+	}
+	foreach(fromExprCell, fromlist)
+	{	
+		Node *fromElement = (Node *) lfirst(fromExprCell);
+		if (IsA(fromElement, JoinExpr))
+		{
+			JoinExpr *joinExpr = (JoinExpr *) fromElement;
+			if(!IS_OUTER_JOIN(joinExpr->jointype))
+			{
+				continue;
+			}
+			// TODO: this path should not be active when the conditions are not met.			
+
+			int outerRtIndex = ((RangeTblRef *)joinExpr->larg)->rtindex;
+			RangeTblEntry *outerRte = rt_fetch(outerRtIndex, rtable);
+
+			/* the outer table is a reference table */
+			if (outerRte->rtekind == RTE_FUNCTION)
+			{
+				RangeTblEntry *newRte = NULL;
+				if (!ExtractCitusExtradataContainerRTE(outerRte, &newRte))
+				{
+					/* RTE does not contain citus_extradata_container */
+					return -1; 
+				}
+			}
+			else if (outerRte->rtekind == RTE_RELATION)
+			{
+				/* OK */
+				ereport(DEBUG5, (errmsg("\t\t outerRte: is RTE_RELATION")));
+			}
+			else
+			{
+				ereport(DEBUG5, (errmsg("\t\t not supported RTE kind %d", outerRte->rtekind)));
+				return -1;
+			}
+
+			ereport(DEBUG5, (errmsg("\t OK outerRte: %s", outerRte->eref->aliasname)));
+			
+			int innerRelid = InvalidOid;
+			ExtractRangeTableIdsContext context;
+			List *innerRteList = NIL;
+			context.result = &innerRteList;
+			context.rtable = rtable;
+			/* TODO:  what if we call this also for LHS? */
+			ExtractRangeTableIds((Node *)joinExpr->rarg, &context);
+
+			List *citusRelids = NIL;
+			RangeTblEntry *rte = NIL;
+			ListCell *lc;
+
+			foreach(lc, innerRteList)
+			{
+				rte = (RangeTblEntry *) lfirst(lc);
+				if (IsCitusTable(rte->relid))
+				{
+					citusRelids = lappend_int(citusRelids, rte->relid);
+					*innerRte = rte; // set the value of innerRte
+				}
+			}
+
+			if (!AllDistributedRelationsInListColocated(citusRelids))
+			{
+				ereport(DEBUG5, (errmsg("The distributed tables are not colocated")));
+				return -1;
+			}
+
+			return outerRtIndex;
+		}
+	}
+
+	return -1;
+}
+
+
+/*
+ * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals 
+ * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard. 
+ * TODO:
+ *     - Not supported cases should not call this function. 
+ *     - Remove the excessive debug messages.
+ */
+bool
+UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (!IsA(node, Query))
+	{
+		return expression_tree_walker(node, UpdateWhereClauseForOuterJoin, relationShardList);
+	}
+
+	Query *query = (Query *) node;
+	if (query->jointree == NULL)
+	{
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+	}
+
+	FromExpr *fromExpr = query->jointree;
+	if(fromExpr == NULL)
+	{
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+	}
+
+	/*
+	* We need to find the outer table in the join clause to add the constraints w.r.to the shard 
+	* intervals of the inner table.
+	* A representative inner table is sufficient as long as it is colocated with all other
+	* distributed tables in the join clause.
+	*/
+	RangeTblEntry *innerRte = NULL;
+	int outerRtIndex = GetRepresentativeTablesFromJoinClause(fromExpr->fromlist, query->rtable, &innerRte);
+	if (outerRtIndex < 0 || innerRte == NULL)
+	{
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+	}
+	
+	ereport(DEBUG5, (errmsg("\t innerRte: %s", innerRte->eref->aliasname)));
+
+	RelationShard *relationShard = FindRelationShard(innerRte->relid, relationShardList);
+	uint64 shardId = relationShard->shardId;
+	Oid relationId = relationShard->relationId;
+
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	Var *partitionColumnVar = cacheEntry->partitionColumn;
+
+	/* 
+	* we will add constraints for the outer table, so we need to set the varno
+	* TODO: this only works when the outer table has the distribution column,
+	* we shoul not end up here if this is not the case.
+	*/
+	partitionColumnVar->varno = outerRtIndex;
+	bool isFirstShard = IsFirstShard(cacheEntry, shardId);
+	
+	/* load the interval for the shard and create constant nodes for the upper/lower bounds */
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Const *constNodeLowerBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), shardInterval->minValue, false, true);
+	Const *constNodeUpperBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), shardInterval->maxValue, false, true);
+	Const *constNodeZero = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), Int32GetDatum(0), false, true);
+
+	//  TOOD: the following is only for hash partitioned tables
+	/* create a function expression node for the hash partition column */ 
+	FuncExpr *hashFunction = makeNode(FuncExpr);
+	hashFunction->funcid = cacheEntry->hashFunction->fn_oid;
+	hashFunction->args = list_make1(partitionColumnVar);
+	hashFunction->funcresulttype = get_func_rettype(cacheEntry->hashFunction->fn_oid);
+	hashFunction->funcretset = false;
+
+	/* create a function expression for the lower bound of the shard interval */
+	Oid resultTypeOid = get_func_rettype(cacheEntry->shardIntervalCompareFunction->fn_oid);
+	FuncExpr* lowerBoundFuncExpr = makeNode(FuncExpr);
+	lowerBoundFuncExpr->funcid = cacheEntry->shardIntervalCompareFunction->fn_oid;
+	lowerBoundFuncExpr->args = list_make2((Node *) constNodeLowerBound, (Node *) hashFunction);
+	lowerBoundFuncExpr->funcresulttype = resultTypeOid;
+	lowerBoundFuncExpr->funcretset = false;
+
+	Oid lessThan = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid, CStringGetDatum("<"), 
+								  resultTypeOid, resultTypeOid, ObjectIdGetDatum(11));
+
+	/* 
+	 * Finally, check if the comparison result is less than 0, i.e., 
+	 * shardInterval->minValue < hash(partitionColumn)
+	 * See SearchCachedShardInterval for the behavior at the boundaries.
+	 */  
+	Expr *lowerBoundExpr = make_opclause(lessThan, BOOLOID, false, (Expr *) lowerBoundFuncExpr,
+										 (Expr *) constNodeZero, InvalidOid, InvalidOid);
+
+	/* create a function expression for the upper bound of the shard interval */
+	FuncExpr* upperBoundFuncExpr = makeNode(FuncExpr);
+	upperBoundFuncExpr->funcid = cacheEntry->shardIntervalCompareFunction->fn_oid;
+	upperBoundFuncExpr->args = list_make2((Node *) hashFunction, (Expr *) constNodeUpperBound);
+	upperBoundFuncExpr->funcresulttype = resultTypeOid;
+	upperBoundFuncExpr->funcretset = false;
+
+	Oid lessThanOrEqualTo = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid, CStringGetDatum("<="), 
+									resultTypeOid, resultTypeOid, ObjectIdGetDatum(11));
+	
+
+	/* 
+	 * Finally, check if the comparison result is less than or equal to 0, i.e., 
+	 * hash(partitionColumn) <= shardInterval->maxValue
+	 * See SearchCachedShardInterval for the behavior at the boundaries.
+	 */  
+	Expr *upperBoundExpr = make_opclause(lessThanOrEqualTo, BOOLOID, false, (Expr *) upperBoundFuncExpr,
+										 (Expr *) constNodeZero, InvalidOid, InvalidOid);
+
+
+	/* create a node for both upper and lower bound */
+	Node *shardIntervalBoundQuals = make_and_qual((Node *) lowerBoundExpr, (Node *) upperBoundExpr);
+
+	/* 
+	 * Add a null test for the partition column for the first shard. 
+	 * This is because we need to include the null values in exactly one of the shard queries.
+	 * The null test is added as an OR clause to the existing AND clause.
+	 */
+	if (isFirstShard)
+	{
+		/* null test for the first shard */
+		NullTest *nullTest = makeNode(NullTest);
+		nullTest->nulltesttype = IS_NULL;  /* Check for IS NULL */
+		nullTest->arg = (Expr *) partitionColumnVar;  /* The variable to check */
+		nullTest->argisrow = false;
+		shardIntervalBoundQuals = (Node *) make_orclause(list_make2(nullTest, shardIntervalBoundQuals));
+	}
+
+	if (fromExpr->quals == NULL)
+	{
+		fromExpr->quals = (Node *) shardIntervalBoundQuals;
+	}
+	else
+	{
+		fromExpr->quals = make_and_qual(fromExpr->quals, shardIntervalBoundQuals);
+	}
+
+	// TODO: verify this, do we need the recursive call for all nodes? 
+	/* We need to continue the recursive walk for the nested join statements.*/
+	return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
 }
 
 
