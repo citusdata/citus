@@ -106,6 +106,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/stat_counters.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
@@ -499,10 +500,14 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 
 	/* set up the destination for the COPY */
 	const bool publishableData = true;
+
+	/* we want to track query counters for "COPY (to) distributed-table .." commands */
+	const bool trackQueryCounters = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList,
 																  partitionColumnIndex,
 																  executorState, NULL,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	/* if the user specified an explicit append-to_shard option, write to it */
 	uint64 appendShardId = ProcessAppendToShardOption(tableId, copyStatement);
@@ -1877,11 +1882,15 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
  * of intermediate results that are co-located with the actual table.
  * The names of the intermediate results with be of the form:
  * intermediateResultIdPrefix_<shardid>
+ *
+ * If trackQueryCounters is true, the COPY will increment the query stat
+ * counters as needed at the end of the COPY.
  */
 CitusCopyDestReceiver *
 CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColumnIndex,
 							EState *executorState,
-							char *intermediateResultIdPrefix, bool isPublishable)
+							char *intermediateResultIdPrefix, bool isPublishable,
+							bool trackQueryCounters)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) palloc0(
 		sizeof(CitusCopyDestReceiver));
@@ -1901,6 +1910,7 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 	copyDest->colocatedIntermediateResultIdPrefix = intermediateResultIdPrefix;
 	copyDest->memoryContext = CurrentMemoryContext;
 	copyDest->isPublishable = isPublishable;
+	copyDest->trackQueryCounters = trackQueryCounters;
 
 	return copyDest;
 }
@@ -2587,8 +2597,9 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 
 /*
  * CitusCopyDestReceiverShutdown implements the rShutdown interface of
- * CitusCopyDestReceiver. It ends the COPY on all the open connections and closes
- * the relation.
+ * CitusCopyDestReceiver. It ends the COPY on all the open connections, closes
+ * the relation and increments the query stat counters based on the shards
+ * copied into if requested.
  */
 static void
 CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
@@ -2598,6 +2609,26 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	HTAB *connectionStateHash = copyDest->connectionStateHash;
 	ListCell *connectionStateCell = NULL;
 	Relation distributedRelation = copyDest->distributedRelation;
+
+	/*
+	 * Increment the query stat counters based on the shards copied into
+	 * if requested.
+	 */
+	if (copyDest->trackQueryCounters)
+	{
+		int copiedShardCount =
+			copyDest->shardStateHash ?
+			hash_get_num_entries(copyDest->shardStateHash) :
+			0;
+		if (copiedShardCount <= 1)
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
+	}
 
 	List *connectionStateList = ConnectionStateList(connectionStateHash);
 
@@ -3140,6 +3171,15 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag)
 	}
 
 	SendCopyEnd(copyOutState);
+
+	if (list_length(shardIntervalList) <= 1)
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
 
 	table_close(distributedRelation, AccessShareLock);
 
