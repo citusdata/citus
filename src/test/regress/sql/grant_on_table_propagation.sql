@@ -405,6 +405,7 @@ RESET client_min_messages;
 -- similar test but adding a node after the fact
 -- remove one of the worker nodes:
 SELECT citus_remove_node('localhost', :worker_2_port);
+SET citus.next_shard_id to 2000000;
 CREATE TABLE grant_table_propagated_after (id int primary key);
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('grant_table_propagated_after', 'id');
@@ -424,8 +425,15 @@ SELECT id FROM grant_table_propagated_after;
 :verify_grant_table ;
 :verify_grant_attributes ;
 
--- cleanup
-REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0;
+-- cleanup and test revoke .. cascade/restrict
+SET citus.log_remote_commands TO on;
+set citus.grep_remote_commands = '%REVOKE%';
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 CASCADE;
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0 RESTRICT;
+REVOKE SELECT (id) ON grant_table_propagated_after FROM grant_user_0; -- implicit RESTRICT
+
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
 
 :verify_grant_table ;
 :verify_grant_attributes ;
@@ -439,6 +447,6 @@ RESET client_min_messages;
 -- prevent useless messages on DROP objects.
 SET client_min_messages TO ERROR;
 DROP SCHEMA grant_on_table CASCADE;
-DROP ROLE grant_user_0, grant_user_1;
+DROP ROLE grant_user_0, grant_user_1, nogrant_user;
 RESET client_min_messages;
 RESET search_path;

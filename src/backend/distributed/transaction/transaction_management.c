@@ -802,8 +802,18 @@ AdjustMaxPreparedTransactions(void)
 	 * (connections * 2 currently).  If the user explicitly configured 2PC, we
 	 * leave the configuration alone - there might have been intent behind the
 	 * decision.
+	 *
+	 * find_option is declared static in guc.c for older versions, so we can't
+	 * really check if max_prepared_xacts is configured by the user explicitly,
+	 * so check if it's value is default.
 	 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+	struct config_generic *gconf = find_option("max_prepared_transactions",
+											   false, false, ERROR);
+	if (gconf->source == PGC_S_DEFAULT)
+#else
 	if (max_prepared_xacts == 0)
+#endif
 	{
 		char newvalue[12];
 

@@ -473,11 +473,11 @@ DETAIL:  on server regress_maintain@localhost:xxxxx connectionId: xxxxxxx
 RESET ROLE;
 SET citus.grep_remote_commands = '%maintain%';
 REVOKE MAINTAIN ON dist_test FROM regress_maintain;
-NOTICE:  issuing REVOKE maintain ON dist_test FROM regress_maintain
+NOTICE:  issuing REVOKE maintain ON dist_test FROM regress_maintain RESTRICT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REVOKE maintain ON dist_test FROM regress_maintain
+NOTICE:  issuing REVOKE maintain ON dist_test FROM regress_maintain RESTRICT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (20240023, 'pg17', 'REVOKE maintain ON dist_test FROM regress_maintain')
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (20240023, 'pg17', 'REVOKE maintain ON dist_test FROM regress_maintain RESTRICT')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 RESET citus.grep_remote_commands;
 SET ROLE regress_maintain;

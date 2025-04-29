@@ -182,6 +182,15 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s",
 							 grantOption, privsString.data, targetString.data,
 							 granteesString.data);
+
+			if (grantStmt->behavior == DROP_CASCADE)
+			{
+				appendStringInfoString(&ddlString, " CASCADE");
+			}
+			else
+			{
+				appendStringInfoString(&ddlString, " RESTRICT");
+			}
 		}
 
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
