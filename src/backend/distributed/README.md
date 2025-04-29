@@ -2718,7 +2718,7 @@ And beside these, Citus itself also provides some additional statistic views to 
 ### Citus stat counters
 Citus keeps track of several stat counters and exposes them via the `citus_stat_counters` view. The counters are tracked once `citus.enable_stat_counters` is set to true. Also, `citus_stat_counters_reset()` can be used to reset the counters for the given database if a database id different than 0 (default, InvalidOid) is provided, otherwise, it resets the counters for the current database.
 
-Details about the implementation and its caveats can be found in the header comment of [stat_counters.c](/src/backend/distributed/stat_counters.c). However, at the high level;
+Details about the implementation and its caveats can be found in the header comment of [stat_counters.c](/src/backend/distributed/stats/stat_counters.c). However, at the high level;
 1. We allocate a shared memory array of length `MaxBackends` so that each backend has its own counter slot to reduce the contention while incrementing the counters at the runtime.
 2. We also allocate a shared hash, whose entries correspond to individual databases. Then, when a backend exits, it first aggregates its counters to the relevant entry in the shared hash, and then it resets its own counters because the same counter slot might be reused by another backend later.
 

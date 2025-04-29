@@ -50,7 +50,7 @@
 #include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
-#include "distributed/stat_counters.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"

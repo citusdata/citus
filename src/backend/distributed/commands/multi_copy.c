@@ -106,7 +106,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/shared_connection_stats.h"
-#include "distributed/stat_counters.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"

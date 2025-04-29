@@ -39,7 +39,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shared_connection_stats.h"
-#include "distributed/stat_counters.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/time_constants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
