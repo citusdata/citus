@@ -26,7 +26,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/repartition_executor.h"
-#include "distributed/stat_counters.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 
 static void ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState);
