@@ -317,8 +317,8 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
 
 
 /*
- * FindCitusExtradataContainerRTE is a helper function that finds the
- * citus_extradata_container in range table entry.
+ * ExtractCitusExtradataContainerRTE is a helper function that stores rangeTblEntry
+ * to result if it has citus extra data container.
  *
  * The function returns true if it finds the RTE, and false otherwise.
  */
