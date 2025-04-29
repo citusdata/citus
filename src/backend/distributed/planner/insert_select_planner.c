@@ -28,6 +28,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "nodes/pg_list.h"
 
 #include "pg_version_constants.h"
 
@@ -108,28 +109,43 @@ static void ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
 							 Form_pg_attribute attr, int targetEntryIndex,
 							 List **projectedEntries, List **nonProjectedEntries);
 
-typedef struct ShiftReferencesWalkerContext
+typedef struct
 {
-	/* current nesting depth, 0 for top-level query, increments each time we go one Query deeper */
-	int levelsup;
-
-	/* how much to shift ctelevelsup by if it matches levelsup+1 (typically -1) */
-	int offset;
-
-	/* optional: if we want to check ctename is in top-level list */
+	int         levelsup;          /* current depth, 0 at sub-query root   */
+	int         offset;            /* -1                                   */
+	/* sets built once before walk, used read-only during walk */
+	List       *dupCteNameList;    /* names duplicated between top & sub   */
+	/* filled while walking */
+	List       *seenDupRefs;       /* RTEs whose ctename will need rename  */
 	List *topLevelCteList;
-} ShiftReferencesWalkerContext;		 
+
+} ShiftCteContext; 
+
 
 static bool
-inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context);
+NameInStringList(List *nameList, const char *name);
+
+static List *
+FindDuplicateCteNames(List *topLevel, List *subquery);
+
+static bool
+inline_cte_walker(Node *node, ShiftCteContext *ctx);
 
 static void
-DecrementInsertLevelReferences(Query *subquery, 
-							   int offset, /* typically -1 */
-							   List *topLevelCteList);
+RenameDuplicateCtes(Query *subq,
+					List *dupNameList,
+					List *seenRefs);
 
 static bool
 CteNameExists(List *cteList, const char *ctename);
+
+static void
+CopyAndRenameOuterCtes(Query *outerQuery,
+                       List  *topLevelCopy,
+                       List  *dupNameList);
+
+static bool
+rename_cte_ref_walker(Node *node, void *dupNameList);
 
 
 /* depth of current insert/select planner. */
@@ -530,56 +546,139 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 static void
 PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 {
-	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	Oid targetRelationId = insertRte->relid;
+    RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
+    RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
+    Oid            targetRel = insertRte->relid;
 
-	if (selectRte->subquery->setOperations != NULL)
-	{
-		/*
-		 * Prepare UNION query for reordering and adding casts by
-		 * wrapping it in a subquery to have a single target list.
-		 */
-		selectRte->subquery = WrapSubquery(selectRte->subquery);
-	}
+    /* 0.  if SELECT is a UNION we first wrap it so we get a single target list */
+    if (selectRte->subquery->setOperations != NULL)
+        selectRte->subquery = WrapSubquery(selectRte->subquery);
 
-	/* this is required for correct deparsing of the query */
-	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
+    /* 1.  reorder INSERT & SELECT tlist + add casts for COPY optimisation */
+    ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
+    selectRte->subquery->targetList =
+        AddInsertSelectCasts(insertSelectQuery->targetList,
+                             copyObject(selectRte->subquery->targetList),
+                             targetRel);
 
-	/*
-	 * Cast types of insert target list and select projection list to
-	 * match the column types of the target relation.
-	 */
-	selectRte->subquery->targetList =
-		AddInsertSelectCasts(insertSelectQuery->targetList,
-							 copyObject(selectRte->subquery->targetList),
-							 targetRelationId);
+    /* --- from here on we only work if INSERT defines CTEs ---------------- */
+    if (insertSelectQuery->cteList == NIL)
+        return;
 
-	if (list_length(insertSelectQuery->cteList) > 0)
-	{
-		List       *topCopy = copyObject(insertSelectQuery->cteList);
-		ListCell   *lc;
-	
-		elog(DEBUG1, "Unifying top‑level CTEs into subquery");
-	
-		/* append only the *new* ones */
-		foreach(lc, topCopy)
-		{
-			CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
-			if (!CteNameExists(selectRte->subquery->cteList, cte->ctename))
-				selectRte->subquery->cteList =
-					lappend(selectRte->subquery->cteList, cte);
-		}
+    /* we mutate the list, keep an untouched copy for later */
+    List       *topCopy = copyObject(insertSelectQuery->cteList);
+    ListCell   *lc;
 
-		insertSelectQuery->cteList = NIL;
+    elog(DEBUG1, "Unifying top-level CTEs into subquery");
 
-		/* Suppose we physically appended the top-level cteList into the subquery, 
-   		so references are at ctelevelsup=1, 2, etc. We want them all to shift by -1. */
+    /* 2. merge INSERT-level CTEs into the SELECT-subquery (skip duplicates) */
+    foreach (lc, topCopy)
+    {
+        CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+        if (!CteNameExists(selectRte->subquery->cteList, cte->ctename))
+            selectRte->subquery->cteList =
+                lappend(selectRte->subquery->cteList, cte);
+    }
 
-		DecrementInsertLevelReferences(selectRte->subquery, -1, topCopy  /* for ctename check */);
+    /* 3. build list of names that now exist twice                         */
+    List *dupNames = FindDuplicateCteNames(topCopy, selectRte->subquery->cteList);
 
-		elog(DEBUG1, "Done shifting ctelevelsup X->X-1 for subquery references");
-	}
+    /* 4. one big walker that shifts ctelevelsup and notes inner refs ----- */
+    ShiftCteContext ctx = {0};
+    ctx.levelsup        = 0;
+    ctx.offset          = -1;          /* shift down by one */
+    ctx.dupCteNameList  = dupNames;
+    ctx.seenDupRefs     = NIL;
+
+    /* 4.a walk the SELECT sub-query                                       */
+    query_tree_walker(selectRte->subquery,
+                      inline_cte_walker,
+                      (void *) &ctx,
+                      QTW_EXAMINE_RTES_BEFORE);
+
+    /* 4.b ALSO walk every INSERT-level CTE body - they may reference a
+     *     sibling CTE that became duplicate.                              */
+    foreach (lc, topCopy)
+    {
+        CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+
+        if (IsA(cte->ctequery, Query))
+            query_tree_walker((Query *) cte->ctequery,
+                              inline_cte_walker,
+                              (void *) &ctx,
+                              QTW_EXAMINE_RTES_BEFORE);
+    }
+
+    /* 5. rename duplicate definitions and the inner references we stored  */
+    if (dupNames != NIL)
+        RenameDuplicateCtes(selectRte->subquery, dupNames, ctx.seenDupRefs);
+
+    /* 6. rename references that live inside the ORIGINAL CTE bodies       */
+    foreach (lc, topCopy)
+    {
+        CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+        rename_cte_ref_walker((Node *) cte->ctequery, dupNames);
+    }
+
+	rename_cte_ref_walker((Node *) selectRte->subquery, dupNames);
+
+    /* 7. create renamed copies of the original CTEs for the outer query   */
+    CopyAndRenameOuterCtes(insertSelectQuery, topCopy, dupNames);
+
+    /* 8. finally fix any remaining references on *all* query levels       */
+    rename_cte_ref_walker((Node *) insertSelectQuery, dupNames);
+}
+
+
+
+/*
+ * inline_cte_walker
+ *
+ *   If node is a Query, we increase context->levelsup by 1,
+ *   recursively walk the Query, then restore it.
+ *
+ *   If node is a RangeTblEntry with RTE_CTE and ctelevelsup == (levelsup + 1),
+ *   we do ctelevelsup += offset (e.g. -1 => so k+1 → k).
+ *
+ *   We do expression_tree_walker for fallback on expressions.
+ */
+static bool
+inline_cte_walker(Node *node, ShiftCteContext *ctx)
+{
+    if (node == NULL)
+        return false;
+
+    if (IsA(node, Query))
+    {
+        ctx->levelsup++;
+        query_tree_walker((Query *) node,
+                          inline_cte_walker,
+                          ctx,
+                          QTW_EXAMINE_RTES_BEFORE);
+        ctx->levelsup--;
+        return false;
+    }
+    else if (IsA(node, RangeTblEntry))
+    {
+        RangeTblEntry *rte = (RangeTblEntry *) node;
+
+        if (rte->rtekind == RTE_CTE &&           /* it is a CTE ref    */
+            rte->ctelevelsup > 0)                /* points above us    */
+        {
+            /* 1. shift one level down */
+            rte->ctelevelsup += ctx->offset;     /* offset == –1 */
+
+            /* 2. if it is one of the duplicate names, remember it   */
+            if (NameInStringList(ctx->dupCteNameList, rte->ctename) &&
+                !list_member_ptr(ctx->seenDupRefs, rte))
+                ctx->seenDupRefs = lappend(ctx->seenDupRefs, rte);
+        }
+        return false;
+    }
+    /* other expression nodes */
+    return expression_tree_walker(node,
+                                  inline_cte_walker,
+                                  ctx);
 }
 
 
@@ -597,101 +696,142 @@ CteNameExists(List *cteList, const char *ctename)
 }
 
 
+static void
+RenameDuplicateCtes(Query *subq,
+                    List *dupNameList,   /* names we must rename          */
+                    List *seenRefs)      /* RTE pointers captured above   */
+{
+    ListCell *lc;
+    /* (A) rename definitions that sit now in subq->cteList */
+    foreach(lc, subq->cteList)
+    {
+        CommonTableExpr *cte = lfirst(lc);
+        if (NameInStringList(dupNameList, cte->ctename))
+        {
+            char *newname = psprintf("_insert_%s", cte->ctename);
+            cte->ctename = pstrdup(newname);
+        }
+    }
+    /* (B) rename every reference we stored while walking */
+    foreach(lc, seenRefs)
+    {
+        RangeTblEntry *rte = lfirst(lc);
+        char *newname = psprintf("_insert_%s", rte->ctename);
+        rte->ctename = pstrdup(newname);
+    }
+}
+
+
+
+/* collect names of CTEs that exist both top-level and inside the sub-query */
+static List *
+FindDuplicateCteNames(List *topLevel, List *subquery)
+{
+    List       *dups = NIL;
+    ListCell   *lc;
+
+    foreach(lc, topLevel)
+    {
+        CommonTableExpr *cte = lfirst(lc);
+        if (CteNameExists(subquery, cte->ctename))
+            dups = lappend(dups, makeString(pstrdup(cte->ctename)));
+    }
+    return dups;
+}
+
+
+static bool
+NameInStringList(List *nameList, const char *name)
+{
+    ListCell *lc;
+    foreach(lc, nameList)
+        if (strcmp(strVal(lfirst(lc)), name) == 0)
+            return true;
+    return false;
+}
+
+
+
 
 /*
- * inline_cte_walker
+ * For each name in dupNameList make a copy of the ORIGINAL top-level CTE,
+ * rename it to "_insert_<name>" and append it to outerQuery->cteList.
+ */
+static void
+CopyAndRenameOuterCtes(Query *outerQuery,
+                       List  *topLevelCopy,   /* copy of original outer CTEs  */
+                       List  *dupNameList)    /* names that were duplicated   */
+{
+    ListCell *lc;
+
+    foreach (lc, topLevelCopy)
+    {
+        CommonTableExpr *orig = (CommonTableExpr *) lfirst(lc);
+
+        if (NameInStringList(dupNameList, orig->ctename))
+        {
+            CommonTableExpr *cpy  = copyObject(orig);
+            char            *newn = psprintf("_insert_%s", orig->ctename);
+
+            cpy->ctename = pstrdup(newn);      /* rename definition  */
+            outerQuery->cteList = lappend(outerQuery->cteList, cpy);
+        }
+    }
+}
+
+
+/*
+ * rename_cte_ref_walker
+ *   Recursively rename every RTE_CTE whose *current* name is in
+ *   dupNameList by prefixing it with "_insert_".
  *
- *   If node is a Query, we increase context->levelsup by 1,
- *   recursively walk the Query, then restore it.
- *
- *   If node is a RangeTblEntry with RTE_CTE and ctelevelsup == (levelsup + 1),
- *   we do ctelevelsup += offset (e.g. -1 => so k+1 → k).
- *
- *   We do expression_tree_walker for fallback on expressions.
+ *   - We do NOT touch cte->ctename in sub-queries here – that was
+ *     already done by RenameDuplicateCtes / CopyAndRenameOuterCtes.
+ *   - We visit every Query node, so this reaches into CTE bodies,
+ *     sub-queries, InitPlans, etc.
  */
 static bool
-inline_cte_walker(Node *node, ShiftReferencesWalkerContext *context)
+rename_cte_ref_walker(Node *node, void *dupNameList)
 {
-	if (node == NULL)
-		return false;
+    if (node == NULL)
+        return false;
 
-	if (IsA(node, Query))
-	{
-		Query *query = (Query *) node;
+    if (IsA(node, RangeTblEntry))
+    {
+        RangeTblEntry *rte = (RangeTblEntry *) node;
 
-		/* descend one query level deeper */
-		context->levelsup++;
+        if (rte->rtekind == RTE_CTE &&
+            NameInStringList((List *) dupNameList, rte->ctename))
+        {
+            char *newn = psprintf("_insert_%s", rte->ctename);
+            rte->ctename = newn;
+        }
+        /* no further descent needed inside a bare RTE */
+        return false;
+    }
+    else if (IsA(node, Query))
+    {
+        Query *q = (Query *) node;
 
-		/*
-		 * Use QTW_EXAMINE_RTES_AFTER or QTW_EXAMINE_RTES_BEFORE – your snippet
-		 * used AFTER, so let's keep that. This means we'll handle the rtable
-		 * after the rest, which is okay. 
-		 *
-		 * Or we can do QTW_EXAMINE_RTES_BEFORE so we see RangeTblEntry first.
-		 * The key is being consistent with your scenario.
-		 */
-		query_tree_walker(query,
-						  inline_cte_walker,
-						  context,
-						  QTW_EXAMINE_RTES_BEFORE);
+        /* first recurse into sub-queries you find in the RTE list */
+        range_table_walker(q->rtable,
+                           rename_cte_ref_walker,
+                           dupNameList,
+                           QTW_EXAMINE_RTES_BEFORE);
 
-		context->levelsup--;
+        /* then recurse into every other field of the Query */
+        return query_tree_walker(q,
+                                 rename_cte_ref_walker,
+                                 dupNameList,
+                                 QTW_IGNORE_RANGE_TABLE);
+    }
 
-		return false;
-	}
-	else if (IsA(node, RangeTblEntry))
-	{
-		RangeTblEntry *rte = (RangeTblEntry *) node;
-
-		if (rte->rtekind == RTE_CTE)
-		{
-			/*
-			 * If RTE_CTE's ctelevelsup == (current nesting level + 1),
-			 * we do ctelevelsup += offset. 
-			 * e.g. if offset=-1, and ctelevelsup= (levelsup + 1), 
-			 * that effectively does "k+1 → k".
-			 */
-			if (rte->ctelevelsup == (context->levelsup + 1))
-			{
-				if (context->topLevelCteList == NULL ||
-					CteNameExists(context->topLevelCteList, rte->ctename))
-				{
-					int old = rte->ctelevelsup;
-					rte->ctelevelsup += context->offset;       /* usually ‑1 */
-					elog(DEBUG2, "Shifted ctelevelsup for %s from %d to %d",
-						 rte->ctename, old, rte->ctelevelsup);
-				}
-				else
-				{
-					elog(DEBUG2, "ctename=%s not found in top-level list, skipping shift",
-						 rte->ctename);
-				}
-			}
-		}
-
-		return false;
-	}
-
-	/* fallback for expressions, e.g. scanning function calls, sublinks, etc. */
-	return expression_tree_walker(node, inline_cte_walker, (void *) context);
+    /* expression nodes, target lists, … */
+    return expression_tree_walker(node,
+                                  rename_cte_ref_walker,
+                                  dupNameList);
 }
 
-
-static void
-DecrementInsertLevelReferences(Query *subquery, 
-							   int offset, /* typically -1 */
-							   List *topLevelCteList)
-{
-	ShiftReferencesWalkerContext ctx;
-	ctx.levelsup = 0;  /* so that top-level query => 0, subquery => 1, etc. */
-	ctx.offset = offset;
-	ctx.topLevelCteList = topLevelCteList;
-
-	query_tree_walker(subquery,
-					  inline_cte_walker,
-					  (void *) &ctx,
-					  QTW_EXAMINE_RTES_AFTER /* or BEFORE, but snippet used AFTER */);
-}
 
 
 
