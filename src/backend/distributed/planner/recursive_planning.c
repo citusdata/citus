@@ -73,6 +73,7 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
@@ -744,17 +745,27 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 			{
 				/* <recurring> left join <distributed> */
 
-				/* TODO: For now, just disable the recursive planning here. 
-				 * However, we should add further checks, i.e., left node is a subquery
-				 * that can not be pushed down with additional constrains. 
+				/* Recursively plan the right side of the left left join when the following 
+				 * conditions are met:
+				 * 1. The left side is recurring
+				 * 2. The right side is not recurring
+				 * 3. The left side is not a RangeTblRef (i.e., it is not a reference/local table)
+				 * 4. The tables in the rigt side are not colocated.
+				 * 5. The left side does not have the distribution column  
 				 */
-				if (leftNodeRecurs && !rightNodeRecurs && false)				
+				if (leftNodeRecurs && !rightNodeRecurs)				
 				{
-					ereport(DEBUG1, (errmsg("recursively planning right side of "
-											"the left join since the outer side "
-											"is a recurring rel")));
-					RecursivelyPlanDistributedJoinNode(rightNode, query,
-													   recursivePlanningContext);
+					int outerRtIndex = ((RangeTblRef *) leftNode)->rtindex;
+					RangeTblEntry *rte = rt_fetch(outerRtIndex, query->rtable);
+
+					if(!IsPushdownSafeForRTEInLeftJoin(rte))
+					{
+						ereport(DEBUG1, (errmsg("recursively planning right side of "
+												"the left join since the outer side "
+												"is a recurring rel that is not an RTE")));
+						RecursivelyPlanDistributedJoinNode(rightNode, query,
+														recursivePlanningContext);
+					}
 				}
 
 				/*
@@ -2647,3 +2658,35 @@ hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
 
 
 #endif
+
+
+/*
+ * IsPushdownSafeForRTEInLeftJoin returns true if the given range table entry 
+ * is safe for pushdown. Currently, we only allow RTE_RELATION and RTE_FUNCTION.
+ */
+bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
+{
+	if (rte->rtekind == RTE_RELATION)
+	{
+		return true;
+	}
+	/* check if it is a citus table, e.g., ref table */
+	else if (rte->rtekind == RTE_FUNCTION)
+	{
+		RangeTblEntry *newRte = NULL;
+		if(!ExtractCitusExtradataContainerRTE(rte, &newRte))
+		{
+			ereport(DEBUG5, (errmsg("RTE type %d is not safe for pushdown, function but it does not contain citus extradata",
+									rte->rtekind)));
+			return false;
+		}
+		return true;
+	}
+	else
+	{
+		ereport(DEBUG5, (errmsg("RTE type %d is not safe for pushdown",
+							    rte->rtekind)));
+		return false;
+	}
+	
+}
