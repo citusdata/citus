@@ -34,11 +34,13 @@
 #include "distributed/combine_query_planner.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/query_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/shard_utils.h"
 #include "distributed/stats/stat_tenants.h"
 #include "distributed/version_compat.h"
@@ -205,58 +207,6 @@ UpdateTaskQueryString(Query *query, Task *task)
 }
 
 
-/*
- * ExtractRangeTableIds walks over the given node, and finds all range
- * table entries.
- */
-bool
-ExtractRangeTableIds(Node *node, ExtractRangeTableIdsContext *context)
-{
-	List **rangeTableList = context->result;
-	List *rtable = context->rtable;
-
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, RangeTblRef))
-	{
-		int rangeTableIndex = ((RangeTblRef *) node)->rtindex;
-
-		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rtable);
-		if (rte->rtekind == RTE_SUBQUERY)
-		{
-			Query *subquery = rte->subquery;
-			context->rtable = subquery->rtable;
-			ExtractRangeTableIds((Node *) subquery, context);
-			context->rtable = rtable; /* restore original rtable */
-		}
-		else if (rte->rtekind == RTE_RELATION || rte->rtekind == RTE_FUNCTION)
-		{
-			(*rangeTableList) = lappend(*rangeTableList, rte);
-			ereport(DEBUG4, (errmsg("ExtractRangeTableIds: found range table id %d", rte->relid)));
-		}
-		else
-		{
-			ereport(DEBUG4, (errmsg("Unsupported RTE kind in ExtractRangeTableIds %d", rte->rtekind)));
-		}
-		return false;
-	}
-	else if (IsA(node, Query))
-	{
-		context->rtable = ((Query *) node)->rtable;
-		query_tree_walker((Query *) node, ExtractRangeTableIds, context, 0);
-		context->rtable = rtable; /* restore original rtable */
-		return false;
-	}
-	else
-	{
-		return expression_tree_walker(node, ExtractRangeTableIds, context);
-	}
-}
-
-
 /* 
  * Iterates through the FROM clause of the query and checks if there is a join
  * clause with a reference and distributed table. 
@@ -291,54 +241,16 @@ GetRepresentativeTablesFromJoinClause(List *fromlist, List *rtable, RangeTblEntr
 			int outerRtIndex = ((RangeTblRef *)joinExpr->larg)->rtindex;
 			RangeTblEntry *outerRte = rt_fetch(outerRtIndex, rtable);
 
-			/* the outer table is a reference table */
-			if (outerRte->rtekind == RTE_FUNCTION)
+			if(!IsPushdownSafeForRTEInLeftJoin(outerRte))
 			{
-				RangeTblEntry *newRte = NULL;
-				if (!ExtractCitusExtradataContainerRTE(outerRte, &newRte))
-				{
-					/* RTE does not contain citus_extradata_container */
-					return -1; 
-				}
-			}
-			else if (outerRte->rtekind == RTE_RELATION)
-			{
-				/* OK */
-				ereport(DEBUG5, (errmsg("\t\t outerRte: is RTE_RELATION")));
-			}
-			else
-			{
-				ereport(DEBUG5, (errmsg("\t\t not supported RTE kind %d", outerRte->rtekind)));
+				ereport(DEBUG5, (errmsg("GetRepresentativeTablesFromJoinClause: RTE is not pushdown safe")));
 				return -1;
 			}
 
 			ereport(DEBUG5, (errmsg("\t OK outerRte: %s", outerRte->eref->aliasname)));
-			
-			int innerRelid = InvalidOid;
-			ExtractRangeTableIdsContext context;
-			List *innerRteList = NIL;
-			context.result = &innerRteList;
-			context.rtable = rtable;
-			/* TODO:  what if we call this also for LHS? */
-			ExtractRangeTableIds((Node *)joinExpr->rarg, &context);
 
-			List *citusRelids = NIL;
-			RangeTblEntry *rte = NIL;
-			ListCell *lc;
-
-			foreach(lc, innerRteList)
+			if (!CheckIfAllCitusRTEsAreColocated((Node *)joinExpr->rarg, rtable, innerRte))
 			{
-				rte = (RangeTblEntry *) lfirst(lc);
-				if (IsCitusTable(rte->relid))
-				{
-					citusRelids = lappend_int(citusRelids, rte->relid);
-					*innerRte = rte; // set the value of innerRte
-				}
-			}
-
-			if (!AllDistributedRelationsInListColocated(citusRelids))
-			{
-				ereport(DEBUG5, (errmsg("The distributed tables are not colocated")));
 				return -1;
 			}
 

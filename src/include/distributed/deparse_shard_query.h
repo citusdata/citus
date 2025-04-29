@@ -23,15 +23,8 @@
 #include "distributed/query_utils.h"
 
 
-/* Struct to pass rtable list and the result list to walker */
-typedef struct ExtractRangeTableIdsContext
-{
-	List **result;
-	List *rtable;
-} ExtractRangeTableIdsContext;
 
 int GetRepresentativeTablesFromJoinClause(List *fromlist, List *rtable, RangeTblEntry **innerRte);
-bool ExtractRangeTableIds(Node *node, ExtractRangeTableIdsContext *context);
 extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
 extern bool UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList);

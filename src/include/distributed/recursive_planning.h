@@ -51,6 +51,7 @@ extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
 extern bool IsRelationLocalTableOrMatView(Oid relationId);
 extern bool ContainsReferencesToOuterQuery(Query *query);
 extern void UpdateVarNosInNode(Node *node, Index newVarNo);
+extern bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte);
 
 
 #endif /* RECURSIVE_PLANNING_H */
