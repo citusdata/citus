@@ -567,6 +567,38 @@ IsAnyObjectDistributed(const List *addresses)
 
 
 /*
+ * IsAnyParentObjectDistributed - true if at least one of the
+ * given addresses is distributed. If an address has a non-zero
+ * objectSubId, it checks the parent object (the object with
+ * the same classId and objid, but with objectSubId = 0). For
+ * example, a column address will check the table address.
+ * If the address has a zero objectSubId, it checks the address
+ * itself.
+ */
+bool
+IsAnyParentObjectDistributed(const List *addresses)
+{
+	bool isDistributed = false;
+	ListCell *lc = NULL;
+	foreach(lc, addresses)
+	{
+		ObjectAddress *address = (ObjectAddress *) lfirst(lc);
+		int32 savedObjectSubId = address->objectSubId;
+		address->objectSubId = 0;
+		isDistributed = IsObjectDistributed(address);
+		address->objectSubId = savedObjectSubId;
+
+		if (isDistributed)
+		{
+			break;
+		}
+	}
+
+	return isDistributed;
+}
+
+
+/*
  * GetDistributedObjectAddressList returns a list of ObjectAddresses that contains all
  * distributed objects as marked in pg_dist_object
  */
