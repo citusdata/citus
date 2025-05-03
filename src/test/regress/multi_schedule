@@ -137,3 +137,13 @@ test: check_mx
 test: generated_identity
 test: drop_database
 test: check_cluster_state
+
+# ----------
+# Tests for migrating comments while undistributing tables
+# ----------
+test: comment_migration_table
+test: comment_migration_table_joined_tables
+test: comment_migration_table_joined_tables_FK
+test: comment_migration_column
+test: comment_migration_column_joined_tables
+test: comment_migration_column_joined_tables_FK
