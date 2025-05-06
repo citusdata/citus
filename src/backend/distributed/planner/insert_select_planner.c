@@ -1593,7 +1593,7 @@ WrapSubquery(Query *subquery)
 
 	outerQuery->rtable = list_make1(rte_subq);
 
-#if PG_VERSION_NUM >= 160000
+#if PG_VERSION_NUM >= PG_VERSION_16
 
 	/* Ensure RTE_SUBQUERY has proper permission handling */
 	Assert(rte_subq->rtekind == RTE_SUBQUERY &&
@@ -1663,7 +1663,7 @@ WrapSubquery(Query *subquery)
 			newInnerTL = lappend(newInnerTL, innerTE);
 
 			Var *v = makeVar(/* subquery reference index is 1 */
-				1,
+				rtref->rtindex,     /* same as 1, but self‑documenting */
 				innerTE->resno,
 				exprType((Node *) innerTE->expr),
 				exprTypmod((Node *) innerTE->expr),
