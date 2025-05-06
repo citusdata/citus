@@ -88,6 +88,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/shard_pruning.h"
@@ -105,6 +106,7 @@ struct RecursivePlanningContextInternal
 	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
+	bool restrictionEquivalenceCheck;
 };
 
 /* track depth of current recursive planner query */
@@ -677,6 +679,35 @@ RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 
 
 /*
+ * Returns true if the given node is recurring, or the node is a 
+ * JoinExpr that contains a recurring node.
+*/
+static bool
+JoinExprHasNonRecurringTable(Node *node, Query *query)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+	else if (IsA(node, RangeTblRef))
+	{
+		return IsRTERefRecurring((RangeTblRef *) node, query);
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+
+		return JoinExprHasNonRecurringTable(joinExpr->larg, query) ||
+			   JoinExprHasNonRecurringTable(joinExpr->rarg, query);
+	}
+	else
+	{
+		return false;
+	}
+}
+
+
+/*
  * RecursivelyPlanRecurringTupleOuterJoinWalker descends into a join tree and
  * recursively plans all non-recurring (i.e., distributed) rels that that
  * participate in an outer join expression together with a recurring rel,
@@ -749,23 +780,46 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 				 * conditions are met:
 				 * 1. The left side is recurring
 				 * 2. The right side is not recurring
-				 * 3. The left side is not a RangeTblRef (i.e., it is not a reference/local table)
-				 * 4. The tables in the rigt side are not colocated.
-				 * 5. The left side does not have the distribution column  
+				 * 3. Either of the following:
+				 * 		a. The left side is not a RangeTblRef (i.e., it is not a reference/local table)
+				 * 		b. The tables in the rigt side are not colocated.
+				 * 5. The left side does not have the distribution column (TODO: CHECK THIS)
 				 */
+
 				if (leftNodeRecurs && !rightNodeRecurs)				
-				{
+				{	
 					int outerRtIndex = ((RangeTblRef *) leftNode)->rtindex;
 					RangeTblEntry *rte = rt_fetch(outerRtIndex, query->rtable);
-
-					if(!IsPushdownSafeForRTEInLeftJoin(rte))
+					RangeTblEntry *innerRte = NULL;
+					if (!IsPushdownSafeForRTEInLeftJoin(rte))
 					{
 						ereport(DEBUG1, (errmsg("recursively planning right side of "
 												"the left join since the outer side "
 												"is a recurring rel that is not an RTE")));
 						RecursivelyPlanDistributedJoinNode(rightNode, query,
-														recursivePlanningContext);
+														   recursivePlanningContext);
 					}
+					else if (!CheckIfAllCitusRTEsAreColocated(rightNode, query->rtable, &innerRte))
+					{
+						ereport(DEBUG1, (errmsg("recursively planning right side of the left join "
+												"since tables in the inner side of the left "
+												"join are not colocated")));
+						RecursivelyPlanDistributedJoinNode(rightNode, query,
+									                       recursivePlanningContext);						
+					}
+				}
+				/*
+				* rightNodeRecurs if there is a recurring table in the right side. However, if the right side 
+				* is a join expression, we need to check if it contains a recurring table. If it does, we need to
+				* recursively plan the right side of the left join. Push-down path does not handle the nested joins
+				* yet, once we have that, we can remove this check.
+				*/
+				else if (leftNodeRecurs && rightNodeRecurs && JoinExprHasNonRecurringTable(rightNode, query))
+				{
+						ereport(DEBUG1, (errmsg("recursively planning right side of the left join "
+												"since right side is a joinexpr with non-recurring tables")));
+						RecursivelyPlanDistributedJoinNode(rightNode, query,
+									   					   recursivePlanningContext);	
 				}
 
 				/*
