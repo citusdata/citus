@@ -174,6 +174,7 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  uint32 taskId,
 									  TaskType taskType,
 									  bool modifyRequiresCoordinatorEvaluation,
+									  bool innerTableOfOuterJoin,
 									  DeferredErrorMessage **planningError);
 static List * SqlTaskList(Job *job);
 static bool DependsOnHashPartitionJob(Job *job);
@@ -2183,6 +2184,8 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	int minShardOffset = INT_MAX;
 	int prevShardCount = 0;
 	Bitmapset *taskRequiredForShardIndex = NULL;
+	Bitmapset *innerTableOfOuterJoinSet = NULL;
+	bool innerTableOfOuterJoin = false;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
@@ -2220,20 +2223,17 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 			return NIL;
 		}
 		prevShardCount = cacheEntry->shardIntervalArrayLength;
-
+		innerTableOfOuterJoin = false;
 		/*
-		 * For left joins we don't care about the shards pruned for the right hand side.
-		 * If the right hand side would prune to a smaller set we should still send it to
-		 * all tables of the left hand side. However if the right hand side is bigger than
-		 * the left hand side we don't have to send the query to any shard that is not
-		 * matching anything on the left hand side.
-		 *
-		 * Instead we will simply skip any RelationRestriction if it is an OUTER join and
-		 * the table is part of the non-outer side of the join.
+		 * For left outer joins, we need to check if the table is in the inner
+		 * part of the join. If it is, we need to mark this shard and add interval
+		 * constraints to the join.
 		 */
 		if (IsInnerTableOfOuterJoin(relationRestriction))
 		{
-			continue;
+			ereport(DEBUG1, errmsg("Inner Table of Outer Join %d",
+								   relationRestriction->relationId));
+			innerTableOfOuterJoin = true;
 		}
 
 		ShardInterval *shardInterval = NULL;
@@ -2244,6 +2244,15 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 			taskRequiredForShardIndex =
 				bms_add_member(taskRequiredForShardIndex, shardIndex);
 			minShardOffset = Min(minShardOffset, shardIndex);
+			if (innerTableOfOuterJoin)
+			{
+				/*
+				 * We need to keep track of the inner table of outer join
+				 * shards so that we can process them later.
+				 */
+				innerTableOfOuterJoinSet =
+					bms_add_member(innerTableOfOuterJoinSet, shardIndex);
+			}
 		}
 	}
 
@@ -2261,11 +2270,13 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	int shardOffset = minShardOffset - 1;
 	while ((shardOffset = bms_next_member(taskRequiredForShardIndex, shardOffset)) >= 0)
 	{
+		innerTableOfOuterJoin = bms_is_member(shardOffset, innerTableOfOuterJoinSet);
 		Task *subqueryTask = QueryPushdownTaskCreate(query, shardOffset,
 													 relationRestrictionContext,
 													 taskIdIndex,
 													 taskType,
 													 modifyRequiresCoordinatorEvaluation,
+													 innerTableOfOuterJoin,
 													 planningError);
 		if (*planningError != NULL)
 		{
@@ -2439,6 +2450,7 @@ static Task *
 QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 						RelationRestrictionContext *restrictionContext, uint32 taskId,
 						TaskType taskType, bool modifyRequiresCoordinatorEvaluation,
+						bool innerTableOfOuterJoin,
 						DeferredErrorMessage **planningError)
 {
 	Query *taskQuery = copyObject(originalQuery);
@@ -2532,10 +2544,20 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	UpdateRelationToShardNames((Node *) taskQuery, relationShardList);
 
 	/*
+	 * Augment the where clause with the shard intervals for inner table of outer
+	 * joins.
+	 */
+	if (innerTableOfOuterJoin)
+	{
+		UpdateWhereClauseForOuterJoin((Node *) taskQuery, relationShardList);
+	}
+
+	/*
 	 * Ands are made implicit during shard pruning, as predicate comparison and
 	 * refutation depend on it being so. We need to make them explicit again so
 	 * that the query string is generated as (...) AND (...) as opposed to
 	 * (...), (...).
+	 * TODO: do we need to run this before adding quals? 
 	 */
 	if (taskQuery->jointree->quals != NULL && IsA(taskQuery->jointree->quals, List))
 	{

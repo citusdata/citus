@@ -20,10 +20,13 @@
 #include "nodes/pg_list.h"
 
 #include "distributed/citus_custom_scan.h"
+#include "distributed/query_utils.h"
 
 
+bool ExtractIndexesForConstaints(List *fromList, List *rtable, int *outerRtIndex, RangeTblEntry **distRte);
 extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
+extern bool UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList);
 extern void SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);
 extern void SetTaskQueryStringList(Task *task, List *queryStringList);
