@@ -1952,7 +1952,7 @@ RegisterCitusConfigVariables(void)
 			"because total background worker count is shared by all background workers. The value "
 			"represents the possible maximum number of task executors."),
 		&MaxBackgroundTaskExecutors,
-		4, 1, MAX_BG_TASK_EXECUTORS,
+		1, 1, MAX_BG_TASK_EXECUTORS,
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -1964,7 +1964,7 @@ RegisterCitusConfigVariables(void)
 			"for scheduled background tasks that involve a particular node"),
 		NULL,
 		&MaxBackgroundTaskExecutorsPerNode,
-		1, 1, 128,
+		4, 1, 128,
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

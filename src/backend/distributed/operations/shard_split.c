@@ -1551,7 +1551,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 									 publicationInfoHash,
 									 logicalRepTargetList,
 									 groupedLogicalRepTargetsHash,
-									 SHARD_SPLIT);
+									 SHARD_SPLIT, false);
 
 	/*
 	 * 10) Delete old shards metadata and mark the shards as to be deferred drop.
