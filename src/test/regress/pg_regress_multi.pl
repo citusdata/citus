@@ -494,6 +494,7 @@ push(@pgOptions, "citus.stat_tenants_limit = 2");
 push(@pgOptions, "citus.stat_tenants_track = 'ALL'");
 push(@pgOptions, "citus.enable_stat_counters=on");
 push(@pgOptions, "citus.superuser = 'postgres'");
+push(@pgOptions, "citus.enable_ddl_propagation=false");
 
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");

@@ -1,5 +1,6 @@
 # should come before multi_cluster_management
 # as it touches node metadata
+test: enable_ddl_propagation
 test: single_node_enterprise
 
 test: multi_test_helpers multi_test_helpers_superuser

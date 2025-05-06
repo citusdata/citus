@@ -1,4 +1,5 @@
 # import this file (from psql you can use \i) to use mitmproxy manually
+test: enable_ddl_propagation
 test: failure_test_helpers
 
 # this should only be run by pg_regress_multi, you don't need it
