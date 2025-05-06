@@ -45,3 +45,4 @@ DROP FUNCTION citus_internal.is_replication_origin_tracking_active();
 DROP VIEW pg_catalog.citus_stat_counters;
 DROP FUNCTION pg_catalog.citus_stat_counters(oid);
 DROP FUNCTION pg_catalog.citus_stat_counters_reset(oid);
+DROP VIEW IF EXISTS pg_catalog.citus_nodes;

@@ -1483,8 +1483,9 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                 | function citus_stat_counters(oid) SETOF record
                                                                 | function citus_stat_counters_reset(oid) void
                                                                 | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
+                                                                | view citus_nodes
                                                                 | view citus_stat_counters
-(30 rows)
+(31 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

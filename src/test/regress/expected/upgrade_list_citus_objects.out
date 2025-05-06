@@ -380,6 +380,7 @@ ORDER BY 1;
  view citus_dist_stat_activity
  view citus_lock_waits
  view citus_locks
+ view citus_nodes
  view citus_schema.citus_schemas
  view citus_schema.citus_tables
  view citus_shard_indexes_on_worker
@@ -392,6 +393,6 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(361 rows)
+(362 rows)
 
 DROP TABLE extension_basic_types;
