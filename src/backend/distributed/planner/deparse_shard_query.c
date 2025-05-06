@@ -206,29 +206,28 @@ UpdateTaskQueryString(Query *query, Task *task)
 	SetTaskQueryIfShouldLazyDeparse(task, query);
 }
 
-
-/* 
+/*
  * Iterates through the FROM clause of the query and checks if there is a join
- * clause with a reference and distributed table. 
- * If there is, it returns the index of the range table entry of the outer
- * table in the join clause. It also sets the innerRte to point to the
- * range table entry inner table. If there is no join clause with a distributed 
- * table, it returns -1.
- */
-int 
-GetRepresentativeTablesFromJoinClause(List *fromlist, List *rtable, RangeTblEntry **innerRte)
+ * expr with a reference and distributed table.
+ * If there is, it adds the index of the range table entry of the outer
+ * table in the join clause to the constraintIndexes list. It also sets the
+ * innerRte to point to the range table entry inner table.
+*/
+bool ExtractIndexesForConstaints(List *fromList, List *rtable,
+								 int *outerRtIndex, RangeTblEntry **distRte)
 {
+	ereport(DEBUG5, (errmsg("******")));
 	ListCell *fromExprCell;
-
-	/* TODO: is this case even possible | fromlist | > 1, no test cases yet */
-	if(list_length(fromlist) > 1)
+	/* TODO: is this case even possible | fromlist | > 1.  */
+	if(list_length(fromList) > 1)
 	{
-		ereport(DEBUG5, (errmsg("GetRepresentativeTablesFromJoinClause: Fromlist length > 1")));
+		ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: Fromlist length > 1")));
 		return -1;
-	}
-	foreach(fromExprCell, fromlist)
-	{	
+	}	
+	foreach(fromExprCell, fromList)
+	{
 		Node *fromElement = (Node *) lfirst(fromExprCell);
+
 		if (IsA(fromElement, JoinExpr))
 		{
 			JoinExpr *joinExpr = (JoinExpr *) fromElement;
@@ -236,29 +235,24 @@ GetRepresentativeTablesFromJoinClause(List *fromlist, List *rtable, RangeTblEntr
 			{
 				continue;
 			}
-			// TODO: this path should not be active when the conditions are not met.			
-
-			int outerRtIndex = ((RangeTblRef *)joinExpr->larg)->rtindex;
-			RangeTblEntry *outerRte = rt_fetch(outerRtIndex, rtable);
+			*outerRtIndex = (((RangeTblRef *)joinExpr->larg)->rtindex);
+			RangeTblEntry *outerRte = rt_fetch(*outerRtIndex, rtable);
 
 			if(!IsPushdownSafeForRTEInLeftJoin(outerRte))
 			{
-				ereport(DEBUG5, (errmsg("GetRepresentativeTablesFromJoinClause: RTE is not pushdown safe")));
-				return -1;
+				return false;
 			}
 
-			ereport(DEBUG5, (errmsg("\t OK outerRte: %s", outerRte->eref->aliasname)));
-
-			if (!CheckIfAllCitusRTEsAreColocated((Node *)joinExpr->rarg, rtable, innerRte))
+			if (!CheckIfAllCitusRTEsAreColocated((Node *)joinExpr->rarg, rtable, distRte))
 			{
-				return -1;
+				return false;
 			}
 
-			return outerRtIndex;
+			return true;
 		}
 	}
 
-	return -1;
+	return false;
 }
 
 
@@ -301,13 +295,16 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	* distributed tables in the join clause.
 	*/
 	RangeTblEntry *innerRte = NULL;
-	int outerRtIndex = GetRepresentativeTablesFromJoinClause(fromExpr->fromlist, query->rtable, &innerRte);
-	if (outerRtIndex < 0 || innerRte == NULL)
+	int outerRtIndex = -1;
+	bool result = ExtractIndexesForConstaints(fromExpr->fromlist, query->rtable, &outerRtIndex, &innerRte);
+	if (!result)
 	{
+		ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: failed to extract indexes")));
 		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
 	}
 	
-	ereport(DEBUG5, (errmsg("\t innerRte: %s", innerRte->eref->aliasname)));
+	ereport(DEBUG5, (errmsg("\t Distributed table from the inner part: %s", innerRte->eref->aliasname)));
+
 
 	RelationShard *relationShard = FindRelationShard(innerRte->relid, relationShardList);
 	uint64 shardId = relationShard->shardId;
