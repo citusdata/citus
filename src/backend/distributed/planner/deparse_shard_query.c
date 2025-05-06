@@ -218,12 +218,8 @@ bool ExtractIndexesForConstaints(List *fromList, List *rtable,
 {
 	ereport(DEBUG5, (errmsg("******")));
 	ListCell *fromExprCell;
-	/* TODO: is this case even possible | fromlist | > 1.  */
-	if(list_length(fromList) > 1)
-	{
-		ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: Fromlist length > 1")));
-		return -1;
-	}	
+	
+	// Check the first element of the from clause, the rest is already handled
 	foreach(fromExprCell, fromList)
 	{
 		Node *fromElement = (Node *) lfirst(fromExprCell);
