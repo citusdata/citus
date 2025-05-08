@@ -1,14 +1,14 @@
 -- See the comments for the function in
--- src/backend/distributed/stat_counters.c for more details.
+-- src/backend/distributed/stats/stat_counters.c for more details.
 CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
 	database_id oid DEFAULT 0,
 
 	-- must always be the first column or you should accordingly update
-	-- StoreDatabaseStatsIntoTupStore() function in src/backend/distributed/stat_counters.c
+	-- StoreDatabaseStatsIntoTupStore() function in src/backend/distributed/stats/stat_counters.c
 	OUT database_id oid,
 
 	-- Following stat counter columns must be in the same order as the
-	-- StatType enum defined in src/include/distributed/stat_counters.h
+	-- StatType enum defined in src/include/distributed/stats/stat_counters.h
 	OUT connection_establishment_succeeded bigint,
 	OUT connection_establishment_failed bigint,
 	OUT connection_reused bigint,
@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_counters(
 	OUT query_execution_multi_shard bigint,
 
 	-- must always be the last column or you should accordingly update
-	-- StoreDatabaseStatsIntoTupStore() function in src/backend/distributed/stat_counters.c
+	-- StoreDatabaseStatsIntoTupStore() function in src/backend/distributed/stats/stat_counters.c
 	OUT stats_reset timestamp with time zone
 )
 RETURNS SETOF RECORD

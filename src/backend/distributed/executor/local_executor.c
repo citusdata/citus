@@ -104,8 +104,8 @@
 #include "distributed/query_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/transaction_management.h"
-#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 

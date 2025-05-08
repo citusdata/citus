@@ -39,7 +39,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/shard_utils.h"
-#include "distributed/utils/citus_stat_tenants.h"
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/version_compat.h"
 
 

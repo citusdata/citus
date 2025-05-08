@@ -171,7 +171,7 @@
 #include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
-#include "distributed/stat_counters.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"

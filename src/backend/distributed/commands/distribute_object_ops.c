@@ -399,10 +399,37 @@ static DistributeObjectOps Any_Rename = {
 	.markDistributed = false,
 };
 static DistributeObjectOps Any_SecLabel = {
-	.deparse = DeparseSecLabelStmt,
+	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = NULL,
-	.postprocess = PostprocessSecLabelStmt,
+	.postprocess = PostprocessAnySecLabelStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = SecLabelStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Role_SecLabel = {
+	.deparse = DeparseRoleSecLabelStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessRoleSecLabelStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = SecLabelStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Table_SecLabel = {
+	.deparse = DeparseTableSecLabelStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessTableOrColumnSecLabelStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = SecLabelStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Column_SecLabel = {
+	.deparse = DeparseColumnSecLabelStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessTableOrColumnSecLabelStmt,
 	.operationType = DIST_OPS_ALTER,
 	.address = SecLabelStmtObjectAddress,
 	.markDistributed = false,
@@ -2119,7 +2146,27 @@ GetDistributeObjectOps(Node *node)
 
 		case T_SecLabelStmt:
 		{
-			return &Any_SecLabel;
+			SecLabelStmt *stmt = castNode(SecLabelStmt, node);
+			switch (stmt->objtype)
+			{
+				case OBJECT_ROLE:
+				{
+					return &Role_SecLabel;
+				}
+
+				case OBJECT_TABLE:
+				{
+					return &Table_SecLabel;
+				}
+
+				case OBJECT_COLUMN:
+				{
+					return &Column_SecLabel;
+				}
+
+				default:
+					return &Any_SecLabel;
+			}
 		}
 
 		case T_RenameStmt:

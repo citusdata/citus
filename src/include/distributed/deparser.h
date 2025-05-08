@@ -292,7 +292,9 @@ extern void QualifyTextSearchConfigurationCommentStmt(Node *node);
 extern void QualifyTextSearchDictionaryCommentStmt(Node *node);
 
 /* forward declarations for deparse_seclabel_stmts.c */
-extern char * DeparseSecLabelStmt(Node *node);
+extern char * DeparseRoleSecLabelStmt(Node *node);
+extern char * DeparseTableSecLabelStmt(Node *node);
+extern char * DeparseColumnSecLabelStmt(Node *node);
 
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *node);

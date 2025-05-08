@@ -32,7 +32,7 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/query_stats.h"
+#include "distributed/stats/query_stats.h"
 #include "distributed/tuplestore.h"
 #include "distributed/version_compat.h"
 

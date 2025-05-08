@@ -10,37 +10,16 @@
 
 #include "postgres.h"
 
+#include "catalog/namespace.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 
 #include "distributed/deparser.h"
 
-static void AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt);
-
-/*
- * DeparseSecLabelStmt builds and returns a string representing of the
- * SecLabelStmt for application on a remote server.
- */
-char *
-DeparseSecLabelStmt(Node *node)
-{
-	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
-	StringInfoData buf = { 0 };
-	initStringInfo(&buf);
-
-	AppendSecLabelStmt(&buf, secLabelStmt);
-
-	return buf.data;
-}
-
-
-/*
- * AppendSecLabelStmt generates the string representation of the
- * SecLabelStmt and appends it to the buffer.
- */
 static void
-AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
+BeginSecLabel(StringInfo buf, SecLabelStmt *stmt)
 {
+	initStringInfo(buf);
 	appendStringInfoString(buf, "SECURITY LABEL ");
 
 	if (stmt->provider != NULL)
@@ -49,31 +28,84 @@ AppendSecLabelStmt(StringInfo buf, SecLabelStmt *stmt)
 	}
 
 	appendStringInfoString(buf, "ON ");
+}
 
-	switch (stmt->objtype)
+
+static void
+EndSecLabel(StringInfo buf, SecLabelStmt *stmt)
+{
+	appendStringInfo(buf, "IS %s", (stmt->label != NULL) ?
+					 quote_literal_cstr(stmt->label) : "NULL");
+}
+
+
+/*
+ * DeparseRoleSecLabelStmt builds and returns a string representation of the
+ * SecLabelStmt for application on a remote server. The SecLabelStmt is for
+ * a role object.
+ */
+char *
+DeparseRoleSecLabelStmt(Node *node)
+{
+	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
+	char *role_name = strVal(secLabelStmt->object);
+	StringInfoData buf = { 0 };
+
+	BeginSecLabel(&buf, secLabelStmt);
+	appendStringInfo(&buf, "ROLE %s ", quote_identifier(role_name));
+	EndSecLabel(&buf, secLabelStmt);
+
+	return buf.data;
+}
+
+
+/*
+ * DeparseTableSecLabelStmt builds and returns a string representation of the
+ * SecLabelStmt for application on a remote server. The SecLabelStmt is for	a
+ * table.
+ */
+char *
+DeparseTableSecLabelStmt(Node *node)
+{
+	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
+	List *names = (List *) secLabelStmt->object;
+	StringInfoData buf = { 0 };
+
+	BeginSecLabel(&buf, secLabelStmt);
+	appendStringInfo(&buf, "TABLE %s", quote_identifier(strVal(linitial(names))));
+	if (list_length(names) > 1)
 	{
-		case OBJECT_ROLE:
-		{
-			appendStringInfo(buf, "ROLE %s ", quote_identifier(strVal(stmt->object)));
-			break;
-		}
-
-		/* normally, we shouldn't reach this */
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported security label statement for"
-								   " deparsing")));
-		}
+		appendStringInfo(&buf, ".%s", quote_identifier(strVal(lsecond(names))));
 	}
+	appendStringInfoString(&buf, " ");
+	EndSecLabel(&buf, secLabelStmt);
 
-	appendStringInfoString(buf, "IS ");
+	return buf.data;
+}
 
-	if (stmt->label != NULL)
+
+/*
+ * DeparseColumnSecLabelStmt builds and returns a string representation of the
+ * SecLabelStmt for application on a remote server. The SecLabelStmt is for	a
+ * column of a distributed table.
+ */
+char *
+DeparseColumnSecLabelStmt(Node *node)
+{
+	SecLabelStmt *secLabelStmt = castNode(SecLabelStmt, node);
+	List *names = (List *) secLabelStmt->object;
+	StringInfoData buf = { 0 };
+
+	BeginSecLabel(&buf, secLabelStmt);
+	appendStringInfo(&buf, "COLUMN %s.%s",
+					 quote_identifier(strVal(linitial(names))),
+					 quote_identifier(strVal(lsecond(names))));
+	if (list_length(names) > 2)
 	{
-		appendStringInfo(buf, "%s", quote_literal_cstr(stmt->label));
+		appendStringInfo(&buf, ".%s", quote_identifier(strVal(lthird(names))));
 	}
-	else
-	{
-		appendStringInfoString(buf, "NULL");
-	}
+	appendStringInfoString(&buf, " ");
+	EndSecLabel(&buf, secLabelStmt);
+
+	return buf.data;
 }

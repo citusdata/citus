@@ -76,7 +76,7 @@
 
 #include "distributed/argutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/stat_counters.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/tuplestore.h"
 
 

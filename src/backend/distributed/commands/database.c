@@ -35,6 +35,7 @@
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
+#include "distributed/commands/serialize_distributed_ddls.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/comment.h"
 #include "distributed/deparse_shard_query.h"
@@ -46,7 +47,6 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
-#include "distributed/serialize_distributed_ddls.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"

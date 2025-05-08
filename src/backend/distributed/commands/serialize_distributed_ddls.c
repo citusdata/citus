@@ -26,9 +26,9 @@
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/argutils.h"
+#include "distributed/commands/serialize_distributed_ddls.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/resource_lock.h"
-#include "distributed/serialize_distributed_ddls.h"
 
 
 PG_FUNCTION_INFO_V1(citus_internal_acquire_citus_advisory_object_class_lock);

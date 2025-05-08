@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * citus_stat_tenants.c
+ * stat_tenants.c
  *	  Routines related to the multi tenant monitor.
  *
  * Copyright (c) Citus Data, Inc.
@@ -35,9 +35,9 @@
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/tuplestore.h"
-#include "distributed/utils/citus_stat_tenants.h"
 
 static void AttributeMetricsIfApplicable(void);
 
