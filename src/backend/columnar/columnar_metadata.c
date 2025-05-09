@@ -645,10 +645,10 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 			{
 				values[Anum_columnar_chunk_minimum_value - 1] =
 					PointerGetDatum(DatumToBytea(chunk->minimumValue,
-												 &tupleDescriptor->attrs[columnIndex]));
+												 Attr(tupleDescriptor, columnIndex)));
 				values[Anum_columnar_chunk_maximum_value - 1] =
 					PointerGetDatum(DatumToBytea(chunk->maximumValue,
-												 &tupleDescriptor->attrs[columnIndex]));
+												 Attr(tupleDescriptor, columnIndex)));
 			}
 			else
 			{
@@ -803,9 +803,9 @@ ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 				datumArray[Anum_columnar_chunk_maximum_value - 1]);
 
 			chunk->minimumValue =
-				ByteaToDatum(minValue, &tupleDescriptor->attrs[columnIndex]);
+				ByteaToDatum(minValue, Attr(tupleDescriptor, columnIndex));
 			chunk->maximumValue =
-				ByteaToDatum(maxValue, &tupleDescriptor->attrs[columnIndex]);
+				ByteaToDatum(maxValue, Attr(tupleDescriptor, columnIndex));
 
 			chunk->hasMinMax = true;
 		}
