@@ -137,7 +137,8 @@ static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 														RecursivePlanningContext *
 														context);
 static bool ContainsSubquery(Query *query);
-static bool ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context);
+static bool ShouldRecursivelyPlanOuterJoins(Query *query,
+											RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
 												  RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
@@ -192,6 +193,8 @@ static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
 static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
+static bool hasPseudoconstantQuals(
+	RelationRestrictionContext *relationRestrictionContext);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -355,7 +358,7 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	 * result and logical planner can handle the new query since it's of the from
 	 * "<recurring> LEFT JOIN <recurring>".
 	 */
-	if (ShouldRecursivelyPlanOuterJoins(context))
+	if (ShouldRecursivelyPlanOuterJoins(query, context))
 	{
 		RecursivelyPlanRecurringTupleOuterJoinWalker((Node *) query->jointree,
 													 query, context);
@@ -468,7 +471,7 @@ ContainsSubquery(Query *query)
  * join(s) that might need to be recursively planned.
  */
 static bool
-ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context)
+ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 {
 	if (!context || !context->plannerRestrictionContext ||
 		!context->plannerRestrictionContext->joinRestrictionContext)
@@ -477,7 +480,37 @@ ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context)
 							   "planning context")));
 	}
 
-	return context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
+	bool hasOuterJoin =
+		context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
+
+	if (!hasOuterJoin)
+	{
+		/*
+		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1
+		 * PG16 commit 695f5deb7902865901eb2d50a70523af655c3a00
+		 * disallows replacing joins with scans in queries with pseudoconstant quals.
+		 * This commit prevents the set_join_pathlist_hook from being called
+		 * if any of the join restrictions is a pseudo-constant.
+		 * So in these cases, citus has no info on the join, never sees that the query
+		 * has an outer join, and ends up producing an incorrect plan.
+		 * PG17 fixes this by commit 9e9931d2bf40e2fea447d779c2e133c2c1256ef3
+		 * Therefore, we take this extra measure here for PG versions less than 17.
+		 * hasOuterJoin can never be true when set_join_pathlist_hook is absent.
+		 */
+		if (hasPseudoconstantQuals(
+				context->plannerRestrictionContext->relationRestrictionContext) &&
+			FindNodeMatchingCheckFunction((Node *) query->jointree, IsOuterJoinExpr))
+		{
+			ereport(ERROR, (errmsg("Distributed queries with outer joins and "
+								   "pseudoconstant quals are not supported in PG14, PG15 and PG16."),
+							errdetail(
+								"PG14, PG15 and PG16 disallow replacing joins with scans when the"
+								" query has pseudoconstant quals"),
+							errhint("Consider upgrading your PG version to PG17+")));
+		}
+	}
+
+	return hasOuterJoin;
 }
 
 
@@ -2109,7 +2142,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -2159,7 +2191,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{
@@ -2460,3 +2491,29 @@ GeneratingSubplans(void)
 {
 	return recursivePlanningDepth > 0;
 }
+
+
+#if PG_VERSION_NUM < PG_VERSION_17
+
+/*
+ * hasPseudoconstantQuals returns true if any of the planner infos in the
+ * relation restriction list of the input relation restriction context
+ * has a pseudoconstant qual
+ */
+static bool
+hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
+{
+	ListCell *objectCell = NULL;
+	foreach(objectCell, relationRestrictionContext->relationRestrictionList)
+	{
+		if (((RelationRestriction *) lfirst(
+				 objectCell))->plannerInfo->hasPseudoConstantQuals)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+#endif
