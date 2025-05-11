@@ -185,6 +185,7 @@ DEPS = {
         "minimal_schedule", ["remove_coordinator_from_metadata"]
     ),
     "limit_intermediate_size": TestDeps("base_schedule"),
+    "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
 }
 
 

@@ -84,7 +84,6 @@ int ValuesMaterializationThreshold = 100;
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionOrValuesRTE(Node *node);
-static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
 static RecurringTuplesType FromClauseRecurringTupleType(Query *queryTree);
@@ -394,7 +393,7 @@ IsNodeSubquery(Node *node)
 /*
  * IsOuterJoinExpr returns whether the given node is an outer join expression.
  */
-static bool
+bool
 IsOuterJoinExpr(Node *node)
 {
 	bool isOuterJoin = false;
