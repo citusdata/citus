@@ -1012,7 +1012,7 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
-		if (tupdesc->attrs[i].attisdropped)
+		if (Attr(tupdesc, i)->attisdropped)
 		{
 			continue;
 		}
@@ -1121,10 +1121,23 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	bool frozenxid_updated;
 	bool minmulti_updated;
 
+/* for PG 18+, vac_update_relstats gained a new “all_frozen” param */
+#if PG_VERSION_NUM >= PG_VERSION_18
+	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
+						new_rel_allvisible,  /* allvisible */
+						0,                   /* all_frozen */
+						nindexes > 0,
+						newRelFrozenXid, newRelminMxid,
+						&frozenxid_updated, &minmulti_updated,
+						false);
+#else
 	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
 						new_rel_allvisible, nindexes > 0,
 						newRelFrozenXid, newRelminMxid,
-						&frozenxid_updated, &minmulti_updated, false);
+						&frozenxid_updated, &minmulti_updated,
+						false);
+#endif
+
 #else
 	TransactionId oldestXmin;
 	TransactionId freezeLimit;
@@ -1187,10 +1200,17 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 #endif
 #endif
 
+#if PG_VERSION_NUM >= PG_VERSION_18
 	pgstat_report_vacuum(RelationGetRelid(rel),
 						 rel->rd_rel->relisshared,
-						 Max(new_live_tuples, 0),
-						 0);
+						 Max(new_live_tuples, 0), /* live tuples */
+						 0,                       /* dead tuples */
+						 GetCurrentTimestamp());  /* start time */
+#else
+	pgstat_report_vacuum(RelationGetRelid(rel),
+						 rel->rd_rel->relisshared);
+#endif
+
 	pgstat_progress_end_command();
 }
 
@@ -1225,7 +1245,7 @@ LogRelationStats(Relation rel, int elevel)
 													  GetTransactionSnapshot());
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
-			bool attrDropped = tupdesc->attrs[column].attisdropped;
+			bool attrDropped = Attr(tupdesc, column)->attisdropped;
 			for (uint32 chunk = 0; chunk < skiplist->chunkCount; chunk++)
 			{
 				ColumnChunkSkipNode *skipnode =
@@ -2564,8 +2584,13 @@ static const TableAmRoutine columnar_am_methods = {
 
 	.relation_estimate_size = columnar_estimate_rel_size,
 
+#if PG_VERSION_NUM < PG_VERSION_18
+
+	/* these two fields were removed in PG 18 */
 	.scan_bitmap_next_block = NULL,
 	.scan_bitmap_next_tuple = NULL,
+#endif
+
 	.scan_sample_next_block = columnar_scan_sample_next_block,
 	.scan_sample_next_tuple = columnar_scan_sample_next_tuple
 };
@@ -2603,7 +2628,7 @@ detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
 
 	for (int i = 0; i < tupleDesc->natts; i++)
 	{
-		if (!isnull[i] && tupleDesc->attrs[i].attlen == -1 &&
+		if (!isnull[i] && Attr(tupleDesc, i)->attlen == -1 &&
 			VARATT_IS_EXTENDED(values[i]))
 		{
 			/* make a copy */

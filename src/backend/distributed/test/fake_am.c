@@ -578,8 +578,13 @@ static const TableAmRoutine fake_methods = {
 
 	.relation_estimate_size = fake_estimate_rel_size,
 
+#if PG_VERSION_NUM < PG_VERSION_18
+
+	/* these two fields were removed in PG 18 */
 	.scan_bitmap_next_block = fake_scan_bitmap_next_block,
 	.scan_bitmap_next_tuple = fake_scan_bitmap_next_tuple,
+#endif
+
 	.scan_sample_next_block = fake_scan_sample_next_block,
 	.scan_sample_next_tuple = fake_scan_sample_next_tuple
 };
