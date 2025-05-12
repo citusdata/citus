@@ -1414,16 +1414,28 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 							   storageId, stripeId)));
 	}
 
+
+/*
+ * heap_modify_tuple + heap_inplace_update only exist on PG < 18;
+ * on PG18 the in-place helper was removed upstream, so we skip the whole block.
+ */
+#if PG_VERSION_NUM < PG_VERSION_18
+
 	/*
 	 * heap_inplace_update already doesn't allow changing size of the original
 	 * tuple, so we don't allow setting any Datum's to NULL values.
 	 */
 	bool newNulls[Natts_columnar_stripe] = { false };
 	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
-	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple, tupleDescriptor,
-												newValues, newNulls, update);
+	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple,
+												tupleDescriptor,
+												newValues,
+												newNulls,
+												update);
 
 	heap_inplace_update(columnarStripes, modifiedTuple);
+#endif
+
 
 	/*
 	 * Existing tuple now contains modifications, because we used
@@ -1727,12 +1739,39 @@ create_estate_for_relation(Relation rel)
 	rte->relkind = rel->rd_rel->relkind;
 	rte->rellockmode = AccessShareLock;
 
+/* Prepare permission info on PG 16+ */
 #if PG_VERSION_NUM >= PG_VERSION_16
 	List *perminfos = NIL;
 	addRTEPermissionInfo(&perminfos, rte);
-	ExecInitRangeTable(estate, list_make1(rte), perminfos);
 #else
-	ExecInitRangeTable(estate, list_make1(rte));
+	List *perminfos = NIL;  /* not used on PG 15 */
+#endif
+
+/* Initialize the range table, with the right signature for each PG version */
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ needs four arguments (unpruned_relids) */
+	ExecInitRangeTable(
+		estate,
+		list_make1(rte),
+		perminfos,
+		NULL  /* unpruned_relids: not used by columnar */
+		);
+#elif PG_VERSION_NUM >= PG_VERSION_16
+
+	/* PG 16–17: three-arg signature (permInfos) */
+	ExecInitRangeTable(
+		estate,
+		list_make1(rte),
+		perminfos
+		);
+#else
+
+	/* PG 15: two-arg signature */
+	ExecInitRangeTable(
+		estate,
+		list_make1(rte)
+		);
 #endif
 
 	estate->es_output_cid = GetCurrentCommandId(true);
