@@ -23,6 +23,7 @@
 #include "commands/createas.h"
 #include "commands/dbcommands.h"
 #include "commands/explain.h"
+#include "commands/explain_format.h"
 #include "commands/tablecmds.h"
 #include "executor/tstoreReceiver.h"
 #include "lib/stringinfo.h"
@@ -42,6 +43,10 @@
 #include "utils/json.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
+#if PG_VERSION_NUM >= PG_VERSION_18
+#  include "commands/explain_dr.h"   /* CreateExplainSerializeDestReceiver() */
+#endif
+
 
 #include "pg_version_constants.h"
 #if PG_VERSION_NUM >= PG_VERSION_18
