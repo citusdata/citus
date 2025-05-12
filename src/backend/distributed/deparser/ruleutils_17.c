@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils_16.c
+ * ruleutils_17.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  src/backend/distributed/deparser/ruleutils_16.c
+ *	  src/backend/distributed/deparser/ruleutils_17.c
  *
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------

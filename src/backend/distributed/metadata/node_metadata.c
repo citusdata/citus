@@ -2965,8 +2965,18 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	 * https://github.com/citusdata/citus/pull/2855#discussion_r313628554
 	 * https://github.com/citusdata/citus/issues/1890
 	 */
-	Relation replicaIndex = index_open(RelationGetPrimaryKeyIndex(pgDistNode),
-									   AccessShareLock);
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ adds a bool “deferrable_ok” parameter */
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode, false),
+				   RowExclusiveLock);
+#else
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode),
+				   RowExclusiveLock);
+#endif
+
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));

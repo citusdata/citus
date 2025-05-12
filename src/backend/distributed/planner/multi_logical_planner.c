@@ -34,6 +34,14 @@
 #include "utils/relcache.h"
 #include "utils/syscache.h"
 
+/*
+ * PG 18 renamed OpBtreeInterpretation to the more generic OpIndexInterpretation,
+ * so make the old name an alias.
+ */
+#if PG_VERSION_NUM >= PG_VERSION_18
+typedef OpIndexInterpretation OpBtreeInterpretation;
+#endif
+
 #include "pg_version_constants.h"
 
 #include "distributed/citus_clauses.h"
@@ -59,6 +67,11 @@ typedef struct QualifierWalkerContext
 	List *baseQualifierList;
 	List *outerJoinQualifierList;
 } QualifierWalkerContext;
+
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+#define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
+#endif
 
 
 /* Function pointer type definition for apply join rule functions */
@@ -2293,7 +2306,12 @@ OperatorImplementsEquality(Oid opno)
 	{
 		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
 													lfirst(btreeInterpretationCell);
+
+	#if PG_VERSION_NUM >= PG_VERSION_18
+		if (btreeIntepretation->cmptype == BTEqualStrategyNumber)
+	#else
 		if (btreeIntepretation->strategy == BTEqualStrategyNumber)
+	#endif
 		{
 			equalityOperator = true;
 			break;
