@@ -72,6 +72,14 @@ SELECT * from citus_nodes where active = 't';
 -- get get inactive nodes
 SELECT * from citus_nodes where active = 'f';
 
+-- make sure non-superusers can access the view
+CREATE ROLE normaluser;
+SET ROLE normaluser;
+SELECT * FROM citus_nodes;
+
+SET ROLE postgres;
+DROP ROLE normaluser;
+
 -- add some shard placements to the cluster
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
