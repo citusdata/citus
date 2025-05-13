@@ -1208,7 +1208,9 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 						 GetCurrentTimestamp());  /* start time */
 #else
 	pgstat_report_vacuum(RelationGetRelid(rel),
-						 rel->rd_rel->relisshared);
+						 rel->rd_rel->relisshared,
+						 Max(new_live_tuples, 0),
+						 0);
 #endif
 
 	pgstat_progress_end_command();
