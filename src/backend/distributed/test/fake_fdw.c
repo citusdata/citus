@@ -91,11 +91,23 @@ FakeGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 	Cost startup_cost = 0;
 	Cost total_cost = startup_cost + baserel->rows;
 
-	add_path(baserel, (Path *) create_foreignscan_path_compat(root, baserel, NULL,
-															  baserel->rows,
-															  startup_cost, total_cost,
-															  NIL,
-															  NULL, NULL, NIL, NIL));
+	add_path(baserel,
+			 (Path *) create_foreignscan_path_compat(
+				 root,
+				 baserel,
+				 baserel->reltarget, /* ← PathTarget* is the rel’s reltarget */
+				 baserel->rows,
+				 0,              /* ← disabled_nodes (only used in PG18+) */
+				 startup_cost,
+				 total_cost,
+				 NIL,            /* pathkeys */
+				 NULL,           /* required_outer */
+				 NULL,           /* fdw_outerpath */
+				 NIL,            /* fdw_restrictinfo (PG18+) */
+				 NIL,            /* fdw_private */
+				 NIL             /* fdw_scan_tlist (PG15–17) */
+				 )
+			 );
 }
 
 

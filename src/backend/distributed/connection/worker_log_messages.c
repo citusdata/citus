@@ -11,11 +11,11 @@
 #include "postgres.h"
 
 #include "utils/elog.h"
+#include "utils/memutils.h"   /* for TopTransactionContext */
 
 #include "distributed/connection_management.h"
 #include "distributed/error_codes.h"
 #include "distributed/errormessage.h"
-#include "utils/memutils.h"   /* for TopTransactionContext */
 #include "distributed/log_utils.h"
 #include "distributed/worker_log_messages.h"
 

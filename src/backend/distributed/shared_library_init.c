@@ -383,6 +383,33 @@ static const struct config_enum_entry metadata_sync_mode_options[] = {
 /* *INDENT-ON* */
 
 
+/*----------------------------------------------------------------------*
+* On PG 18+ the hook signatures changed; we wrap the old Citus handlers
+* in fresh functions that match the new typedefs exactly.
+*----------------------------------------------------------------------*/
+#if PG_VERSION_NUM >= PG_VERSION_18
+static bool
+citus_executor_start_adapter(QueryDesc *queryDesc, int eflags)
+{
+	/* call the original Citus hook (void) and always return “true” */
+	CitusExecutorStart(queryDesc, eflags);
+	return true;
+}
+
+
+static void
+citus_executor_run_adapter(QueryDesc *queryDesc,
+						   ScanDirection direction,
+						   uint64 count)
+{
+	/* call the original Citus hook (which still expects the old 4-arg form) */
+	CitusExecutorRun(queryDesc, direction, count, true);
+}
+
+
+#endif
+
+
 /* shared library initialization function */
 void
 _PG_init(void)
@@ -457,8 +484,13 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	get_relation_info_hook = multi_get_relation_info_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
+#if PG_VERSION_NUM >= PG_VERSION_18
+	ExecutorStart_hook = citus_executor_start_adapter;
+	ExecutorRun_hook = citus_executor_run_adapter;
+#else
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
+#endif
 	ExplainOneQuery_hook = CitusExplainOneQuery;
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = CitusAttributeToEnd;

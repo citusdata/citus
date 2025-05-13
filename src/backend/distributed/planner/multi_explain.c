@@ -2269,7 +2269,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	/* Create textual dump of plan tree */
 	ExplainPrintPlan(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 	/* Show buffer and/or memory usage in planning */
 	if (peek_buffer_usage(es, bufusage) || mem_counters)
 	{
@@ -2315,7 +2315,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	if (es->costs)
 		ExplainPrintJITSummary(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_1
 	if (es->serialize != EXPLAIN_SERIALIZE_NONE)
 	{
 		/* the SERIALIZE option requires its own tuple receiver */
@@ -2382,7 +2382,7 @@ elapsed_time(instr_time *starttime)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 /*
  * Return whether show_buffer_usage would have anything to print, if given
  * the same 'usage' data.  Note that when the format is anything other than

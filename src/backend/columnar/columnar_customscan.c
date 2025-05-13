@@ -16,14 +16,14 @@
 
 #include "miscadmin.h"
 
-#include "nodes/execnodes.h"     /* for ExprState, ExprContext, etc. */
-#include "executor/executor.h"   /* for ExecInitExprWithParams(), ExecEvalExpr() */
-#include "commands/explain_format.h"  /* for ExplainPropertyInteger() */
 #include "access/amapi.h"
 #include "access/skey.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_statistic.h"
 #include "commands/defrem.h"
+#include "commands/explain_format.h"  /* for ExplainPropertyInteger() */
+#include "executor/executor.h"   /* for ExecInitExprWithParams(), ExecEvalExpr() */
+#include "nodes/execnodes.h"     /* for ExprState, ExprContext, etc. */
 #include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
