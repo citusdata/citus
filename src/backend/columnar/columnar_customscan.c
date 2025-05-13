@@ -13,6 +13,7 @@
 #include <math.h>
 
 #include "postgres.h"
+#include "columnar/columnar_version_compat.h"
 
 #include "miscadmin.h"
 
