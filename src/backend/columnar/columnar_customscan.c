@@ -13,7 +13,6 @@
 #include <math.h>
 
 #include "postgres.h"
-#include "columnar/columnar_version_compat.h"
 
 #include "miscadmin.h"
 
@@ -22,6 +21,8 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_statistic.h"
 #include "commands/defrem.h"
+
+#include "columnar/columnar_version_compat.h"
 #if PG_VERSION_NUM >= PG_VERSION_18
 #include "commands/explain_format.h"
 #endif
