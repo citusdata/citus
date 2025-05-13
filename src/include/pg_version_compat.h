@@ -384,70 +384,34 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
 
-#include "nodes/pg_list.h"       /* for List */
-#include "nodes/plannodes.h"     /* for ForeignScan */
-#include "optimizer/pathnode.h"  /* for create_foreignscan_path, ForeignPath */
+#include "nodes/bitmapset.h"      /* for Relids */
+#include "nodes/pg_list.h"        /* for List */
+#include "optimizer/pathnode.h"   /* for create_foreignscan_path() */
 
-/*
- * A single entry point for Citus code to build ForeignPath
- * using the *full* superset of parameters:
- *
- *   root, rel, target, rows,
- *   disabled_nodes, startup_cost, total_cost,
- *   pathkeys, required_outer,
- *   fdw_outerpath, fdw_restrictinfo,
- *   fdw_private, fdw_scan_tlist
- */
-static inline ForeignPath *
-create_foreignscan_path_compat(PlannerInfo *root,
-							   RelOptInfo *rel,
-							   PathTarget *target,
-							   double rows,
-							   int disabled_nodes,
-							   Cost startup_cost,
-							   Cost total_cost,
-							   List *pathkeys,
-							   Relids required_outer,
-							   Path *fdw_outerpath,
-							   List *fdw_restrictinfo,
-							   List *fdw_private,
-							   List *fdw_scan_tlist)
-{
 #if PG_VERSION_NUM >= PG_VERSION_18
-
-	/* PG 18+ signature: 12 args */
-	return create_foreignscan_path(
-		root,
-		rel,
-		target,
-		rows,
-		disabled_nodes,
-		startup_cost,
-		total_cost,
-		pathkeys,
-		required_outer,
-		fdw_outerpath,
-		fdw_restrictinfo,
-		fdw_private
-		);
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
+	create_foreignscan_path( \
+		(a),            /* root            */ \
+		(b),            /* rel             */ \
+		(c),            /* target          */ \
+		(d),            /* rows            */ \
+		0,              /* disabled_nodes  */ \
+		(e),            /* startup_cost    */ \
+		(f),            /* total_cost      */ \
+		(g),            /* pathkeys        */ \
+		(h),            /* required_outer  */ \
+		(i),            /* fdw_outerpath   */ \
+		(j),            /* fdw_restrictinfo*/ \
+		(k)             /* fdw_private     */ \
+		)
 #else
-
-	/* PG 17- signature: 11 args */
-	return create_foreignscan_path(
-		root,
-		rel,
-		target,
-		rows,
-		startup_cost,
-		total_cost,
-		pathkeys,
-		required_outer,
-		fdw_outerpath,
-		fdw_private,
-		fdw_scan_tlist
-		);
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
+	create_foreignscan_path( \
+		(a), (b), (c), (d), \
+		(e), (f), \
+		(g), (h), (i), (j), (k) \
+		)
 #endif
-}
 
 
 #define getProcNo_compat(a) (a->vxid.procNumber)
@@ -482,6 +446,10 @@ getStxstattarget_compat(HeapTuple tup)
 #define identitySequenceRelation_compat(a) (RelationGetRelid(a))
 
 #define matched_compat(a) (a->matched)
+
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
+									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
+																  i, k)
 
 #define getProcNo_compat(a) (a->pgprocno)
 #define getLxid_compat(a) (a->lxid)
