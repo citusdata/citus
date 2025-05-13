@@ -1743,8 +1743,6 @@ create_estate_for_relation(Relation rel)
 #if PG_VERSION_NUM >= PG_VERSION_16
 	List *perminfos = NIL;
 	addRTEPermissionInfo(&perminfos, rte);
-#else
-	List *perminfos = NIL;  /* not used on PG 15 */
 #endif
 
 /* Initialize the range table, with the right signature for each PG version */
