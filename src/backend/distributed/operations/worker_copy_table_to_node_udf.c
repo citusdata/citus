@@ -13,6 +13,7 @@
 
 #include "postgres.h"
 
+#include "executor/executor.h"    /* for CreateExecutorState(), FreeExecutorState(), CreateExprContext(), etc. */
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
