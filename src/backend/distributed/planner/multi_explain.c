@@ -2315,7 +2315,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	if (es->costs)
 		ExplainPrintJITSummary(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_1
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 	if (es->serialize != EXPLAIN_SERIALIZE_NONE)
 	{
 		/* the SERIALIZE option requires its own tuple receiver */
