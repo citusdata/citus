@@ -84,15 +84,11 @@
 #include "utils/memutils.h"
 #include "utils/ruleutils.h"
 
-/*
- * PG 18 renamed OpBtreeInterpretation to the more generic OpIndexInterpretation,
- * so make the old name an alias.
- */
+#include "pg_version_constants.h"
 #if PG_VERSION_NUM >= PG_VERSION_18
 typedef OpIndexInterpretation OpBtreeInterpretation;
 #endif
 
-#include "pg_version_constants.h"
 
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
