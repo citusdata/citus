@@ -1211,7 +1211,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		if (rte->rtekind == RTE_FUNCTION && rte->functions != NIL)
 		{
 			/* Since we're not creating Vars, rtindex etc. don't matter */
-			expandRTE(rte, 1, 0, -1, true /* include dropped */ ,
+			expandRTE(rte, 1, 0, VAR_RETURNING_DEFAULT, -1, true /* include dropped */ ,
 					  &colnames, NULL);
 		}
 		else
@@ -4611,6 +4611,7 @@ get_name_for_var_field(Var *var, int fieldno,
 		case RTE_VALUES:
 		case RTE_NAMEDTUPLESTORE:
 		case RTE_RESULT:
+		case RTE_GROUP:
 
 			/*
 			 * This case should not occur: a column of a table or values list
