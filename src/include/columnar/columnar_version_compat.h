@@ -16,6 +16,7 @@
 
 /* for PG_VERSION_NUM and TupleDescAttr() */
 #include "postgres.h"
+
 #include "access/htup_details.h"
 
 
@@ -27,9 +28,9 @@
 
 /* tuple-descriptor attributes moved in PostgreSQL 18: */
 #if PG_VERSION_NUM >= PG_VERSION_18
-# define Attr(tupdesc, colno) TupleDescAttr((tupdesc), (colno))
+#define Attr(tupdesc, colno) TupleDescAttr((tupdesc), (colno))
 #else
-# define Attr(tupdesc, colno) ((tupdesc)->attrs[(colno)])
+#define Attr(tupdesc, colno) (&((tupdesc)->attrs[(colno)]))
 #endif
 
 #endif /* COLUMNAR_COMPAT_H */
