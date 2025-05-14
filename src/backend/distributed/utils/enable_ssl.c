@@ -239,15 +239,18 @@ CreateCertificatesWhenNeeded()
 	SSL_CTX *sslContext = NULL;
 
 	/*
-	 * Since postgres might not have initialized ssl at this point we need to initialize
-	 * it our self to be able to create a context. This code is less extensive then
-	 * postgres' initialization but that will happen when postgres reloads its
-	 * configuration with ssl enabled.
-	 */
-#ifdef HAVE_OPENSSL_INIT_SSL
-	OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG, NULL);
+	* Ensure the OpenSSL library is initialized so we can create our SSL context.
+	* On OpenSSL ≥ 1.1.0 we call OPENSSL_init_ssl() (which also loads the default
+	* config), and on older versions we fall back to SSL_library_init().
+	* PostgreSQL itself will perform its full SSL setup when it reloads
+	* its configuration with ssl enabled.
+	*/
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+    /* OpenSSL 1.1.0+ */
+    OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG, NULL);
 #else
-	SSL_library_init();
+    /* OpenSSL < 1.1.0 */
+    SSL_library_init();
 #endif
 
 	sslContext = SSL_CTX_new(SSLv23_method());
@@ -379,8 +382,15 @@ CreateCertificate(EVP_PKEY *privateKey)
 	 * would fail right after an upgrade. Instead of working until the certificate
 	 * expiration date and then suddenly erroring out.
 	 */
-	X509_gmtime_adj(X509_get_notBefore(certificate), 0);
-	X509_gmtime_adj(X509_get_notAfter(certificate), 0);
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+    /* OpenSSL 1.1.0+ */
+    X509_gmtime_adj(X509_getm_notBefore(certificate), 0);
+    X509_gmtime_adj(X509_getm_notAfter (certificate),  0);
+#else
+    /* OpenSSL < 1.1.0 */
+    X509_gmtime_adj(X509_get_notBefore(certificate), 0);
+    X509_gmtime_adj(X509_get_notAfter (certificate),  0);
+#endif
 
 	/* Set the public key for our certificate */
 	X509_set_pubkey(certificate, privateKey);
