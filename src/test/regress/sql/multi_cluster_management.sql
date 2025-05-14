@@ -32,6 +32,21 @@ SELECT result FROM run_command_on_workers('SELECT citus_is_primary_node()');
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 
+-- get all nodes
+SELECT * from citus_nodes;
+
+-- get get active nodes
+SELECT * from citus_nodes where active = 't';
+
+-- get coordinator nodes
+SELECT * from citus_nodes where role = 'coordinator';
+
+-- get worker nodes
+SELECT * from citus_nodes where role = 'worker';
+
+-- get nodes with unknown role
+SELECT * from citus_nodes where role = 'foo';
+
 -- try to add a node that is already in the cluster
 SELECT * FROM master_add_node('localhost', :worker_1_port);
 
@@ -50,6 +65,20 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT citus_disable_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync(20000);
 SELECT master_get_active_worker_nodes();
+
+-- get get active nodes
+SELECT * from citus_nodes where active = 't';
+
+-- get get inactive nodes
+SELECT * from citus_nodes where active = 'f';
+
+-- make sure non-superusers can access the view
+CREATE ROLE normaluser;
+SET ROLE normaluser;
+SELECT * FROM citus_nodes;
+
+SET ROLE postgres;
+DROP ROLE normaluser;
 
 -- add some shard placements to the cluster
 SET citus.shard_count TO 16;

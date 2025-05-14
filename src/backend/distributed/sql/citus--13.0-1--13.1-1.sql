@@ -50,3 +50,4 @@ DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
 #include "udfs/citus_is_primary_node/13.1-1.sql"
 #include "udfs/citus_stat_counters/13.1-1.sql"
 #include "udfs/citus_stat_counters_reset/13.1-1.sql"
+#include "udfs/citus_nodes/13.1-1.sql"
