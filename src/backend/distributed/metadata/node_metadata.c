@@ -2970,11 +2970,11 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	/* PG 18+ adds a bool “deferrable_ok” parameter */
 	Relation replicaIndex =
 		index_open(RelationGetPrimaryKeyIndex(pgDistNode, false),
-				   RowExclusiveLock);
+				   AccessShareLock);
 #else
 	Relation replicaIndex =
 		index_open(RelationGetPrimaryKeyIndex(pgDistNode),
-				   RowExclusiveLock);
+				   AccessShareLock);
 #endif
 
 
