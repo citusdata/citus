@@ -245,7 +245,7 @@ CreateCertificatesWhenNeeded()
 	 * PostgreSQL itself will perform its full SSL setup when it reloads
 	 * its configuration with ssl enabled.
 	 */
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+#if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
 
 	/* OpenSSL 1.1.0+ */
 	OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG, NULL);
@@ -255,7 +255,7 @@ CreateCertificatesWhenNeeded()
 	SSL_library_init();
 #endif
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+#if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
 	sslContext = SSL_CTX_new(TLS_method());
 #else
 	sslContext = SSL_CTX_new(SSLv23_method());
@@ -389,7 +389,7 @@ CreateCertificate(EVP_PKEY *privateKey)
 	 * would fail right after an upgrade. Instead of working until the certificate
 	 * expiration date and then suddenly erroring out.
 	 */
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+#if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
 
 	/* New mutable accessors (present in 1.1, 3.x). */
 	X509_gmtime_adj(X509_getm_notBefore(certificate), 0);
