@@ -438,11 +438,21 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 {
 	ListCell *subPlanCell = NULL;
 	uint64 planId = distributedPlan->planId;
+	bool analyzeEnabled = es->analyze;
+	bool timingEnabled = es->timing;
 
 	ExplainOpenGroup("Subplans", "Subplans", false, es);
 
 	foreach(subPlanCell, distributedPlan->subPlanList)
 	{
+		/*
+		 * Subplans are already executed recursively when
+		 * executing the top-level of the plan. Here, we just
+		 * need to explain them but not execute them again.
+		 */
+		es->analyze = false;
+		es->timing = false;
+
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
 		PlannedStmt *plan = subPlan->plan;
 		IntoClause *into = NULL;
@@ -488,9 +498,9 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("Subplan", NULL, true, es);
 
-		if (es->analyze)
+		if (analyzeEnabled)
 		{
-			if (es->timing)
+			if (timingEnabled)
 			{
 				ExplainPropertyFloat("Subplan Duration", "ms", subPlan->durationMillisecs,
 									 2, es);
@@ -552,6 +562,9 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			es->indent -= 3;
 		}
 	}
+
+	es->analyze = analyzeEnabled;
+	es->timing = timingEnabled;
 
 	ExplainCloseGroup("Subplans", "Subplans", false, es);
 }
