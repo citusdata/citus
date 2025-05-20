@@ -1182,5 +1182,15 @@ select * from test_ref_table;
 
 DROP SCHEMA test_auto_explain CASCADE;
 
+SET search_path TO multi_explain;
+-- EXPLAIN ANALYZE shouldn't execute SubPlans twice (bug #4212)
+CREATE TABLE test_subplans (x int primary key, y int);
+SELECT create_distributed_table('test_subplans','x');
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+-- Only one row must exist
+SELECT * FROM test_subplans;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
