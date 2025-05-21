@@ -242,7 +242,27 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 		allowNullPartitionColumnValues);
 
 	/* execute the query */
-	PortalRun(portal, FETCH_ALL, false, true, dest, dest, NULL);
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG18+: drop the “run_once” bool */
+	PortalRun(portal,
+			  FETCH_ALL,   /* count */
+			  false,       /* isTopLevel */
+			  dest,        /* dest receiver */
+			  dest,        /* alternative dest */
+			  NULL);       /* QueryCompletion *qc */
+#else
+
+	/* PG15–17: original seven‐arg signature */
+	PortalRun(portal,
+			  FETCH_ALL,   /* count */
+			  false,       /* isTopLevel */
+			  true,        /* run_once */
+			  dest,        /* dest receiver */
+			  dest,        /* alternative dest */
+			  NULL);       /* QueryCompletion *qc */
+#endif
+
 
 	/* construct the output result */
 	TupleDesc returnTupleDesc = NULL;
@@ -295,8 +315,31 @@ StartPortalForQueryExecution(const char *queryString)
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-	PortalDefineQuery(portal, NULL, queryString, CMDTAG_SELECT,
-					  list_make1(queryPlan), NULL);
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+: new CachedPlanSource slot */
+	PortalDefineQuery(
+		portal,
+		NULL,                  /* no prepared‐stmt name */
+		queryString,           /* the SQL text */
+		CMDTAG_SELECT,         /* we’re running a SELECT */
+		list_make1(queryPlan), /* plan trees */
+		NULL,                  /* no CachedPlan */
+		NULL                   /* no CachedPlanSource */
+		);
+#else
+
+	/* PG 15–17: six‐arg signature */
+	PortalDefineQuery(
+		portal,
+		NULL,
+		queryString,
+		CMDTAG_SELECT,
+		list_make1(queryPlan),
+		NULL                   /* no CachedPlan */
+		);
+#endif
+
 	int eflags = 0;
 	PortalStart(portal, NULL, eflags, GetActiveSnapshot());
 

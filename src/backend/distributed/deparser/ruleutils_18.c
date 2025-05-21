@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils_17.c
+ * ruleutils_18.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  src/backend/distributed/deparser/ruleutils_17.c
+ *	  src/backend/distributed/deparser/ruleutils_18.c
  *
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------
@@ -18,7 +18,7 @@
 
 #include "pg_config.h"
 
-#if (PG_VERSION_NUM >= PG_VERSION_17) && (PG_VERSION_NUM < PG_VERSION_18)
+#if (PG_VERSION_NUM >= PG_VERSION_18) && (PG_VERSION_NUM < PG_VERSION_19)
 
 #include "postgres.h"
 
@@ -1211,7 +1211,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		if (rte->rtekind == RTE_FUNCTION && rte->functions != NIL)
 		{
 			/* Since we're not creating Vars, rtindex etc. don't matter */
-			expandRTE(rte, 1, 0, -1, true /* include dropped */ ,
+			expandRTE(rte, 1, 0, VAR_RETURNING_DEFAULT, -1, true /* include dropped */ ,
 					  &colnames, NULL);
 		}
 		else
@@ -4611,6 +4611,7 @@ get_name_for_var_field(Var *var, int fieldno,
 		case RTE_VALUES:
 		case RTE_NAMEDTUPLESTORE:
 		case RTE_RESULT:
+		case RTE_GROUP:
 
 			/*
 			 * This case should not occur: a column of a table or values list

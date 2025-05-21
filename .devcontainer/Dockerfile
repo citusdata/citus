@@ -73,7 +73,7 @@ USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
 FROM base AS pg15
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.12
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.13
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -85,7 +85,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg16
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.8
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.9
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -97,7 +97,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg17
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.4
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.5
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -107,6 +107,18 @@ RUN make -C .pgenv/src/postgresql-*/src/include install
 RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
+
+FROM base AS pg18
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 18beta1
+RUN rm .pgenv/src/*.tar*
+RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/src/include install
+
+# Stage the pgenv artifacts for PG18
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+   
 
 FROM base AS uncrustify-builder
 
@@ -201,6 +213,7 @@ COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg17 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg18 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
 COPY --link --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
@@ -216,7 +229,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch 17.4
+RUN pgenv switch 18beta1
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
