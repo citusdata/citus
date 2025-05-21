@@ -3229,5 +3229,34 @@ set auto_explain.log_analyze to true;
 -- the following should not be locally executed since explain analyze is on
 select * from test_ref_table;
 DROP SCHEMA test_auto_explain CASCADE;
+SET search_path TO multi_explain;
+-- EXPLAIN ANALYZE shouldn't execute SubPlans twice (bug #4212)
+CREATE TABLE test_subplans (x int primary key, y int);
+SELECT create_distributed_table('test_subplans','x');
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 18 bytes
+        Result destination: Write locally
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 1
+              Tasks Shown: All
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Insert on test_subplans_570039
+                          ->  Result
+  Task Count: 1
+  Tuple data received from nodes: 8 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 8 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
+-- Only one row must exist
+SELECT * FROM test_subplans;
+1|2
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
