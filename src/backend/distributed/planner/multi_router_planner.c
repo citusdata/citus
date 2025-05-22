@@ -2252,6 +2252,9 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 			/*
 			 * Skip over views, which would error out in GetCitusTableCacheEntry.
 			 * Distributed tables within (regular) views are already in rangeTableList.
+			 * In PG15.13 commit https://github.com/postgres/postgres/commit/317aba70e
+			 * relid is retained when converting views to subqueries,
+			 * so we need an extra check identifying those views
 			 */
 			continue;
 		}
