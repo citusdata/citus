@@ -44,7 +44,7 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA = 8,
 	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9,
 	ADV_LOCKTAG_CLASS_CITUS_CLEANUP_OPERATION_ID = 10,
-	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12,
+	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12, /* Not used anymore */
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13,
 	ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK = 14,
 	ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION = 15
@@ -57,7 +57,8 @@ typedef enum CitusOperations
 	CITUS_NONBLOCKING_SPLIT = 1,
 	CITUS_CREATE_DISTRIBUTED_TABLE_CONCURRENTLY = 2,
 	CITUS_CREATE_COLOCATION_DEFAULT = 3,
-	CITUS_BACKGROUND_TASK_MONITOR = 4
+	CITUS_BACKGROUND_TASK_MONITOR = 4,
+	CITUS_REBALANCE_OPERATION = 5
 } CitusOperations;
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/
@@ -123,16 +124,6 @@ typedef enum CitusOperations
 						 (uint32) ((operationId) >> 32), \
 						 (uint32) operationId, \
 						 ADV_LOCKTAG_CLASS_CITUS_CLEANUP_OPERATION_ID)
-
-/* reuse advisory lock, but with different, unused field 4 (12)
- * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
- * are local to each database */
-#define SET_LOCKTAG_LOGICAL_REPLICATION(tag) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) 0, \
-						 (uint32) 0, \
-						 ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION)
 
 /* reuse advisory lock, but with different, unused field 4 (14)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
