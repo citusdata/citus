@@ -73,7 +73,7 @@ USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
 FROM base AS pg15
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.12
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.13
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -85,7 +85,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg16
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.8
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.9
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -97,7 +97,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg17
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.4
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.5
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -216,7 +216,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch 17.4
+RUN pgenv switch 17.5
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
