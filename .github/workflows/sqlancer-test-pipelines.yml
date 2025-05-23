@@ -1,0 +1,92 @@
+name: Run sqlancer tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      citus_release:
+        description: 'Branch, tag or SHA to run tests against'
+        required: true
+        default: 'release-13.1'
+
+
+jobs:
+
+  run-sqlancer-test-on-citus:
+    runs-on: ubuntu-latest
+    container:
+      image: 'citus/exttester:17.5-dev-aa7482a'
+
+    steps:
+
+      - name: Checkout Citus
+        uses: actions/checkout@v3
+        with:
+            repository: citusdata/citus
+            ref: ${{ inputs.citus_release }}
+
+      - name: Configure & Build Citus
+        run: |
+          ./configure 2>&1 | tee output.log
+          make install-all -sj$(nproc) 2>&1 | tee -a output.log
+
+      - name: Cache Maven
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2-
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: 11
+
+      - name: Checkout SQLancer (official)
+        uses: actions/checkout@v3
+        with:
+            repository: sqlancer/sqlancer
+            ref: main            # or a specific tag/branch you know works
+            path: sqlancer
+
+      - name: Build SQLancer
+        run: mvn -B package -DskipTests=true -f sqlancer/pom.xml
+
+      - name: Initialize Citus cluster
+        run: |
+          for port in 9700 9701 9702; do
+            mkdir -p citus/$port
+            gosu circleci initdb -D citus/$port
+            echo "shared_preload_libraries='citus'" >> citus/$port/postgresql.conf
+            gosu circleci pg_ctl -D citus/$port -o "-p $port" -l citus/${port}.log start
+            gosu circleci psql -p $port -c "CREATE ROLE sqlancer SUPERUSER LOGIN CREATEDB PASSWORD 'sqlancer';"
+            gosu circleci createdb test -p $port
+            gosu circleci psql -p $port -d test -c "CREATE EXTENSION citus;"
+          done
+          # Add workers to coordinator
+          gosu circleci psql -p 9700 -d test \
+            -c "SELECT * FROM citus_add_node('localhost',9701), citus_add_node('localhost',9702);"
+
+
+      - name: Run Tests
+        run: CITUS_AVAILABLE=true mvn -Dtest=TestCitus test 
+
+      - name: Publish Logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: citus-logs
+          path: |
+            citus/*.{log,logfile}
+            logs
+
+      - name: Publish Summary
+        if: ${{ always() }}
+        run: |
+          grep -R "ERROR:.*" citus \
+            | awk -F: '{ errs[$4] = errs[$4] ? errs[$4] ", " $1 : $1 }
+                       END { for (e in errs) {
+                           print "### " e >> ENVIRON["GITHUB_STEP_SUMMARY"]
+                           print "In: " errs[e] >> ENVIRON["GITHUB_STEP_SUMMARY"]
+                         } }'
+        shell: bash
