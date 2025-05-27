@@ -47,4 +47,5 @@ extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
 extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList);
 extern bool ExtractRangeTableIds(Node *node, ExtractRangeTableIdsContext *context);
 extern bool CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte);
+AttrNumber GetAttrNumForMatchingColumn(RangeTblEntry *rteTarget, Oid relid, Var *var);
 #endif /* QUERY_UTILS_H */
