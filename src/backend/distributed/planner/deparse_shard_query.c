@@ -291,6 +291,7 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	* distributed tables in the join clause.
 	*/
 	RangeTblEntry *innerRte = NULL;
+	RangeTblEntry *outerRte = NULL;
 	int outerRtIndex = -1;
 	bool result = ExtractIndexesForConstaints(fromExpr->fromlist, query->rtable, &outerRtIndex, &innerRte);
 	if (!result)
@@ -310,11 +311,25 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	Var *partitionColumnVar = cacheEntry->partitionColumn;
 
 	/* 
-	* we will add constraints for the outer table, so we need to set the varno
-	* TODO: this only works when the outer table has the distribution column,
-	* we shoul not end up here if this is not the case.
+	* we will add constraints for the outer table, we need to find the column in the outer 
+	* table that is comparable to the partition column of the inner table.
+	* If the column does not exist, we return without modifying the query.
+	* If the column exists, we create a Var node for the outer table's partition column.
 	*/
-	partitionColumnVar->varno = outerRtIndex;
+	outerRte = rt_fetch(outerRtIndex, query->rtable);
+	AttrNumber attnum = GetAttrNumForMatchingColumn(outerRte, relationId, partitionColumnVar);
+	// TODO: we also have to check that the tables are joined on the partition column. 
+	if( attnum == InvalidAttrNumber)
+	{
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+	}
+
+	Var* outerTablePartitionColumnVar = makeVar(
+					outerRtIndex, attnum, partitionColumnVar->vartype,
+					partitionColumnVar->vartypmod,
+					partitionColumnVar->varcollid,
+					0);
+
 	bool isFirstShard = IsFirstShard(cacheEntry, shardId);
 	
 	/* load the interval for the shard and create constant nodes for the upper/lower bounds */
@@ -327,7 +342,7 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	/* create a function expression node for the hash partition column */ 
 	FuncExpr *hashFunction = makeNode(FuncExpr);
 	hashFunction->funcid = cacheEntry->hashFunction->fn_oid;
-	hashFunction->args = list_make1(partitionColumnVar);
+	hashFunction->args = list_make1(outerTablePartitionColumnVar);
 	hashFunction->funcresulttype = get_func_rettype(cacheEntry->hashFunction->fn_oid);
 	hashFunction->funcretset = false;
 

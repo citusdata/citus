@@ -21,6 +21,7 @@
 #include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/version_compat.h"
+#include "utils/lsyscache.h"
 
 
 static bool CitusQueryableRangeTableRelation(RangeTblEntry *rangeTableEntry);
@@ -239,7 +240,8 @@ ExtractRangeTableIds(Node *node, ExtractRangeTableIdsContext *context)
  * given node are colocated. If they are, it sets the value of rte to a
  * representative table.
  */
-bool CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte)
+bool
+CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte)
 {
 	ExtractRangeTableIdsContext context;
 	List *idList = NIL;
@@ -268,5 +270,29 @@ bool CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **r
 	}
 
 	return true;
+}
 
+/*
+ * GetAttrNumForMatchingColumn returns the attribute number for the column
+ * in the target relation that matches the given Var. If the column does not
+ * exist or is not comparable, it returns InvalidAttrNumber.
+ */
+AttrNumber
+GetAttrNumForMatchingColumn(RangeTblEntry *rteTarget, Oid relid, Var *var)
+{
+	char *targetColumnName = get_attname(relid, var->varattno, false);
+	AttrNumber attnum = get_attnum(rteTarget->relid, targetColumnName);
+	if (attnum == InvalidAttrNumber)
+	{
+		ereport(DEBUG5, (errmsg("Column %s does not exist in relation %s",
+							   targetColumnName, rteTarget->eref->aliasname)));
+		return InvalidAttrNumber;
+	}
+	if(var->vartype != get_atttype(rteTarget->relid, attnum))
+	{
+		ereport(DEBUG5, (errmsg("Column %s is not comparable for tables with relids %d and %d",
+							   targetColumnName, rteTarget->relid, relid)));
+		return InvalidAttrNumber;
+	}
+	return attnum;
 }
