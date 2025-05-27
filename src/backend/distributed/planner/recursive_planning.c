@@ -791,6 +791,7 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 					int outerRtIndex = ((RangeTblRef *) leftNode)->rtindex;
 					RangeTblEntry *rte = rt_fetch(outerRtIndex, query->rtable);
 					RangeTblEntry *innerRte = NULL;
+					bool planned = false;
 					if (!IsPushdownSafeForRTEInLeftJoin(rte))
 					{
 						ereport(DEBUG1, (errmsg("recursively planning right side of "
@@ -798,6 +799,7 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 												"is a recurring rel that is not an RTE")));
 						RecursivelyPlanDistributedJoinNode(rightNode, query,
 														   recursivePlanningContext);
+						planned = true;
 					}
 					else if (!CheckIfAllCitusRTEsAreColocated(rightNode, query->rtable, &innerRte))
 					{
@@ -805,8 +807,27 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 												"since tables in the inner side of the left "
 												"join are not colocated")));
 						RecursivelyPlanDistributedJoinNode(rightNode, query,
-									                       recursivePlanningContext);						
+									                       recursivePlanningContext);
+						planned = true;					
 					}
+
+					if(!planned)
+					{
+						CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(innerRte->relid)
+						if(GetAttrNumForMatchingColumn(rte, innerRte->relid, cacheEntry->partitionColumn) == InvalidAttrNumber)
+						{
+							ereport(DEBUG1, (errmsg("recursively planning right side of the left join "
+													"since the outer side does not have the distribution column")));
+							RecursivelyPlanDistributedJoinNode(rightNode, query, recursivePlanningContext);
+						}
+						else
+						{
+							ereport(DEBUG1, (errmsg("not recursively planning right side of the left join "
+													"since the outer side is a RangeTblRef and "
+													"the inner side is colocated with it")));
+						}
+					}
+
 				}
 				/*
 				* rightNodeRecurs if there is a recurring table in the right side. However, if the right side 
