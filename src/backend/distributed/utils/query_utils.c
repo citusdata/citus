@@ -17,6 +17,7 @@
 #include "nodes/primnodes.h"
 #include "parser/parsetree.h"
 
+#include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
@@ -241,7 +242,7 @@ ExtractRangeTableIds(Node *node, ExtractRangeTableIdsContext *context)
  * representative table.
  */
 bool
-CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte)
+CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte, List **citusRelids)
 {
 	ExtractRangeTableIdsContext context;
 	List *idList = NIL;
@@ -250,7 +251,6 @@ CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte)
 	ExtractRangeTableIds(node, &context);
 
 	RangeTblEntry *rteTmp;
-	List *citusRelids = NIL;
 	ListCell *lc = NULL;
 
 	foreach(lc, idList)
@@ -258,7 +258,7 @@ CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte)
 		rteTmp = (RangeTblEntry *) lfirst(lc);
 		if (IsCitusTable(rteTmp->relid))
 		{
-			citusRelids = lappend_int(citusRelids, rteTmp->relid);
+			*citusRelids = lappend_int(*citusRelids, rteTmp->relid);
 			*rte = rteTmp; // set the value of rte, a representative table
 		}
 	}
@@ -272,27 +272,4 @@ CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte)
 	return true;
 }
 
-/*
- * GetAttrNumForMatchingColumn returns the attribute number for the column
- * in the target relation that matches the given Var. If the column does not
- * exist or is not comparable, it returns InvalidAttrNumber.
- */
-AttrNumber
-GetAttrNumForMatchingColumn(RangeTblEntry *rteTarget, Oid relid, Var *var)
-{
-	char *targetColumnName = get_attname(relid, var->varattno, false);
-	AttrNumber attnum = get_attnum(rteTarget->relid, targetColumnName);
-	if (attnum == InvalidAttrNumber)
-	{
-		ereport(DEBUG5, (errmsg("Column %s does not exist in relation %s",
-							   targetColumnName, rteTarget->eref->aliasname)));
-		return InvalidAttrNumber;
-	}
-	if(var->vartype != get_atttype(rteTarget->relid, attnum))
-	{
-		ereport(DEBUG5, (errmsg("Column %s is not comparable for tables with relids %d and %d",
-							   targetColumnName, rteTarget->relid, relid)));
-		return InvalidAttrNumber;
-	}
-	return attnum;
-}
+

@@ -2247,8 +2247,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		 */
 		if (IsInnerTableOfOuterJoin(relationRestriction))
 		{
-			ereport(DEBUG1, errmsg("Inner Table of Outer Join %d",
-								   relationRestriction->relationId));
 			innerTableOfOuterJoin = true;
 		}
 

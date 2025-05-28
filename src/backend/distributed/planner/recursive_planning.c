@@ -76,6 +76,7 @@
 #include "distributed/combine_query_planner.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/distribution_column.h"
 #include "distributed/errormessage.h"
 #include "distributed/listutils.h"
 #include "distributed/local_distributed_join_planner.h"
@@ -788,47 +789,21 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 
 				if (leftNodeRecurs && !rightNodeRecurs)				
 				{	
-					int outerRtIndex = ((RangeTblRef *) leftNode)->rtindex;
-					RangeTblEntry *rte = rt_fetch(outerRtIndex, query->rtable);
-					RangeTblEntry *innerRte = NULL;
-					bool planned = false;
-					if (!IsPushdownSafeForRTEInLeftJoin(rte))
+					if(!CheckPushDownFeasibilityLeftJoin(joinExpr, query))
 					{
 						ereport(DEBUG1, (errmsg("recursively planning right side of "
 												"the left join since the outer side "
-												"is a recurring rel that is not an RTE")));
+												"is a recurring rel and it is not "
+												"feasible to push down")));
 						RecursivelyPlanDistributedJoinNode(rightNode, query,
 														   recursivePlanningContext);
-						planned = true;
 					}
-					else if (!CheckIfAllCitusRTEsAreColocated(rightNode, query->rtable, &innerRte))
+					else
 					{
-						ereport(DEBUG1, (errmsg("recursively planning right side of the left join "
-												"since tables in the inner side of the left "
-												"join are not colocated")));
-						RecursivelyPlanDistributedJoinNode(rightNode, query,
-									                       recursivePlanningContext);
-						planned = true;					
+						ereport(DEBUG3, (errmsg("a push down safe left join with recurring left side")));
 					}
-
-					if(!planned)
-					{
-						CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(innerRte->relid)
-						if(GetAttrNumForMatchingColumn(rte, innerRte->relid, cacheEntry->partitionColumn) == InvalidAttrNumber)
-						{
-							ereport(DEBUG1, (errmsg("recursively planning right side of the left join "
-													"since the outer side does not have the distribution column")));
-							RecursivelyPlanDistributedJoinNode(rightNode, query, recursivePlanningContext);
-						}
-						else
-						{
-							ereport(DEBUG1, (errmsg("not recursively planning right side of the left join "
-													"since the outer side is a RangeTblRef and "
-													"the inner side is colocated with it")));
-						}
-					}
-
 				}
+				
 				/*
 				* rightNodeRecurs if there is a recurring table in the right side. However, if the right side 
 				* is a join expression, we need to check if it contains a recurring table. If it does, we need to
@@ -2764,4 +2739,147 @@ bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
 		return false;
 	}
 	
+}
+
+/*
+ * CheckPushDownFeasibilityAndComputeIndexes checks if the given join expression
+ * is a left outer join and if it is feasible to push down the join. If feasible,
+ * it computes the outer relation's range table index, the outer relation's
+ * range table entry, the inner (distributed) relation's range table entry, and the
+ * attribute number of the partition column in the outer relation.
+*/
+bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query, int *outerRtIndex, RangeTblEntry **outerRte, RangeTblEntry **distRte, int *attnum)
+{
+
+	if(!IS_OUTER_JOIN(joinExpr->jointype))
+	{
+		return false;
+	}
+
+	// TODO: generalize to right joins
+	if(joinExpr->jointype != JOIN_LEFT)
+	{
+		return false;
+	}
+
+	*outerRtIndex = (((RangeTblRef *)joinExpr->larg)->rtindex);
+	*outerRte = rt_fetch(*outerRtIndex, query->rtable);
+
+	if(!IsPushdownSafeForRTEInLeftJoin(*outerRte))
+	{
+		return false;
+	}
+
+	RangeTblRef *rightTableRef = (RangeTblRef *) joinExpr->rarg;
+	RangeTblEntry *rightTableEntry = rt_fetch(rightTableRef->rtindex, query->rtable);
+
+	// Check if the join is performed on the distribution column
+	if (joinExpr->usingClause)
+	{
+		if(rightTableEntry->rtekind != RTE_RELATION && rightTableEntry->rtekind != RTE_FUNCTION)
+		{
+			ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: right table is not a relation or function when using clause is present")));
+			return false;
+		}
+
+		if(!IsCitusTable(rightTableEntry->relid))
+		{
+			ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: right table is not a Citus table when using clause is present")));
+			return false;
+		}
+		
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(rightTableEntry->relid);
+		Var *partitionColumnVar = cacheEntry->partitionColumn;
+		char *partitionColumnName = get_attname(rightTableEntry->relid, partitionColumnVar->varattno, false);
+		// Here we check if the partition column is in the using clause
+		ListCell *lc;
+		foreach(lc, joinExpr->usingClause)
+		{
+			char *colname = strVal(lfirst(lc));
+			ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: checking column %s in using clause", colname)));
+			// If the column name matches the partition column name
+			if (strcmp(colname, partitionColumnName) == 0)
+			{
+				ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: found partition column in using clause")));
+				*distRte = rightTableEntry;
+				// Get the attribute number for the outer table
+				*attnum = GetAttrNumForMatchingColumn(*outerRte, rightTableEntry->relid, partitionColumnVar);
+				if(*attnum != InvalidAttrNumber)
+				{
+					return true;
+				}
+			}
+		}
+		ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: partition column not found in using clause")));
+		return false;
+	}
+	else 
+	{
+		List *joinClauseList = make_ands_implicit((Expr *) joinExpr->quals);
+		if (joinClauseList == NIL)
+		{
+			ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: no quals in join clause")));
+			return false;
+		}
+		Node *joinClause = NULL;
+		foreach_declared_ptr(joinClause, joinClauseList)
+		{
+			if (!NodeIsEqualsOpExpr(joinClause))
+			{
+				continue;
+			}
+			OpExpr *joinClauseExpr = castNode(OpExpr, joinClause);
+			
+			Var *leftColumn = LeftColumnOrNULL(joinClauseExpr);
+			Var *rightColumn = RightColumnOrNULL(joinClauseExpr);
+			if (leftColumn == NULL || rightColumn == NULL)
+			{
+				continue;
+			}
+
+			RangeTblEntry *rte;
+			int attnumForInner;
+			if (leftColumn->varno == *outerRtIndex)
+			{
+				/* left column is the outer table of the comparison, get right */
+				rte = rt_fetch(rightColumn->varno, query->rtable);
+				attnumForInner = rightColumn->varattno;
+				*attnum = leftColumn->varattno; 
+			}
+			else if (rightColumn->varno == *outerRtIndex)
+			{
+				/* right column is the outer table of the comparison, get left*/
+				rte = rt_fetch(leftColumn->varno, query->rtable);
+				attnumForInner = leftColumn->varattno;
+				*attnum = rightColumn->varattno;
+			}
+			if (rte && IsCitusTable(rte->relid))
+			{
+				CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(rte->relid);
+				if(attnumForInner == cacheEntry->partitionColumn->varattno)
+				{
+					ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: join on distribution column of %s",
+											rte->eref->aliasname)));
+					*distRte = rte;
+					return true;
+				}
+			}					
+		}
+		ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: no join clause on distribution column found")));
+		return false;
+	}
+
+}
+
+/*
+ * Initializes input variables to call CheckPushDownFeasibilityAndComputeIndexes.
+ * See CheckPushDownFeasibilityAndComputeIndexes for more details.
+*/
+bool CheckPushDownFeasibilityLeftJoin(JoinExpr *joinExpr, Query *query)
+{
+	int outerRtIndex;
+	RangeTblEntry *outerRte = NULL;
+	RangeTblEntry *innerRte = NULL;
+	int attnum;
+	return CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex, &outerRte, &innerRte, &attnum);
 }

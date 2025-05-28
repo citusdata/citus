@@ -52,6 +52,8 @@ extern bool IsRelationLocalTableOrMatView(Oid relationId);
 extern bool ContainsReferencesToOuterQuery(Query *query);
 extern void UpdateVarNosInNode(Node *node, Index newVarNo);
 extern bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte);
+extern bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query, int *outerRtIndex, RangeTblEntry **outerRte, RangeTblEntry **distRte, int *attnum);
+extern bool CheckPushDownFeasibilityLeftJoin(JoinExpr *joinExpr, Query *query);
 
 
 #endif /* RECURSIVE_PLANNING_H */
