@@ -24,6 +24,9 @@ INSERT INTO dist_1 VALUES
 (7, 41),
 (7, 42);
 
+CREATE TABLE dist_1_local(LIKE dist_1);
+INSERT INTO dist_1_local SELECT * FROM dist_1;
+
 CREATE TABLE dist_2_columnar(LIKE dist_1) USING columnar;
 INSERT INTO dist_2_columnar SELECT * FROM dist_1;
 SELECT create_distributed_table('dist_2_columnar', 'a');
@@ -34,6 +37,28 @@ CREATE TABLE dist_3_partitioned_p2 PARTITION OF dist_3_partitioned FOR VALUES FR
 CREATE TABLE dist_3_partitioned_p3 PARTITION OF dist_3_partitioned FOR VALUES FROM (4) TO (100);
 SELECT create_distributed_table('dist_3_partitioned', 'a');
 INSERT INTO dist_3_partitioned SELECT * FROM dist_1;
+
+CREATE TABLE dist_4 (a int, b int);
+SELECT create_distributed_table('dist_4', 'a');
+INSERT INTO dist_4 VALUES
+(1, 100),
+(1, 101),
+(1, 300),
+(2, 20),
+(2, 21),
+(2, 400),
+(2, 23),
+(3, 102),
+(3, 301),
+(3, 300),
+(3, null),
+(3, 34),
+(7, 40),
+(7, null),
+(7, 11);
+
+CREATE TABLE dist_4_local(LIKE dist_4);
+INSERT INTO dist_4_local SELECT * FROM dist_4;
 
 CREATE TABLE ref_1 (a int, b int);
 SELECT create_reference_table('ref_1');
@@ -53,6 +78,33 @@ INSERT INTO ref_1 VALUES
 (null, 400),
 (null, 401),
 (null, 402);
+
+CREATE TABLE ref_1_local(LIKE ref_1);
+INSERT INTO ref_1_local SELECT * FROM ref_1;
+
+--- We create a second reference table that does not have the distribution column
+CREATE TABLE ref_2 (a2 int, b int);
+SELECT create_reference_table('ref_2');
+INSERT INTO ref_2 VALUES
+(1, null),
+(1, 100),
+(1, 11),
+(null, 102),
+(2, 200),
+(2, 21),
+(null, 202),
+(2, 203),
+(4, 300),
+(4, 301),
+(null, 302),
+(4, 303),
+(4, 304),
+(null, 400),
+(null, 401),
+(null, 402);
+
+CREATE TABLE ref_2_local(LIKE ref_2); 
+INSERT INTO ref_2_local SELECT * FROM ref_2;
 
 CREATE TABLE local_1 (a int, b int);
 INSERT INTO local_1 VALUES
@@ -95,8 +147,16 @@ ALTER TABLE dist_5_with_pkey ADD CONSTRAINT pkey_1 PRIMARY KEY (a);
 --
 
 SELECT COUNT(*) FROM ref_1 LEFT JOIN dist_1 USING (a);
+SELECT COUNT(*) FROM ref_1_local LEFT JOIN dist_1_local USING (a);
 
 SELECT COUNT(*) FROM ref_1 LEFT JOIN dist_1 USING (a,b);
+SELECT COUNT(*) FROM ref_1_local LEFT JOIN dist_1_local USING (a,b);
+
+SELECT COUNT(*) FROM ref_1 LEFT JOIN dist_4 USING (b);
+SELECT COUNT(*) FROM ref_1_local LEFT JOIN dist_4_local USING (b);
+
+SELECT * FROM ref_2 LEFT JOIN dist_4 USING (b) ORDER BY b, a2, a;
+SELECT * FROM ref_2_local LEFT JOIN dist_4_local USING (b) ORDER BY b, a2, a;
 
 SELECT COUNT(*) FROM dist_1 RIGHT JOIN ref_1 USING (a);
 

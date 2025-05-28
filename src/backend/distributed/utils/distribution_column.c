@@ -282,3 +282,29 @@ ColumnToColumnName(Oid relationId, Node *columnNode)
 
 	return columnName;
 }
+
+
+/*
+ * GetAttrNumForMatchingColumn returns the attribute number for the column
+ * in the target relation that matches the given Var. If the column does not
+ * exist or is not comparable, it returns InvalidAttrNumber.
+ */
+AttrNumber
+GetAttrNumForMatchingColumn(RangeTblEntry *rteTarget, Oid relid, Var *var)
+{
+	char *targetColumnName = get_attname(relid, var->varattno, false);
+	AttrNumber attnum = get_attnum(rteTarget->relid, targetColumnName);
+	if (attnum == InvalidAttrNumber)
+	{
+		ereport(DEBUG5, (errmsg("Column %s does not exist in relation %s",
+							   targetColumnName, rteTarget->eref->aliasname)));
+		return InvalidAttrNumber;
+	}
+	if(var->vartype != get_atttype(rteTarget->relid, attnum))
+	{
+		ereport(DEBUG5, (errmsg("Column %s is not comparable for tables with relids %d and %d",
+							   targetColumnName, rteTarget->relid, relid)));
+		return InvalidAttrNumber;
+	}
+	return attnum;
+}

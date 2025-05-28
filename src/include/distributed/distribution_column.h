@@ -25,5 +25,6 @@ extern Var * BuildDistributionKeyFromColumnName(Oid relationId,
 extern char * ColumnToColumnName(Oid relationId, Node *columnNode);
 extern Oid ColumnTypeIdForRelationColumnName(Oid relationId, char *columnName);
 extern void EnsureValidDistributionColumn(Oid relationId, char *columnName);
+extern AttrNumber GetAttrNumForMatchingColumn(RangeTblEntry *rteTarget, Oid relid, Var *var);
 
 #endif   /* DISTRIBUTION_COLUMN_H */
