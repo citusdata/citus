@@ -23,7 +23,6 @@
 #include "distributed/query_utils.h"
 
 
-bool ExtractIndexesForConstaints(List *fromList, List *rtable, int *outerRtIndex, RangeTblEntry **distRte);
 extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
 extern bool UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList);
