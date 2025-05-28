@@ -206,58 +206,10 @@ UpdateTaskQueryString(Query *query, Task *task)
 	SetTaskQueryIfShouldLazyDeparse(task, query);
 }
 
-/*
- * Iterates through the FROM clause of the query and checks if there is a join
- * expr with a reference and distributed table.
- * If there is, it adds the index of the range table entry of the outer
- * table in the join clause to the constraintIndexes list. It also sets the
- * innerRte to point to the range table entry inner table.
-*/
-bool ExtractIndexesForConstaints(List *fromList, List *rtable,
-								 int *outerRtIndex, RangeTblEntry **distRte)
-{
-	ereport(DEBUG5, (errmsg("******")));
-	ListCell *fromExprCell;
-	
-	// Check the first element of the from clause, the rest is already handled
-	foreach(fromExprCell, fromList)
-	{
-		Node *fromElement = (Node *) lfirst(fromExprCell);
-
-		if (IsA(fromElement, JoinExpr))
-		{
-			JoinExpr *joinExpr = (JoinExpr *) fromElement;
-			if(!IS_OUTER_JOIN(joinExpr->jointype))
-			{
-				continue;
-			}
-			*outerRtIndex = (((RangeTblRef *)joinExpr->larg)->rtindex);
-			RangeTblEntry *outerRte = rt_fetch(*outerRtIndex, rtable);
-
-			if(!IsPushdownSafeForRTEInLeftJoin(outerRte))
-			{
-				return false;
-			}
-
-			if (!CheckIfAllCitusRTEsAreColocated((Node *)joinExpr->rarg, rtable, distRte))
-			{
-				return false;
-			}
-
-			return true;
-		}
-	}
-
-	return false;
-}
-
 
 /*
  * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals 
  * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard. 
- * TODO:
- *     - Not supported cases should not call this function. 
- *     - Remove the excessive debug messages.
  */
 bool
 UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
@@ -273,17 +225,27 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	}
 
 	Query *query = (Query *) node;
+	
 	if (query->jointree == NULL)
 	{
 		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
 	}
 
 	FromExpr *fromExpr = query->jointree;
-	if(fromExpr == NULL)
+	if(fromExpr == NULL || fromExpr->fromlist == NIL)
 	{
 		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
 	}
 
+	// TODO: generalize to the list 
+	Node *firstFromItem = linitial(fromExpr->fromlist);
+	if (!IsA(firstFromItem, JoinExpr))
+	{
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+	}
+
+	JoinExpr *joinExpr = (JoinExpr *) firstFromItem;
+	
 	/*
 	* We need to find the outer table in the join clause to add the constraints w.r.to the shard 
 	* intervals of the inner table.
@@ -293,13 +255,15 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	RangeTblEntry *innerRte = NULL;
 	RangeTblEntry *outerRte = NULL;
 	int outerRtIndex = -1;
-	bool result = ExtractIndexesForConstaints(fromExpr->fromlist, query->rtable, &outerRtIndex, &innerRte);
-	if (!result)
+	int attnum;
+	if(!CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex, &outerRte, &innerRte, &attnum))
 	{
-		ereport(DEBUG5, (errmsg("ExtractIndexesForConstaints: failed to extract indexes")));
 		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
 	}
-	
+	if( attnum == InvalidAttrNumber)
+	{
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+	}
 	ereport(DEBUG5, (errmsg("\t Distributed table from the inner part: %s", innerRte->eref->aliasname)));
 
 
@@ -311,18 +275,9 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	Var *partitionColumnVar = cacheEntry->partitionColumn;
 
 	/* 
-	* we will add constraints for the outer table, we need to find the column in the outer 
-	* table that is comparable to the partition column of the inner table.
-	* If the column does not exist, we return without modifying the query.
-	* If the column exists, we create a Var node for the outer table's partition column.
+	* we will add constraints for the outer table,
+	* we create a Var node for the outer table's column that is compared with the distribution column.
 	*/
-	outerRte = rt_fetch(outerRtIndex, query->rtable);
-	AttrNumber attnum = GetAttrNumForMatchingColumn(outerRte, relationId, partitionColumnVar);
-	// TODO: we also have to check that the tables are joined on the partition column. 
-	if( attnum == InvalidAttrNumber)
-	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
-	}
 
 	Var* outerTablePartitionColumnVar = makeVar(
 					outerRtIndex, attnum, partitionColumnVar->vartype,
