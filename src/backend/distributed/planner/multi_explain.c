@@ -189,7 +189,8 @@ typedef struct SerializeDestReceiver
 
 
 /* Explain functions for distributed queries */
-static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
+static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es,
+							bool queryExecuted);
 static void ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 					   ParamListInfo params);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
@@ -296,7 +297,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	if (distributedPlan->subPlanList != NIL)
 	{
-		ExplainSubPlans(distributedPlan, es);
+		ExplainSubPlans(distributedPlan, es, scanState->finishedRemoteScan);
 	}
 
 	ExplainJob(scanState, distributedPlan->workerJob, es, params);
@@ -434,12 +435,27 @@ NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
  * planning time and set it to 0.
  */
 static void
-ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
+ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es, bool queryExecuted)
 {
 	ListCell *subPlanCell = NULL;
 	uint64 planId = distributedPlan->planId;
+	bool analyzeEnabled = es->analyze;
+	bool timingEnabled = es->timing;
+	bool walEnabled = es->wal;
 
 	ExplainOpenGroup("Subplans", "Subplans", false, es);
+
+	if (queryExecuted)
+	{
+		/*
+		 * Subplans are already executed recursively when
+		 * executing the top-level of the plan. Here, we just
+		 * need to explain them but not execute them again.
+		 */
+		es->analyze = false;
+		es->timing = false;
+		es->wal = false;
+	}
 
 	foreach(subPlanCell, distributedPlan->subPlanList)
 	{
@@ -488,9 +504,9 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("Subplan", NULL, true, es);
 
-		if (es->analyze)
+		if (analyzeEnabled)
 		{
-			if (es->timing)
+			if (timingEnabled)
 			{
 				ExplainPropertyFloat("Subplan Duration", "ms", subPlan->durationMillisecs,
 									 2, es);
@@ -551,6 +567,14 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		{
 			es->indent -= 3;
 		}
+	}
+
+	/* Restore the settings */
+	if (queryExecuted)
+	{
+		es->analyze = analyzeEnabled;
+		es->timing = timingEnabled;
+		es->wal = walEnabled;
 	}
 
 	ExplainCloseGroup("Subplans", "Subplans", false, es);
