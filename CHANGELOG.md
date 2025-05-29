@@ -3,8 +3,6 @@
 * Fixes a crash in left outer joins that can happen when there is an an 
   aggregate on a column from the inner side of the join (#7787) (#7901) (#7904)
 
-* Updates workflow base OS to use the latest version (#7971)
-
 * Fixes an issue detected using address sanitizer (#7965) 
 
 * Fixes a crash when executing a prepared CALL, which is not pure SQL but 
