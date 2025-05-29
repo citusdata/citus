@@ -1,6 +1,6 @@
 ### citus v13.0.4 (May 29th, 2025) ###
 
-* Fixes an issue detected using address sanitizer (#7965)
+* Fixes an issue detected using address sanitizer (#7966)
 
 * Error out for queries with outer joins and pseudoconstant quals in PG 17
   and older versions (#7937)
