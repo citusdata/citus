@@ -1,7 +1,7 @@
 ### citus v12.1.8 (May 29, 2025) ###
 
 * Fixes a crash in left outer joins that can happen when there is an an 
-  aggregate on a column from the inner side of the join (#7787) (#7901) (#7904)
+  aggregate on a column from the inner side of the join (#7904)
 
 * Fixes an issue detected using address sanitizer (#7965) 
 
