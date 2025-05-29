@@ -1,3 +1,36 @@
+## citus v13.1.0 (May 29th, 2025) ###
+
+* Makes sure to prevent INSERT INTO ... SELECT queries involving subfield or
+  sublink, to avoid crashes (#7912)
+
+* Adds support for GRANT/REVOKE on table columns (#7918)
+
+* Fixes issues detected using address sanitizer (#7949, #7948)
+
+* Adjusts max_prepared_transactions only when it's set to default on PG >= 16
+  (#7712)
+
+* Fixes a bug that causes omitting CASCADE clause for the commands sent to
+  workers for REVOKE commands on tables (#7958)
+
+* Adds `citus_stat_counters` view that can be used to query
+  stat counters that Citus collects while the feature is enabled, which is
+  controlled by citus.enable_stat_counters. `citus_stat_counters()` can be
+  used to query the stat counters for the provided database oid and
+  `citus_stat_counters_reset()` can be used to reset them for the provided
+  database oid or for the current database if nothing or 0 is provided (#7917)
+
+* Propagates `SECURITY LABEL` on tables and columns. (#7956)
+
+* Planner: lifts volatile target‑list items in WrapSubquery to coordinator
+  (prevents sequence‑leap in distributed INSERT … SELECT) #7976
+
+* Errors out for queries with outer joins and pseudoconstant quals in versions
+  prior to PG 17 (#7937)
+
+* Adds `citus_nodes` view that displays the node name, port,
+  role, and "active" for nodes in the cluster (#7985)
+
 ### citus v13.0.3 (March 20th, 2025) ###
 
 * Fixes a version bump issue in 13.0.2
