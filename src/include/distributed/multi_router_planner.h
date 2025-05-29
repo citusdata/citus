@@ -28,12 +28,15 @@
 
 extern bool EnableRouterExecution;
 extern bool EnableFastPathRouterPlanner;
+extern bool EnableSingShardFastPathPOC;
 
 extern bool EnableNonColocatedRouterQueryPushdown;
 
 extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);
+extern DistributedPlan * CreateFastPathRouterPlan(
+	DistributedPlanningContext *planContext);
 extern DistributedPlan * CreateModifyPlan(Query *originalQuery, Query *query,
 										  PlannerRestrictionContext *
 										  plannerRestrictionContext);
@@ -100,7 +103,8 @@ extern void GenerateSingleShardRouterTaskList(Job *job,
 
 extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo
 									 boundParams);
-extern bool FastPathRouterQuery(Query *query, Node **distributionKeyValue);
+extern bool FastPathRouterQuery(Query *query, const char *query_string,
+								FastPathRestrictionContext *fastPathContext);
 extern bool JoinConditionIsOnFalse(List *relOptInfo);
 extern Oid ResultRelationOidForQuery(Query *query);
 extern DeferredErrorMessage * TargetlistAndFunctionsSupported(Oid resultRelationId,

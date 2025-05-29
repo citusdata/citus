@@ -20,6 +20,7 @@
 #include "catalog/pg_opfamily.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "distributed/shard_utils.h"
 #include "executor/execdesc.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
@@ -34,6 +35,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/planmain.h"
+#include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
 #include "parser/parse_oper.h"
 #include "parser/parsetree.h"
@@ -173,7 +175,9 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
 static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
-
+static Job * RouterJobFastPath(DistributedPlanningContext *planContext,
+							   DistributedPlan *distributedPlan);
+static Query * ReplaceShardRelationId(Query *query, Oid relationID, Oid shardRelationId);
 
 /*
  * CreateRouterPlan attempts to create a router executor plan for the given
@@ -196,6 +200,64 @@ CreateRouterPlan(Query *originalQuery, Query *query,
 
 	distributedPlan->fastPathRouterPlan =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
+
+	return distributedPlan;
+}
+
+
+DistributedPlan *
+CreateFastPathRouterPlan(DistributedPlanningContext *planContext)
+{
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
+	Query *query = planContext->query;
+	bool is_select = (query->commandType == CMD_SELECT);
+
+	distributedPlan->planningError = NULL; /* todo: relevant parts of DeferErrorIfUnsupportedRouterPlannableSelectQuery(planContext->query); */
+	                                       /* Query targetlist does not have nextval */
+	                                       /* Query -> hasForUpdate	AND table replication factor > 1 */
+	if (!is_select)
+	{
+		distributedPlan->planningError = ModifyQuerySupported(query,
+															  planContext->originalQuery,
+															  false,
+															  planContext->
+															  plannerRestrictionContext);
+	}
+
+	if (distributedPlan->planningError == NULL)
+	{
+		distributedPlan->modLevel = RowModifyLevelForQuery(query);
+		Job *job = NULL;
+
+		if (is_select || UpdateOrDeleteOrMergeQuery(query))
+		{
+			job = RouterJobFastPath(planContext, distributedPlan);
+		}
+		else
+		{
+			job = RouterInsertJob(planContext->originalQuery);
+
+			/* Apply fast path planning :: todo - place earlier in planning */
+			planContext->plan = FastPathPlanner(planContext->originalQuery,
+												planContext->query,
+												planContext->boundParams);
+		}
+
+		if (distributedPlan->planningError == NULL)
+		{
+			distributedPlan->workerJob = job;
+			distributedPlan->combineQuery = NULL;
+			distributedPlan->expectResults = is_select || query->returningList != NIL;
+			distributedPlan->targetRelationId = is_select ? InvalidOid :
+												ResultRelationOidForQuery(query);
+		}
+
+		/* todo: handle the case where planningError is not NULL */
+	}
+
+	distributedPlan->fastPathRouterPlan =
+		planContext->plannerRestrictionContext->fastPathRestrictionContext->
+		fastPathRouterQuery;
 
 	return distributedPlan;
 }
@@ -1945,6 +2007,188 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
 	return job;
+}
+
+
+static Job *
+RouterJobFastPath(DistributedPlanningContext *planContext,
+				  DistributedPlan *distributedPlan)
+{
+	FastPathRestrictionContext *fastPathContext =
+		planContext->plannerRestrictionContext->fastPathRestrictionContext;
+
+	/* DeferredErrorMessage *planningError = NULL; todo - check if we need this */
+	Job *job = NULL;
+	Assert(fastPathContext->fastPathRouterQuery);
+	Assert(fastPathContext->delayFastPathPlanning);
+
+	if (fastPathContext->distributionKeyHasParam)
+	{
+		/*
+		 * Deferred pruning - don't know which shard at this point.
+		 */
+		job = CreateJob(planContext->query);
+		job->deferredPruning = true;
+
+		/* Apply fast path planning */
+		planContext->plan = FastPathPlanner(planContext->originalQuery,
+											planContext->query,
+											planContext->boundParams);
+		return job;
+	}
+
+	Query *originalQuery = planContext->originalQuery;
+	bool isMultiShardQuery = false, shardsPresent = false,
+		 distTableWithShardKey = false, isLocalExecution = false;
+	Const *partitionKeyValue = NULL;
+	Const *distributionKeyValue = fastPathContext->distributionKeyValue;
+	uint64 shardId = INVALID_SHARD_ID;
+	int32 localGroupId = -1;
+
+	List *shardIntervals =
+		TargetShardIntervalForFastPathQuery(originalQuery, &isMultiShardQuery,
+											distributionKeyValue,
+											&partitionKeyValue);
+	Assert(!isMultiShardQuery);
+	Assert(list_length(shardIntervals) == 1);
+
+	List *relationShards = RelationShardListForShardIntervalList(shardIntervals,
+																 &shardsPresent);
+	Assert(shardsPresent);
+	Assert(list_length(relationShards) == 1);
+
+	RelationShard *shard = (RelationShard *) linitial(relationShards);
+	shardId = shard->shardId;
+
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(
+		fastPathContext->distTableRte->relid);
+	Assert(cacheEntry != NULL);
+	Assert(cacheEntry->relationId == shard->relationId);
+	Assert(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE));
+
+	distTableWithShardKey = HasDistributionKeyCacheEntry(cacheEntry);
+	Assert(distTableWithShardKey);
+
+	List *taskPlacementList = CreateTaskPlacementListForShardIntervals(shardIntervals,
+																	   true, false,
+																	   false);
+	Assert(list_length(taskPlacementList) == 1);
+	ShardPlacement *primaryPlacement =
+		(ShardPlacement *) linitial(taskPlacementList);
+	Assert(primaryPlacement->shardId == shardId);
+	Assert(originalQuery->resultRelation == 0 ||
+		   fastPathContext->distTableRte->rtekind != RTE_SUBQUERY);
+	Assert(shardId != INVALID_SHARD_ID);
+	if (originalQuery->hasModifyingCTE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"Fast path queries with modifying CTEs are not supported")));
+	}
+
+	job = CreateJob(originalQuery);
+	job->partitionKeyValue = partitionKeyValue;
+	job->requiresCoordinatorEvaluation = false; /* todo: assert this is correct */
+	job->colocationId = TableColocationId(fastPathContext->distTableRte->relid);
+
+	TaskType taskType = READ_TASK;
+	char replicationModel = 0;
+
+	if (originalQuery->commandType != CMD_SELECT)
+	{
+		taskType = MODIFY_TASK;
+		replicationModel = cacheEntry->replicationModel;
+	}
+
+	Task *task = CreateTask(taskType);
+	task->isLocalTableModification = false;
+	List *relationRowLockList = NIL;
+
+	task->taskPlacementList = taskPlacementList;
+	task->partitionKeyValue = partitionKeyValue;
+	task->colocationId = job->colocationId;
+
+	/* Determine if task is local or remote */
+	localGroupId = GetLocalGroupId();
+	isLocalExecution = (primaryPlacement->groupId == localGroupId);
+
+	if (isLocalExecution)
+	{
+		planContext->query = ReplaceShardRelationId(planContext->query,
+													shard->relationId,
+													shardId);
+
+		/* Plan the query with the new shard relation id */
+		/* Save plan in planContext->plan */
+		planContext->plan = standard_planner(planContext->query, NULL,
+											 planContext->cursorOptions,
+											 planContext->boundParams);
+		SetTaskQueryPlan(task, planContext->plan);
+	}
+	else
+	{
+		SetTaskQueryString(task, (char *) fastPathContext->clientQueryString);
+
+		/* Call fast path query planner, Save plan in planContext->plan */
+		planContext->plan = FastPathPlanner(planContext->originalQuery,
+											planContext->query,
+											planContext->boundParams);
+	}
+	task->anchorShardId = shardId;
+	task->jobId = job->jobId;
+	task->relationShardList = relationShards;
+	task->relationRowLockList = relationRowLockList;
+	task->replicationModel = replicationModel;
+	task->parametersInQueryStringResolved = job->parametersInJobQueryResolved;
+
+	job->taskList = list_make1(task);
+	return job;
+}
+
+
+static Query *
+ReplaceShardRelationId(Query *query, Oid citusTableOid, Oid shardId)
+{
+	Oid shardRelationId = InvalidOid;
+
+	Assert(list_length(query->rtable) == 1);
+	Assert(list_length(query->rteperminfos) == 1);
+
+	RangeTblEntry *rte = (RangeTblEntry *) linitial(query->rtable);
+	Assert(rte->relid == citusTableOid);
+	RTEPermissionInfo *rtePermInfo = (RTEPermissionInfo *) linitial(query->rteperminfos);
+
+	const char *citusTableName = get_rel_name(citusTableOid);
+	Assert(citusTableName != NULL);
+
+	/* construct shard relation name */
+	char *shardRelationName = pstrdup(citusTableName);
+	AppendShardIdToName(&shardRelationName, shardId);
+
+	RangeVar shardRangeVar = {
+		.relname = shardRelationName,
+		.schemaname = NULL, /* todo - should initialize this ? get_rel_namespace(shardRelationId), */
+		.inh = rte->inh,
+		.relpersistence = RELPERSISTENCE_PERMANENT,
+	};
+
+	shardRelationId = RangeVarGetRelidExtended(&shardRangeVar, rte->rellockmode,
+											   0, NULL, NULL);  /* todo - use suitable callback for perms check? */
+	Assert(shardRelationId != InvalidOid);
+	rte->relid = shardRelationId;
+	rtePermInfo->relid = shardRelationId;
+
+	ListCell *lc = NULL;
+	foreach(lc, query->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(lc);
+		if (targetEntry->resorigtbl == citusTableOid)
+		{
+			targetEntry->resorigtbl = shardRelationId;
+		}
+	}
+
+	return query;
 }
 
 
