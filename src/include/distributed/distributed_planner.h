@@ -99,6 +99,12 @@ typedef struct FastPathRestrictionContext
 	 * Set to true when distKey = Param; in the queryTree
 	 */
 	bool distributionKeyHasParam;
+
+	bool delayFastPathPlanning; /* Indicates to hold off on callning the fast path planner until its known if the shard is local */
+
+	RangeTblEntry *distTableRte;   /* Range table entry for the table we're querying */
+
+	const char *clientQueryString;  /* As passed in by the client */
 } FastPathRestrictionContext;
 
 typedef struct PlannerRestrictionContext

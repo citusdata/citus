@@ -439,6 +439,24 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 }
 
 
+void
+SetTaskQueryPlan(Task *task, PlannedStmt *localPlan)
+{
+	Assert(localPlan != NULL);
+	task->taskQuery.queryType = TASK_QUERY_LOCAL_PLAN;
+	task->taskQuery.data.localPlan = localPlan;
+	task->queryCount = 1;
+}
+
+
+PlannedStmt *
+TaskQueryLocalPlan(Task *task)
+{
+	Assert(GetTaskQueryType(task) == TASK_QUERY_LOCAL_PLAN);
+	return task->taskQuery.data.localPlan;
+}
+
+
 /*
  * DeparseTaskQuery is a general way of deparsing a query based on a task.
  */

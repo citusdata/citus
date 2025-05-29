@@ -1367,6 +1367,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_single_shard_poc",
+		gettext_noop("Enables execution shortcuts for single shard "
+					 "queries in the proof of concept mode."),
+		NULL,
+		&EnableSingShardFastPathPOC,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_local_execution",
 		gettext_noop("Enables queries on shards that are local to the current node "
 					 "to be planned and executed locally."),

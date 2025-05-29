@@ -53,6 +53,7 @@
 #include "distributed/shardinterval_utils.h"
 
 bool EnableFastPathRouterPlanner = true;
+bool EnableSingShardFastPathPOC = true;
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
 static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
@@ -112,10 +113,6 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	Plan *plan = &scanNode->plan;
 #endif
 
-	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
-
-	Assert(FastPathRouterQuery(parse, &distKey));
-
 	/* there is only a single relation rte */
 #if PG_VERSION_NUM >= PG_VERSION_16
 	scanNode->scan.scanrelid = 1;
@@ -166,10 +163,14 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
  *     don't have any sublinks/CTEs etc
  */
 bool
-FastPathRouterQuery(Query *query, Node **distributionKeyValue)
+FastPathRouterQuery(Query *query, const char *query_string,
+					FastPathRestrictionContext *fastPathContext)
 {
 	FromExpr *joinTree = query->jointree;
 	Node *quals = NULL;
+	bool isFastPath = false;
+	bool isDistributedTable = false;
+	Node *distributionKeyValue = NULL;
 
 	if (!EnableFastPathRouterPlanner)
 	{
@@ -201,7 +202,9 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 	else if (query->commandType == CMD_INSERT)
 	{
 		/* we don't need to do any further checks, all INSERTs are fast-path */
-		return true;
+		isFastPath = true;
+		isDistributedTable = true;
+		goto returnFastPath;
 	}
 
 	/* make sure that the only range table in FROM clause */
@@ -232,45 +235,74 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 	Var *distributionKey = PartitionColumn(distributedTableId, 1);
 	if (!distributionKey)
 	{
-		return true;
+		isFastPath = true;
 	}
 
-	/* WHERE clause should not be empty for distributed tables */
-	if (joinTree == NULL ||
-		(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) && joinTree->quals ==
-		 NULL))
+	if (!isFastPath)
 	{
-		return false;
+		isDistributedTable = IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE);
+
+		if (joinTree == NULL ||
+			(joinTree->quals == NULL && !isDistributedTable))
+		{
+			/* no quals, not a fast path query */
+			return false;
+		}
+
+		quals = joinTree->quals;
+		if (quals != NULL && IsA(quals, List))
+		{
+			quals = (Node *) make_ands_explicit((List *) quals);
+		}
+
+		/*
+		 * Distribution column must be used in a simple equality match check and it must be
+		 * place at top level conjunction operator. In simple words, we should have
+		 *	    WHERE dist_key = VALUE [AND  ....];
+		 *
+		 *	We're also not allowing any other appearances of the distribution key in the quals.
+		 *
+		 *	Overall the logic might sound fuzzy since it involves two individual checks:
+		 *	    (a) Check for top level AND operator with one side being "dist_key = const"
+		 *	    (b) Only allow single appearance of "dist_key" in the quals
+		 *
+		 *	This is to simplify both of the individual checks and omit various edge cases
+		 *	that might arise with multiple distribution keys in the quals.
+		 */
+		isFastPath = (ConjunctionContainsColumnFilter(quals, distributionKey,
+													  &distributionKeyValue) &&
+					  !ColumnAppearsMultipleTimes(quals, distributionKey));
 	}
 
-	/* convert list of expressions into expression tree for further processing */
-	quals = joinTree->quals;
-	if (quals != NULL && IsA(quals, List))
+returnFastPath:
+
+	if (isFastPath)
 	{
-		quals = (Node *) make_ands_explicit((List *) quals);
+		fastPathContext->fastPathRouterQuery = true;
+		if (distributionKeyValue == NULL)
+		{
+			/* nothing to record */
+		}
+		else if (IsA(distributionKeyValue, Const))
+		{
+			fastPathContext->distributionKeyValue = (Const *) distributionKeyValue;
+		}
+		else if (IsA(distributionKeyValue, Param))
+		{
+			fastPathContext->distributionKeyHasParam = true;
+		}
+
+		if (EnableSingShardFastPathPOC)
+		{
+			fastPathContext->distTableRte = rangeTableEntry;
+			fastPathContext->delayFastPathPlanning = isDistributedTable;  /*&& !fastPathContext->distributionKeyHasParam; */
+
+			/* If the dist key is parameterized the query will use the plan cache (todo: verify) */
+			fastPathContext->clientQueryString = query_string;
+		}
 	}
 
-	/*
-	 * Distribution column must be used in a simple equality match check and it must be
-	 * place at top level conjunction operator. In simple words, we should have
-	 *	    WHERE dist_key = VALUE [AND  ....];
-	 *
-	 *	We're also not allowing any other appearances of the distribution key in the quals.
-	 *
-	 *	Overall the logic might sound fuzzy since it involves two individual checks:
-	 *	    (a) Check for top level AND operator with one side being "dist_key = const"
-	 *	    (b) Only allow single appearance of "dist_key" in the quals
-	 *
-	 *	This is to simplify both of the individual checks and omit various edge cases
-	 *	that might arise with multiple distribution keys in the quals.
-	 */
-	if (ConjunctionContainsColumnFilter(quals, distributionKey, distributionKeyValue) &&
-		!ColumnAppearsMultipleTimes(quals, distributionKey))
-	{
-		return true;
-	}
-
-	return false;
+	return isFastPath;
 }
 
 

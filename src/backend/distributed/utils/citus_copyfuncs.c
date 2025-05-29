@@ -287,6 +287,14 @@ CopyTaskQuery(Task *newnode, Task *from)
 			break;
 		}
 
+		case TASK_QUERY_LOCAL_PLAN:
+		{
+			/*COPY_NODE_FIELD(taskQuery.data.localPlan); */
+			/* This is a local planned statement, so shallow copy is enough */
+			COPY_SCALAR_FIELD(taskQuery.data.localPlan);
+			break;
+		}
+
 		default:
 		{
 			break;
