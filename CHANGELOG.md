@@ -1,3 +1,13 @@
+### citus v12.1.8 (May 29, 2025) ###
+
+* Fixes a crash in left outer joins that can happen when there is an an
+  aggregate on a column from the inner side of the join (#7904)
+
+* Fixes an issue detected using address sanitizer (#7965)
+
+* Fixes a crash when executing a prepared CALL, which is not pure SQL but
+available with some drivers like npgsql and jpgdbc (#7288)
+
 ### citus v12.1.7 (Feb 6, 2025) ###
 
 * Fixes a crash that happens because of unsafe catalog access when re-assigning
