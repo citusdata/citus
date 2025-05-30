@@ -15,15 +15,12 @@
 
 * Allows `citus_*_size` on index related to a distributed table (#7271)
 
-* Adds alter user rename propagation and enriches alter user
-tests (#7204)
+* Adds support for propagating `ALTER USER RENAME` commands (#7204)
 
-* Adds support for `ALTER DATABASE <db_name> SET ..` statement
-propagation (#7181)
+* Adds support for propagating `ALTER DATABASE <db_name> SET ..` commands
+  (#7181)
 
-* Propagates SECURITY LABEL on tables and columns (#7956)
-
-* Supports MERGE command for `single_shard_distributed` Target (#7643)
+* Adds support for propagating `SECURITY LABEL` on tables and columns (#7956)
 
 * Adds `citus_stat_counters` view that can be used to query
   stat counters that Citus collects while the feature is enabled, which is
@@ -42,12 +39,12 @@ propagation (#7181)
   reference tables), when a modify request is initiated from a worker node that
   is not the "FirstWorkerNode" (#7542)
 
-* Errors out for queries with outer joins and pseudoconstant quals in versions
-  prior to PG 17 (#7937)
+* Makes sure to avoid incorrectly pushing-down the outer joins between
+  distributed tables and recurring relations (like reference tables, local
+  tables and `VALUES(..)` etc.) prior to PG 17 (#7937)
 
-* Refactors the `WrapSubquery(Query *subquery)` function to improve clarity and
-  correctness when handling volatile expressions in subqueries during Citus
-  insert-select rewriting (#7976)
+* Prevents incorrectly pushing `nextval()` call down to workers to avoid using
+  incorrect sequence value for some types of `INSERT .. SELECT`s (#7976)
 
 * Adjusts `max_prepared_transactions` only when it's set to default on PG >= 16
   (#7712)
@@ -55,17 +52,12 @@ propagation (#7181)
 * Makes sure to prevent `INSERT INTO ... SELECT` queries involving subfield or
   sublink, to avoid crashes (#7912)
 
-* Updates `tdigest_aggregate_support` output for PG15+ (#7849)
-
 * Makes sure worker_copy_table_to_node errors out with Citus tables (#7662)
 
 * Moves some of the internal citus functions from `pg_catalog` to
   `citus_internal` schema (#7473, #7470, #7466, 7456, 7450)
 
-* Creates directories and files with `pg_file_create_mode` and
-  `pg_dir_create_mode` permissions (#7479)
-
-* Adds comment on database and role propagation (#7388)
+* Adds support for propagating `COMMENT ON <database>/<role>` commands (#7388)
 
 * Adds information to explain output when using
   `citus.explain_distributed_queries=false` (#7412)
@@ -73,10 +65,10 @@ propagation (#7181)
 * Logs username in the failed connection message (#7432)
 
 * Makes sure to take improvement_threshold into the account
-in `citus_add_rebalance_strategy()` (#7247)
+  in `citus_add_rebalance_strategy()` (#7247)
 
 * Makes sure to disallow creating a replicated distributed
-table concurrently (#7219)
+  table concurrently (#7219)
 
 * Fixes a bug that causes omitting `CASCADE` clause for the commands sent to
   workers for `REVOKE` commands on tables (#7958)
@@ -84,7 +76,7 @@ table concurrently (#7219)
 * Fixes an issue detected using address sanitizer (#7948, #7949)
 
 * Fixes a bug in deparsing of shard query in case of "output-table column" name
- conflict (#7932)
+  conflict (#7932)
 
 * Fixes a crash in columnar custom scan that happens when a columnar table is
   used in a join (#7703)
@@ -114,21 +106,21 @@ table concurrently (#7219)
 * Fixes segmentation fault when using `CASE WHEN` in `DO` block functions
   (#7554)
 
-* Fixes undefined behavior in `master_disable_node` due to argument mismatch,
-  where `master_disable_node()` has only two arguments, but calls
-  `citus_disable_node()` that tries to read three arguments (#7492)
+* Fixes undefined behavior in `master_disable_node` due to argument mismatch
+  (#7492)
 
 * Fixes incorrect propagating of `GRANTED BY` and `CASCADE/RESTRICT` clauses
   for `REVOKE` statements (#7451)
 
 * Fixes the incorrect column count after `ALTER TABLE` (#7379)
 
-* Fixes timeout when underlying socket is changed in a MultiConnection (#7377)
+* Fixes timeout when underlying socket is changed for an inter-node connection
+  (#7377)
 
 * Fixes memory leaks (#7441, #7440)
 
-* Fixes leaking of memory and memory contexts in Foreign Constraint Graphs
-  (#7236)
+* Fixes leaking of memory and memory contexts when tracking foreign keys between
+  Citus tables (#7236)
 
 * Fixes a potential segfault for background rebalancer (#7694)
 
@@ -236,9 +228,8 @@ table concurrently (#7219)
 * Allows overwriting host name for all inter-node connections by
   supporting "host" parameter in citus.node_conninfo (#7541)
 
-* Changes the order in which the locks are acquired for the target and
-  reference tables, when a modify request is initiated from a worker
-  node that is not the "FirstWorkerNode" (#7542)
+* Avoids distributed deadlocks by changing the order in which the locks are
+  acquired for the target and reference tables (#7542)
 
 * Fixes a performance issue when distributing a table that depends on an
   extension (#7574)
