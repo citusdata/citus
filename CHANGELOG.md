@@ -9,7 +9,7 @@
 
 * Adds database connection limit, rename and set tablespace propagation (#7253)
 
-* Allows `GRANT ADMIN` to now also be `INHERIT` or `SET` in support of psql16
+* Allows `GRANT ADMIN` to now also be `INHERIT` or `SET` in support of PG16
 
 * Adds support for propagating `CREATE`/`DROP` database (#7240)
 
