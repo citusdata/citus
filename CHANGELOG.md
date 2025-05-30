@@ -5,7 +5,7 @@
 * Adds support for issuing `CREATE`/`DROP` `DATABASE` commands from worker nodes
   (#7359)
 
-* Adds `REASSIGN OWNED` BY propagation (#7319)
+* Adds support for propagating `REASSIGN OWNED BY` commands (#7319)
 
 * Adds database connection limit, rename and set tablespace propagation (#7253)
 
