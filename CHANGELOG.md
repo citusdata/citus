@@ -1,6 +1,6 @@
 ## citus v13.1.0 (May 30th, 2025) ###
 
-* Propagates `GRANT/REVOKE` rights on table columns (#7918)
+* Adds support for propagating `GRANT/REVOKE` rights on table columns (#7918)
 
 * Adds support for issuing `CREATE`/`DROP` `DATABASE` commands from worker nodes
   (#7359)
