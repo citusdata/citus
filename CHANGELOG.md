@@ -2,20 +2,17 @@
 
 * Adds support for propagating `GRANT/REVOKE` rights on table columns (#7918)
 
-* Adds support for issuing `CREATE`/`DROP` `DATABASE` commands from worker nodes
-  (#7359)
-
 * Adds support for propagating `REASSIGN OWNED BY` commands (#7319)
 
-* Adds database connection limit, rename and set tablespace propagation (#7253)
+* Adds support for propagating `CREATE`/`DROP` database from all nodes (#7240,
+  #7253, #7359)
 
 * Allows `GRANT ADMIN` to now also be `INHERIT` or `SET` in support of PG16
 
-* Adds support for propagating `CREATE`/`DROP` database (#7240)
 
 * Propagates `SECURITY LABEL ON ROLE` statement from any node (#7508)
 
-* Adds support from issuing role management commands from worker nodes (#7278)
+* Adds support for issuing role management commands from worker nodes (#7278)
 
 * Allows `citus_*_size` on index related to a distributed table (#7271)
 
@@ -61,7 +58,7 @@ propagation (#7181)
 
 * Updates `tdigest_aggregate_support` output for PG15+ (#7849)
 
-* Checks for Citus table in `worker_copy_table_to_node` (#7662)
+* Makes sure worker_copy_table_to_node errors out with Citus tables (#7662)
 
 * Moves some of the internal citus functions from `pg_catalog` to
   `citus_internal` schema (#7473, #7470, #7466, 7456, 7450)
@@ -93,8 +90,8 @@ table concurrently (#7219)
 * Fixes a crash in columnar custom scan that happens when a columnar table is
   used in a join (#7703)
 
-* Fixes `MERGE` command when insert value does not have source distributed column
-  (#7627)
+* Fixes `MERGE` command when insert value does not have source distributed
+  column (#7627)
 
 * Fixes performance issue when using `\d tablename` on a server with many
   tables (#7577)
@@ -137,7 +134,7 @@ table concurrently (#7219)
 * Fixes leaking of memory and memory contexts in Foreign Constraint Graphs
   (#7236)
 
-* Fixes dereference of `NULL` in background task execution (#7694)
+* Fixes a potential segfault for background rebalancer (#7694)
 
 * Fixes potential `NULL` dereference in casual clocks (#7704)
 
