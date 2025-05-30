@@ -93,7 +93,7 @@ table concurrently (#7219)
 * Fixes a crash in columnar custom scan that happens when a columnar table is
   used in a join (#7703)
 
-* Fixes merge command when insert value does not have source distributed column
+* Fixes `MERGE` command when insert value does not have source distributed column
   (#7627)
 
 * Fixes performance issue when using `\d tablename` on a server with many
