@@ -36,24 +36,24 @@ propagation (#7181)
   `citus_stat_counters_reset()` can be used to reset them for the provided
   database oid or for the current database if nothing or 0 is provided (#7917)
 
-* Adds `citus_nodes` view that displays the node name, port role, and "active" 
+* Adds `citus_nodes` view that displays the node name, port role, and "active"
   for nodes in the cluster (#7968)
 
 * Adds `citus_is_primary_node()` UDF to determine if the current node is a
   primary node in the cluster (#7720)
 
-* Changes the order in which the locks are acquired (for the target and 
+* Changes the order in which the locks are acquired (for the target and
   reference tables), when a modify request is initiated from a worker node that
   is not the "FirstWorkerNode" (#7542)
 
-* Errors out for queries with outer joins and pseudoconstant quals in versions 
+* Errors out for queries with outer joins and pseudoconstant quals in versions
   prior to PG 17 (#7937)
 
 * Refactors the `WrapSubquery(Query *subquery)` function to improve clarity and
-  correctness when handling volatile expressions in subqueries during Citus 
+  correctness when handling volatile expressions in subqueries during Citus
   insert-select rewriting (#7976)
 
-* Adjusts `max_prepared_transactions` only when it's set to default on PG >= 16 
+* Adjusts `max_prepared_transactions` only when it's set to default on PG >= 16
   (#7712)
 
 * Makes sure to prevent `INSERT INTO ... SELECT` queries involving subfield or
@@ -63,10 +63,10 @@ propagation (#7181)
 
 * Checks for Citus table in `worker_copy_table_to_node` (#7662)
 
-* Moves some of the internal citus functions from `pg_catalog` to 
+* Moves some of the internal citus functions from `pg_catalog` to
   `citus_internal` schema (#7473, #7470, #7466, 7456, 7450)
 
-* Creates directories and files with `pg_file_create_mode` and 
+* Creates directories and files with `pg_file_create_mode` and
   `pg_dir_create_mode` permissions (#7479)
 
 * Adds comment on database and role propagation (#7388)
@@ -90,7 +90,7 @@ table concurrently (#7219)
 * Fixes a bug in deparsing of shard query in case of "output-table column" name
  conflict (#7932)
 
-* Fixes a crash in columnar custom scan that happens when a columnar table is 
+* Fixes a crash in columnar custom scan that happens when a columnar table is
   used in a join (#7703)
 
 * Fixes merge command when insert value does not have source distributed column
@@ -99,32 +99,33 @@ table concurrently (#7219)
 * Fixes performance issue when using `\d tablename` on a server with many
   tables (#7577)
 
-* Fixes performance issue in `GetForeignKeyOids` on systems with many constraints
-  (#7580)
+* Fixes performance issue in `GetForeignKeyOids` on systems with many
+  constraints (#7580)
 
 * Fixes performance issue when distributing a table that depends on an
   extension (#7574)
 
-* Fixes performance issue when creating distributed tables if many already 
+* Fixes performance issue when creating distributed tables if many already
   exist (#7575)
 
-* Fixes a crash caused by some form of `ALTER TABLE ADD COLUMN` statements. When 
-  adding multiple columns, if one of the `ADD COLUMN` statements contains a  
+* Fixes a crash caused by some form of `ALTER TABLE ADD COLUMN` statements. When
+  adding multiple columns, if one of the `ADD COLUMN` statements contains a
   `FOREIGN` constraint ommitting the referenced
   columns in the statement, a `SEGFAULT` occurs (#7522)
 
 * Fixes assertion failure in maintenance daemon during Citus upgrades  (#7537)
 
-* Fixes segmentation fault when using `CASE WHEN` in `DO` block functions (#7554) 
+* Fixes segmentation fault when using `CASE WHEN` in `DO` block functions
+  (#7554)
 
-* Fixes copy-paste error on `rightComparisonLimit`, which makes it use the same 
+* Fixes copy-paste error on `rightComparisonLimit`, which makes it use the same
   value as the `leftComparisonLimit` (#7547)
 
-* Fixes undefined behavior in `master_disable_node` due to argument mismatch, 
-  where `master_disable_node()` has only two arguments, but calls 
+* Fixes undefined behavior in `master_disable_node` due to argument mismatch,
+  where `master_disable_node()` has only two arguments, but calls
   `citus_disable_node()` that tries to read three arguments (#7492)
 
-* Fixes incorrect propagating of `GRANTED BY` and `CASCADE/RESTRICT` clauses 
+* Fixes incorrect propagating of `GRANTED BY` and `CASCADE/RESTRICT` clauses
   for `REVOKE` statements (#7451)
 
 * Fixes the incorrect column count after `ALTER TABLE` (#7379)
@@ -133,7 +134,7 @@ table concurrently (#7219)
 
 * Fixes memory leaks (#7441, #7440)
 
-* Fixes leaking of memory and memory contexts in Foreign Constraint Graphs 
+* Fixes leaking of memory and memory contexts in Foreign Constraint Graphs
   (#7236)
 
 * Fixes dereference of `NULL` in background task execution (#7694)
