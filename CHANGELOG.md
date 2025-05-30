@@ -9,7 +9,6 @@
 
 * Allows `GRANT ADMIN` to now also be `INHERIT` or `SET` in support of PG16
 
-
 * Propagates `SECURITY LABEL ON ROLE` statement from any node (#7508)
 
 * Adds support for issuing role management commands from worker nodes (#7278)
@@ -115,9 +114,6 @@ table concurrently (#7219)
 * Fixes segmentation fault when using `CASE WHEN` in `DO` block functions
   (#7554)
 
-* Fixes copy-paste error on `rightComparisonLimit`, which makes it use the same
-  value as the `leftComparisonLimit` (#7547)
-
 * Fixes undefined behavior in `master_disable_node` due to argument mismatch,
   where `master_disable_node()` has only two arguments, but calls
   `citus_disable_node()` that tries to read three arguments (#7492)
@@ -137,8 +133,6 @@ table concurrently (#7219)
 * Fixes a potential segfault for background rebalancer (#7694)
 
 * Fixes potential `NULL` dereference in casual clocks (#7704)
-
-* Adds `NULL` check for node in `HasRangeTableRef` to prevent errors (#7609)
 
 ### citus v13.0.3 (March 20th, 2025) ###
 
