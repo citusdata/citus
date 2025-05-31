@@ -962,6 +962,7 @@ shard_name(PG_FUNCTION_ARGS)
 
 	Oid relationId = PG_GETARG_OID(0);
 	int64 shardId = PG_GETARG_INT64(1);
+	bool skipQualifyPublic = PG_GETARG_BOOL(2);
 
 	char *qualifiedName = NULL;
 
@@ -991,7 +992,7 @@ shard_name(PG_FUNCTION_ARGS)
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 
-	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
+	if (skipQualifyPublic && strncmp(schemaName, "public", NAMEDATALEN) == 0)
 	{
 		qualifiedName = (char *) quote_identifier(relationName);
 	}
