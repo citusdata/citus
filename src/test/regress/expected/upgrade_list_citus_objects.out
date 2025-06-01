@@ -289,7 +289,7 @@ ORDER BY 1;
  function run_command_on_placements(regclass,text,boolean)
  function run_command_on_shards(regclass,text,boolean)
  function run_command_on_workers(text,boolean)
- function shard_name(regclass,bigint)
+ function shard_name(regclass,bigint,boolean)
  function start_metadata_sync_to_all_nodes()
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer,boolean)
@@ -381,8 +381,7 @@ ORDER BY 1;
  view citus_lock_waits
  view citus_locks
  view citus_nodes
- view citus_schema.citus_schemas
- view citus_schema.citus_tables
+ view citus_schemas
  view citus_shard_indexes_on_worker
  view citus_shards
  view citus_shards_on_worker
@@ -391,6 +390,7 @@ ORDER BY 1;
  view citus_stat_statements
  view citus_stat_tenants
  view citus_stat_tenants_local
+ view citus_tables
  view pg_dist_shard_placement
  view time_partitions
 (362 rows)
