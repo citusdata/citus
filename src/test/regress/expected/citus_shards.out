@@ -33,5 +33,33 @@ SELECT * FROM citus_shards;
  t1             | 99456903 | citus_shards.t1_99456903             | distributed      |        456900 | localhost |    57638 |       8192
 (8 rows)
 
+SET search_path TO public;
+CREATE TABLE t3 (i int);
+SELECT citus_add_local_table_to_metadata('t3');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT shard_name('t3', shardid) FROM pg_dist_shard WHERE logicalrelid = 't3'::regclass;
+ shard_name
+---------------------------------------------------------------------
+ t3_99456908
+(1 row)
+
+SELECT shard_name('t3', shardid, true) FROM pg_dist_shard WHERE logicalrelid = 't3'::regclass;
+ shard_name
+---------------------------------------------------------------------
+ t3_99456908
+(1 row)
+
+SELECT shard_name('t3', shardid, false) FROM pg_dist_shard WHERE logicalrelid = 't3'::regclass;
+     shard_name
+---------------------------------------------------------------------
+ public.t3_99456908
+(1 row)
+
+DROP TABLE t3;
+SET search_path TO citus_shards;
 SET client_min_messages TO WARNING;
 DROP SCHEMA citus_shards CASCADE;
