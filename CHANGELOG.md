@@ -35,10 +35,6 @@
 * Adds `citus_is_primary_node()` UDF to determine if the current node is a
   primary node in the cluster (#7720)
 
-* Changes the order in which the locks are acquired (for the target and
-  reference tables), when a modify request is initiated from a worker node that
-  is not the "FirstWorkerNode" (#7542)
-
 * Makes sure to avoid incorrectly pushing-down the outer joins between
   distributed tables and recurring relations (like reference tables, local
   tables and `VALUES(..)` etc.) prior to PG 17 (#7937)
