@@ -289,7 +289,7 @@ ORDER BY 1;
  function run_command_on_placements(regclass,text,boolean)
  function run_command_on_shards(regclass,text,boolean)
  function run_command_on_workers(text,boolean)
- function shard_name(regclass,bigint)
+ function shard_name(regclass,bigint,boolean)
  function start_metadata_sync_to_all_nodes()
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer,boolean)

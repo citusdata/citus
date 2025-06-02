@@ -46,3 +46,24 @@ DROP VIEW pg_catalog.citus_stat_counters;
 DROP FUNCTION pg_catalog.citus_stat_counters(oid);
 DROP FUNCTION pg_catalog.citus_stat_counters_reset(oid);
 DROP VIEW IF EXISTS pg_catalog.citus_nodes;
+
+-- Definition of shard_name() prior to this release doesn't have a separate SQL file
+-- because it's quite an old UDF that its prior definition(s) was(were) squashed into
+-- citus--8.0-1.sql. For this reason, to downgrade it, here we directly execute its old
+-- definition instead of including it from such a separate file.
+--
+-- And before dropping and creating the function, we also need to drop citus_shards view
+-- since it depends on it. And immediately after creating the function, we recreate
+-- citus_shards view again.
+
+DROP VIEW pg_catalog.citus_shards;
+
+DROP FUNCTION pg_catalog.shard_name(object_name regclass, shard_id bigint, skip_qualify_public boolean);
+CREATE FUNCTION pg_catalog.shard_name(object_name regclass, shard_id bigint)
+    RETURNS text
+    LANGUAGE C STABLE STRICT
+    AS 'MODULE_PATHNAME', $$shard_name$$;
+COMMENT ON FUNCTION pg_catalog.shard_name(object_name regclass, shard_id bigint)
+    IS 'returns schema-qualified, shard-extended identifier of object name';
+
+#include "../udfs/citus_shards/12.0-1.sql"

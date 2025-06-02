@@ -1455,6 +1455,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                         previous_object                         |                                        current_object
 ---------------------------------------------------------------------
  function citus_unmark_object_distributed(oid,oid,integer) void |
+ function shard_name(regclass,bigint) text                      |
                                                                 | function citus_internal.acquire_citus_advisory_object_class_lock(integer,cstring) void
                                                                 | function citus_internal.add_colocation_metadata(integer,integer,integer,regtype,oid) void
                                                                 | function citus_internal.add_object_metadata(text,text[],text[],integer,integer,boolean) void
@@ -1483,16 +1484,17 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                 | function citus_stat_counters(oid) SETOF record
                                                                 | function citus_stat_counters_reset(oid) void
                                                                 | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
+                                                                | function shard_name(regclass,bigint,boolean) text
                                                                 | view citus_nodes
                                                                 | view citus_stat_counters
-(31 rows)
+(33 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 13.1devel
+ 13.1.0
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
