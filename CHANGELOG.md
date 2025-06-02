@@ -1,27 +1,5 @@
 ## citus v13.1.0 (May 30th, 2025) ###
 
-* Adds support for propagating `GRANT/REVOKE` rights on table columns (#7918)
-
-* Adds support for propagating `REASSIGN OWNED BY` commands (#7319)
-
-* Adds support for propagating `CREATE`/`DROP` database from all nodes (#7240,
-  #7253, #7359)
-
-* Allows `GRANT ADMIN` to now also be `INHERIT` or `SET` in support of PG16
-
-* Propagates `SECURITY LABEL ON ROLE` statement from any node (#7508)
-
-* Adds support for issuing role management commands from worker nodes (#7278)
-
-* Allows `citus_*_size` on index related to a distributed table (#7271)
-
-* Adds support for propagating `ALTER USER RENAME` commands (#7204)
-
-* Adds support for propagating `ALTER DATABASE <db_name> SET ..` commands
-  (#7181)
-
-* Adds support for propagating `SECURITY LABEL` on tables and columns (#7956)
-
 * Adds `citus_stat_counters` view that can be used to query
   stat counters that Citus collects while the feature is enabled, which is
   controlled by citus.enable_stat_counters. `citus_stat_counters()` can be
@@ -35,6 +13,46 @@
 * Adds `citus_is_primary_node()` UDF to determine if the current node is a
   primary node in the cluster (#7720)
 
+* Adds support for propagating `GRANT/REVOKE` rights on table columns (#7918)
+
+* Adds support for propagating `REASSIGN OWNED BY` commands (#7319)
+
+* Adds support for propagating `CREATE`/`DROP` database from all nodes (#7240,
+  #7253, #7359)
+
+* Propagates `SECURITY LABEL ON ROLE` statement from any node (#7508)
+
+* Adds support for issuing role management commands from worker nodes (#7278)
+
+* Adds support for propagating `ALTER USER RENAME` commands (#7204)
+
+* Adds support for propagating `ALTER DATABASE <db_name> SET ..` commands
+  (#7181)
+
+* Adds support for propagating `SECURITY LABEL` on tables and columns (#7956)
+
+* Adds support for propagating `COMMENT ON <database>/<role>` commands (#7388)
+
+* Moves some of the internal citus functions from `pg_catalog` to
+  `citus_internal` schema (#7473, #7470, #7466, 7456, 7450)
+
+* Adjusts `max_prepared_transactions` only when it's set to default on PG >= 16
+  (#7712)
+
+* Adds skip_qualify_public param to shard_name() UDF to allow qualifying for
+  "public" schema when needed (#8014)
+
+* Allows `citus_*_size` on indexes on a distributed tables (#7271)
+
+* Allows `GRANT ADMIN` to now also be `INHERIT` or `SET` in support of PG16
+
+* Makes sure `worker_copy_table_to_node` errors out with Citus tables (#7662)
+
+* Adds information to explain output when using
+  `citus.explain_distributed_queries=false` (#7412)
+
+* Logs username in the failed connection message (#7432)
+
 * Makes sure to avoid incorrectly pushing-down the outer joins between
   distributed tables and recurring relations (like reference tables, local
   tables and `VALUES(..)` etc.) prior to PG 17 (#7937)
@@ -42,23 +60,8 @@
 * Prevents incorrectly pushing `nextval()` call down to workers to avoid using
   incorrect sequence value for some types of `INSERT .. SELECT`s (#7976)
 
-* Adjusts `max_prepared_transactions` only when it's set to default on PG >= 16
-  (#7712)
-
 * Makes sure to prevent `INSERT INTO ... SELECT` queries involving subfield or
   sublink, to avoid crashes (#7912)
-
-* Makes sure worker_copy_table_to_node errors out with Citus tables (#7662)
-
-* Moves some of the internal citus functions from `pg_catalog` to
-  `citus_internal` schema (#7473, #7470, #7466, 7456, 7450)
-
-* Adds support for propagating `COMMENT ON <database>/<role>` commands (#7388)
-
-* Adds information to explain output when using
-  `citus.explain_distributed_queries=false` (#7412)
-
-* Logs username in the failed connection message (#7432)
 
 * Makes sure to take improvement_threshold into the account
   in `citus_add_rebalance_strategy()` (#7247)
