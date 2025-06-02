@@ -1715,3 +1715,73 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 		}
 	}
 }
+
+
+/*
+ * list_sort comparator to sort target list by paramid (in MULTIEXPR)
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ */
+int
+target_list_cmp(const ListCell *a, const ListCell *b)
+{
+	TargetEntry *tleA = lfirst(a);
+	TargetEntry *tleB = lfirst(b);
+
+	if (IsA(tleA->expr, Param) && IsA(tleB->expr, Param))
+	{
+		int la = ((Param *) tleA->expr)->paramid;
+		int lb = ((Param *) tleB->expr)->paramid;
+		return (la > lb) - (la < lb);
+	}
+	else if ((IsA(tleA->expr, Param) && IsA(tleB->expr, SubLink)) ||
+			 (IsA(tleA->expr, SubLink) && IsA(tleB->expr, Param)) ||
+			 (IsA(tleA->expr, SubLink) && IsA(tleB->expr, SubLink)))
+	{
+		return -1;
+	}
+	else
+	{
+		elog(ERROR, "unexpected nodes");
+	}
+}
+
+
+/*
+ * Recursively search an expression for a Param and return its paramid
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ * Does not cover all options but those supported by Citus.
+ */
+int
+GetParamId(Node *expr)
+{
+	int paramid = 0;
+
+	if (expr == NULL)
+	{
+		return paramid;
+	}
+
+	/* If it's a Param, return its attnum */
+	if (IsA(expr, Param))
+	{
+		Param *param = (Param *) expr;
+		paramid = param->paramid;
+	}
+	/* If it's a FuncExpr, search in arguments */
+	else if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *func = (FuncExpr *) expr;
+		ListCell *lc;
+
+		foreach(lc, func->args)
+		{
+			paramid = GetParamId((Node *) lfirst(lc));
+			if (paramid != 0)
+			{
+				break; /* Stop at the first valid paramid */
+			}
+		}
+	}
+
+	return paramid;
+}
