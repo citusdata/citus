@@ -190,7 +190,7 @@ typedef struct SerializeDestReceiver
 
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es,
-							bool queryExecuted);
+							bool subPlansExecuted);
 static void ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 					   ParamListInfo params);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
@@ -297,7 +297,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	if (distributedPlan->subPlanList != NIL)
 	{
-		ExplainSubPlans(distributedPlan, es, scanState->finishedRemoteScan);
+		ExplainSubPlans(distributedPlan, es, scanState->finishedPreScan);
 	}
 
 	ExplainJob(scanState, distributedPlan->workerJob, es, params);
@@ -435,7 +435,7 @@ NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
  * planning time and set it to 0.
  */
 static void
-ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es, bool queryExecuted)
+ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es, bool subPlansExecuted)
 {
 	ListCell *subPlanCell = NULL;
 	uint64 planId = distributedPlan->planId;
@@ -445,7 +445,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es, bool queryEx
 
 	ExplainOpenGroup("Subplans", "Subplans", false, es);
 
-	if (queryExecuted)
+	if (subPlansExecuted)
 	{
 		/*
 		 * Subplans are already executed recursively when
@@ -570,7 +570,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es, bool queryEx
 	}
 
 	/* Restore the settings */
-	if (queryExecuted)
+	if (subPlansExecuted)
 	{
 		es->analyze = analyzeEnabled;
 		es->timing = timingEnabled;
@@ -602,6 +602,7 @@ static bool
 ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es)
 {
 	TupleDesc tupDesc = ScanStateGetTupleDescriptor(scanState);
+
 	return es->analyze && tupDesc != NULL && tupDesc->natts > 0;
 }
 
