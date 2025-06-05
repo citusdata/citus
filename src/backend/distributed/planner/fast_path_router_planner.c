@@ -54,6 +54,8 @@
 
 bool EnableFastPathRouterPlanner = true;
 bool EnableSingShardFastPathPOC = true;
+bool EnableSingShardFastRemotePOC = false;
+
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
 static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
@@ -171,6 +173,7 @@ FastPathRouterQuery(Query *query, const char *query_string,
 	bool isFastPath = false;
 	bool isDistributedTable = false;
 	Node *distributionKeyValue = NULL;
+	RangeTblEntry *rangeTableEntry = NULL;
 
 	if (!EnableFastPathRouterPlanner)
 	{
@@ -213,7 +216,7 @@ FastPathRouterQuery(Query *query, const char *query_string,
 		return false;
 	}
 
-	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(query->rtable);
+	rangeTableEntry = (RangeTblEntry *) linitial(query->rtable);
 	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
 		return false;
@@ -235,6 +238,9 @@ FastPathRouterQuery(Query *query, const char *query_string,
 	Var *distributionKey = PartitionColumn(distributedTableId, 1);
 	if (!distributionKey)
 	{
+		isDistributedTable = IsCitusTableTypeCacheEntry(cacheEntry,
+														SINGLE_SHARD_DISTRIBUTED) ||
+							 IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);
 		isFastPath = true;
 	}
 
@@ -294,8 +300,9 @@ returnFastPath:
 
 		if (EnableSingShardFastPathPOC)
 		{
+			Assert(rangeTableEntry != NULL);
 			fastPathContext->distTableRte = rangeTableEntry;
-			fastPathContext->delayFastPathPlanning = isDistributedTable;  /*&& !fastPathContext->distributionKeyHasParam; */
+			fastPathContext->delayFastPathPlanning = isDistributedTable;
 
 			/* If the dist key is parameterized the query will use the plan cache (todo: verify) */
 			fastPathContext->clientQueryString = query_string;

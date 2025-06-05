@@ -29,6 +29,7 @@
 extern bool EnableRouterExecution;
 extern bool EnableFastPathRouterPlanner;
 extern bool EnableSingShardFastPathPOC;
+extern bool EnableSingShardFastRemotePOC;
 
 extern bool EnableNonColocatedRouterQueryPushdown;
 

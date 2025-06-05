@@ -2039,7 +2039,7 @@ RouterJobFastPath(DistributedPlanningContext *planContext,
 
 	Query *originalQuery = planContext->originalQuery;
 	bool isMultiShardQuery = false, shardsPresent = false,
-		 distTableWithShardKey = false, isLocalExecution = false;
+		 isLocalExecution = false;
 	Const *partitionKeyValue = NULL;
 	Const *distributionKeyValue = fastPathContext->distributionKeyValue;
 	uint64 shardId = INVALID_SHARD_ID;
@@ -2065,9 +2065,6 @@ RouterJobFastPath(DistributedPlanningContext *planContext,
 	Assert(cacheEntry != NULL);
 	Assert(cacheEntry->relationId == shard->relationId);
 	Assert(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE));
-
-	distTableWithShardKey = HasDistributionKeyCacheEntry(cacheEntry);
-	Assert(distTableWithShardKey);
 
 	List *taskPlacementList = CreateTaskPlacementListForShardIntervals(shardIntervals,
 																	   true, false,
@@ -2127,12 +2124,19 @@ RouterJobFastPath(DistributedPlanningContext *planContext,
 	}
 	else
 	{
-		SetTaskQueryString(task, (char *) fastPathContext->clientQueryString);
-
 		/* Call fast path query planner, Save plan in planContext->plan */
 		planContext->plan = FastPathPlanner(planContext->originalQuery,
 											planContext->query,
 											planContext->boundParams);
+		if (EnableSingShardFastRemotePOC)
+		{
+			SetTaskQueryString(task, (char *) fastPathContext->clientQueryString);
+		}
+		else
+		{
+			UpdateRelationToShardNames((Node *) job->jobQuery, relationShards);
+			SetTaskQueryIfShouldLazyDeparse(task, job->jobQuery);
+		}
 	}
 	task->anchorShardId = shardId;
 	task->jobId = job->jobId;
@@ -2165,9 +2169,12 @@ ReplaceShardRelationId(Query *query, Oid citusTableOid, Oid shardId)
 	char *shardRelationName = pstrdup(citusTableName);
 	AppendShardIdToName(&shardRelationName, shardId);
 
+	/* construct the schema name */
+	char *schemaName = get_namespace_name(get_rel_namespace(citusTableOid));
+
 	RangeVar shardRangeVar = {
 		.relname = shardRelationName,
-		.schemaname = NULL, /* todo - should initialize this ? get_rel_namespace(shardRelationId), */
+		.schemaname = schemaName,
 		.inh = rte->inh,
 		.relpersistence = RELPERSISTENCE_PERMANENT,
 	};

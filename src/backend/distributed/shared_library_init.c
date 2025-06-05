@@ -1367,6 +1367,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_single_shard_poc_remote",
+		gettext_noop("Enables execution shortcuts for single shard "
+					 "queries in the proof of concept mode - remote case."),
+		NULL,
+		&EnableSingShardFastRemotePOC,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_single_shard_poc",
 		gettext_noop("Enables execution shortcuts for single shard "
 					 "queries in the proof of concept mode."),
