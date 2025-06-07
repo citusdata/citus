@@ -1692,6 +1692,7 @@ CreateJob(Query *query)
 	job->subqueryPushdown = false;
 	job->requiresCoordinatorEvaluation = false;
 	job->deferredPruning = false;
+	job->jobExecuted = false;
 
 	return job;
 }
@@ -1791,6 +1792,7 @@ CreateTask(TaskType taskType)
 	task->modifyWithSubquery = false;
 	task->partiallyLocalOrRemote = false;
 	task->relationShardList = NIL;
+	task->taskCompleted = false;
 
 	return task;
 }

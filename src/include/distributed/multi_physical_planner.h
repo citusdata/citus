@@ -153,6 +153,7 @@ typedef struct Job
 	 */
 	bool parametersInJobQueryResolved;
 	uint32 colocationId; /* common colocation group ID of the relations */
+	bool jobExecuted;
 } Job;
 
 
@@ -334,6 +335,7 @@ typedef struct Task
 
 	Const *partitionKeyValue;
 	int colocationId;
+	bool taskCompleted;
 } Task;
 
 
@@ -471,6 +473,7 @@ typedef struct DistributedPlan
 	 * of source rows to be repartitioned for colocation with the target.
 	 */
 	int sourceResultRepartitionColumnIndex;
+	bool subPlansExecuted;
 } DistributedPlan;
 
 

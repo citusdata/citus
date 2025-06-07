@@ -625,7 +625,7 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 	ExplainOpenGroup("Job", "Job", true, es);
 
 	ExplainPropertyInteger("Task Count", NULL, taskCount, es);
-	if (ShowReceivedTupleData(scanState, es))
+	if (ShowReceivedTupleData(scanState, es) || job->jobExecuted)
 	{
 		Task *task = NULL;
 		uint64 totalReceivedTupleDataForAllTasks = 0;
