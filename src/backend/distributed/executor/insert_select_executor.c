@@ -42,6 +42,7 @@
 #include "distributed/merge_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -121,7 +122,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			bool binaryFormat =
 				CanUseBinaryCopyFormatForTargetList(selectQuery->targetList);
 
-			ExecuteSubPlans(distSelectPlan);
+			ExecuteSubPlans(distSelectPlan, RequestedForExplainAnalyze(scanState));
 
 			/*
 			 * We have a separate directory for each transaction, so choosing

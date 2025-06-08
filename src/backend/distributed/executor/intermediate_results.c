@@ -249,6 +249,17 @@ RemoteFileDestReceiverBytesSent(DestReceiver *destReceiver)
 
 
 /*
+ * RemoteFileDestReceiverTuplesSent returns number of tuples sent per remote worker.
+ */
+uint64
+RemoteFileDestReceiverTuplesSent(DestReceiver *destReceiver)
+{
+	RemoteFileDestReceiver *remoteDestReceiver = (RemoteFileDestReceiver *) destReceiver;
+	return remoteDestReceiver->tuplesSent;
+}
+
+
+/*
  * RemoteFileDestReceiverStartup implements the rStartup interface of
  * RemoteFileDestReceiver. It opens connections to the nodes in initialNodeList,
  * and sends the COPY command on all connections.
