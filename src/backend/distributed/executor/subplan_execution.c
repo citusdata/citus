@@ -30,13 +30,21 @@ int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate resu
 /* when this is true, we enforce intermediate result size limit in all executors */
 int SubPlanLevel = 0;
 
+/*
+ * SubPlanExplainAnalyzeContext is both a memory context for storing
+ * subplans’ EXPLAIN ANALYZE output and a flag indicating that execution
+ * is running under EXPLAIN ANALYZE for subplans.
+ */
+MemoryContext SubPlanExplainAnalyzeContext = NULL;
+SubPlanExplainOutput *SubPlanExplainAnalyzeOutput;
+extern int NumTasksOutput;
 
 /*
  * ExecuteSubPlans executes a list of subplans from a distributed plan
  * by sequentially executing each plan from the top.
  */
 void
-ExecuteSubPlans(DistributedPlan *distributedPlan)
+ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 {
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
@@ -45,6 +53,15 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	{
 		/* no subplans to execute */
 		return;
+	}
+
+	/*
+	 * If the root DistributedPlan has EXPLAIN ANALYZE enabled,
+	 * its subplans should also have EXPLAIN ANALYZE enabled.
+	 */
+	if (explainAnalyzeEnabled)
+	{
+		SubPlanExplainAnalyzeContext = GetMemoryChunkContext(distributedPlan);
 	}
 
 	HTAB *intermediateResultsHash = MakeIntermediateResultHTAB();
@@ -61,6 +78,13 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	DistributedSubPlan *subPlan = NULL;
 	foreach_declared_ptr(subPlan, subPlanList)
 	{
+		/*
+		 * Save the EXPLAIN ANALYZE output(s) to be extracted later
+		 * in ExplainSubPlans()
+		 */
+		MemSet(subPlan->totalExplainOutput, 0, sizeof(subPlan->totalExplainOutput));
+		SubPlanExplainAnalyzeOutput = subPlan->totalExplainOutput;
+
 		PlannedStmt *plannedStmt = subPlan->plan;
 		uint32 subPlanId = subPlan->subPlanId;
 		ParamListInfo params = NULL;
@@ -99,5 +123,10 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		SubPlanLevel--;
 		FreeExecutorState(estate);
+	}
+
+	if (explainAnalyzeEnabled)
+	{
+		SubPlanExplainAnalyzeContext = NULL;
 	}
 }

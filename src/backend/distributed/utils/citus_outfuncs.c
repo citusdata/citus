@@ -215,6 +215,44 @@ OutDistributedSubPlan(OUTFUNC_ARGS)
 
 	WRITE_UINT_FIELD(subPlanId);
 	WRITE_NODE_FIELD(plan);
+	WRITE_UINT64_FIELD(bytesSentPerWorker);
+	WRITE_INT_FIELD(remoteWorkerCount);
+	WRITE_FLOAT_FIELD(durationMillisecs, "%.2f");
+	WRITE_BOOL_FIELD(writeLocalFile);
+
+	appendStringInfoString(str, " totalExplainOutput [");
+	for (int i = 0; i < MAX_ANALYZE_OUTPUT; i++)
+	{
+		const SubPlanExplainOutput *e = &node->totalExplainOutput[i];
+
+		/* skip empty slots */
+		if (e->explainOutput == NULL &&
+			e->executionDuration == 0
+				&& e->totalReceivedTupleData == 0)
+		{
+			continue;
+		}
+
+		if (i > 0)
+		{
+			appendStringInfoChar(str, ' ');
+		}
+
+		appendStringInfoChar(str, '(');
+
+		/* string pointer – prints quoted or NULL */
+		WRITE_STRING_FIELD(totalExplainOutput[i].explainOutput);
+
+		/* double field */
+		WRITE_FLOAT_FIELD(totalExplainOutput[i].executionDuration, "%.2f");
+
+		/* 64-bit unsigned – use the uint64 macro */
+		WRITE_UINT64_FIELD(totalExplainOutput[i].totalReceivedTupleData);
+
+		appendStringInfoChar(str, ')');
+	}
+
+	appendStringInfoChar(str, ']');
 }
 
 void

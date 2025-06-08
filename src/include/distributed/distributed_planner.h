@@ -28,6 +28,7 @@
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
 
+#define MAX_ANALYZE_OUTPUT 32
 
 /* level of planner calls */
 extern int PlannerLevel;

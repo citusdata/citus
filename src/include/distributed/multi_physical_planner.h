@@ -475,6 +475,17 @@ typedef struct DistributedPlan
 
 
 /*
+ *
+ */
+typedef struct SubPlanExplainOutput
+{
+	char *explainOutput;
+	double executionDuration;
+	uint64 totalReceivedTupleData;
+} SubPlanExplainOutput;
+
+
+/*
  * DistributedSubPlan contains a subplan of a distributed plan. Subplans are
  * executed before the distributed query and their results are written to
  * temporary files. This is used to execute CTEs and subquery joins that
@@ -492,6 +503,7 @@ typedef struct DistributedSubPlan
 	uint32 remoteWorkerCount;
 	double durationMillisecs;
 	bool writeLocalFile;
+	SubPlanExplainOutput totalExplainOutput[MAX_ANALYZE_OUTPUT];
 } DistributedSubPlan;
 
 

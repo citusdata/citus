@@ -78,6 +78,7 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 int ExplainAnalyzeSortMethod = EXPLAIN_ANALYZE_SORT_BY_TIME;
+extern MemoryContext SubPlanExplainAnalyzeContext;
 
 /*
  * If enabled, EXPLAIN ANALYZE output & other statistics of last worker task
@@ -85,6 +86,8 @@ int ExplainAnalyzeSortMethod = EXPLAIN_ANALYZE_SORT_BY_TIME;
  */
 static char *SavedExplainPlan = NULL;
 static double SavedExecutionDurationMillisec = 0.0;
+extern SubPlanExplainOutput *SubPlanExplainAnalyzeOutput;
+int NumTasksOutput = 0;
 
 /* struct to save explain flags */
 typedef struct
@@ -251,6 +254,7 @@ static double elapsed_time(instr_time *starttime);
 static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es);
 static uint64 TaskReceivedTupleData(Task *task);
 static bool ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es);
+static void ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr);
 
 
 /* exports for SQL callable functions */
@@ -297,6 +301,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 	if (distributedPlan->subPlanList != NIL)
 	{
 		ExplainSubPlans(distributedPlan, es);
+		NumTasksOutput = 0;
 	}
 
 	ExplainJob(scanState, distributedPlan->workerJob, es, params);
@@ -453,24 +458,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		 * for now we put an empty string, which is valid according to postgres.
 		 */
 		char *queryString = pstrdup("");
-		instr_time planduration;
 		BufferUsage bufusage_start,
 					bufusage;
-
-#if PG_VERSION_NUM >= PG_VERSION_17
-		MemoryContextCounters mem_counters;
-		MemoryContext planner_ctx = NULL;
-		MemoryContext saved_ctx = NULL;
-
-		if (es->memory)
-		{
-			/* copy paste from postgres code */
-			planner_ctx = AllocSetContextCreate(CurrentMemoryContext,
-												"explain analyze planner context",
-												ALLOCSET_DEFAULT_SIZES);
-			saved_ctx = MemoryContextSwitchTo(planner_ctx);
-		}
-#endif
 
 		if (es->buffers)
 		{
@@ -518,8 +507,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			ExplainPropertyText("Result destination", destination->data, es);
 		}
 
-		INSTR_TIME_SET_ZERO(planduration);
-
 		/* calc differences of buffer counters. */
 		if (es->buffers)
 		{
@@ -529,21 +516,99 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
-		if (es->memory)
+		/* Print only and not execute */
+		DestReceiver *dest;
+		if (into)
 		{
-			MemoryContextSwitchTo(saved_ctx);
-			MemoryContextMemConsumed(planner_ctx, &mem_counters);
+			dest = CreateIntoRelDestReceiver(into);
+		}
+		else
+		{
+			dest = None_Receiver;
 		}
 
-		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration,
-					   (es->buffers ? &bufusage : NULL),
-					   (es->memory ? &mem_counters : NULL));
-#else
-		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration,
-					   (es->buffers ? &bufusage : NULL));
-#endif
+		int instrument_option = 0;
 
+		if (es->analyze && es->timing)
+		{
+			instrument_option |= INSTRUMENT_TIMER;
+		}
+		else if (es->analyze)
+		{
+			instrument_option |= INSTRUMENT_ROWS;
+		}
+
+		if (es->buffers)
+		{
+			instrument_option |= INSTRUMENT_BUFFERS;
+		}
+		if (es->wal)
+		{
+			instrument_option |= INSTRUMENT_WAL;
+		}
+
+		/* Create a QueryDesc for the query */
+		QueryDesc *queryDesc =
+			CreateQueryDesc(plan, queryString, GetActiveSnapshot(),
+							InvalidSnapshot, dest, params, NULL, instrument_option);
+
+		ExecutorStart(queryDesc, EXEC_FLAG_EXPLAIN_ONLY);
+
+		/* Inject the earlier executed results into the newly created tasks */
+
+		if (NumTasksOutput && (queryDesc->planstate != NULL) &&
+			IsA(queryDesc->planstate, CustomScanState))
+		{
+			DistributedPlan *newdistributedPlan =
+				((CitusScanState *) queryDesc->planstate)->distributedPlan;
+
+			ListCell *lc;
+			int idx = 0;
+
+			/* We need to extract this from the explain output of workers */
+			Instrumentation instr = { 0 };
+			foreach(lc, newdistributedPlan->workerJob->taskList)
+			{
+				if (subPlan->totalExplainOutput[idx].explainOutput &&
+					idx < NumTasksOutput)
+				{
+					/*
+					 * Now feed the earlier saved output, which will be used
+					 * by RemoteExplain() when printing tasks
+					 */
+					Task *task = (Task *) lfirst(lc);
+					MemoryContext taskContext = GetMemoryChunkContext(task);
+
+					task->totalReceivedTupleData =
+						subPlan->totalExplainOutput[idx].totalReceivedTupleData;
+					task->fetchedExplainAnalyzeExecutionDuration =
+						subPlan->totalExplainOutput[idx].executionDuration;
+					task->fetchedExplainAnalyzePlan =
+						MemoryContextStrdup(taskContext,
+											subPlan->totalExplainOutput[idx].explainOutput);
+					ParseExplainAnalyzeOutput(task->fetchedExplainAnalyzePlan, &instr);
+
+					subPlan->totalExplainOutput[idx].explainOutput = NULL;
+				}
+
+				idx++;
+			}
+			queryDesc->planstate->instrument = &instr;
+		}
+
+		ExplainOpenGroup("Query", NULL, true, es);
+
+		ExplainPrintPlan(es, queryDesc);
+
+		if (es->analyze)
+		{
+			ExplainPrintTriggers(es, queryDesc);
+		}
+
+		ExecutorEnd(queryDesc);
+		FreeQueryDesc(queryDesc);
+
+		ExplainCloseGroup("Query", NULL, true, es);
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
 		ExplainCloseGroup("Subplan", NULL, true, es);
 
@@ -1621,6 +1686,11 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple,
 								  tupleLibpqSize);
 		tupleDestination->originalTask->totalReceivedTupleData += tupleLibpqSize;
+		if (SubPlanExplainAnalyzeContext && NumTasksOutput < MAX_ANALYZE_OUTPUT)
+		{
+			SubPlanExplainAnalyzeOutput[NumTasksOutput].totalReceivedTupleData =
+				tupleDestination->originalTask->totalReceivedTupleData;
+		}
 	}
 	else if (queryNumber == 1)
 	{
@@ -1670,6 +1740,17 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 			placementIndex;
 		tupleDestination->originalTask->fetchedExplainAnalyzeExecutionDuration =
 			fetchedExplainAnalyzeExecutionDuration;
+
+		/* We should build tupleDestination in subPlan similar to the above */
+		if (SubPlanExplainAnalyzeContext && NumTasksOutput < MAX_ANALYZE_OUTPUT)
+		{
+			SubPlanExplainAnalyzeOutput[NumTasksOutput].explainOutput =
+				MemoryContextStrdup(SubPlanExplainAnalyzeContext,
+									fetchedExplainAnalyzePlan);
+			SubPlanExplainAnalyzeOutput[NumTasksOutput].executionDuration =
+				fetchedExplainAnalyzeExecutionDuration;
+			NumTasksOutput++;
+		}
 	}
 	else
 	{
@@ -2246,6 +2327,108 @@ elapsed_time(instr_time *starttime)
 	INSTR_TIME_SUBTRACT(endtime, *starttime);
 	return INSTR_TIME_GET_DOUBLE(endtime);
 }
+
+
+static void
+ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr)
+{
+    char       *line = pstrdup(explainOutput);
+    char       *token,
+               *saveptr;
+    bool        in_wal = false;
+
+    /* split on spaces, parentheses or newlines */
+    for (token = strtok_r(line, " ()\n", &saveptr);
+         token != NULL;
+         token = strtok_r(NULL, " ()\n", &saveptr))
+    {
+        if (strcmp(token, "WAL:") == 0)
+        {
+            in_wal = true;
+            continue;
+        }
+
+        if (in_wal)
+        {
+            if (strncmp(token, "records=", 8) == 0)
+                instr->walusage.wal_records =
+                    strtoul(token + 8, NULL, 10);
+            else if (strncmp(token, "bytes=", 6) == 0)
+            {
+                instr->walusage.wal_bytes =
+                    strtoul(token + 6, NULL, 10);
+                /* once we’ve seen bytes=, we can leave WAL mode */
+                in_wal = false;
+            }
+            continue;
+        }
+
+        if (strncmp(token, "time=", 5) == 0)
+        {
+            /* token is "time=X..Y" */
+            char *p = token + 5;
+            char *dd = strstr(p, "..");
+
+            if (dd)
+            {
+                *dd = '\0';
+                instr->startup += strtod(p, NULL) / 1000.0;
+                instr->total   += strtod(dd + 2, NULL) / 1000.0;
+            }
+        }
+        else if (strncmp(token, "rows=", 5) == 0)
+        {
+            instr->ntuples += strtol(token + 5, NULL, 10);
+        }
+        else if (strncmp(token, "loops=", 6) == 0)
+        {
+            instr->nloops = strtol(token + 6, NULL, 10);
+        }
+    }
+
+    pfree(line);
+}
+
+#if 0
+/*
+ * ParseExplainAnalyzeOutput
+ */
+static void
+ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr)
+{
+	double start_ms = 0.0, end_ms = 0.0;
+	int    rows = 0, loops = 0;
+
+	/* 1) Extract “actual time=XXX..YYY rows=R loops=L” */
+	if (sscanf(explainOutput, "%*[^=]=%lf..%lf rows=%d loops=%d",
+				&start_ms, &end_ms, &rows, &loops) == 4)
+	{
+		/* times in ms, convert to seconds */
+		instr->startup += start_ms  / 1000.0;
+		instr->total   += end_ms    / 1000.0;
+		instr->ntuples += (double) rows;
+		instr->nloops  = (double) loops;
+	}
+	else if (sscanf(explainOutput, "%*[^(\n](actual rows=%d loops=%d)", &rows, &loops) == 2)
+	{
+		/* no timing present, just capture rows & loops */
+		instr->ntuples += (double) rows;
+		instr->nloops  = (double) loops;
+	}
+
+	/* 2) Look for “WAL: records=X bytes=Y” */
+	const char *wal = strstr(explainOutput, "WAL:");
+	if (wal)
+	{
+		int recs = 0, bytes = 0;
+		if (sscanf(wal, "WAL: records=%d bytes=%d", &recs, &bytes) == 2)
+		{
+			instr->walusage.wal_records += recs;
+			instr->walusage.wal_bytes += bytes;
+		}
+	}
+}
+#endif
 
 
 #if PG_VERSION_NUM >= PG_VERSION_17

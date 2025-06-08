@@ -132,7 +132,7 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 	ereport(DEBUG1, (errmsg("Executing subplans of the source query and "
 							"storing the results at the respective node(s)")));
 
-	ExecuteSubPlans(distSourcePlan);
+	ExecuteSubPlans(distSourcePlan, false);
 
 	/*
 	 * We have a separate directory for each transaction, so choosing
