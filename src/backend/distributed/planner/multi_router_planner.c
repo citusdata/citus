@@ -243,14 +243,13 @@ CreateFastPathRouterPlan(DistributedPlanningContext *planContext)
 												planContext->boundParams);
 		}
 
-		if (distributedPlan->planningError == NULL)
-		{
-			distributedPlan->workerJob = job;
-			distributedPlan->combineQuery = NULL;
-			distributedPlan->expectResults = is_select || query->returningList != NIL;
-			distributedPlan->targetRelationId = is_select ? InvalidOid :
-												ResultRelationOidForQuery(query);
-		}
+		distributedPlan->workerJob = job;
+		distributedPlan->combineQuery = NULL;
+		distributedPlan->expectResults = is_select || query->returningList != NIL;
+		distributedPlan->targetRelationId = is_select ? InvalidOid :
+											ResultRelationOidForQuery(query);
+
+		ereport(DEBUG2, (errmsg("Creating router plan")));
 
 		/* todo: handle the case where planningError is not NULL */
 	}
@@ -2052,6 +2051,9 @@ RouterJobFastPath(DistributedPlanningContext *planContext,
 	Assert(!isMultiShardQuery);
 	Assert(list_length(shardIntervals) == 1);
 
+	ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
+							"query")));
+
 	List *relationShards = RelationShardListForShardIntervalList(shardIntervals,
 																 &shardsPresent);
 	Assert(shardsPresent);
@@ -2064,12 +2066,13 @@ RouterJobFastPath(DistributedPlanningContext *planContext,
 		fastPathContext->distTableRte->relid);
 	Assert(cacheEntry != NULL);
 	Assert(cacheEntry->relationId == shard->relationId);
-	Assert(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE));
 
 	List *taskPlacementList = CreateTaskPlacementListForShardIntervals(shardIntervals,
-																	   true, false,
+																	   shardsPresent,
+																	   true,
 																	   false);
-	Assert(list_length(taskPlacementList) == 1);
+
+	/* Assert(list_length(taskPlacementList) == 1); // not the case for reference tables */
 	ShardPlacement *primaryPlacement =
 		(ShardPlacement *) linitial(taskPlacementList);
 	Assert(primaryPlacement->shardId == shardId);

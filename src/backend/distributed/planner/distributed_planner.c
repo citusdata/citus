@@ -1299,8 +1299,6 @@ CreateFastPathDistributedPlan(DistributedPlanningContext *planContext)
 	Query *originalQuery = planContext->originalQuery;
 	Query *query = planContext->query;
 	ParamListInfo boundParams = planContext->boundParams;
-	PlannerRestrictionContext *plannerRestrictionContext =
-		planContext->plannerRestrictionContext;
 
 	bool hasUnresolvedParams = false;
 	if (HasUnresolvedExternParamsWalker((Node *) originalQuery,
@@ -1533,7 +1531,7 @@ GetDistributedPlan(CustomScan *customScan)
 	Node *node = (Node *) linitial(customScan->custom_private);
 	Assert(CitusIsA(node, DistributedPlan));
 
-	/* CheckNodeCopyAndSerialization(node); commented out for local perf profiling */
+	CheckNodeCopyAndSerialization(node);
 
 	DistributedPlan *distributedPlan = (DistributedPlan *) node;
 

@@ -43,6 +43,7 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/citus_clauses.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
@@ -171,7 +172,7 @@ FastPathRouterQuery(Query *query, const char *query_string,
 	FromExpr *joinTree = query->jointree;
 	Node *quals = NULL;
 	bool isFastPath = false;
-	bool isDistributedTable = false;
+	bool canAvoidDeparse = false;
 	Node *distributionKeyValue = NULL;
 	RangeTblEntry *rangeTableEntry = NULL;
 
@@ -206,7 +207,7 @@ FastPathRouterQuery(Query *query, const char *query_string,
 	{
 		/* we don't need to do any further checks, all INSERTs are fast-path */
 		isFastPath = true;
-		isDistributedTable = true;
+		canAvoidDeparse = true;
 		goto returnFastPath;
 	}
 
@@ -238,18 +239,21 @@ FastPathRouterQuery(Query *query, const char *query_string,
 	Var *distributionKey = PartitionColumn(distributedTableId, 1);
 	if (!distributionKey)
 	{
-		isDistributedTable = IsCitusTableTypeCacheEntry(cacheEntry,
-														SINGLE_SHARD_DISTRIBUTED) ||
-							 IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);
+		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry,
+													 SINGLE_SHARD_DISTRIBUTED) ||
+
+		                  /*(IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE) */
+		                  /* && (query->commandType == CMD_SELECT)) || */
+						  false;
 		isFastPath = true;
 	}
 
 	if (!isFastPath)
 	{
-		isDistributedTable = IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE);
+		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE);
 
 		if (joinTree == NULL ||
-			(joinTree->quals == NULL && !isDistributedTable))
+			(joinTree->quals == NULL && !canAvoidDeparse))
 		{
 			/* no quals, not a fast path query */
 			return false;
@@ -300,9 +304,12 @@ returnFastPath:
 
 		if (EnableSingShardFastPathPOC)
 		{
-			Assert(rangeTableEntry != NULL);
+			Assert(rangeTableEntry != NULL || query->commandType == CMD_INSERT);
 			fastPathContext->distTableRte = rangeTableEntry;
-			fastPathContext->delayFastPathPlanning = isDistributedTable;
+			canAvoidDeparse = canAvoidDeparse &&
+							  !FindNodeMatchingCheckFunction((Node *) query,
+															 CitusIsVolatileFunction);
+			fastPathContext->delayFastPathPlanning = canAvoidDeparse;
 
 			/* If the dist key is parameterized the query will use the plan cache (todo: verify) */
 			fastPathContext->clientQueryString = query_string;
