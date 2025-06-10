@@ -515,6 +515,8 @@ TaskQueryStringAtIndex(Task *task, int index)
 }
 
 
+static char *plan_msg = "Task query optimized away";
+
 /*
  * TaskQueryString generates task query string text if missing.
  *
@@ -541,6 +543,10 @@ TaskQueryString(Task *task)
 	else if (taskQueryType == TASK_QUERY_TEXT)
 	{
 		return task->taskQuery.data.queryStringLazy;
+	}
+	else if (taskQueryType == TASK_QUERY_LOCAL_PLAN)
+	{
+		return plan_msg;
 	}
 
 	Query *jobQueryReferenceForLazyDeparsing =

@@ -2064,12 +2064,13 @@ RouterJobFastPath(DistributedPlanningContext *planContext,
 		fastPathContext->distTableRte->relid);
 	Assert(cacheEntry != NULL);
 	Assert(cacheEntry->relationId == shard->relationId);
-	Assert(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE));
 
 	List *taskPlacementList = CreateTaskPlacementListForShardIntervals(shardIntervals,
-																	   true, false,
+																	   shardsPresent,
+																	   true,
 																	   false);
-	Assert(list_length(taskPlacementList) == 1);
+
+	/* Assert(list_length(taskPlacementList) == 1); // not the case for reference tables */
 	ShardPlacement *primaryPlacement =
 		(ShardPlacement *) linitial(taskPlacementList);
 	Assert(primaryPlacement->shardId == shardId);
