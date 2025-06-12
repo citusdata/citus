@@ -252,6 +252,8 @@ OutDistributedSubPlan(OUTFUNC_ARGS)
 		appendStringInfoChar(str, ')');
 	}
 
+	WRITE_INT_FIELD(numTasksOutput);
+
 	appendStringInfoChar(str, ']');
 }
 

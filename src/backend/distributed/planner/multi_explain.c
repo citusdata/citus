@@ -301,7 +301,6 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 	if (distributedPlan->subPlanList != NIL)
 	{
 		ExplainSubPlans(distributedPlan, es);
-		NumTasksOutput = 0;
 	}
 
 	ExplainJob(scanState, distributedPlan->workerJob, es, params);
@@ -556,7 +555,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		/* Inject the earlier executed results into the newly created tasks */
 
-		if (NumTasksOutput && (queryDesc->planstate != NULL) &&
+		if (subPlan->numTasksOutput && (queryDesc->planstate != NULL) &&
 			IsA(queryDesc->planstate, CustomScanState))
 		{
 			DistributedPlan *newdistributedPlan =
@@ -570,7 +569,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			foreach(lc, newdistributedPlan->workerJob->taskList)
 			{
 				if (subPlan->totalExplainOutput[idx].explainOutput &&
-					idx < NumTasksOutput)
+					idx < subPlan->numTasksOutput)
 				{
 					/*
 					 * Now feed the earlier saved output, which will be used
@@ -593,6 +592,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 				idx++;
 			}
+			instr.nloops = 1;
 			queryDesc->planstate->instrument = &instr;
 		}
 
@@ -2332,104 +2332,90 @@ elapsed_time(instr_time *starttime)
 static void
 ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr)
 {
-    char       *line = pstrdup(explainOutput);
-    char       *token,
-               *saveptr;
-    bool        in_wal = false;
+	char *token, *saveptr;
 
-    /* split on spaces, parentheses or newlines */
-    for (token = strtok_r(line, " ()\n", &saveptr);
-         token != NULL;
-         token = strtok_r(NULL, " ()\n", &saveptr))
-    {
-        if (strcmp(token, "WAL:") == 0)
-        {
-            in_wal = true;
-            continue;
-        }
+	/* Validate input */
+	if (explainOutput == NULL || instr == NULL)
+		return;
 
-        if (in_wal)
-        {
-            if (strncmp(token, "records=", 8) == 0)
-                instr->walusage.wal_records =
-                    strtoul(token + 8, NULL, 10);
-            else if (strncmp(token, "bytes=", 6) == 0)
-            {
-                instr->walusage.wal_bytes =
-                    strtoul(token + 6, NULL, 10);
-                /* once we’ve seen bytes=, we can leave WAL mode */
-                in_wal = false;
-            }
-            continue;
-        }
+	char *line = pstrdup(explainOutput);
 
-        if (strncmp(token, "time=", 5) == 0)
-        {
-            /* token is "time=X..Y" */
-            char *p = token + 5;
-            char *dd = strstr(p, "..");
+	bool inWal = false;
+	bool inResult = false;
 
-            if (dd)
-            {
-                *dd = '\0';
-                instr->startup += strtod(p, NULL) / 1000.0;
-                instr->total   += strtod(dd + 2, NULL) / 1000.0;
-            }
-        }
-        else if (strncmp(token, "rows=", 5) == 0)
-        {
-            instr->ntuples += strtol(token + 5, NULL, 10);
-        }
-        else if (strncmp(token, "loops=", 6) == 0)
-        {
-            instr->nloops = strtol(token + 6, NULL, 10);
-        }
-    }
-
-    pfree(line);
-}
-
-#if 0
-/*
- * ParseExplainAnalyzeOutput
- */
-static void
-ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr)
-{
-	double start_ms = 0.0, end_ms = 0.0;
-	int    rows = 0, loops = 0;
-
-	/* 1) Extract “actual time=XXX..YYY rows=R loops=L” */
-	if (sscanf(explainOutput, "%*[^=]=%lf..%lf rows=%d loops=%d",
-				&start_ms, &end_ms, &rows, &loops) == 4)
+	/* split on spaces, parentheses or newlines */
+	for (token = strtok_r(line, " ()\n", &saveptr);
+		 token != NULL;
+		 token = strtok_r(NULL, " ()\n", &saveptr))
 	{
-		/* times in ms, convert to seconds */
-		instr->startup += start_ms  / 1000.0;
-		instr->total   += end_ms    / 1000.0;
-		instr->ntuples += (double) rows;
-		instr->nloops  = (double) loops;
-	}
-	else if (sscanf(explainOutput, "%*[^(\n](actual rows=%d loops=%d)", &rows, &loops) == 2)
-	{
-		/* no timing present, just capture rows & loops */
-		instr->ntuples += (double) rows;
-		instr->nloops  = (double) loops;
-	}
-
-	/* 2) Look for “WAL: records=X bytes=Y” */
-	const char *wal = strstr(explainOutput, "WAL:");
-	if (wal)
-	{
-		int recs = 0, bytes = 0;
-		if (sscanf(wal, "WAL: records=%d bytes=%d", &recs, &bytes) == 2)
+		if (strcmp(token, "WAL:") == 0)
 		{
-			instr->walusage.wal_records += recs;
-			instr->walusage.wal_bytes += bytes;
+			inWal = true;
+			continue;
+		}
+
+		if (strcmp(token, "Result") == 0)
+		{
+			inResult = true;
+			continue;
+		}
+
+		/* Reset Result flag when we see "actual" - but only skip if we're in Result mode */
+		if (strcmp(token, "actual") == 0)
+		{
+			/* If we were in Result mode, the next tokens should be skipped */
+			/* If we weren't in Result mode, continue normally */
+			continue;
+		}
+
+		if (inWal)
+		{
+			if (strncmp(token, "records=", 8) == 0)
+				instr->walusage.wal_records += strtoul(token + 8, NULL, 10);
+			else if (strncmp(token, "bytes=", 6) == 0)
+			{
+				instr->walusage.wal_bytes += strtoul(token + 6, NULL, 10);
+				/* once we've seen bytes=, we can leave WAL mode */
+				inWal = false;
+			}
+			continue;
+		}
+
+		/* Skip Result node's actual timing data */
+		if (inResult)
+		{
+			if (strncmp(token, "time=", 5) == 0 ||
+				strncmp(token, "rows=", 5) == 0 ||
+				strncmp(token, "loops=", 6) == 0)
+			{
+				/* If this is loops=, we've seen all Result data */
+				if (strncmp(token, "loops=", 6) == 0)
+					inResult = false;
+				continue;
+			}
+		}
+
+		if (strncmp(token, "time=", 5) == 0)
+		{
+			/* token is "time=X..Y" */
+			char *timeStr = token + 5;
+			char *doubleDot = strstr(timeStr, "..");
+			if (doubleDot)
+			{
+				*doubleDot = '\0';
+				instr->startup += strtod(timeStr, NULL) / 1000.0;
+				instr->total += strtod(doubleDot + 2, NULL) / 1000.0;
+			}
+		}
+		else if (strncmp(token, "rows=", 5) == 0)
+		{
+			instr->ntuples += strtol(token + 5, NULL, 10);
+			break; /* We are done for this Task */
 		}
 	}
-}
-#endif
 
+	pfree(line);
+}
 
 #if PG_VERSION_NUM >= PG_VERSION_17
 /*

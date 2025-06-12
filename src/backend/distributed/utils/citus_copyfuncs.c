@@ -166,6 +166,8 @@ CopyNodeDistributedSubPlan(COPYFUNC_ARGS)
 		/* copy the totalReceivedTupleData (uint64) */
 		COPY_SCALAR_FIELD(totalExplainOutput[i].totalReceivedTupleData);
 	}
+
+	COPY_SCALAR_FIELD(numTasksOutput);
 }
 
 

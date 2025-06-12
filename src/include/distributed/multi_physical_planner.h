@@ -504,6 +504,7 @@ typedef struct DistributedSubPlan
 	double durationMillisecs;
 	bool writeLocalFile;
 	SubPlanExplainOutput totalExplainOutput[MAX_ANALYZE_OUTPUT];
+	uint32 numTasksOutput;
 } DistributedSubPlan;
 
 

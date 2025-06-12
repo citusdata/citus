@@ -122,6 +122,8 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 		subPlan->writeLocalFile = entry->writeLocalFile;
 
 		SubPlanLevel--;
+		subPlan->numTasksOutput = NumTasksOutput;
+		NumTasksOutput = 0;
 		FreeExecutorState(estate);
 	}
 
