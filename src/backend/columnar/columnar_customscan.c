@@ -18,7 +18,6 @@
 
 #include "nodes/execnodes.h"     /* for ExprState, ExprContext, etc. */
 #include "executor/executor.h"   /* for ExecInitExprWithParams(), ExecEvalExpr() */
-#include "commands/explain_format.h"  /* for ExplainPropertyInteger() */
 #include "access/amapi.h"
 #include "access/skey.h"
 #include "catalog/pg_am.h"
