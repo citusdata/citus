@@ -121,7 +121,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			bool binaryFormat =
 				CanUseBinaryCopyFormatForTargetList(selectQuery->targetList);
 
-			ExecuteSubPlans(distSelectPlan);
+			ExecuteSubPlans(distSelectPlan, false);
 
 			/*
 			 * We have a separate directory for each transaction, so choosing
