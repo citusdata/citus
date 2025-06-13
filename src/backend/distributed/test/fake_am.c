@@ -485,6 +485,7 @@ fake_estimate_rel_size(Relation rel, int32 *attr_widths,
  * Executor related callbacks for the fake AM
  * ------------------------------------------------------------------------
  */
+#if PG_VERSION_NUM < PG_VERSION_18
 static bool
 fake_scan_bitmap_next_block(TableScanDesc scan,
 							TBMIterateResult *tbmres)
@@ -501,6 +502,8 @@ fake_scan_bitmap_next_tuple(TableScanDesc scan,
 	elog(ERROR, "fake_scan_bitmap_next_tuple not implemented");
 }
 
+
+#endif
 
 static bool
 fake_scan_sample_next_block(TableScanDesc scan,
@@ -578,8 +581,13 @@ static const TableAmRoutine fake_methods = {
 
 	.relation_estimate_size = fake_estimate_rel_size,
 
+#if PG_VERSION_NUM < PG_VERSION_18
+
+	/* these two fields were removed in PG 18 */
 	.scan_bitmap_next_block = fake_scan_bitmap_next_block,
 	.scan_bitmap_next_tuple = fake_scan_bitmap_next_tuple,
+#endif
+
 	.scan_sample_next_block = fake_scan_sample_next_block,
 	.scan_sample_next_tuple = fake_scan_sample_next_tuple
 };

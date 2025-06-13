@@ -35,6 +35,10 @@
 #include "utils/syscache.h"
 
 #include "pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_18
+typedef OpIndexInterpretation OpBtreeInterpretation;
+#endif
+
 
 #include "distributed/citus_clauses.h"
 #include "distributed/colocation_utils.h"
@@ -59,6 +63,11 @@ typedef struct QualifierWalkerContext
 	List *baseQualifierList;
 	List *outerJoinQualifierList;
 } QualifierWalkerContext;
+
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+#define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
+#endif
 
 
 /* Function pointer type definition for apply join rule functions */
@@ -2293,7 +2302,12 @@ OperatorImplementsEquality(Oid opno)
 	{
 		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
 													lfirst(btreeInterpretationCell);
+
+	#if PG_VERSION_NUM >= PG_VERSION_18
+		if (btreeIntepretation->cmptype == BTEqualStrategyNumber)
+	#else
 		if (btreeIntepretation->strategy == BTEqualStrategyNumber)
+	#endif
 		{
 			equalityOperator = true;
 			break;

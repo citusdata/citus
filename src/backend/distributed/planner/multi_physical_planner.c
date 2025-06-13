@@ -1418,8 +1418,24 @@ ExtractColumns(RangeTblEntry *callingRTE, int rangeTableId,
 	int subLevelsUp = 0;
 	int location = -1;
 	bool includeDroppedColumns = false;
-	expandRTE(callingRTE, rangeTableId, subLevelsUp, location, includeDroppedColumns,
-			  columnNames, columnVars);
+#if PG_VERSION_NUM >= PG_VERSION_18
+	expandRTE(callingRTE,
+			  rangeTableId,
+			  subLevelsUp,
+			  VAR_RETURNING_DEFAULT,    /* new argument on PG 18+ */
+			  location,
+			  includeDroppedColumns,
+			  columnNames,
+			  columnVars);
+#else
+	expandRTE(callingRTE,
+			  rangeTableId,
+			  subLevelsUp,
+			  location,
+			  includeDroppedColumns,
+			  columnNames,
+			  columnVars);
+#endif
 }
 
 

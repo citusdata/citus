@@ -384,9 +384,35 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
 
-#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
-									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
-																  i, j, k)
+#include "nodes/bitmapset.h"      /* for Relids */
+#include "nodes/pg_list.h"        /* for List */
+#include "optimizer/pathnode.h"   /* for create_foreignscan_path() */
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
+	create_foreignscan_path( \
+		(a),            /* root            */ \
+		(b),            /* rel             */ \
+		(c),            /* target          */ \
+		(d),            /* rows            */ \
+		0,              /* disabled_nodes  */ \
+		(e),            /* startup_cost    */ \
+		(f),            /* total_cost      */ \
+		(g),            /* pathkeys        */ \
+		(h),            /* required_outer  */ \
+		(i),            /* fdw_outerpath   */ \
+		(j),            /* fdw_restrictinfo*/ \
+		(k)             /* fdw_private     */ \
+		)
+#else
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
+	create_foreignscan_path( \
+		(a), (b), (c), (d), \
+		(e), (f), \
+		(g), (h), (i), (j), (k) \
+		)
+#endif
+
 
 #define getProcNo_compat(a) (a->vxid.procNumber)
 #define getLxid_compat(a) (a->vxid.lxid)
