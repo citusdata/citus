@@ -19,6 +19,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 #include "utils/palloc.h"
+#include "catalog/pg_collation.h"
 
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
@@ -371,8 +372,9 @@ CommandMatchesLogGrepPattern(const char *command)
 	if (GrepRemoteCommands && strnlen(GrepRemoteCommands, NAMEDATALEN) > 0)
 	{
 		Datum boolDatum =
-			DirectFunctionCall2(textlike, CStringGetTextDatum(command),
-								CStringGetTextDatum(GrepRemoteCommands));
+			DirectFunctionCall2Coll(textlike, DEFAULT_COLLATION_OID,
+									CStringGetTextDatum(command),
+									CStringGetTextDatum(GrepRemoteCommands));
 
 		return DatumGetBool(boolDatum);
 	}
