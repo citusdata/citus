@@ -19,6 +19,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 #include "utils/palloc.h"
+#include "catalog/pg_collation.h"
 
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
