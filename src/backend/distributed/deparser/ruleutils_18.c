@@ -172,6 +172,8 @@ typedef struct
 	List	   *subplans;		/* List of Plan trees for SubPlans */
 	List	   *ctes;			/* List of CommonTableExpr nodes */
 	AppendRelInfo **appendrels; /* Array of AppendRelInfo nodes, or NULL */
+	char	   *ret_old_alias;	/* alias for OLD in RETURNING list */
+	char	   *ret_new_alias;	/* alias for NEW in RETURNING list */
 	/* Workspace for column alias assignment: */
 	bool		unique_using;	/* Are we making USING names globally unique */
 	List	   *using_names;	/* List of assigned names for USING columns */
@@ -375,6 +377,7 @@ static void get_merge_query_def(Query *query, deparse_context *context);
 static void get_utility_query_def(Query *query, deparse_context *context);
 static void get_basic_select_query(Query *query, deparse_context *context);
 static void get_target_list(List *targetList, deparse_context *context);
+static void get_returning_clause(Query *query, deparse_context *context);
 static void get_setop_query(Node *setOp, Query *query,
 							deparse_context *context);
 static Node *get_rule_sortgroupclause(Index ref, List *tlist,
@@ -387,6 +390,9 @@ static void get_rule_orderby(List *orderList, List *targetList,
 static void get_rule_windowclause(Query *query, deparse_context *context);
 static void get_rule_windowspec(WindowClause *wc, List *targetList,
 					deparse_context *context);
+static void get_window_frame_options(int frameOptions,
+									 Node *startOffset, Node *endOffset,
+									 deparse_context *context);					
 static char *get_variable(Var *var, int levelsup, bool istoplevel,
 			 deparse_context *context);
 static void get_special_variable(Node *node, deparse_context *context,
@@ -852,6 +858,8 @@ set_deparse_for_query(deparse_namespace *dpns, Query *query,
 	dpns->subplans = NIL;
 	dpns->ctes = query->cteList;
 	dpns->appendrels = NULL;
+	dpns->ret_old_alias = query->returningOldAlias;
+	dpns->ret_new_alias = query->returningNewAlias;
 
 	/* Assign a unique relation alias to each RTE */
 	set_rtable_names(dpns, parent_namespaces, NULL);
@@ -2392,10 +2400,20 @@ get_select_query_def(Query *query, deparse_context *context)
 	{
 		if (query->limitOption == LIMIT_OPTION_WITH_TIES)
 		{
+			/*
+			 * The limitCount arg is a c_expr, so it needs parens. Simple
+			 * literals and function expressions would not need parens, but
+			 * unfortunately it's hard to tell if the expression will be
+			 * printed as a simple literal like 123 or as a typecast
+			 * expression, like '-123'::int4. The grammar accepts the former
+			 * without quoting, but not the latter.
+			 */
 			// had to add '(' and ')' here because it fails with casting
 			appendContextKeyword(context, " FETCH FIRST (",
 								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
+			appendStringInfoChar(buf, '(');
 			get_rule_expr(query->limitCount, context, false);
+			appendStringInfoChar(buf, ')');
 			appendStringInfoString(buf, ") ROWS WITH TIES");
 		}
 		else
@@ -2796,6 +2814,45 @@ get_target_list(List *targetList, deparse_context *context)
 }
 
 static void
+get_returning_clause(Query *query, deparse_context *context)
+{
+	StringInfo	buf = context->buf;
+
+	if (query->returningList)
+	{
+		bool		have_with = false;
+
+		appendContextKeyword(context, " RETURNING",
+							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
+
+		/* Add WITH (OLD/NEW) options, if they're not the defaults */
+		if (query->returningOldAlias && strcmp(query->returningOldAlias, "old") != 0)
+		{
+			appendStringInfo(buf, " WITH (OLD AS %s",
+							 quote_identifier(query->returningOldAlias));
+			have_with = true;
+		}
+		if (query->returningNewAlias && strcmp(query->returningNewAlias, "new") != 0)
+		{
+			if (have_with)
+				appendStringInfo(buf, ", NEW AS %s",
+								 quote_identifier(query->returningNewAlias));
+			else
+			{
+				appendStringInfo(buf, " WITH (NEW AS %s",
+								 quote_identifier(query->returningNewAlias));
+				have_with = true;
+			}
+		}
+		if (have_with)
+			appendStringInfoChar(buf, ')');
+
+		/* Add the returning expressions themselves */
+		get_target_list(query->returningList, context);
+	}
+}
+
+static void
 get_setop_query(Node *setOp, Query *query, deparse_context *context)
 {
 	StringInfo	buf = context->buf;
@@ -2812,13 +2869,18 @@ get_setop_query(Node *setOp, Query *query, deparse_context *context)
 		Query	   *subquery = rte->subquery;
 
 		Assert(subquery != NULL);
-		Assert(subquery->setOperations == NULL);
-		/* Need parens if WITH, ORDER BY, FOR UPDATE, or LIMIT; see gram.y */
+		/*
+		 * We need parens if WITH, ORDER BY, FOR UPDATE, or LIMIT; see gram.y.
+		 * Also add parens if the leaf query contains its own set operations.
+		 * (That shouldn't happen unless one of the other clauses is also
+		 * present, see transformSetOperationTree; but let's be safe.)
+		 */
 		need_paren = (subquery->cteList ||
 					  subquery->sortClause ||
 					  subquery->rowMarks ||
 					  subquery->limitOffset ||
-					  subquery->limitCount);
+					  subquery->limitCount ||
+					  subquery->setOperations);
 		if (need_paren)
 			appendStringInfoChar(buf, '(');
 		get_query_def(subquery, buf, context->namespaces,
@@ -3200,45 +3262,64 @@ get_rule_windowspec(WindowClause *wc, List *targetList,
 	{
 		if (needspace)
 			appendStringInfoChar(buf, ' ');
-		if (wc->frameOptions & FRAMEOPTION_RANGE)
+		get_window_frame_options(wc->frameOptions,
+								 wc->startOffset, wc->endOffset,
+								 context);
+	}
+	appendStringInfoChar(buf, ')');
+}
+
+/*
+ * Append the description of a window's framing options to context->buf
+ */
+static void
+get_window_frame_options(int frameOptions,
+						 Node *startOffset, Node *endOffset,
+						 deparse_context *context)
+{
+	StringInfo	buf = context->buf;
+
+	if (frameOptions & FRAMEOPTION_NONDEFAULT)
+	{
+		if (frameOptions & FRAMEOPTION_RANGE)
 			appendStringInfoString(buf, "RANGE ");
-		else if (wc->frameOptions & FRAMEOPTION_ROWS)
+		else if (frameOptions & FRAMEOPTION_ROWS)
 			appendStringInfoString(buf, "ROWS ");
-		else if (wc->frameOptions & FRAMEOPTION_GROUPS)
+		else if (frameOptions & FRAMEOPTION_GROUPS)
 			appendStringInfoString(buf, "GROUPS ");
 		else
 			Assert(false);
-		if (wc->frameOptions & FRAMEOPTION_BETWEEN)
+		if (frameOptions & FRAMEOPTION_BETWEEN)
 			appendStringInfoString(buf, "BETWEEN ");
-		if (wc->frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING)
+		if (frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING)
 			appendStringInfoString(buf, "UNBOUNDED PRECEDING ");
-		else if (wc->frameOptions & FRAMEOPTION_START_CURRENT_ROW)
+		else if (frameOptions & FRAMEOPTION_START_CURRENT_ROW)
 			appendStringInfoString(buf, "CURRENT ROW ");
-		else if (wc->frameOptions & FRAMEOPTION_START_OFFSET)
+		else if (frameOptions & FRAMEOPTION_START_OFFSET)
 		{
-			get_rule_expr(wc->startOffset, context, false);
-			if (wc->frameOptions & FRAMEOPTION_START_OFFSET_PRECEDING)
+			get_rule_expr(startOffset, context, false);
+			if (frameOptions & FRAMEOPTION_START_OFFSET_PRECEDING)
 				appendStringInfoString(buf, " PRECEDING ");
-			else if (wc->frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING)
+			else if (frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING)
 				appendStringInfoString(buf, " FOLLOWING ");
 			else
 				Assert(false);
 		}
 		else
 			Assert(false);
-		if (wc->frameOptions & FRAMEOPTION_BETWEEN)
+		if (frameOptions & FRAMEOPTION_BETWEEN)
 		{
 			appendStringInfoString(buf, "AND ");
-			if (wc->frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING)
+			if (frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING)
 				appendStringInfoString(buf, "UNBOUNDED FOLLOWING ");
-			else if (wc->frameOptions & FRAMEOPTION_END_CURRENT_ROW)
+			else if (frameOptions & FRAMEOPTION_END_CURRENT_ROW)
 				appendStringInfoString(buf, "CURRENT ROW ");
-			else if (wc->frameOptions & FRAMEOPTION_END_OFFSET)
+			else if (frameOptions & FRAMEOPTION_END_OFFSET)
 			{
-				get_rule_expr(wc->endOffset, context, false);
-				if (wc->frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING)
+				get_rule_expr(endOffset, context, false);
+				if (frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING)
 					appendStringInfoString(buf, " PRECEDING ");
-				else if (wc->frameOptions & FRAMEOPTION_END_OFFSET_FOLLOWING)
+				else if (frameOptions & FRAMEOPTION_END_OFFSET_FOLLOWING)
 					appendStringInfoString(buf, " FOLLOWING ");
 				else
 					Assert(false);
@@ -3246,16 +3327,15 @@ get_rule_windowspec(WindowClause *wc, List *targetList,
 			else
 				Assert(false);
 		}
-		if (wc->frameOptions & FRAMEOPTION_EXCLUDE_CURRENT_ROW)
+		if (frameOptions & FRAMEOPTION_EXCLUDE_CURRENT_ROW)
 			appendStringInfoString(buf, "EXCLUDE CURRENT ROW ");
-		else if (wc->frameOptions & FRAMEOPTION_EXCLUDE_GROUP)
+		else if (frameOptions & FRAMEOPTION_EXCLUDE_GROUP)
 			appendStringInfoString(buf, "EXCLUDE GROUP ");
-		else if (wc->frameOptions & FRAMEOPTION_EXCLUDE_TIES)
+		else if (frameOptions & FRAMEOPTION_EXCLUDE_TIES)
 			appendStringInfoString(buf, "EXCLUDE TIES ");
 		/* we will now have a trailing space; remove it */
-		buf->len--;
+		buf->data[--(buf->len)] = '\0';
 	}
-	appendStringInfoChar(buf, ')');
 }
 
 /* ----------
@@ -3442,9 +3522,7 @@ get_insert_query_def(Query *query, deparse_context *context)
 	/* Add RETURNING if present */
 	if (query->returningList)
 	{
-		appendContextKeyword(context, " RETURNING",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_target_list(query->returningList, context);
+		get_returning_clause(query, context);
 	}
 }
 
@@ -3520,9 +3598,7 @@ get_update_query_def(Query *query, deparse_context *context)
 	/* Add RETURNING if present */
 	if (query->returningList)
 	{
-		appendContextKeyword(context, " RETURNING",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_target_list(query->returningList, context);
+		get_returning_clause(query, context);
 	}
 }
 
@@ -3744,9 +3820,7 @@ get_delete_query_def(Query *query, deparse_context *context)
 	/* Add RETURNING if present */
 	if (query->returningList)
 	{
-		appendContextKeyword(context, " RETURNING",
-							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
-		get_target_list(query->returningList, context);
+		get_returning_clause(query, context);
 	}
 }
 
@@ -4120,7 +4194,15 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		}
 
 		rte = rt_fetch(varno, dpns->rtable);
-		refname = (char *) list_nth(dpns->rtable_names, varno - 1);
+
+		/* might be returning old/new column value */
+		if (var->varreturningtype == VAR_RETURNING_OLD)
+			refname = dpns->ret_old_alias;
+		else if (var->varreturningtype == VAR_RETURNING_NEW)
+			refname = dpns->ret_new_alias;
+		else
+			refname = (char *) list_nth(dpns->rtable_names, varno - 1);
+
 		colinfo = deparse_columns_fetch(varno, dpns);
 		attnum = varattno;
 	}
@@ -4239,7 +4321,8 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		attname = get_rte_attribute_name(rte, attnum);
 	}
 
-	need_prefix = (context->varprefix || attname == NULL);
+	need_prefix = (context->varprefix || attname == NULL ||
+				   var->varreturningtype != VAR_RETURNING_DEFAULT);
 	/*
 	 * If we're considering a plain Var in an ORDER BY (but not GROUP BY)
 	 * clause, we may need to add a table-name prefix to prevent
@@ -5336,6 +5419,9 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
 								node, prettyFlags);
 		case T_ConvertRowtypeExpr:
 			return isSimpleNode((Node *) ((ConvertRowtypeExpr *) node)->arg,
+								node, prettyFlags);
+		case T_ReturningExpr:
+			return isSimpleNode((Node *) ((ReturningExpr *) node)->retexpr,
 								node, prettyFlags);
 
 		case T_OpExpr:
@@ -6619,9 +6705,16 @@ get_rule_expr(Node *node, deparse_context *context,
 					}
 				}
 				if (xexpr->op == IS_XMLSERIALIZE)
+				{
 					appendStringInfo(buf, " AS %s",
 									 format_type_with_typemod(xexpr->type,
 															  xexpr->typmod));
+					if (xexpr->indent)
+						appendStringInfoString(buf, " INDENT");
+					else
+						appendStringInfoString(buf, " NO INDENT");
+				}
+
 				if (xexpr->op == IS_DOCUMENT)
 					appendStringInfoString(buf, " IS DOCUMENT");
 				else
@@ -6820,6 +6913,20 @@ get_rule_expr(Node *node, deparse_context *context,
 			}
 			break;
 
+		case T_ReturningExpr:
+			{
+				ReturningExpr *retExpr = (ReturningExpr *) node;
+
+				/*
+				 * We cannot see a ReturningExpr in rule deparsing, only while
+				 * EXPLAINing a query plan (ReturningExpr nodes are only ever
+				 * adding during query rewriting). Just display the expression
+				 * returned (an expanded view column).
+				 */
+				get_rule_expr((Node *) retExpr->retexpr, context, showimplicit);
+			}
+			break;			
+
 		case T_PartitionBoundSpec:
 			{
 				PartitionBoundSpec *spec = (PartitionBoundSpec *) node;
@@ -6971,7 +7078,7 @@ get_rule_expr(Node *node, deparse_context *context,
 
 						get_rule_expr((Node *) lfirst(lc2), context, showimplicit);
 						appendStringInfo(buf, " AS %s",
-										 ((String *) lfirst_node(String, lc1))->sval);
+										 quote_identifier(lfirst_node(String, lc1)->sval));
 					}
 				}
 
@@ -7536,30 +7643,50 @@ get_windowfunc_expr_helper(WindowFunc *wfunc, deparse_context *context,
 
 	appendStringInfoString(buf, ") OVER ");
 
-	foreach(l, context->windowClause)
+	if (context->windowClause)
 	{
-		WindowClause *wc = (WindowClause *) lfirst(l);
-
-		if (wc->winref == wfunc->winref)
+		/* Query-decompilation case: search the windowClause list */
+		foreach(l, context->windowClause)
 		{
-			if (wc->name)
-				appendStringInfoString(buf, quote_identifier(wc->name));
-			else
-				get_rule_windowspec(wc, context->targetList, context);
-			break;
+			WindowClause *wc = (WindowClause *) lfirst(l);
+
+			if (wc->winref == wfunc->winref)
+			{
+				if (wc->name)
+					appendStringInfoString(buf, quote_identifier(wc->name));
+				else
+					get_rule_windowspec(wc, context->targetList, context);
+				break;
+			}
 		}
-	}
-	if (l == NULL)
-	{
-		if (context->windowClause)
+		if (l == NULL)
 			elog(ERROR, "could not find window clause for winref %u",
 				 wfunc->winref);
-
+	}
+	else
+	{
 		/*
-		 * In EXPLAIN, we don't have window context information available, so
-		 * we have to settle for this:
+		 * In EXPLAIN, search the namespace stack for a matching WindowAgg
+		 * node (probably it's always the first entry), and print winname.
 		 */
-		appendStringInfoString(buf, "(?)");
+		foreach(l, context->namespaces)
+		{
+			deparse_namespace *dpns = (deparse_namespace *) lfirst(l);
+
+			if (dpns->plan && IsA(dpns->plan, WindowAgg))
+			{
+				WindowAgg  *wagg = (WindowAgg *) dpns->plan;
+
+				if (wagg->winref == wfunc->winref)
+				{
+					appendStringInfoString(buf, quote_identifier(wagg->winname));
+					break;
+				}
+			}
+		}
+		if (l == NULL)
+			elog(ERROR, "could not find window clause for winref %u",
+				 wfunc->winref);
 	}
 }
 
@@ -8377,17 +8504,18 @@ get_xmltable(TableFunc *tf, deparse_context *context, bool showimplicit)
 		forboth(lc1, tf->ns_uris, lc2, tf->ns_names)
 		{
 			Node	   *expr = (Node *) lfirst(lc1);
-			char	   *name = strVal(lfirst(lc2));
+			String	   *ns_node = lfirst_node(String, lc2);
 
 			if (!first)
 				appendStringInfoString(buf, ", ");
 			else
 				first = false;
 
-			if (name != NULL)
+			if (ns_node != NULL)
 			{
 				get_rule_expr(expr, context, showimplicit);
-				appendStringInfo(buf, " AS %s", name);
+				appendStringInfo(buf, " AS %s",
+								 quote_identifier(strVal(ns_node)));
 			}
 			else
 			{
