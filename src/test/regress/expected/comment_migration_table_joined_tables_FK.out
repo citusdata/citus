@@ -1,0 +1,116 @@
+CREATE SCHEMA comment_migration_table;
+CREATE TABLE comment_migration_table.table_1
+(
+    id            bigserial,
+    code          varchar(200)                           not null,
+    name          varchar(200),
+    date_created  timestamp with time zone default NOW() not null,
+    active        boolean                  default true,
+    owner_id     bigint,
+    CONSTRAINT table_1_pkey PRIMARY KEY (id)
+)
+    WITH (autovacuum_enabled = TRUE);
+CREATE TABLE comment_migration_table.table_2
+(
+    id            bigserial,
+    table_1_id    bigint ,
+    description   varchar(200),
+    owner_id     bigint,
+    CONSTRAINT table_2_pkey PRIMARY KEY (id)
+)
+    WITH (autovacuum_enabled = TRUE);
+SET citus.shard_replication_factor = 1;
+comment on table comment_migration_table.table_1 is 'Table 1';
+comment on table comment_migration_table.table_2 is 'Table 2';
+select obj_description('comment_migration_table.table_1'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 1
+(1 row)
+
+select obj_description('comment_migration_table.table_2'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 2
+(1 row)
+
+SELECT create_reference_table('comment_migration_table.table_1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('comment_migration_table.table_2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE comment_migration_table.table_2 ADD CONSTRAINT table2_table1_fk FOREIGN KEY (table_1_id) REFERENCES comment_migration_table.table_1(id);
+select obj_description('comment_migration_table.table_1'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 1
+(1 row)
+
+select obj_description('comment_migration_table.table_2'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 2
+(1 row)
+
+SELECT undistribute_table('comment_migration_table.table_1', cascade_via_foreign_keys=>true);
+NOTICE:  creating a new table for comment_migration_table.table_1
+NOTICE:  moving the data of comment_migration_table.table_1
+NOTICE:  dropping the old comment_migration_table.table_1
+NOTICE:  renaming the new table to comment_migration_table.table_1
+NOTICE:  creating a new table for comment_migration_table.table_2
+NOTICE:  moving the data of comment_migration_table.table_2
+NOTICE:  dropping the old comment_migration_table.table_2
+NOTICE:  renaming the new table to comment_migration_table.table_2
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select obj_description('comment_migration_table.table_1'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 1
+(1 row)
+
+select obj_description('comment_migration_table.table_2'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 2
+(1 row)
+
+ALTER TABLE comment_migration_table.table_2 DROP CONSTRAINT table2_table1_fk;
+SELECT create_reference_table('comment_migration_table.table_1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('comment_migration_table.table_2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE comment_migration_table.table_2 ADD CONSTRAINT table2_table1_fk FOREIGN KEY (table_1_id) REFERENCES comment_migration_table.table_1(id);
+select obj_description('comment_migration_table.table_1'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 1
+(1 row)
+
+select obj_description('comment_migration_table.table_2'::regclass);
+ obj_description
+---------------------------------------------------------------------
+ Table 2
+(1 row)
+
+DROP TABLE comment_migration_table.table_2;
+DROP TABLE comment_migration_table.table_1;
+DROP SCHEMA comment_migration_table;
