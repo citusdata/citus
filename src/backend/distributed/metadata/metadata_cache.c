@@ -3567,6 +3567,18 @@ SecondaryNodeRoleId(void)
 	return MetadataCache.secondaryNodeRoleId;
 }
 
+/* return the Oid of the 'unavailable' nodeRole enum value */
+Oid
+UnavailableNodeRoleId(void)
+{
+	if (!MetadataCache.secondaryNodeRoleId)
+	{
+		MetadataCache.secondaryNodeRoleId = LookupStringEnumValueId("noderole",
+																	"unavailable");
+	}
+
+	return MetadataCache.secondaryNodeRoleId;
+}
 
 Oid
 CitusJobStatusScheduledId(void)
