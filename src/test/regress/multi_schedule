@@ -5,6 +5,7 @@ test: pg16
 test: multi_create_fdw
 test: multi_test_catalog_views
 test: replicated_table_disable_node
+test: cdc_library_path_test
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
