@@ -598,7 +598,7 @@ AdjustDynamicLibraryPathForCdcDecoders(void)
 {
 	if (strcmp(Dynamic_library_path, "$libdir") == 0)
 	{
-				SetConfigOption("dynamic_library_path", CDC_DECODER_DYNAMIC_LIB_PATH,
+		SetConfigOption("dynamic_library_path", CDC_DECODER_DYNAMIC_LIB_PATH,
 						PGC_POSTMASTER, PGC_S_OVERRIDE);
 	}
 }
