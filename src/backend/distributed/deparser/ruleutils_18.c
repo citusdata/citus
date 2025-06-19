@@ -4853,14 +4853,6 @@ get_name_for_var_field(Var *var, int fieldno,
 		case RTE_VALUES:
 		case RTE_NAMEDTUPLESTORE:
 		case RTE_RESULT:
-		case RTE_GROUP:
-
-			/*
-			 * This case should not occur: a column of a table or values list
-			 * shouldn't have type RECORD.  Fall through and fail (most
-			 * likely) at the bottom.
-			 */
-			break;
 		case RTE_SUBQUERY:
 			/* Subselect-in-FROM: examine sub-select's output expr */
 			{
@@ -5082,6 +5074,14 @@ get_name_for_var_field(Var *var, int fieldno,
 				}
 			}
 			break;
+		case RTE_GROUP:
+
+			/*
+			 * We couldn't get here: any Vars that reference the RTE_GROUP RTE
+			 * should have been replaced with the underlying grouping
+			 * expressions.
+			 */
+			break;			
 	}
 
 	/*
