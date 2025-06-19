@@ -16,8 +16,6 @@
 
 #include "miscadmin.h"
 
-#include "nodes/execnodes.h"     /* for ExprState, ExprContext, etc. */
-#include "executor/executor.h"   /* for ExecInitExprWithParams(), ExecEvalExpr() */
 #include "access/amapi.h"
 #include "access/skey.h"
 #include "catalog/pg_am.h"
