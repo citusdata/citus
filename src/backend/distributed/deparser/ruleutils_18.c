@@ -8663,18 +8663,17 @@ get_xmltable(TableFunc *tf, deparse_context *context, bool showimplicit)
 		forboth(lc1, tf->ns_uris, lc2, tf->ns_names)
 		{
 			Node	   *expr = (Node *) lfirst(lc1);
-			String	   *ns_node = lfirst_node(String, lc2);
+			char	   *name = strVal(lfirst(lc2));
 
 			if (!first)
 				appendStringInfoString(buf, ", ");
 			else
 				first = false;
 
-			if (ns_node != NULL)
+			if (name != NULL)
 			{
 				get_rule_expr(expr, context, showimplicit);
-				appendStringInfo(buf, " AS %s",
-								 quote_identifier(strVal(ns_node)));
+				appendStringInfo(buf, " AS %s", name);
 			}
 			else
 			{
