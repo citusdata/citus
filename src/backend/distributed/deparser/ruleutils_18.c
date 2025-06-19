@@ -8673,7 +8673,7 @@ get_xmltable(TableFunc *tf, deparse_context *context, bool showimplicit)
 			if (name != NULL)
 			{
 				get_rule_expr(expr, context, showimplicit);
-				appendStringInfo(buf, " AS %s", name);
+				appendStringInfo(buf, " AS %s", quote_identifier(name));
 			}
 			else
 			{
