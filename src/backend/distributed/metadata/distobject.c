@@ -109,12 +109,19 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	Oid classid = PG_GETARG_OID(0);
 	Oid objid = PG_GETARG_OID(1);
 	int32 objsubid = PG_GETARG_INT32(2);
+
+	/*
+	 * SQL function master_unmark_object_distributed doesn't expect the
+	 * 4th argument but SQL function citus_unmark_object_distributed does
+	 * so as checkobjectexistence argument. For this reason, we try to
+	 * get the 4th argument only if this C function is called with 4
+	 * arguments.
+	 */
 	bool checkObjectExistence = true;
-	if (!PG_ARGISNULL(3))
+	if (PG_NARGS() == 4)
 	{
 		checkObjectExistence = PG_GETARG_BOOL(3);
 	}
-
 
 	ObjectAddress address = { 0 };
 	ObjectAddressSubSet(address, classid, objid, objsubid);

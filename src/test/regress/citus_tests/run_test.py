@@ -224,6 +224,7 @@ DEPS = {
         ],
         repeatable=False,
     ),
+    "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
 }
 
 

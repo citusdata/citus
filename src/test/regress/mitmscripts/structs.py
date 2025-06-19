@@ -137,18 +137,21 @@ class Message:
 
 class SharedMessage(Message, metaclass=MessageMeta):
     "A message which could be sent by either the frontend or the backend"
+
     _msgtypes = dict()
     _classes = dict()
 
 
 class FrontendMessage(Message, metaclass=MessageMeta):
     "A message which will only be sent be a backend"
+
     _msgtypes = dict()
     _classes = dict()
 
 
 class BackendMessage(Message, metaclass=MessageMeta):
     "A message which will only be sent be a frontend"
+
     _msgtypes = dict()
     _classes = dict()
 

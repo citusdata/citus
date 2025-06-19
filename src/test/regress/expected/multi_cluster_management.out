@@ -72,6 +72,45 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (2 rows)
 
+-- get all nodes
+SELECT * from citus_nodes;
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57637 | worker      | t
+ localhost |    57638 | worker      | t
+ localhost |    57636 | coordinator | t
+(3 rows)
+
+-- get get active nodes
+SELECT * from citus_nodes where active = 't';
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57637 | worker      | t
+ localhost |    57638 | worker      | t
+ localhost |    57636 | coordinator | t
+(3 rows)
+
+-- get coordinator nodes
+SELECT * from citus_nodes where role = 'coordinator';
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57636 | coordinator | t
+(1 row)
+
+-- get worker nodes
+SELECT * from citus_nodes where role = 'worker';
+ nodename  | nodeport |  role  | active
+---------------------------------------------------------------------
+ localhost |    57637 | worker | t
+ localhost |    57638 | worker | t
+(2 rows)
+
+-- get nodes with unknown role
+SELECT * from citus_nodes where role = 'foo';
+ nodename | nodeport | role | active
+---------------------------------------------------------------------
+(0 rows)
+
 -- try to add a node that is already in the cluster
 SELECT * FROM master_add_node('localhost', :worker_1_port);
  master_add_node
@@ -126,6 +165,34 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (1 row)
 
+-- get get active nodes
+SELECT * from citus_nodes where active = 't';
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57636 | coordinator | t
+ localhost |    57637 | worker      | t
+(2 rows)
+
+-- get get inactive nodes
+SELECT * from citus_nodes where active = 'f';
+ nodename  | nodeport |  role  | active
+---------------------------------------------------------------------
+ localhost |    57638 | worker | f
+(1 row)
+
+-- make sure non-superusers can access the view
+CREATE ROLE normaluser;
+SET ROLE normaluser;
+SELECT * FROM citus_nodes;
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57636 | coordinator | t
+ localhost |    57638 | worker      | f
+ localhost |    57637 | worker      | t
+(3 rows)
+
+SET ROLE postgres;
+DROP ROLE normaluser;
 -- add some shard placements to the cluster
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
