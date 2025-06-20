@@ -2255,7 +2255,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 #else
     /* PG 17- still expect the 4th ‘once’ argument */
     ExecutorRun(queryDesc, dir, 0L, true);
-#endif		
+#endif
 
 		/* run cleanup too */
 		ExecutorFinish(queryDesc);

@@ -118,7 +118,7 @@ RUN make -C .pgenv/src/postgresql-*/src/include install
 RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
-   
+
 
 FROM base AS uncrustify-builder
 
