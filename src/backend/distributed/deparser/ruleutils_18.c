@@ -235,7 +235,7 @@ typedef void (*rsv_callback) (Node *node, deparse_context *context,
  * of aliases to columns of the right input.  Thus, positions in the printable
  * column alias list are not necessarily one-for-one with varattnos of the
  * JOIN, so we need a separate new_colnames[] array for printing purposes.
- * 
+ *
 * Finally, when dealing with wide tables we risk O(N^2) costs in assigning
  * non-duplicate column names.  We ameliorate that by using a hash table that
  * holds all the strings appearing in colnames, new_colnames, and parentUsing.
@@ -313,7 +313,7 @@ typedef struct
 	 * functions set_relation_column_names and set_join_column_names;
 	 * otherwise, names_hash is NULL.
 	 */
-	HTAB	   *names_hash;		/* entries are just strings */	
+	HTAB	   *names_hash;		/* entries are just strings */
 } deparse_columns;
 
 /* This macro is analogous to rt_fetch(), but for deparse_columns structs */
@@ -408,7 +408,7 @@ static void get_rule_windowspec(WindowClause *wc, List *targetList,
 					deparse_context *context);
 static void get_window_frame_options(int frameOptions,
 									 Node *startOffset, Node *endOffset,
-									 deparse_context *context);					
+									 deparse_context *context);
 static char *get_variable(Var *var, int levelsup, bool istoplevel,
 			 deparse_context *context);
 static void get_special_variable(Node *node, deparse_context *context,
@@ -1004,7 +1004,7 @@ has_dangerous_join_using(deparse_namespace *dpns, Node *jtnode)
  *
  * parentUsing is a list of all USING aliases assigned in parent joins of
  * the current jointree node.  (The passed-in list must not be modified.)
- * 
+ *
  * Note that we do not use per-deparse_columns hash tables in this function.
  * The number of names that need to be assigned should be small enough that
  * we don't need to trouble with that.
@@ -1286,7 +1286,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	colinfo->is_new_col = (bool *) palloc(ncolumns * sizeof(bool));
 
 	/* If the RTE is wide enough, use a hash table to avoid O(N^2) costs */
-	build_colinfo_names_hash(colinfo);	
+	build_colinfo_names_hash(colinfo);
 
 	/*
 	 * Scan the columns, select a unique alias for each one, and store it in
@@ -1419,7 +1419,7 @@ set_join_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	Assert(colinfo->num_cols == noldcolumns);
 
 	/* If the RTE is wide enough, use a hash table to avoid O(N^2) costs */
-	build_colinfo_names_hash(colinfo);	
+	build_colinfo_names_hash(colinfo);
 
 	/*
 	 * Scan the join output columns, select an alias for each one, and store
@@ -5081,7 +5081,7 @@ get_name_for_var_field(Var *var, int fieldno,
 			 * should have been replaced with the underlying grouping
 			 * expressions.
 			 */
-			break;			
+			break;
 	}
 
 	/*
@@ -7084,7 +7084,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				 */
 				get_rule_expr((Node *) retExpr->retexpr, context, showimplicit);
 			}
-			break;			
+			break;
 
 		case T_PartitionBoundSpec:
 			{
