@@ -1,0 +1,2 @@
+-- citus--13.2-1--13.1-1
+-- downgrade version to 13.1-1
