@@ -32,6 +32,7 @@ test: propagate_extension_commands
 test: escape_extension_name
 test: ref_citus_local_fkeys
 test: alter_database_owner
+test: citus_column_stats
 test: seclabel
 test: distributed_triggers
 test: create_single_shard_table
