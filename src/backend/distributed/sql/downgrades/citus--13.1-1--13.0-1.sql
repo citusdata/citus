@@ -46,6 +46,7 @@ DROP VIEW pg_catalog.citus_stat_counters;
 DROP FUNCTION pg_catalog.citus_stat_counters(oid);
 DROP FUNCTION pg_catalog.citus_stat_counters_reset(oid);
 DROP VIEW IF EXISTS pg_catalog.citus_nodes;
+DROP FUNCTION IF EXISTS pg_catalog.citus_column_stats;
 
 -- Definition of shard_name() prior to this release doesn't have a separate SQL file
 -- because it's quite an old UDF that its prior definition(s) was(were) squashed into
