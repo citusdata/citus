@@ -167,23 +167,19 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	 */
 	executorBoundParams = queryDesc->params;
 
-	/*
-	 * We do some potentially time consuming operations ourself now before we hand off
-	 * control to postgres' executor. To make sure that time spent is accurately measured
-	 * we remove the totaltime instrumentation from the queryDesc. Instead we will start
-	 * and stop the instrumentation of the total time and put it back on the queryDesc
-	 * before returning (or rethrowing) from this function.
-	 */
-	Instrumentation *volatile totalTime = queryDesc->totaltime;
-	queryDesc->totaltime = NULL;
-
 	PG_TRY();
 	{
 		ExecutorLevel++;
 
-		if (totalTime)
+		/*
+		 * We do some potentially time consuming operations our self now before we hand of
+		 * control to postgres' executor. To make sure that time spent is accurately measured
+		 * we start and stop totaltime instrumentation from the queryDesc to mesure this
+		 * time consuming operations before postgres' executor.
+		 */
+		if (queryDesc->totaltime)
 		{
-			InstrStartNode(totalTime);
+			InstrStartNode(queryDesc->totaltime);
 		}
 
 		/*
@@ -202,13 +198,16 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		 */
 		if (AlterTableConstraintCheck(queryDesc))
 		{
-			EState *estate = queryDesc->estate;
-
-			estate->es_processed = 0;
-
 			/* start and shutdown tuple receiver to simulate empty result */
 			dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
 			dest->rShutdown(dest);
+
+			queryDesc->estate->es_processed = 0;
+
+			if (queryDesc->totaltime)
+			{
+				InstrStopNode(queryDesc->totaltime, 0);
+			}
 		}
 		else
 		{
@@ -235,26 +234,25 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			/* postgres will switch here again and will restore back on its own */
 			MemoryContextSwitchTo(oldcontext);
 
-			#if PG_VERSION_NUM >= PG_VERSION_18
+			if (queryDesc->totaltime)
+			{
+				InstrStopNode(queryDesc->totaltime, 0);
+			}
+
+#if PG_VERSION_NUM >= PG_VERSION_18
 
 			/* PG18+ drops the “execute_once” argument */
 			standard_ExecutorRun(queryDesc,
 								 direction,
 								 count);
-		#else
+#else
 
 			/* PG17-: original four-arg signature */
 			standard_ExecutorRun(queryDesc,
 								 direction,
 								 count,
 								 execute_once);
-		#endif
-		}
-
-		if (totalTime)
-		{
-			InstrStopNode(totalTime, queryDesc->estate->es_processed);
-			queryDesc->totaltime = totalTime;
+#endif
 		}
 
 		executorBoundParams = savedBoundParams;
@@ -282,11 +280,6 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	}
 	PG_CATCH();
 	{
-		if (totalTime)
-		{
-			queryDesc->totaltime = totalTime;
-		}
-
 		executorBoundParams = savedBoundParams;
 		ExecutorLevel--;
 
