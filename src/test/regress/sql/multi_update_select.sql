@@ -1,9 +1,7 @@
-SET citus.shard_count TO 2;
-SET citus.next_shard_id TO 750000;
-SET citus.next_placement_id TO 750000;
+CREATE SCHEMA multi_update_select;
+SET search_path TO multi_update_select;
 
-CREATE SCHEMA indirections;
-SET search_path TO indirections;
+SET citus.next_shard_id TO 751000;
 
 -- specific tests related to get_update_query_targetlist_def
 -- we test only queries with sublinks, like:
@@ -14,28 +12,26 @@ CREATE TABLE test_ref_indirection (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_reference_table('indirections.test_ref_indirection');
+SELECT create_reference_table('test_ref_indirection');
 
 CREATE TABLE test_ref_indirection_new (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_reference_table('indirections.test_ref_indirection_new');
+SELECT create_reference_table('test_ref_indirection_new');
 
 -- Distributed tables
 CREATE TABLE test_dist_indirection (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_distributed_table('indirections.test_dist_indirection', 'id');
+SELECT create_distributed_table('test_dist_indirection', 'id');
 
 CREATE TABLE test_dist_indirection_new (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_distributed_table('indirections.test_dist_indirection_new', 'id');
-
--- Local tables required ?
+SELECT create_distributed_table('test_dist_indirection_new', 'id');
 
 -- those should work:
 INSERT INTO test_ref_indirection (id, col_bool, col_date, col_int, col_text)
@@ -217,12 +213,35 @@ CREATE TABLE update_test (
     b   INT,
     c   TEXT
 );
-SELECT create_reference_table('indirections.update_test');
+
+SELECT create_reference_table('update_test');
+INSERT INTO update_test VALUES (11, 41, 'car');
+INSERT INTO update_test VALUES (100, 20, 'bike');
+INSERT INTO update_test VALUES (100, 20, 'tractor');
+SELECT * FROM update_test;
+
 UPDATE update_test
 SET (b,a) = (select a,b from update_test where b = 41 and c = 'car')
-WHERE a = 100 AND b = 20;
+WHERE a = 100 AND b = 20
+RETURNING *;
 
--- https://github.com/citusdata/citus/pull/5692
-set client_min_messages to ERROR;
-DROP SCHEMA indirections CASCADE;
+-- Test that multiple out of order columns and multiple sublinks are handled correctly.
+CREATE TABLE upd2_test (a1 int, b1 int, c1 int, d1 int, e1 int, f1 int, g1 int);
+SELECT create_reference_table('upd2_test');
+
+INSERT INTO upd2_test SELECT 1, 1, 1, 1, 1, 1, 1 FROM generate_series(1,5) c(i);
+
+UPDATE upd2_test set (b1, a1) = (SELECT 200, 100), (g1, f1, e1) = (SELECT 700, 600, 500), (d1, c1) = (SELECT 400, 300);
+SELECT * FROM upd2_test;
+
+UPDATE upd2_test set (g1, a1) = (SELECT 77, 11), (f1, b1) = (SELECT 66, 22), (e1, c1) = (SELECT 55, 33), (d1) = (SELECT 44);
+SELECT * FROM upd2_test;
+
+UPDATE upd2_test set (g1, a1) = (SELECT 7, 1), (f1) = (SELECT 6), (c1, e1) = (SELECT 3, 5), (b1) = (SELECT 2), (d1) = (SELECT 4);
+SELECT * FROM upd2_test;
+
+-- suppress cascade messages
+SET client_min_messages to ERROR;
+DROP SCHEMA multi_update_select CASCADE;
+RESET client_min_messages;
 
