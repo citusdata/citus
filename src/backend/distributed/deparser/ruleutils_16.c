@@ -3558,8 +3558,7 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 			else if (!tle->resjunk)
 			{
 				int paramid = 0;
-				if (saw_junk)
-					elog(ERROR, "out of order target list");
+				Assert(!saw_junk)
 
 				paramid = GetParamId((Node *) tle->expr);
 				if (paramid < previous_paramid)
