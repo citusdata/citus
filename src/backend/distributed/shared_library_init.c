@@ -3274,14 +3274,15 @@ CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int su
 	}
 }
 
+
 /*
- * EnableChangeDataCaptureAssignHook is called whenever the 
+ * EnableChangeDataCaptureAssignHook is called whenever the
  * citus.enable_change_data_capture setting is changed to dynamically
  * adjust the dynamic_library_path based on the new value.
  */
 static void
 EnableChangeDataCaptureAssignHook(bool newval, void *extra)
-{	
+{
 	if (newval)
 	{
 		/* CDC enabled: add citus_decoders to the path */
