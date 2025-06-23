@@ -11,9 +11,9 @@ SET citus.enable_change_data_capture = true;
 SHOW dynamic_library_path;
 
 -- Verify that the dynamic_library_path has been modified to include citus_decoders
-SELECT 
-    CASE 
-        WHEN current_setting('dynamic_library_path') LIKE '%citus_decoders%' 
+SELECT
+    CASE
+        WHEN current_setting('dynamic_library_path') LIKE '%citus_decoders%'
         THEN 'CDC path correctly set'
         ELSE 'CDC path incorrectly not set'
     END AS cdc_path_status;
@@ -28,9 +28,9 @@ SET citus.enable_change_data_capture = true;
 SHOW dynamic_library_path;
 
 -- Verify that path is unchanged with custom library path
-SELECT 
-    CASE 
-        WHEN current_setting('dynamic_library_path') LIKE '%citus_decoders%' 
+SELECT
+    CASE
+        WHEN current_setting('dynamic_library_path') LIKE '%citus_decoders%'
         THEN 'CDC path incorrectly set'
         ELSE 'CDC path correctly not set'
     END AS custom_path_test;
