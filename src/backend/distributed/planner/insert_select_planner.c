@@ -1082,11 +1082,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		TargetEntry *newSubqueryTargetEntry = NULL;
 		AttrNumber originalAttrNo = get_attnum(insertRelationId,
 											   oldInsertTargetEntry->resname);
-		Node *expr;
-
-		/* we need to explore the underlying expression */
-		expr = (Node *) oldInsertTargetEntry->expr;
-		expr = strip_implicit_coercions(expr);
 
 		/* we need to explore the underlying expression */
 		Node *expr = strip_implicit_coercions((Node *) oldInsertTargetEntry->expr);

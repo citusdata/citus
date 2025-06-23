@@ -60,8 +60,6 @@ extern char * generate_operator_name(Oid operid, Oid arg1, Oid arg2);
 extern List * getOwnedSequences_internal(Oid relid, AttrNumber attnum, char deptype);
 extern void AppendOptionListToString(StringInfo stringData, List *options);
 
-extern int GetParamId(Node *expr);
-extern int target_list_cmp(const ListCell *a, const ListCell *b);
-
+extern void ensure_update_targetlist_in_param_order(List *targetList);
 
 #endif /* CITUS_RULEUTILS_H */

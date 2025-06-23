@@ -588,10 +588,10 @@ WHERE id = 2;
 
 SELECT * FROM summary_table ORDER BY id;
 
---- TODO this one is a silent corruption:
--- UPDATE summary_table SET (average_value, min_value) =
--- 	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
--- WHERE id = 2;
+-- try different order of update targets
+UPDATE summary_table SET (average_value, min_value) =
+ 	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
+WHERE id = 2;
 
 SELECT * FROM summary_table ORDER BY id;
 
@@ -723,10 +723,9 @@ WHERE id = 2;
 
 SELECT * FROM reference_summary_table ORDER BY id;
 
---- TODO this one is a silent corruption:
--- UPDATE reference_summary_table SET (average_value, min_value) =
--- 	(SELECT avg(value), min(value) FROM reference_raw_table WHERE id = 2)
--- WHERE id = 2;
+UPDATE reference_summary_table SET (average_value, min_value) =
+	(SELECT avg(value), min(value) FROM reference_raw_table WHERE id = 2)
+WHERE id = 2;
 
 SELECT * FROM reference_summary_table ORDER BY id;
 
@@ -920,4 +919,15 @@ DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
 DROP TABLE reference_summary_table;
+DROP TABLE limit_orders;
+DROP TABLE multiple_hash;
+DROP TABLE range_partitioned;
+DROP TABLE append_partitioned;
+DROP TABLE bidders;
+
+DROP FUNCTION stable_append;
+DROP FUNCTION immutable_append;
+DROP FUNCTION temp_strict_func;
+DROP TYPE order_side;
+
 DROP SCHEMA multi_modifications CASCADE;

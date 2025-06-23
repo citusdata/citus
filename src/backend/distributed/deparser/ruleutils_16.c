@@ -3533,21 +3533,13 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 	ma_sublinks = NIL;
 	if (query->hasSubLinks)		/* else there can't be any */
 	{
-		bool saw_junk = false;
-		bool need_to_sort_target_list = false;
-		int previous_paramid = 0;
-
 		foreach(l, targetList)
 		{
 			TargetEntry *tle = (TargetEntry *) lfirst(l);
 
-			// elog(WARNING, "TOP node to string: %s", nodeToString(tle->expr));
-			// elog(WARNING, "TOP node type: %d", (int) nodeTag(tle->expr));
-
 			if (tle->resjunk && IsA(tle->expr, SubLink))
 			{
 				SubLink    *sl = (SubLink *) tle->expr;
-				saw_junk = true;
 
 				if (sl->subLinkType == MULTIEXPR_SUBLINK)
 				{
@@ -3555,30 +3547,9 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 					Assert(sl->subLinkId == list_length(ma_sublinks));
 				}
 			}
-			else if (!tle->resjunk)
-			{
-				int paramid = 0;
-				if (saw_junk)
-					elog(ERROR, "out of order target list");
-
-				paramid = GetParamId((Node *) tle->expr);
-				if (paramid < previous_paramid)
-					need_to_sort_target_list = true;
-
-				previous_paramid = paramid;
-			}
 		}
 
-		/*
-		 * reorder the target list on left side of the update:
-		 * SET () = (SELECT )
-		 * reordering the SELECT side only does not work, consider a case like:
-		 * SET (col_1, col3) = (SELECT 1, 3), (col_2) = (SELECT 2)
-		 * Then default order will lead to:
-		 * SET (col_1, col2) = (SELECT 1, 3), (col_3) = (SELECT 2)
-		 */
-		if (need_to_sort_target_list)
-			list_sort(targetList, target_list_cmp);
+	        ensure_update_targetlist_in_param_order(targetList);
 	}
 	next_ma_cell = list_head(ma_sublinks);
 	cur_ma_sublink = NULL;
@@ -3689,7 +3660,6 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 
 		get_rule_expr(expr, context, false);
 	}
-	elog(DEBUG4, "rewriten query: %s", buf->data);
 }
 
 /* ----------
