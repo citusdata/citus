@@ -1,8 +1,6 @@
-SET citus.shard_count TO 2;
-SET citus.next_shard_id TO 750000;
-SET citus.next_placement_id TO 750000;
-CREATE SCHEMA indirections;
-SET search_path TO indirections;
+CREATE SCHEMA multi_update_select;
+SET search_path TO multi_update_select;
+SET citus.next_shard_id TO 751000;
 -- specific tests related to get_update_query_targetlist_def
 -- we test only queries with sublinks, like:
 -- ( ... SET (...) = (SELECT ...))
@@ -11,7 +9,7 @@ CREATE TABLE test_ref_indirection (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_reference_table('indirections.test_ref_indirection');
+SELECT create_reference_table('test_ref_indirection');
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -21,7 +19,7 @@ CREATE TABLE test_ref_indirection_new (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_reference_table('indirections.test_ref_indirection_new');
+SELECT create_reference_table('test_ref_indirection_new');
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -32,7 +30,7 @@ CREATE TABLE test_dist_indirection (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_distributed_table('indirections.test_dist_indirection', 'id');
+SELECT create_distributed_table('test_dist_indirection', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -42,13 +40,12 @@ CREATE TABLE test_dist_indirection_new (
     id bigint primary key
   , col_bool bool , col_date date , col_int integer , col_text text
   );
-SELECT create_distributed_table('indirections.test_dist_indirection_new', 'id');
+SELECT create_distributed_table('test_dist_indirection_new', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
--- Local tables required ?
 -- those should work:
 INSERT INTO test_ref_indirection (id, col_bool, col_date, col_int, col_text)
     SELECT 1, true, '1970-01-01'::date, 1, 'one';
@@ -433,15 +430,115 @@ CREATE TABLE update_test (
     b   INT,
     c   TEXT
 );
-SELECT create_reference_table('indirections.update_test');
+SELECT create_reference_table('update_test');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+INSERT INTO update_test VALUES (11, 41, 'car');
+INSERT INTO update_test VALUES (100, 20, 'bike');
+INSERT INTO update_test VALUES (100, 20, 'tractor');
+SELECT * FROM update_test;
+  a  | b  |    c
+---------------------------------------------------------------------
+  11 | 41 | car
+ 100 | 20 | bike
+ 100 | 20 | tractor
+(3 rows)
+
 UPDATE update_test
 SET (b,a) = (select a,b from update_test where b = 41 and c = 'car')
-WHERE a = 100 AND b = 20;
--- https://github.com/citusdata/citus/pull/5692
-set client_min_messages to ERROR;
-DROP SCHEMA indirections CASCADE;
+WHERE a = 100 AND b = 20
+RETURNING *;
+ a  | b  |    c
+---------------------------------------------------------------------
+ 41 | 11 | bike
+ 41 | 11 | tractor
+(2 rows)
+
+-- Test that multiple out of order columns and multiple sublinks are handled correctly.
+CREATE TABLE upd2_test (a1 int, b1 int, c1 int, d1 int, e1 int, f1 int, g1 int);
+SELECT create_reference_table('upd2_test');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO upd2_test SELECT 1, 1, 1, 1, 1, 1, 1 FROM generate_series(1,5) c(i);
+UPDATE upd2_test set (b1, a1) = (SELECT 200, 100), (g1, f1, e1) = (SELECT 700, 600, 500), (d1, c1) = (SELECT 400, 300);
+SELECT * FROM upd2_test;
+ a1  | b1  | c1  | d1  | e1  | f1  | g1
+---------------------------------------------------------------------
+ 100 | 200 | 300 | 400 | 500 | 600 | 700
+ 100 | 200 | 300 | 400 | 500 | 600 | 700
+ 100 | 200 | 300 | 400 | 500 | 600 | 700
+ 100 | 200 | 300 | 400 | 500 | 600 | 700
+ 100 | 200 | 300 | 400 | 500 | 600 | 700
+(5 rows)
+
+UPDATE upd2_test set (g1, a1) = (SELECT 77, 11), (f1, b1) = (SELECT 66, 22), (e1, c1) = (SELECT 55, 33), (d1) = (SELECT 44);
+SELECT * FROM upd2_test;
+ a1 | b1 | c1 | d1 | e1 | f1 | g1
+---------------------------------------------------------------------
+ 11 | 22 | 33 | 44 | 55 | 66 | 77
+ 11 | 22 | 33 | 44 | 55 | 66 | 77
+ 11 | 22 | 33 | 44 | 55 | 66 | 77
+ 11 | 22 | 33 | 44 | 55 | 66 | 77
+ 11 | 22 | 33 | 44 | 55 | 66 | 77
+(5 rows)
+
+UPDATE upd2_test set (g1, a1) = (SELECT 7, 1), (f1) = (SELECT 6), (c1, e1) = (SELECT 3, 5), (b1) = (SELECT 2), (d1) = (SELECT 4);
+SELECT * FROM upd2_test;
+ a1 | b1 | c1 | d1 | e1 | f1 | g1
+---------------------------------------------------------------------
+  1 |  2 |  3 |  4 |  5 |  6 |  7
+  1 |  2 |  3 |  4 |  5 |  6 |  7
+  1 |  2 |  3 |  4 |  5 |  6 |  7
+  1 |  2 |  3 |  4 |  5 |  6 |  7
+  1 |  2 |  3 |  4 |  5 |  6 |  7
+(5 rows)
+
+-- Test out of order updates on distributed table
+CREATE TABLE dist_test(a1 int, b1 numeric, c1 text, d1 int);
+SELECT create_distributed_table('dist_test', 'a1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_test VALUES (1, 10.0, 'xxx', 4);
+INSERT INTO dist_test VALUES (1, 10.0, 'xxx', 4);
+INSERT INTO dist_test VALUES (2, 10.0, 'xxx', 4);
+INSERT INTO dist_test VALUES (2, 10.0, 'xxx', 4);
+INSERT INTO dist_test VALUES (3, 10.0, 'xxx', 4);
+INSERT INTO dist_test VALUES (3, 10.0, 'xxx', 4);
+INSERT INTO dist_test VALUES (3, 10.0, 'xxx', 4);
+-- Router plan:
+UPDATE dist_test
+SET (d1, c1, b1) = (SELECT 7, 'tractor', 4.2)
+WHERE a1=1
+RETURNING *;
+ a1 | b1  |   c1    | d1
+---------------------------------------------------------------------
+  1 | 4.2 | tractor |  7
+  1 | 4.2 | tractor |  7
+(2 rows)
+
+-- Pushdown plan:
+UPDATE dist_test
+SET (d1, c1, b1) = (SELECT X, 'car', Y)
+FROM (SELECT r.a * d1 as X, r.b * b1 as Y FROM update_test r, dist_test WHERE r.c=c1) upd
+WHERE dist_test.a1 > 2
+RETURNING *;
+ a1 |  b1  | c1  | d1  |  x  |  y
+---------------------------------------------------------------------
+  3 | 46.2 | car | 287 | 287 | 46.2
+  3 | 46.2 | car | 287 | 287 | 46.2
+  3 | 46.2 | car | 287 | 287 | 46.2
+(3 rows)
+
+-- suppress cascade messages
+SET client_min_messages to ERROR;
+DROP SCHEMA multi_update_select CASCADE;
+RESET client_min_messages;
