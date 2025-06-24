@@ -174,8 +174,15 @@ typedef enum TaskQueryType
 	TASK_QUERY_NULL,
 	TASK_QUERY_TEXT,
 	TASK_QUERY_OBJECT,
-	TASK_QUERY_TEXT_LIST
+	TASK_QUERY_TEXT_LIST,
+	TASK_QUERY_LOCAL_PLAN,
 } TaskQueryType;
+
+typedef struct LocalCompilation
+{
+	PlannedStmt *plan; /* the local plan for this task */
+	Query *query; /* query to deparse for EXPLAIN ANALYZE or local command logging */
+} LocalCompilation;
 
 typedef struct TaskQuery
 {
@@ -219,6 +226,15 @@ typedef struct TaskQuery
 		 * when we want to access each query string.
 		 */
 		List *queryStringList;
+
+		/*
+		 * For tasks that can be executed locally, this field contains the
+		 * local plan for the task. This is only set when the shard that the
+		 * task is assigned to is local to the node that executes the task.
+		 * The query field is used to deparse the query for EXPLAIN ANALYZE
+		 * or local command logging.
+		 */
+		LocalCompilation *localCompiled; /* only applies to local tasks */
 	}data;
 }TaskQuery;
 

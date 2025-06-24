@@ -287,6 +287,15 @@ CopyTaskQuery(Task *newnode, Task *from)
 			break;
 		}
 
+		case TASK_QUERY_LOCAL_PLAN:
+		{
+			newnode->taskQuery.data.localCompiled =
+				(LocalCompilation *) palloc0(sizeof(LocalCompilation));
+			COPY_NODE_FIELD(taskQuery.data.localCompiled->plan);
+			COPY_NODE_FIELD(taskQuery.data.localCompiled->query);
+			break;
+		}
+
 		default:
 		{
 			break;

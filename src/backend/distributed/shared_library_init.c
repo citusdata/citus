@@ -212,6 +212,7 @@ static const char * MaxSharedPoolSizeGucShowHook(void);
 static const char * LocalPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
+static bool WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source);
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
 static void AdjustDynamicLibraryPathForCdcDecoders(void);
@@ -1425,6 +1426,17 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_local_execution_local_plan",
+		gettext_noop("Enables the planner to avoid a query deparse and planning if "
+					 "the shard is local to the current node."),
+		NULL,
+		&EnableFastPathLocalExecutor,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		WarnIfLocalExecutionDisabled, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_local_reference_table_foreign_keys",
@@ -2845,6 +2857,21 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 
 		/* adaptive executor is superset of real-time, so switch to that */
 		*newval = MULTI_EXECUTOR_ADAPTIVE;
+	}
+
+	return true;
+}
+
+
+static bool
+WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source)
+{
+	if (*newval == true && EnableLocalExecution == false)
+	{
+		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						  errmsg(
+							  "citus.enable_local_execution must be set in order for "
+							  "citus.enable_local_execution_local_plan to be effective.")));
 	}
 
 	return true;
