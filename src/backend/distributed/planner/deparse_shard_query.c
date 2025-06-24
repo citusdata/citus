@@ -439,6 +439,24 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 }
 
 
+void
+SetTaskQueryPlan(Task *task, PlannedStmt *localPlan)
+{
+	Assert(localPlan != NULL);
+	task->taskQuery.queryType = TASK_QUERY_LOCAL_PLAN;
+	task->taskQuery.data.localPlan = localPlan;
+	task->queryCount = 1;
+}
+
+
+PlannedStmt *
+TaskQueryLocalPlan(Task *task)
+{
+	Assert(task->taskQuery.queryType == TASK_QUERY_LOCAL_PLAN);
+	return task->taskQuery.data.localPlan;
+}
+
+
 /*
  * DeparseTaskQuery is a general way of deparsing a query based on a task.
  */
@@ -497,6 +515,8 @@ TaskQueryStringAtIndex(Task *task, int index)
 }
 
 
+static char *qry_unavailable_msg = "SELECT 'Task query unavailable - optimized away'";
+
 /*
  * TaskQueryString generates task query string text if missing.
  *
@@ -523,6 +543,10 @@ TaskQueryString(Task *task)
 	else if (taskQueryType == TASK_QUERY_TEXT)
 	{
 		return task->taskQuery.data.queryStringLazy;
+	}
+	else if (taskQueryType == TASK_QUERY_LOCAL_PLAN)
+	{
+		return qry_unavailable_msg;
 	}
 
 	Query *jobQueryReferenceForLazyDeparsing =

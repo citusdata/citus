@@ -174,7 +174,8 @@ typedef enum TaskQueryType
 	TASK_QUERY_NULL,
 	TASK_QUERY_TEXT,
 	TASK_QUERY_OBJECT,
-	TASK_QUERY_TEXT_LIST
+	TASK_QUERY_TEXT_LIST,
+	TASK_QUERY_LOCAL_PLAN,
 } TaskQueryType;
 
 typedef struct TaskQuery
@@ -219,6 +220,8 @@ typedef struct TaskQuery
 		 * when we want to access each query string.
 		 */
 		List *queryStringList;
+
+		PlannedStmt *localPlan; /* only applies to local tasks */
 	}data;
 }TaskQuery;
 
