@@ -686,7 +686,8 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 									  relationShardList,
 									  placementList,
 									  shardId,
-									  isLocalTableModification);
+									  isLocalTableModification,
+									  false);
 }
 
 
