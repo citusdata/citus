@@ -136,7 +136,9 @@ static MultiNode * ApplyCartesianProductReferenceJoin(MultiNode *leftNode,
 static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
 										 List *partitionColumnList, JoinType joinType,
 										 List *joinClauses);
+#if PG_VERSION_NUM >= PG_VERSION_18
 static bool ExprMentionsPartitionColumn(Node *node, Query *query);
+#endif
 
 
 /*
@@ -225,15 +227,26 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpression = targetEntry->expr;
 
-		bool isPartitionColumn = ExprMentionsPartitionColumn((Node *) targetExpression,
-															 query);
+		bool isPartitionColumn;
+		bool skipOuterVars = false;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+		isPartitionColumn =
+			ExprMentionsPartitionColumn((Node *) targetExpression, query);
+#else
+		{
+			skipOuterVars = true;
+			isPartitionColumn =
+				IsPartitionColumn(targetExpression, query, skipOuterVars);
+		}
+#endif
+
 
 		Var *column = NULL;
 		RangeTblEntry *rte = NULL;
 
 		FindReferencedTableColumn(targetExpression, NIL, query, &column, &rte,
-
-		                          /*skipOuterVars=*/ false);
+								  skipOuterVars);
 		Oid relationId = rte ? rte->relid : InvalidOid;
 
 		/*
@@ -294,6 +307,8 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_18
+
 /*
  * ExprMentionsPartitionColumn
  *
@@ -331,7 +346,7 @@ ExprMentionsPartitionColumn(Node *node, Query *query)
 
 		RangeTblEntry *rte = rt_fetch(v->varno, query->rtable);
 
-#if PG_VERSION_NUM >= 180000
+#if PG_VERSION_NUM >= PG_VERSION_18
 
 		/* Synthetic GROUP RTE – examine its expressions instead */
 		if (rte->rtekind == RTE_GROUP && rte->groupexprs)
@@ -360,6 +375,9 @@ ExprMentionsPartitionColumn(Node *node, Query *query)
 								  ExprMentionsPartitionColumn,
 								  (void *) query);
 }
+
+
+#endif
 
 
 /*
