@@ -113,8 +113,6 @@ static Var * PartitionColumnForPushedDownSubquery(Query *query);
 static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
 static bool ContainsReferencesToRelidsWalker(Node *node,
 											 RelidsReferenceWalkerContext *context);
-static bool
-ExprReferencesPartitionColumn(Node *node, Query *query);									 
 
 
 /*
@@ -1038,13 +1036,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		errorDetail = "For Update/Share commands are currently unsupported";
 	}
 
-	/* real GROUPING SETS / ROLLUP / CUBE are still disallowed;
-	* but PG 18 also fills groupingSets with a single simple item
-	* when the GROUP BY list contains un-projected columns.  Allow that. */
-	if (subqueryTree->groupingSets &&
-		!(list_length(subqueryTree->groupingSets) == 1 &&
-		((GroupingSet *) linitial(subqueryTree->groupingSets))->kind
-			== GROUPING_SET_SIMPLE))
+	/* grouping sets are not allowed in subqueries*/
+	if (subqueryTree->groupingSets)
 	{
 		preconditionsSatisfied = false;
 		errorDetail = "could not run distributed query with GROUPING SETS, CUBE, "
@@ -1104,27 +1097,12 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
 	/* group clause list must include partition column */
 	if (subqueryTree->groupClause)
 	{
-		bool groupOnPartitionColumn = false;
-
-		/* Walk every GROUP BY expression. */
-		ListCell *lc;
-		foreach (lc, subqueryTree->groupClause)
-		{
-			Expr *expr = (Expr *)
-				get_sortgroupclause_expr(
-					(SortGroupClause *) lfirst(lc),
-					subqueryTree->targetList);
-
-			expr = (Expr *) strip_implicit_coercions((Node *) expr);
-
-			if (ExprReferencesPartitionColumn((Node *) expr, subqueryTree))
-			{
-				groupOnPartitionColumn = true;
-				break;
-			}
-		}
-
-
+		List *groupClauseList = subqueryTree->groupClause;
+		List *targetEntryList = subqueryTree->targetList;
+		List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
+														  targetEntryList);
+		bool groupOnPartitionColumn =
+			TargetListOnPartitionColumn(subqueryTree, groupTargetEntryList);
 		if (!groupOnPartitionColumn)
 		{
 			preconditionsSatisfied = false;
@@ -1190,70 +1168,6 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
 	}
 
 	return NULL;
-}
-
-
-/*
- * ExprReferencesPartitionColumn
- *
- * Recursively return true iff `node` ultimately refers to the partition
- * (distribution) column of *any* distributed table in `query`.
- *
- * Handles:
- *  • plain Vars that point straight at RTE_RELATION
- *  • OUTER_VAR indirection (PG ≥ 18 resjunk columns)
- *  • Vars that point at an RTE_GROUP (PG ≥ 18); we descend into
- *    its groupexprs until we reach real relations.
- */
-static bool
-ExprReferencesPartitionColumn(Node *node, Query *query)
-{
-    if (node == NULL)
-        return false;
-
-    /* 1. Plain or OUTER_VAR Var ---------------------------------------- */
-    if (IsA(node, Var))
-    {
-        Var *v = (Var *) node;
-
-        /* Follow the OUTER_VAR → targetlist indirection exactly once */
-        if (v->varno == OUTER_VAR)
-        {
-            TargetEntry *tle = get_tle_by_resno(query->targetList, v->varattno);
-            return tle && ExprReferencesPartitionColumn((Node *) tle->expr, query);
-        }
-
-        /* Sanity: varno must fit in rtable */
-        if (v->varno <= 0 || v->varno > list_length(query->rtable))
-            return false;
-
-        RangeTblEntry *rte = rt_fetch(v->varno, query->rtable);
-
-        /* 1a. Real relation: compare attnos ---------------------------- */
-        if (rte->rtekind == RTE_RELATION && HasDistributionKey(rte->relid))
-        {
-            Var *partcol = DistPartitionKey(rte->relid);
-            return partcol && partcol->varattno == v->varattno;
-        }
-
-        /* 1b. Synthetic GROUP entry: descend into its expressions ------- */
-        if (rte->rtekind == RTE_GROUP && rte->groupexprs)
-        {
-            ListCell *lc;
-            foreach (lc, rte->groupexprs)
-            {
-                if (ExprReferencesPartitionColumn((Node *) lfirst(lc), query))
-                    return true;
-            }
-        }
-
-        return false;      /* other RTE kinds are irrelevant here */
-    }
-
-    /* 2. Any other node type: walk its children ------------------------ */
-    return expression_tree_walker(node,
-           ExprReferencesPartitionColumn,
-           (void *) query);
 }
 
 
