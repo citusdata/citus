@@ -41,11 +41,16 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 
+	if (distributedPlan->workerJob)
+	distributedPlan->workerJob->jobExecuted = true;
+	distributedPlan->subPlansExecuted = true;
+
 	if (subPlanList == NIL)
 	{
 		/* no subplans to execute */
 		return;
 	}
+
 
 	HTAB *intermediateResultsHash = MakeIntermediateResultHTAB();
 	RecordSubplanExecutionsOnNodes(intermediateResultsHash, distributedPlan);
