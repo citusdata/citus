@@ -17,7 +17,7 @@
 extern int MaxIntermediateResult;
 extern int SubPlanLevel;
 
-extern void ExecuteSubPlans(DistributedPlan *distributedPlan);
+extern void ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled);
 
 /**
  * IntermediateResultsHashEntry is used to store which nodes need to receive
