@@ -136,9 +136,6 @@ static MultiNode * ApplyCartesianProductReferenceJoin(MultiNode *leftNode,
 static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
 										 List *partitionColumnList, JoinType joinType,
 										 List *joinClauses);
-#if PG_VERSION_NUM >= PG_VERSION_18
-static bool ExprMentionsPartitionColumn(Node *node, Query *query);
-#endif
 
 
 /*
@@ -227,21 +224,9 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpression = targetEntry->expr;
 
-		bool isPartitionColumn;
-		bool skipOuterVars = false;
-
-#if PG_VERSION_NUM >= PG_VERSION_18
-		isPartitionColumn =
-			ExprMentionsPartitionColumn((Node *) targetExpression, query);
-#else
-		{
-			skipOuterVars = true;
-			isPartitionColumn =
-				IsPartitionColumn(targetExpression, query, skipOuterVars);
-		}
-#endif
-
-
+		bool skipOuterVars = true;
+		bool isPartitionColumn = IsPartitionColumn(targetExpression, query,
+												   skipOuterVars);
 		Var *column = NULL;
 		RangeTblEntry *rte = NULL;
 
@@ -305,79 +290,6 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 
 	return targetListOnPartitionColumn;
 }
-
-
-#if PG_VERSION_NUM >= PG_VERSION_18
-
-/*
- * ExprMentionsPartitionColumn
- *
- * Return true iff `node` ultimately resolves to the partition column of
- * *any* distributed table referenced by `query`.
- *
- *  • Understands OUTER_VAR indirection (PG ≥ 17)
- *  • Understands synthetic RTE_GROUP entries (PG ≥ 18)
- *  • Falls back to original logic for PG 15/16 automatically
- */
-static bool
-ExprMentionsPartitionColumn(Node *node, Query *query)
-{
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(node, Var))
-	{
-		Var *v = (Var *) node;
-
-		/* Follow OUTER_VAR → target-list indirection, if present */
-		if (v->varno == OUTER_VAR)
-		{
-			TargetEntry *tle = get_tle_by_resno(query->targetList, v->varattno);
-			return tle && ExprMentionsPartitionColumn((Node *) tle->expr, query);
-		}
-
-		/* Sanity-check varno */
-		if (v->varno <= 0 || v->varno > list_length(query->rtable))
-		{
-			return false;
-		}
-
-		RangeTblEntry *rte = rt_fetch(v->varno, query->rtable);
-
-#if PG_VERSION_NUM >= PG_VERSION_18
-
-		/* Synthetic GROUP RTE – examine its expressions instead */
-		if (rte->rtekind == RTE_GROUP && rte->groupexprs)
-		{
-			ListCell *lc;
-			foreach(lc, rte->groupexprs)
-			if (ExprMentionsPartitionColumn((Node *) lfirst(lc), query))
-			{
-				return true;
-			}
-			return false;
-		}
-#endif
-
-		/* Real table? — compare against its dist key */
-		if (rte->rtekind == RTE_RELATION && HasDistributionKey(rte->relid))
-		{
-			Var *partcol = DistPartitionKey(rte->relid);
-			return partcol && partcol->varattno == v->varattno;
-		}
-		return false;
-	}
-
-	/* Recurse through any other node type */
-	return expression_tree_walker(node,
-								  ExprMentionsPartitionColumn,
-								  (void *) query);
-}
-
-
-#endif
 
 
 /*
