@@ -520,6 +520,23 @@ CompositeFieldRecursive(Expr *expression, Query *query)
 
 		compositeField = CompositeFieldRecursive(joinColumn, query);
 	}
+#if PG_VERSION_NUM >= PG_VERSION_18
+	else if (rangeTableEntry->rtekind == RTE_GROUP)
+	{
+		/* PG 18 synthetic GROUP RTE: each groupexprs[i] matches varattno=i+1 */
+		List *gexprs = rangeTableEntry->groupexprs;
+		AttrNumber grpIndex = candidateColumn->varattno - 1;
+
+		if (grpIndex >= 0 && grpIndex < list_length(gexprs))
+		{
+			Expr *grpExpr = (Expr *) list_nth(gexprs, grpIndex);
+			compositeField = CompositeFieldRecursive(grpExpr, query);
+		}
+
+		/* else leave compositeField = NULL */
+	}
+#endif
+
 
 	return compositeField;
 }
