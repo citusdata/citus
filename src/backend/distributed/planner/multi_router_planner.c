@@ -1027,9 +1027,6 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES ||
 				 rangeTableEntry->rtekind == RTE_RESULT
-#if PG_VERSION_NUM >= PG_VERSION_18
-				 || rangeTableEntry->rtekind == RTE_GROUP   /* Accept synthetic GROUP */
-#endif
 				 )
 		{
 			/* do nothing, this type is supported */
