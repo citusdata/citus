@@ -1180,6 +1180,9 @@ HasComplexRangeTableType(Query *queryTree)
 			rangeTableEntry->rtekind != RTE_SUBQUERY &&
 			rangeTableEntry->rtekind != RTE_FUNCTION &&
 			rangeTableEntry->rtekind != RTE_VALUES &&
+#if PG_VERSION_NUM >= PG_VERSION_18
+    		rangeTableEntry->rtekind != RTE_GROUP   &&
+#endif			
 			!IsJsonTableRTE(rangeTableEntry))
 		{
 			hasComplexRangeTableType = true;
