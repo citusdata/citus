@@ -16,6 +16,8 @@
 #include "postgres.h"
 
 #include "access/stratnum.h"
+#include "access/tupdesc.h"
+#include "access/tupdesc_details.h"
 #include "access/xact.h"
 #include "catalog/pg_opfamily.h"
 #include "catalog/pg_proc.h"
@@ -175,7 +177,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
 static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
-static Query * ConvertToQueryOnShard(Query *query, Oid relationID, Oid shardRelationId);
+static bool ConvertToQueryOnShard(Query *query, Oid relationID, Oid shardRelationId);
 
 /*
  * CreateRouterPlan attempts to create a router executor plan for the given
@@ -1952,6 +1954,75 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 }
 
 
+/*
+ * CheckAttributesMatch checks if the attributes of the Citus table and the shard
+ * table match.
+ *
+ * It is used to ensure that the shard table has the same schema as the Citus
+ * table before replacing the Citus table OID with the shard table OID in the
+ * parse tree we (Citus planner) recieved from Postgres.
+ */
+static
+bool
+CheckAttributesMatch(Oid citusTableId, Oid shardTableId)
+{
+	Relation citusR, shardR;
+	bool same_schema = false;
+
+	citusR = RelationIdGetRelation(citusTableId);
+	shardR = RelationIdGetRelation(shardTableId);
+
+	if (RelationIsValid(citusR) && RelationIsValid(shardR))
+	{
+		TupleDesc citusTupDesc = citusR->rd_att;
+		TupleDesc shardTupDesc = shardR->rd_att;
+
+		if (citusTupDesc->natts == shardTupDesc->natts)
+		{
+			/*
+			 * Do an attribute-by-attribute comparison. This is borrowed from
+			 * the Postgres function equalTupleDescs(), which we cannot use
+			 * because the citus table and shard table have different composite
+			 * types.
+			 */
+			same_schema = true;
+			for (int i = 0; i < citusTupDesc->natts && same_schema; i++)
+			{
+				Form_pg_attribute attr1 = TupleDescAttr(citusTupDesc, i);
+				Form_pg_attribute attr2 = TupleDescAttr(shardTupDesc, i);
+
+				if (strcmp(NameStr(attr1->attname), NameStr(attr2->attname)) != 0)
+				{
+					same_schema = false;
+				}
+				if (attr1->atttypid != attr2->atttypid)
+				{
+					same_schema = false;
+				}
+				if (attr1->atttypmod != attr2->atttypmod)
+				{
+					same_schema = false;
+				}
+				if (attr1->attcollation != attr2->attcollation)
+				{
+					same_schema = false;
+				}
+
+				/* Record types derived from tables could have dropped fields. */
+				if (attr1->attisdropped != attr2->attisdropped)
+				{
+					same_schema = false;
+				}
+			}
+		}
+	}
+
+	RelationClose(citusR);
+	RelationClose(shardR);
+	return same_schema;
+}
+
+
 void
 CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 								 DistributedPlan *plan)
@@ -1969,7 +2040,7 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 
 	if (job->deferredPruning)
 	{
-		/* Call fast path query planner, Save plan in planContext->plan */
+		/* Execution time pruning => don't know which shard at this point */
 		planContext->plan = FastPathPlanner(planContext->originalQuery,
 											planContext->query,
 											planContext->boundParams);
@@ -1985,27 +2056,26 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 	ShardPlacement *primaryPlacement = (ShardPlacement *) linitial(placements);
 	List *relationShards = task->relationShardList;
 	Assert(list_length(relationShards) == 1);
+	RelationShard *relationShard = (RelationShard *) linitial(relationShards);
+	Assert(relationShard->shardId == primaryPlacement->shardId);
 	bool isLocalExecution = (primaryPlacement->groupId == localGroupId);
 
-	if (isLocalExecution)
+	if (isLocalExecution && ConvertToQueryOnShard(planContext->query,
+												  relationShard->relationId,
+												  relationShard->shardId))
 	{
-		ConvertToQueryOnShard(planContext->query,
-							  fastPathContext->distTableRte->relid,
-							  primaryPlacement->shardId);
-
 		/* Plan the query with the new shard relation id */
-		/* Save plan in planContext->plan */
 		planContext->plan = standard_planner(planContext->query, NULL,
 											 planContext->cursorOptions,
 											 planContext->boundParams);
-		SetTaskQueryPlan(task, planContext->plan);
+		SetTaskQueryPlan(task, job->jobQuery, planContext->plan);
 
 		ereport(DEBUG2, (errmsg("Local plan for fast-path router "
 								"query")));
 	}
 	else
 	{
-		/* Call fast path query planner, Save plan in planContext->plan */
+		/* Fall back to fast path planner and generating SQL query on the shard */
 		planContext->plan = FastPathPlanner(planContext->originalQuery,
 											planContext->query,
 											planContext->boundParams);
@@ -2029,7 +2099,7 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
  * changes the RTEPermissionInfo's relid to the shard's relation id also.
  * At this point the Query is ready for the postgres planner.
  */
-static Query *
+static bool
 ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 {
 	Assert(list_length(query->rtable) == 1);
@@ -2060,6 +2130,23 @@ ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 												   citusTableRte->rellockmode,
 												   0, NULL, NULL); /* todo - use suitable callback for perms check? */
 
+	/* Verify that the attributes of citus table and shard table match */
+	if (!CheckAttributesMatch(citusTableOid, shardRelationId))
+	{
+		/* There is a difference between the attributes of the citus
+		 * table and the shard table. This can happen if there is a DROP
+		 * COLUMN on the citus table. In this case, we cannot
+		 * convert the query to a shard query, so clean up and return.
+		 */
+		UnlockRelationOid(shardRelationId, citusTableRte->rellockmode);
+		pfree(shardRelationName);
+		ereport(DEBUG2, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						 errmsg("shard table \"%s\" does not match the "
+								"distributed table \"%s\"",
+								shardRelationName, citusTableName)));
+		return false;
+	}
+
 	/* Change the target list entries that reference the original citus table's relation id */
 	ListCell *lc = NULL;
 	foreach(lc, query->targetList)
@@ -2070,7 +2157,6 @@ ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 			targetEntry->resorigtbl = shardRelationId;
 		}
 	}
-
 
 	/* Change the range table entry's oid to that of the shard's */
 	Assert(shardRelationId != InvalidOid);
@@ -2084,7 +2170,7 @@ ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 	rtePermInfo->relid = shardRelationId;
 #endif
 
-	return query;
+	return true;
 }
 
 

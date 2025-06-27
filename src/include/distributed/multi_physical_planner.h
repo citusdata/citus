@@ -220,8 +220,6 @@ typedef struct TaskQuery
 		 * when we want to access each query string.
 		 */
 		List *queryStringList;
-
-		PlannedStmt *localPlan; /* only applies to local tasks */
 	}data;
 }TaskQuery;
 
@@ -337,6 +335,8 @@ typedef struct Task
 
 	Const *partitionKeyValue;
 	int colocationId;
+
+	PlannedStmt *localPlan; /* only applies to local tasks */
 } Task;
 
 

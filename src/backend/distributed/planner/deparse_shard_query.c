@@ -440,11 +440,12 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 
 
 void
-SetTaskQueryPlan(Task *task, PlannedStmt *localPlan)
+SetTaskQueryPlan(Task *task, Query *query, PlannedStmt *localPlan)
 {
 	Assert(localPlan != NULL);
 	task->taskQuery.queryType = TASK_QUERY_LOCAL_PLAN;
-	task->taskQuery.data.localPlan = localPlan;
+	task->taskQuery.data.jobQueryReferenceForLazyDeparsing = query;
+	task->localPlan = localPlan;
 	task->queryCount = 1;
 }
 
@@ -453,7 +454,7 @@ PlannedStmt *
 TaskQueryLocalPlan(Task *task)
 {
 	Assert(task->taskQuery.queryType == TASK_QUERY_LOCAL_PLAN);
-	return task->taskQuery.data.localPlan;
+	return task->localPlan;
 }
 
 
@@ -515,8 +516,6 @@ TaskQueryStringAtIndex(Task *task, int index)
 }
 
 
-static char *qry_unavailable_msg = "SELECT 'Task query unavailable - optimized away'";
-
 /*
  * TaskQueryString generates task query string text if missing.
  *
@@ -546,7 +545,11 @@ TaskQueryString(Task *task)
 	}
 	else if (taskQueryType == TASK_QUERY_LOCAL_PLAN)
 	{
-		return qry_unavailable_msg;
+		Query *query = task->taskQuery.data.jobQueryReferenceForLazyDeparsing;
+		Assert(query != NULL);
+		UpdateRelationToShardNames((Node *) query, task->relationShardList);
+		return AnnotateQuery(DeparseTaskQuery(task, query),
+							 task->partitionKeyValue, task->colocationId);
 	}
 
 	Query *jobQueryReferenceForLazyDeparsing =

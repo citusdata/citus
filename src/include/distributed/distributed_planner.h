@@ -105,11 +105,6 @@ typedef struct FastPathRestrictionContext
 	 * known if the shard is local
 	 */
 	bool delayFastPathPlanning;
-
-	/*
-	 * Range table entry for the table we're querying
-	 */
-	RangeTblEntry *distTableRte;
 } FastPathRestrictionContext;
 
 typedef struct PlannerRestrictionContext

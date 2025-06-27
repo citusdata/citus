@@ -148,6 +148,51 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 }
 
 
+static void
+InitializeFastPathContext(FastPathRestrictionContext *fastPathContext,
+						  Node *distributionKeyValue,
+						  bool canAvoidDeparse,
+						  Query *query)
+{
+	Assert(fastPathContext != NULL);
+	Assert(!fastPathContext->fastPathRouterQuery);
+	Assert(!fastPathContext->delayFastPathPlanning);
+
+	/*
+	 * We're looking at a fast path query, so we can fill the
+	 * fastPathContext with relevant details.
+	 */
+	fastPathContext->fastPathRouterQuery = true;
+	if (distributionKeyValue == NULL)
+	{
+		/* nothing to record */
+	}
+	else if (IsA(distributionKeyValue, Const))
+	{
+		fastPathContext->distributionKeyValue = (Const *) distributionKeyValue;
+	}
+	else if (IsA(distributionKeyValue, Param))
+	{
+		fastPathContext->distributionKeyHasParam = true;
+	}
+
+	if (EnableFastPathLocalExecutor)
+	{
+		/*
+		 * This fast path query may be executed by the local executor.
+		 * We need to delay the fast path planning until we know if the
+		 * shard is local or not. Make a final check for volatile
+		 * functions in the query tree to determine if we should delay
+		 * the fast path planning.
+		 */
+		fastPathContext->delayFastPathPlanning = canAvoidDeparse &&
+												 !FindNodeMatchingCheckFunction(
+			(Node *) query,
+			CitusIsVolatileFunction);
+	}
+}
+
+
 /*
  * FastPathRouterQuery gets a query and returns true if the query is eligible for
  * being a fast path router query. It also fills the given fastPathContext with
@@ -175,7 +220,6 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 	bool isFastPath = false;
 	bool canAvoidDeparse = false;
 	Node *distributionKeyValue = NULL;
-	RangeTblEntry *rangeTableEntry = NULL;
 
 	if (!EnableFastPathRouterPlanner)
 	{
@@ -207,8 +251,8 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 	else if (query->commandType == CMD_INSERT)
 	{
 		/* we don't need to do any further checks, all INSERTs are fast-path */
-		isFastPath = true;
-		goto returnFastPath;
+		InitializeFastPathContext(fastPathContext, NULL, true, query);
+		return true;
 	}
 
 	/* make sure that the only range table in FROM clause */
@@ -217,7 +261,7 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 		return false;
 	}
 
-	rangeTableEntry = (RangeTblEntry *) linitial(query->rtable);
+	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(query->rtable);
 	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
 		return false;
@@ -281,52 +325,10 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 					  !ColumnAppearsMultipleTimes(quals, distributionKey));
 	}
 
-returnFastPath:
-
 	if (isFastPath)
 	{
-		Assert(fastPathContext != NULL);
-		Assert(!fastPathContext->fastPathRouterQuery);
-		Assert(!fastPathContext->delayFastPathPlanning);
-
-		/*
-		 * We're looking at a fast path query, so we can fill the
-		 * fastPathContext with relevant details.
-		 */
-		fastPathContext->fastPathRouterQuery = true;
-		if (distributionKeyValue == NULL)
-		{
-			/* nothing to record */
-		}
-		else if (IsA(distributionKeyValue, Const))
-		{
-			fastPathContext->distributionKeyValue = (Const *) distributionKeyValue;
-		}
-		else if (IsA(distributionKeyValue, Param))
-		{
-			fastPathContext->distributionKeyHasParam = true;
-		}
-
-		/*
-		 * Note the range table entry for the table we're querying.
-		 */
-		Assert(rangeTableEntry != NULL || query->commandType == CMD_INSERT);
-		fastPathContext->distTableRte = rangeTableEntry;
-
-		if (EnableFastPathLocalExecutor)
-		{
-			/*
-			 * This fast path query may be executed by the local executor.
-			 * We need to delay the fast path planning until we know if the
-			 * shard is local or not. Make a final check for volatile
-			 * functions in the query tree to determine if we should delay
-			 * the fast path planning.
-			 */
-			fastPathContext->delayFastPathPlanning = canAvoidDeparse &&
-													 !FindNodeMatchingCheckFunction(
-				(Node *) query,
-				CitusIsVolatileFunction);
-		}
+		InitializeFastPathContext(fastPathContext, distributionKeyValue, canAvoidDeparse,
+								  query);
 	}
 
 	return isFastPath;
