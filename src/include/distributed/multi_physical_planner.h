@@ -174,7 +174,8 @@ typedef enum TaskQueryType
 	TASK_QUERY_NULL,
 	TASK_QUERY_TEXT,
 	TASK_QUERY_OBJECT,
-	TASK_QUERY_TEXT_LIST
+	TASK_QUERY_TEXT_LIST,
+	TASK_QUERY_LOCAL_PLAN,
 } TaskQueryType;
 
 typedef struct TaskQuery
@@ -334,6 +335,8 @@ typedef struct Task
 
 	Const *partitionKeyValue;
 	int colocationId;
+
+	PlannedStmt *localPlan; /* only applies to local tasks */
 } Task;
 
 

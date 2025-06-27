@@ -287,6 +287,13 @@ CopyTaskQuery(Task *newnode, Task *from)
 			break;
 		}
 
+		case TASK_QUERY_LOCAL_PLAN:
+		{
+			COPY_NODE_FIELD(localPlan);
+			COPY_NODE_FIELD(taskQuery.data.jobQueryReferenceForLazyDeparsing);
+			break;
+		}
+
 		default:
 		{
 			break;

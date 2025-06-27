@@ -439,6 +439,25 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 }
 
 
+void
+SetTaskQueryPlan(Task *task, Query *query, PlannedStmt *localPlan)
+{
+	Assert(localPlan != NULL);
+	task->taskQuery.queryType = TASK_QUERY_LOCAL_PLAN;
+	task->taskQuery.data.jobQueryReferenceForLazyDeparsing = query;
+	task->localPlan = localPlan;
+	task->queryCount = 1;
+}
+
+
+PlannedStmt *
+TaskQueryLocalPlan(Task *task)
+{
+	Assert(task->taskQuery.queryType == TASK_QUERY_LOCAL_PLAN);
+	return task->localPlan;
+}
+
+
 /*
  * DeparseTaskQuery is a general way of deparsing a query based on a task.
  */
@@ -523,6 +542,14 @@ TaskQueryString(Task *task)
 	else if (taskQueryType == TASK_QUERY_TEXT)
 	{
 		return task->taskQuery.data.queryStringLazy;
+	}
+	else if (taskQueryType == TASK_QUERY_LOCAL_PLAN)
+	{
+		Query *query = task->taskQuery.data.jobQueryReferenceForLazyDeparsing;
+		Assert(query != NULL);
+		UpdateRelationToShardNames((Node *) query, task->relationShardList);
+		return AnnotateQuery(DeparseTaskQuery(task, query),
+							 task->partitionKeyValue, task->colocationId);
 	}
 
 	Query *jobQueryReferenceForLazyDeparsing =

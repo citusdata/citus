@@ -28,6 +28,7 @@
 
 extern bool EnableRouterExecution;
 extern bool EnableFastPathRouterPlanner;
+extern bool EnableFastPathLocalExecutor;
 
 extern bool EnableNonColocatedRouterQueryPushdown;
 
@@ -91,7 +92,8 @@ extern void GenerateSingleShardRouterTaskList(Job *job,
 											  List *relationShardList,
 											  List *placementList,
 											  uint64 shardId,
-											  bool isLocalTableModification);
+											  bool isLocalTableModification,
+											  bool delayedFastPath);
 
 /*
  * FastPathPlanner is a subset of router planner, that's why we prefer to
@@ -100,7 +102,8 @@ extern void GenerateSingleShardRouterTaskList(Job *job,
 
 extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo
 									 boundParams);
-extern bool FastPathRouterQuery(Query *query, Node **distributionKeyValue);
+extern bool FastPathRouterQuery(Query *query,
+								FastPathRestrictionContext *fastPathContext);
 extern bool JoinConditionIsOnFalse(List *relOptInfo);
 extern Oid ResultRelationOidForQuery(Query *query);
 extern DeferredErrorMessage * TargetlistAndFunctionsSupported(Oid resultRelationId,
@@ -120,5 +123,7 @@ extern Job * RouterJob(Query *originalQuery,
 					   DeferredErrorMessage **planningError);
 extern bool ContainsOnlyLocalOrReferenceTables(RTEListProperties *rteProperties);
 extern RangeTblEntry * ExtractSourceResultRangeTableEntry(Query *query);
+extern void CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
+											 DistributedPlan *plan);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
