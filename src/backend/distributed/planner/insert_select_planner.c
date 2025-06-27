@@ -1404,7 +1404,6 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 		/* we can set the select relation id */
 		*selectPartitionColumnTableId = subqueryPartitionColumnRelationId;
 
-
 		break;
 	}
 
