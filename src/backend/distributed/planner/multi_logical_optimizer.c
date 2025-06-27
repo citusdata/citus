@@ -4557,7 +4557,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		FindReferencedTableColumn(joinColumn, parentQueryList, query, column,
 								  rteContainingReferencedColumn, skipOuterVars);
 	}
-#if PG_VERSION_NUM >= 180000
+#if PG_VERSION_NUM >= PG_VERSION_18
 	else if (rangeTableEntry->rtekind == RTE_GROUP)
 	{
 		/*
