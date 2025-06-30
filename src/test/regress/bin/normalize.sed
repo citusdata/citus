@@ -325,3 +325,6 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 # supported Postgres version.
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
+
+# normalize CREATE DOMAIN pseudotype error: drop pg_catalog. only in this exact message
+s#^ERROR:  "pg_catalog\.([A-Za-z_][A-Za-z0-9_]*)" is not a valid base type for a domain$#ERROR:  "\1" is not a valid base type for a domain#g
