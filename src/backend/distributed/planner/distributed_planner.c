@@ -1395,6 +1395,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	PlannedStmt *finalPlan = NULL;
 	CustomScan *customScan = makeNode(CustomScan);
 	MultiExecutorType executorType = MULTI_EXECUTOR_INVALID_FIRST;
+	distributedPlan->subPlansExecuted = false;
 
 	/* this field is used in JobExecutorType */
 	distributedPlan->relationIdList = localPlan->relationOids;
