@@ -55,7 +55,8 @@ DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
 #include "cat_upgrades/add_replica_info_to_pg_dist_node.sql"
 #include "udfs/citus_add_replica_node/13.1-1.sql"
 #include "udfs/citus_remove_replica_node/13.1-1.sql"
-
+#include "udfs/citus_promote_replica_and_rebalance/13.1-1.sql"
+#include "udfs/get_snapshot_based_node_split_plan/13.1-1.sql"
 -- Since shard_name/13.1-1.sql first drops the function and then creates it, we first
 -- need to drop citus_shards view since that view depends on this function. And immediately
 -- after creating the function, we recreate citus_shards view again.

@@ -466,4 +466,7 @@ extern bool IsBackgroundJobStatusTerminal(BackgroundJobStatus status);
 extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
 extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
+/* from node_metadata.c */
+extern void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode);
+extern void ActivateReplicaNodeAsPrimary(WorkerNode *workerNode);
 #endif   /* METADATA_UTILITY_H */

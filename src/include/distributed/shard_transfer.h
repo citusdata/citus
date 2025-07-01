@@ -41,3 +41,9 @@ extern void UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalL
 extern void InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList);
 extern void InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList,
 														 int32 groupId);
+
+extern void
+AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
+									   WorkerNode *replicaNode,
+									   List* primaryShardList,
+									   List* replicaShardList);
