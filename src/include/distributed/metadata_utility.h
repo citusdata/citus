@@ -467,4 +467,7 @@ extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
 extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
 extern int GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDEsc);
+/* from node_metadata.c */
+extern void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode);
+extern void ActivateReplicaNodeAsPrimary(WorkerNode *workerNode);
 #endif   /* METADATA_UTILITY_H */

@@ -573,6 +573,44 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	FinalizeCurrentProgressMonitor();
 }
 
+/*
+ * AdjustShardsForPrimaryReplicaNodeSplit is called when a primary-replica node split
+ * occurs. It adjusts the shard placements such that the shards that should be on the
+ * primary node are removed from the replica node, and vice versa.
+ *
+ * This function does not move any data; it only updates the shard placement metadata.
+ */
+void
+AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
+											WorkerNode *replicaNode,
+											List* primaryShardList,
+											List* replicaShardList)
+{
+	int shardId = 0;
+	/*
+	 * Remove all shards from the replica that should reside on the primary node,
+	 * and update the shard placement metadata for shards that will now be served
+	 * from the replica node. No data movement is required; we only need to drop
+	 * the relevant shards from the replica and primary nodes and update the
+	 * corresponding shard placement metadata.
+	 */
+	foreach_declared_int(shardId, primaryShardList)
+	{
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+		/* TODO: Drops shard table here */
+	}
+	/* Now drop all shards from primary that need to be on the replica node */
+	foreach_declared_int(shardId, replicaShardList)
+	{
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+		UpdateColocatedShardPlacementMetadataOnWorkers(shardId,
+										primaryNode->workerName, primaryNode->workerPort,
+										replicaNode->workerName, replicaNode->workerPort);
+		/* TODO: Drop the not required table on primary here */
+	}
+}
 
 /*
  * Insert deferred cleanup records.

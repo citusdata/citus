@@ -135,8 +135,6 @@ static void MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 static void EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid);
 static void SetNodeMetadata(MetadataSyncContext *context, bool localOnly);
 static void EnsureTransactionalMetadataSyncMode(void);
-static void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE
-											lockMode);
 static BackgroundWorkerHandle * CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown);
 static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode(
 	WorkerNode *workerNode, bool force, int32 lock_cooldown);
@@ -1189,6 +1187,27 @@ ActivateNodeList(MetadataSyncContext *context)
 	SetNodeMetadata(context, localOnly);
 }
 
+/*
+ * ActivateReplicaNodeAsPrimary sets the given worker node as primary and active
+ * in the pg_dist_node catalog and make the replica node as first class citizen.
+ */
+void
+ActivateReplicaNodeAsPrimary(WorkerNode *workerNode)
+{
+	/*
+	 * Set the node as primary and active.
+	 */
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_noderole,
+							 ObjectIdGetDatum(PrimaryNodeRoleId()));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
+							 BoolGetDatum(true));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_nodeisreplica,
+							 BoolGetDatum(false));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_shouldhaveshards,
+							 BoolGetDatum(true));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_nodeprimarynodeid,
+							 Int32GetDatum(0));
+}
 
 /*
  * Acquires shard metadata locks on all shards residing in the given worker node
@@ -3720,7 +3739,7 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 	StringInfo sysidQueryResInfo = (StringInfo) linitial(sysidList);
 	char *sysidQueryResStr = sysidQueryResInfo->data;
 
-	ereport (NOTICE, (errmsg("system identifier of %s:%d is %s",
+	ereport (DEBUG2, (errmsg("system identifier of %s:%d is %s",
 			replicaHostname, replicaPort, sysidQueryResStr)));
 
 	/* We do not need the connection anymore */
@@ -3767,7 +3786,7 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 	StringInfo primarySysidQueryResInfo = (StringInfo) linitial(primarySizeList);
 	char *primarySysidQueryResStr = primarySysidQueryResInfo->data;
 
-	ereport (NOTICE, (errmsg("system identifier of %s:%d is %s",
+	ereport (DEBUG2, (errmsg("system identifier of %s:%d is %s",
 			primaryWorkerNode->workerName, primaryWorkerNode->workerPort, primarySysidQueryResStr)));
 	/* verify both identifiers */
 	if (strcmp(sysidQueryResStr, primarySysidQueryResStr) != 0)
