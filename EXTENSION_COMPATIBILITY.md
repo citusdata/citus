@@ -36,8 +36,8 @@
 | pg_cron                      | Yes                 |         |
 | pg_diskann                   | Yes                 |         |
 | pg_failover_slots            | To be tested        |         |
-| pg_freespacemap              | Partially           | Users can set citus.override_table_visibility='off'; to get accurate calcualtion of free space map. |
-| pg_hint_plan                 | Partially           | Works fine side by side, but hints are ignored for distirbuted queries |
+| pg_freespacemap              | Partially           | Users can set citus.override_table_visibility='off'; to get accurate calculation of free space map. |
+| pg_hint_plan                 | Partially           | Works fine side by side, but hints are ignored for distributed queries |
 | pg_partman                   | Yes                 |         |
 | pg_prewarm                   | Partially           | In order to prewarm distributed tables, set " citus.override_table_visibility" to off, and run prewarm for each shard. This needs to be done at each node. |
 | pg_repack                    | Partially           | Extension relies on triggers, but Citus does not support triggers over distributed tables. It works fine on local tables. |
@@ -74,4 +74,4 @@
 | uuid-ossp                    | Yes                 |         |
 | vector (aka pg_vector)       | Yes                 |         |
 | wal2json                     | To be tested        |         |
-| xml2                         | To be tested        |         |s
+| xml2                         | To be tested        |         |
