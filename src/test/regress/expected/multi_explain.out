@@ -2492,12 +2492,12 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
         Intermediate Data Size: 100 bytes
         Result destination: Write locally
-        ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
+        ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
-              Tuple data received from nodes: 160 bytes
+              Tuple data received from nodes: 80 bytes
               Tasks Shown: One of 4
               ->  Task
-                    Tuple data received from node: 64 bytes
+                    Tuple data received from node: 32 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Insert on dist_table_570017 citus_table_alias (actual rows=8 loops=1)
                           ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
