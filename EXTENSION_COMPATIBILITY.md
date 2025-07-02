@@ -4,7 +4,7 @@
 | address_standardizer_data_us | Yes                 |         |
 | age                          | Partially           | Works fine side by side, but graph data cannot be distributed. |
 | amcheck                      | Yes                 |         |
-| anon                         | Partially           | Cannot anonimize distributed tables. It is possible to anonymize local tables. |
+| anon                         | Partially           | Cannot anonymize distributed tables. It is possible to anonymize local tables. |
 | auto_explain                 | No                  | [Issue #6448](https://github.com/citusdata/citus/issues/6448) |
 | azure                        | Yes                 |         |
 | azure_ai                     | Yes                 |         |
