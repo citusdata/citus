@@ -3286,6 +3286,12 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 
 (1 row)
 
+SELECT 1;
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SET client_min_messages TO ERROR;
 SET search_path TO public;
 DROP SCHEMA local_shard_execution CASCADE;

@@ -193,6 +193,13 @@ execute p4(8);
 NOTICE:  executing the command locally: UPDATE local_shard_execution_dropped_column.t1_2460000 t1 SET a = (a OPERATOR(pg_catalog.+) 1) WHERE (c OPERATOR(pg_catalog.=) 8)
 execute p4(8);
 NOTICE:  executing the command locally: UPDATE local_shard_execution_dropped_column.t1_2460000 t1 SET a = (a OPERATOR(pg_catalog.+) 1) WHERE (c OPERATOR(pg_catalog.=) 8)
+-- arbitrary change to trigger test flakiness on this regress test
+SELECT 'random'::text;
+  text
+---------------------------------------------------------------------
+ random
+(1 row)
+
 \c - - - :master_port
 -- one another combination is that the shell table
 -- has a dropped column but not the shard, via rebalance operation
@@ -200,6 +207,12 @@ SET search_path TO local_shard_execution_dropped_column;
 ALTER TABLE t1 DROP COLUMN a;
 SELECT citus_move_shard_placement(2460000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
  citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_for_resource_cleanup(); -- otherwise fails flakiness tests
+ wait_for_resource_cleanup
 ---------------------------------------------------------------------
 
 (1 row)

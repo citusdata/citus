@@ -1441,6 +1441,8 @@ ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
 SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
+SELECT 1;
+
 SET client_min_messages TO ERROR;
 SET search_path TO public;
 DROP SCHEMA local_shard_execution CASCADE;

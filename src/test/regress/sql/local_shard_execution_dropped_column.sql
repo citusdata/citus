@@ -78,6 +78,9 @@ execute p4(8);
 execute p4(8);
 execute p4(8);
 
+-- arbitrary change to trigger test flakiness on this regress test
+SELECT 'random'::text;
+
 \c - - - :master_port
 
 -- one another combination is that the shell table
@@ -86,6 +89,7 @@ SET search_path TO local_shard_execution_dropped_column;
 ALTER TABLE t1 DROP COLUMN a;
 
 SELECT citus_move_shard_placement(2460000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
+SELECT public.wait_for_resource_cleanup(); -- otherwise fails flakiness tests
 
 \c - - - :worker_2_port
 SET search_path TO local_shard_execution_dropped_column;
