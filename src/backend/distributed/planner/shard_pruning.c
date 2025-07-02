@@ -85,6 +85,10 @@
 #include "utils/ruleutils.h"
 
 #include "pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_18
+typedef OpIndexInterpretation OpBtreeInterpretation;
+#endif
+
 
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
@@ -176,6 +180,11 @@ typedef struct PruningInstance
 	 */
 	bool isPartial;
 } PruningInstance;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+#define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
+#define ROWCOMPARE_NE COMPARE_NE
+#endif
 
 
 /*
@@ -1078,7 +1087,11 @@ IsValidPartitionKeyRestriction(OpExpr *opClause)
 		OpBtreeInterpretation *btreeInterpretation =
 			(OpBtreeInterpretation *) lfirst(btreeInterpretationCell);
 
+	#if PG_VERSION_NUM >= PG_VERSION_18
+		if (btreeInterpretation->cmptype == ROWCOMPARE_NE)
+	#else
 		if (btreeInterpretation->strategy == ROWCOMPARE_NE)
+	#endif
 		{
 			/* TODO: could add support for this, if we feel like it */
 			return false;
@@ -1130,7 +1143,11 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 		OpBtreeInterpretation *btreeInterpretation =
 			(OpBtreeInterpretation *) lfirst(btreeInterpretationCell);
 
+	#if PG_VERSION_NUM >= PG_VERSION_18
+		switch (btreeInterpretation->cmptype)
+	#else
 		switch (btreeInterpretation->strategy)
+	#endif
 		{
 			case BTLessStrategyNumber:
 			{
@@ -1299,7 +1316,11 @@ IsValidHashRestriction(OpExpr *opClause)
 		OpBtreeInterpretation *btreeInterpretation =
 			(OpBtreeInterpretation *) lfirst(btreeInterpretationCell);
 
+		#if PG_VERSION_NUM >= PG_VERSION_18
+		if (btreeInterpretation->cmptype == BTGreaterEqualStrategyNumber)
+		#else
 		if (btreeInterpretation->strategy == BTGreaterEqualStrategyNumber)
+		#endif
 		{
 			return true;
 		}

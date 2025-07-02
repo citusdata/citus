@@ -44,6 +44,11 @@
 #include "utils/snapmgr.h"
 
 #include "pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_18
+#include "commands/explain_dr.h"   /* CreateExplainSerializeDestReceiver() */
+#include "commands/explain_format.h"
+#endif
+
 
 #include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
@@ -134,7 +139,7 @@ typedef struct ExplainAnalyzeDestination
 	TupleDesc lastSavedExplainAnalyzeTupDesc;
 } ExplainAnalyzeDestination;
 
-#if PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 
 /*
  * Various places within need to convert bytes to kilobytes.  Round these up
@@ -529,19 +534,53 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
 
+/* Capture memory stats on PG17+ */
 #if PG_VERSION_NUM >= PG_VERSION_17
 		if (es->memory)
 		{
 			MemoryContextSwitchTo(saved_ctx);
 			MemoryContextMemConsumed(planner_ctx, &mem_counters);
 		}
+#endif
 
-		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration,
-					   (es->buffers ? &bufusage : NULL),
-					   (es->memory ? &mem_counters : NULL));
+#if PG_VERSION_NUM >= PG_VERSION_18
+		ExplainOnePlan(
+			plan,                            /* PlannedStmt *plannedstmt */
+			NULL,                            /* CachedPlan *cplan */
+			NULL,                            /* CachedPlanSource *plansource */
+			0,                               /* query_index */
+			into,                            /* IntoClause *into */
+			es,                              /* struct ExplainState *es */
+			queryString,                     /* const char *queryString */
+			params,                          /* ParamListInfo params */
+			NULL,                            /* QueryEnvironment *queryEnv */
+			&planduration,                   /* const instr_time *planduration */
+			(es->buffers ? &bufusage : NULL),/* const BufferUsage *bufusage */
+			(es->memory ? &mem_counters : NULL)  /* const MemoryContextCounters *mem_counters */
+			);
+#elif PG_VERSION_NUM >= PG_VERSION_17
+		ExplainOnePlan(
+			plan,
+			into,
+			es,
+			queryString,
+			params,
+			NULL,                           /* QueryEnvironment *queryEnv */
+			&planduration,
+			(es->buffers ? &bufusage : NULL),
+			(es->memory ? &mem_counters : NULL)
+			);
 #else
-		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration,
-					   (es->buffers ? &bufusage : NULL));
+		ExplainOnePlan(
+			plan,
+			into,
+			es,
+			queryString,
+			params,
+			NULL,                           /* QueryEnvironment *queryEnv */
+			&planduration,
+			(es->buffers ? &bufusage : NULL)
+			);
 #endif
 
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
@@ -1558,22 +1597,55 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 	}
 
+/* capture memory stats on PG17+ */
 #if PG_VERSION_NUM >= PG_VERSION_17
 	if (es->memory)
 	{
 		MemoryContextSwitchTo(saved_ctx);
 		MemoryContextMemConsumed(planner_ctx, &mem_counters);
 	}
+#endif
 
-	/* run it (if needed) and produce output */
-	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-				   &planduration, (es->buffers ? &bufusage : NULL),
-				   (es->memory ? &mem_counters : NULL));
+#if PG_VERSION_NUM >= PG_VERSION_18
+	ExplainOnePlan(
+		plan,                          /* PlannedStmt *plannedstmt */
+		NULL,                          /* no CachedPlan */
+		NULL,                          /* no CachedPlanSource */
+		0,                             /* query_index */
+		into,                          /* IntoClause *into */
+		es,                            /* struct ExplainState *es */
+		queryString,                   /* const char *queryString */
+		params,                        /* ParamListInfo params */
+		queryEnv,                      /* QueryEnvironment *queryEnv */
+		&planduration,                 /* const instr_time *planduration */
+		(es->buffers ? &bufusage : NULL),   /* const BufferUsage *bufusage */
+		(es->memory ? &mem_counters : NULL) /* const MemoryContextCounters *mem_counters */
+		);
+#elif PG_VERSION_NUM >= PG_VERSION_17
+
+	/* PostgreSQL 17 signature (9 args: includes mem_counters) */
+	ExplainOnePlan(
+		plan,
+		into,
+		es,
+		queryString,
+		params,
+		queryEnv,
+		&planduration,
+		(es->buffers ? &bufusage : NULL),
+		(es->memory ? &mem_counters : NULL)
+		);
 #else
-
-	/* run it (if needed) and produce output */
-	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-				   &planduration, (es->buffers ? &bufusage : NULL));
+	ExplainOnePlan(
+		plan,
+		into,
+		es,
+		queryString,
+		params,
+		queryEnv,
+		&planduration,
+		(es->buffers ? &bufusage : NULL)
+		);
 #endif
 }
 
@@ -1805,7 +1877,7 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
 			appendStringInfoString(columnDef, ", ");
 		}
 
-		Form_pg_attribute attr = &tupleDesc->attrs[columnIndex];
+		Form_pg_attribute attr = TupleDescAttr(tupleDesc, columnIndex);
 		char *attrType = format_type_extended(attr->atttypid, attr->atttypmod,
 											  FORMAT_TYPE_TYPEMOD_GIVEN |
 											  FORMAT_TYPE_FORCE_QUALIFY);
@@ -2026,21 +2098,55 @@ ExplainOneQuery(Query *query, int cursorOptions,
 			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 		}
 
+/* 1) Capture memory counters on PG17+ only once: */
 #if PG_VERSION_NUM >= PG_VERSION_17
 		if (es->memory)
 		{
 			MemoryContextSwitchTo(saved_ctx);
 			MemoryContextMemConsumed(planner_ctx, &mem_counters);
 		}
-		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-					   &planduration, (es->buffers ? &bufusage : NULL),
-					   (es->memory ? &mem_counters : NULL));
-#else
-		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-					   &planduration, (es->buffers ? &bufusage : NULL));
 #endif
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+		ExplainOnePlan(
+			plan,                 /* PlannedStmt *plannedstmt */
+			NULL,                 /* CachedPlan *cplan */
+			NULL,                 /* CachedPlanSource *plansource */
+			0,                    /* query_index */
+			into,                 /* IntoClause *into */
+			es,                   /* struct ExplainState *es */
+			queryString,          /* const char *queryString */
+			params,               /* ParamListInfo params */
+			queryEnv,             /* QueryEnvironment *queryEnv */
+			&planduration,        /* const instr_time *planduration */
+			(es->buffers  ? &bufusage    : NULL),
+			(es->memory   ? &mem_counters: NULL)
+		);
+#elif PG_VERSION_NUM >= PG_VERSION_17
+		ExplainOnePlan(
+			plan,
+			into,
+			es,
+			queryString,
+			params,
+			queryEnv,
+			&planduration,
+			(es->buffers  ? &bufusage    : NULL),
+			(es->memory   ? &mem_counters: NULL)
+		);
+#else
+		ExplainOnePlan(
+			plan,
+			into,
+			es,
+			queryString,
+			params,
+			queryEnv,
+			&planduration,
+			(es->buffers ? &bufusage : NULL)
+		);
+#endif
+
 	}
 }
 
@@ -2102,9 +2208,30 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	UpdateActiveSnapshotCommandId();
 
 	/* Create a QueryDesc for the query */
-	queryDesc = CreateQueryDesc(plannedstmt, queryString,
-								GetActiveSnapshot(), InvalidSnapshot,
-								dest, params, queryEnv, instrument_option);
+	#if PG_VERSION_NUM >= PG_VERSION_18
+	queryDesc = CreateQueryDesc(
+		plannedstmt,    /* PlannedStmt *plannedstmt */
+		NULL,           /* CachedPlan *cplan (none) */
+		queryString,    /* const char *sourceText */
+		GetActiveSnapshot(),   /* Snapshot snapshot */
+		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
+		dest,           /* DestReceiver *dest */
+		params,         /* ParamListInfo params */
+		queryEnv,       /* QueryEnvironment *queryEnv */
+		instrument_option /* int instrument_options */
+	);
+	#else
+	queryDesc = CreateQueryDesc(
+		plannedstmt,    /* PlannedStmt *plannedstmt */
+		queryString,    /* const char *sourceText */
+		GetActiveSnapshot(),   /* Snapshot snapshot */
+		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
+		dest,           /* DestReceiver *dest */
+		params,         /* ParamListInfo params */
+		queryEnv,       /* QueryEnvironment *queryEnv */
+		instrument_option /* int instrument_options */
+	);
+	#endif
 
 	/* Select execution options */
 	if (es->analyze)
@@ -2121,7 +2248,14 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 		ScanDirection dir = ForwardScanDirection;
 
 		/* run the plan */
-		ExecutorRun(queryDesc, dir, 0L, true);
+/* run the plan: count = 0 (all rows) */
+#if PG_VERSION_NUM >= PG_VERSION_18
+    /* PG 18+ dropped the “execute_once” boolean */
+    ExecutorRun(queryDesc, dir, 0L);
+#else
+    /* PG 17- still expect the 4th ‘once’ argument */
+    ExecutorRun(queryDesc, dir, 0L, true);
+#endif
 
 		/* run cleanup too */
 		ExecutorFinish(queryDesc);
@@ -2135,7 +2269,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	/* Create textual dump of plan tree */
 	ExplainPrintPlan(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 	/* Show buffer and/or memory usage in planning */
 	if (peek_buffer_usage(es, bufusage) || mem_counters)
 	{
@@ -2181,7 +2315,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	if (es->costs)
 		ExplainPrintJITSummary(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 	if (es->serialize != EXPLAIN_SERIALIZE_NONE)
 	{
 		/* the SERIALIZE option requires its own tuple receiver */
@@ -2248,7 +2382,7 @@ elapsed_time(instr_time *starttime)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 /*
  * Return whether show_buffer_usage would have anything to print, if given
  * the same 'usage' data.  Note that when the format is anything other than
@@ -2560,7 +2694,7 @@ ExplainPrintSerialize(ExplainState *es, SerializeMetrics *metrics)
 			ExplainPropertyFloat("Time", "ms",
 								 1000.0 * INSTR_TIME_GET_DOUBLE(metrics->timeSpent),
 								 3, es);
-		ExplainPropertyUInteger("Output Volume", "kB",
+		ExplainPropertyInteger("Output Volume", "kB",
 								BYTES_TO_KILOBYTES(metrics->bytesSent), es);
 		ExplainPropertyText("Format", format, es);
 		if (es->buffers)
