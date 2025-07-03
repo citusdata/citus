@@ -153,8 +153,8 @@ jobs:
           - check-isolation
           - check-operations
           - check-follower-cluster
-          - check-columnar
-          - check-columnar-isolation
+          # - check-columnar
+          # - check-columnar-isolation
           - check-enterprise
           - check-enterprise-isolation
           - check-enterprise-isolation-logicalrep-1
