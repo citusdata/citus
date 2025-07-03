@@ -1233,10 +1233,10 @@ bool
 IsObjectAddressOwnedByCitus(const ObjectAddress *objectAddress)
 {
 	Oid citusId = get_extension_oid("citus", true);
-	Oid citusColumnarId = get_extension_oid("citus_columnar", true);
+	// Oid citusColumnarId = get_extension_oid("citus_columnar", true);
 
 	/* return false because we could not find any citus extension */
-	if (!OidIsValid(citusId) && !OidIsValid(citusColumnarId))
+	if (!OidIsValid(citusId))
 	{
 		return false;
 	}
@@ -1250,9 +1250,8 @@ IsObjectAddressOwnedByCitus(const ObjectAddress *objectAddress)
 	}
 
 	bool ownedByCitus = extObjectAddress.objectId == citusId;
-	bool ownedByCitusColumnar = extObjectAddress.objectId == citusColumnarId;
 
-	return ownedByCitus || ownedByCitusColumnar;
+	return ownedByCitus;
 }
 
 
