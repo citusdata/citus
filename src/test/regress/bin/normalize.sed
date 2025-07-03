@@ -325,3 +325,6 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 # supported Postgres version.
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
+
+# pg18 change: strip trailing “.00” (or “.0…”) from actual rows counts
+s/(actual rows=[0-9]+)\.[0-9]+/\1/g
