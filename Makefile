@@ -15,13 +15,15 @@ all: extension
 
 
 # build columnar only
+.PHONY: columnar
 columnar:
-	$(MAKE) -C src/backend/columnar all
+	@echo ">>> skipping columnar storage build <<<"
 # build extension
-extension: $(citus_top_builddir)/src/include/citus_version.h columnar
+extension: $(citus_top_builddir)/src/include/citus_version.h
 	$(MAKE) -C src/backend/distributed/ all
+.PHONY: install-columnar	
 install-columnar: columnar
-	$(MAKE) -C src/backend/columnar install
+	@echo ">>> skipping columnar storage install <<<"
 install-extension: extension install-columnar
 	$(MAKE) -C src/backend/distributed/ install
 install-headers: extension
@@ -33,7 +35,7 @@ install-headers: extension
 
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
-	$(MAKE) -C src/backend/columnar/ clean
+#	$(MAKE) -C src/backend/columnar/ clean
 clean-full:
 	$(MAKE) -C src/backend/distributed/ clean-full
 .PHONY: extension install-extension clean-extension clean-full
@@ -41,7 +43,7 @@ clean-full:
 install-downgrades:
 	$(MAKE) -C src/backend/distributed/ install-downgrades
 install-all: install-headers
-	$(MAKE) -C src/backend/columnar/ install-all
+#   $(MAKE) -C src/backend/columnar/ install-all
 	$(MAKE) -C src/backend/distributed/ install-all
 
 
