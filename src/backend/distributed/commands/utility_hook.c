@@ -212,7 +212,7 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		 * Postgres forbids creating/altering other extensions from within an extension script, so we use a utility hook instead
 		 * This preprocess check whether citus_columnar should be installed first before citus
 		 */
-		PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
+		// PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
 	}
 
 	if (isCreateAlterExtensionUpdateCitusStmt || IsDropCitusExtensionStmt(parsetree))
@@ -797,7 +797,7 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 			 * or drop citus_columnar fake version when downgrade citus to older version that do not support
 			 * citus_columnar
 			 */
-			PostprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
+			// PostprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
 		/*
