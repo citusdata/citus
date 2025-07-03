@@ -784,7 +784,7 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 			/*
 			 * Check whether need to install/drop citus_columnar when upgrade/downgrade citus
 			 */
-			PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
+			// PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
 		PrevProcessUtility(pstmt, queryString, false, context,
