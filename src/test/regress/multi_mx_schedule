@@ -70,6 +70,7 @@ test: metadata_sync_helpers
 
 test: issue_6592
 test: executor_local_failure
+test: local_execution_local_plan
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
