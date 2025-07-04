@@ -4568,11 +4568,9 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		List *groupexprs = rangeTableEntry->groupexprs;
 		AttrNumber groupIndex = candidateColumn->varattno - 1;
 
-		/* Safety check */
-		if (groupIndex < 0 || groupIndex >= list_length(groupexprs))
-		{
-			return;  /* malformed Var */
-		}
+		/* this must always hold unless upstream Postgres mis-constructed the RTE_GROUP */
+		Assert(groupIndex >= 0 && groupIndex < list_length(groupexprs));
+
 		Expr *groupExpr = (Expr *) list_nth(groupexprs, groupIndex);
 
 		/* Recurse on the underlying expression (stay in the same query) */
