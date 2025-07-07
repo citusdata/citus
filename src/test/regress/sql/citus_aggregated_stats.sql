@@ -51,5 +51,53 @@ DROP TABLE current_check;
 DROP TABLE dist_current_check;
 
 RESET SESSION AUTHORIZATION;
+RESET row_security;
+
+-- compare pg_stat_user_tables with citus_stat_user_tables
+CREATE TABLE trunc_stats_test(id serial);
+CREATE TABLE trunc_stats_dist_test(id serial);
+SELECT create_distributed_table('trunc_stats_dist_test', 'id');
+
+-- rollback a savepoint: this should count 4 inserts and have 2
+-- live tuples after commit (and 2 dead ones due to aborted subxact)
+BEGIN;
+
+INSERT INTO trunc_stats_test DEFAULT VALUES;
+INSERT INTO trunc_stats_test DEFAULT VALUES;
+
+INSERT INTO trunc_stats_dist_test DEFAULT VALUES;
+INSERT INTO trunc_stats_dist_test DEFAULT VALUES;
+
+SAVEPOINT p1;
+
+INSERT INTO trunc_stats_test DEFAULT VALUES;
+INSERT INTO trunc_stats_test DEFAULT VALUES;
+TRUNCATE trunc_stats_test;
+INSERT INTO trunc_stats_test DEFAULT VALUES;
+
+INSERT INTO trunc_stats_dist_test DEFAULT VALUES;
+INSERT INTO trunc_stats_dist_test DEFAULT VALUES;
+TRUNCATE trunc_stats_dist_test;
+INSERT INTO trunc_stats_dist_test DEFAULT VALUES;
+
+ROLLBACK TO SAVEPOINT p1;
+COMMIT;
+
+\c - - - :worker_1_port
+SELECT pg_stat_force_next_flush();
+\c - - - :worker_2_port
+SELECT pg_stat_force_next_flush();
+\c - - - :master_port
+SELECT pg_stat_force_next_flush();
+
+SELECT relname, n_tup_ins, n_live_tup, n_dead_tup
+FROM pg_stat_user_tables
+WHERE relname like 'trunc_stats%';
+
+SELECT relname, n_tup_ins, n_live_tup, n_dead_tup
+FROM citus_stat_user_tables();
+
 REVOKE ALL ON SCHEMA public FROM user1;
 DROP USER user1;
+DROP TABLE trunc_stats_test;
+DROP TABLE trunc_stats_dist_test;

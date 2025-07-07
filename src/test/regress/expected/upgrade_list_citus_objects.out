@@ -189,6 +189,7 @@ ORDER BY 1;
  function citus_stat_tenants_local_internal(boolean)
  function citus_stat_tenants_local_reset()
  function citus_stat_tenants_reset()
+ function citus_stat_user_tables()
  function citus_table_is_visible(oid)
  function citus_table_size(regclass)
  function citus_task_wait(bigint,citus_task_status)
@@ -394,6 +395,6 @@ ORDER BY 1;
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(363 rows)
+(364 rows)
 
 DROP TABLE extension_basic_types;
