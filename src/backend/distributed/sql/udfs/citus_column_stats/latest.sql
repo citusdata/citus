@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_column_stats(
     qualified_table_name text)
 RETURNS TABLE (
     attname text,
+    null_frac float4,
     most_common_vals text[],
     most_common_freqs float4[]
 )
@@ -14,10 +15,10 @@ BEGIN
 
         WITH most_common_vals_json AS (
         SELECT * FROM run_command_on_shards(qualified_table_name,
-                                            $$ SELECT json_agg(row_to_json(shard_stats)) FROM (
-                                            SELECT attname, most_common_vals, most_common_freqs, c.reltuples AS reltuples
-                                            FROM pg_stats s RIGHT JOIN pg_class c ON (s.tablename = c.relname)
-                                            WHERE c.relname = '%s') shard_stats $$ )),
+                $$ SELECT json_agg(row_to_json(shard_stats)) FROM (
+                SELECT attname, s.null_frac, most_common_vals, most_common_freqs, c.reltuples AS reltuples
+                FROM pg_stats s RIGHT JOIN pg_class c ON (s.tablename = c.relname)
+                WHERE c.relname = '%s') shard_stats $$ )),
 
         table_reltuples_json AS (
         SELECT distinct(shardid),
@@ -30,18 +31,22 @@ BEGIN
         most_common_vals AS (
         SELECT shardid,
                (json_array_elements(result::json)->>'attname')::text AS attname,
+               (json_array_elements(result::json)->>'null_frac')::float4 AS null_frac,
                json_array_elements_text((json_array_elements(result::json)->>'most_common_vals')::json)::text AS common_val,
                json_array_elements_text((json_array_elements(result::json)->>'most_common_freqs')::json)::float4 AS common_freq,
                (json_array_elements(result::json)->>'reltuples')::bigint AS shard_reltuples
         FROM most_common_vals_json),
 
         common_val_occurrence AS (
-        SELECT m.attname, common_val, sum(common_freq * shard_reltuples)::bigint AS occurrence
+        SELECT m.attname, common_val,
+                sum(common_freq * shard_reltuples)::bigint AS occurrence,
+                any_value(m.null_frac * shard_reltuples)::bigint AS null_occurrences
         FROM most_common_vals m
         GROUP BY m.attname, common_val
         ORDER BY m.attname, occurrence DESC, common_val)
 
         SELECT c.attname,
+               any_value((null_occurrences/t.table_reltuples)::float4) AS null_frac,
                ARRAY_agg(common_val) AS most_common_vals,
                ARRAY_agg((occurrence/t.table_reltuples)::float4) AS most_common_freqs
         FROM common_val_occurrence c, table_reltuples t

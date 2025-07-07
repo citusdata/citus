@@ -13,7 +13,8 @@ INSERT INTO current_check VALUES
     (3, 'cde', 'user1'),
     (4, 'def', 'user1'),
     (4, 'def', 'user1'),
-    (3, 'cde', 'user2');
+    (3, 'cde', 'user2'),
+    (5, NULL, NULL);
 
 ALTER TABLE current_check ENABLE ROW LEVEL SECURITY;
 
@@ -21,7 +22,7 @@ SET row_security TO ON;
 
 ANALYZE current_check;
 
-SELECT attname, most_common_vals, most_common_freqs FROM pg_stats
+SELECT attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
   WHERE tablename = 'current_check'
   ORDER BY 1;
 
@@ -35,11 +36,12 @@ INSERT INTO dist_current_check VALUES
     (3, 'cde', 'user1'),
     (4, 'def', 'user1'),
     (4, 'def', 'user1'),
-    (3, 'cde', 'user2');
+    (3, 'cde', 'user2'),
+    (5, NULL, NULL);
 
 ANALYZE dist_current_check;
 
-SELECT attname, most_common_vals, most_common_freqs FROM pg_stats
+SELECT attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
   WHERE tablename = 'dist_current_check'
   ORDER BY 1;
 
