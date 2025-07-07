@@ -9,18 +9,19 @@ INSERT INTO current_check VALUES
     (3, 'cde', 'user1'),
     (4, 'def', 'user1'),
     (4, 'def', 'user1'),
-    (3, 'cde', 'user2');
+    (3, 'cde', 'user2'),
+    (5, NULL, NULL);
 ALTER TABLE current_check ENABLE ROW LEVEL SECURITY;
 SET row_security TO ON;
 ANALYZE current_check;
-SELECT attname, most_common_vals, most_common_freqs FROM pg_stats
+SELECT attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
   WHERE tablename = 'current_check'
   ORDER BY 1;
-  attname  | most_common_vals | most_common_freqs
+  attname  | null_frac | most_common_vals |  most_common_freqs
 ---------------------------------------------------------------------
- currentid | {3,4}            | {0.4,0.4}
- payload   | {cde,def}        | {0.4,0.4}
- rlsuser   | {user1}          | {0.8}
+ currentid |         0 | {3,4}            | {0.333333,0.333333}
+ payload   |  0.166667 | {cde,def}        | {0.333333,0.333333}
+ rlsuser   |  0.166667 | {user1}          | {0.666667}
 (3 rows)
 
 SELECT * FROM citus_column_stats('current_check');
@@ -38,21 +39,22 @@ INSERT INTO dist_current_check VALUES
     (3, 'cde', 'user1'),
     (4, 'def', 'user1'),
     (4, 'def', 'user1'),
-    (3, 'cde', 'user2');
+    (3, 'cde', 'user2'),
+    (5, NULL, NULL);
 ANALYZE dist_current_check;
-SELECT attname, most_common_vals, most_common_freqs FROM pg_stats
+SELECT attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
   WHERE tablename = 'dist_current_check'
   ORDER BY 1;
- attname | most_common_vals | most_common_freqs
+ attname | null_frac | most_common_vals | most_common_freqs
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM citus_column_stats('dist_current_check');
-  attname  | most_common_vals | most_common_freqs
+  attname  | null_frac | most_common_vals |  most_common_freqs
 ---------------------------------------------------------------------
- currentid | {3,4}            | {0.4,0.4}
- payload   | {cde,def}        | {0.4,0.4}
- rlsuser   | {user1}          | {0.8}
+ currentid |         0 | {3,4}            | {0.333333,0.333333}
+ payload   |  0.166667 | {cde,def}        | {0.333333,0.333333}
+ rlsuser   |  0.166667 | {user1}          | {0.666667}
 (3 rows)
 
 DROP TABLE current_check;
