@@ -1484,11 +1484,12 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                 | function citus_is_primary_node() boolean
                                                                 | function citus_stat_counters(oid) SETOF record
                                                                 | function citus_stat_counters_reset(oid) void
+                                                                | function citus_stat_user_tables() TABLE(relname regclass, n_tup_ins bigint, n_tup_upd bigint, n_tup_del bigint, n_tup_hot_upd bigint, n_tup_newpage_upd bigint, n_live_tup bigint, n_dead_tup bigint)
                                                                 | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
                                                                 | function shard_name(regclass,bigint,boolean) text
                                                                 | view citus_nodes
                                                                 | view citus_stat_counters
-(34 rows)
+(35 rows)
 
 -- Test downgrade to 13.1-1 from 13.2-1
 ALTER EXTENSION citus UPDATE TO '13.2-1';
