@@ -9,8 +9,8 @@
  *-------------------------------------------------------------------------
  */
 
- #ifndef COLUMNAR_VERSION_COMPAT_H
- #define COLUMNAR_VERSION_COMPAT_H
+#ifndef COLUMNAR_VERSION_COMPAT_H
+#define COLUMNAR_VERSION_COMPAT_H
 
 #include "pg_version_constants.h"
 
