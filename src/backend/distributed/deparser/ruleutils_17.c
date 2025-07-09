@@ -3565,6 +3565,8 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 				}
 			}
 		}
+
+		ensure_update_targetlist_in_param_order(targetList);
 	}
 	next_ma_cell = list_head(ma_sublinks);
 	cur_ma_sublink = NULL;
