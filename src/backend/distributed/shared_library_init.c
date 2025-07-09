@@ -391,7 +391,7 @@ static const struct config_enum_entry metadata_sync_mode_options[] = {
 static bool
 citus_executor_start_adapter(QueryDesc *queryDesc, int eflags)
 {
-	/* call the original Citus hook (void) and always return “true” */
+	/* PG18+ expects a bool return */
 	CitusExecutorStart(queryDesc, eflags);
 	return true;
 }
@@ -402,8 +402,30 @@ citus_executor_run_adapter(QueryDesc *queryDesc,
 						   ScanDirection direction,
 						   uint64 count)
 {
-	/* call the original Citus hook (which still expects the old 4-arg form) */
+	/* PG18+ has no run_once flag
+	 * call the original Citus hook (which still expects the old 4-arg form) */
 	CitusExecutorRun(queryDesc, direction, count, true);
+}
+
+
+#else
+static bool
+citus_executor_start_adapter(QueryDesc *queryDesc, int eflags)
+{
+	CitusExecutorStart(queryDesc, eflags);
+
+	/* our adapter must return bool even if PG15–17 don’t use it */
+	return true;
+}
+
+
+static void
+citus_executor_run_adapter(QueryDesc *queryDesc,
+						   ScanDirection direction,
+						   uint64 count)
+{
+	/* older PG wants the run_once flag back */
+	CitusExecutorRun(queryDesc, direction, count, /*run_once=*/ true);
 }
 
 
@@ -484,13 +506,8 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	get_relation_info_hook = multi_get_relation_info_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
-#if PG_VERSION_NUM >= PG_VERSION_18
 	ExecutorStart_hook = citus_executor_start_adapter;
 	ExecutorRun_hook = citus_executor_run_adapter;
-#else
-	ExecutorStart_hook = CitusExecutorStart;
-	ExecutorRun_hook = CitusExecutorRun;
-#endif
 	ExplainOneQuery_hook = CitusExplainOneQuery;
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = CitusAttributeToEnd;
