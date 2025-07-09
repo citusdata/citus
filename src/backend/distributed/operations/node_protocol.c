@@ -748,7 +748,7 @@ GetRelationIdentityOrPK(Relation rel)
 	{
 /* Determine the index OID of the primary key (PG18 adds a second parameter) */
 #if PG_VERSION_NUM >= PG_VERSION_18
-		idxoid = RelationGetPrimaryKeyIndex(rel, false);
+		idxoid = RelationGetPrimaryKeyIndex(rel, false /* deferred_ok */);
 #else
 		idxoid = RelationGetPrimaryKeyIndex(rel);
 #endif
