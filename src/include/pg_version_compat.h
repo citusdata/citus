@@ -29,6 +29,13 @@
 		(j),            /* fdw_restrictinfo*/ \
 		(k)             /* fdw_private     */ \
 		)
+
+/* PG-18 introduced get_op_index_interpretation, old name was get_op_btree_interpretation */
+#define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
+
+/* PG-18 unified row-compare operator codes under COMPARE_* */
+#define ROWCOMPARE_NE COMPARE_NE
+
 #elif PG_VERSION_NUM >= PG_VERSION_17
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
 	create_foreignscan_path( \

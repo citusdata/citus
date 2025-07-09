@@ -181,11 +181,6 @@ typedef struct PruningInstance
 	bool isPartial;
 } PruningInstance;
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-#define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
-#define ROWCOMPARE_NE COMPARE_NE
-#endif
-
 
 /*
  * Partial instances that need to be finished building. This is used to

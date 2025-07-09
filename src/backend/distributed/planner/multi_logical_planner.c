@@ -65,11 +65,6 @@ typedef struct QualifierWalkerContext
 } QualifierWalkerContext;
 
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-#define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
-#endif
-
-
 /* Function pointer type definition for apply join rule functions */
 typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNode,
 										 List *partitionColumnList, JoinType joinType,
