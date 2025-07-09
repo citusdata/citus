@@ -21,6 +21,7 @@
 #include "common/hashfn.h"
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"    /* for ALLOCSET_DEFAULT_MINSIZE, _INITSIZE, _MAXSIZE */
 
 #include "pg_version_constants.h"
 

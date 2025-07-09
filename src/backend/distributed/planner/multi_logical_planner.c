@@ -35,6 +35,10 @@
 #include "utils/syscache.h"
 
 #include "pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_18
+typedef OpIndexInterpretation OpBtreeInterpretation;
+#endif
+
 
 #include "distributed/citus_clauses.h"
 #include "distributed/colocation_utils.h"
@@ -2293,7 +2297,12 @@ OperatorImplementsEquality(Oid opno)
 	{
 		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
 													lfirst(btreeInterpretationCell);
+
+	#if PG_VERSION_NUM >= PG_VERSION_18
+		if (btreeIntepretation->cmptype == BTEqualStrategyNumber)
+	#else
 		if (btreeIntepretation->strategy == BTEqualStrategyNumber)
+	#endif
 		{
 			equalityOperator = true;
 			break;
