@@ -409,23 +409,22 @@ citus_executor_run_adapter(QueryDesc *queryDesc,
 
 
 #else
-static bool
+
+/* PG15–17: adapter signatures must match the *old* typedefs */
+static void
 citus_executor_start_adapter(QueryDesc *queryDesc, int eflags)
 {
 	CitusExecutorStart(queryDesc, eflags);
-
-	/* our adapter must return bool even if PG15–17 don’t use it */
-	return true;
 }
 
 
 static void
 citus_executor_run_adapter(QueryDesc *queryDesc,
 						   ScanDirection direction,
-						   uint64 count)
+						   uint64 count,
+						   bool run_once)
 {
-	/* older PG wants the run_once flag back */
-	CitusExecutorRun(queryDesc, direction, count, /*run_once=*/ true);
+	CitusExecutorRun(queryDesc, direction, count, run_once);
 }
 
 
