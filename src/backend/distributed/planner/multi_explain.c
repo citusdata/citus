@@ -68,6 +68,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/remote_commands.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/tuplestore.h"
 #include "distributed/version_compat.h"
@@ -164,6 +165,7 @@ static void ExplainIndentText(ExplainState *es);
 static void ExplainPrintSerialize(ExplainState *es,
 								  SerializeMetrics *metrics);
 static SerializeMetrics GetSerializationMetrics(DestReceiver *dest);
+static void ExtractAnalyzeStats(DistributedSubPlan *subPlan, QueryDesc *queryDesc);
 
 /*
  * DestReceiver functions for SERIALIZE option
@@ -213,7 +215,8 @@ static const char * ExplainFormatStr(ExplainFormat format);
 #if PG_VERSION_NUM >= PG_VERSION_17
 static const char * ExplainSerializeStr(ExplainSerializeOption serializeOption);
 #endif
-static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
+static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DistributedSubPlan *subPlan,
+							  DestReceiver *dest,
 							  ExplainState *es,
 							  const char *queryString, ParamListInfo params,
 							  QueryEnvironment *queryEnv,
@@ -432,6 +435,58 @@ NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
 
 
 /*
+ * ExtractAnalyzeStats parses the EXPLAIN ANALYZE output of the pre-executed
+ * subplans and injects the parsed statistics into queryDesc->planstate->instrument.
+ */
+static void
+ExtractAnalyzeStats(DistributedSubPlan *subPlan, QueryDesc *queryDesc)
+{
+	/* Inject the earlier executed results into the newly created tasks */
+	if (subPlan->numTasksOutput && (queryDesc->planstate != NULL) &&
+		IsA(queryDesc->planstate, CustomScanState))
+	{
+		DistributedPlan *newdistributedPlan =
+			((CitusScanState *) queryDesc->planstate)->distributedPlan;
+
+		ListCell *lc;
+		int idx = 0;
+
+		/* We need to extract this from the explain output of workers */
+		Instrumentation instr = { 0 };
+		foreach(lc, newdistributedPlan->workerJob->taskList)
+		{
+			if (subPlan->totalExplainOutput[idx].explainOutput &&
+				idx < subPlan->numTasksOutput)
+			{
+				/*
+				 * Now feed the earlier saved output, which will be used
+				 * by RemoteExplain() when printing tasks
+				 */
+				Task *task = (Task *) lfirst(lc);
+				MemoryContext taskContext = GetMemoryChunkContext(task);
+
+				task->totalReceivedTupleData =
+					subPlan->totalExplainOutput[idx].totalReceivedTupleData;
+				task->fetchedExplainAnalyzeExecutionDuration =
+					subPlan->totalExplainOutput[idx].executionDuration;
+				task->fetchedExplainAnalyzePlan =
+					MemoryContextStrdup(taskContext,
+										subPlan->totalExplainOutput[idx].explainOutput);
+				ParseExplainAnalyzeOutput(task->fetchedExplainAnalyzePlan, &instr);
+
+				subPlan->totalExplainOutput[idx].explainOutput = NULL;
+			}
+
+			idx++;
+		}
+
+		instr.nloops = 1;
+		queryDesc->planstate->instrument = &instr;
+	}
+}
+
+
+/*
  * ExplainSubPlans generates EXPLAIN output for subplans for CTEs
  * and complex subqueries. Because the planning for these queries
  * is done along with the top-level plan, we cannot determine the
@@ -449,7 +504,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 	{
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
 		PlannedStmt *plan = subPlan->plan;
-		IntoClause *into = NULL;
 		ParamListInfo params = NULL;
 
 		/*
@@ -457,8 +511,24 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		 * for now we put an empty string, which is valid according to postgres.
 		 */
 		char *queryString = pstrdup("");
+		instr_time planDuration;
 		BufferUsage bufusage_start,
 					bufusage;
+
+#if PG_VERSION_NUM >= PG_VERSION_17
+		MemoryContextCounters mem_counters;
+		MemoryContext planner_ctx = NULL;
+		MemoryContext saved_ctx = NULL;
+
+		if (es->memory)
+		{
+			/* copy paste from postgres code */
+			planner_ctx = AllocSetContextCreate(CurrentMemoryContext,
+												"explain analyze planner context",
+												ALLOCSET_DEFAULT_SIZES);
+			saved_ctx = MemoryContextSwitchTo(planner_ctx);
+		}
+#endif
 
 		if (es->buffers)
 		{
@@ -506,6 +576,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			ExplainPropertyText("Result destination", destination->data, es);
 		}
 
+		INSTR_TIME_SET_ZERO(planDuration);
+
 		/* calc differences of buffer counters. */
 		if (es->buffers)
 		{
@@ -515,100 +587,37 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
 
-		/* Print only and not execute */
-		DestReceiver *dest;
-		if (into)
+		/* TODO: Do we really need dest and bound params when not executing? */
+		DestReceiver *dest = None_Receiver;
+		double executionDurationMillisec = 0.0;
+
+#if PG_VERSION_NUM >= PG_VERSION_17
+		if (es->memory)
 		{
-			dest = CreateIntoRelDestReceiver(into);
-		}
-		else
-		{
-			dest = None_Receiver;
+			MemoryContextSwitchTo(saved_ctx);
+			MemoryContextMemConsumed(planner_ctx, &mem_counters);
 		}
 
-		int instrument_option = 0;
-
-		if (es->analyze && es->timing)
-		{
-			instrument_option |= INSTRUMENT_TIMER;
-		}
-		else if (es->analyze)
-		{
-			instrument_option |= INSTRUMENT_ROWS;
-		}
-
+		/* calc differences of buffer counters. */
 		if (es->buffers)
 		{
-			instrument_option |= INSTRUMENT_BUFFERS;
-		}
-		if (es->wal)
-		{
-			instrument_option |= INSTRUMENT_WAL;
+			memset(&bufusage, 0, sizeof(BufferUsage));
+			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 		}
 
-		/* Create a QueryDesc for the query */
-		QueryDesc *queryDesc =
-			CreateQueryDesc(plan, queryString, GetActiveSnapshot(),
-							InvalidSnapshot, dest, params, NULL, instrument_option);
+		/* do the actual EXPLAIN ANALYZE */
+		ExplainWorkerPlan(plan, subPlan, dest, es, queryString, params, NULL,
+						  &planDuration,
+						  (es->buffers ? &bufusage : NULL),
+						  (es->memory ? &mem_counters : NULL),
+						  &executionDurationMillisec);
+#else
 
-		ExecutorStart(queryDesc, EXEC_FLAG_EXPLAIN_ONLY);
+		/* do the actual EXPLAIN ANALYZE */
+		ExplainWorkerPlan(plan, subPlan, dest, es, queryString, params, NULL,
+						  &planDuration, &executionDurationMillisec);
+#endif
 
-		/* Inject the earlier executed results into the newly created tasks */
-
-		if (subPlan->numTasksOutput && (queryDesc->planstate != NULL) &&
-			IsA(queryDesc->planstate, CustomScanState))
-		{
-			DistributedPlan *newdistributedPlan =
-				((CitusScanState *) queryDesc->planstate)->distributedPlan;
-
-			ListCell *lc;
-			int idx = 0;
-
-			/* We need to extract this from the explain output of workers */
-			Instrumentation instr = { 0 };
-			foreach(lc, newdistributedPlan->workerJob->taskList)
-			{
-				if (subPlan->totalExplainOutput[idx].explainOutput &&
-					idx < subPlan->numTasksOutput)
-				{
-					/*
-					 * Now feed the earlier saved output, which will be used
-					 * by RemoteExplain() when printing tasks
-					 */
-					Task *task = (Task *) lfirst(lc);
-					MemoryContext taskContext = GetMemoryChunkContext(task);
-
-					task->totalReceivedTupleData =
-						subPlan->totalExplainOutput[idx].totalReceivedTupleData;
-					task->fetchedExplainAnalyzeExecutionDuration =
-						subPlan->totalExplainOutput[idx].executionDuration;
-					task->fetchedExplainAnalyzePlan =
-						MemoryContextStrdup(taskContext,
-											subPlan->totalExplainOutput[idx].explainOutput);
-					ParseExplainAnalyzeOutput(task->fetchedExplainAnalyzePlan, &instr);
-
-					subPlan->totalExplainOutput[idx].explainOutput = NULL;
-				}
-
-				idx++;
-			}
-			instr.nloops = 1;
-			queryDesc->planstate->instrument = &instr;
-		}
-
-		ExplainOpenGroup("Query", NULL, true, es);
-
-		ExplainPrintPlan(es, queryDesc);
-
-		if (es->analyze)
-		{
-			ExplainPrintTriggers(es, queryDesc);
-		}
-
-		ExecutorEnd(queryDesc);
-		FreeQueryDesc(queryDesc);
-
-		ExplainCloseGroup("Query", NULL, true, es);
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
 		ExplainCloseGroup("Subplan", NULL, true, es);
 
@@ -1424,7 +1433,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	}
 
 	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, boundParams, NULL,
+	ExplainWorkerPlan(plan, NULL, tupleStoreDest, es, queryString, boundParams, NULL,
 					  &planDuration,
 					  (es->buffers ? &bufusage : NULL),
 					  (es->memory ? &mem_counters : NULL),
@@ -1432,7 +1441,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 #else
 
 	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, boundParams, NULL,
+	ExplainWorkerPlan(plan, NULL, tupleStoreDest, es, queryString, boundParams, NULL,
 					  &planDuration, &executionDurationMillisec);
 #endif
 
@@ -1813,7 +1822,14 @@ ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int queryNumber)
 bool
 RequestedForExplainAnalyze(CitusScanState *node)
 {
-	return (node->customScanState.ss.ps.state->es_instrument != 0);
+	/*
+	 * When running a distributed plan—either the root plan or a subplan’s
+	 * distributed fragment—we need to know if we’re under EXPLAIN ANALYZE.
+	 * Subplans can’t receive the EXPLAIN ANALYZE flag directly, so we use
+	 * SubPlanExplainAnalyzeContext as a flag to indicate that context.
+	 */
+	return (node->customScanState.ss.ps.state->es_instrument != 0) ||
+		   (SubPlanLevel > 0 && SubPlanExplainAnalyzeContext);
 }
 
 
@@ -2140,7 +2156,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
  * destination.
  */
 static void
-ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es,
+ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestReceiver *dest, ExplainState *es,
 				  const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv,
 				  const instr_time *planduration,
 #if PG_VERSION_NUM >= PG_VERSION_17
@@ -2154,6 +2170,8 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	double		totaltime = 0;
 	int			eflags;
 	int			instrument_option = 0;
+	/* Never executed a sub-plan, it's already done */
+	bool executeQuery = (es->analyze && !subPlan);
 
 	Assert(plannedstmt->commandType != CMD_UTILITY);
 
@@ -2188,7 +2206,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 								dest, params, queryEnv, instrument_option);
 
 	/* Select execution options */
-	if (es->analyze)
+	if (executeQuery)
 		eflags = 0;				/* default run-to-completion flags */
 	else
 		eflags = EXEC_FLAG_EXPLAIN_ONLY;
@@ -2197,7 +2215,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	ExecutorStart(queryDesc, eflags);
 
 	/* Execute the plan for statistics if asked for */
-	if (es->analyze)
+	if (executeQuery)
 	{
 		ScanDirection dir = ForwardScanDirection;
 
@@ -2212,6 +2230,11 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	}
 
 	ExplainOpenGroup("Query", NULL, true, es);
+
+	if (subPlan)
+	{
+		ExtractAnalyzeStats(subPlan, queryDesc);
+	}
 
 	/* Create textual dump of plan tree */
 	ExplainPrintPlan(es, queryDesc);
@@ -2292,7 +2315,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	PopActiveSnapshot();
 
 	/* We need a CCI just in case query expanded to multiple plans */
-	if (es->analyze)
+	if (executeQuery)
 		CommandCounterIncrement();
 
 	totaltime += elapsed_time(&starttime);
@@ -2329,6 +2352,25 @@ elapsed_time(instr_time *starttime)
 }
 
 
+/*
+ * ParseExplainAnalyzeOutput
+ *
+ * Parses the output of an EXPLAIN ANALYZE run to extract ANALYZE statistics
+ * and other instrumentation data.
+ *
+ * Parameters:
+ *   explainOutput  - a null-terminated string containing the raw EXPLAIN ANALYZE output
+ *   instr          - pointer to an Instrumentation struct to accumulate parsed metrics
+ *
+ * Behavior:
+ *   - Validates inputs and returns immediately if either pointer is NULL.
+ *   - Tokenizes the output on spaces, parentheses, and newlines.
+ *   - Populates the instr-><..> fields.
+ *
+ * Notes:
+ *   - Caller must free or manage the memory for explainOutput.
+ *   - Parsing is case-sensitive and assumes standard EXPLAIN ANALYZE formatting.
+ */
 static void
 ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr)
 {
@@ -2416,6 +2458,7 @@ ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr)
 
 	pfree(line);
 }
+
 
 #if PG_VERSION_NUM >= PG_VERSION_17
 /*

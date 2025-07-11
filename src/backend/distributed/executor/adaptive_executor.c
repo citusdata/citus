@@ -809,13 +809,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	bool localExecutionSupported = true;
 
-	/*
-	 * When running a distributed plan—either the root plan or a subplan’s
-	 * distributed fragment—we need to know if we’re under EXPLAIN ANALYZE.
-	 * Subplans can’t receive the EXPLAIN ANALYZE flag directly, so we use
-	 * SubPlanExplainAnalyzeContext as a flag to indicate that context.
-	 */
-	if (RequestedForExplainAnalyze(scanState) || SubPlanExplainAnalyzeContext)
+	if (RequestedForExplainAnalyze(scanState))
 	{
 		/*
 		 * We use multiple queries per task in EXPLAIN ANALYZE which need to

@@ -63,6 +63,10 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 	{
 		SubPlanExplainAnalyzeContext = GetMemoryChunkContext(distributedPlan);
 	}
+	else
+	{
+		SubPlanExplainAnalyzeContext = NULL;
+	}
 
 	HTAB *intermediateResultsHash = MakeIntermediateResultHTAB();
 	RecordSubplanExecutionsOnNodes(intermediateResultsHash, distributedPlan);
@@ -103,7 +107,17 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 
 		TimestampTz startTimestamp = GetCurrentTimestamp();
 
-		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
+		PG_TRY();
+		{
+			ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
+		}
+		PG_CATCH();
+		{
+			SubPlanExplainAnalyzeContext = NULL;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
 
 		/*
 		 * EXPLAIN ANALYZE instrumentations. Calculating these are very light-weight,
@@ -127,8 +141,5 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 		FreeExecutorState(estate);
 	}
 
-	if (explainAnalyzeEnabled)
-	{
-		SubPlanExplainAnalyzeContext = NULL;
-	}
+	SubPlanExplainAnalyzeContext = NULL;
 }
