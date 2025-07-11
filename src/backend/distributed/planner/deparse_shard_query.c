@@ -264,7 +264,7 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	{
 		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
 	}
-	ereport(DEBUG5, (errmsg("\t Distributed table from the inner part: %s", innerRte->eref->aliasname)));
+	ereport(DEBUG5, (errmsg("Distributed table from the inner part of the outer join: %s.", innerRte->eref->aliasname)));
 
 
 	RelationShard *relationShard = FindRelationShard(innerRte->relid, relationShardList);
@@ -293,7 +293,6 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	Const *constNodeUpperBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), shardInterval->maxValue, false, true);
 	Const *constNodeZero = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), Int32GetDatum(0), false, true);
 
-	//  TOOD: the following is only for hash partitioned tables
 	/* create a function expression node for the hash partition column */ 
 	FuncExpr *hashFunction = makeNode(FuncExpr);
 	hashFunction->funcid = cacheEntry->hashFunction->fn_oid;
@@ -367,7 +366,6 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 		fromExpr->quals = make_and_qual(fromExpr->quals, shardIntervalBoundQuals);
 	}
 
-	// TODO: verify this, do we need the recursive call for all nodes? 
 	/* We need to continue the recursive walk for the nested join statements.*/
 	return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
 }

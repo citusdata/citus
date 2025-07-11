@@ -54,6 +54,8 @@ extern void UpdateVarNosInNode(Node *node, Index newVarNo);
 extern bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte);
 extern bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query, int *outerRtIndex, RangeTblEntry **outerRte, RangeTblEntry **distRte, int *attnum);
 extern bool CheckPushDownFeasibilityLeftJoin(JoinExpr *joinExpr, Query *query);
-
-
+bool CheckUsingClauseForRte(RangeTblEntry *rte, List *usingClause, Var **partitionColumnVar);
+bool FindPartitionColumnInSubquery(Query *query, List *usingClause, Var **partitionColumnVar, RangeTblEntry **rte);
+bool ResolveBaseVarFromSubquery(Var *var, Query *query, Var **baseVar, RangeTblEntry **baseRte);
+bool CheckAttrNumAndDistributionTypeForJoinPushdown(int attnum, RangeTblEntry *rte);
 #endif /* RECURSIVE_PLANNING_H */
