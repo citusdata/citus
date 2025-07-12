@@ -630,6 +630,7 @@ typedef struct TaskPlacementExecution
 	instr_time endTime;
 } TaskPlacementExecution;
 
+extern MemoryContext SubPlanExplainAnalyzeContext;
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
@@ -760,7 +761,7 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 	 */
 	LockPartitionsForDistributedPlan(distributedPlan);
 
-	ExecuteSubPlans(distributedPlan);
+	ExecuteSubPlans(distributedPlan, RequestedForExplainAnalyze(scanState));
 
 	scanState->finishedPreScan = true;
 }
