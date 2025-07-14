@@ -1123,9 +1123,13 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 
 /* for PG 18+, vac_update_relstats gained a new “all_frozen” param */
 #if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* all frozen pages are always 0, because columnar stripes never store XIDs */
+	BlockNumber new_rel_allfrozen = 0;
+
 	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
 						new_rel_allvisible,  /* allvisible */
-						0,                   /* all_frozen */
+						new_rel_allfrozen,   /* all_frozen */
 						nindexes > 0,
 						newRelFrozenXid, newRelminMxid,
 						&frozenxid_updated, &minmulti_updated,
