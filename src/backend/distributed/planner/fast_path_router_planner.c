@@ -221,9 +221,6 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 {
 	FromExpr *joinTree = query->jointree;
 	Node *quals = NULL;
-	bool isFastPath = false;
-	bool canAvoidDeparse = false;
-	Node *distributionKeyValue = NULL;
 
 	if (!EnableFastPathRouterPlanner)
 	{
@@ -280,6 +277,10 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 		return false;
 	}
 
+	bool isFastPath = false;
+	bool canAvoidDeparse = false;
+	Node *distributionKeyValue = NULL;
+
 	/*
 	 * If the table doesn't have a distribution column, we don't need to
 	 * check anything further.
@@ -292,8 +293,7 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 													 SINGLE_SHARD_DISTRIBUTED);
 		isFastPath = true;
 	}
-
-	if (!isFastPath)
+	else
 	{
 		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE);
 
