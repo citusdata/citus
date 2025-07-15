@@ -682,12 +682,13 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 	}
 
 	bool isLocalTableModification = false;
+	bool isLocalShardExecution = false;
 	GenerateSingleShardRouterTaskList(workerJob,
 									  relationShardList,
 									  placementList,
 									  shardId,
 									  isLocalTableModification,
-									  false);
+									  isLocalShardExecution);
 }
 
 

@@ -59,7 +59,7 @@ GROUP BY b
 ORDER BY b;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Fast-path router query: created local execution plan to avoid deparse to and compile of shard query
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 8
 NOTICE:  executing the command locally: SELECT b, avg(data_f) AS avg, min(data_f) AS min, max(data_f) AS max, count(1) AS count FROM local_shard_execution_local_plan.test_tbl_86000000 test_tbl WHERE ((a OPERATOR(pg_catalog.=) 8) AND (b OPERATOR(pg_catalog.=) ANY (ARRAY[1, 3, 5, 8, 13, 21]))) GROUP BY b ORDER BY b
 DEBUG:  Local executor: Using task's cached local plan for task 0
@@ -72,7 +72,7 @@ DEBUG:  Local executor: Using task's cached local plan for task 0
  13 |  3900.7835426648 | 510.078935445757 | 7784.07104505068 |    18
 (5 rows)
 
-SET citus.enable_local_execution_local_plan TO OFF;
+SET citus.enable_local_fast_path_query_optimization TO OFF;
 -- With local execution local plan disabled, the same query
 -- does query deparse and planning of the shard query and
 -- provides the same results
@@ -122,8 +122,85 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 (5 rows)
 
 \c - - - :master_port
-DROP SCHEMA local_shard_execution_local_plan CASCADE;
-NOTICE:  drop cascades to table local_shard_execution_local_plan.test_tbl
+SET search_path TO local_shard_execution_local_plan;
+SET citus.next_shard_id TO 86001000;
+-- Test citus local and reference tables
+CREATE TABLE ref_tbl (a int, b int, data_f double precision);
+SELECT create_reference_table('ref_tbl');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT setseed(0.42); -- make the random data inserted deterministic
+ setseed
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_tbl
+SELECT (random()*20)::int AS a,
+       (random()*20)::int AS b,
+       random()*10000.0 AS data_f
+FROM generate_series(1, 10000);
+SET citus.next_shard_id TO 86002000;
+CREATE TABLE citus_tbl (a int, b int, data_f double precision);
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_add_local_table_to_metadata('citus_tbl');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO citus_tbl SELECT a, b, data_f FROM ref_tbl;
+SET client_min_messages TO DEBUG2;
+SET citus.log_remote_commands TO ON;
+SET citus.log_local_commands TO ON;
+-- citus local table: can use the fast path optimization
+SELECT b, AVG(data_f), MIN(data_f), MAX(data_f), COUNT(1)
+FROM citus_tbl
+WHERE a = 8 AND b IN (1,3,5,8,13,21)
+GROUP BY b
+ORDER BY b;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
+NOTICE:  executing the command locally: SELECT b, avg(data_f) AS avg, min(data_f) AS min, max(data_f) AS max, count(1) AS count FROM local_shard_execution_local_plan.citus_tbl_86002000 citus_tbl WHERE ((a OPERATOR(pg_catalog.=) 8) AND (b OPERATOR(pg_catalog.=) ANY (ARRAY[1, 3, 5, 8, 13, 21]))) GROUP BY b ORDER BY b
+DEBUG:  Local executor: Using task's cached local plan for task 0
+ b  |       avg        |       min        |       max        | count
+---------------------------------------------------------------------
+  1 | 4930.97455169836 |  130.09338419238 | 9961.37766951669 |    21
+  3 | 5587.38637430731 | 1230.07668620184 | 9937.96225230491 |    23
+  5 | 3987.47953221387 | 437.362539823312 | 9729.29912509372 |    25
+  8 | 5028.45408903437 | 593.546207093687 | 9869.93823005882 |    27
+ 13 |  3900.7835426648 | 510.078935445757 | 7784.07104505068 |    18
+(5 rows)
+
+-- reference table: does not use the fast path optimization.
+-- It may be enabled in a future enhancement.
+SELECT b, AVG(data_f), MIN(data_f), MAX(data_f), COUNT(1)
+FROM ref_tbl
+WHERE a = 8 AND b IN (1,3,5,8,13,21)
+GROUP BY b
+ORDER BY b;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+NOTICE:  executing the command locally: SELECT b, avg(data_f) AS avg, min(data_f) AS min, max(data_f) AS max, count(1) AS count FROM local_shard_execution_local_plan.ref_tbl_86001000 ref_tbl WHERE ((a OPERATOR(pg_catalog.=) 8) AND (b OPERATOR(pg_catalog.=) ANY (ARRAY[1, 3, 5, 8, 13, 21]))) GROUP BY b ORDER BY b
+ b  |       avg        |       min        |       max        | count
+---------------------------------------------------------------------
+  1 | 4930.97455169836 |  130.09338419238 | 9961.37766951669 |    21
+  3 | 5587.38637430731 | 1230.07668620184 | 9937.96225230491 |    23
+  5 | 3987.47953221387 | 437.362539823312 | 9729.29912509372 |    25
+  8 | 5028.45408903437 | 593.546207093687 | 9869.93823005882 |    27
+ 13 |  3900.7835426648 | 510.078935445757 | 7784.07104505068 |    18
+(5 rows)
+
+\c - - - :master_port
 -- Now test local execution with local plan for a schema sharded table.
 SET citus.enable_schema_based_sharding to on;
 CREATE SCHEMA schema_sharding_test;
@@ -197,7 +274,7 @@ GROUP BY b
 ORDER BY b;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Fast-path router query: created local execution plan to avoid deparse to and compile of shard query
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 NOTICE:  executing the command locally: SELECT b, avg(data_f) AS avg, min(data_f) AS min, max(data_f) AS max, count(1) AS count FROM schema_sharding_test.test_tbl_87000000 test_tbl WHERE ((a OPERATOR(pg_catalog.=) 8) AND (b OPERATOR(pg_catalog.=) ANY (ARRAY[1, 3, 5, 8, 13, 21]))) GROUP BY b ORDER BY b
 DEBUG:  Local executor: Using task's cached local plan for task 0
  b  |       avg        |       min        |       max        | count
@@ -209,7 +286,7 @@ DEBUG:  Local executor: Using task's cached local plan for task 0
  13 |  3900.7835426648 | 510.078935445757 | 7784.07104505068 |    18
 (5 rows)
 
-SET citus.enable_local_execution_local_plan TO OFF;
+SET citus.enable_local_fast_path_query_optimization TO OFF;
 -- Run the test query on worker_2 but with local execution
 -- local plan disabled; now the planner does query deparse
 -- and planning of the shard query.
@@ -231,6 +308,7 @@ NOTICE:  executing the command locally: SELECT b, avg(data_f) AS avg, min(data_f
 (5 rows)
 
 \c - - - :master_port
+SET client_min_messages to ERROR;
+DROP SCHEMA local_shard_execution_local_plan CASCADE;
 DROP SCHEMA schema_sharding_test CASCADE;
-NOTICE:  drop cascades to table schema_sharding_test.test_tbl
 RESET ALL;

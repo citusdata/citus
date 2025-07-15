@@ -1428,7 +1428,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_local_execution_local_plan",
+		"citus.enable_local_fast_path_query_optimization",
 		gettext_noop("Enables the planner to avoid a query deparse and planning if "
 					 "the shard is local to the current node."),
 		NULL,
@@ -2863,6 +2863,11 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 }
 
 
+/*
+ * WarnIfLocalExecutionDisabled is used to emit a warning message when
+ * enabling citus.enable_local_fast_path_query_optimization if
+ * citus.enable_local_execution was disabled.
+ */
 static bool
 WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source)
 {
@@ -2871,7 +2876,7 @@ WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source)
 		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						  errmsg(
 							  "citus.enable_local_execution must be set in order for "
-							  "citus.enable_local_execution_local_plan to be effective.")));
+							  "citus.enable_local_fast_path_query_optimization to be effective.")));
 	}
 
 	return true;

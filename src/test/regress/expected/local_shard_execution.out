@@ -2410,7 +2410,7 @@ NOTICE:  executing the command locally: UPDATE local_shard_execution.event_respo
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Fast-path router query: created local execution plan to avoid deparse to and compile of shard query
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
 DEBUG:  Local executor: Using task's cached local plan for task 0
@@ -2422,7 +2422,7 @@ DEBUG:  Local executor: Using task's cached local plan for task 0
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Fast-path router query: created local execution plan to avoid deparse to and compile of shard query
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
 DEBUG:  Local executor: Using task's cached local plan for task 0
@@ -2434,7 +2434,7 @@ DEBUG:  Local executor: Using task's cached local plan for task 0
 UPDATE event_responses SET response = 'no' WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Fast-path router query: created local execution plan to avoid deparse to and compile of shard query
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: UPDATE local_shard_execution.event_responses_1480001 event_responses SET response = 'no'::local_shard_execution.invite_resp WHERE (event_id OPERATOR(pg_catalog.=) 16)
 DEBUG:  Local executor: Using task's cached local plan for task 0
@@ -2535,7 +2535,7 @@ SET citus.log_remote_commands TO ON;
 SELECT * FROM event_responses_no_pkey WHERE event_id = 2;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Fast-path router query: created local execution plan to avoid deparse to and compile of shard query
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 2
 NOTICE:  executing the command locally: SELECT event_id, user_id, response FROM local_shard_execution.event_responses_no_pkey_1480007 event_responses_no_pkey WHERE (event_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Local executor: Using task's cached local plan for task 0
