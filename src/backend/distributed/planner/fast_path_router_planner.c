@@ -118,6 +118,10 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	Plan *plan = &scanNode->plan;
 #endif
 
+	FastPathRestrictionContext fprCtxt PG_USED_FOR_ASSERTS_ONLY = { 0 };
+
+	Assert(FastPathRouterQuery(parse, &fprCtxt));
+
 	/* there is only a single relation rte */
 #if PG_VERSION_NUM >= PG_VERSION_16
 	scanNode->scan.scanrelid = 1;
@@ -219,12 +223,6 @@ InitializeFastPathContext(FastPathRestrictionContext *fastPathContext,
 bool
 FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 {
-	FromExpr *joinTree = query->jointree;
-	Node *quals = NULL;
-	bool isFastPath = false;
-	bool canAvoidDeparse = false;
-	Node *distributionKeyValue = NULL;
-
 	if (!EnableFastPathRouterPlanner)
 	{
 		return false;
@@ -280,6 +278,10 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 		return false;
 	}
 
+	bool isFastPath = false;
+	bool canAvoidDeparse = false;
+	Node *distributionKeyValue = NULL;
+
 	/*
 	 * If the table doesn't have a distribution column, we don't need to
 	 * check anything further.
@@ -289,16 +291,19 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 	{
 		/* Local execution may avoid a deparse on single shard distributed tables */
 		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry,
-													 SINGLE_SHARD_DISTRIBUTED);
+													 SINGLE_SHARD_DISTRIBUTED) ||
+						  IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE);
 		isFastPath = true;
 	}
-
-	if (!isFastPath)
+	else
 	{
+		FromExpr *joinTree = query->jointree;
+		Node *quals = NULL;
+
 		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE);
 
 		if (joinTree == NULL ||
-			(joinTree->quals == NULL && !canAvoidDeparse))
+			(joinTree->quals == NULL && canAvoidDeparse))
 		{
 			/* no quals, not a fast path query */
 			return false;

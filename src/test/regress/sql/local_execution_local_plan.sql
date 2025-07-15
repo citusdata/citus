@@ -46,7 +46,7 @@ WHERE a = 8 AND b IN (1,3,5,8,13,21)
 GROUP BY b
 ORDER BY b;
 
-SET citus.enable_local_execution_local_plan TO OFF;
+SET citus.enable_local_fast_path_query_optimization TO OFF;
 
 -- With local execution local plan disabled, the same query
 -- does query deparse and planning of the shard query and
@@ -75,7 +75,45 @@ ORDER BY b;
 
 \c - - - :master_port
 
-DROP SCHEMA local_shard_execution_local_plan CASCADE;
+SET search_path TO local_shard_execution_local_plan;
+SET citus.next_shard_id TO 86001000;
+
+-- Test citus local and reference tables
+CREATE TABLE ref_tbl (a int, b int, data_f double precision);
+SELECT create_reference_table('ref_tbl');
+SELECT setseed(0.42); -- make the random data inserted deterministic
+INSERT INTO ref_tbl
+SELECT (random()*20)::int AS a,
+       (random()*20)::int AS b,
+       random()*10000.0 AS data_f
+FROM generate_series(1, 10000);
+
+SET citus.next_shard_id TO 86002000;
+CREATE TABLE citus_tbl (a int, b int, data_f double precision);
+SELECT citus_set_coordinator_host('localhost', :master_port);
+SELECT citus_add_local_table_to_metadata('citus_tbl');
+INSERT INTO citus_tbl SELECT a, b, data_f FROM ref_tbl;
+
+SET client_min_messages TO DEBUG2;
+SET citus.log_remote_commands TO ON;
+SET citus.log_local_commands TO ON;
+
+-- citus local table: can use the fast path optimization
+SELECT b, AVG(data_f), MIN(data_f), MAX(data_f), COUNT(1)
+FROM citus_tbl
+WHERE a = 8 AND b IN (1,3,5,8,13,21)
+GROUP BY b
+ORDER BY b;
+
+-- reference table: does not use the fast path optimization.
+-- It may be enabled in a future enhancement.
+SELECT b, AVG(data_f), MIN(data_f), MAX(data_f), COUNT(1)
+FROM ref_tbl
+WHERE a = 8 AND b IN (1,3,5,8,13,21)
+GROUP BY b
+ORDER BY b;
+
+\c - - - :master_port
 
 -- Now test local execution with local plan for a schema sharded table.
 
@@ -132,7 +170,7 @@ WHERE a = 8 AND b IN (1,3,5,8,13,21)
 GROUP BY b
 ORDER BY b;
 
-SET citus.enable_local_execution_local_plan TO OFF;
+SET citus.enable_local_fast_path_query_optimization TO OFF;
 
 -- Run the test query on worker_2 but with local execution
 -- local plan disabled; now the planner does query deparse
@@ -145,5 +183,7 @@ ORDER BY b;
 
 \c - - - :master_port
 
+SET client_min_messages to ERROR;
+DROP SCHEMA local_shard_execution_local_plan CASCADE;
 DROP SCHEMA schema_sharding_test CASCADE;
 RESET ALL;

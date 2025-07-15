@@ -2089,7 +2089,7 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 
 			ereport(DEBUG2, (errmsg(
 								 "Fast-path router query: created local execution plan "
-								 "to avoid deparse to and compile of shard query")));
+								 "to avoid deparse and compile of shard query")));
 			return;
 		}
 	}

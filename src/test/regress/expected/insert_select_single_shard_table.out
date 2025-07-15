@@ -226,10 +226,12 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM insert_select_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM (insert_select_single_shard_table.nullkey_c1_t1 JOIN (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table USING (a))
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Local executor: Using task's cached local plan for task 0
 -- use a postgres local table
 INSERT INTO distributed_table_c1_t1 SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 JOIN postgres_local_table USING (a);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
@@ -338,10 +340,12 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM insert_select_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM (insert_select_single_shard_table.nullkey_c1_t1 JOIN (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table USING (a))
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Local executor: Using task's cached local plan for task 0
 -- use a postgres local table
 INSERT INTO reference_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 JOIN postgres_local_table USING (a);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
@@ -400,10 +404,12 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM insert_select_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b FROM (insert_select_single_shard_table.nullkey_c1_t1 JOIN (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table USING (a))
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Local executor: Using task's cached local plan for task 0
 -- use a postgres local table
 INSERT INTO citus_local_table SELECT nullkey_c1_t2.a, nullkey_c1_t2.b FROM nullkey_c1_t2 JOIN postgres_local_table USING (a);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
@@ -416,6 +422,8 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT avg(a), avg(b) FROM citus_local_table ORDER BY 1, 2;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
+DEBUG:  Local executor: Using task's cached local plan for task 0
         avg         |        avg
 ---------------------------------------------------------------------
  4.5270270270270270 | 4.5270270270270270
@@ -458,7 +466,9 @@ DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Local executor: Using task's cached local plan for task 0
 INSERT INTO nullkey_c1_t1 SELECT citus_local_table.a, citus_local_table.b FROM citus_local_table JOIN reference_table USING (a) JOIN postgres_local_table USING (a) ORDER BY 1,2 OFFSET 7;
 DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT cannot select from a local table
@@ -470,10 +480,12 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM insert_select_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT citus_local_table.a, citus_local_table.b FROM ((SELECT citus_local_table_1.a, citus_local_table_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table_1) citus_local_table JOIN insert_select_single_shard_table.nullkey_c1_t1 USING (a))
 DEBUG:  Creating router plan
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Local executor: Using task's cached local plan for task 0
 -- use a distributed table
 INSERT INTO nullkey_c1_t1 SELECT distributed_table_c1_t2.a, distributed_table_c1_t2.b FROM distributed_table_c1_t2;
 DEBUG:  INSERT target relation and all source relations of the SELECT must be colocated in distributed INSERT ... SELECT
