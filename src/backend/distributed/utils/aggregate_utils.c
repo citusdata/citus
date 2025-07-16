@@ -918,7 +918,7 @@ TypecheckWorkerPartialAggArgType(FunctionCallInfo fcinfo, StypeBox *box)
 										true, 'i', &argtypesNull);
 			Assert(!argtypesNull);
 			TupleDesc tupleDesc = box->aggregationArgumentContext->tupleDesc;
-			if (argType != tupleDesc->attrs[aggregateArgIndex].atttypid)
+			if (argType != TupleDescAttr(tupleDesc, aggregateArgIndex)->atttypid)
 			{
 				return false;
 			}
