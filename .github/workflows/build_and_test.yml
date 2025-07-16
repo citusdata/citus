@@ -31,12 +31,13 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "17.6"
-      image_suffix: "-v4df94a0"
-      pg15_version: '{ "major": "15", "full": "15.14" }'
-      pg16_version: '{ "major": "16", "full": "16.10" }'
-      pg17_version: '{ "major": "17", "full": "17.6" }'
-      upgrade_pg_versions: "15.14-16.10-17.6"
+      sql_snapshot_pg_version: "17.5"
+      image_suffix: "-dev-8e2a1ce"
+      pg15_version: '{ "major": "15", "full": "15.13" }'
+      pg16_version: '{ "major": "16", "full": "16.9" }'
+      pg17_version: '{ "major": "17", "full": "17.5" }'
+      pg18_version: '{ "major": "18", "full": "18beta3" }'
+      upgrade_pg_versions: "15.13-16.9-17.5-18beta3"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -113,6 +114,7 @@ jobs:
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
+          - ${{ needs.params.outputs.pg18_version }}
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
@@ -144,6 +146,7 @@ jobs:
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
+          - ${{ needs.params.outputs.pg18_version }}
         make:
           - check-split
           - check-multi
@@ -174,6 +177,10 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg17_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-failure
+            pg_version: ${{ needs.params.outputs.pg18_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
@@ -184,6 +191,10 @@ jobs:
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg17_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-enterprise-failure
+            pg_version: ${{ needs.params.outputs.pg18_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
@@ -198,6 +209,10 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg17_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-pytest
+            pg_version: ${{ needs.params.outputs.pg18_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: installcheck
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
@@ -210,6 +225,10 @@ jobs:
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg17_version }}
+          - make: installcheck
+            suite: cdc
+            image_name: ${{ needs.params.outputs.test_image_name }}
+            pg_version: ${{ needs.params.outputs.pg18_version }}
           - make: check-query-generator
             pg_version: ${{ needs.params.outputs.pg15_version }}
             suite: regress
@@ -220,6 +239,10 @@ jobs:
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
             pg_version: ${{ needs.params.outputs.pg17_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+          - make: check-query-generator
+            pg_version: ${{ needs.params.outputs.pg18_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
     runs-on: ubuntu-latest
@@ -265,6 +288,7 @@ jobs:
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
+          - ${{ needs.params.outputs.pg18_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
     - uses: actions/checkout@v4
@@ -315,6 +339,10 @@ jobs:
             new_pg_major: 17
           - old_pg_major: 15
             new_pg_major: 17
+          - old_pg_major: 17
+            new_pg_major: 18
+          - old_pg_major: 16
+            new_pg_major: 18
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
@@ -411,7 +439,7 @@ jobs:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg17_version).full }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg18_version).full }}${{ needs.params.outputs.image_suffix }}
     needs:
       - params
       - test-citus
@@ -527,7 +555,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg17_version).full }}${{ needs.params.outputs.image_suffix }}
+      image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg18_version).full }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     env:
       runs: 8
