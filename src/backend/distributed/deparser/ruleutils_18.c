@@ -1242,7 +1242,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 
         for (i = 0; i < ncolumns; i++)
             real_colnames[i] = pstrdup(strVal(list_nth(rte->eref->colnames, i)));
-    }	
+    }
 	else
 	{
 		/* Otherwise get the column names from eref or expandRTE() */
