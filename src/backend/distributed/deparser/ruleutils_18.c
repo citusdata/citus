@@ -795,6 +795,11 @@ set_rtable_names(deparse_namespace *dpns, List *parent_namespaces,
 			/* Unnamed join has no refname */
 			refname = NULL;
 		}
+		else if (rte->rtekind == RTE_GROUP)
+		{
+			/* Use the name of the group */
+			refname = NULL;
+		}
 		else
 		{
 			/* Otherwise use whatever the parser assigned */
@@ -1191,8 +1196,9 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	 * real_colnames[] will be indexed by physical column number, with NULL
 	 * entries for dropped columns.
 	 */
-	if (rte->rtekind == RTE_RELATION ||
-        GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	if ((rte->rtekind == RTE_RELATION ||
+		GetRangeTblKind(rte) == CITUS_RTE_SHARD) &&
+		OidIsValid(rte->relid))
 	{
 		/* Relation --- look to the system catalogs for up-to-date info */
 		Relation	rel;
@@ -1215,6 +1221,28 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		}
 		relation_close(rel, AccessShareLock);
 	}
+	else if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		/* shard RTE without relid (pulled-up clone in PG18)            */
+		/* use the column aliases already stored in rte->eref->colnames */
+
+		ncolumns      = list_length(rte->eref->colnames);
+		real_colnames = (char **) palloc0(ncolumns * sizeof(char *));
+
+		for (i = 0; i < ncolumns; i++)
+			real_colnames[i] = pstrdup(strVal(list_nth(rte->eref->colnames, i)));
+
+		/* keep changed_any / has_anonymous defaults */
+	}
+    else if (rte->rtekind == RTE_GROUP)
+    {
+        /* ----- synthetic PG 18 RTE for GROUP BY / HAVING ----- */
+        ncolumns      = list_length(rte->eref->colnames);
+        real_colnames = (char **) palloc0(ncolumns * sizeof(char *));
+
+        for (i = 0; i < ncolumns; i++)
+            real_colnames[i] = pstrdup(strVal(list_nth(rte->eref->colnames, i)));
+    }
 	else
 	{
 		/* Otherwise get the column names from eref or expandRTE() */
