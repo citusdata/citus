@@ -543,22 +543,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		}
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-		ExplainOnePlan(
-			plan,                            /* PlannedStmt *plannedstmt */
-			NULL,                            /* CachedPlan *cplan */
-			NULL,                            /* CachedPlanSource *plansource */
-			0,                               /* query_index */
-			into,                            /* IntoClause *into */
-			es,                              /* struct ExplainState *es */
-			queryString,                     /* const char *queryString */
-			params,                          /* ParamListInfo params */
-			NULL,                            /* QueryEnvironment *queryEnv */
-			&planduration,                   /* const instr_time *planduration */
-			(es->buffers ? &bufusage : NULL),/* const BufferUsage *bufusage */
-			(es->memory ? &mem_counters : NULL)  /* const MemoryContextCounters *mem_counters */
-			);
-#elif PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17
 		ExplainOnePlan(
 			plan,
 			into,
@@ -1606,22 +1591,7 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	}
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-	ExplainOnePlan(
-		plan,                          /* PlannedStmt *plannedstmt */
-		NULL,                          /* no CachedPlan */
-		NULL,                          /* no CachedPlanSource */
-		0,                             /* query_index */
-		into,                          /* IntoClause *into */
-		es,                            /* struct ExplainState *es */
-		queryString,                   /* const char *queryString */
-		params,                        /* ParamListInfo params */
-		queryEnv,                      /* QueryEnvironment *queryEnv */
-		&planduration,                 /* const instr_time *planduration */
-		(es->buffers ? &bufusage : NULL),   /* const BufferUsage *bufusage */
-		(es->memory ? &mem_counters : NULL) /* const MemoryContextCounters *mem_counters */
-		);
-#elif PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17
 
 	/* PostgreSQL 17 signature (9 args: includes mem_counters) */
 	ExplainOnePlan(
@@ -2107,22 +2077,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		}
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-		ExplainOnePlan(
-			plan,                 /* PlannedStmt *plannedstmt */
-			NULL,                 /* CachedPlan *cplan */
-			NULL,                 /* CachedPlanSource *plansource */
-			0,                    /* query_index */
-			into,                 /* IntoClause *into */
-			es,                   /* struct ExplainState *es */
-			queryString,          /* const char *queryString */
-			params,               /* ParamListInfo params */
-			queryEnv,             /* QueryEnvironment *queryEnv */
-			&planduration,        /* const instr_time *planduration */
-			(es->buffers  ? &bufusage    : NULL),
-			(es->memory   ? &mem_counters: NULL)
-		);
-#elif PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17
 		ExplainOnePlan(
 			plan,
 			into,
@@ -2146,7 +2101,6 @@ ExplainOneQuery(Query *query, int cursorOptions,
 			(es->buffers ? &bufusage : NULL)
 		);
 #endif
-
 	}
 }
 
@@ -2208,19 +2162,6 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	UpdateActiveSnapshotCommandId();
 
 	/* Create a QueryDesc for the query */
-	#if PG_VERSION_NUM >= PG_VERSION_18
-	queryDesc = CreateQueryDesc(
-		plannedstmt,    /* PlannedStmt *plannedstmt */
-		NULL,           /* CachedPlan *cplan (none) */
-		queryString,    /* const char *sourceText */
-		GetActiveSnapshot(),   /* Snapshot snapshot */
-		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
-		dest,           /* DestReceiver *dest */
-		params,         /* ParamListInfo params */
-		queryEnv,       /* QueryEnvironment *queryEnv */
-		instrument_option /* int instrument_options */
-	);
-	#else
 	queryDesc = CreateQueryDesc(
 		plannedstmt,    /* PlannedStmt *plannedstmt */
 		queryString,    /* const char *sourceText */
@@ -2231,7 +2172,6 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 		queryEnv,       /* QueryEnvironment *queryEnv */
 		instrument_option /* int instrument_options */
 	);
-	#endif
 
 	/* Select execution options */
 	if (es->analyze)
