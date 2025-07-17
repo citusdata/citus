@@ -1391,7 +1391,17 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
-	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
+#if PG_VERSION_NUM >= 180000
+
+	/* CatalogTupleUpdate performs a normal heap UPDATE → RowExclusiveLock */
+	const LOCKMODE openLockMode = RowExclusiveLock;
+#else
+
+	/* In‑place update never changed tuple length → AccessShareLock was enough */
+	const LOCKMODE openLockMode = AccessShareLock;
+#endif
+
+	Relation columnarStripes = table_open(columnarStripesOid, openLockMode);
 
 	Oid indexId = ColumnarStripePKeyIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
@@ -1414,17 +1424,6 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 							   storageId, stripeId)));
 	}
 
-
-/*
- * heap_modify_tuple + heap_inplace_update only exist on PG < 18;
- * on PG18 the in-place helper was removed upstream, so we skip the whole block.
- */
-#if PG_VERSION_NUM < PG_VERSION_18
-
-	/*
-	 * heap_inplace_update already doesn't allow changing size of the original
-	 * tuple, so we don't allow setting any Datum's to NULL values.
-	 */
 	bool newNulls[Natts_columnar_stripe] = { false };
 	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple,
@@ -1433,27 +1432,37 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 												newNulls,
 												update);
 
-	heap_inplace_update(columnarStripes, modifiedTuple);
-#endif
+#if PG_VERSION_NUM < PG_VERSION_18
 
+	/*
+	 * heap_inplace_update already doesn't allow changing size of the original
+	 * tuple, so we don't allow setting any Datum's to NULL values.
+	 */
+	heap_inplace_update(columnarStripes, modifiedTuple);
 
 	/*
 	 * Existing tuple now contains modifications, because we used
 	 * heap_inplace_update().
 	 */
 	HeapTuple newTuple = oldTuple;
+#else
+
+	/* Regular catalog UPDATE keeps indexes in sync */
+	CatalogTupleUpdate(columnarStripes, &oldTuple->t_self, modifiedTuple);
+	HeapTuple newTuple = modifiedTuple;
+#endif
+
+	CommandCounterIncrement();
 
 	/*
 	 * Must not pass modifiedTuple, because BuildStripeMetadata expects a real
 	 * heap tuple with MVCC fields.
 	 */
-	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
-																 newTuple);
-
-	CommandCounterIncrement();
+	StripeMetadata *modifiedStripeMetadata =
+		BuildStripeMetadata(columnarStripes, newTuple);
 
 	systable_endscan(scanDescriptor);
-	table_close(columnarStripes, AccessShareLock);
+	table_close(columnarStripes, openLockMode);
 
 	/* return StripeMetadata object built from modified tuple */
 	return modifiedStripeMetadata;
