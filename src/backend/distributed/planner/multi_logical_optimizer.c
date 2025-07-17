@@ -4557,6 +4557,29 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		FindReferencedTableColumn(joinColumn, parentQueryList, query, column,
 								  rteContainingReferencedColumn, skipOuterVars);
 	}
+#if PG_VERSION_NUM >= PG_VERSION_18
+	else if (rangeTableEntry->rtekind == RTE_GROUP)
+	{
+		/*
+		 * PG 18: synthetic GROUP RTE.  Each groupexprs item corresponds to the
+		 * columns produced by the grouping step, in the *same ordinal order* as
+		 * the Vars that reference them.
+		 */
+		List *groupexprs = rangeTableEntry->groupexprs;
+		AttrNumber groupIndex = candidateColumn->varattno - 1;
+
+		/* this must always hold unless upstream Postgres mis-constructed the RTE_GROUP */
+		Assert(groupIndex >= 0 && groupIndex < list_length(groupexprs));
+
+		Expr *groupExpr = (Expr *) list_nth(groupexprs, groupIndex);
+
+		/* Recurse on the underlying expression (stay in the same query) */
+		FindReferencedTableColumn(groupExpr, parentQueryList, query,
+								  column, rteContainingReferencedColumn,
+								  skipOuterVars);
+	}
+#endif   /* PG_VERSION_NUM >= 180000 */
+
 	else if (rangeTableEntry->rtekind == RTE_CTE)
 	{
 		/*
