@@ -315,21 +315,6 @@ StartPortalForQueryExecution(const char *queryString)
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-
-	/* PG 18+: new CachedPlanSource slot */
-	PortalDefineQuery(
-		portal,
-		NULL,                  /* no prepared‐stmt name */
-		queryString,           /* the SQL text */
-		CMDTAG_SELECT,         /* we’re running a SELECT */
-		list_make1(queryPlan), /* plan trees */
-		NULL,                  /* no CachedPlan */
-		NULL                   /* no CachedPlanSource */
-		);
-#else
-
-	/* PG 15–17: six‐arg signature */
 	PortalDefineQuery(
 		portal,
 		NULL,
@@ -338,7 +323,6 @@ StartPortalForQueryExecution(const char *queryString)
 		list_make1(queryPlan),
 		NULL                   /* no CachedPlan */
 		);
-#endif
 
 	int eflags = 0;
 	PortalStart(portal, NULL, eflags, GetActiveSnapshot());
