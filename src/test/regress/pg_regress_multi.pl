@@ -490,7 +490,7 @@ push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 push(@pgOptions, "citus.allow_unsafe_locks_from_workers=on");
 push(@pgOptions, "citus.stat_statements_track = 'all'");
-push(@pgOptions, "citus.enable_change_data_capture=on");
+push(@pgOptions, "citus.enable_change_data_capture=off");
 push(@pgOptions, "citus.stat_tenants_limit = 2");
 push(@pgOptions, "citus.stat_tenants_track = 'ALL'");
 

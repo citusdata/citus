@@ -4,6 +4,7 @@ test: create_role_propagation
 test: multi_create_fdw
 test: multi_test_catalog_views
 test: replicated_table_disable_node
+test: cdc_library_path non_super_user_cdc_library_path
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
