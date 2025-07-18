@@ -1906,7 +1906,32 @@ ExecuteSqlString(const char *sql)
 
 		/* Don't display the portal in pg_cursors */
 		portal->visible = false;
-		PortalDefineQuery(portal, NULL, sql, commandTag, plantree_list, NULL);
+
+		#if PG_VERSION_NUM >= PG_VERSION_18
+
+		/* PG18+ added a seventh “plansource” argument */
+		PortalDefineQuery(
+			portal,
+			NULL,             /* no prepared‐stmt name */
+			sql,              /* the query text */
+			commandTag,       /* the CommandTag */
+			plantree_list,    /* List of PlannedStmt* */
+			NULL,             /* no CachedPlan */
+			NULL              /* no CachedPlanSource */
+			);
+	#else
+
+		/* PG17-: six‐arg signature */
+		PortalDefineQuery(
+			portal,
+			NULL,             /* no prepared‐stmt name */
+			sql,              /* the query text */
+			commandTag,       /* the CommandTag */
+			plantree_list,    /* List of PlannedStmt* */
+			NULL              /* no CachedPlan */
+			);
+	#endif
+
 		PortalStart(portal, NULL, 0, InvalidSnapshot);
 		int16 format[] = { 1 };
 		PortalSetResultFormat(portal, lengthof(format), format);        /* binary format */
@@ -1923,7 +1948,28 @@ ExecuteSqlString(const char *sql)
 
 		/* Here's where we actually execute the command. */
 		QueryCompletion qc = { 0 };
-		(void) PortalRun(portal, FETCH_ALL, isTopLevel, true, receiver, receiver, &qc);
+
+/* Execute the portal, dropping the `run_once` arg on PG18+ */
+#if PG_VERSION_NUM >= PG_VERSION_18
+		(void) PortalRun(
+			portal,
+			FETCH_ALL,  /* count */
+			isTopLevel, /* isTopLevel */
+			receiver,   /* DestReceiver *dest */
+			receiver,   /* DestReceiver *altdest */
+			&qc         /* QueryCompletion *qc */
+			);
+#else
+		(void) PortalRun(
+			portal,
+			FETCH_ALL,  /* count */
+			isTopLevel, /* isTopLevel */
+			true,       /* run_once */
+			receiver,   /* DestReceiver *dest */
+			receiver,   /* DestReceiver *altdest */
+			&qc         /* QueryCompletion *qc */
+			);
+#endif
 
 		/* Clean up the receiver. */
 		(*receiver->rDestroy)(receiver);

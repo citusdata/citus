@@ -215,6 +215,7 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
 static void AdjustDynamicLibraryPathForCdcDecoders(void);
+static void EnableChangeDataCaptureAssignHook(bool newval, void *extra);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 static emit_log_hook_type original_emit_log_hook = NULL;
@@ -383,6 +384,54 @@ static const struct config_enum_entry metadata_sync_mode_options[] = {
 /* *INDENT-ON* */
 
 
+/*----------------------------------------------------------------------*
+* On PG 18+ the hook signatures changed; we wrap the old Citus handlers
+* in fresh functions that match the new typedefs exactly.
+*----------------------------------------------------------------------*/
+#if PG_VERSION_NUM >= PG_VERSION_18
+static bool
+citus_executor_start_adapter(QueryDesc *queryDesc, int eflags)
+{
+	/* PG18+ expects a bool return */
+	CitusExecutorStart(queryDesc, eflags);
+	return true;
+}
+
+
+static void
+citus_executor_run_adapter(QueryDesc *queryDesc,
+						   ScanDirection direction,
+						   uint64 count)
+{
+	/* PG18+ has no run_once flag
+	 * call the original Citus hook (which still expects the old 4-arg form) */
+	CitusExecutorRun(queryDesc, direction, count, true);
+}
+
+
+#else
+
+/* PG15–17: adapter signatures must match the *old* typedefs */
+static void
+citus_executor_start_adapter(QueryDesc *queryDesc, int eflags)
+{
+	CitusExecutorStart(queryDesc, eflags);
+}
+
+
+static void
+citus_executor_run_adapter(QueryDesc *queryDesc,
+						   ScanDirection direction,
+						   uint64 count,
+						   bool run_once)
+{
+	CitusExecutorRun(queryDesc, direction, count, run_once);
+}
+
+
+#endif
+
+
 /* shared library initialization function */
 void
 _PG_init(void)
@@ -457,8 +506,8 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	get_relation_info_hook = multi_get_relation_info_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
-	ExecutorStart_hook = CitusExecutorStart;
-	ExecutorRun_hook = CitusExecutorRun;
+	ExecutorStart_hook = citus_executor_start_adapter;
+	ExecutorRun_hook = citus_executor_run_adapter;
 	ExplainOneQuery_hook = CitusExplainOneQuery;
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = CitusAttributeToEnd;
@@ -1272,7 +1321,7 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		NULL, EnableChangeDataCaptureAssignHook, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_cluster_clock",
@@ -3270,5 +3319,21 @@ CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int su
 		 * the provided objectId with extension oid so we will set the value
 		 * regardless if it's citus being created */
 		SetCreateCitusTransactionLevel(GetCurrentTransactionNestLevel());
+	}
+}
+
+
+/*
+ * EnableChangeDataCaptureAssignHook is called whenever the
+ * citus.enable_change_data_capture setting is changed to dynamically
+ * adjust the dynamic_library_path based on the new value.
+ */
+static void
+EnableChangeDataCaptureAssignHook(bool newval, void *extra)
+{
+	if (newval)
+	{
+		/* CDC enabled: add citus_decoders to the path */
+		AdjustDynamicLibraryPathForCdcDecoders();
 	}
 }

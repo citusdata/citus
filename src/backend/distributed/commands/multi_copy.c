@@ -3049,7 +3049,7 @@ CitusCopySelect(CopyStmt *copyStatement)
 
 	for (int i = 0; i < tupleDescriptor->natts; i++)
 	{
-		Form_pg_attribute attr = &tupleDescriptor->attrs[i];
+		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
 
 		if (attr->attisdropped ||
 			attr->attgenerated
