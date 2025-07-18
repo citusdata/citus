@@ -1432,7 +1432,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Enables the planner to avoid a query deparse and planning if "
 					 "the shard is local to the current node."),
 		NULL,
-		&EnableFastPathLocalExecutor,
+		&EnableLocalFastPathQueryOptimization,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,

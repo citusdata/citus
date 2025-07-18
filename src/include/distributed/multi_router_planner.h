@@ -28,7 +28,7 @@
 
 extern bool EnableRouterExecution;
 extern bool EnableFastPathRouterPlanner;
-extern bool EnableFastPathLocalExecutor;
+extern bool EnableLocalFastPathQueryOptimization;
 
 extern bool EnableNonColocatedRouterQueryPushdown;
 

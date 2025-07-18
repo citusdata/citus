@@ -46,6 +46,31 @@ WHERE a = 8 AND b IN (1,3,5,8,13,21)
 GROUP BY b
 ORDER BY b;
 
+BEGIN;
+  -- force accessing local placements via remote connections first
+  SET citus.enable_local_execution TO false;
+  RESET client_min_messages;
+  RESET citus.log_remote_commands;
+  RESET citus.log_local_commands;
+  SELECT count(*), b FROM test_tbl GROUP BY b ORDER BY b;
+  -- Now, even if we enable local execution back before the query that
+  -- could normally benefit from fast path local query optimizations,
+  -- this time it won't be the case because local execution was implicitly
+  -- disabled by Citus as we accessed local shard placements via remote
+  -- connections.
+  SET citus.enable_local_execution TO true;
+  SET client_min_messages TO DEBUG2;
+  SET citus.log_remote_commands TO ON;
+  SET citus.log_local_commands TO ON;
+  SELECT b, AVG(data_f), MIN(data_f), MAX(data_f), COUNT(1)
+  FROM test_tbl
+  WHERE a = 8 AND b IN (1,3,5,8,13,21)
+  GROUP BY b
+  ORDER BY b;
+SET client_min_messages TO ERROR; -- keep COMMIT output quiet
+COMMIT;
+SET client_min_messages TO DEBUG2;
+
 SET citus.enable_local_fast_path_query_optimization TO OFF;
 
 -- With local execution local plan disabled, the same query

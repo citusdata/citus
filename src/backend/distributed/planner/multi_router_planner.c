@@ -1966,16 +1966,14 @@ static
 bool
 CheckAttributesMatch(Oid citusTableId, Oid shardTableId)
 {
-	Relation citusR, shardR;
 	bool same_schema = false;
+	Relation citusRelation = RelationIdGetRelation(citusTableId);
+	Relation shardRelation = RelationIdGetRelation(shardTableId);
 
-	citusR = RelationIdGetRelation(citusTableId);
-	shardR = RelationIdGetRelation(shardTableId);
-
-	if (RelationIsValid(citusR) && RelationIsValid(shardR))
+	if (RelationIsValid(citusRelation) && RelationIsValid(shardRelation))
 	{
-		TupleDesc citusTupDesc = citusR->rd_att;
-		TupleDesc shardTupDesc = shardR->rd_att;
+		TupleDesc citusTupDesc = citusRelation->rd_att;
+		TupleDesc shardTupDesc = shardRelation->rd_att;
 
 		if (citusTupDesc->natts == shardTupDesc->natts)
 		{
@@ -2017,8 +2015,8 @@ CheckAttributesMatch(Oid citusTableId, Oid shardTableId)
 		}
 	}
 
-	RelationClose(citusR);
-	RelationClose(shardR);
+	RelationClose(citusRelation);
+	RelationClose(shardRelation);
 	return same_schema;
 }
 
@@ -2061,8 +2059,15 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 	Assert(list_length(tasks) == 1);
 	Task *task = (Task *) linitial(tasks);
 	List *placements = task->taskPlacementList;
-	Assert(list_length(placements) > 0);
 	int32 localGroupId = GetLocalGroupId();
+
+	/*
+	 * Today FastPathRouterQuery() doesn't set delayFastPathPlanning to true for
+	 * reference tables. We should be looking at 1 placement, or ShardReplicationFactor
+	 * of them.
+	 */
+	Assert(list_length(placements) == 1 || list_length(placements) ==
+		   ShardReplicationFactor);
 	ShardPlacement *primaryPlacement = (ShardPlacement *) linitial(placements);
 
 	bool isLocalExecution = !IsDummyPlacement(primaryPlacement) &&
@@ -2156,7 +2161,7 @@ ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 	/* Must apply the same lock to the shard that was applied to the citus table */
 	Oid shardRelationId = RangeVarGetRelidExtended(&shardRangeVar,
 												   citusTableRte->rellockmode,
-												   0, NULL, NULL); /* todo - use suitable callback for perms check? */
+												   0, NULL, NULL);
 
 	/* Verify that the attributes of citus table and shard table match */
 	if (!CheckAttributesMatch(citusTableOid, shardRelationId))
