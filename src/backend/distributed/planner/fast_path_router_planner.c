@@ -46,6 +46,7 @@
 #include "distributed/citus_clauses.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h" /* only to use some utility functions */
 #include "distributed/multi_router_planner.h"
@@ -54,7 +55,7 @@
 #include "distributed/shardinterval_utils.h"
 
 bool EnableFastPathRouterPlanner = true;
-bool EnableFastPathLocalExecutor = true;
+bool EnableLocalFastPathQueryOptimization = true;
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
 static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
@@ -63,6 +64,11 @@ static bool ConjunctionContainsColumnFilter(Node *node,
 											Var *column,
 											Node **distributionKeyValue);
 
+/*
+ * FastPathPreprocessParseTree is used to apply transformations on the parse tree
+ * that are expected by the Postgres planner. This is called on both delayed FastPath
+ * and non-delayed FastPath queries.
+ */
 void
 FastPathPreprocessParseTree(Query *parse)
 {
@@ -156,6 +162,10 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 }
 
 
+/*
+ * InitializeFastPathContext - helper function to initialize a FastPath
+ * restriction context with the details that the FastPath code path needs.
+ */
 static void
 InitializeFastPathContext(FastPathRestrictionContext *fastPathContext,
 						  Node *distributionKeyValue,
@@ -184,12 +194,18 @@ InitializeFastPathContext(FastPathRestrictionContext *fastPathContext,
 		fastPathContext->distributionKeyHasParam = true;
 	}
 
-	if (EnableFastPathLocalExecutor)
+	/*
+	 * If local execution and the fast path optimization to
+	 * avoid deparse are enabled, and it is safe to do local
+	 * execution..
+	 */
+	if (EnableLocalFastPathQueryOptimization &&
+		EnableLocalExecution &&
+		GetCurrentLocalExecutionStatus() != LOCAL_EXECUTION_DISABLED)
 	{
 		/*
-		 * This fast path query may be executed by the local executor.
-		 * We need to delay the fast path planning until we know if the
-		 * shard is local or not. Make a final check for volatile
+		 * .. we can delay fast path planning until we know whether
+		 * or not the shard is local. Make a final check for volatile
 		 * functions in the query tree to determine if we should delay
 		 * the fast path planning.
 		 */
@@ -289,7 +305,11 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 	Var *distributionKey = PartitionColumn(distributedTableId, 1);
 	if (!distributionKey)
 	{
-		/* Local execution may avoid a deparse on single shard distributed tables */
+		/*
+		 * Local execution may avoid a deparse on single shard distributed tables or
+		 * citus local tables. We don't yet support reference tables in this code-path
+		 * because modifications on reference tables are complicated to support here.
+		 */
 		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry,
 													 SINGLE_SHARD_DISTRIBUTED) ||
 						  IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE);
