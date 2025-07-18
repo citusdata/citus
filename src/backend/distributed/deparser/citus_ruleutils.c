@@ -1715,3 +1715,122 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 		}
 	}
 }
+
+
+/*
+ * Recursively search an expression for a Param and return its paramid
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ * Does not cover all options but those supported by Citus.
+ */
+static int
+GetParamId(Node *expr)
+{
+	int paramid = 0;
+
+	if (expr == NULL)
+	{
+		return paramid;
+	}
+
+	/* If it's a Param, return its attnum */
+	if (IsA(expr, Param))
+	{
+		Param *param = (Param *) expr;
+		paramid = param->paramid;
+	}
+	/* If it's a FuncExpr, search in arguments */
+	else if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *func = (FuncExpr *) expr;
+		ListCell *lc;
+
+		foreach(lc, func->args)
+		{
+			paramid = GetParamId((Node *) lfirst(lc));
+			if (paramid != 0)
+			{
+				break; /* Stop at the first valid paramid */
+			}
+		}
+	}
+
+	return paramid;
+}
+
+
+/*
+ * list_sort comparator to sort target list by paramid (in MULTIEXPR)
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ */
+static int
+target_list_cmp(const ListCell *a, const ListCell *b)
+{
+	TargetEntry *tleA = lfirst(a);
+	TargetEntry *tleB = lfirst(b);
+
+	/*
+	 * Deal with resjunk entries; sublinks are marked resjunk and
+	 * are placed at the end of the target list so this logic
+	 * ensures they stay grouped at the end of the target list:
+	 */
+	if (tleA->resjunk || tleB->resjunk)
+	{
+		return tleA->resjunk - tleB->resjunk;
+	}
+
+	int la = GetParamId((Node *) tleA->expr);
+	int lb = GetParamId((Node *) tleB->expr);
+
+	/*
+	 * Should be looking at legitimate param ids
+	 */
+	Assert(la > 0);
+	Assert(lb > 0);
+
+	/*
+	 * Return -1, 0 or 1 depending on if la is less than,
+	 * equal to or greater than lb
+	 */
+	return (la > lb) - (la < lb);
+}
+
+
+/*
+ * Used by get_update_query_targetlist_def() (in ruleutils) to reorder the target
+ * list on the left side of the update:
+ * SET () = (SELECT )
+ * Reordering the SELECT side only does not work, consider a case like:
+ * SET (col_1, col3) = (SELECT 1, 3), (col_2) = (SELECT 2)
+ * Without ensure_update_targetlist_in_param_order(), this will lead to an incorrect
+ * deparsed query:
+ * SET (col_1, col2) = (SELECT 1, 3), (col_3) = (SELECT 2)
+ */
+void
+ensure_update_targetlist_in_param_order(List *targetList)
+{
+	bool need_to_sort_target_list = false;
+	int previous_paramid = 0;
+	ListCell *l;
+
+	foreach(l, targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(l);
+
+		if (!tle->resjunk)
+		{
+			int paramid = GetParamId((Node *) tle->expr);
+			if (paramid < previous_paramid)
+			{
+				need_to_sort_target_list = true;
+				break;
+			}
+
+			previous_paramid = paramid;
+		}
+	}
+
+	if (need_to_sort_target_list)
+	{
+		list_sort(targetList, target_list_cmp);
+	}
+}
