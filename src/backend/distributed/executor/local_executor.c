@@ -755,13 +755,48 @@ ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 								 CreateDestReceiver(DestNone);
 
 	/* Create a QueryDesc for the query */
-	QueryDesc *queryDesc = CreateQueryDesc(taskPlan, queryString,
-										   GetActiveSnapshot(), InvalidSnapshot,
-										   destReceiver, paramListInfo,
-										   queryEnv, 0);
+	#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG18+: nine‐arg CreateQueryDesc with a CachedPlan slot */
+	QueryDesc *queryDesc = CreateQueryDesc(
+		taskPlan,          /* PlannedStmt *plannedstmt */
+		NULL,              /* CachedPlan *cplan (none) */
+		queryString,       /* const char *sourceText */
+		GetActiveSnapshot(),   /* Snapshot snapshot */
+		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
+		destReceiver,      /* DestReceiver *dest */
+		paramListInfo,     /* ParamListInfo params */
+		queryEnv,          /* QueryEnvironment *queryEnv */
+		0                  /* int instrument_options */
+		);
+	#else
+
+	/* PG15–17: eight‐arg CreateQueryDesc without CachedPlan */
+	QueryDesc *queryDesc = CreateQueryDesc(
+		taskPlan,          /* PlannedStmt *plannedstmt */
+		queryString,       /* const char *sourceText */
+		GetActiveSnapshot(),   /* Snapshot snapshot */
+		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
+		destReceiver,      /* DestReceiver *dest */
+		paramListInfo,     /* ParamListInfo params */
+		queryEnv,          /* QueryEnvironment *queryEnv */
+		0                  /* int instrument_options */
+		);
+	#endif
+
 
 	ExecutorStart(queryDesc, eflags);
+
+/* run the plan: count = 0 (all rows) */
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ dropped the “execute_once” boolean */
+	ExecutorRun(queryDesc, scanDirection, 0L);
+#else
+
+	/* PG 17 and prevs still expect the 4th ‘once’ argument */
 	ExecutorRun(queryDesc, scanDirection, 0L, true);
+#endif
 
 	/*
 	 * We'll set the executorState->es_processed later, for now only remember
