@@ -897,6 +897,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
+	job->jobExecuted = true;
 	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
 	{
 		SortTupleStore(scanState);
