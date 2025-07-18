@@ -43,8 +43,10 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/citus_clauses.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h" /* only to use some utility functions */
 #include "distributed/multi_router_planner.h"
@@ -53,6 +55,7 @@
 #include "distributed/shardinterval_utils.h"
 
 bool EnableFastPathRouterPlanner = true;
+bool EnableLocalFastPathQueryOptimization = true;
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
 static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
@@ -60,6 +63,24 @@ static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
 static bool ConjunctionContainsColumnFilter(Node *node,
 											Var *column,
 											Node **distributionKeyValue);
+
+/*
+ * FastPathPreprocessParseTree is used to apply transformations on the parse tree
+ * that are expected by the Postgres planner. This is called on both delayed FastPath
+ * and non-delayed FastPath queries.
+ */
+void
+FastPathPreprocessParseTree(Query *parse)
+{
+	/*
+	 * Citus planner relies on some of the transformations on constant
+	 * evaluation on the parse tree.
+	 */
+	parse->targetList =
+		(List *) eval_const_expressions(NULL, (Node *) parse->targetList);
+	parse->jointree->quals =
+		(Node *) eval_const_expressions(NULL, (Node *) parse->jointree->quals);
+}
 
 
 /*
@@ -73,15 +94,6 @@ static bool ConjunctionContainsColumnFilter(Node *node,
 PlannedStmt *
 FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo boundParams)
 {
-	/*
-	 * Citus planner relies on some of the transformations on constant
-	 * evaluation on the parse tree.
-	 */
-	parse->targetList =
-		(List *) eval_const_expressions(NULL, (Node *) parse->targetList);
-	parse->jointree->quals =
-		(Node *) eval_const_expressions(NULL, (Node *) parse->jointree->quals);
-
 	PlannedStmt *result = GeneratePlaceHolderPlannedStmt(originalQuery);
 
 	return result;
@@ -112,9 +124,9 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	Plan *plan = &scanNode->plan;
 #endif
 
-	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
+	FastPathRestrictionContext fprCtxt PG_USED_FOR_ASSERTS_ONLY = { 0 };
 
-	Assert(FastPathRouterQuery(parse, &distKey));
+	Assert(FastPathRouterQuery(parse, &fprCtxt));
 
 	/* there is only a single relation rte */
 #if PG_VERSION_NUM >= PG_VERSION_16
@@ -151,26 +163,82 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 
 
 /*
+ * InitializeFastPathContext - helper function to initialize a FastPath
+ * restriction context with the details that the FastPath code path needs.
+ */
+static void
+InitializeFastPathContext(FastPathRestrictionContext *fastPathContext,
+						  Node *distributionKeyValue,
+						  bool canAvoidDeparse,
+						  Query *query)
+{
+	Assert(fastPathContext != NULL);
+	Assert(!fastPathContext->fastPathRouterQuery);
+	Assert(!fastPathContext->delayFastPathPlanning);
+
+	/*
+	 * We're looking at a fast path query, so we can fill the
+	 * fastPathContext with relevant details.
+	 */
+	fastPathContext->fastPathRouterQuery = true;
+	if (distributionKeyValue == NULL)
+	{
+		/* nothing to record */
+	}
+	else if (IsA(distributionKeyValue, Const))
+	{
+		fastPathContext->distributionKeyValue = (Const *) distributionKeyValue;
+	}
+	else if (IsA(distributionKeyValue, Param))
+	{
+		fastPathContext->distributionKeyHasParam = true;
+	}
+
+	/*
+	 * If local execution and the fast path optimization to
+	 * avoid deparse are enabled, and it is safe to do local
+	 * execution..
+	 */
+	if (EnableLocalFastPathQueryOptimization &&
+		EnableLocalExecution &&
+		GetCurrentLocalExecutionStatus() != LOCAL_EXECUTION_DISABLED)
+	{
+		/*
+		 * .. we can delay fast path planning until we know whether
+		 * or not the shard is local. Make a final check for volatile
+		 * functions in the query tree to determine if we should delay
+		 * the fast path planning.
+		 */
+		fastPathContext->delayFastPathPlanning = canAvoidDeparse &&
+												 !FindNodeMatchingCheckFunction(
+			(Node *) query,
+			CitusIsVolatileFunction);
+	}
+}
+
+
+/*
  * FastPathRouterQuery gets a query and returns true if the query is eligible for
- * being a fast path router query.
+ * being a fast path router query. It also fills the given fastPathContext with
+ * details about the query such as the distribution key value (if available),
+ * whether the distribution key is a parameter, and the range table entry for the
+ * table being queried.
  * The requirements for the fast path query can be listed below:
  *
  *   - SELECT/UPDATE/DELETE query without CTES, sublinks-subqueries, set operations
  *   - The query should touch only a single hash distributed or reference table
  *   - The distribution with equality operator should be in the WHERE clause
  *      and it should be ANDed with any other filters. Also, the distribution
- *      key should only exists once in the WHERE clause. So basically,
+ *      key should only exist once in the WHERE clause. So basically,
  *          SELECT ... FROM dist_table WHERE dist_key = X
  *      If the filter is a const, distributionKeyValue is set
  *   - All INSERT statements (including multi-row INSERTs) as long as the commands
  *     don't have any sublinks/CTEs etc
+ *   -
  */
 bool
-FastPathRouterQuery(Query *query, Node **distributionKeyValue)
+FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 {
-	FromExpr *joinTree = query->jointree;
-	Node *quals = NULL;
-
 	if (!EnableFastPathRouterPlanner)
 	{
 		return false;
@@ -201,6 +269,7 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 	else if (query->commandType == CMD_INSERT)
 	{
 		/* we don't need to do any further checks, all INSERTs are fast-path */
+		InitializeFastPathContext(fastPathContext, NULL, true, query);
 		return true;
 	}
 
@@ -225,6 +294,10 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 		return false;
 	}
 
+	bool isFastPath = false;
+	bool canAvoidDeparse = false;
+	Node *distributionKeyValue = NULL;
+
 	/*
 	 * If the table doesn't have a distribution column, we don't need to
 	 * check anything further.
@@ -232,45 +305,62 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 	Var *distributionKey = PartitionColumn(distributedTableId, 1);
 	if (!distributionKey)
 	{
-		return true;
+		/*
+		 * Local execution may avoid a deparse on single shard distributed tables or
+		 * citus local tables. We don't yet support reference tables in this code-path
+		 * because modifications on reference tables are complicated to support here.
+		 */
+		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry,
+													 SINGLE_SHARD_DISTRIBUTED) ||
+						  IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE);
+		isFastPath = true;
 	}
-
-	/* WHERE clause should not be empty for distributed tables */
-	if (joinTree == NULL ||
-		(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) && joinTree->quals ==
-		 NULL))
+	else
 	{
-		return false;
+		FromExpr *joinTree = query->jointree;
+		Node *quals = NULL;
+
+		canAvoidDeparse = IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE);
+
+		if (joinTree == NULL ||
+			(joinTree->quals == NULL && canAvoidDeparse))
+		{
+			/* no quals, not a fast path query */
+			return false;
+		}
+
+		quals = joinTree->quals;
+		if (quals != NULL && IsA(quals, List))
+		{
+			quals = (Node *) make_ands_explicit((List *) quals);
+		}
+
+		/*
+		 * Distribution column must be used in a simple equality match check and it must be
+		 * place at top level conjunction operator. In simple words, we should have
+		 *	    WHERE dist_key = VALUE [AND  ....];
+		 *
+		 *	We're also not allowing any other appearances of the distribution key in the quals.
+		 *
+		 *	Overall the logic might sound fuzzy since it involves two individual checks:
+		 *	    (a) Check for top level AND operator with one side being "dist_key = const"
+		 *	    (b) Only allow single appearance of "dist_key" in the quals
+		 *
+		 *	This is to simplify both of the individual checks and omit various edge cases
+		 *	that might arise with multiple distribution keys in the quals.
+		 */
+		isFastPath = (ConjunctionContainsColumnFilter(quals, distributionKey,
+													  &distributionKeyValue) &&
+					  !ColumnAppearsMultipleTimes(quals, distributionKey));
 	}
 
-	/* convert list of expressions into expression tree for further processing */
-	quals = joinTree->quals;
-	if (quals != NULL && IsA(quals, List))
+	if (isFastPath)
 	{
-		quals = (Node *) make_ands_explicit((List *) quals);
+		InitializeFastPathContext(fastPathContext, distributionKeyValue, canAvoidDeparse,
+								  query);
 	}
 
-	/*
-	 * Distribution column must be used in a simple equality match check and it must be
-	 * place at top level conjunction operator. In simple words, we should have
-	 *	    WHERE dist_key = VALUE [AND  ....];
-	 *
-	 *	We're also not allowing any other appearances of the distribution key in the quals.
-	 *
-	 *	Overall the logic might sound fuzzy since it involves two individual checks:
-	 *	    (a) Check for top level AND operator with one side being "dist_key = const"
-	 *	    (b) Only allow single appearance of "dist_key" in the quals
-	 *
-	 *	This is to simplify both of the individual checks and omit various edge cases
-	 *	that might arise with multiple distribution keys in the quals.
-	 */
-	if (ConjunctionContainsColumnFilter(quals, distributionKey, distributionKeyValue) &&
-		!ColumnAppearsMultipleTimes(quals, distributionKey))
-	{
-		return true;
-	}
-
-	return false;
+	return isFastPath;
 }
 
 

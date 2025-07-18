@@ -78,14 +78,37 @@ execute p4(8);
 execute p4(8);
 execute p4(8);
 
+-- Test that "Avoid deparse and planning of shard query for local execution" (*)
+-- does not take the fast path of modifying the parse tree with the shard OID, as
+-- the dropped column means the attribute check between the distributed table and
+-- shard fails. With client_min_messages at DEBUG2, we see "cannot modify parse tree
+-- for local execution", indicating that router planning has detected the difference.
+--
+-- (*) https://github.com/citusdata/citus/pull/8035
+
+SET client_min_messages to DEBUG2;
+prepare p5(int) as SELECT count(*) FROM t1 WHERE c = 8 and a = $1 GROUP BY c;
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+RESET client_min_messages;
+
 \c - - - :master_port
 
--- one another combination is that the shell table
+-- one other combination is that the shell table
 -- has a dropped column but not the shard, via rebalance operation
 SET search_path TO local_shard_execution_dropped_column;
 ALTER TABLE t1 DROP COLUMN a;
 
 SELECT citus_move_shard_placement(2460000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
+SELECT public.wait_for_resource_cleanup(); -- otherwise fails flakiness tests
 
 \c - - - :worker_2_port
 SET search_path TO local_shard_execution_dropped_column;
@@ -131,6 +154,26 @@ execute p3(8);
 execute p3(8);
 execute p3(8);
 execute p3(8);
+
+-- Test that "Avoid deparse and planning of shard query for local execution"
+-- does not take the fast path of modifying the parse tree with the shard OID
+-- for this scenario (rebalance) also.
+--
+-- (*) https://github.com/citusdata/citus/pull/8035
+
+SET client_min_messages to DEBUG2;
+prepare p4(int) as SELECT count(*) FROM t1 WHERE c = 8 and 5 = $1 GROUP BY c;
+execute p4(5);
+execute p4(5);
+execute p4(5);
+execute p4(5);
+execute p4(5);
+execute p4(5);
+execute p4(5);
+execute p4(5);
+execute p4(5);
+execute p4(5);
+RESET client_min_messages;
 
 \c - - - :master_port
 DROP SCHEMA local_shard_execution_dropped_column CASCADE;
