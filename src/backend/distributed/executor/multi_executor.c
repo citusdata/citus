@@ -701,21 +701,6 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-
-	/* PostgreSQL 18+ adds a seventh “plansource” argument */
-	PortalDefineQuery(
-		portal,
-		NULL,                 /* no prepared statement name */
-		"",                   /* query text */
-		CMDTAG_SELECT,        /* command tag */
-		list_make1(queryPlan),/* list of PlannedStmt* */
-		NULL,                 /* no CachedPlan */
-		NULL                  /* no CachedPlanSource */
-		);
-#else
-
-	/* PostgreSQL 17-: six-arg signature */
 	PortalDefineQuery(
 		portal,
 		NULL,                 /* no prepared statement name */
@@ -724,7 +709,6 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 		list_make1(queryPlan),/* list of PlannedStmt* */
 		NULL                  /* no CachedPlan */
 		);
-#endif
 
 	PortalStart(portal, params, eflags, GetActiveSnapshot());
 
