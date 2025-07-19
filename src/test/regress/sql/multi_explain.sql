@@ -1183,6 +1183,12 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
 WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
 SELECT * FROM a;
 
+-- Test JSON format
+TRUNCATE test_subplans;
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+
 -- Only one row must exist
 SELECT * FROM test_subplans;
 
