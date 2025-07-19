@@ -688,7 +688,7 @@ ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *d
  * ExecutePlanIntoDestReceiver executes a query plan and sends results to the given
  * DestReceiver.
  */
-void
+uint64
 ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 							DestReceiver *dest)
 {
@@ -729,6 +729,8 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	PortalStart(portal, params, eflags, GetActiveSnapshot());
 
 
+	QueryCompletion qc = { 0 };
+
 #if PG_VERSION_NUM >= PG_VERSION_18
 
 /* PG 18+: six-arg signature (drop the run_once bool) */
@@ -737,7 +739,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 			  false,  /* isTopLevel */
 			  dest,   /* DestReceiver *dest */
 			  dest,   /* DestReceiver *altdest */
-			  NULL);  /* QueryCompletion *qc */
+			  &qc);  /* QueryCompletion *qc */
 #else
 
 /* PG 17-: original seven-arg signature */
@@ -747,10 +749,12 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 			  true,   /* run_once */
 			  dest,   /* DestReceiver *dest */
 			  dest,   /* DestReceiver *altdest */
-			  NULL);  /* QueryCompletion *qc */
+			  &qc);  /* QueryCompletion *qc */
 #endif
 
 	PortalDrop(portal, false);
+
+	return qc.nprocessed;
 }
 
 
