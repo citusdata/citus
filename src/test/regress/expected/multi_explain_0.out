@@ -3255,6 +3255,118 @@ SELECT * FROM a;
 ERROR:  duplicate key value violates unique constraint "test_subplans_pkey_570038"
 DETAIL:  Key (x)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
+-- Test JSON format
+TRUNCATE test_subplans;
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+[
+  {
+    "Plan": {
+      "Node Type": "Custom Scan",
+      "Custom Plan Provider": "Citus Adaptive",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Actual Rows": 1,
+      "Actual Loops": 1,
+      "Distributed Query": {
+        "Subplans": [
+          {
+            "Intermediate Data Size": "18 bytes",
+            "Result destination": "Write locally",
+            "PlannedStmt": [
+              {
+                "Plan": {
+                  "Node Type": "Custom Scan",
+                  "Custom Plan Provider": "Citus Adaptive",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Actual Rows": 1,
+                  "Actual Loops": 1,
+                  "Distributed Query": {
+                    "Job": {
+                      "Task Count": 1,
+                      "Tuple data received from nodes": "16 bytes",
+                      "Tasks Shown": "All",
+                      "Tasks": [
+                        {
+                          "Tuple data received from node": "16 bytes",
+                          "Node": "host=localhost port=xxxxx dbname=regression",
+                          "Remote Plan": [
+                            [
+                              {
+                                "Plan": {
+                                  "Node Type": "ModifyTable",
+                                  "Operation": "Insert",
+                                  "Parallel Aware": false,
+                                  "Async Capable": false,
+                                  "Relation Name": "test_subplans_570038",
+                                  "Alias": "test_subplans_570038",
+                                  "Actual Rows": 1,
+                                  "Actual Loops": 1,
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Result",
+                                      "Parent Relationship": "Outer",
+                                      "Parallel Aware": false,
+                                      "Async Capable": false,
+                                      "Actual Rows": 1,
+                                      "Actual Loops": 1
+                                    }
+                                  ]
+                                },
+                                "Triggers": [
+                                ]
+                              }
+                            ]
+
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                "Triggers": [
+                ]
+              }
+            ]
+          }
+        ],
+        "Job": {
+          "Task Count": 1,
+          "Tuple data received from nodes": "8 bytes",
+          "Tasks Shown": "All",
+          "Tasks": [
+            {
+              "Tuple data received from node": "8 bytes",
+              "Node": "host=localhost port=xxxxx dbname=regression",
+              "Remote Plan": [
+                [
+                  {
+                    "Plan": {
+                      "Node Type": "Function Scan",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Function Name": "read_intermediate_result",
+                      "Alias": "intermediate_result",
+                      "Actual Rows": 1,
+                      "Actual Loops": 1
+                    },
+                    "Triggers": [
+                    ]
+                  }
+                ]
+
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Triggers": [
+    ]
+  }
+]
 -- Only one row must exist
 SELECT * FROM test_subplans;
 1|2

@@ -92,7 +92,6 @@ extern CitusTableCacheEntry * QueryTupleShardSearchInfo(ArrayType *minValuesArra
 														Var *partitionColumn);
 extern void WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat);
 extern uint64 RemoteFileDestReceiverBytesSent(DestReceiver *destReceiver);
-extern uint64 RemoteFileDestReceiverTuplesSent(DestReceiver *destReceiver);
 extern void SendQueryResultViaCopy(const char *resultId);
 extern void ReceiveQueryResultViaCopy(const char *resultId);
 extern void RemoveIntermediateResultsDirectories(void);

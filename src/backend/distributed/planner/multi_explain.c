@@ -93,6 +93,8 @@ extern MemoryContext SubPlanExplainAnalyzeContext;
  */
 static char *SavedExplainPlan = NULL;
 static double SavedExecutionDurationMillisec = 0.0;
+static double SavedExplainPlanNtuples = 0;
+static double SavedExplainPlanNloops = 0;
 extern SubPlanExplainOutputData *SubPlanExplainOutput;
 uint8 NumTasksOutput = 0;
 
@@ -230,7 +232,9 @@ static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DistributedSubPlan *subP
 							  const BufferUsage *bufusage,
 							  const MemoryContextCounters *mem_counters,
 #endif
-							  double *executionDurationMillisec);
+							  double *executionDurationMillisec,
+							  double *executionTuples,
+							  double *executionLoops);
 static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
 											   ExplainFormat defaultValue);
 #if PG_VERSION_NUM >= PG_VERSION_17
@@ -262,10 +266,8 @@ static double elapsed_time(instr_time *starttime);
 static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es);
 static uint64 TaskReceivedTupleData(Task *task);
 static bool ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es);
-static void ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr);
 static bool PlanStateAnalyzeWalker(PlanState *planState, void *ctx);
 static void ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState);
-
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(worker_last_saved_explain_analyze);
@@ -453,10 +455,11 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		return;
 	}
 
+	Instrumentation *instr = planState->instrument;
 	if (!IsA(planState, CustomScanState))
 	{
-		planState->instrument->ntuples = subPlan->ntuples;
-		planState->instrument->nloops = 1; /* TODO */
+		instr->ntuples = subPlan->ntuples;
+		instr->nloops = 1; /* subplan nodes are executed only once */
 		return;
 	}
 
@@ -469,7 +472,8 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 
 	ListCell *lc;
 	int tasksOutput = 0;
-	Instrumentation *instr = planState->instrument;
+	double tasksNtuples = 0;
+	double tasksNloops = 0;
 	memset(instr, 0, sizeof(Instrumentation));
 	DistributedPlan *newdistributedPlan =
 		((CitusScanState *) planState)->distributedPlan;
@@ -505,14 +509,15 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		task->fetchedExplainAnalyzePlan =
 			MemoryContextStrdup(taskContext,
 								subPlan->totalExplainOutput[taskId].explainOutput);
-
-		ParseExplainAnalyzeOutput(task->fetchedExplainAnalyzePlan, instr);
+		tasksNtuples += subPlan->totalExplainOutput[taskId].executionNtuples;
+		tasksNloops = subPlan->totalExplainOutput[taskId].executionNloops;
 
 		subPlan->totalExplainOutput[taskId].explainOutput = NULL;
 		tasksOutput++;
 	}
 
-	subPlan->ntuples += planState->instrument->ntuples;
+	instr->ntuples = tasksNtuples;
+	instr->nloops = tasksNloops;
 }
 
 
@@ -619,6 +624,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		DestReceiver *dest = None_Receiver; /* No query execution */
 		double executionDurationMillisec = 0.0;
+		double executionTuples = 0;
+		double executionLoops = 0;
 
 /* Capture memory stats on PG17+ */
 #if PG_VERSION_NUM >= PG_VERSION_17
@@ -633,12 +640,15 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 						  &planduration,
 						  (es->buffers ? &bufusage : NULL),
 						  (es->memory ? &mem_counters : NULL),
-						  &executionDurationMillisec);
+						  &executionDurationMillisec,
+						  &executionTuples,
+						  &executionLoops);
 #else
 
 		/* Execute EXPLAIN without ANALYZE */
 		ExplainWorkerPlan(plan, subPlan, dest, es, queryString, params, NULL,
-						  &planduration, &executionDurationMillisec);
+						  &planduration, &executionDurationMillisec,
+						  &executionTuples, &executionLoops);
 #endif
 
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
@@ -1309,17 +1319,19 @@ worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
 	if (SavedExplainPlan != NULL)
 	{
 		int columnCount = tupleDescriptor->natts;
-		if (columnCount != 2)
+		if (columnCount != 4)
 		{
-			ereport(ERROR, (errmsg("expected 3 output columns in definition of "
+			ereport(ERROR, (errmsg("expected 4 output columns in definition of "
 								   "worker_last_saved_explain_analyze, but got %d",
 								   columnCount)));
 		}
 
-		bool columnNulls[2] = { false };
-		Datum columnValues[2] = {
+		bool columnNulls[4] = { false };
+		Datum columnValues[4] = {
 			CStringGetTextDatum(SavedExplainPlan),
-			Float8GetDatum(SavedExecutionDurationMillisec)
+			Float8GetDatum(SavedExecutionDurationMillisec),
+			Float8GetDatum(SavedExplainPlanNtuples),
+			Float8GetDatum(SavedExplainPlanNloops)
 		};
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, columnValues, columnNulls);
@@ -1340,6 +1352,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
 	double executionDurationMillisec = 0.0;
+	double executionTuples = 0;
+	double executionLoops = 0;
 
 	Datum explainOptions = PG_GETARG_DATUM(1);
 	ExplainState *es = NewExplainState();
@@ -1460,12 +1474,15 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 					  &planDuration,
 					  (es->buffers ? &bufusage : NULL),
 					  (es->memory ? &mem_counters : NULL),
-					  &executionDurationMillisec);
+					  &executionDurationMillisec,
+					  &executionTuples,
+					  &executionLoops);
 #else
 
 	/* do the actual EXPLAIN ANALYZE */
 	ExplainWorkerPlan(plan, NULL, tupleStoreDest, es, queryString, boundParams, NULL,
-					  &planDuration, &executionDurationMillisec);
+					  &planDuration, &executionDurationMillisec,
+					  &executionTuples, &executionLoops);
 #endif
 
 	ExplainEndOutput(es);
@@ -1476,6 +1493,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	SavedExplainPlan = pstrdup(es->str->data);
 	SavedExecutionDurationMillisec = executionDurationMillisec;
+	SavedExplainPlanNtuples = executionTuples;
+	SavedExplainPlanNloops = executionLoops;
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -1705,11 +1724,13 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 	tupleDestination->originalTask = task;
 	tupleDestination->originalTaskDestination = taskDest;
 
-	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(2);
+	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(4);
 
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 1, "explain analyze", TEXTOID, 0,
 					   0);
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 2, "duration", FLOAT8OID, 0, 0);
+	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 3, "ntuples", FLOAT8OID, 0, 0);
+	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 4, "nloops", FLOAT8OID, 0, 0);
 
 	tupleDestination->lastSavedExplainAnalyzeTupDesc = lastSavedExplainAnalyzeTupDesc;
 
@@ -1758,6 +1779,8 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		}
 
 		Datum executionDuration = heap_getattr(heapTuple, 2, tupDesc, &isNull);
+		Datum executionTuples = heap_getattr(heapTuple, 3, tupDesc, &isNull);
+		Datum executionLoops = heap_getattr(heapTuple, 4, tupDesc, &isNull);
 
 		if (isNull)
 		{
@@ -1767,6 +1790,8 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 
 		char *fetchedExplainAnalyzePlan = TextDatumGetCString(explainAnalyze);
 		double fetchedExplainAnalyzeExecutionDuration = DatumGetFloat8(executionDuration);
+		double fetchedExplainAnalyzeTuples = DatumGetFloat8(executionTuples);
+		double fetchedExplainAnalyzeLoops = DatumGetFloat8(executionLoops);
 
 		/*
 		 * Allocate fetchedExplainAnalyzePlan in the same context as the Task, since we are
@@ -1801,6 +1826,8 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 									fetchedExplainAnalyzePlan);
 			SubPlanExplainOutput[taskId].executionDuration =
 				fetchedExplainAnalyzeExecutionDuration;
+			SubPlanExplainOutput[taskId].executionNtuples = fetchedExplainAnalyzeTuples;
+			SubPlanExplainOutput[taskId].executionNloops = fetchedExplainAnalyzeLoops;
 			NumTasksOutput++;
 		}
 	}
@@ -2031,7 +2058,8 @@ FetchPlanQueryForExplainAnalyze(const char *queryString, ParamListInfo params)
 	}
 
 	appendStringInfoString(fetchQuery,
-						   "SELECT explain_analyze_output, execution_duration "
+						   "SELECT explain_analyze_output, execution_duration, "
+						   "execution_ntuples, execution_nloops "
 						   "FROM worker_last_saved_explain_analyze()");
 
 	return fetchQuery->data;
@@ -2238,7 +2266,9 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 				  const BufferUsage *bufusage,
 			      const MemoryContextCounters *mem_counters,
 #endif
-				  double *executionDurationMillisec)
+				  double *executionDurationMillisec,
+				  double *executionTuples,
+				  double *executionLoops)
 {
 	QueryDesc  *queryDesc;
 	instr_time	starttime;
@@ -2247,6 +2277,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 	int			instrument_option = 0;
 	/* Sub-plan already executed; skipping execution */
 	bool executeQuery = (es->analyze && !subPlan);
+	bool executeSubplan = (es->analyze && subPlan);
 
 	Assert(plannedstmt->commandType != CMD_UTILITY);
 
@@ -2320,7 +2351,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 
 	ExplainOpenGroup("Query", NULL, true, es);
 
-	if (es->analyze && subPlan)
+	if (executeSubplan)
 	{
 		ExtractAnalyzeStats(subPlan, queryDesc->planstate);
 		planstate_tree_walker(queryDesc->planstate, PlanStateAnalyzeWalker, (void *) subPlan);
@@ -2398,6 +2429,13 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 	 */
 	INSTR_TIME_SET_CURRENT(starttime);
 
+	if (executeQuery)
+	{
+		Instrumentation *instr = queryDesc->planstate->instrument;
+		*executionTuples = instr->ntuples;
+		*executionLoops = instr->nloops;
+	}
+
 	ExecutorEnd(queryDesc);
 
 	FreeQueryDesc(queryDesc);
@@ -2439,119 +2477,6 @@ elapsed_time(instr_time *starttime)
 	INSTR_TIME_SET_CURRENT(endtime);
 	INSTR_TIME_SUBTRACT(endtime, *starttime);
 	return INSTR_TIME_GET_DOUBLE(endtime);
-}
-
-
-/*
- * ParseExplainAnalyzeOutput
- *
- * Parses the output of an EXPLAIN ANALYZE run to extract ANALYZE statistics
- * and other instrumentation data.
- *
- * Parameters:
- *   explainOutput  - a null-terminated string containing the raw EXPLAIN ANALYZE output
- *   instr          - pointer to an Instrumentation struct to accumulate parsed metrics
- *
- * Behavior:
- *   - Validates inputs and returns immediately if either pointer is NULL.
- *   - Tokenizes the output on spaces, parentheses, and newlines.
- *   - Populates the instr-><..> fields.
- *
- * Notes:
- *   - Caller must free or manage the memory for explainOutput.
- *   - Parsing is case-sensitive and assumes standard EXPLAIN ANALYZE formatting.
- */
-static void
-ParseExplainAnalyzeOutput(char *explainOutput, Instrumentation *instr)
-{
-	/* elog(NOTICE, "Parsing :%s ", explainOutput); */
-	char *token, *saveptr;
-
-	/* Validate input */
-	if (explainOutput == NULL || instr == NULL)
-		return;
-
-	char *line = pstrdup(explainOutput);
-
-	bool inWal = false;
-	bool inResult = false;
-
-	/* split on spaces, parentheses or newlines */
-	for (token = strtok_r(line, " ()\n", &saveptr);
-		 token != NULL;
-		 token = strtok_r(NULL, " ()\n", &saveptr))
-	{
-		if (strcmp(token, "WAL:") == 0)
-		{
-			inWal = true;
-			continue;
-		}
-
-		if (strcmp(token, "Result") == 0)
-		{
-			inResult = true;
-			continue;
-		}
-
-		/* Reset Result flag when we see "actual" - but only skip if we're in Result mode */
-		if (strcmp(token, "actual") == 0)
-		{
-			/* If we were in Result mode, the next tokens should be skipped */
-			/* If we weren't in Result mode, continue normally */
-			continue;
-		}
-
-		if (inWal)
-		{
-			if (strncmp(token, "records=", 8) == 0)
-				instr->walusage.wal_records += strtoul(token + 8, NULL, 10);
-			else if (strncmp(token, "bytes=", 6) == 0)
-			{
-				instr->walusage.wal_bytes += strtoul(token + 6, NULL, 10);
-				/* once we've seen bytes=, we can leave WAL mode */
-				inWal = false;
-			}
-			continue;
-		}
-
-		/* Skip Result node's actual timing data */
-		if (inResult)
-		{
-			if (strncmp(token, "time=", 5) == 0 ||
-				strncmp(token, "rows=", 5) == 0 ||
-				strncmp(token, "loops=", 6) == 0)
-			{
-				/* If this is loops=, we've seen all Result data */
-				if (strncmp(token, "loops=", 6) == 0)
-					inResult = false;
-				continue;
-			}
-		}
-
-		if (strncmp(token, "time=", 5) == 0)
-		{
-			/* token is "time=X..Y" */
-			char *timeStr = token + 5;
-			char *doubleDot = strstr(timeStr, "..");
-			if (doubleDot)
-			{
-				*doubleDot = '\0';
-				instr->startup += strtod(timeStr, NULL) / 1000.0;
-				instr->total += strtod(doubleDot + 2, NULL) / 1000.0;
-			}
-		}
-		else if (strncmp(token, "rows=", 5) == 0)
-		{
-			instr->ntuples += strtol(token + 5, NULL, 10);
-		}
-		else if (strncmp(token, "loops=", 6) == 0)
-		{
-			instr->nloops = strtol(token + 6, NULL, 10);
-			break; /* We are done for this Task */
-		}
-	}
-
-	pfree(line);
 }
 
 
