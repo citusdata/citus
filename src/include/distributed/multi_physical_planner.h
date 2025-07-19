@@ -502,6 +502,8 @@ typedef struct SubPlanExplainOutputData
 {
 	char *explainOutput;
 	double executionDuration;
+	double executionNtuples;
+	double executionNloops;
 	uint64 totalReceivedTupleData;
 } SubPlanExplainOutputData;
 

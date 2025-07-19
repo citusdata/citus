@@ -108,9 +108,12 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 
 		TimestampTz startTimestamp = GetCurrentTimestamp();
 
+		uint64 nprocessed;
+
 		PG_TRY();
 		{
-			ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
+			nprocessed =
+				ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 		}
 		PG_CATCH();
 		{
@@ -135,7 +138,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 		subPlan->durationMillisecs += durationMicrosecs * MICRO_TO_MILLI_SECOND;
 
 		subPlan->bytesSentPerWorker = RemoteFileDestReceiverBytesSent(copyDest);
-		subPlan->ntuples = RemoteFileDestReceiverTuplesSent(copyDest);
+		subPlan->ntuples = nprocessed;
 		subPlan->remoteWorkerCount = list_length(remoteWorkerNodeList);
 		subPlan->writeLocalFile = entry->writeLocalFile;
 
