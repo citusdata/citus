@@ -514,31 +514,16 @@ ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
 												CitusTableCacheEntry *cacheEntry,
 												PlannedStmt *plan)
 {
-	/* Log distribution argument index and argument list size */
-	elog(DEBUG1, "Distribution Argument Index: %d, Argument List Length: %d",
-		 procedure->distributionArgIndex, list_length(argumentList));
-
 	if (procedure->distributionArgIndex < 0 ||
 		procedure->distributionArgIndex >= list_length(argumentList))
 	{
-		/* Add more detailed log for invalid distribution argument index */
-		ereport(DEBUG1, (errmsg("Invalid distribution argument index: %d",
-								procedure->distributionArgIndex)));
+		ereport(DEBUG1, (errmsg("cannot push down invalid distribution_argument_index")));
 		return NULL;
 	}
 
-	/* Get the partition value node */
-	Node *partitionValueNode = (Node *) list_nth(argumentList, procedure->distributionArgIndex);
-
-	/* Log the partition value node before stripping implicit coercions */
-	elog(DEBUG1, "Partition Value Node before stripping: %s", nodeToString(partitionValueNode));
-
-	/* Strip implicit coercions */
+	Node *partitionValueNode = (Node *) list_nth(argumentList,
+												 procedure->distributionArgIndex);
 	partitionValueNode = strip_implicit_coercions(partitionValueNode);
-
-	/* Log the partition value node after stripping implicit coercions */
-	elog(DEBUG1, "Partition Value Node after stripping: %s", nodeToString(partitionValueNode));
-
 
 	if (IsA(partitionValueNode, Param))
 	{

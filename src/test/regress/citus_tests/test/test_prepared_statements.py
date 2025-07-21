@@ -33,36 +33,47 @@ def test_call_param(cluster):
 
 
 def test_call_param2(cluster):
-    # Get the coordinator node from the Citus cluster
+    # create a distributed table with two columns and an associated distributed procedure
+    # to ensure parameterized CALL succeed, even when the first param is the
+    # distribution key but there are additional params.
     coord = cluster.coordinator
 
-    coord.sql("DROP TABLE IF EXISTS t CASCADE")
-    coord.sql("CREATE TABLE t (p int, i int)")
-    coord.sql("SELECT create_distributed_table('t', 'p')")
+    # 1) create table with two columns
+    coord.sql("DROP TABLE IF EXISTS test CASCADE")
+    coord.sql("CREATE TABLE test(i int, j int)")
+
+    # 2) create a procedure taking both columns as inputs
     coord.sql(
         """
-        CREATE PROCEDURE f(_p INT, _i INT) LANGUAGE plpgsql AS $$
+        CREATE PROCEDURE p(_i INT, _j INT)
+        LANGUAGE plpgsql AS $$
         BEGIN
-        INSERT INTO t (p, i) VALUES (_p, _i);
-        PERFORM _i;
-        END; $$
+            INSERT INTO test(i, j) VALUES (_i, _j);
+        END;
+        $$;
         """
     )
+
+    sql = "CALL p(2, %s)"
+
+    # 4) distribute table on column i and function on _i
+    coord.sql("SELECT create_distributed_table('test', 'i')")
     coord.sql(
-        "SELECT create_distributed_function('f(int, int)', distribution_arg_name := '_p', colocate_with := 't')"
+        """
+        SELECT create_distributed_function(
+            'p(int, int)',
+            distribution_arg_name := '_i',
+            colocate_with := 'test'
+        )
+        """
     )
 
-    sql_insert_and_call = "CALL f(1, 33);"
-    # sql_insert_and_call = "CALL f(%s, 1);"
+    # 5) prepare/exec after distribution
+    coord.sql_prepared(sql, (20,))
 
-    # cluster.coordinator.psql_debug()
-    # cluster.debug()
+    # 6) verify both inserts happened
+    sum_i = coord.sql_value("SELECT sum(i) FROM test;")
+    sum_j = coord.sql_value("SELECT sum(j) FROM test;")
 
-    # After distributing the table, insert more data and call the procedure again
-    # coord.sql_prepared(sql_insert_and_call, (33,))
-    coord.sql(sql_insert_and_call)
-
-    # Step 6: Check the result
-    sum_i = coord.sql_value("SELECT i FROM t limit 1;")
-
-    assert sum_i == 33
+    assert sum_i == 2
+    assert sum_j == 20
