@@ -108,7 +108,6 @@
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "miscadmin.h"  // for elog functions
 
 /* controlled via a GUC */
 bool EnableLocalExecution = true;
@@ -212,39 +211,6 @@ ExecuteLocalTaskListExtended(List *taskList,
 							 TupleDestination *defaultTupleDest,
 							 bool isUtilityCommand)
 {
-	    /* Log the size of the task list */
-    elog(DEBUG1, "Executing local task list, number of tasks: %d", list_length(taskList));
-
-    /* Log the distributed plan type */
-    if (distributedPlan != NULL)
-    {
-        elog(DEBUG1, "Distributed plan type: %d", nodeTag(distributedPlan));
-    }
-    else
-    {
-        elog(DEBUG1, "Distributed plan is NULL");
-    }
-
-    /* Log if the command is a utility command */
-    elog(DEBUG1, "Is Utility Command: %d", isUtilityCommand);
-
-    /* Log the parameters */
-    if (orig_paramListInfo != NULL)
-    {
-        elog(DEBUG1, "Original ParamListInfo has %d params", orig_paramListInfo->numParams);
-
-        /* Optionally log details of each parameter */
-        for (int i = 0; i < orig_paramListInfo->numParams; i++)
-        {
-            ParamExternData param = orig_paramListInfo->params[i];
-            elog(DEBUG1, "Param %d has type OID %d", i + 1, param.ptype);
-        }
-    }
-    else
-    {
-        elog(DEBUG1, "Original ParamListInfo is NULL");
-    }
-	
 	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
 	uint64 totalRowsProcessed = 0;
 	int numParams = 0;
