@@ -264,6 +264,151 @@ FROM (SELECT r.a * d1 as X, r.b * b1 as Y FROM update_test r, dist_test WHERE r.
 WHERE dist_test.a1 > 2
 RETURNING *;
 
+-- Test subscripting updates
+CREATE TABLE jsonb_subscript_update (id INT, data JSONB);
+SELECT create_distributed_table('jsonb_subscript_update', 'id');
+
+INSERT INTO jsonb_subscript_update VALUES (1, '{"a": 1}'), (2, '{"a": 2}');
+
+UPDATE jsonb_subscript_update
+SET data['b'] = updated_vals.b::TEXT::jsonb,
+    data['c'] = updated_vals.c::TEXT::jsonb,
+    data['d'] = updated_vals.d::TEXT::jsonb
+FROM (
+  SELECT id,
+         data['a'] AS a,
+         data['a']::NUMERIC + 1 AS b,
+         data['a']::NUMERIC + 2 AS c,
+         data['a']::NUMERIC + 3 AS d
+  FROM jsonb_subscript_update
+) updated_vals
+WHERE jsonb_subscript_update.id = updated_vals.id;
+
+SELECT * FROM jsonb_subscript_update ORDER BY 1,2;
+
+TRUNCATE jsonb_subscript_update;
+INSERT INTO jsonb_subscript_update VALUES (1, '{"a": 1}'), (2, '{"a": 2}');
+
+-- test router update with jsonb subscript
+UPDATE jsonb_subscript_update
+SET data['b'] = updated_vals.b::TEXT::jsonb,
+    data['c'] = updated_vals.c::TEXT::jsonb,
+    data['d'] = updated_vals.d::TEXT::jsonb
+FROM (
+  SELECT id,
+         data['a'] AS a,
+         data['a']::NUMERIC + 1 AS b,
+         data['a']::NUMERIC + 2 AS c,
+         data['a']::NUMERIC + 3 AS d
+  FROM jsonb_subscript_update
+) updated_vals
+WHERE jsonb_subscript_update.id = updated_vals.id
+    AND jsonb_subscript_update.id = 1;
+
+SELECT * FROM jsonb_subscript_update WHERE id = 1 ORDER BY 1,2;
+
+TRUNCATE jsonb_subscript_update;
+
+-- Test updates on nested json objects
+INSERT INTO jsonb_subscript_update VALUES (1, '{"a": {"c":20, "d" : 200}}'), (2, '{"a": {"d":10, "c" : 100}}');
+
+BEGIN;
+UPDATE jsonb_subscript_update
+SET DATA['a']['c'] = (updated_vals.d + updated_vals.a::NUMERIC)::TEXT::JSONB
+FROM
+  (SELECT id,
+          DATA['a']['c'] AS a,
+                   DATA['a']['c']::NUMERIC + 1 AS b,
+                            DATA['a']['c']::NUMERIC + 2 AS c,
+                                     DATA['a']['d']::NUMERIC + 3 AS d
+   FROM jsonb_subscript_update) updated_vals
+WHERE jsonb_subscript_update.id = updated_vals.id;
+
+SELECT * FROM jsonb_subscript_update ORDER BY 1,2;
+ROLLBACK;
+
+BEGIN;
+-- Router plan
+UPDATE jsonb_subscript_update
+SET DATA['a']['c'] = (updated_vals.d + updated_vals.a::NUMERIC)::TEXT::JSONB
+FROM
+  (SELECT id,
+          DATA['a']['c'] AS a,
+                   DATA['a']['c']::NUMERIC + 1 AS b,
+                            DATA['a']['c']::NUMERIC + 2 AS c,
+                                     DATA['a']['d']::NUMERIC + 3 AS d
+   FROM jsonb_subscript_update) updated_vals
+WHERE jsonb_subscript_update.id = updated_vals.id
+    AND jsonb_subscript_update.id = 1;
+
+SELECT * FROM jsonb_subscript_update WHERE id = 1 ORDER BY 1,2;
+ROLLBACK;
+
+TRUNCATE jsonb_subscript_update;
+INSERT INTO jsonb_subscript_update VALUES (1, '{"a": 1}'), (2, '{"a": 2}'), (4, '{"a": 4, "b": 10}');
+
+ALTER TABLE jsonb_subscript_update ADD CONSTRAINT pkey PRIMARY KEY (id, data);
+
+INSERT INTO jsonb_subscript_update VALUES (1, '{"a": 1}'), (2, '{"a": 2}')
+ON CONFLICT (id, data)
+DO UPDATE SET data['d']=(jsonb_subscript_update.data['a']::INT*100)::TEXT::JSONB,
+              data['b']=(jsonb_subscript_update.data['a']::INT*-100)::TEXT::JSONB;
+
+SELECT * FROM jsonb_subscript_update ORDER BY 1,2;
+
+CREATE TABLE nested_obj_update(id INT, data JSONB, text_col TEXT);
+SELECT create_distributed_table('nested_obj_update', 'id');
+INSERT INTO nested_obj_update VALUES
+  (1, '{"a": [1,2,3], "b": [4,5,6], "c": [7,8,9], "d": [1,2,1,2]}', '4'),
+  (2, '{"a": [10,20,30], "b": [41,51,61], "c": [72,82,92], "d": [11,21,11,21]}', '6');
+
+BEGIN;
+-- Pushdown plan
+UPDATE nested_obj_update
+SET data['a'][0] = (updated_vals.b * 1)::TEXT::JSONB,
+    data['b'][2] = (updated_vals.c * 2)::TEXT::JSONB,
+    data['c'][0] = (updated_vals.d * 3)::TEXT::JSONB,
+    text_col = (nested_obj_update.id*1000)::TEXT,
+    data['a'][0] = (text_col::INT * data['a'][0]::INT)::TEXT::JSONB,
+    data['d'][6] = (nested_obj_update.id*1)::TEXT::JSONB,
+    data['d'][4] = (nested_obj_update.id*2)::TEXT::JSONB
+FROM (
+  SELECT id,
+         data['a'][0] AS a,
+         data['b'][0]::NUMERIC + 1 AS b,
+         data['c'][0]::NUMERIC + 2 AS c,
+         data['c'][1]::NUMERIC + 3 AS d
+  FROM nested_obj_update
+) updated_vals
+WHERE nested_obj_update.id = updated_vals.id;
+
+SELECT * FROM nested_obj_update ORDER BY 1,2,3;
+ROLLBACK;
+
+BEGIN;
+-- Router plan
+UPDATE nested_obj_update
+SET data['a'][0] = (updated_vals.b * 1)::TEXT::JSONB,
+    data['b'][2] = (updated_vals.c * 2)::TEXT::JSONB,
+    data['c'][0] = (updated_vals.d * 3)::TEXT::JSONB,
+    text_col = (nested_obj_update.id*1000)::TEXT,
+    data['a'][0] = (text_col::INT * data['a'][0]::INT)::TEXT::JSONB,
+    data['d'][6] = (nested_obj_update.id*1)::TEXT::JSONB,
+    data['d'][4] = (nested_obj_update.id*2)::TEXT::JSONB
+FROM (
+  SELECT id,
+         data['a'][0] AS a,
+         data['b'][0]::NUMERIC + 1 AS b,
+         data['c'][0]::NUMERIC + 2 AS c,
+         data['c'][1]::NUMERIC + 3 AS d
+  FROM nested_obj_update
+) updated_vals
+WHERE nested_obj_update.id = updated_vals.id
+    AND nested_obj_update.id = 2;
+
+SELECT * FROM nested_obj_update WHERE id = 2 ORDER BY 1,2,3;
+ROLLBACK;
+
 -- suppress cascade messages
 SET client_min_messages to ERROR;
 DROP SCHEMA multi_update_select CASCADE;

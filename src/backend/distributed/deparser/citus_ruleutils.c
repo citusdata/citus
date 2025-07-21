@@ -82,6 +82,7 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static const char * convert_aclright_to_string(int aclright);
 static void simple_quote_literal(StringInfo buf, const char *val);
+static SubscriptingRef * TargetEntryExprFindSubsRef(Expr *expr);
 static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
 static void process_acl_items(Acl *acl, const char *relationName,
 							  const char *attributeName, List **defs);
@@ -1833,4 +1834,137 @@ ensure_update_targetlist_in_param_order(List *targetList)
 	{
 		list_sort(targetList, target_list_cmp);
 	}
+}
+
+
+/*
+ * ExpandMergedSubscriptingRefEntries takes a list of target entries and expands
+ * each one that references a SubscriptingRef node that indicates multiple (field)
+ * updates on the same attribute, which is applicable for array/json types atm.
+ */
+List *
+ExpandMergedSubscriptingRefEntries(List *targetEntryList)
+{
+	List *newTargetEntryList = NIL;
+	ListCell *tgtCell = NULL;
+
+	foreach(tgtCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(tgtCell);
+		List *expandedTargetEntries = NIL;
+
+		Expr *expr = targetEntry->expr;
+		while (expr)
+		{
+			SubscriptingRef *subsRef = TargetEntryExprFindSubsRef(expr);
+			if (!subsRef)
+			{
+				break;
+			}
+
+			/*
+			 * Remove refexpr from the SubscriptingRef that we are about to
+			 * wrap in a new TargetEntry and save it for the next one.
+			 */
+			Expr *refexpr = subsRef->refexpr;
+			subsRef->refexpr = NULL;
+
+			/*
+			 * Wrap the Expr that holds SubscriptingRef (directly or indirectly)
+			 * in a new TargetEntry; note that it doesn't have a refexpr anymore.
+			 */
+			TargetEntry *newTargetEntry = copyObject(targetEntry);
+			newTargetEntry->expr = expr;
+			expandedTargetEntries = lappend(expandedTargetEntries, newTargetEntry);
+
+			/* now inspect the refexpr that SubscriptingRef at hand were holding */
+			expr = refexpr;
+		}
+
+		if (expandedTargetEntries == NIL)
+		{
+			/* return original entry since it doesn't hold a SubscriptingRef node */
+			newTargetEntryList = lappend(newTargetEntryList, targetEntry);
+		}
+		else
+		{
+			/*
+			 * Need to concat expanded target list entries in reverse order
+			 * to preserve ordering of the original target entry list.
+			 */
+			List *reversedTgtEntries = NIL;
+			ListCell *revCell = NULL;
+			foreach(revCell, expandedTargetEntries)
+			{
+				TargetEntry *tgtEntry = (TargetEntry *) lfirst(revCell);
+				reversedTgtEntries = lcons(tgtEntry, reversedTgtEntries);
+			}
+			newTargetEntryList = list_concat(newTargetEntryList, reversedTgtEntries);
+		}
+	}
+
+	return newTargetEntryList;
+}
+
+
+/*
+ * TargetEntryExprFindSubsRef searches given Expr --assuming that it is part
+ * of a target list entry-- to see if it directly (i.e.: itself) or indirectly
+ * (e.g.: behind some level of coercions) holds a SubscriptingRef node.
+ *
+ * Returns the original SubscriptingRef node on success or NULL otherwise.
+ *
+ * Note that it wouldn't add much value to use expression_tree_walker here
+ * since we are only interested in a subset of the fields of a few certain
+ * node types.
+ */
+static SubscriptingRef *
+TargetEntryExprFindSubsRef(Expr *expr)
+{
+	Node *node = (Node *) expr;
+	while (node)
+	{
+		if (IsA(node, FieldStore))
+		{
+			/*
+			 * ModifyPartialQuerySupported doesn't allow INSERT/UPDATE via
+			 * FieldStore. If we decide supporting such commands, then we
+			 * should take the first element of "newvals" list into account
+			 * here. This is because, to support such commands, we will need
+			 * to expand merged FieldStore into separate target entries too.
+			 *
+			 * For this reason, this block is not reachable atm and need to
+			 * uncomment the following if we decide supporting such commands.
+			 *
+			 * """
+			 *   FieldStore *fieldStore = (FieldStore *) node;
+			 *   node = (Node *) linitial(fieldStore->newvals);
+			 * """
+			 */
+			ereport(ERROR, (errmsg("unexpectedly got FieldStore object when "
+								   "generating shard query")));
+		}
+		else if (IsA(node, CoerceToDomain))
+		{
+			CoerceToDomain *coerceToDomain = (CoerceToDomain *) node;
+			if (coerceToDomain->coercionformat != COERCE_IMPLICIT_CAST)
+			{
+				/* not an implicit coercion, cannot reach to a SubscriptingRef */
+				break;
+			}
+
+			node = (Node *) coerceToDomain->arg;
+		}
+		else if (IsA(node, SubscriptingRef))
+		{
+			return (SubscriptingRef *) node;
+		}
+		else
+		{
+			/* got a node that we are not interested in */
+			break;
+		}
+	}
+
+	return NULL;
 }
