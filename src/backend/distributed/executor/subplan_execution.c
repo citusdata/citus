@@ -37,6 +37,7 @@ int SubPlanLevel = 0;
  */
 MemoryContext SubPlanExplainAnalyzeContext = NULL;
 SubPlanExplainOutputData *SubPlanExplainOutput;
+extern uint8 TotalExplainOutputCapacity;
 extern uint8 NumTasksOutput;
 
 /*
@@ -82,14 +83,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 	DistributedSubPlan *subPlan = NULL;
 	foreach_declared_ptr(subPlan, subPlanList)
 	{
-		/*
-		 * Save the EXPLAIN ANALYZE output(s) for later extraction in ExplainSubPlans().
-		 * Because the SubPlan context isn’t available during distributed execution,
-		 * pass the pointer as a global variable in SubPlanExplainOutput.
-		 */
-		MemSet(subPlan->totalExplainOutput, 0, sizeof(subPlan->totalExplainOutput));
-		SubPlanExplainOutput = subPlan->totalExplainOutput;
-
 		PlannedStmt *plannedStmt = subPlan->plan;
 		uint32 subPlanId = subPlan->subPlanId;
 		ParamListInfo params = NULL;
@@ -119,6 +112,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 		{
 			SubPlanExplainAnalyzeContext = NULL;
 			SubPlanExplainOutput = NULL;
+			TotalExplainOutputCapacity = 0;
 			NumTasksOutput = 0;
 			PG_RE_THROW();
 		}
@@ -143,8 +137,16 @@ ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled)
 		subPlan->writeLocalFile = entry->writeLocalFile;
 
 		SubPlanLevel--;
+
+		/*
+		 * Save the EXPLAIN ANALYZE output(s) for later extraction in ExplainSubPlans().
+		 * Because the SubPlan context isn’t available during distributed execution,
+		 * pass the pointer as a global variable in SubPlanExplainOutput.
+		 */
+		subPlan->totalExplainOutput = SubPlanExplainOutput;
 		subPlan->numTasksOutput = NumTasksOutput;
 		SubPlanExplainOutput = NULL;
+		TotalExplainOutputCapacity = 0;
 		NumTasksOutput = 0;
 		FreeExecutorState(estate);
 	}

@@ -526,7 +526,7 @@ typedef struct DistributedSubPlan
 	uint32 remoteWorkerCount;
 	double durationMillisecs;
 	bool writeLocalFile;
-	SubPlanExplainOutputData totalExplainOutput[MAX_ANALYZE_OUTPUT];
+	SubPlanExplainOutputData *totalExplainOutput;
 	uint32 numTasksOutput; /* actual size of the above array */
 	double ntuples; /* total tuples produced */
 } DistributedSubPlan;

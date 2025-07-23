@@ -221,7 +221,7 @@ OutDistributedSubPlan(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(writeLocalFile);
 
 	appendStringInfoString(str, " totalExplainOutput [");
-	for (int i = 0; i < MAX_ANALYZE_OUTPUT; i++)
+	for (int i = 0; i < node->numTasksOutput; i++)
 	{
 		const SubPlanExplainOutputData *e = &node->totalExplainOutput[i];
 
@@ -252,10 +252,11 @@ OutDistributedSubPlan(OUTFUNC_ARGS)
 		appendStringInfoChar(str, ')');
 	}
 
+	appendStringInfoChar(str, ']');
+
 	WRITE_INT_FIELD(numTasksOutput);
 	WRITE_FLOAT_FIELD(ntuples, "%.2f");
 
-	appendStringInfoChar(str, ']');
 }
 
 void
