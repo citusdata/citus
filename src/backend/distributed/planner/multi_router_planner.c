@@ -2138,7 +2138,6 @@ ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 	Assert(list_length(query->rtable) == 1);
 	RangeTblEntry *citusTableRte = (RangeTblEntry *) linitial(query->rtable);
 	Assert(citusTableRte->relid == citusTableOid);
-	Assert(list_length(query->rteperminfos) == 1);
 
 	const char *citusTableName = get_rel_name(citusTableOid);
 	Assert(citusTableName != NULL);
