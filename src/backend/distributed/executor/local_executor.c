@@ -764,24 +764,6 @@ ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 															 localPlacementIndex) :
 								 CreateDestReceiver(DestNone);
 
-	/* Create a QueryDesc for the query */
-	#if PG_VERSION_NUM >= PG_VERSION_18
-
-	/* PG18+: nine‐arg CreateQueryDesc with a CachedPlan slot */
-	QueryDesc *queryDesc = CreateQueryDesc(
-		taskPlan,          /* PlannedStmt *plannedstmt */
-		NULL,              /* CachedPlan *cplan (none) */
-		queryString,       /* const char *sourceText */
-		GetActiveSnapshot(),   /* Snapshot snapshot */
-		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
-		destReceiver,      /* DestReceiver *dest */
-		paramListInfo,     /* ParamListInfo params */
-		queryEnv,          /* QueryEnvironment *queryEnv */
-		0                  /* int instrument_options */
-		);
-	#else
-
-	/* PG15–17: eight‐arg CreateQueryDesc without CachedPlan */
 	QueryDesc *queryDesc = CreateQueryDesc(
 		taskPlan,          /* PlannedStmt *plannedstmt */
 		queryString,       /* const char *sourceText */
@@ -792,8 +774,6 @@ ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 		queryEnv,          /* QueryEnvironment *queryEnv */
 		0                  /* int instrument_options */
 		);
-	#endif
-
 
 	ExecutorStart(queryDesc, eflags);
 

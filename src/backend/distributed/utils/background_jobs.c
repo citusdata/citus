@@ -1907,20 +1907,6 @@ ExecuteSqlString(const char *sql)
 		/* Don't display the portal in pg_cursors */
 		portal->visible = false;
 
-		#if PG_VERSION_NUM >= PG_VERSION_18
-
-		/* PG18+ added a seventh “plansource” argument */
-		PortalDefineQuery(
-			portal,
-			NULL,             /* no prepared‐stmt name */
-			sql,              /* the query text */
-			commandTag,       /* the CommandTag */
-			plantree_list,    /* List of PlannedStmt* */
-			NULL,             /* no CachedPlan */
-			NULL              /* no CachedPlanSource */
-			);
-	#else
-
 		/* PG17-: six‐arg signature */
 		PortalDefineQuery(
 			portal,
@@ -1930,7 +1916,6 @@ ExecuteSqlString(const char *sql)
 			plantree_list,    /* List of PlannedStmt* */
 			NULL              /* no CachedPlan */
 			);
-	#endif
 
 		PortalStart(portal, NULL, 0, InvalidSnapshot);
 		int16 format[] = { 1 };
