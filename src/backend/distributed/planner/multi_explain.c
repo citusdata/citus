@@ -96,6 +96,7 @@ static double SavedExecutionDurationMillisec = 0.0;
 static double SavedExplainPlanNtuples = 0;
 static double SavedExplainPlanNloops = 0;
 extern SubPlanExplainOutputData *SubPlanExplainOutput;
+uint8 TotalExplainOutputCapacity = 0;
 uint8 NumTasksOutput = 0;
 
 /* struct to save explain flags */
@@ -1742,6 +1743,51 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 
 
 /*
+ * EnsureExplainOutputCapacity is to ensure capacity for new entries. Input
+ * parameter requiredSize is minimum number of elements needed.
+ */
+static void
+EnsureExplainOutputCapacity(int requiredSize)
+{
+	if (requiredSize < TotalExplainOutputCapacity)
+	{
+		return;
+	}
+
+	int newCapacity =
+		(TotalExplainOutputCapacity == 0) ? 32 : TotalExplainOutputCapacity * 2;
+
+	while (newCapacity <= requiredSize)
+	{
+		newCapacity *= 2;
+	}
+
+	if (SubPlanExplainOutput == NULL)
+	{
+		SubPlanExplainOutput =
+			(SubPlanExplainOutputData *) MemoryContextAllocZero(
+				SubPlanExplainAnalyzeContext,
+				newCapacity *
+				sizeof(SubPlanExplainOutputData));
+	}
+	else
+	{
+		/* Use repalloc and manually zero the new memory */
+		int oldSize = TotalExplainOutputCapacity * sizeof(SubPlanExplainOutputData);
+		int newSize = newCapacity * sizeof(SubPlanExplainOutputData);
+
+		SubPlanExplainOutput =
+			(SubPlanExplainOutputData *) repalloc(SubPlanExplainOutput, newSize);
+
+		/* Zero out the newly allocated memory */
+		MemSet((char *) SubPlanExplainOutput + oldSize, 0, newSize - oldSize);
+	}
+
+	TotalExplainOutputCapacity = newCapacity;
+}
+
+
+/*
  * ExplainAnalyzeDestPutTuple implements TupleDestination->putTuple
  * for ExplainAnalyzeDestination.
  */
@@ -1759,8 +1805,10 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple,
 								  tupleLibpqSize);
 		tupleDestination->originalTask->totalReceivedTupleData += tupleLibpqSize;
-		if (SubPlanExplainAnalyzeContext && NumTasksOutput < MAX_ANALYZE_OUTPUT)
+
+		if (SubPlanExplainAnalyzeContext)
 		{
+			EnsureExplainOutputCapacity(taskId + 1);
 			SubPlanExplainOutput[taskId].totalReceivedTupleData =
 				tupleDestination->originalTask->totalReceivedTupleData;
 		}
@@ -1819,8 +1867,9 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 			fetchedExplainAnalyzeExecutionDuration;
 
 		/* We should build tupleDestination in subPlan similar to the above */
-		if (SubPlanExplainAnalyzeContext && NumTasksOutput < MAX_ANALYZE_OUTPUT)
+		if (SubPlanExplainAnalyzeContext)
 		{
+			EnsureExplainOutputCapacity(taskId + 1);
 			SubPlanExplainOutput[taskId].explainOutput =
 				MemoryContextStrdup(SubPlanExplainAnalyzeContext,
 									fetchedExplainAnalyzePlan);

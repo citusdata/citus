@@ -630,7 +630,6 @@ typedef struct TaskPlacementExecution
 	instr_time endTime;
 } TaskPlacementExecution;
 
-extern MemoryContext SubPlanExplainAnalyzeContext;
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,

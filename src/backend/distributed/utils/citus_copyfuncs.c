@@ -152,10 +152,13 @@ CopyNodeDistributedSubPlan(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(durationMillisecs);
 	COPY_SCALAR_FIELD(writeLocalFile);
 
-	MemSet(newnode->totalExplainOutput, 0, sizeof(newnode->totalExplainOutput));
+	if (newnode->totalExplainOutput)
+	{
+		MemSet(newnode->totalExplainOutput, 0, sizeof(newnode->totalExplainOutput));
+	}
 
 	/* copy each SubPlanExplainOutput element */
-	for (int i = 0; i < MAX_ANALYZE_OUTPUT; i++)
+	for (int i = 0; i < from->numTasksOutput; i++)
 	{
 		/* copy the explainOutput string pointer */
 		COPY_STRING_FIELD(totalExplainOutput[i].explainOutput);
