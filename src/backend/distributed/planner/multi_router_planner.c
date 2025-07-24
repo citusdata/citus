@@ -2060,14 +2060,6 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 	Task *task = (Task *) linitial(tasks);
 	List *placements = task->taskPlacementList;
 	int32 localGroupId = GetLocalGroupId();
-
-	/*
-	 * Today FastPathRouterQuery() doesn't set delayFastPathPlanning to true for
-	 * reference tables. We should be looking at 1 placement, or ShardReplicationFactor
-	 * of them.
-	 */
-	Assert(list_length(placements) == 1 || list_length(placements) ==
-		   ShardReplicationFactor);
 	ShardPlacement *primaryPlacement = (ShardPlacement *) linitial(placements);
 
 	bool isLocalExecution = !IsDummyPlacement(primaryPlacement) &&
@@ -2080,6 +2072,14 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 		Assert(list_length(relationShards) == 1);
 		RelationShard *relationShard = (RelationShard *) linitial(relationShards);
 		Assert(relationShard->shardId == primaryPlacement->shardId);
+
+		/*
+		 * Today FastPathRouterQuery() doesn't set delayFastPathPlanning to true for
+		 * reference tables. We should be looking at 1 placement, or their replication
+		 * factor.
+		 */
+		Assert(list_length(placements) == 1 || list_length(placements) ==
+			   TableShardReplicationFactor(relationShard->relationId));
 
 		canBuildLocalPlan = ConvertToQueryOnShard(planContext->query,
 												  relationShard->relationId,
