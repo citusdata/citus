@@ -2658,25 +2658,13 @@ hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
 
 
 /*
- * IsPushdownSafeForRTEInLeftJoin returns true if the given range table entry 
- * is safe for pushdown. Currently, we only allow RTE_RELATION and RTE_FUNCTION.
+ * IsPushdownSafeForRTEInLeftJoin returns true if the given range table entry
+ * is safe for pushdown. Currently, we only allow reference tables.
  */
 bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
 {
-	if (rte->rtekind == RTE_RELATION)
+	if (IsCitusTable(rte->relid) && IsCitusTableType(rte->relid, REFERENCE_TABLE))
 	{
-		return true;
-	}
-	/* check if it is a citus table, e.g., ref table */
-	else if (rte->rtekind == RTE_FUNCTION)
-	{
-		RangeTblEntry *newRte = NULL;
-		if(!ExtractCitusExtradataContainerRTE(rte, &newRte))
-		{
-			ereport(DEBUG5, (errmsg("RTE type %d is not safe for pushdown, function but it does not contain citus extradata",
-									rte->rtekind)));
-			return false;
-		}
 		return true;
 	}
 	else
@@ -2685,7 +2673,6 @@ bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
 							    rte->rtekind)));
 		return false;
 	}
-	
 }
 
 
