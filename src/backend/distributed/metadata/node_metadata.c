@@ -2930,7 +2930,19 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG18+: Must push snapshot before catalog insert */
+	Snapshot snapshot = GetTransactionSnapshot();
+	PushActiveSnapshot(snapshot);
+#endif
+
 	CatalogTupleInsert(pgDistNode, heapTuple);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+	PopActiveSnapshot();
+#endif
+
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
