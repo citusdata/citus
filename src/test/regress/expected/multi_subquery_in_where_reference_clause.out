@@ -300,7 +300,7 @@ ORDER BY 1, 2;
        5 |       5
 (2 rows)
 
--- reference table LEFT JOIN distributed table in WHERE is still not ok
+-- reference table LEFT JOIN distributed table in WHERE is ok
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 5
@@ -361,7 +361,12 @@ SELECT user_id, value_2 FROM users_table WHERE
 		HAVING sum(submit_card_info) > 0
 )
 ORDER BY 1, 2;
-ERROR:  cannot perform a lateral outer join when a distributed subquery references a reference table
+ user_id | value_2
+---------------------------------------------------------------------
+       5 |       5
+       5 |       5
+(2 rows)
+
 -- non-partition key equality with reference table
  SELECT
   user_id, count(*)

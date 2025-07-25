@@ -754,8 +754,7 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 					{
 						ereport(DEBUG1, (errmsg("recursively planning right side of "
 												"the left join since the outer side "
-												"is a recurring rel and it is not "
-												"feasible to push down")));
+												"is a recurring rel")));
 						RecursivelyPlanDistributedJoinNode(rightNode, query,
 														   recursivePlanningContext);
 					}

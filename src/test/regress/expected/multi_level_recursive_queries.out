@@ -62,12 +62,9 @@ RIGHT JOIN (
     RIGHT JOIN tbl_dist1 USING (id)
 ) AS table_4 USING (id);
 DEBUG:  CTE cte_0 is going to be inlined via distributed planning
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "tbl_dist1" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "tbl_dist1" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM multi_recursive.tbl_dist1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN multi_recursive.tbl_dist1 USING (id))
 DEBUG:  push down of limit count: 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM (SELECT tbl_dist1.id FROM multi_recursive.tbl_dist1 WHERE (tbl_dist1.id OPERATOR(pg_catalog.=) ANY (SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN (SELECT tbl_dist1_2.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) tbl_dist1_2) tbl_dist1_1 USING (id))))) cte_0 LIMIT 0
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM (SELECT tbl_dist1.id FROM multi_recursive.tbl_dist1 WHERE (tbl_dist1.id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)))) cte_0 LIMIT 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(table_4.id) AS count FROM (multi_recursive.tbl_dist1 RIGHT JOIN (SELECT table_5.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5 RIGHT JOIN multi_recursive.tbl_dist1 tbl_dist1_1 USING (id))) table_4 USING (id))
 DEBUG:  generating subplan XXX_1 for subquery SELECT table_5.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5 RIGHT JOIN multi_recursive.tbl_dist1 USING (id))
 DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
@@ -76,11 +73,8 @@ DEBUG:  Wrapping relation "tbl_dist1" to a subquery
 DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM multi_recursive.tbl_dist1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(table_4.id) AS count FROM ((SELECT tbl_dist1_1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) tbl_dist1_1) tbl_dist1 RIGHT JOIN (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_4 USING (id))
 DEBUG:  generating subplan XXX_1 for CTE cte_0: SELECT id FROM multi_recursive.tbl_dist1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN multi_recursive.tbl_dist1 tbl_dist1_1 USING (id))))
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "tbl_dist1" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "tbl_dist1" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM multi_recursive.tbl_dist1 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id FROM multi_recursive.tbl_dist1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN (SELECT tbl_dist1_2.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) tbl_dist1_2) tbl_dist1_1 USING (id))))
+DEBUG:  generating subplan XXX_1 for subquery SELECT tbl_ref1.id FROM (multi_recursive.tbl_ref1 LEFT JOIN multi_recursive.tbl_dist1 USING (id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id FROM multi_recursive.tbl_dist1 WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)))
 DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) cte_0 LIMIT 0
 DEBUG:  generating subplan XXX_3 for subquery SELECT table_5.id FROM ((SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) table_5 RIGHT JOIN multi_recursive.tbl_dist1 USING (id))
 DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
