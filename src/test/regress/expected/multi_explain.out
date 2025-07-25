@@ -2492,15 +2492,15 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
         Intermediate Data Size: 100 bytes
         Result destination: Write locally
-        ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
+        ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
-              Tuple data received from nodes: 160 bytes
+              Tuple data received from nodes: 80 bytes
               Tasks Shown: One of 4
               ->  Task
-                    Tuple data received from node: 64 bytes
+                    Tuple data received from node: 32 bytes
                     Node: host=localhost port=xxxxx dbname=regression
-                    ->  Insert on dist_table_570017 citus_table_alias (actual rows=8 loops=1)
-                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
+                    ->  Insert on dist_table_570017 citus_table_alias (actual rows=4 loops=1)
+                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
                                 Filter: (a IS NOT NULL)
   ->  Distributed Subplan XXX_2
         Intermediate Data Size: 150 bytes
@@ -3228,6 +3228,159 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
                 ->  Update on tbl_570036 tbl (actual rows=0 loops=1)
                       ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
                             Filter: (a = 1)
+-- EXPLAIN ANALYZE shouldn't execute SubPlans twice (bug #4212)
+SET search_path TO multi_explain;
+CREATE TABLE test_subplans (x int primary key, y int);
+SELECT create_distributed_table('test_subplans','x');
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 18 bytes
+        Result destination: Write locally
+        ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+              Task Count: 1
+              Tuple data received from nodes: 16 bytes
+              Tasks Shown: All
+              ->  Task
+                    Tuple data received from node: 16 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Insert on test_subplans_570038 (actual rows=1 loops=1)
+                          ->  Result (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 8 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 8 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
+-- Only one row must exist
+SELECT * FROM test_subplans;
+1|2
+-- Will fail with duplicate pk
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+ERROR:  duplicate key value violates unique constraint "test_subplans_pkey_570038"
+DETAIL:  Key (x)=(1) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+-- Test JSON format
+TRUNCATE test_subplans;
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+[
+  {
+    "Plan": {
+      "Node Type": "Custom Scan",
+      "Custom Plan Provider": "Citus Adaptive",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Actual Rows": 1,
+      "Actual Loops": 1,
+      "Distributed Query": {
+        "Subplans": [
+          {
+            "Intermediate Data Size": "18 bytes",
+            "Result destination": "Write locally",
+            "PlannedStmt": [
+              {
+                "Plan": {
+                  "Node Type": "Custom Scan",
+                  "Custom Plan Provider": "Citus Adaptive",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Actual Rows": 1,
+                  "Actual Loops": 1,
+                  "Distributed Query": {
+                    "Job": {
+                      "Task Count": 1,
+                      "Tuple data received from nodes": "16 bytes",
+                      "Tasks Shown": "All",
+                      "Tasks": [
+                        {
+                          "Tuple data received from node": "16 bytes",
+                          "Node": "host=localhost port=xxxxx dbname=regression",
+                          "Remote Plan": [
+                            [
+                              {
+                                "Plan": {
+                                  "Node Type": "ModifyTable",
+                                  "Operation": "Insert",
+                                  "Parallel Aware": false,
+                                  "Async Capable": false,
+                                  "Relation Name": "test_subplans_570038",
+                                  "Alias": "test_subplans_570038",
+                                  "Actual Rows": 1,
+                                  "Actual Loops": 1,
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Result",
+                                      "Parent Relationship": "Outer",
+                                      "Parallel Aware": false,
+                                      "Async Capable": false,
+                                      "Actual Rows": 1,
+                                      "Actual Loops": 1
+                                    }
+                                  ]
+                                },
+                                "Triggers": [
+                                ]
+                              }
+                            ]
+
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                "Triggers": [
+                ]
+              }
+            ]
+          }
+        ],
+        "Job": {
+          "Task Count": 1,
+          "Tuple data received from nodes": "8 bytes",
+          "Tasks Shown": "All",
+          "Tasks": [
+            {
+              "Tuple data received from node": "8 bytes",
+              "Node": "host=localhost port=xxxxx dbname=regression",
+              "Remote Plan": [
+                [
+                  {
+                    "Plan": {
+                      "Node Type": "Function Scan",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Function Name": "read_intermediate_result",
+                      "Alias": "intermediate_result",
+                      "Actual Rows": 1,
+                      "Actual Loops": 1
+                    },
+                    "Triggers": [
+                    ]
+                  }
+                ]
+
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Triggers": [
+    ]
+  }
+]
+-- Only one row must exist
+SELECT * FROM test_subplans;
+1|2
 -- check when auto explain + analyze is enabled, we do not allow local execution.
 CREATE SCHEMA test_auto_explain;
 SET search_path TO 'test_auto_explain';

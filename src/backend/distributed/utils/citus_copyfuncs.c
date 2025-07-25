@@ -147,6 +147,31 @@ CopyNodeDistributedSubPlan(COPYFUNC_ARGS)
 
 	COPY_SCALAR_FIELD(subPlanId);
 	COPY_NODE_FIELD(plan);
+	COPY_SCALAR_FIELD(bytesSentPerWorker);
+	COPY_SCALAR_FIELD(remoteWorkerCount);
+	COPY_SCALAR_FIELD(durationMillisecs);
+	COPY_SCALAR_FIELD(writeLocalFile);
+
+	if (newnode->totalExplainOutput)
+	{
+		MemSet(newnode->totalExplainOutput, 0, sizeof(newnode->totalExplainOutput));
+	}
+
+	/* copy each SubPlanExplainOutput element */
+	for (int i = 0; i < from->numTasksOutput; i++)
+	{
+		/* copy the explainOutput string pointer */
+		COPY_STRING_FIELD(totalExplainOutput[i].explainOutput);
+
+		/* copy the executionDuration (double) */
+		COPY_SCALAR_FIELD(totalExplainOutput[i].executionDuration);
+
+		/* copy the totalReceivedTupleData (uint64) */
+		COPY_SCALAR_FIELD(totalExplainOutput[i].totalReceivedTupleData);
+	}
+
+	COPY_SCALAR_FIELD(numTasksOutput);
+	COPY_SCALAR_FIELD(ntuples);
 }
 
 

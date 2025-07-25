@@ -1166,6 +1166,32 @@ PREPARE q2(int_wrapper_type) AS WITH a AS (UPDATE tbl SET b = $1 WHERE a = 1 RET
 EXPLAIN (COSTS false) EXECUTE q2('(1)');
 EXPLAIN :default_analyze_flags EXECUTE q2('(1)');
 
+-- EXPLAIN ANALYZE shouldn't execute SubPlans twice (bug #4212)
+SET search_path TO multi_explain;
+CREATE TABLE test_subplans (x int primary key, y int);
+SELECT create_distributed_table('test_subplans','x');
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+
+-- Only one row must exist
+SELECT * FROM test_subplans;
+
+-- Will fail with duplicate pk
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+
+-- Test JSON format
+TRUNCATE test_subplans;
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+
+-- Only one row must exist
+SELECT * FROM test_subplans;
+
 -- check when auto explain + analyze is enabled, we do not allow local execution.
 CREATE SCHEMA test_auto_explain;
 SET search_path TO 'test_auto_explain';
