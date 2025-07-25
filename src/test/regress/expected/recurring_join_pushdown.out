@@ -90,7 +90,7 @@ SELECT * FROM r1_local LEFT JOIN d1_local using (a, b) ORDER BY 1, 2;
 SET client_min_messages TO DEBUG1;
 -- Test that the join is not pushed down when joined on a non-distributed column
 SELECT count(*) FROM r1 LEFT JOIN d1 USING (b);
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel and it is not feasible to push down
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "d1" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM recurring_join_pushdown.d1 WHERE true
@@ -196,7 +196,7 @@ SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.b = d1.b;
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel and it is not feasible to push down
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "d1" to a subquery
 DEBUG:  no shard pruning constraints on d1 found
@@ -226,7 +226,7 @@ SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.b;
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel and it is not feasible to push down
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "d1" to a subquery
 DEBUG:  no shard pruning constraints on d1 found
@@ -255,7 +255,7 @@ SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.b;
 SET client_min_messages TO DEBUG1;
 -- Test that the join is not pushed down when joined on a distributed column with disjunctive conditions
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.a OR r1.b = d1.b;
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel and it is not feasible to push down
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "d1" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_join_pushdown.d1 WHERE true
@@ -372,7 +372,7 @@ DEBUG:  shard count after pruning for d1: 4
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel and it is not feasible to push down
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "d1" to a subquery
 DEBUG:  no shard pruning constraints on d1 found

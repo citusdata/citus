@@ -765,16 +765,10 @@ DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_133000
    raw_events_second.user_id
  FROM
    reference_table LEFT JOIN raw_events_second ON reference_table.user_id = raw_events_second.user_id;
-DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "raw_events_second" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "raw_events_second" to a subquery
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM multi_insert_select.raw_events_second WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table LEFT JOIN (SELECT raw_events_second_1.user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) raw_events_second_1) raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)))
-DEBUG:  Creating router plan
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300004 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300005 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300006 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300007 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_second.user_id IS NOT NULL)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -3378,23 +3372,31 @@ $$);
          Task Count: 1
 (4 rows)
 
--- verify that insert select cannot be pushed down when we have reference table in outside of outer join.
+-- verify that insert select can be pushed down when we have reference table in outside of outer join.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
 $$);
-                coordinator_plan
+       coordinator_plan
 ---------------------------------------------------------------------
- Custom Scan (Citus INSERT ... SELECT)
-   INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+(2 rows)
 
--- verify that insert select cannot be pushed down when it has a recurring outer join in a subquery.
+-- verify that insert select can be pushed down when we have reference table in outside of left join.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
+$$);
+           coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+(4 rows)
+
+-- verify that insert select cannot be pushed down when we have reference table in outside of left join and joined on non-distribution column.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT ref_table_1.id FROM ref_table_1 LEFT JOIN dist_table_5 ON ref_table_1.id = dist_table_5.id2;
 $$);
                 coordinator_plan
 ---------------------------------------------------------------------
