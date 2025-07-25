@@ -1,4 +1,4 @@
-black==23.11.0
+black==24.3.0
 click==8.1.7
 isort==5.12.0
 mypy-extensions==1.0.0
