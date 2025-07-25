@@ -209,7 +209,7 @@ InitializeMaintenanceDaemonForMainDb(void)
 	worker.bgw_restart_time = 5;
 	strcpy_s(worker.bgw_library_name,
 			 sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
+	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_function_name),
 			 "CitusMaintenanceDaemonMain");
 
 	worker.bgw_main_arg = (Datum) 0;
