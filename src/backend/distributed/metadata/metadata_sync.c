@@ -92,6 +92,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/background_worker_utils.h"
 
 
 /* managed via a GUC */
@@ -2238,7 +2239,7 @@ GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
 	if (permissions & ACL_CREATE_TEMP)
 	{
 		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
-										  OBJECT_DATABASE, granteeOid, databaseOid,
+																				  OBJECT_DATABASE, granteeOid, databaseOid,
 										  "TEMPORARY",
 										  grants & ACL_CREATE_TEMP));
 		queries = lappend(queries, query);
@@ -3152,37 +3153,25 @@ MetadataSyncSigAlrmHandler(SIGNAL_ARGS)
 BackgroundWorkerHandle *
 SpawnSyncNodeMetadataToNodes(Oid database, Oid extensionOwner)
 {
-	BackgroundWorker worker;
-	BackgroundWorkerHandle *handle = NULL;
+    char workerName[BGW_MAXLEN];
+    
+    SafeSnprintf(workerName, BGW_MAXLEN,
+                 "Citus Metadata Sync: %u/%u",
+                 database, extensionOwner);
 
-	/* Configure a worker. */
-	memset(&worker, 0, sizeof(worker));
-	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
-				 "Citus Metadata Sync: %u/%u",
-				 database, extensionOwner);
-	worker.bgw_flags =
-		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_ConsistentState;
+    CitusBackgroundWorkerConfig config = {
+        .workerName = workerName,
+        .functionName = "SyncNodeMetadataToNodesMain",
+        .mainArg = ObjectIdGetDatum(MyDatabaseId),
+        .extensionOwner = extensionOwner,
+        .needsNotification = true,
+        .waitForStartup = false,
+        .restartTime = CITUS_BGW_NEVER_RESTART,
+        .extraData = NULL,
+        .extraDataSize = 0
+    };
 
-	/* don't restart, we manage restarts from maintenance daemon */
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
-	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "SyncNodeMetadataToNodesMain");
-	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
-	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
-			 sizeof(Oid));
-	worker.bgw_notify_pid = MyProcPid;
-
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-	{
-		return NULL;
-	}
-
-	pid_t pid;
-	WaitForBackgroundWorkerStartup(handle, &pid);
-
-	return handle;
+    return RegisterCitusBackgroundWorker(&config);
 }
 
 

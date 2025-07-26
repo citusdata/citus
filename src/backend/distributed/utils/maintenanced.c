@@ -60,6 +60,7 @@
 #include "distributed/stats/query_stats.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
+#include "distributed/background_worker_utils.h"
 
 /*
  * Shared memory data for all maintenance workers.
@@ -188,33 +189,21 @@ InitializeMaintenanceDaemonForMainDb(void)
 		return;
 	}
 
-	BackgroundWorker worker;
+    CitusBackgroundWorkerConfig config = {
+        .workerName = "Citus Maintenance Daemon for Main DB",
+        .functionName = "CitusMaintenanceDaemonMain",
+        .mainArg = (Datum) 0,
+        .extensionOwner = InvalidOid,
+        .needsNotification = false,
+        .waitForStartup = false,
+        .restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
+        .extraData = NULL,
+        .extraDataSize = 0
+    };
 
-	memset(&worker, 0, sizeof(worker));
-
-
-	strcpy_s(worker.bgw_name, sizeof(worker.bgw_name),
-			 "Citus Maintenance Daemon for Main DB");
-
-	/* request ability to connect to target database */
-	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-
-	/*
-	 * No point in getting started before able to run query, but we do
-	 * want to get started on Hot-Standby.
-	 */
-	worker.bgw_start_time = BgWorkerStart_ConsistentState;
-
-	/* Restart after a bit after errors, but don't bog the system. */
-	worker.bgw_restart_time = 5;
-	strcpy_s(worker.bgw_library_name,
-			 sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_function_name),
-			 "CitusMaintenanceDaemonMain");
-
-	worker.bgw_main_arg = (Datum) 0;
-
-	RegisterBackgroundWorker(&worker);
+    BackgroundWorker worker;
+    InitializeCitusBackgroundWorker(&worker, &config);
+    RegisterBackgroundWorker(&worker);
 }
 
 
@@ -256,53 +245,40 @@ InitializeMaintenanceDaemonBackend(void)
 	{
 		Assert(dbData->workerPid == 0);
 
-		BackgroundWorker worker;
-		BackgroundWorkerHandle *handle = NULL;
+        BackgroundWorkerHandle *handle = NULL;
+        char workerName[BGW_MAXLEN];
+        
+        SafeSnprintf(workerName, sizeof(workerName),
+                     "Citus Maintenance Daemon: %u/%u",
+                     MyDatabaseId, extensionOwner);
 
-		memset(&worker, 0, sizeof(worker));
+        CitusBackgroundWorkerConfig config = {
+            .workerName = workerName,
+            .functionName = "CitusMaintenanceDaemonMain",
+            .mainArg = ObjectIdGetDatum(MyDatabaseId),
+            .extensionOwner = extensionOwner,
+            .needsNotification = true,
+            .waitForStartup = true,
+            .restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
+            .extraData = NULL,
+            .extraDataSize = 0
+        };
 
-		SafeSnprintf(worker.bgw_name, sizeof(worker.bgw_name),
-					 "Citus Maintenance Daemon: %u/%u",
-					 MyDatabaseId, extensionOwner);
+        handle = RegisterCitusBackgroundWorker(&config);
 
-		/* request ability to connect to target database */
-		worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
+        if (!handle)
+        {
+            WarnMaintenanceDaemonNotStarted();
+            dbData->daemonStarted = false;
+            LWLockRelease(&MaintenanceDaemonControl->lock);
+            return;
+        }
 
-		/*
-		 * No point in getting started before able to run query, but we do
-		 * want to get started on Hot-Standby.
-		 */
-		worker.bgw_start_time = BgWorkerStart_ConsistentState;
-
-		/* Restart after a bit after errors, but don't bog the system. */
-		worker.bgw_restart_time = 5;
-		strcpy_s(worker.bgw_library_name,
-				 sizeof(worker.bgw_library_name), "citus");
-		strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-				 "CitusMaintenanceDaemonMain");
-
-		worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
-		memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
-				 sizeof(Oid));
-		worker.bgw_notify_pid = MyProcPid;
-
-		if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-		{
-			WarnMaintenanceDaemonNotStarted();
-			dbData->daemonStarted = false;
-			LWLockRelease(&MaintenanceDaemonControl->lock);
-
-			return;
-		}
-
-		dbData->daemonStarted = true;
-		dbData->userOid = extensionOwner;
-		dbData->workerPid = 0;
-		dbData->triggerNodeMetadataSync = false;
-		LWLockRelease(&MaintenanceDaemonControl->lock);
-
-		pid_t pid;
-		WaitForBackgroundWorkerStartup(handle, &pid);
+        dbData->daemonStarted = true;
+        dbData->userOid = extensionOwner;
+        dbData->workerPid = 0;
+        dbData->triggerNodeMetadataSync = false;
+        LWLockRelease(&MaintenanceDaemonControl->lock);
 
 		pfree(handle);
 	}
