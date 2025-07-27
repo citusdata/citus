@@ -31,13 +31,13 @@ build_ext() {
   echo "------ pg_config output -----" >&2
   /usr/lib/postgresql/${pg_major}/bin/pg_config >&2
 
-  echo "---- Try libpq link----" >&2
-  echo 'int main() { return 0; }' > test.c
-  gcc test.c -L/usr/lib/x86_64-linux-gnu -lpq -o test.out -Wl,-v
-
   pg_config --libs >&2
   file /usr/lib/x86_64-linux-gnu/libpq.so.5.15 >&2
   file /usr/lib/x86_64-linux-gnu/libpq.so >&2
+
+  echo "---- Try libpq link----" >&2
+  echo 'int main() { return 0; }' > test.c
+  gcc test.c -L/usr/lib/x86_64-linux-gnu -lpq -o test.out -Wl,-v
 
   builddir="${basedir}/build-${pg_major}"
   echo "Beginning build for PostgreSQL ${pg_major}..." >&2
