@@ -23,9 +23,12 @@ rm -rf "${basedir}/.git"
 
 build_ext() {
   pg_major="$1"
-
+  echo "--- Temporarily moving static lib---" >&2
+  mv /usr/lib/x86_64-linux-gnu/libpq.a /usr/lib/x86_64-linux-gnu/libpq.a.bak
   ls -la /usr/lib/x86_64-linux-gnu | grep libpq  >&2
+  echo "---- ENV----" >&2
   env  >&2
+  echo "------ pg_config output -----" >&2
   /usr/lib/postgresql/${pg_major}/bin/pg_config >&2
 
   builddir="${basedir}/build-${pg_major}"
