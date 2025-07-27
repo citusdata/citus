@@ -20,22 +20,22 @@
  */
 typedef struct CitusBackgroundWorkerConfig
 {
-    /* Worker identification */
-    const char *workerName;
-    const char *functionName;
-    
-    /* Worker parameters */
-    Datum mainArg;
-    Oid extensionOwner;
-    
-    /* Worker behavior flags */
-    bool needsNotification;
-    bool waitForStartup;
-    int restartTime;
-    
-    /* Optional extra data */
-    const void *extraData;
-    size_t extraDataSize;
+	/* Worker identification */
+	const char *workerName;
+	const char *functionName;
+
+	/* Worker parameters */
+	Datum mainArg;
+	Oid extensionOwner;
+
+	/* Worker behavior flags */
+	bool needsNotification;
+	bool waitForStartup;
+	int restartTime;
+
+	/* Optional extra data */
+	const void *extraData;
+	size_t extraDataSize;
 } CitusBackgroundWorkerConfig;
 
 /* Default configuration values */
@@ -43,10 +43,11 @@ typedef struct CitusBackgroundWorkerConfig
 #define CITUS_BGW_NEVER_RESTART BGW_NEVER_RESTART
 
 /* Function declarations */
-extern BackgroundWorkerHandle * RegisterCitusBackgroundWorker(
-    const CitusBackgroundWorkerConfig *config);
+extern BackgroundWorkerHandle * RegisterCitusBackgroundWorker(const
+															  CitusBackgroundWorkerConfig
+															  *config);
 
 extern void InitializeCitusBackgroundWorker(BackgroundWorker *worker,
-                                           const CitusBackgroundWorkerConfig *config);
+											const CitusBackgroundWorkerConfig *config);
 
 #endif /* BACKGROUND_WORKER_UTILS_H */

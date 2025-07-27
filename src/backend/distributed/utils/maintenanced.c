@@ -189,21 +189,21 @@ InitializeMaintenanceDaemonForMainDb(void)
 		return;
 	}
 
-    CitusBackgroundWorkerConfig config = {
-        .workerName = "Citus Maintenance Daemon for Main DB",
-        .functionName = "CitusMaintenanceDaemonMain",
-        .mainArg = (Datum) 0,
-        .extensionOwner = InvalidOid,
-        .needsNotification = false,
-        .waitForStartup = false,
-        .restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
-        .extraData = NULL,
-        .extraDataSize = 0
-    };
+	CitusBackgroundWorkerConfig config = {
+		.workerName = "Citus Maintenance Daemon for Main DB",
+		.functionName = "CitusMaintenanceDaemonMain",
+		.mainArg = (Datum) 0,
+		.extensionOwner = InvalidOid,
+		.needsNotification = false,
+		.waitForStartup = false,
+		.restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
 
-    BackgroundWorker worker;
-    InitializeCitusBackgroundWorker(&worker, &config);
-    RegisterBackgroundWorker(&worker);
+	BackgroundWorker worker;
+	InitializeCitusBackgroundWorker(&worker, &config);
+	RegisterBackgroundWorker(&worker);
 }
 
 
@@ -245,40 +245,41 @@ InitializeMaintenanceDaemonBackend(void)
 	{
 		Assert(dbData->workerPid == 0);
 
-        BackgroundWorkerHandle *handle = NULL;
-        char workerName[BGW_MAXLEN];
-        
-        SafeSnprintf(workerName, sizeof(workerName),
-                     "Citus Maintenance Daemon: %u/%u",
-                     MyDatabaseId, extensionOwner);
+		BackgroundWorkerHandle *handle = NULL;
+		char workerName[BGW_MAXLEN];
 
-        CitusBackgroundWorkerConfig config = {
-            .workerName = workerName,
-            .functionName = "CitusMaintenanceDaemonMain",
-            .mainArg = ObjectIdGetDatum(MyDatabaseId),
-            .extensionOwner = extensionOwner,
-            .needsNotification = true,
-            .waitForStartup = true,
-            .restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
-            .extraData = NULL,
-            .extraDataSize = 0
-        };
+		SafeSnprintf(workerName, sizeof(workerName),
+					 "Citus Maintenance Daemon: %u/%u",
+					 MyDatabaseId, extensionOwner);
 
-        handle = RegisterCitusBackgroundWorker(&config);
+		CitusBackgroundWorkerConfig config = {
+			.workerName = workerName,
+			.functionName = "CitusMaintenanceDaemonMain",
+			.mainArg = ObjectIdGetDatum(MyDatabaseId),
+			.extensionOwner = extensionOwner,
+			.needsNotification = true,
+			.waitForStartup = true,
+			.restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
+			.extraData = NULL,
+			.extraDataSize = 0
+		};
 
-        if (!handle)
-        {
-            WarnMaintenanceDaemonNotStarted();
-            dbData->daemonStarted = false;
-            LWLockRelease(&MaintenanceDaemonControl->lock);
-            return;
-        }
+		handle = RegisterCitusBackgroundWorker(&config);
 
-        dbData->daemonStarted = true;
-        dbData->userOid = extensionOwner;
-        dbData->workerPid = 0;
-        dbData->triggerNodeMetadataSync = false;
-        LWLockRelease(&MaintenanceDaemonControl->lock);
+		if (!handle)
+		{
+			WarnMaintenanceDaemonNotStarted();
+			dbData->daemonStarted = false;
+			LWLockRelease(&MaintenanceDaemonControl->lock);
+
+			return;
+		}
+
+		dbData->daemonStarted = true;
+		dbData->userOid = extensionOwner;
+		dbData->workerPid = 0;
+		dbData->triggerNodeMetadataSync = false;
+		LWLockRelease(&MaintenanceDaemonControl->lock);
 
 		pfree(handle);
 	}

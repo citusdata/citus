@@ -2239,7 +2239,7 @@ GenerateGrantOnDatabaseFromAclItem(Oid databaseOid, AclItem *aclItem)
 	if (permissions & ACL_CREATE_TEMP)
 	{
 		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
-																				  OBJECT_DATABASE, granteeOid, databaseOid,
+										  OBJECT_DATABASE, granteeOid, databaseOid,
 										  "TEMPORARY",
 										  grants & ACL_CREATE_TEMP));
 		queries = lappend(queries, query);
@@ -3153,25 +3153,25 @@ MetadataSyncSigAlrmHandler(SIGNAL_ARGS)
 BackgroundWorkerHandle *
 SpawnSyncNodeMetadataToNodes(Oid database, Oid extensionOwner)
 {
-    char workerName[BGW_MAXLEN];
-    
-    SafeSnprintf(workerName, BGW_MAXLEN,
-                 "Citus Metadata Sync: %u/%u",
-                 database, extensionOwner);
+	char workerName[BGW_MAXLEN];
 
-    CitusBackgroundWorkerConfig config = {
-        .workerName = workerName,
-        .functionName = "SyncNodeMetadataToNodesMain",
-        .mainArg = ObjectIdGetDatum(MyDatabaseId),
-        .extensionOwner = extensionOwner,
-        .needsNotification = true,
-        .waitForStartup = false,
-        .restartTime = CITUS_BGW_NEVER_RESTART,
-        .extraData = NULL,
-        .extraDataSize = 0
-    };
+	SafeSnprintf(workerName, BGW_MAXLEN,
+				 "Citus Metadata Sync: %u/%u",
+				 database, extensionOwner);
 
-    return RegisterCitusBackgroundWorker(&config);
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "SyncNodeMetadataToNodesMain",
+		.mainArg = ObjectIdGetDatum(MyDatabaseId),
+		.extensionOwner = extensionOwner,
+		.needsNotification = true,
+		.waitForStartup = false,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
+
+	return RegisterCitusBackgroundWorker(&config);
 }
 
 

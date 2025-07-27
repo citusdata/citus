@@ -418,25 +418,25 @@ citus_task_wait_internal(int64 taskid, BackgroundTaskStatus *desiredStatus)
 BackgroundWorkerHandle *
 StartCitusBackgroundTaskQueueMonitor(Oid database, Oid extensionOwner)
 {
-    char workerName[BGW_MAXLEN];
-    
-    SafeSnprintf(workerName, BGW_MAXLEN,
-                 "Citus Background Task Queue Monitor: %u/%u",
-                 database, extensionOwner);
+	char workerName[BGW_MAXLEN];
 
-    CitusBackgroundWorkerConfig config = {
-        .workerName = workerName,
-        .functionName = "CitusBackgroundTaskQueueMonitorMain",
-        .mainArg = ObjectIdGetDatum(MyDatabaseId),
-        .extensionOwner = extensionOwner,
-        .needsNotification = true,
-        .waitForStartup = true,
-        .restartTime = CITUS_BGW_NEVER_RESTART,
-        .extraData = NULL,
-        .extraDataSize = 0
-    };
+	SafeSnprintf(workerName, BGW_MAXLEN,
+				 "Citus Background Task Queue Monitor: %u/%u",
+				 database, extensionOwner);
 
-    return RegisterCitusBackgroundWorker(&config);
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "CitusBackgroundTaskQueueMonitorMain",
+		.mainArg = ObjectIdGetDatum(MyDatabaseId),
+		.extensionOwner = extensionOwner,
+		.needsNotification = true,
+		.waitForStartup = true,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
+
+	return RegisterCitusBackgroundWorker(&config);
 }
 
 
@@ -1650,29 +1650,29 @@ StartCitusBackgroundTaskExecutor(char *database, char *user, char *command,
 {
 	dsm_segment *seg = StoreArgumentsInDSM(database, user, command, taskId, jobId);
 
-    char workerName[BGW_MAXLEN];
-    SafeSnprintf(workerName, BGW_MAXLEN,
-                 "Citus Background Task Queue Executor: %s/%s for (%ld/%ld)",
-                 database, user, jobId, taskId);
+	char workerName[BGW_MAXLEN];
+	SafeSnprintf(workerName, BGW_MAXLEN,
+				 "Citus Background Task Queue Executor: %s/%s for (%ld/%ld)",
+				 database, user, jobId, taskId);
 
-    CitusBackgroundWorkerConfig config = {
-        .workerName = workerName,
-        .functionName = "CitusBackgroundTaskExecutor",
-        .mainArg = UInt32GetDatum(dsm_segment_handle(seg)),
-        .extensionOwner = InvalidOid,
-        .needsNotification = true,
-        .waitForStartup = true,
-        .restartTime = CITUS_BGW_NEVER_RESTART,
-        .extraData = NULL,
-        .extraDataSize = 0
-    };
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "CitusBackgroundTaskExecutor",
+		.mainArg = UInt32GetDatum(dsm_segment_handle(seg)),
+		.extensionOwner = InvalidOid,
+		.needsNotification = true,
+		.waitForStartup = true,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
 
-    BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
-    if (!handle)
-    {
-        dsm_detach(seg);
-        return NULL;
-    }
+	BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
+	if (!handle)
+	{
+		dsm_detach(seg);
+		return NULL;
+	}
 
 	if (pSegment)
 	{

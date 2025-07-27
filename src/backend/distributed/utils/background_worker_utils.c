@@ -24,64 +24,65 @@
  */
 void
 InitializeCitusBackgroundWorker(BackgroundWorker *worker,
-                               const CitusBackgroundWorkerConfig *config)
+								const CitusBackgroundWorkerConfig *config)
 {
-    Assert(worker != NULL);
-    Assert(config != NULL);
-    Assert(config->workerName != NULL);
-    Assert(config->functionName != NULL);
+	Assert(worker != NULL);
+	Assert(config != NULL);
+	Assert(config->workerName != NULL);
+	Assert(config->functionName != NULL);
 
-    /* Initialize the worker structure */
-    memset(worker, 0, sizeof(BackgroundWorker));
+	/* Initialize the worker structure */
+	memset(worker, 0, sizeof(BackgroundWorker));
 
-    /* Set worker name */
-    strcpy_s(worker->bgw_name, sizeof(worker->bgw_name), config->workerName);
+	/* Set worker name */
+	strcpy_s(worker->bgw_name, sizeof(worker->bgw_name), config->workerName);
 
-    /* Set standard flags for Citus workers */
-    worker->bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
+	/* Set standard flags for Citus workers */
+	worker->bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 
-    /* Set start time - all Citus workers need consistent state */
-    worker->bgw_start_time = BgWorkerStart_ConsistentState;
+	/* Set start time - all Citus workers need consistent state */
+	worker->bgw_start_time = BgWorkerStart_ConsistentState;
 
-    /* Set restart behavior */
-    worker->bgw_restart_time = config->restartTime;
+	/* Set restart behavior */
+	worker->bgw_restart_time = config->restartTime;
 
-    /* Set library and function names */
-    strcpy_s(worker->bgw_library_name, sizeof(worker->bgw_library_name), "citus");
-    strcpy_s(worker->bgw_function_name, sizeof(worker->bgw_function_name), 
-             config->functionName);
+	/* Set library and function names */
+	strcpy_s(worker->bgw_library_name, sizeof(worker->bgw_library_name), "citus");
+	strcpy_s(worker->bgw_function_name, sizeof(worker->bgw_function_name),
+			 config->functionName);
 
-    /* Set main argument */
-    worker->bgw_main_arg = config->mainArg;
+	/* Set main argument */
+	worker->bgw_main_arg = config->mainArg;
 
-    /* Set extension owner if provided */
-    if (OidIsValid(config->extensionOwner))
-    {
-        memcpy_s(worker->bgw_extra, sizeof(worker->bgw_extra), 
-                 &config->extensionOwner, sizeof(Oid));
-    }
+	/* Set extension owner if provided */
+	if (OidIsValid(config->extensionOwner))
+	{
+		memcpy_s(worker->bgw_extra, sizeof(worker->bgw_extra),
+				 &config->extensionOwner, sizeof(Oid));
+	}
 
-    /* Set additional extra data if provided */
-    if (config->extraData != NULL && config->extraDataSize > 0)
-    {
-        size_t remainingSpace = sizeof(worker->bgw_extra);
-        size_t usedSpace = OidIsValid(config->extensionOwner) ? sizeof(Oid) : 0;
-        
-        if (usedSpace + config->extraDataSize <= remainingSpace)
-        {
-            memcpy_s(((char *) worker->bgw_extra) + usedSpace, 
-                     remainingSpace - usedSpace,
-                     config->extraData, 
-                     config->extraDataSize);
-        }
-    }
+	/* Set additional extra data if provided */
+	if (config->extraData != NULL && config->extraDataSize > 0)
+	{
+		size_t remainingSpace = sizeof(worker->bgw_extra);
+		size_t usedSpace = OidIsValid(config->extensionOwner) ? sizeof(Oid) : 0;
 
-    /* Set notification PID if needed */
-    if (config->needsNotification)
-    {
-        worker->bgw_notify_pid = MyProcPid;
-    }
+		if (usedSpace + config->extraDataSize <= remainingSpace)
+		{
+			memcpy_s(((char *) worker->bgw_extra) + usedSpace,
+					 remainingSpace - usedSpace,
+					 config->extraData,
+					 config->extraDataSize);
+		}
+	}
+
+	/* Set notification PID if needed */
+	if (config->needsNotification)
+	{
+		worker->bgw_notify_pid = MyProcPid;
+	}
 }
+
 
 /*
  * RegisterCitusBackgroundWorker creates and registers a Citus background worker
@@ -91,24 +92,24 @@ InitializeCitusBackgroundWorker(BackgroundWorker *worker,
 BackgroundWorkerHandle *
 RegisterCitusBackgroundWorker(const CitusBackgroundWorkerConfig *config)
 {
-    BackgroundWorker worker;
-    BackgroundWorkerHandle *handle = NULL;
+	BackgroundWorker worker;
+	BackgroundWorkerHandle *handle = NULL;
 
-    /* Initialize the worker structure */
-    InitializeCitusBackgroundWorker(&worker, config);
+	/* Initialize the worker structure */
+	InitializeCitusBackgroundWorker(&worker, config);
 
-    /* Register the background worker */
-    if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-    {
-        return NULL;
-    }
+	/* Register the background worker */
+	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
+	{
+		return NULL;
+	}
 
-    /* Wait for startup if requested */
-    if (config->waitForStartup && handle != NULL)
-    {
-        pid_t pid = 0;
-        WaitForBackgroundWorkerStartup(handle, &pid);
-    }
+	/* Wait for startup if requested */
+	if (config->waitForStartup && handle != NULL)
+	{
+		pid_t pid = 0;
+		WaitForBackgroundWorkerStartup(handle, &pid);
+	}
 
-    return handle;
+	return handle;
 }
