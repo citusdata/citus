@@ -12,6 +12,7 @@
 #include "postgres.h"
 
 #include "miscadmin.h"
+
 #include "postmaster/bgworker.h"
 #include "storage/proc.h"
 

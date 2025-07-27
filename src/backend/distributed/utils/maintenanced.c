@@ -48,6 +48,7 @@
 #include "pg_version_constants.h"
 
 #include "distributed/background_jobs.h"
+#include "distributed/background_worker_utils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/distributed_deadlock_detection.h"
@@ -60,7 +61,6 @@
 #include "distributed/stats/query_stats.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
-#include "distributed/background_worker_utils.h"
 
 /*
  * Shared memory data for all maintenance workers.

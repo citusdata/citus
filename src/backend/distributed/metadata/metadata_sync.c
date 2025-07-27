@@ -58,6 +58,7 @@
 
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
+#include "distributed/background_worker_utils.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -92,7 +93,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
-#include "distributed/background_worker_utils.h"
 
 
 /* managed via a GUC */

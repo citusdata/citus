@@ -13,6 +13,7 @@
 #define BACKGROUND_WORKER_UTILS_H
 
 #include "postgres.h"
+
 #include "postmaster/bgworker.h"
 
 /*
