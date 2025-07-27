@@ -24,6 +24,10 @@ rm -rf "${basedir}/.git"
 build_ext() {
   pg_major="$1"
 
+  ls -la /usr/lib/x86_64-linux-gnu | grep libpq  >&2
+  env  >&2
+  /usr/lib/postgresql/${pg_major}/bin/pg_config >&2
+
   builddir="${basedir}/build-${pg_major}"
   echo "Beginning build for PostgreSQL ${pg_major}..." >&2
 
