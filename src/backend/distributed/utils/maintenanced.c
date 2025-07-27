@@ -245,7 +245,6 @@ InitializeMaintenanceDaemonBackend(void)
 	{
 		Assert(dbData->workerPid == 0);
 
-		BackgroundWorkerHandle *handle = NULL;
 		char workerName[BGW_MAXLEN];
 
 		SafeSnprintf(workerName, sizeof(workerName),
@@ -264,7 +263,7 @@ InitializeMaintenanceDaemonBackend(void)
 			.extraDataSize = 0
 		};
 
-		handle = RegisterCitusBackgroundWorker(&config);
+		BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
 
 		if (!handle)
 		{
