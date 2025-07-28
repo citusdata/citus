@@ -772,7 +772,6 @@ ALTER EXTENSION citus UPDATE;
 
 -- re-create in newest version
 DROP EXTENSION citus;
-DROP EXTENSION citus_columnar;
 \c
 CREATE EXTENSION citus;
 
@@ -780,7 +779,6 @@ CREATE EXTENSION citus;
 \c - - - :worker_1_port
 
 DROP EXTENSION citus;
-DROP EXTENSION citus_columnar;
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '8.0-1';
@@ -1048,8 +1046,7 @@ SELECT citus_add_local_table_to_metadata('test');
 DROP TABLE test;
 
 -- Verify that we don't consider the schemas created by extensions as tenant schemas.
--- Easiest way of verifying this is to drop and re-create columnar extension.
-DROP EXTENSION citus_columnar;
+-- Easiest way of verifying this is to create columnar extension.
 
 SET citus.enable_schema_based_sharding TO ON;
 
