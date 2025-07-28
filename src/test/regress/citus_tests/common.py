@@ -230,6 +230,17 @@ def create_citus_extension(pg_path, node_ports):
     parallel_run(create, node_ports)
 
 
+def create_citus_columnar_extension(pg_path, node_ports):
+    def create(port):
+        # Older versions of Citus always auto-creates citus_columnar extension,
+        # i.e., regardless of whether the user has any columnar tables or not.
+        # However, this is not the case for Citus 13.2. So we create it only if
+        # it does not exist.
+        utils.psql(pg_path, port, "CREATE EXTENSION IF NOT EXISTS citus_columnar;")
+
+    parallel_run(create, node_ports)
+
+
 def run_pg_regress(pg_path, pg_srcdir, port, schedule):
     should_exit = True
     try:
@@ -396,6 +407,7 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
         bindir, datadir, config.node_name_to_ports, config.name, config.env_variables
     )
     create_citus_extension(bindir, config.node_name_to_ports.values())
+    create_citus_columnar_extension(bindir, config.node_name_to_ports.values())
 
     # In upgrade tests, it is possible that Citus version < 11.0
     # where the citus_set_coordinator_host UDF does not exist.
@@ -806,8 +818,8 @@ class Postgres(QueryRunner):
             # pgconf.write("log_connections = on\n")
             # pgconf.write("log_disconnections = on\n")
 
-            # Enable citus
-            pgconf.write("shared_preload_libraries = 'citus'\n")
+            # Enable citus and citus_columnar
+            pgconf.write("shared_preload_libraries = 'citus, citus_columnar'\n")
 
             # Allow CREATE SUBSCRIPTION to work
             pgconf.write("wal_level = 'logical'\n")
@@ -856,6 +868,7 @@ class Postgres(QueryRunner):
         self.initdb()
         self.start()
         self.sql("CREATE EXTENSION citus")
+        self.sql("CREATE EXTENSION citus_columnar")
 
         # Manually turn on ssl, so that we can safely truncate
         # postgresql.auto.conf later. We can only do this after creating the
