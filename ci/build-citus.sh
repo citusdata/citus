@@ -23,6 +23,17 @@ rm -rf "${basedir}/.git"
 
 build_ext() {
   pg_major="$1"
+  echo "---- libpq.so.5.15 --- "
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so.5.15
+  echo " ---- dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so ---- "
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so
+  echo "----- dpkg -L libpq-dev "
+  dpkg -L libpq-dev
+  echo "---- dpkg -L libpq5 ----"
+  dpkg -L libpq5
+  echo "---- static -----"
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.a
+
   echo "--- Temporarily moving static lib---" >&2
   mv /usr/lib/x86_64-linux-gnu/libpq.a /usr/lib/x86_64-linux-gnu/libpq.a.bak
   ls -la /usr/lib/x86_64-linux-gnu | grep libpq  >&2
