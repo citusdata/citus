@@ -23,17 +23,21 @@ rm -rf "${basedir}/.git"
 
 build_ext() {
   pg_major="$1"
-  echo "---- libpq.so.5.15 --- "
-  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so.5.15
-  echo " ---- dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so ---- "
-  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so
-  echo "----- dpkg -L libpq-dev "
-  dpkg -L libpq-dev
-  echo "---- dpkg -L libpq5 ----"
-  dpkg -L libpq5
-  echo "---- static -----"
-  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.a
-
+  echo "---- libpq.so.5.15 --- "  >&2
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so.5.15  >&2
+  echo " ---- dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so ---- "  >&2
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so  >&2
+  echo "----- dpkg -L libpq-dev "  >&2
+  dpkg -L libpq-dev  >&2
+  echo "---- dpkg -L libpq5 ----"  >&2
+  dpkg -L libpq5  >&2
+  echo "---- static -----"  >&2
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.a  >&2
+  dpkg-divert --list | grep pg_config  >&2
+  which pg_config  >&2
+  pg_config --version >&2
+  echo "---- Full path pg_config -- "
+  /usr/lib/postgresql/${pg_major}/bin/pg_config >&2
   echo "--- Temporarily moving static lib---" >&2
   mv /usr/lib/x86_64-linux-gnu/libpq.a /usr/lib/x86_64-linux-gnu/libpq.a.bak
   ls -la /usr/lib/x86_64-linux-gnu | grep libpq  >&2
