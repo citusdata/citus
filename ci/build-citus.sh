@@ -37,7 +37,7 @@ build_ext() {
   which pg_config  >&2
   pg_config --version >&2
   echo "---- Full path pg_config -- "
-  /usr/lib/postgresql/${pg_major}/bin/pg_config >&2
+  /usr/lib/postgresql/${pg_major}/bin/pg_config --version >&2
   echo "--- Temporarily moving static lib---" >&2
   mv /usr/lib/x86_64-linux-gnu/libpq.a /usr/lib/x86_64-linux-gnu/libpq.a.bak
   ls -la /usr/lib/x86_64-linux-gnu | grep libpq  >&2
