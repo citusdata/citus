@@ -760,7 +760,7 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 	 */
 	LockPartitionsForDistributedPlan(distributedPlan);
 
-	ExecuteSubPlans(distributedPlan);
+	ExecuteSubPlans(distributedPlan, RequestedForExplainAnalyze(scanState));
 
 	scanState->finishedPreScan = true;
 }

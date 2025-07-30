@@ -721,13 +721,11 @@ CALL exec_query_and_check_query_counters($$
     0, 0
 );
 -- same with explain analyze
---
--- this time, query_execution_multi_shard is incremented twice because of #4212
 CALL exec_query_and_check_query_counters($$
     EXPLAIN (ANALYZE)
     SELECT * FROM (SELECT * FROM dist_table OFFSET 0) q
     $$,
-    1, 2
+    1, 1
 );
 CALL exec_query_and_check_query_counters($$
     DELETE FROM dist_table WHERE a = 1
@@ -1041,9 +1039,6 @@ PL/pgSQL function exec_query_and_check_query_counters(text,bigint,bigint) line X
 -- A similar one but without the insert, so we would normally expect 2 increments
 -- for query_execution_single_shard and 2 for query_execution_multi_shard instead
 -- of 3 since the insert is not there anymore.
---
--- But this time we observe more counter increments because we execute the subplans
--- twice because of #4212.
 CALL exec_query_and_check_query_counters($$
     EXPLAIN (ANALYZE)
     -- single-shard subplan (whole cte)
@@ -1057,7 +1052,7 @@ CALL exec_query_and_check_query_counters($$
     FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q -- multi-shard subplan (subquery q)
     JOIN cte ON q.a = cte.a
     $$,
-    3, 4
+    2, 2
 );
 -- safe to push-down
 CALL exec_query_and_check_query_counters($$
