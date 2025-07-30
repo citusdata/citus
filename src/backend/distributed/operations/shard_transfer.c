@@ -795,7 +795,7 @@ LockColocatedRelationsForMove(List *colocatedTableList)
 	Oid colocatedTableId = InvalidOid;
 	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
-		LockRelationOid(colocatedTableId, ShareLock);
+		LockRelationOid(colocatedTableId, RowExclusiveLock);
 	}
 }
 
@@ -1242,9 +1242,9 @@ BlockWritesToShardList(List *shardList)
 		 * asynchronous shard copy in case of cascading DML operations.
 		 */
 		LockReferencedReferenceShardDistributionMetadata(shard->shardId,
-														 RowExclusiveLock);
+														 ExclusiveLock);
 
-		LockShardDistributionMetadata(shard->shardId, RowExclusiveLock);
+		LockShardDistributionMetadata(shard->shardId, ExclusiveLock);
 	}
 
 	/* following code relies on the list to have at least one shard */
@@ -1267,7 +1267,7 @@ BlockWritesToShardList(List *shardList)
 		 * Even if users disable metadata sync, we cannot allow them not to
 		 * acquire the remote locks. Hence, we have !IsCoordinator() check.
 		 */
-		LockShardListMetadataOnWorkers(RowExclusiveLock, shardList);
+		LockShardListMetadataOnWorkers(ExclusiveLock, shardList);
 	}
 }
 
