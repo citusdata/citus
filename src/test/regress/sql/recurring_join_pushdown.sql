@@ -27,6 +27,11 @@ INSERT INTO d1_local select * from d1;
 CREATE TABLE d2_local(like d2);
 INSERT INTO d2_local select * from d2;
 
+SET citus.shard_count TO 2;
+CREATE TABLE d3_not_colocated(like d1);
+SELECT create_distributed_table('d3_not_colocated', 'a');
+
+
 SET client_min_messages TO DEBUG3;
 
 -- Basic test cases
@@ -41,6 +46,11 @@ SET client_min_messages TO DEBUG1;
 -- Test that the join is not pushed down when joined on a non-distributed column
 SELECT count(*) FROM r1 LEFT JOIN d1 USING (b);
 SELECT count(*) FROM r1_local LEFT JOIN d1_local USING (b);
+
+-- Test that the join is not pushed down when we have non-colocated tables in the RHS
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) USING (a);
+-- The same error with its RIGHT JOIN variant
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated JOIN d1 ON d3_not_colocated.a = d1.a) USING (a);
 
 -- Basic test cases with ON syntax
 -- Test that the join is pushed down to the worker nodes, using "on" syntax
