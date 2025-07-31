@@ -208,8 +208,8 @@ UpdateTaskQueryString(Query *query, Task *task)
 
 
 /*
- * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals 
- * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard. 
+ * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals
+ * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard.
  */
 bool
 UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
@@ -221,50 +221,59 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 
 	if (!IsA(node, Query))
 	{
-		return expression_tree_walker(node, UpdateWhereClauseForOuterJoin, relationShardList);
+		return expression_tree_walker(node, UpdateWhereClauseForOuterJoin,
+									  relationShardList);
 	}
 
 	Query *query = (Query *) node;
-	
+
 	if (query->jointree == NULL)
 	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
+								 0);
 	}
 
 	FromExpr *fromExpr = query->jointree;
-	if(fromExpr == NULL || fromExpr->fromlist == NIL)
+	if (fromExpr == NULL || fromExpr->fromlist == NIL)
 	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
+								 0);
 	}
 
-	// TODO: generalize to the list 
+	/* TODO: generalize to the list */
 	Node *firstFromItem = linitial(fromExpr->fromlist);
 	if (!IsA(firstFromItem, JoinExpr))
 	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
+								 0);
 	}
 
 	JoinExpr *joinExpr = (JoinExpr *) firstFromItem;
-	
+
 	/*
-	* We need to find the outer table in the join clause to add the constraints w.r.to the shard 
-	* intervals of the inner table.
-	* A representative inner table is sufficient as long as it is colocated with all other
-	* distributed tables in the join clause.
-	*/
+	 * We need to find the outer table in the join clause to add the constraints w.r.to the shard
+	 * intervals of the inner table.
+	 * A representative inner table is sufficient as long as it is colocated with all other
+	 * distributed tables in the join clause.
+	 */
 	RangeTblEntry *innerRte = NULL;
 	RangeTblEntry *outerRte = NULL;
 	int outerRtIndex = -1;
 	int attnum;
-	if(!CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex, &outerRte, &innerRte, &attnum))
+	if (!CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
+												   &outerRte, &innerRte, &attnum))
 	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
+								 0);
 	}
-	if( attnum == InvalidAttrNumber)
+	if (attnum == InvalidAttrNumber)
 	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
+								 0);
 	}
-	ereport(DEBUG5, (errmsg("Distributed table from the inner part of the outer join: %s.", innerRte->eref->aliasname)));
+	ereport(DEBUG5, (errmsg(
+						 "Distributed table from the inner part of the outer join: %s.",
+						 innerRte->eref->aliasname)));
 
 
 	RelationShard *relationShard = FindRelationShard(innerRte->relid, relationShardList);
@@ -274,26 +283,29 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	Var *partitionColumnVar = cacheEntry->partitionColumn;
 
-	/* 
-	* we will add constraints for the outer table,
-	* we create a Var node for the outer table's column that is compared with the distribution column.
-	*/
+	/*
+	 * we will add constraints for the outer table,
+	 * we create a Var node for the outer table's column that is compared with the distribution column.
+	 */
 
-	Var* outerTablePartitionColumnVar = makeVar(
-					outerRtIndex, attnum, partitionColumnVar->vartype,
-					partitionColumnVar->vartypmod,
-					partitionColumnVar->varcollid,
-					0);
+	Var *outerTablePartitionColumnVar = makeVar(
+		outerRtIndex, attnum, partitionColumnVar->vartype,
+		partitionColumnVar->vartypmod,
+		partitionColumnVar->varcollid,
+		0);
 
 	bool isFirstShard = IsFirstShard(cacheEntry, shardId);
-	
+
 	/* load the interval for the shard and create constant nodes for the upper/lower bounds */
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	Const *constNodeLowerBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), shardInterval->minValue, false, true);
-	Const *constNodeUpperBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), shardInterval->maxValue, false, true);
-	Const *constNodeZero = makeConst(INT4OID, -1, InvalidOid, sizeof(int32), Int32GetDatum(0), false, true);
+	Const *constNodeLowerBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32),
+										   shardInterval->minValue, false, true);
+	Const *constNodeUpperBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32),
+										   shardInterval->maxValue, false, true);
+	Const *constNodeZero = makeConst(INT4OID, -1, InvalidOid, sizeof(int32),
+									 Int32GetDatum(0), false, true);
 
-	/* create a function expression node for the hash partition column */ 
+	/* create a function expression node for the hash partition column */
 	FuncExpr *hashFunction = makeNode(FuncExpr);
 	hashFunction->funcid = cacheEntry->hashFunction->fn_oid;
 	hashFunction->args = list_make1(outerTablePartitionColumnVar);
@@ -301,49 +313,57 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	hashFunction->funcretset = false;
 
 	/* create a function expression for the lower bound of the shard interval */
-	Oid resultTypeOid = get_func_rettype(cacheEntry->shardIntervalCompareFunction->fn_oid);
-	FuncExpr* lowerBoundFuncExpr = makeNode(FuncExpr);
+	Oid resultTypeOid = get_func_rettype(
+		cacheEntry->shardIntervalCompareFunction->fn_oid);
+	FuncExpr *lowerBoundFuncExpr = makeNode(FuncExpr);
 	lowerBoundFuncExpr->funcid = cacheEntry->shardIntervalCompareFunction->fn_oid;
-	lowerBoundFuncExpr->args = list_make2((Node *) constNodeLowerBound, (Node *) hashFunction);
+	lowerBoundFuncExpr->args = list_make2((Node *) constNodeLowerBound,
+										  (Node *) hashFunction);
 	lowerBoundFuncExpr->funcresulttype = resultTypeOid;
 	lowerBoundFuncExpr->funcretset = false;
 
-	Oid lessThan = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid, CStringGetDatum("<"), 
+	Oid lessThan = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid, CStringGetDatum("<"),
 								  resultTypeOid, resultTypeOid, ObjectIdGetDatum(11));
 
-	/* 
-	 * Finally, check if the comparison result is less than 0, i.e., 
+	/*
+	 * Finally, check if the comparison result is less than 0, i.e.,
 	 * shardInterval->minValue < hash(partitionColumn)
 	 * See SearchCachedShardInterval for the behavior at the boundaries.
-	 */  
-	Expr *lowerBoundExpr = make_opclause(lessThan, BOOLOID, false, (Expr *) lowerBoundFuncExpr,
+	 */
+	Expr *lowerBoundExpr = make_opclause(lessThan, BOOLOID, false,
+										 (Expr *) lowerBoundFuncExpr,
 										 (Expr *) constNodeZero, InvalidOid, InvalidOid);
 
 	/* create a function expression for the upper bound of the shard interval */
-	FuncExpr* upperBoundFuncExpr = makeNode(FuncExpr);
+	FuncExpr *upperBoundFuncExpr = makeNode(FuncExpr);
 	upperBoundFuncExpr->funcid = cacheEntry->shardIntervalCompareFunction->fn_oid;
-	upperBoundFuncExpr->args = list_make2((Node *) hashFunction, (Expr *) constNodeUpperBound);
+	upperBoundFuncExpr->args = list_make2((Node *) hashFunction,
+										  (Expr *) constNodeUpperBound);
 	upperBoundFuncExpr->funcresulttype = resultTypeOid;
 	upperBoundFuncExpr->funcretset = false;
 
-	Oid lessThanOrEqualTo = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid, CStringGetDatum("<="), 
-									resultTypeOid, resultTypeOid, ObjectIdGetDatum(11));
-	
+	Oid lessThanOrEqualTo = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid,
+										   CStringGetDatum("<="),
+										   resultTypeOid, resultTypeOid, ObjectIdGetDatum(
+											   11));
 
-	/* 
-	 * Finally, check if the comparison result is less than or equal to 0, i.e., 
+
+	/*
+	 * Finally, check if the comparison result is less than or equal to 0, i.e.,
 	 * hash(partitionColumn) <= shardInterval->maxValue
 	 * See SearchCachedShardInterval for the behavior at the boundaries.
-	 */  
-	Expr *upperBoundExpr = make_opclause(lessThanOrEqualTo, BOOLOID, false, (Expr *) upperBoundFuncExpr,
+	 */
+	Expr *upperBoundExpr = make_opclause(lessThanOrEqualTo, BOOLOID, false,
+										 (Expr *) upperBoundFuncExpr,
 										 (Expr *) constNodeZero, InvalidOid, InvalidOid);
 
 
 	/* create a node for both upper and lower bound */
-	Node *shardIntervalBoundQuals = make_and_qual((Node *) lowerBoundExpr, (Node *) upperBoundExpr);
+	Node *shardIntervalBoundQuals = make_and_qual((Node *) lowerBoundExpr,
+												  (Node *) upperBoundExpr);
 
-	/* 
-	 * Add a null test for the partition column for the first shard. 
+	/*
+	 * Add a null test for the partition column for the first shard.
 	 * This is because we need to include the null values in exactly one of the shard queries.
 	 * The null test is added as an OR clause to the existing AND clause.
 	 */
@@ -354,7 +374,8 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 		nullTest->nulltesttype = IS_NULL;  /* Check for IS NULL */
 		nullTest->arg = (Expr *) partitionColumnVar;  /* The variable to check */
 		nullTest->argisrow = false;
-		shardIntervalBoundQuals = (Node *) make_orclause(list_make2(nullTest, shardIntervalBoundQuals));
+		shardIntervalBoundQuals = (Node *) make_orclause(list_make2(nullTest,
+																	shardIntervalBoundQuals));
 	}
 
 	if (fromExpr->quals == NULL)
