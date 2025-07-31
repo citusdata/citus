@@ -23,6 +23,36 @@ rm -rf "${basedir}/.git"
 
 build_ext() {
   pg_major="$1"
+  echo "---- libpq.so.5.15 --- "  >&2
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so.5.15  >&2
+  echo " ---- dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so ---- "  >&2
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.so  >&2
+  echo "----- dpkg -L libpq-dev "  >&2
+  dpkg -L libpq-dev  >&2
+  echo "---- dpkg -L libpq5 ----"  >&2
+  dpkg -L libpq5  >&2
+  echo "---- static -----"  >&2
+  dpkg -S /usr/lib/x86_64-linux-gnu/libpq.a  >&2
+  dpkg-divert --list | grep pg_config  >&2
+  which pg_config  >&2
+  pg_config --version >&2
+  echo "---- Full path pg_config -- "
+  /usr/lib/postgresql/${pg_major}/bin/pg_config --version >&2
+  echo "--- Temporarily moving static lib---" >&2
+  mv /usr/lib/x86_64-linux-gnu/libpq.a /usr/lib/x86_64-linux-gnu/libpq.a.bak
+  ls -la /usr/lib/x86_64-linux-gnu | grep libpq  >&2
+  echo "---- ENV----" >&2
+  env  >&2
+  echo "------ pg_config output -----" >&2
+  /usr/lib/postgresql/${pg_major}/bin/pg_config >&2
+
+  pg_config --libs >&2
+  file /usr/lib/x86_64-linux-gnu/libpq.so.5.15 >&2
+  file /usr/lib/x86_64-linux-gnu/libpq.so >&2
+
+  echo "---- Try libpq link----" >&2
+  echo 'int main() { return 0; }' > test.c
+  gcc test.c -L/usr/lib/x86_64-linux-gnu -lpq -o test.out -Wl,-v
 
   builddir="${basedir}/build-${pg_major}"
   echo "Beginning build for PostgreSQL ${pg_major}..." >&2
@@ -30,10 +60,10 @@ build_ext() {
   # do everything in a subdirectory to avoid clutter in current directory
   mkdir -p "${builddir}" && cd "${builddir}"
 
-  CFLAGS=-Werror "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags
+  CFLAGS=-Werror LDFLAGS="-Wl,-v" "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags
 
   installdir="${builddir}/install"
-  make -j$(nproc) && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
+  make V=1 -j$(nproc) && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
 
   cd "${installdir}" && find . -type f -print > "${builddir}/files.lst"
   tar cvf "${basedir}/install-${pg_major}.tar" `cat ${builddir}/files.lst`
