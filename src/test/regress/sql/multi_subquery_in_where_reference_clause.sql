@@ -260,7 +260,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 )
 ORDER BY 1, 2;
 
--- reference table LEFT JOIN distributed table in WHERE is still not ok
+-- reference table LEFT JOIN distributed table in WHERE is ok
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 5
