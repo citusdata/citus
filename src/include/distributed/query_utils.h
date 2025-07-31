@@ -30,13 +30,6 @@ typedef struct ExtractRangeTableWalkerContext
 	ExtractRangeTableMode walkerMode;
 } ExtractRangeTableWalkerContext;
 
-/* Struct to pass rtable list and the result list to walker */
-typedef struct ExtractRangeTableIdsContext
-{
-	List **idList;
-	List *rtable;
-} ExtractRangeTableIdsContext;
-
 /* Function declarations for query-walker utility functions */
 extern bool ExtractRangeTableList(Node *node, ExtractRangeTableWalkerContext *context);
 
@@ -45,6 +38,5 @@ extern bool ExtractRangeTableRelationWalker(Node *node, List **rangeTableList);
 extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
 
 extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList);
-extern bool ExtractRangeTableIds(Node *node, ExtractRangeTableIdsContext *context);
-extern bool CheckIfAllCitusRTEsAreColocated(Node *node, List *rtable, RangeTblEntry **rte, List **citusRelids);
+
 #endif /* QUERY_UTILS_H */
