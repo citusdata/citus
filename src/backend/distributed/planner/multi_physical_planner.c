@@ -241,6 +241,10 @@ static bool IsImproperForDeparseRelabelTypeNode(Node *inputNode);
 static bool IsImproperForDeparseCoerceViaIONode(Node *inputNode);
 static CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
 
+static void RenameAnonymousTargetEntries(List *targetList);
+static RangeTblEntry * FindRemoteQueryRTE(List *rtable);
+static void SyncErefColnamesWithTargetList(RangeTblEntry *rte, List *targetList);
+
 
 /*
  * CreatePhysicalDistributedPlan is the entry point for physical plan generation. The
@@ -607,9 +611,22 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 		targetList = QueryTargetList(multiNode);
 	}
 
+	RenameAnonymousTargetEntries(targetList);
+
+
 	/* build the join tree and the range table list */
 	List *rangeTableList = BaseRangeTableList(multiNode);
 	Node *joinRoot = QueryJoinTree(multiNode, dependentJobList, &rangeTableList);
+
+	/* ---- keep alias list in sync so deparser uses the same names */
+	RangeTblEntry *remoteRTE = FindRemoteQueryRTE(rangeTableList);
+	if (remoteRTE != NULL)
+	{
+		SyncErefColnamesWithTargetList(remoteRTE, targetList);
+	}
+
+	/* ------------------------------------------------------------ */
+
 
 	/* update the column attributes for target entries */
 	if (updateColumnAttributes)
@@ -693,6 +710,71 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	Assert(jobQuery->hasWindowFuncs == contain_window_function((Node *) jobQuery));
 
 	return jobQuery;
+}
+
+
+#include <string.h>           /* strcmp */
+#include "utils/builtins.h"   /* psprintf */
+#include "nodes/makefuncs.h"  /* makeString */
+
+/* ------------------------------------------------------------------ */
+/* RenameAnonymousTargetEntries                                       */
+/* ------------------------------------------------------------------ */
+static void
+RenameAnonymousTargetEntries(List *targetList)
+{
+	ListCell *lc;
+	int anon = 0;
+
+	foreach(lc, targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+
+		if (tle->resname == NULL ||
+			strcmp(tle->resname, "?column?") == 0)
+		{
+			anon++;
+			tle->resname = psprintf("column%d", anon);
+		}
+	}
+}
+
+
+/* ------------------------------------------------------------------ */
+/* FindRemoteQueryRTE: return the only CITUS_RTE_REMOTE_QUERY entry    */
+/* ------------------------------------------------------------------ */
+static RangeTblEntry *
+FindRemoteQueryRTE(List *rtable)
+{
+	ListCell *lc;
+
+	foreach(lc, rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+		if (GetRangeTblKind(rte) == CITUS_RTE_REMOTE_QUERY)
+		{
+			return rte;
+		}
+	}
+	return NULL;   /* should never happen */
+}
+
+
+/* ------------------------------------------------------------------ */
+/* SyncErefColnamesWithTargetList                                     */
+/* ------------------------------------------------------------------ */
+static void
+SyncErefColnamesWithTargetList(RangeTblEntry *rte, List *targetList)
+{
+	List *newNames = NIL;
+	ListCell *lc;
+
+	foreach(lc, targetList)
+	{
+		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+		newNames = lappend(newNames, makeString(pstrdup(tle->resname)));
+	}
+	rte->eref->colnames = newNames;
 }
 
 
