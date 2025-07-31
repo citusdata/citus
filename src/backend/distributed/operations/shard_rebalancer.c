@@ -220,7 +220,6 @@ typedef struct ShardMoveSourceNodeHashEntry
  */
 typedef struct ShardMoveDependencies
 {
-	HTAB *colocationDependencies;
 	HTAB *nodeDependencies;
 } ShardMoveDependencies;
 
@@ -274,6 +273,7 @@ static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
 static void AcquireRebalanceColocationLock(Oid relationId, const char *operationName);
 static void ExecutePlacementUpdates(List *placementUpdateList, Oid
 									shardReplicationModeOid, char *noticeOperation);
+static void AcquireRebalanceOperationLock(const char *operationName);
 static float4 CalculateUtilization(float4 totalCost, float4 capacity);
 static Form_pg_dist_rebalance_strategy GetRebalanceStrategy(Name name);
 static void EnsureShardCostUDF(Oid functionOid);
@@ -297,8 +297,9 @@ static void ErrorOnConcurrentRebalance(RebalanceOptions *);
 static List * GetSetCommandListForNewConnections(void);
 static int64 GetColocationId(PlacementUpdateEvent *move);
 static ShardMoveDependencies InitializeShardMoveDependencies();
-static int64 * GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64
-											  colocationId,
+static int64 * GenerateTaskMoveDependencyList(PlacementUpdateEvent *move,
+											  int64 *refTablesDepTaskIds,
+											  int refTablesDepTaskIdsCount,
 											  ShardMoveDependencies shardMoveDependencies,
 											  int *nDepends);
 static void UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId,
@@ -760,6 +761,33 @@ AcquireRebalanceColocationLock(Oid relationId, const char *operationName)
 		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
 							   operationName,
 							   generate_qualified_relation_name(relationId)),
+						errdetail("It means that either a concurrent shard move "
+								  "or shard copy is happening."),
+						errhint("Make sure that the concurrent operation has "
+								"finished and re-run the command")));
+	}
+}
+
+
+/*
+ * AcquireRebalanceOperationLock does not allow concurrent rebalance
+ * operations.
+ */
+static void
+AcquireRebalanceOperationLock(const char *operationName)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_REBALANCE_OPERATION);
+
+	LockAcquireResult lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock,
+												 dontWait);
+	if (!lockAcquired)
+	{
+		ereport(ERROR, (errmsg("could not acquire the lock required for %s operation",
+							   operationName),
 						errdetail("It means that either a concurrent shard move "
 								  "or shard copy is happening."),
 						errhint("Make sure that the concurrent operation has "
@@ -1954,6 +1982,8 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
 		AcquireRebalanceColocationLock(relationId, options->operationName);
 	}
 
+	AcquireRebalanceOperationLock(options->operationName);
+
 	int64 jobId = 0;
 	if (HasNonTerminalJobOfType("rebalance", &jobId))
 	{
@@ -1991,10 +2021,6 @@ static ShardMoveDependencies
 InitializeShardMoveDependencies()
 {
 	ShardMoveDependencies shardMoveDependencies;
-	shardMoveDependencies.colocationDependencies = CreateSimpleHashWithNameAndSize(int64,
-																				   ShardMoveDependencyInfo,
-																				   "colocationDependencyHashMap",
-																				   6);
 	shardMoveDependencies.nodeDependencies = CreateSimpleHashWithNameAndSize(int32,
 																			 ShardMoveSourceNodeHashEntry,
 																			 "nodeDependencyHashMap",
@@ -2008,22 +2034,14 @@ InitializeShardMoveDependencies()
  * the move must take a dependency on, given the shard move dependencies as input.
  */
 static int64 *
-GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
+GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 *refTablesDepTaskIds,
+							   int refTablesDepTaskIdsCount,
 							   ShardMoveDependencies shardMoveDependencies, int *nDepends)
 {
 	HTAB *dependsList = CreateSimpleHashSetWithNameAndSize(int64,
 														   "shardMoveDependencyList", 0);
 
 	bool found;
-
-	/* Check if there exists a move in the same colocation group scheduled earlier. */
-	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-		shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, &found);
-
-	if (found)
-	{
-		hash_search(dependsList, &shardMoveDependencyInfo->taskId, HASH_ENTER, NULL);
-	}
 
 	/*
 	 * Check if there exists moves scheduled earlier whose source node
@@ -2043,6 +2061,19 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 		{
 			hash_search(dependsList, taskId, HASH_ENTER, NULL);
 		}
+	}
+
+	/*
+	 * shard copy can only start after finishing copy of reference table shards
+	 * so each shard task will have a dependency on the task that indicates the
+	 * copy complete of reference tables
+	 */
+	while (refTablesDepTaskIdsCount > 0)
+	{
+		int64 refTableTaskId = *refTablesDepTaskIds;
+		hash_search(dependsList, &refTableTaskId, HASH_ENTER, NULL);
+		refTablesDepTaskIds++;
+		refTablesDepTaskIdsCount--;
 	}
 
 	*nDepends = hash_get_num_entries(dependsList);
@@ -2076,10 +2107,6 @@ static void
 UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int64 taskId,
 							ShardMoveDependencies shardMoveDependencies)
 {
-	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-		shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, NULL);
-	shardMoveDependencyInfo->taskId = taskId;
-
 	bool found;
 	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
 		shardMoveDependencies.nodeDependencies, &move->sourceNode->nodeId, HASH_ENTER,
@@ -2174,30 +2201,19 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	initStringInfo(&buf);
 
 	List *referenceTableIdList = NIL;
-	int64 replicateRefTablesTaskId = 0;
+	int64 *refTablesDepTaskIds = NULL;
+	int refTablesDepTaskIdsCount = 0;
 
 	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
-		if (shardTransferMode == TRANSFER_MODE_AUTOMATIC)
-		{
-			VerifyTablesHaveReplicaIdentity(referenceTableIdList);
-		}
-
-		/*
-		 * Reference tables need to be copied to (newly-added) nodes, this needs to be the
-		 * first task before we can move any other table.
-		 */
-		appendStringInfo(&buf,
-						 "SELECT pg_catalog.replicate_reference_tables(%s)",
-						 quote_literal_cstr(shardTranferModeLabel));
-
-		int32 nodesInvolved[] = { 0 };
-
-		/* replicate_reference_tables permissions require superuser */
-		Oid superUserId = CitusExtensionOwner();
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data, 0,
-													  NULL, 0, nodesInvolved);
-		replicateRefTablesTaskId = task->taskid;
+		refTablesDepTaskIds = ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(
+			jobId, TRANSFER_MODE_BLOCK_WRITES, &refTablesDepTaskIdsCount);
+		ereport(DEBUG2,
+				(errmsg("%d dependent copy reference table tasks for job %ld",
+						refTablesDepTaskIdsCount, jobId),
+				 errdetail("Rebalance scheduled as background job"),
+				 errhint("To monitor progress, run: SELECT * FROM "
+						 "citus_rebalance_status();")));
 	}
 
 	PlacementUpdateEvent *move = NULL;
@@ -2219,16 +2235,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 		int nDepends = 0;
 
-		int64 *dependsArray = GenerateTaskMoveDependencyList(move, colocationId,
+		int64 *dependsArray = GenerateTaskMoveDependencyList(move, refTablesDepTaskIds,
+															 refTablesDepTaskIdsCount,
 															 shardMoveDependencies,
 															 &nDepends);
-
-		if (nDepends == 0 && replicateRefTablesTaskId > 0)
-		{
-			nDepends = 1;
-			dependsArray = palloc(nDepends * sizeof(int64));
-			dependsArray[0] = replicateRefTablesTaskId;
-		}
 
 		int32 nodesInvolved[2] = { 0 };
 		nodesInvolved[0] = move->sourceNode->nodeId;

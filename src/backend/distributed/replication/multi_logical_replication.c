@@ -132,7 +132,6 @@ static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
-static void AcquireLogicalReplicationLock(void);
 
 static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
@@ -156,7 +155,6 @@ void
 LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePort,
 						 char *targetNodeName, int targetNodePort)
 {
-	AcquireLogicalReplicationLock();
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 	int connectionFlags = FORCE_NEW_CONNECTION;
@@ -268,6 +266,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	 */
 	CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
 	CloseConnection(sourceConnection);
+
 }
 
 
@@ -494,25 +493,6 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 			publication->target->newShards, shardInterval);
 	}
 	return logicalRepTargetList;
-}
-
-
-/*
- * AcquireLogicalReplicationLock tries to acquire a lock for logical
- * replication. We need this lock, because at the start of logical replication
- * we clean up old subscriptions and publications. Because of this cleanup it's
- * not safe to run multiple logical replication based shard moves at the same
- * time. If multiple logical replication moves would run at the same time, the
- * second move might clean up subscriptions and publications that are in use by
- * another move.
- */
-static void
-AcquireLogicalReplicationLock(void)
-{
-	LOCKTAG tag;
-	SET_LOCKTAG_LOGICAL_REPLICATION(tag);
-
-	LockAcquire(&tag, ExclusiveLock, false, false);
 }
 
 
