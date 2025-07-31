@@ -2240,6 +2240,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 		prevShardCount = cacheEntry->shardIntervalArrayLength;
 		innerTableOfOuterJoin = false;
+
 		/*
 		 * For left outer joins, we need to check if the table is in the inner
 		 * part of the join. If it is, we need to mark this shard and add interval
@@ -2571,7 +2572,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 * refutation depend on it being so. We need to make them explicit again so
 	 * that the query string is generated as (...) AND (...) as opposed to
 	 * (...), (...).
-	 * TODO: do we need to run this before adding quals? 
+	 * TODO: do we need to run this before adding quals?
 	 */
 	if (taskQuery->jointree->quals != NULL && IsA(taskQuery->jointree->quals, List))
 	{

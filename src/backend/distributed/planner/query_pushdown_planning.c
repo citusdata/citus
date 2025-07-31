@@ -833,10 +833,10 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 				 * contains recurring rels, must be an unsupported lateral outer
 				 * join.
 				 */
-				/* 
-				* For now only stop returning an error here.
-				* TODO: later add all required checks to push down the query here
-				*/
+				/*
+				 * For now only stop returning an error here.
+				 * TODO: later add all required checks to push down the query here
+				 */
 				continue;
 				recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
 
