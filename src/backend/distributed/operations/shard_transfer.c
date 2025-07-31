@@ -167,7 +167,8 @@ static List * PostLoadShardCreationCommandList(ShardInterval *shardInterval,
 static ShardCommandList * CreateShardCommandList(ShardInterval *shardInterval,
 												 List *ddlCommandList);
 static char * CreateShardCopyCommand(ShardInterval *shard, WorkerNode *targetNode);
-
+static void AcquireShardPlacementLock(uint64_t shardId, int lockMode, Oid relationId,
+										const char *operationName);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
@@ -406,6 +407,34 @@ citus_move_shard_placement_with_nodeid(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+/*
+ * AcquireShardPlacementLock tries to acquire a lock on the shardid
+ * while moving/copying the shard placement. If this
+ * is it not possible it fails instantly because this means
+ * another move/copy on same shard is currently happening. */
+static void
+AcquireShardPlacementLock(uint64_t shardId, int lockMode, Oid relationId,
+							const char *operationName)
+{
+   LOCKTAG tag;
+   const bool sessionLock = false;
+   const bool dontWait = true;
+
+   SET_LOCKTAG_SHARD_MOVE(tag, shardId);
+
+   LockAcquireResult lockAcquired = LockAcquire(&tag, lockMode, sessionLock, dontWait);
+   if (!lockAcquired)
+   {
+		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
+			operationName,
+			generate_qualified_relation_name(relationId)),
+				errdetail("It means that either a concurrent shard move "
+							"or colocated distributed table creation is "
+							"happening."),
+				errhint("Make sure that the concurrent operation has "
+						"finished and re-run the command")));
+   }
+}
 
 /*
  * TransferShards is the function for shard transfers.
@@ -490,6 +519,18 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	if (!(optionFlags & SHARD_TRANSFER_SINGLE_SHARD_ONLY))
 	{
 		colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
+	}
+
+	/* We have pretty much covered the concurrent rebalance operations
+	 * and we want to allow concurrent moves within the same colocation group.
+	 * but at the same time we want to block the concurrent moves on the same shard
+	 * placement. So we lock the shard moves before starting the transfer.
+	 */
+	foreach_declared_ptr(shardInterval, colocatedShardList)
+	{
+		int64 shardIdToLock = shardInterval->shardId;
+		AcquireShardPlacementLock(shardIdToLock, ExclusiveLock, distributedTableId,
+								  operationName);
 	}
 
 	bool transferAlreadyCompleted = TransferAlreadyCompleted(colocatedShardList,

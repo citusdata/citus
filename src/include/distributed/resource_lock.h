@@ -47,7 +47,8 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12, /* Not used anymore */
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13,
 	ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK = 14,
-	ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION = 15
+	ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION = 15,
+	ADV_LOCKTAG_CLASS_CITUS_SHARD_MOVE = 16
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -84,6 +85,16 @@ typedef enum CitusOperations
 						 (uint32) ((shardid) >> 32), \
 						 (uint32) (shardid), \
 						 ADV_LOCKTAG_CLASS_CITUS_SHARD)
+
+/* advisory lock for citus shard move/copy operations,
+ * also it has the database hardcoded to MyDatabaseId,
+ * to ensure the locks are local to each database */
+#define SET_LOCKTAG_SHARD_MOVE(tag, shardid) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) ((shardid) >> 32), \
+						 (uint32) (shardid), \
+						 ADV_LOCKTAG_CLASS_CITUS_SHARD_MOVE)
 
 /* reuse advisory lock, but with different, unused field 4 (7)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
