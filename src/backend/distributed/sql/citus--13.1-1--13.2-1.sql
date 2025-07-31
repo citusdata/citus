@@ -2,6 +2,8 @@
 -- bump version to 13.2-1
 #include "udfs/worker_last_saved_explain_analyze/13.2-1.sql"
 
+#include "udfs/citus_finish_pg_upgrade/13.2-1.sql"
+
 DO $drop_leftover_old_columnar_objects$
 BEGIN
   -- If old columnar exists, i.e., the columnar access method that we had before Citus 11.1,

@@ -4,6 +4,8 @@
 DROP FUNCTION IF EXISTS pg_catalog.worker_last_saved_explain_analyze();
 #include "../udfs/worker_last_saved_explain_analyze/9.4-1.sql"
 
+#include "../udfs/citus_finish_pg_upgrade/13.1-1.sql"
+
 -- Note that we intentionally don't add the old columnar objects back to the "citus"
 -- extension in this downgrade script, even if they were present in the older version.
 --

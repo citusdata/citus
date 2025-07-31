@@ -262,7 +262,7 @@ ROLLBACK;
 --
 -- Given that this test file is run both before and after pg upgrade, the
 -- first run will test that for columnar--10.2-3--10.2-4.sql script, and the
--- second run will test the same for citus_finish_pg_upgrade(), for the post
+-- second run will test the same for columnar_finish_pg_upgrade(), for the post
 -- pg-upgrade scenario.
 SELECT pg_class.oid INTO columnar_schema_members
 FROM pg_class, pg_namespace
