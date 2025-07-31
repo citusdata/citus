@@ -753,9 +753,9 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 			{
 				/* <recurring> left join <distributed> */
 
-				if (leftNodeRecurs && !rightNodeRecurs)				
-				{	
-					if(chainedJoin || !CheckPushDownFeasibilityLeftJoin(joinExpr, query))
+				if (leftNodeRecurs && !rightNodeRecurs)
+				{
+					if (chainedJoin || !CheckPushDownFeasibilityLeftJoin(joinExpr, query))
 					{
 						ereport(DEBUG1, (errmsg("recursively planning right side of "
 												"the left join since the outer side "
@@ -765,7 +765,8 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 					}
 					else
 					{
-						ereport(DEBUG3, (errmsg("a push down safe left join with recurring left side")));
+						ereport(DEBUG3, (errmsg(
+											 "a push down safe left join with recurring left side")));
 						leftNodeRecurs = false; /* left node will be pushed down */
 					}
 				}
@@ -2666,7 +2667,8 @@ hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
  * IsPushdownSafeForRTEInLeftJoin returns true if the given range table entry
  * is safe for pushdown. Currently, we only allow reference tables.
  */
-bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
+bool
+IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
 {
 	if (IsCitusTable(rte->relid) && IsCitusTableType(rte->relid, REFERENCE_TABLE))
 	{
@@ -2675,7 +2677,7 @@ bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
 	else
 	{
 		ereport(DEBUG5, (errmsg("RTE type %d is not safe for pushdown",
-							    rte->rtekind)));
+								rte->rtekind)));
 		return false;
 	}
 }
@@ -2684,33 +2686,36 @@ bool IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
 /*
  * Recursively resolve a Var from a subquery target list to the base Var and RTE
  */
-bool ResolveBaseVarFromSubquery(Var *var, Query *query,
-                           		Var **baseVar, RangeTblEntry **baseRte)
+bool
+ResolveBaseVarFromSubquery(Var *var, Query *query,
+						   Var **baseVar, RangeTblEntry **baseRte)
 {
-    TargetEntry *tle = get_tle_by_resno(query->targetList, var->varattno);
-    if (!tle || !IsA(tle->expr, Var))
-        return false;
+	TargetEntry *tle = get_tle_by_resno(query->targetList, var->varattno);
+	if (!tle || !IsA(tle->expr, Var))
+	{
+		return false;
+	}
 
-    Var *tleVar = (Var *) tle->expr;
-    RangeTblEntry *rte = rt_fetch(tleVar->varno, query->rtable);
+	Var *tleVar = (Var *) tle->expr;
+	RangeTblEntry *rte = rt_fetch(tleVar->varno, query->rtable);
 
 	if (rte == NULL)
 	{
 		return false;
 	}
 
-    if (rte->rtekind == RTE_RELATION || rte->rtekind == RTE_FUNCTION)
-    {
-        *baseVar = tleVar;
-        *baseRte = rte;
-        return true;
-    }
-    else if (rte->rtekind == RTE_SUBQUERY)
-    {
-        return ResolveBaseVarFromSubquery(tleVar, rte->subquery, baseVar, baseRte);
-    }
+	if (rte->rtekind == RTE_RELATION || rte->rtekind == RTE_FUNCTION)
+	{
+		*baseVar = tleVar;
+		*baseRte = rte;
+		return true;
+	}
+	else if (rte->rtekind == RTE_SUBQUERY)
+	{
+		return ResolveBaseVarFromSubquery(tleVar, rte->subquery, baseVar, baseRte);
+	}
 
-    return false;
+	return false;
 }
 
 
@@ -2718,28 +2723,30 @@ bool ResolveBaseVarFromSubquery(Var *var, Query *query,
  * CheckPushDownConditionOnVarsForJoinPushdown checks if the inner variable
  * from a join qual for a join pushdown. It returns true if it is valid,
  * it is the partition column and hash distributed, otherwise it returns false.
-*/
-bool CheckPushDownConditionOnInnerVar(Var* innerVar, RangeTblEntry *rte)
+ */
+bool
+CheckPushDownConditionOnInnerVar(Var *innerVar, RangeTblEntry *rte)
 {
 	if (!innerVar || !rte)
 	{
 		return false;
 	}
 
-	if(innerVar->varattno == InvalidAttrNumber)
+	if (innerVar->varattno == InvalidAttrNumber)
 	{
 		return false;
 	}
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
-	if(!cacheEntry || GetCitusTableType(cacheEntry) != HASH_DISTRIBUTED)
+	if (!cacheEntry || GetCitusTableType(cacheEntry) != HASH_DISTRIBUTED)
 	{
 		return false;
 	}
 
 	/* Check if the inner variable is part of the distribution column */
-	if (cacheEntry->partitionColumn && innerVar->varattno == cacheEntry->partitionColumn->varattno)
+	if (cacheEntry->partitionColumn && innerVar->varattno ==
+		cacheEntry->partitionColumn->varattno)
 	{
 		return true;
 	}
@@ -2754,25 +2761,27 @@ bool CheckPushDownConditionOnInnerVar(Var* innerVar, RangeTblEntry *rte)
  * it computes the outer relation's range table index, the outer relation's
  * range table entry, the inner (distributed) relation's range table entry, and the
  * attribute number of the partition column in the outer relation.
-*/
-bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query, int *outerRtIndex, RangeTblEntry **outerRte, RangeTblEntry **distRte, int *attnum)
+ */
+bool
+CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
+										  int *outerRtIndex, RangeTblEntry **outerRte,
+										  RangeTblEntry **distRte, int *attnum)
 {
-
-	if(!IS_OUTER_JOIN(joinExpr->jointype))
+	if (!IS_OUTER_JOIN(joinExpr->jointype))
 	{
 		return false;
 	}
 
-	// TODO: generalize to right joins
-	if(joinExpr->jointype != JOIN_LEFT)
+	/* TODO: generalize to right joins */
+	if (joinExpr->jointype != JOIN_LEFT)
 	{
 		return false;
 	}
 
-	*outerRtIndex = (((RangeTblRef *)joinExpr->larg)->rtindex);
+	*outerRtIndex = (((RangeTblRef *) joinExpr->larg)->rtindex);
 	*outerRte = rt_fetch(*outerRtIndex, query->rtable);
 
-	if(!IsPushdownSafeForRTEInLeftJoin(*outerRte))
+	if (!IsPushdownSafeForRTEInLeftJoin(*outerRte))
 	{
 		return false;
 	}
@@ -2780,7 +2789,8 @@ bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 	/* Push down for chained joins is not supported in this path. */
 	if (IsA(joinExpr->rarg, JoinExpr) || IsA(joinExpr->larg, JoinExpr))
 	{
-		ereport(DEBUG5, (errmsg("One side is a join expression, pushdown is not supported in this path.")));
+		ereport(DEBUG5, (errmsg(
+							 "One side is a join expression, pushdown is not supported in this path.")));
 		return false;
 	}
 
@@ -2799,7 +2809,7 @@ bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 			continue;
 		}
 		OpExpr *joinClauseExpr = castNode(OpExpr, joinClause);
-		
+
 		Var *leftColumn = LeftColumnOrNULL(joinClauseExpr);
 		Var *rightColumn = RightColumnOrNULL(joinClauseExpr);
 		if (leftColumn == NULL || rightColumn == NULL)
@@ -2808,12 +2818,13 @@ bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		}
 
 		RangeTblEntry *rte;
-		Var *innerVar; 
+		Var *innerVar;
 		if (leftColumn->varno == *outerRtIndex)
 		{
 			/* left column is the outer table of the comparison, get right */
 			rte = rt_fetch(rightColumn->varno, query->rtable);
 			innerVar = rightColumn;
+
 			/* additional constraints will be introduced on outer relation variable */
 			*attnum = leftColumn->varattno;
 		}
@@ -2822,6 +2833,7 @@ bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 			/* right column is the outer table of the comparison, get left*/
 			rte = rt_fetch(leftColumn->varno, query->rtable);
 			innerVar = leftColumn;
+
 			/* additional constraints will be introduced on outer relation variable */
 			*attnum = rightColumn->varattno;
 		}
@@ -2833,7 +2845,7 @@ bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		/* the simple case, the inner table itself a Citus table */
 		if (rte && IsCitusTable(rte->relid))
 		{
-			if(CheckPushDownConditionOnInnerVar(innerVar, rte))
+			if (CheckPushDownConditionOnInnerVar(innerVar, rte))
 			{
 				*distRte = rte;
 				return true;
@@ -2849,14 +2861,14 @@ bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 			{
 				if (baseRte && IsCitusTable(baseRte->relid))
 				{
-					if(CheckPushDownConditionOnInnerVar(baseVar, baseRte))
+					if (CheckPushDownConditionOnInnerVar(baseVar, baseRte))
 					{
 						*distRte = baseRte;
 						return true;
 					}
 				}
 			}
-		}				
+		}
 	}
 
 	return false;
@@ -2866,12 +2878,14 @@ bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 /*
  * Initializes input variables to call CheckPushDownFeasibilityAndComputeIndexes.
  * See CheckPushDownFeasibilityAndComputeIndexes for more details.
-*/
-bool CheckPushDownFeasibilityLeftJoin(JoinExpr *joinExpr, Query *query)
+ */
+bool
+CheckPushDownFeasibilityLeftJoin(JoinExpr *joinExpr, Query *query)
 {
 	int outerRtIndex;
 	RangeTblEntry *outerRte = NULL;
 	RangeTblEntry *innerRte = NULL;
 	int attnum;
-	return CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex, &outerRte, &innerRte, &attnum);
+	return CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
+													 &outerRte, &innerRte, &attnum);
 }
