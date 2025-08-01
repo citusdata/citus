@@ -155,6 +155,7 @@ SELECT pg_reload_conf();
  sensors_2020_01_01_8970002 | fkey_from_child_to_child_8970002                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_2020_01_01_8970002 | fkey_from_child_to_dist_8970002                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
  sensors_2020_01_01_8970002 | fkey_from_child_to_parent_8970002                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
+ sensors_2020_01_01_8970002 | fkey_from_child_to_parent_8970002_1                     | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_2020_01_01_8970002 | fkey_from_child_to_ref_8970002                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
  sensors_2020_01_01_8970002 | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_2020_01_01_8970002 | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
