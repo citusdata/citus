@@ -167,7 +167,8 @@ static uint32 HashPartitionCount(void);
 /* Local functions forward declarations for task list creation and helper functions */
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
-static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction);
+static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
+									Bitmapset *distributedTables);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
@@ -2199,6 +2200,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	int minShardOffset = INT_MAX;
 	int prevShardCount = 0;
 	Bitmapset *taskRequiredForShardIndex = NULL;
+	Bitmapset *distributedTableIndex = NULL;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
@@ -2215,8 +2217,12 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	RelationRestriction *relationRestriction = NULL;
 	List *prunedShardList = NULL;
 
-	forboth_ptr(prunedShardList, prunedRelationShardList,
-				relationRestriction, relationRestrictionContext->relationRestrictionList)
+	/* First loop, gather the indexes of distributed tables
+	 *  this is required to decide whether we can skip shards
+	 *  from inner tables of outer joins
+	 */
+	foreach_declared_ptr(relationRestriction,
+						 relationRestrictionContext->relationRestrictionList)
 	{
 		Oid relationId = relationRestriction->relationId;
 
@@ -2237,6 +2243,22 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 		prevShardCount = cacheEntry->shardIntervalArrayLength;
 
+		distributedTableIndex = bms_add_member(distributedTableIndex,
+											   relationRestriction->index);
+	}
+
+	/* In the second loop, populate taskRequiredForShardIndex */
+	forboth_ptr(prunedShardList, prunedRelationShardList,
+				relationRestriction, relationRestrictionContext->relationRestrictionList)
+	{
+		Oid relationId = relationRestriction->relationId;
+
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		if (!HasDistributionKeyCacheEntry(cacheEntry))
+		{
+			continue;
+		}
+
 		/*
 		 * For left joins we don't care about the shards pruned for the right hand side.
 		 * If the right hand side would prune to a smaller set we should still send it to
@@ -2244,10 +2266,11 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		 * the left hand side we don't have to send the query to any shard that is not
 		 * matching anything on the left hand side.
 		 *
-		 * Instead we will simply skip any RelationRestriction if it is an OUTER join and
-		 * the table is part of the non-outer side of the join.
+		 * Instead we will simply skip any RelationRestriction if it is an OUTER join,
+		 * the table is part of the non-outer side of the join and the outer side has a
+		 * distributed table.
 		 */
-		if (IsInnerTableOfOuterJoin(relationRestriction))
+		if (IsInnerTableOfOuterJoin(relationRestriction, distributedTableIndex))
 		{
 			continue;
 		}
@@ -2314,11 +2337,12 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
  * RelationRestriction if the table accessed for this relation is
  *   a) in an outer join
  *   b) on the inner part of said join
+ *   c) the outer part of the join has a distributed table
  *
- * The function returns true only if both conditions above hold true
+ * The function returns true only if all three conditions above hold true.
  */
 static bool
-IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction)
+IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction, Bitmapset *distributedTables)
 {
 	RestrictInfo *joinInfo = NULL;
 	foreach_declared_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
@@ -2339,7 +2363,13 @@ IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction)
 		if (!isInOuter)
 		{
 			/* this table is joined in the inner part of an outer join */
-			return true;
+			/* check if the outer part has a distributed relation */
+			bool outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids, distributedTables);
+			if (outerPartHasDistributedTable)
+			{
+				/* this is an inner table of an outer join with a distributed table */
+				return true;
+			}
 		}
 	}
 
@@ -2547,11 +2577,13 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 */
 	UpdateRelationToShardNames((Node *) taskQuery, relationShardList);
 
+
 	/*
 	 * Ands are made implicit during shard pruning, as predicate comparison and
 	 * refutation depend on it being so. We need to make them explicit again so
 	 * that the query string is generated as (...) AND (...) as opposed to
 	 * (...), (...).
+	 * TODO: do we need to run this before adding quals?
 	 */
 	if (taskQuery->jointree->quals != NULL && IsA(taskQuery->jointree->quals, List))
 	{

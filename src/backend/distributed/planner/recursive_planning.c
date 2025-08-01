@@ -73,8 +73,10 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/distribution_column.h"
 #include "distributed/errormessage.h"
 #include "distributed/listutils.h"
 #include "distributed/local_distributed_join_planner.h"
@@ -87,10 +89,13 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
+
+bool EnableRecurringOuterJoinPushdown = true;
 
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
@@ -104,6 +109,7 @@ struct RecursivePlanningContextInternal
 	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
+	bool restrictionEquivalenceCheck;
 };
 
 /* track depth of current recursive planner query */
@@ -152,7 +158,8 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 RecursivePlanningContext *
 														 recursivePlanningContext);
 static bool RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
-														 RecursivePlanningContext *context);
+														 RecursivePlanningContext *context,
+														 bool chainedJoin);
 static void RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 											   RecursivePlanningContext *context);
 static bool IsRTERefRecurring(RangeTblRef *rangeTableRef, Query *query);
@@ -363,7 +370,7 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	if (ShouldRecursivelyPlanOuterJoins(query, context))
 	{
 		RecursivelyPlanRecurringTupleOuterJoinWalker((Node *) query->jointree,
-													 query, context);
+													 query, context, false);
 	}
 
 	/*
@@ -691,7 +698,8 @@ RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 static bool
 RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 											 RecursivePlanningContext *
-											 recursivePlanningContext)
+											 recursivePlanningContext,
+											 bool chainedJoin)
 {
 	if (node == NULL)
 	{
@@ -708,7 +716,8 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 			Node *fromElement = (Node *) lfirst(fromExprCell);
 
 			RecursivelyPlanRecurringTupleOuterJoinWalker(fromElement, query,
-														 recursivePlanningContext);
+														 recursivePlanningContext,
+														 false);
 		}
 
 		/*
@@ -734,22 +743,34 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 		 */
 		bool leftNodeRecurs =
 			RecursivelyPlanRecurringTupleOuterJoinWalker(leftNode, query,
-														 recursivePlanningContext);
+														 recursivePlanningContext,
+														 true);
 		bool rightNodeRecurs =
 			RecursivelyPlanRecurringTupleOuterJoinWalker(rightNode, query,
-														 recursivePlanningContext);
+														 recursivePlanningContext,
+														 true);
 		switch (joinExpr->jointype)
 		{
 			case JOIN_LEFT:
 			{
 				/* <recurring> left join <distributed> */
+
 				if (leftNodeRecurs && !rightNodeRecurs)
 				{
-					ereport(DEBUG1, (errmsg("recursively planning right side of "
-											"the left join since the outer side "
-											"is a recurring rel")));
-					RecursivelyPlanDistributedJoinNode(rightNode, query,
-													   recursivePlanningContext);
+					if (chainedJoin || !CheckPushDownFeasibilityLeftJoin(joinExpr, query))
+					{
+						ereport(DEBUG1, (errmsg("recursively planning right side of "
+												"the left join since the outer side "
+												"is a recurring rel")));
+						RecursivelyPlanDistributedJoinNode(rightNode, query,
+														   recursivePlanningContext);
+					}
+					else
+					{
+						ereport(DEBUG3, (errmsg(
+											 "a push down safe left join with recurring left side")));
+						leftNodeRecurs = false; /* left node will be pushed down */
+					}
 				}
 
 				/*
@@ -2642,3 +2663,236 @@ hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
 
 
 #endif
+
+
+/*
+ * IsPushdownSafeForRTEInLeftJoin returns true if the given range table entry
+ * is safe for pushdown. Currently, we only allow reference tables.
+ */
+bool
+IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
+{
+	if (IsCitusTable(rte->relid) && IsCitusTableType(rte->relid, REFERENCE_TABLE))
+	{
+		return true;
+	}
+	else
+	{
+		ereport(DEBUG5, (errmsg("RTE type %d is not safe for pushdown",
+								rte->rtekind)));
+		return false;
+	}
+}
+
+
+/*
+ * Recursively resolve a Var from a subquery target list to the base Var and RTE
+ */
+bool
+ResolveBaseVarFromSubquery(Var *var, Query *query,
+						   Var **baseVar, RangeTblEntry **baseRte)
+{
+	TargetEntry *tle = get_tle_by_resno(query->targetList, var->varattno);
+	if (!tle || !IsA(tle->expr, Var))
+	{
+		return false;
+	}
+
+	Var *tleVar = (Var *) tle->expr;
+	RangeTblEntry *rte = rt_fetch(tleVar->varno, query->rtable);
+
+	if (rte == NULL)
+	{
+		return false;
+	}
+
+	if (rte->rtekind == RTE_RELATION || rte->rtekind == RTE_FUNCTION)
+	{
+		*baseVar = tleVar;
+		*baseRte = rte;
+		return true;
+	}
+	else if (rte->rtekind == RTE_SUBQUERY)
+	{
+		return ResolveBaseVarFromSubquery(tleVar, rte->subquery, baseVar, baseRte);
+	}
+
+	return false;
+}
+
+
+/*
+ * CheckPushDownConditionOnVarsForJoinPushdown checks if the inner variable
+ * from a join qual for a join pushdown. It returns true if it is valid,
+ * it is the partition column and hash distributed, otherwise it returns false.
+ */
+bool
+CheckPushDownConditionOnInnerVar(Var *innerVar, RangeTblEntry *rte)
+{
+	if (!innerVar || !rte)
+	{
+		return false;
+	}
+
+	if (innerVar->varattno == InvalidAttrNumber)
+	{
+		return false;
+	}
+
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(rte->relid);
+
+	if (!cacheEntry || GetCitusTableType(cacheEntry) != HASH_DISTRIBUTED)
+	{
+		return false;
+	}
+
+	/* Check if the inner variable is part of the distribution column */
+	if (cacheEntry->partitionColumn && innerVar->varattno ==
+		cacheEntry->partitionColumn->varattno)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * CheckPushDownFeasibilityAndComputeIndexes checks if the given join expression
+ * is a left outer join and if it is feasible to push down the join. If feasible,
+ * it computes the outer relation's range table index, the outer relation's
+ * range table entry, the inner (distributed) relation's range table entry, and the
+ * attribute number of the partition column in the outer relation.
+ */
+bool
+CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
+										  int *outerRtIndex, RangeTblEntry **outerRte,
+										  RangeTblEntry **distRte, int *attnum)
+{
+	if (!EnableRecurringOuterJoinPushdown)
+	{
+		return false;
+	}
+
+	if (!IS_OUTER_JOIN(joinExpr->jointype))
+	{
+		return false;
+	}
+
+	/* TODO: generalize to right joins */
+	if (joinExpr->jointype != JOIN_LEFT)
+	{
+		return false;
+	}
+
+	*outerRtIndex = (((RangeTblRef *) joinExpr->larg)->rtindex);
+	*outerRte = rt_fetch(*outerRtIndex, query->rtable);
+
+	if (!IsPushdownSafeForRTEInLeftJoin(*outerRte))
+	{
+		return false;
+	}
+
+	/* Push down for chained joins is not supported in this path. */
+	if (IsA(joinExpr->rarg, JoinExpr) || IsA(joinExpr->larg, JoinExpr))
+	{
+		ereport(DEBUG5, (errmsg(
+							 "One side is a join expression, pushdown is not supported in this path.")));
+		return false;
+	}
+
+	/* Check if the join is performed on the distribution column */
+	List *joinClauseList = make_ands_implicit((Expr *) joinExpr->quals);
+	if (joinClauseList == NIL)
+	{
+		return false;
+	}
+
+	Node *joinClause = NULL;
+	foreach_declared_ptr(joinClause, joinClauseList)
+	{
+		if (!NodeIsEqualsOpExpr(joinClause))
+		{
+			continue;
+		}
+		OpExpr *joinClauseExpr = castNode(OpExpr, joinClause);
+
+		Var *leftColumn = LeftColumnOrNULL(joinClauseExpr);
+		Var *rightColumn = RightColumnOrNULL(joinClauseExpr);
+		if (leftColumn == NULL || rightColumn == NULL)
+		{
+			continue;
+		}
+
+		RangeTblEntry *rte;
+		Var *innerVar;
+		if (leftColumn->varno == *outerRtIndex)
+		{
+			/* left column is the outer table of the comparison, get right */
+			rte = rt_fetch(rightColumn->varno, query->rtable);
+			innerVar = rightColumn;
+
+			/* additional constraints will be introduced on outer relation variable */
+			*attnum = leftColumn->varattno;
+		}
+		else if (rightColumn->varno == *outerRtIndex)
+		{
+			/* right column is the outer table of the comparison, get left*/
+			rte = rt_fetch(leftColumn->varno, query->rtable);
+			innerVar = leftColumn;
+
+			/* additional constraints will be introduced on outer relation variable */
+			*attnum = rightColumn->varattno;
+		}
+		else
+		{
+			continue;
+		}
+
+		/* the simple case, the inner table itself a Citus table */
+		if (rte && IsCitusTable(rte->relid))
+		{
+			if (CheckPushDownConditionOnInnerVar(innerVar, rte))
+			{
+				*distRte = rte;
+				return true;
+			}
+		}
+		/* the inner table is a subquery, extract the base relation referred in the qual */
+		else if (rte && rte->rtekind == RTE_SUBQUERY)
+		{
+			Var *baseVar = NULL;
+			RangeTblEntry *baseRte = NULL;
+
+			if (ResolveBaseVarFromSubquery(innerVar, rte->subquery, &baseVar, &baseRte))
+			{
+				if (baseRte && IsCitusTable(baseRte->relid))
+				{
+					if (CheckPushDownConditionOnInnerVar(baseVar, baseRte))
+					{
+						*distRte = baseRte;
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * Initializes input variables to call CheckPushDownFeasibilityAndComputeIndexes.
+ * See CheckPushDownFeasibilityAndComputeIndexes for more details.
+ */
+bool
+CheckPushDownFeasibilityLeftJoin(JoinExpr *joinExpr, Query *query)
+{
+	int outerRtIndex;
+	RangeTblEntry *outerRte = NULL;
+	RangeTblEntry *innerRte = NULL;
+	int attnum;
+	return CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
+													 &outerRte, &innerRte, &attnum);
+}
