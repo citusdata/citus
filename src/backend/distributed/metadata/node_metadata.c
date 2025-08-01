@@ -2930,7 +2930,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
-	CatalogTupleInsert(pgDistNode, heapTuple);
+	CATALOG_INSERT_WITH_SNAPSHOT(pgDistNode, heapTuple);
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
