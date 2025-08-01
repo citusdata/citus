@@ -107,7 +107,7 @@ INSERT INTO ref_2 VALUES
 (null, 401),
 (null, 402);
 
-CREATE TABLE ref_2_local(LIKE ref_2); 
+CREATE TABLE ref_2_local(LIKE ref_2);
 INSERT INTO ref_2_local SELECT * FROM ref_2;
 
 CREATE TABLE local_1 (a int, b int);
