@@ -42,6 +42,11 @@ SELECT count(*) FROM r1_local LEFT JOIN d1_local using (a);
 SELECT * FROM r1 LEFT JOIN d1 using (a, b) ORDER BY 1, 2;
 SELECT * FROM r1_local LEFT JOIN d1_local using (a, b) ORDER BY 1, 2;
 
+-- Disable the pushdown and verify that the join is not pushed down
+SET citus.enable_recurring_outer_join_pushdown TO off;
+SELECT count(*) FROM r1 LEFT JOIN d1 using (a);
+SET citus.enable_recurring_outer_join_pushdown TO on;
+
 SET client_min_messages TO DEBUG1;
 -- Test that the join is not pushed down when joined on a non-distributed column
 SELECT count(*) FROM r1 LEFT JOIN d1 USING (b);
@@ -64,17 +69,17 @@ SELECT * FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a AND r1_loca
 EXPLAIN (COSTS OFF) SELECT * FROM r1 LEFT JOIN d1 ON r1.a = d1.a AND r1.b = d1.b ORDER BY 1, 2;
 
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.b = d1.a;
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.b = d1_local.a;  
+SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.b = d1_local.a;
 -- Test that the join is not pushed down when joined on a non-distributed column
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.b = d1.b;
 SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.b = d1_local.b;
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.b;
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.b;  
+SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.b;
 
 SET client_min_messages TO DEBUG1;
 -- Test that the join is not pushed down when joined on a distributed column with disjunctive conditions
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.a OR r1.b = d1.b;
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a OR r1_local.b = d1_local.b; 
+SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a OR r1_local.b = d1_local.b;
 
 -- Test join pushdown behavior when the inner part of the join is a subquery
 -- Using 'using' syntax
