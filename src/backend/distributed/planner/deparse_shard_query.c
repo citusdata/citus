@@ -208,75 +208,12 @@ UpdateTaskQueryString(Query *query, Task *task)
 
 
 /*
- * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals
- * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard.
+ * DefineQualsForShardInterval creates the necessary qual conditions over the
+ * given attnum and rtindex for the given shard interval.
  */
-bool
-UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
+Node *
+DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtindex)
 {
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	if (!IsA(node, Query))
-	{
-		return expression_tree_walker(node, UpdateWhereClauseForOuterJoin,
-									  relationShardList);
-	}
-
-	Query *query = (Query *) node;
-
-	if (query->jointree == NULL)
-	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
-								 0);
-	}
-
-	FromExpr *fromExpr = query->jointree;
-	if (fromExpr == NULL || fromExpr->fromlist == NIL)
-	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
-								 0);
-	}
-
-	/* TODO: generalize to the list */
-	Node *firstFromItem = linitial(fromExpr->fromlist);
-	if (!IsA(firstFromItem, JoinExpr))
-	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
-								 0);
-	}
-
-	JoinExpr *joinExpr = (JoinExpr *) firstFromItem;
-
-	/*
-	 * We need to find the outer table in the join clause to add the constraints w.r.to the shard
-	 * intervals of the inner table.
-	 * A representative inner table is sufficient as long as it is colocated with all other
-	 * distributed tables in the join clause.
-	 */
-	RangeTblEntry *innerRte = NULL;
-	RangeTblEntry *outerRte = NULL;
-	int outerRtIndex = -1;
-	int attnum;
-	if (!CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
-												   &outerRte, &innerRte, &attnum))
-	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
-								 0);
-	}
-	if (attnum == InvalidAttrNumber)
-	{
-		return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList,
-								 0);
-	}
-	ereport(DEBUG5, (errmsg(
-						 "Distributed table from the inner part of the outer join: %s.",
-						 innerRte->eref->aliasname)));
-
-
-	RelationShard *relationShard = FindRelationShard(innerRte->relid, relationShardList);
 	uint64 shardId = relationShard->shardId;
 	Oid relationId = relationShard->relationId;
 
@@ -284,12 +221,13 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 	Var *partitionColumnVar = cacheEntry->partitionColumn;
 
 	/*
-	 * we will add constraints for the outer table,
-	 * we create a Var node for the outer table's column that is compared with the distribution column.
+	 * Add constraints for the relation identified by rtindex, specifically on its column at attnum.
+	 * Create a Var node representing this column, which will be used to compare against the partition
+	 * column for shard interval qualification.
 	 */
 
 	Var *outerTablePartitionColumnVar = makeVar(
-		outerRtIndex, attnum, partitionColumnVar->vartype,
+		rtindex, attnum, partitionColumnVar->vartype,
 		partitionColumnVar->vartypmod,
 		partitionColumnVar->varcollid,
 		0);
@@ -377,18 +315,79 @@ UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList)
 		shardIntervalBoundQuals = (Node *) make_orclause(list_make2(nullTest,
 																	shardIntervalBoundQuals));
 	}
+	return shardIntervalBoundQuals;
+}
 
-	if (fromExpr->quals == NULL)
+
+/*
+ * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals
+ * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard.
+ */
+void
+UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
+{
+	if (query == NULL || query->jointree == NULL || query->jointree->fromlist == NIL)
 	{
-		fromExpr->quals = (Node *) shardIntervalBoundQuals;
-	}
-	else
-	{
-		fromExpr->quals = make_and_qual(fromExpr->quals, shardIntervalBoundQuals);
+		return;
 	}
 
-	/* We need to continue the recursive walk for the nested join statements.*/
-	return query_tree_walker(query, UpdateWhereClauseForOuterJoin, relationShardList, 0);
+	FromExpr *fromExpr = query->jointree;
+	if (fromExpr == NULL || fromExpr->fromlist == NIL)
+	{
+		return;
+	}
+
+	ListCell *fromExprCell;
+	foreach(fromExprCell, fromExpr->fromlist)
+	{
+		Node *fromItem = (Node *) lfirst(fromExprCell);
+		if (!IsA(fromItem, JoinExpr))
+		{
+			continue;
+		}
+		JoinExpr *joinExpr = (JoinExpr *) fromItem;
+
+		/*
+		 * We will check if we need to add constraints to the WHERE clause.
+		 */
+		RangeTblEntry *innerRte = NULL;
+		RangeTblEntry *outerRte = NULL;
+		int outerRtIndex = -1;
+		int attnum;
+		if (!CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
+													   &outerRte, &innerRte, &attnum))
+		{
+			continue;
+		}
+
+		if (attnum == InvalidAttrNumber)
+		{
+			continue;
+		}
+		ereport(DEBUG5, (errmsg(
+							 "Distributed table from the inner part of the outer join: %s.",
+							 innerRte->eref->aliasname)));
+
+		RelationShard *relationShard = FindRelationShard(innerRte->relid,
+														 relationShardList);
+
+		if (relationShard == NULL || relationShard->shardId == INVALID_SHARD_ID)
+		{
+			continue;
+		}
+
+		Node *shardIntervalBoundQuals = DefineQualsForShardInterval(relationShard, attnum,
+																	outerRtIndex);
+		if (fromExpr->quals == NULL)
+		{
+			fromExpr->quals = (Node *) shardIntervalBoundQuals;
+		}
+		else
+		{
+			fromExpr->quals = make_and_qual(fromExpr->quals, shardIntervalBoundQuals);
+		}
+	}
+	return;
 }
 
 
@@ -414,6 +413,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	/* want to look at all RTEs, even in subqueries, CTEs and such */
 	if (IsA(node, Query))
 	{
+		UpdateWhereClauseForOuterJoin((Query *) node, relationShardList); // TODO, check this again, we might want to skip this for fast path queries
 		return query_tree_walker((Query *) node, UpdateRelationToShardNames,
 								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}

@@ -168,15 +168,13 @@ static uint32 HashPartitionCount(void);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
-									Bitmapset *distributedTables,
-									bool *outerPartHasDistributedTable);
+									Bitmapset *distributedTables);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
 									  uint32 taskId,
 									  TaskType taskType,
 									  bool modifyRequiresCoordinatorEvaluation,
-									  bool innerTableOfOuterJoin,
 									  DeferredErrorMessage **planningError);
 static List * SqlTaskList(Job *job);
 static bool DependsOnHashPartitionJob(Job *job);
@@ -2202,8 +2200,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	int minShardOffset = INT_MAX;
 	int prevShardCount = 0;
 	Bitmapset *taskRequiredForShardIndex = NULL;
-	bool innerTableOfOuterJoin = false;
-	bool outerPartHasDistributedTable = false;
 	Bitmapset *distributedTableIndex = NULL;
 
 	/* error if shards are not co-partitioned */
@@ -2274,16 +2270,9 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		 * the table is part of the non-outer side of the join and the outer side has a
 		 * distributed table.
 		 */
-		if (IsInnerTableOfOuterJoin(relationRestriction, distributedTableIndex,
-									&outerPartHasDistributedTable))
+		if (IsInnerTableOfOuterJoin(relationRestriction, distributedTableIndex))
 		{
-			innerTableOfOuterJoin = true;
-
-			/* Skip this relation only if a relation from the outer part is distributed */
-			if (outerPartHasDistributedTable)
-			{
-				continue;
-			}
+			continue;
 		}
 
 		ShardInterval *shardInterval = NULL;
@@ -2316,7 +2305,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 													 taskIdIndex,
 													 taskType,
 													 modifyRequiresCoordinatorEvaluation,
-													 innerTableOfOuterJoin,
 													 planningError);
 		if (*planningError != NULL)
 		{
@@ -2349,14 +2337,12 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
  * RelationRestriction if the table accessed for this relation is
  *   a) in an outer join
  *   b) on the inner part of said join
+ *   c) the outer part of the join has a distributed table
  *
- * The function returns true only if both conditions above hold true
- * and sets the outerPartHasDistributedTable to true if the outer part of the
- * join contains a distributed table.
+ * The function returns true only if all three conditions above hold true.
  */
 static bool
-IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
-						Bitmapset *distributedTables, bool *outerPartHasDistributedTable)
+IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction, Bitmapset *distributedTables)
 {
 	RestrictInfo *joinInfo = NULL;
 	foreach_declared_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
@@ -2377,9 +2363,13 @@ IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
 		if (!isInOuter)
 		{
 			/* this table is joined in the inner part of an outer join */
-			*outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids,
-														distributedTables);
-			return true;
+			/* check if the outer part has a distributed relation */
+			bool outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids, distributedTables);
+			if (outerPartHasDistributedTable)
+			{
+				/* this is an inner table of an outer join with a distributed table */
+				return true;
+			}
 		}
 	}
 
@@ -2495,7 +2485,6 @@ static Task *
 QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 						RelationRestrictionContext *restrictionContext, uint32 taskId,
 						TaskType taskType, bool modifyRequiresCoordinatorEvaluation,
-						bool innerTableOfOuterJoin,
 						DeferredErrorMessage **planningError)
 {
 	Query *taskQuery = copyObject(originalQuery);
@@ -2588,14 +2577,6 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 */
 	UpdateRelationToShardNames((Node *) taskQuery, relationShardList);
 
-	/*
-	 * Augment the where clause with the shard intervals for inner table of outer
-	 * joins.
-	 */
-	if (innerTableOfOuterJoin)
-	{
-		UpdateWhereClauseForOuterJoin((Node *) taskQuery, relationShardList);
-	}
 
 	/*
 	 * Ands are made implicit during shard pruning, as predicate comparison and

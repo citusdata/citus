@@ -25,7 +25,9 @@
 
 extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
-extern bool UpdateWhereClauseForOuterJoin(Node *node, List *relationShardList);
+extern void UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList);
+Node * DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int
+								   outerRtIndex);
 extern void SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);
 extern void SetTaskQueryStringList(Task *task, List *queryStringList);
