@@ -95,6 +95,8 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 
+bool EnableRecurringOuterJoinPushdown = true;
+
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
  * and CTEs, pull results to the coordinator, and push it back into
@@ -2767,6 +2769,11 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 										  int *outerRtIndex, RangeTblEntry **outerRte,
 										  RangeTblEntry **distRte, int *attnum)
 {
+	if (!EnableRecurringOuterJoinPushdown)
+	{
+		return false;
+	}
+
 	if (!IS_OUTER_JOIN(joinExpr->jointype))
 	{
 		return false;
