@@ -1122,7 +1122,7 @@ SELECT * FROM
   SELECT * FROM dist1 JOIN dist2 USING (a)
   UNION
   SELECT * FROM dist1 JOIN dist2 USING (a)
-) ORDER BY 1;
+) AS t1 ORDER BY 1;
 
 -- not safe to pushdown, the distribution key from the outer part of the outer join is not in the target list
 SELECT * FROM
@@ -1130,7 +1130,7 @@ SELECT * FROM
   SELECT dist2.a FROM dist1 LEFT JOIN dist2 USING (a)
   UNION
   SELECT dist2.a FROM dist2
-) ORDER BY 1;
+) AS t1 ORDER BY 1;
 
 -- not safe to pushdown, the distribution key from the outer part of the outer join is not in the target list
 SELECT * FROM
@@ -1138,7 +1138,7 @@ SELECT * FROM
   SELECT dist1.a FROM dist1 RIGHT JOIN dist2 USING (a)
   UNION
   SELECT dist2.a FROM dist2
-) ORDER BY 1;
+) AS t1 ORDER BY 1;
 
 
 SET client_min_messages TO WARNING;
