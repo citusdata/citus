@@ -213,6 +213,7 @@ ORDER BY 2 DESC;
 -- Similar to the above queries, but
 -- this time the joins are not removed because
 -- target list contains all the entries
+SET citus.enable_router_execution TO true;
 SELECT
     *
 FROM users_table t1
