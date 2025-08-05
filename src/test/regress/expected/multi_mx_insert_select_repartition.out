@@ -45,7 +45,7 @@ select public.colocate_proc_with_table('square', 'source_table'::regclass, 0);
 -- function delegation only happens for "SELECT f()", and we don't use
 -- repartitioned INSERT/SELECT when task count is 1, so the following
 -- should go via coordinator
-EXPLAIN (costs off) INSERT INTO target_table(a) SELECT square(4);
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table(a) SELECT square(4);
                  QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
@@ -66,7 +66,7 @@ TRUNCATE target_table;
 --
 \c - - - :worker_1_port
 SET search_path TO multi_mx_insert_select_repartition;
-EXPLAIN (costs off) INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
                               QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)

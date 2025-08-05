@@ -791,7 +791,7 @@ ERROR:  local table citus_local_table cannot be joined with these distributed ta
 -- test different execution paths --
 ---------------------------------------------------------------------
 -- a bit different explain output than for postgres local tables
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT * FROM distributed_table
 ORDER BY distributed_table.*
@@ -815,7 +815,7 @@ LIMIT 10;
 (14 rows)
 
 -- show that we do not pull to coordinator
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT * FROM citus_local_table;
                                 QUERY PLAN
@@ -829,7 +829,7 @@ SELECT * FROM citus_local_table;
                ->  Seq Scan on citus_local_table_1510001 citus_local_table
 (7 rows)
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT reference_table.* FROM reference_table;
                               QUERY PLAN
@@ -843,7 +843,7 @@ SELECT reference_table.* FROM reference_table;
                ->  Seq Scan on reference_table_1510003 reference_table
 (7 rows)
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT reference_table.* FROM reference_table, postgres_local_table;
                                  QUERY PLAN
@@ -862,7 +862,7 @@ SELECT reference_table.* FROM reference_table, postgres_local_table;
 (11 rows)
 
 -- show that we pull to coordinator when a distributed table is involved
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT reference_table.* FROM reference_table, distributed_table;
                                     QUERY PLAN

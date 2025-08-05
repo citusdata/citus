@@ -70,7 +70,7 @@ SELECT create_distributed_table('customer_hash', 'c_custkey');
 
 SET client_min_messages TO DEBUG2;
 -- The following query checks that we can correctly handle self-joins
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -87,7 +87,7 @@ SET client_min_messages TO LOG;
 -- The following queries check that we correctly handle joins and OR clauses. In
 -- particular, these queries check that we factorize out OR clauses if possible,
 -- and that we default to a cartesian product otherwise.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey AND l_quantity > 5)
 	OR (l_orderkey = o_orderkey AND l_quantity < 10);
@@ -99,11 +99,11 @@ LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
          citus.explain_distributed_queries: false
 (3 rows)
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT l_quantity FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey OR l_quantity > 5);
 ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders" ][ dual partition join "lineitem_hash" ]
@@ -115,7 +115,7 @@ LOG:  join order: [ "orders" ][ dual partition join "lineitem_hash" ]
 (3 rows)
 
 -- Verify we handle local joins between two hash-partitioned tables.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM orders_hash, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
@@ -127,7 +127,7 @@ LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
 (3 rows)
 
 -- Validate that we can handle broadcast joins with hash-partitioned tables.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
 LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
@@ -140,7 +140,7 @@ LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
 
 -- Validate that we don't use a single-partition join method for a hash
 -- re-partitioned table, thus preventing a partition of just the customer table.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM orders, lineitem, customer_append
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
 LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer_append" ]
@@ -153,7 +153,7 @@ LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition
 
 -- Validate that we don't chose a single-partition join method with a
 -- hash-partitioned base table
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM orders, customer_hash
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
@@ -166,7 +166,7 @@ LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
 
 -- Validate that we can re-partition a hash partitioned table to join with a
 -- range partitioned one.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders_hash" ][ dual partition join "customer_append" ]
@@ -180,7 +180,7 @@ LOG:  join order: [ "orders_hash" ][ dual partition join "customer_append" ]
 -- Validate a 4 way join that could be done locally is planned as such by the logical
 -- planner. It used to be planned as a repartition join due to no 1 table being directly
 -- joined to all other tables, but instead follows a chain.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*)
 FROM (
     SELECT users_table.user_id

@@ -24,7 +24,7 @@ SELECT create_distributed_table('target_table', 'a');
 (1 row)
 
 INSERT INTO source_table SELECT i, 2 * i FROM generate_series(1, 100) i;
-EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table;
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table SELECT * FROM source_table;
                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)

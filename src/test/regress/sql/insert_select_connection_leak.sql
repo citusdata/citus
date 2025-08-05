@@ -20,7 +20,7 @@ SELECT create_distributed_table('target_table', 'a');
 
 INSERT INTO source_table SELECT i, 2 * i FROM generate_series(1, 100) i;
 
-EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table;
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table SELECT * FROM source_table;
 
 SELECT worker_connection_count(:worker_1_port) AS pre_xact_worker_1_connections,
        worker_connection_count(:worker_2_port) AS pre_xact_worker_2_connections \gset

@@ -30,14 +30,14 @@ INSERT INTO t4 VALUES (1.0, 2 BETWEEN 1 AND 3);
 -- show that. The query still works though. So doesn't seem important enough to
 -- fix, since boolean partition columns should not happen much/at all for
 -- actual users.
-EXPLAIN (COSTS FALSE) SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
-EXPLAIN (COSTS FALSE) SELECT FROM t4 WHERE c1 = true;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT FROM t4 WHERE c1 = true;
 
 CREATE TABLE t5(c0 int);
 SELECT create_distributed_table('t5', 'c0');
 INSERT INTO t5 VALUES (CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END);
-EXPLAIN (COSTS FALSE) SELECT FROM t5 WHERE c0 = 2;
-EXPLAIN (COSTS FALSE) SELECT FROM t5 WHERE c0 = CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT FROM t5 WHERE c0 = 2;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT FROM t5 WHERE c0 = CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END;
 
 CREATE TABLE IF NOT EXISTS t6(c0 TEXT  CHECK (TRUE), c1 money ) WITH (autovacuum_vacuum_threshold=1180014707, autovacuum_freeze_table_age=13771154, autovacuum_vacuum_cost_delay=23, autovacuum_analyze_threshold=1935153914, autovacuum_freeze_min_age=721733768, autovacuum_enabled=0, autovacuum_vacuum_cost_limit=9983);
 CREATE UNLOGGED TABLE IF NOT EXISTS t7(LIKE t6);
@@ -258,7 +258,7 @@ RIGHT JOIN
    )
 ON (true)) as unsupported_join;
 
-EXPLAIN (COSTS OFF) SELECT
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT
   unsupported_join.*
 FROM
    (distributed_table a

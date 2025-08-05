@@ -48,7 +48,7 @@ END; $$ language plpgsql VOLATILE;
 RESET citus.enable_metadata_sync;
 -- INSERT ... SELECT between reference tables
 BEGIN;
-EXPLAIN (COSTS OFF) INSERT INTO squares SELECT a, a*a FROM numbers;
+EXPLAIN (COSTS OFF, BUFFERS OFF) INSERT INTO squares SELECT a, a*a FROM numbers;
                         QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -70,7 +70,7 @@ SELECT * FROM squares WHERE a >= 20 ORDER BY a;
 
 ROLLBACK;
 BEGIN;
-EXPLAIN (COSTS OFF) INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
+EXPLAIN (COSTS OFF, BUFFERS OFF) INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
                         QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -104,7 +104,7 @@ SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
 -- Join between reference tables and local tables
 CREATE TABLE local_table(a int);
 INSERT INTO local_table VALUES (2), (4), (7), (20);
-EXPLAIN (COSTS OFF) SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
                          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -368,7 +368,7 @@ NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (re
 --
 CREATE VIEW numbers_v AS SELECT * FROM numbers WHERE a=1;
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 $Q$);
        coordinator_plan
@@ -382,7 +382,7 @@ WARNING:  "view local_table_v" has dependency to "table local_table" that is not
 DETAIL:  "view local_table_v" will be created only locally
 HINT:  Distribute "table local_table" first to distribute "view local_table_v"
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
 $Q$);
        coordinator_plan

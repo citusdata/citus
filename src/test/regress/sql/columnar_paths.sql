@@ -164,7 +164,7 @@ INSERT INTO heap_table SELECT i, i::text, (i+1000)*7, (i+900)*5 FROM generate_se
 CREATE INDEX heap_table_btree ON heap_table (a);
 ANALYZE heap_table;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte AS MATERIALIZED (SELECT d FROM full_correlated WHERE a > 1)
 SELECT SUM(ht_1.a), MIN(ct_1.c)
 FROM heap_table AS ht_1
@@ -177,7 +177,7 @@ WHERE ct_1.a < 3000;
 BEGIN;
   SET LOCAL columnar.enable_custom_scan TO 'OFF';
 
-  EXPLAIN (COSTS OFF)
+  EXPLAIN (COSTS OFF, BUFFERS OFF)
   WITH cte AS MATERIALIZED (SELECT d FROM full_correlated WHERE a > 1)
   SELECT SUM(ht_1.a), MIN(ct_1.c)
   FROM heap_table AS ht_1
@@ -188,16 +188,16 @@ BEGIN;
 ROLLBACK;
 
 -- use custom scan
-EXPLAIN (COSTS OFF) WITH w AS (SELECT * FROM full_correlated)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH w AS (SELECT * FROM full_correlated)
 SELECT * FROM w AS w1 JOIN w AS w2 ON w1.a = w2.d
 WHERE w2.a = 123;
 
 -- use index
-EXPLAIN (COSTS OFF) WITH w AS NOT MATERIALIZED (SELECT * FROM full_correlated)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH w AS NOT MATERIALIZED (SELECT * FROM full_correlated)
 SELECT * FROM w AS w1 JOIN w AS w2 ON w1.a = w2.d
 WHERE w2.a = 123;
 
-EXPLAIN (COSTS OFF) SELECT sub_1.b, sub_2.a, sub_3.avg
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT sub_1.b, sub_2.a, sub_3.avg
 FROM
   (SELECT b FROM full_correlated WHERE (a > 2) GROUP BY b ORDER BY 1 DESC LIMIT 5) AS sub_1,
   (SELECT a FROM full_correlated WHERE (a > 10) GROUP BY a HAVING count(DISTINCT a) >= 1 ORDER BY 1 DESC LIMIT 3) AS sub_2,
@@ -361,12 +361,12 @@ CREATE INDEX uncorrelated_idx ON uncorrelated(x);
 ANALYZE correlated, uncorrelated;
 
 -- should choose chunk group filtering; selective and correlated
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM correlated WHERE x = 78910;
 SELECT * FROM correlated WHERE x = 78910;
 
 -- should choose index scan; selective but uncorrelated
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM uncorrelated WHERE x = 78910;
 SELECT * FROM uncorrelated WHERE x = 78910;
 

@@ -412,8 +412,8 @@ CALL public.create_range_partitioned_shards('target_table', '{0,3,6,9}','{2,5,8,
 
 INSERT INTO target_table VALUES (11,9), (22,4);
 
-EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table;
-EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table WHERE b IS NOT NULL;
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table SELECT * FROM source_table;
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table SELECT * FROM source_table WHERE b IS NOT NULL;
 
 BEGIN;
 SAVEPOINT s1;
@@ -505,7 +505,7 @@ SELECT count(*) FROM target_table;
 TRUNCATE target_table;
 SET citus.enable_repartitioned_insert_select TO OFF;
 
-EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
 
 SET client_min_messages TO DEBUG2;
 INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
@@ -514,7 +514,7 @@ RESET client_min_messages;
 SELECT count(*) FROM target_table;
 
 SET citus.enable_repartitioned_insert_select TO ON;
-EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
 
 DROP TABLE source_table, target_table;
 
@@ -528,7 +528,7 @@ set citus.enable_repartition_joins to true;
 
 INSERT INTO test SELECT i, i FROM generate_series(1, 10) i;
 
-EXPLAIN (costs off) INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
 
 SET client_min_messages TO DEBUG1;
 INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
@@ -539,7 +539,7 @@ SELECT count(*) FROM test;
 TRUNCATE test;
 INSERT INTO test SELECT i, i FROM generate_series(1, 10) i;
 
-EXPLAIN (costs off) INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
+EXPLAIN (costs off, BUFFERS OFF) INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
 
 SET client_min_messages TO DEBUG1;
 INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
@@ -613,7 +613,7 @@ DO UPDATE SET
 
 RESET client_min_messages;
 
-EXPLAIN (COSTS OFF) INSERT INTO target_table AS enriched(c1, c2, c3, c4, c5, c6, cardinality, sum)
+EXPLAIN (COSTS OFF, BUFFERS OFF) INSERT INTO target_table AS enriched(c1, c2, c3, c4, c5, c6, cardinality, sum)
 SELECT c1, c2, c3, c4, -1::float AS c5,
        dist_func(c1, 4) c6,
        sum(cardinality),
@@ -649,7 +649,7 @@ SELECT create_distributed_table('dist_table_2','id');
 -- verify that insert select with union can be repartitioned. We cannot push down the query
 -- since UNION clause has no FROM clause at top level query.
 SELECT public.coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
 $$);
 
 -- clean-up

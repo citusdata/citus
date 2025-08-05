@@ -303,7 +303,7 @@ SELECT count(*) FROM zero_col_columnar;
      2
 (1 row)
 
-EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+EXPLAIN (costs off, summary off, BUFFERS OFF) SELECT * FROM zero_col_columnar;
                              QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on zero_col_columnar
@@ -323,7 +323,7 @@ SELECT count(*) FROM zero_col_columnar;
      5
 (1 row)
 
-EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+EXPLAIN (costs off, summary off, BUFFERS OFF) SELECT * FROM zero_col_columnar;
                              QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on zero_col_columnar

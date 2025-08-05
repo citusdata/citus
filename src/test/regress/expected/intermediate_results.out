@@ -203,7 +203,7 @@ SELECT create_intermediate_result('squares', 'SELECT s, s*s FROM generate_series
                         632
 (1 row)
 
-EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int, x2 int);
+EXPLAIN (COSTS ON, BUFFERS OFF) SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int, x2 int);
                                     QUERY PLAN
 ---------------------------------------------------------------------
  Function Scan on read_intermediate_result res  (cost=0.00..4.55 rows=632 width=8)
@@ -216,7 +216,7 @@ SELECT create_intermediate_result('hellos', $$SELECT s, 'hello-'||s FROM generat
                          63
 (1 row)
 
-EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_result('hellos', 'binary') AS res (x int, y text);
+EXPLAIN (COSTS ON, BUFFERS OFF) SELECT * FROM read_intermediate_result('hellos', 'binary') AS res (x int, y text);
                                     QUERY PLAN
 ---------------------------------------------------------------------
  Function Scan on read_intermediate_result res  (cost=0.00..0.32 rows=30 width=36)
@@ -229,7 +229,7 @@ SELECT create_intermediate_result('stored_squares', 'SELECT square FROM stored_s
                           4
 (1 row)
 
-EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_result('stored_squares', 'text') AS res (s intermediate_results.square_type);
+EXPLAIN (COSTS ON, BUFFERS OFF) SELECT * FROM read_intermediate_result('stored_squares', 'text') AS res (s intermediate_results.square_type);
                                     QUERY PLAN
 ---------------------------------------------------------------------
  Function Scan on read_intermediate_result res  (cost=0.00..0.01 rows=1 width=32)
@@ -400,7 +400,7 @@ SELECT create_intermediate_result('squares_1', 'SELECT s, s*s FROM generate_seri
                         632 |                        392
 (1 row)
 
-EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2'], 'binary') AS res (x int, x2 int);
+EXPLAIN (COSTS ON, BUFFERS OFF) SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2'], 'binary') AS res (x int, x2 int);
                                      QUERY PLAN
 ---------------------------------------------------------------------
  Function Scan on read_intermediate_results res  (cost=0.00..7.37 rows=1024 width=8)
@@ -414,7 +414,7 @@ SELECT create_intermediate_result('hellos_1', $$SELECT s, 'hello-'||s FROM gener
                          63 |                         66
 (1 row)
 
-EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_results(ARRAY['hellos_1', 'hellos_2'], 'binary') AS res (x int, y text);
+EXPLAIN (COSTS ON, BUFFERS OFF) SELECT * FROM read_intermediate_results(ARRAY['hellos_1', 'hellos_2'], 'binary') AS res (x int, y text);
                                      QUERY PLAN
 ---------------------------------------------------------------------
  Function Scan on read_intermediate_results res  (cost=0.00..0.66 rows=62 width=36)
@@ -427,7 +427,7 @@ SELECT create_intermediate_result('stored_squares', 'SELECT square FROM stored_s
                           4
 (1 row)
 
-EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_results(ARRAY['stored_squares'], 'text') AS res (s intermediate_results.square_type);
+EXPLAIN (COSTS ON, BUFFERS OFF) SELECT * FROM read_intermediate_results(ARRAY['stored_squares'], 'text') AS res (s intermediate_results.square_type);
                                     QUERY PLAN
 ---------------------------------------------------------------------
  Function Scan on read_intermediate_results res  (cost=0.00..0.01 rows=1 width=32)

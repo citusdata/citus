@@ -167,14 +167,14 @@ COMMIT;
 
 SELECT * FROM zero_col_columnar;
 SELECT count(*) FROM zero_col_columnar;
-EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+EXPLAIN (costs off, summary off, BUFFERS OFF) SELECT * FROM zero_col_columnar;
 
 INSERT INTO zero_col_columnar DEFAULT VALUES;
 INSERT INTO zero_col_columnar DEFAULT VALUES;
 INSERT INTO zero_col_columnar DEFAULT VALUES;
 SELECT * FROM zero_col_columnar;
 SELECT count(*) FROM zero_col_columnar;
-EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+EXPLAIN (costs off, summary off, BUFFERS OFF) SELECT * FROM zero_col_columnar;
 
 VACUUM VERBOSE zero_col_columnar;
 ANALYZE zero_col_columnar;

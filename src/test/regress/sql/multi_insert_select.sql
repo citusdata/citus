@@ -671,7 +671,7 @@ SET client_min_messages TO WARNING;
  -- same as the above with INNER JOIN
  -- we support this with route to coordinator
  SELECT coordinator_plan($Q$
- EXPLAIN (costs off)
+ EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -680,7 +680,7 @@ SET client_min_messages TO WARNING;
 $Q$);
 
 -- EXPLAIN ANALYZE is not supported for INSERT ... SELECT via coordinator
-EXPLAIN (costs off, analyze on)
+EXPLAIN (costs off, analyze on, BUFFERS OFF)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -700,7 +700,7 @@ WHERE
  -- same as the above with INNER JOIN
  -- we support this with route to coordinator
  SELECT coordinator_plan($Q$
- EXPLAIN (costs off)
+ EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -712,7 +712,7 @@ $Q$);
  -- make things a bit more complicate with IN clauses
  -- we support this with route to coordinator
  SELECT coordinator_plan($Q$
- EXPLAIN (costs off)
+ EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -724,7 +724,7 @@ $Q$);
  -- implicit join on non partition column should also not be pushed down,
  -- so we fall back to route via coordinator
  SELECT coordinator_plan($Q$
- EXPLAIN (costs off)
+ EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events
              (user_id)
  SELECT raw_events_first.user_id
@@ -739,7 +739,7 @@ RESET client_min_messages;
  -- on value_1 as shown in the above, Citus could push it down and use
  -- distributed INSERT/SELECT. But we instead fall back to route via coordinator.
  SELECT coordinator_plan($Q$
- EXPLAIN (costs off)
+ EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events
              (user_id)
  SELECT raw_events_first.user_id
@@ -752,7 +752,7 @@ $Q$);
  -- foo is not joined on the partition key so the query is not
  -- pushed down. So instead we route via coordinator.
  SELECT coordinator_plan($Q$
- EXPLAIN (costs off)
+ EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events
              (user_id, value_4_agg)
  SELECT
@@ -786,7 +786,7 @@ $Q$);
  -- if the given filter was on value_1 as shown in the above, Citus could
  -- push it down. But here the query falls back to route via coordinator.
  SELECT coordinator_plan($Q$
- EXPLAIN (costs off)
+ EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events
              (user_id)
  SELECT raw_events_first.user_id
@@ -799,7 +799,7 @@ $Q$);
  -- foo is not joined on the partition key so the query is not
  -- pushed down, and it falls back to route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
  INSERT INTO agg_events
              (user_id, value_4_agg)
  SELECT
@@ -984,7 +984,7 @@ SET client_min_messages TO WARNING;
 -- cannot pushdown the query since the JOIN is not equi JOIN
 -- falls back to route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_events
             (user_id, value_4_agg)
 SELECT
@@ -1017,7 +1017,7 @@ $Q$);
 -- cannot pushdown since foo2 is not join on partition key
 -- falls back to route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_events
             (user_id, value_4_agg)
 SELECT
@@ -1051,7 +1051,7 @@ $Q$);
 -- cannot push down since foo doesn't have en equi join
 -- falls back to route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_events
             (user_id, value_4_agg)
 SELECT
@@ -1086,7 +1086,7 @@ $Q$);
 -- join on averages is not on the partition key
 -- should fall back to route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_events (user_id, value_4_agg)
 SELECT
   averages.user_id, avg(averages.value_4)
@@ -1108,7 +1108,7 @@ $Q$);
 -- join among reference_ids and averages is not on the partition key
 -- should fall back to route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_events (user_id, value_4_agg)
 SELECT
   averages.user_id, avg(averages.value_4)
@@ -1129,7 +1129,7 @@ $Q$);
 -- join among the agg_ids and averages is not on the partition key
 -- should fall back to route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_events (user_id, value_4_agg)
 SELECT
   averages.user_id, avg(averages.value_4)
@@ -1152,7 +1152,7 @@ $Q$);
 -- Selected value in the WHERE is not partition key, so we cannot use distributed
 -- INSERT/SELECT and falls back route via coordinator
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
@@ -1164,7 +1164,7 @@ $Q$);
 -- same as above but slightly more complex
 -- since it also includes subquery in FROM as well
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_events
             (user_id)
 SELECT f2.id FROM
@@ -1210,7 +1210,7 @@ RESET client_min_messages;
 -- we cannot push this down since it is NOT IN
 -- we use repartition insert/select instead
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
@@ -1276,7 +1276,7 @@ RESET client_min_messages;
 -- cannot push down since the f.id IN is matched with value_1
 -- we use repartition insert/select instead
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
@@ -2356,19 +2356,19 @@ SELECT create_distributed_table('dist_table_4', 'dist_col');
 -- Even if target table distribution column is colocated with dist_table_2's distributed column, source tables dist_table_2 and dist_table_4
 -- are non-colocated. Hence, SELECT part of the query should be pulled to coordinator.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_4 ON dist_table_2.dist_col = dist_table_4.int_col;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_1 SELECT dist_table_2.dist_col FROM dist_table_2 JOIN dist_table_4 ON dist_table_2.dist_col = dist_table_4.int_col;
 $$);
 
 -- For INSERT SELECT, when a lateral query references an outer query, push-down is possible even if limit clause exists in the lateral query.
 -- It is because subquery with limit does not need to be merged at coordinator as it is a lateral query.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN LATERAL (SELECT * FROM dist_table_2 d2 WHERE d1.dist_col = d2.dist_col LIMIT 3) dummy USING(dist_col);
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN LATERAL (SELECT * FROM dist_table_2 d2 WHERE d1.dist_col = d2.dist_col LIMIT 3) dummy USING(dist_col);
 $$);
 
 -- For INSERT SELECT, when push-down is NOT possible when limit clause exists in a subquery at SELECT part of INSERT SELECT.
 -- It is because the subquery with limit needs to be merged at coordinator.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_1 SELECT d1.dist_col FROM dist_table_1 d1 LEFT JOIN (SELECT * FROM dist_table_2 LIMIT 3) dummy USING(dist_col);
 $$);
 
 CREATE TABLE dist_table_5(id int, id2 int);
@@ -2378,12 +2378,12 @@ SELECT create_distributed_table('dist_table_6','id');
 
 -- verify that insert select with union can be pushed down since UNION clause has FROM clause at top level query.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5(id) SELECT id FROM (SELECT id FROM dist_table_5 UNION SELECT id FROM dist_table_6) dummy;
 $$);
 
 -- verify that insert select with sublink can be pushed down when tables are colocated.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM dist_table_5 WHERE dist_table_5.id = dist_table_6.id) FROM dist_table_6;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM dist_table_5 WHERE dist_table_5.id = dist_table_6.id) FROM dist_table_6;
 $$);
 
 CREATE TABLE ref_table_1(id int);
@@ -2394,24 +2394,24 @@ INSERT INTO dist_table_5 SELECT id, (SELECT id FROM dist_table_5 WHERE dist_tabl
 
 -- verify that insert select cannot be pushed down when we have recurring range table in from clause.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM ref_table_1 WHERE id = 1) FROM ref_table_1;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM ref_table_1 WHERE id = 1) FROM ref_table_1;
 $$);
 
 -- verify that insert select cannot be pushed down when we have reference table in outside of outer join.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
 $$);
 
 -- verify that insert select cannot be pushed down when it has a recurring outer join in a subquery.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
 $$);
 
 CREATE TABLE loc_table_1(id int);
 
 -- verify that insert select cannot be pushed down when it contains join between local and distributed tables.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM dist_table_5 JOIN loc_table_1 USING(id);
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5 SELECT id FROM dist_table_5 JOIN loc_table_1 USING(id);
 $$);
 
 CREATE VIEW view_1 AS
@@ -2422,12 +2422,12 @@ CREATE MATERIALIZED VIEW view_2 AS
 
 -- verify that insert select cannot be pushed down when it contains view.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT * FROM view_1;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5 SELECT * FROM view_1;
 $$);
 
 -- verify that insert select cannot be pushed down when it contains materialized view.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT * FROM view_2;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5 SELECT * FROM view_2;
 $$);
 
 CREATE TABLE append_table(id integer, data text, int_data int);
@@ -2440,14 +2440,14 @@ INSERT INTO append_table SELECT * FROM append_table;
 -- verify that CTEs at top level of INSERT SELECT, that can normally be inlined, would not be inlined by INSERT SELECT pushdown planner
 -- and handled by pull to coordinator.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id > 5)
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id > 5)
   INSERT INTO dist_table_5
   SELECT id FROM dist_table_5 JOIN cte_1 USING(id) OFFSET 5;
 $$);
 
 -- verify that CTEs at top level of SELECT part, would be inlined by Postgres and pushed down by INSERT SELECT planner.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_5
   WITH cte_1 AS (SELECT id FROM dist_table_5 WHERE id = 5)
   SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
 $$);

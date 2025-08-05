@@ -40,7 +40,7 @@ SELECT create_reference_table('ref_table');
 
 
 -- single hash repartition after bcast joins
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -49,7 +49,7 @@ WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
 
 -- a more complicated join order, first colocated join, later single hash repartition join
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM

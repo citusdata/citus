@@ -186,7 +186,7 @@ WHERE
 	key = 1;
 
 -- EXPLAIN should show the difference between materialized an not materialized
-EXPLAIN (COSTS OFF) WITH a AS (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH a AS (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM
@@ -194,7 +194,7 @@ FROM
 WHERE
 	key = 1;
 
-EXPLAIN (COSTS OFF) WITH a AS MATERIALIZED (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH a AS MATERIALIZED (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM
@@ -228,7 +228,7 @@ FROM
 \set VERBOSITY terse
 
 SELECT public.coordinator_plan_with_subplans($Q$
-EXPLAIN (COSTS OFF) WITH cte_1 AS (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH cte_1 AS (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM
@@ -240,7 +240,7 @@ $Q$);
 
 \set VERBOSITY default
 
-EXPLAIN (COSTS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM

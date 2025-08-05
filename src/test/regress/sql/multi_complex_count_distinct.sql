@@ -53,7 +53,7 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_orderkey, count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -68,7 +68,7 @@ SELECT
 	ORDER BY 1 DESC
 	LIMIT 10;
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -82,7 +82,7 @@ SELECT
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_shipmode, count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -98,7 +98,7 @@ SELECT
 	ORDER BY 3 DESC, 2 DESC, 1
 	LIMIT 10;
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_orderkey, count(distinct l_partkey), count(distinct l_shipmode)
 	FROM lineitem_hash
@@ -111,7 +111,7 @@ SELECT
 	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
 	FROM lineitem_hash;
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
 	FROM lineitem_hash;
@@ -183,7 +183,7 @@ SELECT *
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT *
 	FROM (
 		SELECT
@@ -203,7 +203,7 @@ SELECT
 	ORDER BY 2 DESC, 3 DESC, 1
 	LIMIT 10;
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_orderkey,
 	count(DISTINCT l_suppkey) FILTER (WHERE l_shipmode = 'AIR'),
@@ -221,7 +221,7 @@ SELECT
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 -- explaining the same query fails
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_suppkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
 	FROM lineitem_hash

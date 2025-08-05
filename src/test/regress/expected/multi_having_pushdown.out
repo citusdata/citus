@@ -17,7 +17,7 @@ SELECT create_distributed_table('orders_hash', 'o_orderkey', 'hash');
 (1 row)
 
 -- push down when table is distributed by hash and grouped by partition column
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
     SELECT l_orderkey, sum(l_extendedprice * l_discount) as revenue
     FROM lineitem_hash
     GROUP BY l_orderkey HAVING sum(l_quantity) > 24
@@ -42,7 +42,7 @@ EXPLAIN (COSTS FALSE)
 (15 rows)
 
 -- but don't push down when table is distributed by append
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
     SELECT l_orderkey, sum(l_extendedprice * l_discount) as revenue
     FROM lineitem
     GROUP BY l_orderkey HAVING sum(l_quantity) > 24
@@ -67,7 +67,7 @@ EXPLAIN (COSTS FALSE)
 (15 rows)
 
 -- and don't push down when not grouped by partition column
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
     SELECT l_shipmode, sum(l_extendedprice * l_discount) as revenue
     FROM lineitem_hash
     GROUP BY l_shipmode HAVING sum(l_quantity) > 24
@@ -91,7 +91,7 @@ EXPLAIN (COSTS FALSE)
 (14 rows)
 
 -- push down if grouped by multiple rows one of which is partition column
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
     SELECT l_shipmode, l_orderkey, sum(l_extendedprice * l_discount) as revenue
     FROM lineitem_hash
     GROUP BY l_shipmode, l_orderkey HAVING sum(l_quantity) > 24
@@ -116,7 +116,7 @@ EXPLAIN (COSTS FALSE)
 (15 rows)
 
 -- couple more checks with joins
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
     SELECT sum(l_extendedprice * l_discount) as revenue
     FROM lineitem_hash, orders_hash
     WHERE o_orderkey = l_orderkey
@@ -145,7 +145,7 @@ EXPLAIN (COSTS FALSE)
                                                    ->  Seq Scan on lineitem_hash_590000 lineitem_hash
 (19 rows)
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
     SELECT sum(l_extendedprice * l_discount) as revenue
     FROM lineitem_hash, orders_hash
     WHERE o_orderkey = l_orderkey

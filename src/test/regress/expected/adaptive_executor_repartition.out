@@ -82,7 +82,7 @@ SELECT create_reference_table('ref_table');
 (1 row)
 
 -- single hash repartition after bcast joins
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -101,7 +101,7 @@ WHERE
 (7 rows)
 
 -- a more complicated join order, first colocated join, later single hash repartition join
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM

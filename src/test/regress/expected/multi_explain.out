@@ -26,7 +26,7 @@ AS $BODY$
 DECLARE
   result jsonb;
 BEGIN
-  EXECUTE format('EXPLAIN (FORMAT JSON) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (FORMAT JSON, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -36,7 +36,7 @@ AS $BODY$
 DECLARE
   result jsonb;
 BEGIN
-  EXECUTE format('EXPLAIN (ANALYZE TRUE, FORMAT JSON) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (ANALYZE TRUE, FORMAT JSON, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -47,7 +47,7 @@ AS $BODY$
 DECLARE
   result xml;
 BEGIN
-  EXECUTE format('EXPLAIN (FORMAT XML) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (FORMAT XML, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -58,7 +58,7 @@ AS $BODY$
 DECLARE
   result xml;
 BEGIN
-  EXECUTE format('EXPLAIN (ANALYZE true, FORMAT XML) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (ANALYZE true, FORMAT XML, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -66,7 +66,7 @@ $BODY$ LANGUAGE plpgsql;
 VACUUM ANALYZE lineitem;
 VACUUM ANALYZE orders;
 -- Test Text format
-EXPLAIN (COSTS FALSE, FORMAT TEXT)
+EXPLAIN (COSTS FALSE, FORMAT TEXT, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
@@ -83,7 +83,7 @@ Sort
                           ->  Seq Scan on lineitem_360000 lineitem
 -- Test disable hash aggregate
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE, FORMAT TEXT)
+EXPLAIN (COSTS FALSE, FORMAT TEXT, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
@@ -102,7 +102,7 @@ Sort
                                 ->  Seq Scan on lineitem_360000 lineitem
 SET enable_hashagg TO on;
 -- Test JSON format
-EXPLAIN (COSTS FALSE, FORMAT JSON)
+EXPLAIN (COSTS FALSE, FORMAT JSON, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 [
@@ -184,7 +184,7 @@ SELECT true AS valid FROM explain_analyze_json($$
 $$);
 t
 -- Test XML format
-EXPLAIN (COSTS FALSE, FORMAT XML)
+EXPLAIN (COSTS FALSE, FORMAT XML, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -272,7 +272,7 @@ SELECT true AS valid FROM explain_analyze_xml($$
 $$);
 t
 -- Test YAML format
-EXPLAIN (COSTS FALSE, FORMAT YAML)
+EXPLAIN (COSTS FALSE, FORMAT YAML, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 - Plan:
@@ -321,7 +321,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                               Alias: "lineitem"
 
 -- Test Text format
-EXPLAIN (COSTS FALSE, FORMAT TEXT)
+EXPLAIN (COSTS FALSE, FORMAT TEXT, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
@@ -338,7 +338,7 @@ Sort
                           ->  Seq Scan on lineitem_360000 lineitem
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -365,7 +365,7 @@ SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
 |
 BEGIN;
 SET LOCAL citus.enable_repartition_joins TO true;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
         Task Count: 6
@@ -378,7 +378,7 @@ Aggregate (actual rows=1 loops=1)
               Map Task Count: 3
               Merge Task Count: 6
 -- Confirm repartiton join in distributed subplan works
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
 SELECT count(*) from repartition;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -408,7 +408,7 @@ END;
 DROP TABLE t1, t2;
 -- Test query text output, with ANALYZE ON
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -434,7 +434,7 @@ Sort (actual rows=50 loops=1)
                           ->  Seq Scan on public.lineitem_360000 lineitem (actual rows=5894 loops=1)
                                 Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test query text output, with ANALYZE OFF
-EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
@@ -456,7 +456,7 @@ Sort
                           ->  Seq Scan on public.lineitem_360000 lineitem
                                 Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test verbose
-EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
 Aggregate
   Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
@@ -472,7 +472,7 @@ Aggregate
                     ->  Seq Scan on public.lineitem_360000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test join
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT * FROM lineitem
 	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5.0
 	ORDER BY l_quantity LIMIT 10;
@@ -494,7 +494,7 @@ Limit
                                       ->  Hash
                                             ->  Seq Scan on orders_360002 orders
 -- Test insert
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
 Custom Scan (Citus Adaptive)
   Task Count: 2
@@ -504,7 +504,7 @@ Custom Scan (Citus Adaptive)
         ->  Insert on lineitem_360000 citus_table_alias
               ->  Values Scan on "*VALUES*"
 -- Test update
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
@@ -519,7 +519,7 @@ Custom Scan (Citus Adaptive)
                     Filter: (l_partkey = 0)
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 BEGIN;
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
@@ -535,7 +535,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
                     Rows Removed by Filter: 6
 ROLLBACk;
 -- Test delete
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 Custom Scan (Citus Adaptive)
@@ -548,7 +548,7 @@ Custom Scan (Citus Adaptive)
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
 -- Test zero-shard update
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_orderkey = 0;
@@ -556,14 +556,14 @@ Custom Scan (Citus Adaptive)
   Task Count: 0
   Tasks Shown: All
 -- Test zero-shard delete
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_orderkey = 0;
 Custom Scan (Citus Adaptive)
   Task Count: 0
   Tasks Shown: All
 -- Test single-shard SELECT
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 Custom Scan (Citus Adaptive)
   Task Count: 1
@@ -579,7 +579,7 @@ SELECT true AS valid FROM explain_json($$
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5$$);
 t
 -- Test CREATE TABLE ... AS
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
 Custom Scan (Citus Adaptive)
@@ -589,7 +589,7 @@ Custom Scan (Citus Adaptive)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on lineitem_360000 lineitem
 -- Test having
-EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem
 	HAVING sum(l_quantity) > 100;
 Aggregate
@@ -607,7 +607,7 @@ Aggregate
                     ->  Seq Scan on public.lineitem_360000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test having without aggregate
-EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT l_quantity FROM lineitem
 	GROUP BY l_quantity
 	HAVING l_quantity > (100 * random());
@@ -628,7 +628,7 @@ HashAggregate
                     ->  Seq Scan on public.lineitem_360000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Subquery pushdown tests with explain
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	avg(array_length(events, 1)) AS event_average
 FROM
@@ -681,7 +681,7 @@ SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 t
 t
 -- Union and left join subquery pushdown
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	avg(array_length(events, 1)) AS event_average,
 	hasdone
@@ -783,7 +783,7 @@ HashAggregate
                                                               ->  Seq Scan on events_1400285 events_2
                                                                     Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
 -- Union, left join and having subquery pushdown
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
   SELECT
 	avg(array_length(events, 1)) AS event_average,
 	count_pay
@@ -909,7 +909,7 @@ t
 SET citus.subquery_pushdown to ON;
 NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
 DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	tenant_id,
 	user_id,
@@ -988,7 +988,7 @@ Limit
 RESET citus.subquery_pushdown;
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
   ->  Custom Scan (Citus Adaptive)
@@ -1011,7 +1011,7 @@ SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
 t
 -- Test multi shard update
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12;
 Custom Scan (Citus Adaptive)
@@ -1033,7 +1033,7 @@ Custom Scan (Citus Adaptive)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 OR l_orderkey = 3;
@@ -1051,7 +1051,7 @@ Custom Scan (Citus Adaptive)
               ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
                     Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
 -- Test multi shard delete
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	DELETE FROM lineitem_hash_part;
 Custom Scan (Citus Adaptive)
   Task Count: 4
@@ -1074,7 +1074,7 @@ Custom Scan (Citus Adaptive)
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -1101,7 +1101,7 @@ Sort (actual rows=50 loops=1)
                           ->  Seq Scan on lineitem_360001 lineitem (actual rows=6106 loops=1)
 SET citus.explain_all_tasks TO off;
 -- Test update with subquery
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12
 	FROM orders_hash_part
@@ -1118,7 +1118,7 @@ Custom Scan (Citus Adaptive)
                     ->  Hash
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 -- Test delete with subquery
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	DELETE FROM lineitem_hash_part
 	USING orders_hash_part
 	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
@@ -1134,7 +1134,7 @@ Custom Scan (Citus Adaptive)
                     ->  Hash
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 -- Test track tracker
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
   ->  Custom Scan (Citus Adaptive)
@@ -1146,7 +1146,7 @@ Aggregate
                     ->  Index Only Scan using lineitem_pkey_360000 on lineitem_360000 lineitem
                           Index Cond: (l_orderkey > 9030)
 -- Test re-partition join
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
@@ -1168,7 +1168,7 @@ Aggregate
         ->  MapMergeJob
               Map Task Count: 1
               Merge Task Count: 6
-EXPLAIN (COSTS FALSE, FORMAT JSON)
+EXPLAIN (COSTS FALSE, FORMAT JSON, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
@@ -1227,7 +1227,7 @@ SELECT true AS valid FROM explain_json($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 t
-EXPLAIN (COSTS FALSE, FORMAT XML)
+EXPLAIN (COSTS FALSE, FORMAT XML, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem, orders, customer_append, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
@@ -1299,7 +1299,7 @@ SELECT true AS valid FROM explain_xml($$
 	FROM nation, supplier
 	WHERE nation.n_nationkey = supplier.s_nationkey$$);
 t
-EXPLAIN (COSTS FALSE, FORMAT YAML)
+EXPLAIN (COSTS FALSE, FORMAT YAML, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem, orders, customer, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
@@ -1328,12 +1328,12 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                 Merge Task Count: 6
 -- ensure local plans display correctly
 CREATE TABLE lineitem_clone (LIKE lineitem);
-EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem_clone;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT avg(l_linenumber) FROM lineitem_clone;
 Aggregate
   ->  Seq Scan on lineitem_clone
 DROP TABLE lineitem_clone;
 -- ensure distributed plans don't break
-EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT avg(l_linenumber) FROM lineitem;
 Aggregate
   ->  Custom Scan (Citus Adaptive)
         Task Count: 2
@@ -1345,7 +1345,7 @@ Aggregate
 -- ensure EXPLAIN EXECUTE doesn't crash
 PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) EXECUTE task_tracker_query;
 Aggregate
   ->  Custom Scan (Citus Adaptive)
         Task Count: 2
@@ -1366,7 +1366,7 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
               Index Cond: (l_orderkey = 5)
 PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) EXECUTE real_time_executor_query;
 Aggregate
   ->  Custom Scan (Citus Adaptive)
         Task Count: 2
@@ -1387,7 +1387,7 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
   Task Count: 1
   Tuple data received from nodes: 30 bytes
@@ -1400,7 +1400,7 @@ Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
 BEGIN;
-EXPLAIN (COSTS OFF) EXECUTE multi_shard_query_param(5);
+EXPLAIN (COSTS OFF, BUFFERS OFF) EXECUTE multi_shard_query_param(5);
 Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: One of 2
@@ -1410,7 +1410,7 @@ Custom Scan (Citus Adaptive)
               ->  Seq Scan on lineitem_360000 lineitem
 ROLLBACK;
 BEGIN;
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE multi_shard_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
   Tasks Shown: One of 2
@@ -1428,7 +1428,7 @@ SELECT create_distributed_table('explain_table', 'id');
 ALTER TABLE explain_table ADD COLUMN value int;
 ROLLBACK;
 -- test explain with local INSERT ... SELECT
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO lineitem_hash_part
 SELECT o_orderkey FROM orders_hash_part LIMIT 3;
 Custom Scan (Citus INSERT ... SELECT)
@@ -1446,7 +1446,7 @@ SELECT true AS valid FROM explain_json($$
   SELECT o_orderkey FROM orders_hash_part LIMIT 3;
 $$);
 t
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey, l_quantity)
 SELECT o_orderkey, 5 FROM orders_hash_part LIMIT 3;
 Custom Scan (Citus INSERT ... SELECT)
@@ -1459,7 +1459,7 @@ Custom Scan (Citus INSERT ... SELECT)
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
 Custom Scan (Citus INSERT ... SELECT)
@@ -1467,7 +1467,7 @@ Custom Scan (Citus INSERT ... SELECT)
   ->  Function Scan on generate_series s
 -- WHERE EXISTS forces pg12 to materialize cte
 SELECT public.explain_with_pg17_initplan_format($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
 WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
@@ -1489,7 +1489,7 @@ Custom Scan (Citus INSERT ... SELECT)
         InitPlan 4
           ->  CTE Scan on cte1 cte1_3
         ->  CTE Scan on cte1
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
 ( SELECT s FROM generate_series(5,10) s);
@@ -1502,7 +1502,7 @@ Custom Scan (Citus INSERT ... SELECT)
                     ->  Function Scan on generate_series s
                     ->  Function Scan on generate_series s_1
 -- explain with recursive planning
-EXPLAIN (COSTS OFF, VERBOSE true)
+EXPLAIN (COSTS OFF, VERBOSE true, BUFFERS OFF)
 WITH keys AS MATERIALIZED (
   SELECT DISTINCT l_orderkey FROM lineitem_hash_part
 ),
@@ -1993,8 +1993,8 @@ SET citus.shard_count TO 4;
 SET client_min_messages TO WARNING;
 SELECT create_distributed_table('explain_analyze_test', 'a');
 
-\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off)'
-\set default_explain_flags '(ANALYZE off, COSTS off, TIMING off, SUMMARY off)'
+\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)'
+\set default_explain_flags '(ANALYZE off, COSTS off, TIMING off, SUMMARY off, BUFFERS off)'
 -- router SELECT
 EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -2168,7 +2168,7 @@ SELECT * FROM explain_pk ORDER BY 1;
 ROLLBACK;
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 [
   {
     "Plan": {
@@ -2224,7 +2224,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
   }
 ]
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
 [
   {
     "Plan": {
@@ -2271,7 +2271,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * F
   }
 ]
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 <explain xmlns="http://www.postgresql.org/2009/explain">
   <Query>
     <Plan>
@@ -2326,7 +2326,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
   </Query>
 </explain>
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) SELECT * FROM explain_pk;
 <explain xmlns="http://www.postgresql.org/2009/explain">
   <Query>
     <Plan>
@@ -2438,7 +2438,7 @@ Aggregate (actual rows=1 loops=1)
                                 Sort Method: quicksort  Memory: 25kB
                                 ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
 SELECT public.explain_with_pg17_initplan_format($Q$
-EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off)
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
 $Q$);
@@ -2927,7 +2927,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 deallocate update_query;
 -- prepared deletes
 PREPARE delete_query AS DELETE FROM simple WHERE name=$1 OR name=$2;
-EXPLAIN (COSTS OFF) EXECUTE delete_query('x', 'y');
+EXPLAIN (COSTS OFF, BUFFERS OFF) EXECUTE delete_query('x', 'y');
 Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: One of 2
@@ -3053,7 +3053,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
               Conflicting Tuples: 0
               ->  Seq Scan on users_table_2_570028 users_table_2 (actual rows=0 loops=1)
 -- simple test to confirm we can fetch long (>4KB) plans
-EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) SELECT * FROM users_table_2 WHERE value_1::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X';
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT * FROM users_table_2 WHERE value_1::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X';
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
@@ -3076,7 +3076,7 @@ SELECT create_distributed_table('explain_analyze_execution_time', 'a');
 -- sleep for the shard that has the single row, so that
 -- will definitely be slower
 set citus.explain_analyze_sort_method to "taskId";
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 2
   Tuple data received from nodes: 4 bytes
@@ -3086,7 +3086,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on explain_analyze_execution_time_570029 explain_analyze_execution_time (actual rows=0 loops=1)
 set citus.explain_analyze_sort_method to "execution-time";
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 2
   Tuple data received from nodes: 4 bytes
@@ -3185,7 +3185,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
 PREPARE q1(int_wrapper_type) AS WITH a AS (SELECT * FROM tbl WHERE b = $1 AND a = 1 OFFSET 0) SELECT * FROM a;
-EXPLAIN (COSTS false) EXECUTE q1('(1)');
+EXPLAIN (COSTS false, BUFFERS OFF) EXECUTE q1('(1)');
 Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
@@ -3204,7 +3204,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
               Filter: ((b = $1) AND (a = 1))
 PREPARE q2(int_wrapper_type) AS WITH a AS (UPDATE tbl SET b = $1 WHERE a = 1 RETURNING *) SELECT * FROM a;
-EXPLAIN (COSTS false) EXECUTE q2('(1)');
+EXPLAIN (COSTS false, BUFFERS OFF) EXECUTE q2('(1)');
 Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
@@ -3233,7 +3233,7 @@ SET search_path TO multi_explain;
 CREATE TABLE test_subplans (x int primary key, y int);
 SELECT create_distributed_table('test_subplans','x');
 
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
 SELECT * FROM a;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -3260,7 +3260,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 SELECT * FROM test_subplans;
 1|2
 -- Will fail with duplicate pk
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
 SELECT * FROM a;
 ERROR:  duplicate key value violates unique constraint "test_subplans_pkey_570038"
@@ -3268,7 +3268,7 @@ DETAIL:  Key (x)=(1) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 -- Test JSON format
 TRUNCATE test_subplans;
-EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
 SELECT * FROM a;
 [

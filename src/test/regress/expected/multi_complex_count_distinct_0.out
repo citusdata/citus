@@ -70,7 +70,7 @@ SELECT
       14624 |     7
 (10 rows)
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_orderkey, count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -114,7 +114,7 @@ SELECT
  11661
 (1 row)
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -160,7 +160,7 @@ SELECT
  REG AIR    |  1676
 (7 rows)
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_shipmode, count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -215,7 +215,7 @@ SELECT
        1281 |     7 |     6
 (10 rows)
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_orderkey, count(distinct l_partkey), count(distinct l_shipmode)
 	FROM lineitem_hash
@@ -257,7 +257,7 @@ SELECT
   2985 | 11661 |     7
 (1 row)
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
 	FROM lineitem_hash;
@@ -416,7 +416,7 @@ SELECT *
       1927 |     3
 (10 rows)
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT *
 	FROM (
 		SELECT
@@ -486,7 +486,7 @@ SELECT
        2309 |     3 |     7
 (10 rows)
 
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_orderkey,
 	count(DISTINCT l_suppkey) FILTER (WHERE l_shipmode = 'AIR'),
@@ -543,7 +543,7 @@ SELECT
 (10 rows)
 
 -- explaining the same query fails
-EXPLAIN (COSTS false, VERBOSE true)
+EXPLAIN (COSTS false, VERBOSE true, BUFFERS OFF)
 SELECT
 	l_suppkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
 	FROM lineitem_hash

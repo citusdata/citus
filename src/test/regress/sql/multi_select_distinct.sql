@@ -73,7 +73,7 @@ SELECT DISTINCT l_orderkey, count(*)
 	ORDER BY 2 DESC, 1;
 
 -- explain the query to see actual plan
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_orderkey, count(*)
 		FROM lineitem_hash_part
 		WHERE l_orderkey < 200
@@ -83,7 +83,7 @@ EXPLAIN (COSTS FALSE)
 
 -- check the plan if the hash aggreate is disabled
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_orderkey, count(*)
 		FROM lineitem_hash_part
 		WHERE l_orderkey < 200
@@ -103,7 +103,7 @@ SELECT DISTINCT count(*)
 -- explain the query to see actual plan. We expect to see Aggregate node having
 -- group by key on count(*) column, since columns in the Group By doesn't guarantee
 -- the uniqueness of the result.
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT count(*)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -112,7 +112,7 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. We expect to see sort+unique
 -- instead of aggregate plan node to handle distinct.
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT count(*)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -129,7 +129,7 @@ SELECT DISTINCT l_suppkey, count(*)
 	LIMIT 10;
 
 -- explain the query to see actual plan. Similar to the explain of the query above.
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_suppkey, count(*)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -139,7 +139,7 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. Similar to the explain of
 -- the query above.
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_suppkey, count(*)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -158,7 +158,7 @@ SELECT DISTINCT l_suppkey, avg(l_partkey)
 
 -- explain the query to see actual plan. Similar to the explain of the query above.
 -- Only aggregate functions will be changed.
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_suppkey, avg(l_partkey)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -168,7 +168,7 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_suppkey, avg(l_partkey)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -186,7 +186,7 @@ SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
 
 -- explain the query to see actual plan. We expect to see sort+unique to handle
 -- distinct on.
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -196,7 +196,7 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. We expect to see sort+unique to
 -- handle distinct on.
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -213,7 +213,7 @@ SELECT DISTINCT avg(ceil(l_partkey / 2))
 	LIMIT 10;
 
 -- explain the query to see actual plan
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT avg(ceil(l_partkey / 2))
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -223,7 +223,7 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT avg(ceil(l_partkey / 2))
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -240,7 +240,7 @@ SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis
 	LIMIT 10;
 
 -- explain the query to see actual plan
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -250,7 +250,7 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
@@ -270,7 +270,7 @@ SELECT DISTINCT *
 -- explain the query to see actual plan. We expect to see only one aggregation
 -- node since group by columns guarantees the uniqueness.
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT *
 		FROM lineitem_hash_part
 		GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
@@ -282,7 +282,7 @@ $Q$);
 -- aggregation node since group by columns guarantees the uniqueness.
 SET enable_hashagg TO off;
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT *
 		FROM lineitem_hash_part
 		GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
@@ -300,7 +300,7 @@ SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 
 -- explain the query to see actual plan. We expect to see aggregation plan for
 -- the outer distinct.
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey, l_partkey, l_shipmode
@@ -309,7 +309,7 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. We expect to see sort + unique
 -- plans for the outer distinct.
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey, l_partkey, l_shipmode
@@ -324,7 +324,7 @@ SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) 
 	ORDER BY 1;
 
 -- explain the query to see actual plan
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) AS count
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey
@@ -332,7 +332,7 @@ EXPLAIN (COSTS FALSE)
 
 -- check the plan if the hash aggreate is disabled
 SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) AS count
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey
@@ -342,7 +342,7 @@ SET enable_hashagg TO on;
 
 -- explain the query to see actual plan with array_agg aggregation.
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey
@@ -353,7 +353,7 @@ $Q$);
 -- check the plan if the hash aggreate is disabled.
 SET enable_hashagg TO off;
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey
@@ -372,7 +372,7 @@ SELECT DISTINCT l_partkey, count(*)
 	ORDER BY 1;
 
 -- explain the query to see actual plan
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_partkey, count(*)
 		FROM lineitem_hash_part
 		GROUP BY 1
@@ -393,7 +393,7 @@ SELECT DISTINCT l_partkey, l_suppkey
 	WHERE l_shipmode = 'AIR' AND l_orderkey < 100
 	ORDER BY 1, 2;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_partkey, l_suppkey
 		FROM lineitem_hash_part
 		WHERE l_shipmode = 'AIR' AND l_orderkey < 100
@@ -405,7 +405,7 @@ SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
 	WHERE l_orderkey < 35
 	ORDER BY 1, 2, 3;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
 		FROM lineitem_hash_part
 		WHERE l_orderkey < 35
@@ -420,7 +420,7 @@ SELECT DISTINCT ON (l_partkey) l_partkey, l_orderkey
 	ORDER BY 1,2
 	LIMIT 20;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (l_partkey) l_partkey, l_orderkey
 		FROM lineitem_hash_part
 		ORDER BY 1,2
@@ -434,7 +434,7 @@ SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 	ORDER BY 1,2;
 
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey)
 		WHERE o_custkey < 15
@@ -444,7 +444,7 @@ $Q$);
 -- explain without order by
 -- notice master plan has order by on distinct on column
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey)
 		WHERE o_custkey < 15;
@@ -458,7 +458,7 @@ SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, 
 
 -- explain without order by
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
 		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey)
 		WHERE o_custkey < 20;
@@ -479,7 +479,7 @@ SELECT DISTINCT l_orderkey, l_partkey
 	ORDER BY 1,2
 	LIMIT 10;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_orderkey, l_partkey
 		FROM (
 			SELECT l_orderkey, l_partkey
@@ -497,7 +497,7 @@ SELECT DISTINCT l_orderkey, cnt
 	ORDER BY 1,2
 	LIMIT 10;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT l_orderkey, cnt
 		FROM (
 			SELECT l_orderkey, count(*) as cnt
@@ -517,7 +517,7 @@ SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey
 	ORDER BY 1,2
 	LIMIT 10;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey
 		FROM (
 			SELECT l_orderkey, l_partkey, (random()*10)::int + 2 as r
@@ -537,7 +537,7 @@ SELECT DISTINCT ON (l_partkey) l_orderkey, l_partkey
 	ORDER BY 2,1
 	LIMIT 10;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT DISTINCT ON (l_partkey) l_orderkey, l_partkey
 		FROM (
 			SELECT l_orderkey, l_partkey, (random()*10)::int + 2 as r

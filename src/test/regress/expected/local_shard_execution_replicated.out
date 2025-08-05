@@ -237,7 +237,7 @@ INSERT INTO distributed_table SELECT * FROM distributed_table ON CONFLICT DO NOT
 SET citus.enable_binary_protocol = TRUE;
 -- EXPLAIN for local execution just works fine
 -- though going through distributed execution
-EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                                                  QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -250,7 +250,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                Filter: (age = 20)
 (8 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                                                              QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -265,7 +265,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distribute
                Filter: (age = 20)
 (10 rows)
 
-EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 WITH r AS ( SELECT GREATEST(random(), 2) z,* FROM distributed_table)
 SELECT 1 FROM r WHERE z < 3;
                                                QUERY PLAN
@@ -292,7 +292,7 @@ SELECT 1 FROM r WHERE z < 3;
                Filter: (z < '3'::double precision)
 (20 rows)
 
-EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
+EXPLAIN (COSTS OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                                                     QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -306,7 +306,7 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                      Filter: (age = 20)
 (9 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                                                                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)

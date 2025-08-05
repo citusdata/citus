@@ -33,7 +33,7 @@ SET min_parallel_table_scan_size = 1;
 SET parallel_tuple_cost = 0;
 SET max_parallel_workers = 4;
 SET max_parallel_workers_per_gather = 4;
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent;
                         QUERY PLAN
 ---------------------------------------------------------------------
  Finalize Aggregate
@@ -85,7 +85,7 @@ NOTICE:  renaming the new table to public.p3
 (1 row)
 
 -- should also be parallel plan
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent;
                             QUERY PLAN
 ---------------------------------------------------------------------
  Finalize Aggregate
@@ -110,7 +110,7 @@ SELECT count(*), sum(i), min(i), max(i) FROM parent;
 
 -- and also parallel without custom scan
 SET columnar.enable_custom_scan = FALSE;
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent;
                         QUERY PLAN
 ---------------------------------------------------------------------
  Finalize Aggregate
@@ -144,7 +144,7 @@ CREATE INDEX parent_btree ON parent (n);
 ANALYZE parent;
 -- will use columnar custom scan on columnar partitions but index
 -- scan on heap partition
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent
 WHERE ts > '2020-02-20' AND n < 5;
                                                               QUERY PLAN
 ---------------------------------------------------------------------
@@ -167,7 +167,7 @@ BEGIN;
   SET LOCAL columnar.enable_custom_scan TO 'OFF';
   -- now that we disabled columnar custom scan, will use seq scan on columnar
   -- partitions since index scan is more expensive than seq scan too
-  EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+  EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent
   WHERE ts > '2020-02-20' AND n < 5;
                                                    QUERY PLAN
 ---------------------------------------------------------------------
@@ -199,7 +199,7 @@ CREATE TABLE ij_col_row(j int) INHERITS(i_col);
 INSERT INTO ij_col_row VALUES(500, 3000);
 CREATE TABLE ij_col_col(j int) INHERITS(i_col) USING columnar;
 INSERT INTO ij_col_col VALUES(600, 4000);
-EXPLAIN (costs off) SELECT * FROM i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_row;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Append
@@ -217,7 +217,7 @@ SELECT * FROM i_row;
  400
 (3 rows)
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_row;
     QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on i_row
@@ -229,7 +229,7 @@ SELECT * FROM ONLY i_row;
  100
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_col;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Append
@@ -248,7 +248,7 @@ SELECT * FROM i_col;
  600
 (3 rows)
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_col;
              QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on i_col
@@ -261,7 +261,7 @@ SELECT * FROM ONLY i_col;
  200
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_row_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_row;
        QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on ij_row_row
@@ -273,7 +273,7 @@ SELECT * FROM ij_row_row;
  300 | 1000
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_row_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_col;
                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on ij_row_col
@@ -286,7 +286,7 @@ SELECT * FROM ij_row_col;
  400 | 2000
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_col_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_row;
        QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on ij_col_row
@@ -298,7 +298,7 @@ SELECT * FROM ij_col_row;
  500 | 3000
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_col_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_col;
                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on ij_col_col
@@ -312,7 +312,7 @@ SELECT * FROM ij_col_col;
 (1 row)
 
 SET columnar.enable_custom_scan = FALSE;
-EXPLAIN (costs off) SELECT * FROM i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_row;
               QUERY PLAN
 ---------------------------------------------------------------------
  Append
@@ -329,7 +329,7 @@ SELECT * FROM i_row;
  400
 (3 rows)
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_row;
     QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on i_row
@@ -341,7 +341,7 @@ SELECT * FROM ONLY i_row;
  100
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_col;
               QUERY PLAN
 ---------------------------------------------------------------------
  Append
@@ -358,7 +358,7 @@ SELECT * FROM i_col;
  600
 (3 rows)
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_col;
     QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on i_col
@@ -370,7 +370,7 @@ SELECT * FROM ONLY i_col;
  200
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_row_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_row;
        QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on ij_row_row
@@ -382,7 +382,7 @@ SELECT * FROM ij_row_row;
  300 | 1000
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_row_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_col;
        QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on ij_row_col
@@ -394,7 +394,7 @@ SELECT * FROM ij_row_col;
  400 | 2000
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_col_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_row;
        QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on ij_col_row
@@ -406,7 +406,7 @@ SELECT * FROM ij_col_row;
  500 | 3000
 (1 row)
 
-EXPLAIN (costs off) SELECT * FROM ij_col_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_col;
        QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on ij_col_col
@@ -443,7 +443,7 @@ CREATE TABLE prt2_p2 PARTITION OF prt2 FOR VALUES FROM (250) TO (500);
 CREATE TABLE prt2_p3 PARTITION OF prt2 FOR VALUES FROM (500) TO (600);
 INSERT INTO prt2 SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(0, 599) i WHERE i % 3 = 0;
 SET enable_partitionwise_join to true;
-EXPLAIN (costs off, timing off, summary off)
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM
   prt1 t1 LEFT JOIN LATERAL
   (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b)

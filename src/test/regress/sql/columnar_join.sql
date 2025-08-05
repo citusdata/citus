@@ -18,13 +18,13 @@ JOIN things ON (users.id = things.user_id)
 WHERE things.id > 290;
 
 -- verify the join uses a nested loop to trigger the rescan behaviour
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*)
 FROM users
 JOIN things ON (users.id = things.user_id)
 WHERE things.id > 299990;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT u1.id, u2.id, COUNT(u2.*)
 FROM users u1
 JOIN users u2 ON (u1.id::text = u2.name)
@@ -172,7 +172,7 @@ INSERT INTO tbl_middle_left_heap1 VALUES (1), (2), (3), (4);
 INSERT INTO tbl_middle_left_heap2 VALUES (2), (3), (5), (6);
 INSERT INTO tbl_middle_left_columnar VALUES (3), (5), (7);
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT h1.*, h2.*, c.*
 FROM tbl_middle_left_heap1 h1
 LEFT JOIN tbl_middle_left_columnar c ON h1.id = c.id

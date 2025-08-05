@@ -71,7 +71,7 @@ select i % 10 + 1, 2021 + (i % 3), i %11, md5((i*i)::text) from generate_series(
 -- clause but if the subquery can be pulled up to a join it becomes possible
 -- for Citus to run the query, per this example. Pre PG17 the suqbuery
 -- was implemented as a SubPlan filter on the events table scan.
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 WITH event_id
      AS(SELECT user_id AS events_user_id,
                 time    AS events_time,
@@ -99,7 +99,7 @@ RESET client_min_messages;
 -- Query 2 rewritten with subquery pulled up to a join, as done by pg17 planner. Citus
 -- Citus is able to run this query with previous pg versions. Note that the CTE can be
 -- disregarded because it is inlined, being only referenced once.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT Count(*)
 FROM (SELECT user_id AS events_user_id,
                 time    AS events_time,
@@ -119,7 +119,7 @@ RESET client_min_messages;
 -- Query 3: another example where recursive planning was prevented due to
 -- correlated subqueries, but with PG17 folding the subquery to a join it is
 -- possible for Citus to plan and run the query.
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 SELECT dept, sum(user_id) FROM
 (SELECT users.dept, users.user_id
 FROM users, events as d1
@@ -144,7 +144,7 @@ RESET client_min_messages;
 
 -- Query 3 rewritten in a similar way to how the PG17 pulls up the subquery;
 -- the join is on the distribution key so Citus can push down.
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 SELECT dept, sum(user_id) FROM
 (SELECT users.dept, users.user_id
 FROM users, events as d1

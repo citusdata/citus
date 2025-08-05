@@ -11,7 +11,7 @@ SET client_min_messages TO LOG;
 -- except that more data has been loaded into customer and part tables. Therefore,
 -- we will apply different distributed join strategies for these queries.
 -- Query #6 from the TPC-H decision support benchmark
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	sum(l_extendedprice * l_discount) as revenue
 FROM
@@ -30,7 +30,7 @@ LOG:  join order: [ "lineitem" ]
 (3 rows)
 
 -- Query #3 from the TPC-H decision support benchmark
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	l_orderkey,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -65,7 +65,7 @@ LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partitio
 (6 rows)
 
 -- Query #10 from the TPC-H decision support benchmark
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	c_custkey,
 	c_name,
@@ -107,7 +107,7 @@ LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partitio
 (4 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM
@@ -146,7 +146,7 @@ LOG:  join order: [ "lineitem" ][ dual partition join "part_append" ]
 (3 rows)
 
 -- Query to test multiple re-partition jobs in a single query
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	l_partkey, count(*)
 FROM

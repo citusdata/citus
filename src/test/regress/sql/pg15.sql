@@ -900,12 +900,12 @@ SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign
 
 -- same tests as in the relevant PG commit
 -- Check that Remote SQL in the EXPLAIN doesn't contain casting
-EXPLAIN (VERBOSE, COSTS OFF)
+EXPLAIN (VERBOSE, COSTS OFF, BUFFERS OFF)
 SELECT * FROM foreign_table WHERE c1 = 'foo' LIMIT 1;
 SELECT * FROM foreign_table WHERE c1 = 'foo' LIMIT 1;
 
 -- Check that Remote SQL in the EXPLAIN doesn't contain casting
-EXPLAIN (VERBOSE, COSTS OFF)
+EXPLAIN (VERBOSE, COSTS OFF, BUFFERS OFF)
 SELECT * FROM foreign_table WHERE 'foo' = c1 LIMIT 1;
 SELECT * FROM foreign_table WHERE 'foo' = c1 LIMIT 1;
 

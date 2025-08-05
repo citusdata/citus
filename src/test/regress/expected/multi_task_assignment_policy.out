@@ -68,7 +68,7 @@ BEGIN;
 SET client_min_messages TO DEBUG3;
 -- First test the default greedy task assignment policy
 SET citus.task_assignment_policy TO 'greedy';
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  no shard pruning constraints on task_assignment_test_table found
 DEBUG:  shard count after pruning for task_assignment_test_table: 3
@@ -82,7 +82,7 @@ DEBUG:  assigned task to node localhost:xxxxx
          citus.explain_distributed_queries: false
 (3 rows)
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  no shard pruning constraints on task_assignment_test_table found
 DEBUG:  shard count after pruning for task_assignment_test_table: 3
@@ -98,7 +98,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 -- Next test the first-replica task assignment policy
 SET citus.task_assignment_policy TO 'first-replica';
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  no shard pruning constraints on task_assignment_test_table found
 DEBUG:  shard count after pruning for task_assignment_test_table: 3
@@ -112,7 +112,7 @@ DEBUG:  assigned task to node localhost:xxxxx
          citus.explain_distributed_queries: false
 (3 rows)
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  no shard pruning constraints on task_assignment_test_table found
 DEBUG:  shard count after pruning for task_assignment_test_table: 3
@@ -139,7 +139,7 @@ SET LOCAL client_min_messages TO DEBUG3;
 SET LOCAL citus.explain_distributed_queries TO off;
 -- Check how task_assignment_policy impact planning decisions for reference tables
 SET LOCAL citus.task_assignment_policy TO 'greedy';
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN
@@ -148,7 +148,7 @@ DEBUG:  Creating router plan
    citus.explain_distributed_queries: false
 (2 rows)
 
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN
@@ -158,7 +158,7 @@ DEBUG:  Creating router plan
 (2 rows)
 
 SET LOCAL citus.task_assignment_policy TO 'first-replica';
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN
@@ -167,7 +167,7 @@ DEBUG:  Creating router plan
    citus.explain_distributed_queries: false
 (2 rows)
 
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN

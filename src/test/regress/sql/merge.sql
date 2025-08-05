@@ -1226,7 +1226,7 @@ FROM colocations;
 SET client_min_messages TO DEBUG1;
 -- Test 1 : tables are colocated AND query is multisharded AND Join On distributed column : should push down to workers.
 
-EXPLAIN (costs off, timing off, summary off)
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF)
 MERGE INTO target_pushdowntest t
 USING source_pushdowntest s
 ON t.id = s.id
@@ -1247,7 +1247,7 @@ WHEN NOT MATCHED THEN
 -- Test 3 : tables are colocated source query is single sharded but not using source distributed column in insertion. let's not pushdown.
 INSERT INTO source_pushdowntest (id) VALUES (3);
 
-EXPLAIN (costs off, timing off, summary off)
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF)
 MERGE INTO target_pushdowntest t
 USING (SELECT 1 as somekey, id from source_pushdowntest where id = 1) s
 on t.id = s.somekey
@@ -1278,7 +1278,7 @@ WHEN NOT MATCHED THEN
   VALUES (s.some_number, 'parag');
 
 -- let's verify if data inserted to second shard of target.
-EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM target_table;
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF) SELECT * FROM target_table;
 
 -- let's verify target data too.
 SELECT * FROM target_table;
@@ -1573,7 +1573,7 @@ SELECT create_distributed_table('target_json','id'), create_distributed_table('s
 -- single shard query given source_json is filtered and Postgres is smart to pushdown
 -- filter to the target_json as well
 SELECT public.coordinator_plan($Q$
-EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 USING (SELECT * FROM source_json WHERE id = 1) sdn
 ON sda.id = sdn.id
 WHEN NOT matched THEN
@@ -1583,7 +1583,7 @@ SELECT * FROM target_json ORDER BY 1;
 
 -- zero shard query as filters do not match
 --SELECT public.coordinator_plan($Q$
---EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+--EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 --USING (SELECT * FROM source_json WHERE id = 1) sdn
 --ON sda.id = sdn.id AND sda.id = 2
 --WHEN NOT matched THEN
@@ -1593,7 +1593,7 @@ SELECT * FROM target_json ORDER BY 1;
 
 -- join for source_json is happening at a different place
 SELECT public.coordinator_plan($Q$
-EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 USING source_json s1 LEFT JOIN (SELECT * FROM source_json) s2 USING(z)
 ON sda.id = s1.id AND s1.id = s2.id
 WHEN NOT matched THEN
@@ -1603,7 +1603,7 @@ SELECT * FROM target_json ORDER BY 1;
 
 -- update JSON column
 SELECT public.coordinator_plan($Q$
-EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 USING source_json sdn
 ON sda.id = sdn.id
 WHEN matched THEN
@@ -1931,7 +1931,7 @@ WHERE p.id1 IS NULL OR d.id1 IS NULL;
 
 -- Test explain with repartition
 SET citus.explain_all_tasks TO false;
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 MERGE INTO demo_distributed t
 USING (SELECT 999 as s3, demo_source_table.* FROM (SELECT * FROM demo_source_table ORDER BY 1 LIMIT 3) as foo LEFT JOIN demo_source_table USING(id2)) AS s
 ON t.id1 = s.id2

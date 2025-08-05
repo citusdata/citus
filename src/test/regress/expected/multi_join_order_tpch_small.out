@@ -6,7 +6,7 @@ SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO LOG;
 -- Query #6 from the TPC-H decision support benchmark
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	sum(l_extendedprice * l_discount) as revenue
 FROM
@@ -25,7 +25,7 @@ LOG:  join order: [ "lineitem" ]
 (3 rows)
 
 -- Query #3 from the TPC-H decision support benchmark
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	l_orderkey,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -58,7 +58,7 @@ LOG:  join order: [ "orders" ][ reference join "customer" ][ local partition joi
 (4 rows)
 
 -- Query #10 from the TPC-H decision support benchmark
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	c_custkey,
 	c_name,
@@ -102,7 +102,7 @@ LOG:  join order: [ "orders" ][ reference join "customer" ][ reference join "nat
 (6 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM

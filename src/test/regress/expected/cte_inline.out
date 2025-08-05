@@ -325,7 +325,7 @@ DEBUG:  Creating router plan
 (1 row)
 
 -- EXPLAIN should show the difference between materialized an not materialized
-EXPLAIN (COSTS OFF) WITH a AS (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH a AS (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM
@@ -347,7 +347,7 @@ DEBUG:  query has a single distribution column value: 1
                      Filter: (key = 1)
 (8 rows)
 
-EXPLAIN (COSTS OFF) WITH a AS MATERIALIZED (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH a AS MATERIALIZED (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM
@@ -428,7 +428,7 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 -- EXPLAIN should show the differences between MATERIALIZED and NOT MATERIALIZED
 \set VERBOSITY terse
 SELECT public.coordinator_plan_with_subplans($Q$
-EXPLAIN (COSTS OFF) WITH cte_1 AS (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH cte_1 AS (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM
@@ -452,7 +452,7 @@ DEBUG:  Creating router plan
 (5 rows)
 
 \set VERBOSITY default
-EXPLAIN (COSTS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+EXPLAIN (COSTS OFF, BUFFERS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
 SELECT
 	count(*)
 FROM

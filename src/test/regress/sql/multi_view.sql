@@ -373,10 +373,10 @@ RESET citus.subquery_pushdown;
 VACUUM ANALYZE users_table;
 
 -- explain tests
-EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE) SELECT *
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT *
 	FROM (
 		(SELECT user_id FROM recent_users)
 		UNION
@@ -385,9 +385,9 @@ EXPLAIN (COSTS FALSE) SELECT *
 	ORDER BY user_id;
 $Q$);
 
-EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
 SET citus.subquery_pushdown to ON;
-EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
 
 RESET citus.subquery_pushdown;
 

@@ -38,13 +38,13 @@ RESET citus.enable_metadata_sync;
 
 -- INSERT ... SELECT between reference tables
 BEGIN;
-EXPLAIN (COSTS OFF) INSERT INTO squares SELECT a, a*a FROM numbers;
+EXPLAIN (COSTS OFF, BUFFERS OFF) INSERT INTO squares SELECT a, a*a FROM numbers;
 INSERT INTO squares SELECT a, a*a FROM numbers;
 SELECT * FROM squares WHERE a >= 20 ORDER BY a;
 ROLLBACK;
 
 BEGIN;
-EXPLAIN (COSTS OFF) INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
+EXPLAIN (COSTS OFF, BUFFERS OFF) INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 SELECT * FROM numbers ORDER BY a;
 ROLLBACK;
@@ -56,7 +56,7 @@ SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
 CREATE TABLE local_table(a int);
 INSERT INTO local_table VALUES (2), (4), (7), (20);
 
-EXPLAIN (COSTS OFF) SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 
 -- test non equijoin
@@ -176,13 +176,13 @@ SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE
 
 CREATE VIEW numbers_v AS SELECT * FROM numbers WHERE a=1;
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 $Q$);
 
 CREATE VIEW local_table_v AS SELECT * FROM local_table WHERE a BETWEEN 1 AND 10;
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
 $Q$);
 

@@ -33,11 +33,11 @@ UPDATE pg_dist_partition SET colocationid = 87091 WHERE logicalrelid = 'orders':
 -- Check that partition and join pruning works when min/max values exist
 -- Adding l_orderkey = 1 to make the query not router executable
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
 $Q$);
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
 
@@ -48,11 +48,11 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = :lineitem_shardid1;
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
 
@@ -63,11 +63,11 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = :lineitem_shardid2;
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
 
@@ -78,11 +78,11 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = :lineitem_shardid1;
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_partkey = o_custkey;
 

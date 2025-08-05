@@ -31,7 +31,7 @@ SELECT success FROM run_command_on_workers('alter system set enable_indexonlysca
 SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to off');
 SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
 
 -- set partition-wise join on and parallel to off
@@ -41,13 +41,13 @@ SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 -- SET enable_partitionwise_join TO on;
 ANALYZE partitioning_hash_test, partitioning_hash_join_test;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
 
 -- note that partition-wise joins only work when partition key is in the join
 -- following join does not have that, therefore join will not be pushed down to
 -- partitions
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id);
 
 -- reset partition-wise join

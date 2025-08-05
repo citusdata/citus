@@ -994,7 +994,7 @@ ROLLBACK;
 
 -- Previous issue failed to rename reference tables in subqueries
 SELECT public.explain_with_pg17_initplan_format($Q$
-EXPLAIN (COSTS OFF) SELECT value_1, count(*) FROM colocated_table_test GROUP BY value_1
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT value_1, count(*) FROM colocated_table_test GROUP BY value_1
 HAVING (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2) > 0
 ORDER BY 1;
 $Q$) as "QUERY PLAN";

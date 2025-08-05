@@ -105,14 +105,14 @@ BEGIN;
   SELECT a FROM columnar_table WHERE a = 16050;
 ERROR:  cannot read from index when there is unflushed data in upper transactions
 ROLLBACK;
-EXPLAIN (COSTS OFF) SELECT * FROM columnar_table WHERE a=6456;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT * FROM columnar_table WHERE a=6456;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Index Scan using columnar_table_a_idx on columnar_table
    Index Cond: (a = 6456)
 (2 rows)
 
-EXPLAIN (COSTS OFF) SELECT a FROM columnar_table WHERE a=6456;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT a FROM columnar_table WHERE a=6456;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Index Scan using columnar_table_a_idx on columnar_table
@@ -176,7 +176,7 @@ SELECT pg_total_relation_size('columnar_table_b_idx') * 5 <
 (1 row)
 
 -- can't use index scan due to partial index boundaries
-EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30000;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM columnar_table WHERE b = 30000;
          QUERY PLAN
 ---------------------------------------------------------------------
  Seq Scan on columnar_table
@@ -184,7 +184,7 @@ EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30000;
 (2 rows)
 
 -- can use index scan
-EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30001;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM columnar_table WHERE b = 30001;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Index Scan using columnar_table_b_idx on columnar_table
@@ -352,7 +352,7 @@ CREATE TABLE include_test (a INT, b BIGINT, c BIGINT, d BIGINT) USING columnar;
 INSERT INTO include_test SELECT i, i, i, i FROM generate_series (1, 1000) i;
 CREATE UNIQUE INDEX CONCURRENTLY unique_a ON include_test (a);
 -- cannot use index only scan
-EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM include_test WHERE a = 500;
                 QUERY PLAN
 ---------------------------------------------------------------------
  Index Scan using unique_a on include_test
@@ -370,7 +370,7 @@ SELECT pg_total_relation_size ('unique_a') * 1.5 <
 
 DROP INDEX unique_a;
 -- should use index only scan since unique_a_include_b_c_d includes column "b" too
-EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM include_test WHERE a = 500;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Index Scan using unique_a_include_b_c_d on include_test
@@ -380,7 +380,7 @@ EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
 BEGIN;
   SET enable_indexonlyscan = OFF;
   -- show that we respect enable_indexonlyscan GUC
-  EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
+  EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM include_test WHERE a = 500;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Index Scan using unique_a_include_b_c_d on include_test

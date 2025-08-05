@@ -31,7 +31,7 @@ AS $BODY$
 DECLARE
   result jsonb;
 BEGIN
-  EXECUTE format('EXPLAIN (FORMAT JSON) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (FORMAT JSON, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;

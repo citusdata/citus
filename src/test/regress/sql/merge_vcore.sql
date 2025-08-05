@@ -57,7 +57,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -105,7 +105,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -154,7 +154,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -201,7 +201,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -249,7 +249,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 
@@ -297,7 +297,7 @@ VALUES (src.t_id, doc);
 SELECT * FROM target;
 
 -- Explain
-EXPLAIN (costs off, timing off, summary off) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF) MERGE INTO ONLY target USING (SELECT 2::bigint AS t_id, doc FROM source) src
 ON (src.t_id = target.id)
 WHEN MATCHED THEN DO NOTHING;
 

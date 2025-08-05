@@ -72,7 +72,7 @@ FROM generate_series(0, 100) i;
 -- a sample router query with NOT MATERIALIZED
 -- which pushes down the filters to the CTE
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte1 AS NOT MATERIALIZED
 (
 	SELECT id
@@ -86,7 +86,7 @@ $Q$);
 -- same query, without NOT MATERIALIZED, which is already default
 -- which pushes down the filters to the CTE
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte1 AS
 (
 	SELECT id
@@ -101,7 +101,7 @@ $Q$);
 -- which prevents pushing down filters to the CTE,
 -- thus becoming a real-time query
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte1 AS MATERIALIZED
 (
 	SELECT id
@@ -116,7 +116,7 @@ $Q$);
 -- now manually have the same filter in the CTE
 -- thus becoming a router query again
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte1 AS MATERIALIZED
 (
 	SELECT id
@@ -132,7 +132,7 @@ $Q$);
 -- these are sanitiy checks, because all of the CTEs are recursively
 -- planned and there is no benefit that Citus can have
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte1 AS MATERIALIZED
 (
 	SELECT id
@@ -145,7 +145,7 @@ WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_se
 $Q$);
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 WITH cte1 AS NOT MATERIALIZED
 (
 	SELECT id

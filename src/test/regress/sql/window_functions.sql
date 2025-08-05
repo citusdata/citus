@@ -424,7 +424,7 @@ ORDER BY
 	3 DESC, 2 DESC, 1 DESC;
 
 SELECT coordinator_plan($Q$
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT
 	user_id,
 	AVG(avg(value_1)) OVER (PARTITION BY user_id, max(user_id), MIN(value_2)),
@@ -508,7 +508,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT
 	user_id,
 	avg(value_1),
@@ -529,7 +529,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
 
 -- limit is not pushed down to worker !!
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT
 	user_id,
 	avg(value_1),
@@ -540,7 +540,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT
 	user_id,
 	avg(value_1),
@@ -551,7 +551,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT
 	user_id,
 	avg(value_1),
@@ -562,7 +562,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT
 	user_id,
 	avg(value_1),
@@ -574,7 +574,7 @@ ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
 
 -- Grouping can be pushed down with aggregates even when window function can't
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
 FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1;
 
@@ -594,7 +594,7 @@ ORDER BY 1;
 CREATE TABLE daily_uniques (value_2 float, user_id bigint);
 SELECT create_distributed_table('daily_uniques', 'user_id');
 
-EXPLAIN (COSTS FALSE) SELECT
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT
   user_id,
   sum(value_2) AS commits,
   RANK () OVER (

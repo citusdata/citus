@@ -770,7 +770,7 @@ FROM
 
 
 -- a self join is followed by a correlated subquery
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	*
 FROM
@@ -876,7 +876,7 @@ where (((t0.pkey) in (select t7.vkey from t7 where false
 SELECT vkey, pkey, c0 FROM t0;
 
 -- MERGE command with redundant join can be planned locally
-EXPLAIN (costs off, timing off)
+EXPLAIN (costs off, timing off, BUFFERS OFF)
 MERGE INTO t0 USING t7 ON
  (((t0.pkey) in (select t7.vkey from t7 where false
         union all
