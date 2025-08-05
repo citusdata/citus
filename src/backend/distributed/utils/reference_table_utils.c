@@ -139,7 +139,6 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	 * DROP TABLE and create_reference_table calls so that the list of reference tables we
 	 * operate on are stable.
 	 *
-	 *
 	 * Since the changes to the reference table placements are made via loopback
 	 * connections we release the locks held at the end of this function. Due to Citus
 	 * only running transactions in READ COMMITTED mode we can be sure that other
@@ -289,9 +288,9 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	}
 
 	/*
-	 * Since reference tables have been copied via a loopback connection we do not have to
-	 * retain our locks. Since Citus only runs well in READ COMMITTED mode we can be sure
-	 * that other transactions will find the reference tables copied.
+	 * Since reference tables have been copied via a loopback connection we do not have
+	 * to retain our locks. Since Citus only runs well in READ COMMITTED mode we can be
+	 * sure that other transactions will find the reference tables copied.
 	 * We have obtained and held multiple locks, here we unlock them all in the reverse
 	 * order we have obtained them in.
 	 */
@@ -306,8 +305,8 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 /*
  * ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes is essentially a
  * twin of EnsureReferenceTablesExistOnAllNodesExtended. The difference is instead of
- * copying the missing tables on to the worker nodes this function creates the background tasks
- * for each required copy operation and schedule it in the background job.
+ * copying the missing tables on to the worker nodes this function creates the background
+ * tasks for each required copy operation and schedule it in the background job.
  * Another difference is that instead of moving all the colocated shards sequencially
  * this function creates a seperate background task for each shard, even when the shards
  * are part of same colocated shard group.
@@ -502,8 +501,8 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 							 GetGlobalPID());
 
 			/*
-			 * In first step just create and load data in the shards but defer the creation
-			 * of the shard relationships to the next step.
+			 * In first step just create and load data in the shards but defer the
+			 * creation of the shard relationships to the next step.
 			 * The reason we want to defer the creation of the shard relationships is that
 			 * we want to make sure that all the parallel shard copy task are finished
 			 * before we create the relationships. Otherwise we might end up with
@@ -511,7 +510,9 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 			 * create the shard relationships will result in ERROR.
 			 */
 			appendStringInfo(&buf,
-							 "SELECT citus_internal.citus_internal_copy_single_shard_placement(%ld,%u,%u,%u,%s)",
+							 "SELECT "
+							 "citus_internal.citus_internal_copy_single_shard_placement"
+							 "(%ld,%u,%u,%u,%s)",
 							 shardId,
 							 sourceShardPlacement->nodeId,
 							 newWorkerNode->nodeId,
@@ -582,7 +583,8 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 				taskEntry->taskId = task->taskid;
 				ereport(DEBUG2,
 						(errmsg(
-							 "Added hash entry in scheduled task hash with task %ld for shard %ld",
+							 "Added hash entry in scheduled task hash "
+							 "with task %ld for shard %ld",
 							 task->taskid, shardId)));
 			}
 			else
@@ -618,7 +620,9 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 							 CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
 							 GetGlobalPID());
 			appendStringInfo(&buf,
-							 "SELECT citus_internal.citus_internal_copy_single_shard_placement(%ld,%u,%u,%u,%s)",
+							 "SELECT "
+							 "citus_internal.citus_internal_copy_single_shard_placement"
+							 "(%ld,%u,%u,%u,%s)",
 							 shardId,
 							 sourceShardPlacement->nodeId,
 							 newWorkerNode->nodeId,
@@ -627,7 +631,8 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 
 			ereport(DEBUG2,
 					(errmsg(
-						 "creating relations for reference table '%s' on %s:%d ... QUERY= %s",
+						 "creating relations for reference table '%s' on %s:%d ... "
+						 "QUERY= %s",
 						 referenceTableName, newWorkerNode->workerName,
 						 newWorkerNode->workerPort, buf.data)));
 
