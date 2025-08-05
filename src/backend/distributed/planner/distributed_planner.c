@@ -66,7 +66,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardinterval_utils.h"
-#include "distributed/utils/citus_stat_tenants.h"
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 
@@ -135,13 +135,13 @@ static void AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo,
 													  Const *resultFormatConst);
 static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
-static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
+static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(
+	FastPathRestrictionContext *fastPathContext);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
-static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-												 Node *distributionKeyValue);
+static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
@@ -166,7 +166,7 @@ distributed_planner(Query *parse,
 {
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
-	Node *distributionKeyValue = NULL;
+	FastPathRestrictionContext fastPathContext = { 0 };
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
@@ -191,8 +191,7 @@ distributed_planner(Query *parse,
 											&maybeHasForeignDistributedTable);
 		if (needsDistributedPlanning)
 		{
-			fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
-
+			fastPathRouterQuery = FastPathRouterQuery(parse, &fastPathContext);
 			if (maybeHasForeignDistributedTable)
 			{
 				WarnIfListHasForeignDistributedTable(rangeTableList);
@@ -247,8 +246,9 @@ distributed_planner(Query *parse,
 	 */
 	HideCitusDependentObjectsOnQueriesOfPgMetaTables((Node *) parse, NULL);
 
-	/* create a restriction context and put it at the end if context list */
-	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
+	/* create a restriction context and put it at the end of context list */
+	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext(
+		&fastPathContext);
 
 	/*
 	 * We keep track of how many times we've recursed into the planner, primarily
@@ -264,7 +264,7 @@ distributed_planner(Query *parse,
 	{
 		if (fastPathRouterQuery)
 		{
-			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue);
+			result = PlanFastPathDistributedStmt(&planContext);
 		}
 		else
 		{
@@ -649,30 +649,21 @@ IsMultiTaskPlan(DistributedPlan *distributedPlan)
  * the FastPathPlanner.
  */
 static PlannedStmt *
-PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-							Node *distributionKeyValue)
+PlanFastPathDistributedStmt(DistributedPlanningContext *planContext)
 {
 	FastPathRestrictionContext *fastPathContext =
 		planContext->plannerRestrictionContext->fastPathRestrictionContext;
+	Assert(fastPathContext != NULL);
+	Assert(fastPathContext->fastPathRouterQuery);
 
-	planContext->plannerRestrictionContext->fastPathRestrictionContext->
-	fastPathRouterQuery = true;
+	FastPathPreprocessParseTree(planContext->query);
 
-	if (distributionKeyValue == NULL)
+	if (!fastPathContext->delayFastPathPlanning)
 	{
-		/* nothing to record */
+		planContext->plan = FastPathPlanner(planContext->originalQuery,
+											planContext->query,
+											planContext->boundParams);
 	}
-	else if (IsA(distributionKeyValue, Const))
-	{
-		fastPathContext->distributionKeyValue = (Const *) distributionKeyValue;
-	}
-	else if (IsA(distributionKeyValue, Param))
-	{
-		fastPathContext->distributionKeyHasParam = true;
-	}
-
-	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
-										planContext->boundParams);
 
 	return CreateDistributedPlannedStmt(planContext);
 }
@@ -802,6 +793,8 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	{
 		RaiseDeferredError(distributedPlan->planningError, ERROR);
 	}
+
+	CheckAndBuildDelayedFastPathPlan(planContext, distributedPlan);
 
 	/* remember the plan's identifier for identifying subplans */
 	distributedPlan->planId = planId;
@@ -2407,13 +2400,15 @@ CopyPlanParamList(List *originalPlanParamList)
 
 
 /*
- * CreateAndPushPlannerRestrictionContext creates a new relation restriction context
- * and a new join context, inserts it to the beginning of the
- * plannerRestrictionContextList. Finally, the planner restriction context is
- * inserted to the beginning of the plannerRestrictionContextList and it is returned.
+ * CreateAndPushPlannerRestrictionContext creates a new planner restriction
+ * context with an empty relation restriction context and an empty join and
+ * a copy of the given fast path restriction context (if present). Finally,
+ * the planner restriction context is inserted to the beginning of the
+ * global plannerRestrictionContextList and it is returned.
  */
 static PlannerRestrictionContext *
-CreateAndPushPlannerRestrictionContext(void)
+CreateAndPushPlannerRestrictionContext(
+	FastPathRestrictionContext *fastPathRestrictionContext)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
 		palloc0(sizeof(PlannerRestrictionContext));
@@ -2426,6 +2421,21 @@ CreateAndPushPlannerRestrictionContext(void)
 
 	plannerRestrictionContext->fastPathRestrictionContext =
 		palloc0(sizeof(FastPathRestrictionContext));
+
+	if (fastPathRestrictionContext != NULL)
+	{
+		/* copy the given fast path restriction context */
+		FastPathRestrictionContext *plannersFastPathCtx =
+			plannerRestrictionContext->fastPathRestrictionContext;
+		plannersFastPathCtx->fastPathRouterQuery =
+			fastPathRestrictionContext->fastPathRouterQuery;
+		plannersFastPathCtx->distributionKeyValue =
+			fastPathRestrictionContext->distributionKeyValue;
+		plannersFastPathCtx->distributionKeyHasParam =
+			fastPathRestrictionContext->distributionKeyHasParam;
+		plannersFastPathCtx->delayFastPathPlanning =
+			fastPathRestrictionContext->delayFastPathPlanning;
+	}
 
 	plannerRestrictionContext->memoryContext = CurrentMemoryContext;
 
@@ -2549,21 +2559,20 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		/* check whether parameter is available (and valid) */
 		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
 		{
-			ParamExternData *externParam = NULL;
+			Oid paramType = InvalidOid;
 
 			/* give hook a chance in case parameter is dynamic */
 			if (boundParams->paramFetch != NULL)
 			{
 				ParamExternData externParamPlaceholder;
-				externParam = (*boundParams->paramFetch)(boundParams, paramId, false,
-														 &externParamPlaceholder);
+				paramType = (*boundParams->paramFetch)(boundParams, paramId, false,
+													   &externParamPlaceholder)->ptype;
 			}
 			else
 			{
-				externParam = &boundParams->params[paramId - 1];
+				paramType = boundParams->params[paramId - 1].ptype;
 			}
 
-			Oid paramType = externParam->ptype;
 			if (OidIsValid(paramType))
 			{
 				return false;

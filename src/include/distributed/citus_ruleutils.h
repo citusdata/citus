@@ -44,6 +44,7 @@ extern bool contain_nextval_expression_walker(Node *node, void *context);
 extern char * pg_get_replica_identity_command(Oid tableRelationId);
 extern List * pg_get_row_level_security_commands(Oid relationId);
 extern const char * RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier);
+extern List * ExpandMergedSubscriptingRefEntries(List *targetEntryList);
 extern char * flatten_reloptions(Oid relid);
 
 /* Function declarations for version dependent PostgreSQL ruleutils functions */
@@ -60,5 +61,6 @@ extern char * generate_operator_name(Oid operid, Oid arg1, Oid arg2);
 extern List * getOwnedSequences_internal(Oid relid, AttrNumber attnum, char deptype);
 extern void AppendOptionListToString(StringInfo stringData, List *options);
 
+extern void ensure_update_targetlist_in_param_order(List *targetList);
 
 #endif /* CITUS_RULEUTILS_H */

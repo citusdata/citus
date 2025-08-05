@@ -13,6 +13,54 @@
 
 #include "pg_version_constants.h"
 
+/* we need these for PG-18’s PushActiveSnapshot/PopActiveSnapshot APIs */
+#include "access/xact.h"
+#include "utils/snapmgr.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
+	create_foreignscan_path( \
+		(a),            /* root            */ \
+		(b),            /* rel             */ \
+		(c),            /* target          */ \
+		(d),            /* rows            */ \
+		0,              /* disabled_nodes  */ \
+		(e),            /* startup_cost    */ \
+		(f),            /* total_cost      */ \
+		(g),            /* pathkeys        */ \
+		(h),            /* required_outer  */ \
+		(i),            /* fdw_outerpath   */ \
+		(j),            /* fdw_restrictinfo*/ \
+		(k)             /* fdw_private     */ \
+		)
+
+/* PG-18 introduced get_op_index_interpretation, old name was get_op_btree_interpretation */
+#define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
+
+/* PG-18 unified row-compare operator codes under COMPARE_* */
+#define ROWCOMPARE_NE COMPARE_NE
+
+#define CATALOG_INSERT_WITH_SNAPSHOT(rel, tup) \
+	do { \
+		Snapshot __snap = GetTransactionSnapshot(); \
+		PushActiveSnapshot(__snap); \
+		CatalogTupleInsert((rel), (tup)); \
+		PopActiveSnapshot(); \
+	} while (0)
+
+#elif PG_VERSION_NUM >= PG_VERSION_17
+#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
+	create_foreignscan_path( \
+		(a), (b), (c), (d), \
+		(e), (f), \
+		(g), (h), (i), (j), (k) \
+		)
+
+/* no-op wrapper on older PGs */
+#define CATALOG_INSERT_WITH_SNAPSHOT(rel, tup) \
+	CatalogTupleInsert((rel), (tup))
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_17
 
 #include "catalog/pg_am.h"
@@ -384,10 +432,6 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
 
-#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
-									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
-																  i, j, k)
-
 #define getProcNo_compat(a) (a->vxid.procNumber)
 #define getLxid_compat(a) (a->vxid.lxid)
 
@@ -424,6 +468,10 @@ getStxstattarget_compat(HeapTuple tup)
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
 									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
 																  i, k)
+
+/* no-op wrapper on older PGs */
+#define CATALOG_INSERT_WITH_SNAPSHOT(rel, tup) \
+	CatalogTupleInsert((rel), (tup))
 
 #define getProcNo_compat(a) (a->pgprocno)
 #define getLxid_compat(a) (a->lxid)

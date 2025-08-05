@@ -31,19 +31,19 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "17.4"
-      image_suffix: "-veab367a"
-      pg15_version: '{ "major": "15", "full": "15.12" }'
-      pg16_version: '{ "major": "16", "full": "16.8" }'
-      pg17_version: '{ "major": "17", "full": "17.4" }'
-      upgrade_pg_versions: "15.12-16.8-17.4"
+      sql_snapshot_pg_version: "17.5"
+      image_suffix: "-vb17c33b"
+      pg15_version: '{ "major": "15", "full": "15.13" }'
+      pg16_version: '{ "major": "16", "full": "16.9" }'
+      pg17_version: '{ "major": "17", "full": "17.5" }'
+      upgrade_pg_versions: "15.13-16.9-17.5"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
         run: echo 'noop'
   check-sql-snapshots:
     needs: params
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
@@ -55,7 +55,7 @@ jobs:
         ci/check_sql_snapshots.sh
   check-style:
     needs: params
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.style_checker_image_name }}:${{ needs.params.outputs.style_checker_tools_version }}${{ needs.params.outputs.image_suffix }}
     steps:
@@ -113,7 +113,7 @@ jobs:
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
@@ -221,7 +221,7 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg17_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root --dns=8.8.8.8
@@ -297,7 +297,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -350,7 +350,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
     name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -396,10 +396,11 @@ jobs:
         flags: ${{ env.PG_MAJOR }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
-    if: always()
+    # secret below is not available for forks so disabling upload action for them
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' }}
     env:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg17_version).full }}${{ needs.params.outputs.image_suffix }}
     needs:
@@ -421,7 +422,7 @@ jobs:
   ch_benchmark:
     name: CH Benchmark
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs:
     - build
     steps:
@@ -439,7 +440,7 @@ jobs:
   tpcc_benchmark:
     name: TPCC Benchmark
     if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs:
     - build
     steps:
@@ -458,7 +459,7 @@ jobs:
     name: Prepare parallelization matrix
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     needs: test-flakyness-pre
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
@@ -470,7 +471,7 @@ jobs:
   test-flakyness-pre:
     name: Detect regression tests need to be ran
     if: ${{ !inputs.skip_test_flakyness }}}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs: build
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
@@ -511,7 +512,7 @@ jobs:
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg17_version).full }}${{ needs.params.outputs.image_suffix }}
       options: --user root

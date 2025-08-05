@@ -55,6 +55,43 @@ ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
 
+SET citus.enable_stat_counters TO true;
+
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
+
+SELECT (citus_stat_counters(oid)).connection_establishment_failed AS old_connection_establishment_failed
+FROM pg_database WHERE datname = current_database() \gset
+
+SELECT * FROM products;
+
+SELECT (citus_stat_counters(oid)).connection_establishment_failed - :old_connection_establishment_failed > 0
+FROM pg_database WHERE datname = current_database();
+
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+
+-- this time set citus.force_max_query_parallelization set to on
+SET citus.force_max_query_parallelization TO ON;
+
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
+
+SELECT (citus_stat_counters(oid)).connection_establishment_failed AS old_connection_establishment_failed
+FROM pg_database WHERE datname = current_database() \gset
+
+SELECT * FROM products;
+
+SELECT (citus_stat_counters(oid)).connection_establishment_failed - :old_connection_establishment_failed > 0
+FROM pg_database WHERE datname = current_database();
+
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+
+RESET citus.force_max_query_parallelization;
+
+RESET citus.enable_stat_counters;
+
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
 SET citus.node_connection_timeout TO 900;
@@ -87,6 +124,33 @@ RESET citus.force_max_query_parallelization;
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
 
+SET citus.enable_stat_counters TO true;
+SET citus.force_max_query_parallelization TO ON;
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
+
+-- test insert into a single replicated table
+SELECT (citus_stat_counters(oid)).connection_establishment_failed AS old_connection_establishment_failed
+FROM pg_database WHERE datname = current_database() \gset
+
+INSERT INTO single_replicatated VALUES (100);
+
+SELECT (citus_stat_counters(oid)).connection_establishment_failed - :old_connection_establishment_failed > 0
+FROM pg_database WHERE datname = current_database();
+
+-- test select from a single replicated table
+SELECT (citus_stat_counters(oid)).connection_establishment_failed AS old_connection_establishment_failed
+FROM pg_database WHERE datname = current_database() \gset
+
+SELECT count(*) FROM single_replicatated;
+
+SELECT (citus_stat_counters(oid)).connection_establishment_failed - :old_connection_establishment_failed > 0
+FROM pg_database WHERE datname = current_database();
+
+RESET citus.force_max_query_parallelization;
+RESET citus.node_connection_timeout;
+RESET citus.enable_stat_counters;
+SELECT citus.mitmproxy('conn.allow()');
 
 -- one similar test, and this time on modification queries
 -- to see that connection establishement failures could

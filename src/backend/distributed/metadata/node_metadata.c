@@ -2930,7 +2930,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
-	CatalogTupleInsert(pgDistNode, heapTuple);
+	CATALOG_INSERT_WITH_SNAPSHOT(pgDistNode, heapTuple);
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
@@ -2965,8 +2965,18 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	 * https://github.com/citusdata/citus/pull/2855#discussion_r313628554
 	 * https://github.com/citusdata/citus/issues/1890
 	 */
-	Relation replicaIndex = index_open(RelationGetPrimaryKeyIndex(pgDistNode),
-									   AccessShareLock);
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ adds a bool “deferrable_ok” parameter */
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode, false),
+				   AccessShareLock);
+#else
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode),
+				   AccessShareLock);
+#endif
+
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));

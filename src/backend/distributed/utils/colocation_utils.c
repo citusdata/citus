@@ -1371,9 +1371,21 @@ DeleteColocationGroupLocally(uint32 colocationId)
 		 * https://github.com/citusdata/citus/pull/2855#discussion_r313628554
 		 * https://github.com/citusdata/citus/issues/1890
 		 */
-		Relation replicaIndex =
-			index_open(RelationGetPrimaryKeyIndex(pgDistColocation),
-					   AccessShareLock);
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+		/* PG 18+ expects a second “deferrable_ok” flag */
+		Relation replicaIndex = index_open(
+			RelationGetPrimaryKeyIndex(pgDistColocation, false),
+			AccessShareLock
+			);
+#else
+
+		/* PG 17- had a single-arg signature */
+		Relation replicaIndex = index_open(
+			RelationGetPrimaryKeyIndex(pgDistColocation),
+			AccessShareLock
+			);
+#endif
 		simple_heap_delete(pgDistColocation, &(heapTuple->t_self));
 
 		CitusInvalidateRelcacheByRelid(DistColocationRelationId());

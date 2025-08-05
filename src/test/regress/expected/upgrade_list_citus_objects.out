@@ -179,6 +179,8 @@ ORDER BY 1;
  function citus_shards_on_worker()
  function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode)
  function citus_stat_activity()
+ function citus_stat_counters(oid)
+ function citus_stat_counters_reset(oid)
  function citus_stat_statements()
  function citus_stat_statements_reset()
  function citus_stat_tenants(boolean)
@@ -287,7 +289,7 @@ ORDER BY 1;
  function run_command_on_placements(regclass,text,boolean)
  function run_command_on_shards(regclass,text,boolean)
  function run_command_on_workers(text,boolean)
- function shard_name(regclass,bigint)
+ function shard_name(regclass,bigint,boolean)
  function start_metadata_sync_to_all_nodes()
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer,boolean)
@@ -378,17 +380,19 @@ ORDER BY 1;
  view citus_dist_stat_activity
  view citus_lock_waits
  view citus_locks
+ view citus_nodes
  view citus_schema.citus_schemas
  view citus_schema.citus_tables
  view citus_shard_indexes_on_worker
  view citus_shards
  view citus_shards_on_worker
  view citus_stat_activity
+ view citus_stat_counters
  view citus_stat_statements
  view citus_stat_tenants
  view citus_stat_tenants_local
  view pg_dist_shard_placement
  view time_partitions
-(358 rows)
+(362 rows)
 
 DROP TABLE extension_basic_types;

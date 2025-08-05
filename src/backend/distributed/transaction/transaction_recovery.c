@@ -106,7 +106,7 @@ LogTransactionRecord(int32 groupId, char *transactionName, FullTransactionId out
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
-	CatalogTupleInsert(pgDistTransaction, heapTuple);
+	CATALOG_INSERT_WITH_SNAPSHOT(pgDistTransaction, heapTuple);
 
 	CommandCounterIncrement();
 
@@ -514,8 +514,9 @@ PendingWorkerTransactionList(MultiConnection *connection)
 	List *transactionNames = NIL;
 	int32 coordinatorId = GetLocalGroupId();
 
-	appendStringInfo(command, "SELECT gid FROM pg_prepared_xacts "
-							  "WHERE gid LIKE 'citus\\_%d\\_%%' and database = current_database()",
+	appendStringInfo(command,
+					 "SELECT gid FROM pg_prepared_xacts "
+					 "WHERE gid COLLATE pg_catalog.default LIKE 'citus\\_%d\\_%%' COLLATE pg_catalog.default AND database = current_database()",
 					 coordinatorId);
 
 	int querySent = SendRemoteCommand(connection, command->data);

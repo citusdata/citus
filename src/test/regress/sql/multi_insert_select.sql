@@ -2452,5 +2452,136 @@ SELECT coordinator_plan($$
   SELECT id FROM dist_table_5 JOIN cte_1 USING(id);
 $$);
 
+-------------------------------
+-- Regression Test Script for Issue #7784
+-- This script tests INSERT ... SELECT with a CTE for:
+--  1. Schema based sharding.
+--  2. A distributed table.
+-------------------------------
+
+-- Enable schema-based sharding
+SET citus.enable_schema_based_sharding TO ON;
+
+
+-- Create a table for schema based sharding
+CREATE TABLE version_sch_based (
+    id bigserial NOT NULL,
+    description varchar(255),
+    PRIMARY KEY (id)
+);
+
+-- Insert an initial row.
+INSERT INTO version_sch_based (description) VALUES ('Version 1');
+
+-- Duplicate the row using a CTE and INSERT ... SELECT.
+WITH v AS (
+    SELECT * FROM version_sch_based WHERE description = 'Version 1'
+)
+INSERT INTO version_sch_based (description)
+SELECT description FROM v;
+
+-- Expected output:
+--   id | description
+--  ----+-------------
+--    1 | Version 1
+--    2 | Version 1
+
+-- Query the table and order by id for consistency.
+SELECT * FROM version_sch_based ORDER BY id;
+
+--------------------------------------------------
+-- Case 2: Distributed Table Scenario
+--------------------------------------------------
+SET citus.enable_schema_based_sharding TO OFF;
+
+-- Create a table for the distributed test.
+CREATE TABLE version_dist (
+    id bigserial NOT NULL,
+    description varchar(255),
+    PRIMARY KEY (id)
+);
+
+-- Register the table as distributed using the 'id' column as the distribution key.
+SELECT create_distributed_table('version_dist', 'id');
+
+-- Insert an initial row.
+INSERT INTO version_dist (description) VALUES ('Version 1');
+
+-- Duplicate the row using a CTE and INSERT ... SELECT.
+WITH v AS (
+    SELECT * FROM version_dist WHERE description = 'Version 1'
+)
+INSERT INTO version_dist (description)
+SELECT description FROM v;
+
+-- Expected output:
+--   id | description
+--  ----+-------------
+--    1 | Version 1
+--    2 | Version 1
+
+-- Query the table and order by id for consistency.
+SELECT * FROM version_dist ORDER BY id;
+
+-------------------------------
+-- Case 3: Distributed INSERT … SELECT with nextval()
+-- Verifies that nextval() is evaluated on the coordinator only.
+-------------------------------
+
+-- A fresh sequence for clarity
+CREATE SEQUENCE seq_nextval_test START 100;
+
+-- Table with DEFAULT nextval()
+CREATE TABLE version_dist_seq (
+    id  bigint DEFAULT nextval('seq_nextval_test'),
+    description text,
+    PRIMARY KEY (id)
+);
+SELECT create_distributed_table('version_dist_seq', 'id');
+
+-- Seed one row (id = 100)
+INSERT INTO version_dist_seq (description) VALUES ('row‑0');
+
+-- CTE duplication – should produce **exactly one** new sequence value (id = 101)
+WITH v AS (
+    SELECT * FROM version_dist_seq WHERE description = 'row‑0'
+)
+INSERT INTO version_dist_seq (description)
+SELECT description FROM v;
+
+-- Expected: ids are 100 and 101 (no gaps, no duplicates)
+SELECT id, description FROM version_dist_seq ORDER BY id;
+
+
+-------------------------------
+-- Case 4: UNION ALL + nextval() in distributed INSERT … SELECT
+-------------------------------
+
+CREATE SEQUENCE seq_union_test START 200;
+
+CREATE TABLE version_dist_union (
+    id  bigint DEFAULT nextval('seq_union_test'),
+    val int,
+    PRIMARY KEY (id)
+);
+SELECT create_distributed_table('version_dist_union', 'id');
+
+-- Seed rows
+INSERT INTO version_dist_union (val) VALUES (1), (2);
+
+-- UNION ALL duplication; each leg returns two rows -> four inserts total
+WITH src AS (
+    SELECT val FROM version_dist_union
+    UNION ALL
+    SELECT val FROM version_dist_union
+)
+INSERT INTO version_dist_union(val)
+SELECT val FROM src;
+
+-- Expected IDs: 200,201,202,203,204,205
+SELECT id, val FROM version_dist_union ORDER BY id;
+
+-- End of Issue #7784
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_insert_select CASCADE;

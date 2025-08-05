@@ -146,8 +146,8 @@ extern void ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamLis
 											   DestReceiver *dest);
 extern void ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params,
 										 DestReceiver *dest);
-extern void ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
-										DestReceiver *dest);
+extern uint64 ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
+										  DestReceiver *dest);
 extern void SetLocalMultiShardModifyModeToSequential(void);
 extern void EnsureSequentialMode(ObjectType objType);
 extern void SetLocalForceMaxQueryParallelization(void);

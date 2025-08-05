@@ -44,6 +44,12 @@ test: comment_on_role
 test: single_shard_table_udfs
 test: schema_based_sharding
 test: citus_schema_distribute_undistribute
+# Don't parallelize stat_counters with others because we don't want statistics
+# to be updated by other tests concurrently except Citus Maintenance Daemon.
+#
+# Also, this needs to be the first test that calls citus_stat_counters()
+# because it checks the value of stats_reset column before calling the function.
+test: stat_counters
 
 test: multi_test_catalog_views
 test: multi_table_ddl
@@ -204,6 +210,7 @@ test: multi_outer_join
 # ---
 test: multi_complex_count_distinct multi_select_distinct
 test: multi_modifications
+test: multi_update_select
 test: multi_distribution_metadata
 test: multi_prune_shard_list
 test: multi_upsert multi_simple_queries multi_data_types
@@ -290,6 +297,9 @@ test: multi_colocation_utils
 
 # ----------
 # node_conninfo_reload tests that node_conninfo changes take effect
+#
+# Do not parallelize with others because this measures stat counters
+# for failed connections for a few queries.
 # ----------
 test: node_conninfo_reload
 

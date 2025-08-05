@@ -39,7 +39,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/shard_utils.h"
-#include "distributed/utils/citus_stat_tenants.h"
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/version_compat.h"
 
 
@@ -439,6 +439,27 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 }
 
 
+void
+SetTaskQueryPlan(Task *task, Query *query, PlannedStmt *localPlan)
+{
+	Assert(localPlan != NULL);
+	task->taskQuery.queryType = TASK_QUERY_LOCAL_PLAN;
+	task->taskQuery.data.localCompiled = (LocalCompilation *) palloc0(
+		sizeof(LocalCompilation));
+	task->taskQuery.data.localCompiled->query = query;
+	task->taskQuery.data.localCompiled->plan = localPlan;
+	task->queryCount = 1;
+}
+
+
+PlannedStmt *
+TaskQueryLocalPlan(Task *task)
+{
+	Assert(task->taskQuery.queryType == TASK_QUERY_LOCAL_PLAN);
+	return task->taskQuery.data.localCompiled->plan;
+}
+
+
 /*
  * DeparseTaskQuery is a general way of deparsing a query based on a task.
  */
@@ -523,6 +544,26 @@ TaskQueryString(Task *task)
 	else if (taskQueryType == TASK_QUERY_TEXT)
 	{
 		return task->taskQuery.data.queryStringLazy;
+	}
+	else if (taskQueryType == TASK_QUERY_LOCAL_PLAN)
+	{
+		Query *query = task->taskQuery.data.localCompiled->query;
+		Assert(query != NULL);
+
+		/*
+		 * Use the query of the local compilation to generate the
+		 * query string. For local compiled tasks, the query is retained
+		 * for this purpose, which may be EXPLAIN ANALYZing the task, or
+		 * command logging. Generating the query string on the fly is
+		 * acceptable because the plan of the local compilation is used
+		 * for query execution.
+		 */
+		MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
+																  query));
+		UpdateRelationToShardNames((Node *) query, task->relationShardList);
+		MemoryContextSwitchTo(previousContext);
+		return AnnotateQuery(DeparseTaskQuery(task, query),
+							 task->partitionKeyValue, task->colocationId);
 	}
 
 	Query *jobQueryReferenceForLazyDeparsing =

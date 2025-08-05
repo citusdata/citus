@@ -147,6 +147,7 @@ DEPS = {
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
+    "multi_mx_modifications": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
@@ -224,6 +225,7 @@ DEPS = {
         ],
         repeatable=False,
     ),
+    "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
 }
 
 

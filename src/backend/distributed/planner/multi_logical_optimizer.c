@@ -4478,45 +4478,42 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
-
-	if (candidateColumn->varlevelsup > 0)
+	/* Walk up varlevelsup as many times as needed */
+	while (candidateColumn->varlevelsup > 0)
 	{
+		/* Caller asked us to ignore any outer Vars → just bail out */
 		if (skipOuterVars)
 		{
-			/*
-			 * we don't want to process outer vars, so we return early.
-			 */
 			return;
 		}
 
-		/*
-		 * We currently don't support finding partition keys in the subqueries
-		 * that reference outer subqueries. For example, in correlated
-		 * subqueries in WHERE clause, we don't support use of partition keys
-		 * in the subquery that is referred from the outer query.
-		 */
-
-		int parentQueryIndex = list_length(parentQueryList) -
-							   candidateColumn->varlevelsup;
-		if (!(IsIndexInRange(parentQueryList, parentQueryIndex)))
+		/* Locate the parent query that owns this Var */
+		int parentIdx =
+			list_length(parentQueryList) - candidateColumn->varlevelsup;
+		if (!IsIndexInRange(parentQueryList, parentIdx))
 		{
-			return;
+			return;                             /* malformed tree */
 		}
 
-		/*
-		 * Before we recurse into the query tree, we should update the candidateColumn and we use copy of it.
-		 * As we get the query from varlevelsup up, we reset the varlevelsup.
-		 */
+		/* Work on a fresh copy of the Var with varlevelsup reset */
 		candidateColumn = copyObject(candidateColumn);
 		candidateColumn->varlevelsup = 0;
 
 		/*
-		 * We should be careful about these fields because they need to
-		 * be updated correctly based on ctelevelsup and varlevelsup.
+		 * Make a *completely private* copy of parentQueryList for the
+		 * next recursion step.  We copy the whole list and then truncate
+		 * so every recursive branch owns its own list cells.
 		 */
-		query = list_nth(parentQueryList, parentQueryIndex);
-		parentQueryList = list_truncate(parentQueryList, parentQueryIndex);
+		List *newParent =
+			list_copy(parentQueryList);         /* duplicates every cell  */
+		newParent = list_truncate(newParent, parentIdx);
+
+		query = list_nth(parentQueryList, parentIdx);
+		parentQueryList = newParent;            /* hand private copy down */
+
+		/* Loop again if still pointing to an outer level */
 	}
+
 
 	if (candidateColumn->varattno == InvalidAttrNumber)
 	{
@@ -4560,6 +4557,29 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		FindReferencedTableColumn(joinColumn, parentQueryList, query, column,
 								  rteContainingReferencedColumn, skipOuterVars);
 	}
+#if PG_VERSION_NUM >= PG_VERSION_18
+	else if (rangeTableEntry->rtekind == RTE_GROUP)
+	{
+		/*
+		 * PG 18: synthetic GROUP RTE.  Each groupexprs item corresponds to the
+		 * columns produced by the grouping step, in the *same ordinal order* as
+		 * the Vars that reference them.
+		 */
+		List *groupexprs = rangeTableEntry->groupexprs;
+		AttrNumber groupIndex = candidateColumn->varattno - 1;
+
+		/* this must always hold unless upstream Postgres mis-constructed the RTE_GROUP */
+		Assert(groupIndex >= 0 && groupIndex < list_length(groupexprs));
+
+		Expr *groupExpr = (Expr *) list_nth(groupexprs, groupIndex);
+
+		/* Recurse on the underlying expression (stay in the same query) */
+		FindReferencedTableColumn(groupExpr, parentQueryList, query,
+								  column, rteContainingReferencedColumn,
+								  skipOuterVars);
+	}
+#endif   /* PG_VERSION_NUM >= 180000 */
+
 	else if (rangeTableEntry->rtekind == RTE_CTE)
 	{
 		/*
