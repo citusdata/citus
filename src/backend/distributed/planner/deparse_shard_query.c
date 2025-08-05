@@ -413,7 +413,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	/* want to look at all RTEs, even in subqueries, CTEs and such */
 	if (IsA(node, Query))
 	{
-		UpdateWhereClauseForOuterJoin((Query *) node, relationShardList); // TODO, check this again, we might want to skip this for fast path queries
+		UpdateWhereClauseForOuterJoin((Query *) node, relationShardList); /* TODO, check this again, we might want to skip this for fast path queries */
 		return query_tree_walker((Query *) node, UpdateRelationToShardNames,
 								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}
