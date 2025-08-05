@@ -203,6 +203,42 @@ BEGIN
         'n' as deptype
     FROM pg_catalog.pg_dist_partition p;
 
+    -- If citus_columnar extension exists, then perform the post PG-upgrade work for columnar as well.
+    --
+    -- First look if pg_catalog.columnar_finish_pg_upgrade function exists as part of the citus_columnar
+    -- extension. (We check whether it's part of the extension just for security reasons). If it does, then
+    -- call it. If not, then look for columnar_internal.columnar_ensure_am_depends_catalog function and as
+    -- part of the citus_columnar extension. If so, then call it. We alternatively check for the latter UDF
+    -- just because pg_catalog.columnar_finish_pg_upgrade function is introduced in citus_columnar 13.2-1
+    -- and as of today all it does is to call columnar_internal.columnar_ensure_am_depends_catalog function.
+    IF EXISTS (
+        SELECT 1 FROM pg_depend
+        JOIN pg_proc ON (pg_depend.objid = pg_proc.oid)
+        JOIN pg_namespace ON (pg_proc.pronamespace = pg_namespace.oid)
+        JOIN pg_extension ON (pg_depend.refobjid = pg_extension.oid)
+        WHERE
+            -- Looking if pg_catalog.columnar_finish_pg_upgrade function exists and
+            -- if there is a dependency record from it (proc class = 1255) ..
+            pg_depend.classid = 1255 AND pg_namespace.nspname = 'pg_catalog' AND pg_proc.proname = 'columnar_finish_pg_upgrade' AND
+            -- .. to citus_columnar extension (3079 = extension class), if it exists.
+            pg_depend.refclassid = 3079 AND pg_extension.extname = 'citus_columnar'
+    )
+    THEN PERFORM pg_catalog.columnar_finish_pg_upgrade();
+    ELSIF EXISTS (
+        SELECT 1 FROM pg_depend
+        JOIN pg_proc ON (pg_depend.objid = pg_proc.oid)
+        JOIN pg_namespace ON (pg_proc.pronamespace = pg_namespace.oid)
+        JOIN pg_extension ON (pg_depend.refobjid = pg_extension.oid)
+        WHERE
+            -- Looking if columnar_internal.columnar_ensure_am_depends_catalog function exists and
+            -- if there is a dependency record from it (proc class = 1255) ..
+            pg_depend.classid = 1255 AND pg_namespace.nspname = 'columnar_internal' AND pg_proc.proname = 'columnar_ensure_am_depends_catalog' AND
+            -- .. to citus_columnar extension (3079 = extension class), if it exists.
+            pg_depend.refclassid = 3079 AND pg_extension.extname = 'citus_columnar'
+    )
+    THEN PERFORM columnar_internal.columnar_ensure_am_depends_catalog();
+    END IF;
+
     -- restore pg_dist_object from the stable identifiers
     TRUNCATE pg_catalog.pg_dist_object;
     INSERT INTO pg_catalog.pg_dist_object (classid, objid, objsubid, distribution_argument_index, colocationid)
