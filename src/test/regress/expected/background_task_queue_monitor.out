@@ -252,9 +252,9 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     ORDER BY job_id, task_id; -- show that last task is not running but ready to run(runnable)
  job_id  | task_id |  status
 ---------------------------------------------------------------------
- 1450005 | 1450009 | running
- 1450005 | 1450010 | running
- 1450005 | 1450011 | running
+ 1450005 | 1450009 | done
+ 1450005 | 1450010 | done
+ 1450005 | 1450011 | done
  1450006 | 1450012 | running
  1450007 | 1450013 | runnable
 (5 rows)
@@ -282,9 +282,9 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     ORDER BY job_id, task_id;  -- show that last task is running
  job_id  | task_id |  status
 ---------------------------------------------------------------------
- 1450005 | 1450009 | running
- 1450005 | 1450010 | running
- 1450005 | 1450011 | running
+ 1450005 | 1450009 | done
+ 1450005 | 1450010 | done
+ 1450005 | 1450011 | done
  1450006 | 1450012 | cancelled
  1450007 | 1450013 | running
 (5 rows)
@@ -318,9 +318,9 @@ SELECT job_id, task_id, status FROM pg_dist_background_task
     ORDER BY job_id, task_id;  -- show that multiple cancels worked
  job_id  | task_id |  status
 ---------------------------------------------------------------------
- 1450005 | 1450009 | cancelled
- 1450005 | 1450010 | cancelled
- 1450005 | 1450011 | cancelled
+ 1450005 | 1450009 | done
+ 1450005 | 1450010 | done
+ 1450005 | 1450011 | done
  1450006 | 1450012 | cancelled
  1450007 | 1450013 | cancelled
 (5 rows)
@@ -372,9 +372,9 @@ SELECT task_id, status FROM pg_dist_background_task
     ORDER BY task_id; -- show that last task is not running but ready to run(runnable)
  task_id |  status
 ---------------------------------------------------------------------
- 1450014 | running
- 1450015 | running
- 1450016 | running
+ 1450014 | done
+ 1450015 | done
+ 1450016 | done
  1450017 | running
  1450018 | runnable
 (5 rows)
@@ -397,9 +397,9 @@ SELECT task_id, status FROM pg_dist_background_task
     ORDER BY task_id;  -- show that last task is running
  task_id | status
 ---------------------------------------------------------------------
- 1450014 | running
- 1450015 | running
- 1450016 | running
+ 1450014 | done
+ 1450015 | done
+ 1450016 | done
  1450017 | running
  1450018 | running
 (5 rows)
@@ -445,9 +445,9 @@ SELECT task_id, status FROM pg_dist_background_task
     ORDER BY task_id; -- show that all tasks are cancelled
  task_id |  status
 ---------------------------------------------------------------------
- 1450014 | cancelled
- 1450015 | cancelled
- 1450016 | cancelled
+ 1450014 | done
+ 1450015 | done
+ 1450016 | done
  1450017 | cancelled
  1450018 | cancelled
 (5 rows)
@@ -693,9 +693,9 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
 ---------------------------------------------------------------------
  1450017 | 1450025 | running  | {1,2}
  1450017 | 1450026 | running  | {3,4}
- 1450017 | 1450027 | runnable | {1,2}
- 1450017 | 1450028 | runnable | {1,3}
- 1450017 | 1450029 | runnable | {2,4}
+ 1450017 | 1450027 | running  | {1,2}
+ 1450017 | 1450028 | running  | {1,3}
+ 1450017 | 1450029 | running  | {2,4}
  1450017 | 1450030 | runnable | {1,2}
  1450017 | 1450031 | runnable | {1,3}
  1450017 | 1450032 | runnable | {1,4}
@@ -750,7 +750,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
  1450017 | 1450027 | running  | {1,2}
  1450017 | 1450028 | running  | {1,3}
  1450017 | 1450029 | running  | {2,4}
- 1450017 | 1450030 | runnable | {1,2}
+ 1450017 | 1450030 | running  | {1,2}
  1450017 | 1450031 | runnable | {1,3}
  1450017 | 1450032 | runnable | {1,4}
 (8 rows)
@@ -810,7 +810,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
  1450017 | 1450027 | done    | {1,2}
  1450017 | 1450028 | done    | {1,3}
  1450017 | 1450029 | done    | {2,4}
- 1450017 | 1450030 | running | {1,2}
+ 1450017 | 1450030 | done    | {1,2}
  1450017 | 1450031 | running | {1,3}
  1450017 | 1450032 | running | {1,4}
 (8 rows)
@@ -825,15 +825,15 @@ SELECT pg_reload_conf();
 -- if pg_cancel_backend is called on one of the running task PIDs
 -- task doesn't restart because it's not allowed anymore by the limit.
 -- node with id 1 can be used only once, unless there are previously running tasks
-SELECT pid AS task_id6_pid FROM pg_dist_background_task WHERE task_id IN (:task_id6) \gset
-SELECT pg_cancel_backend(:task_id6_pid); -- cancel task_id6 process
+SELECT pid AS task_id7_pid FROM pg_dist_background_task WHERE task_id IN (:task_id7) \gset
+SELECT pg_cancel_backend(:task_id7_pid); -- cancel task_id7 process
  pg_cancel_backend
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- task goes to only runnable state, not running anymore.
-SELECT citus_task_wait(:task_id6, desired_status => 'runnable');
+SELECT citus_task_wait(:task_id7, desired_status => 'runnable');
  citus_task_wait
 ---------------------------------------------------------------------
 
@@ -851,8 +851,8 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
  1450017 | 1450027 | done     | {1,2}
  1450017 | 1450028 | done     | {1,3}
  1450017 | 1450029 | done     | {2,4}
- 1450017 | 1450030 | runnable | {1,2}
- 1450017 | 1450031 | running  | {1,3}
+ 1450017 | 1450030 | done     | {1,2}
+ 1450017 | 1450031 | runnable | {1,3}
  1450017 | 1450032 | running  | {1,4}
 (8 rows)
 
@@ -868,7 +868,7 @@ SELECT citus_task_wait(:task_id8, desired_status => 'done');
 
 (1 row)
 
-SELECT citus_task_wait(:task_id6, desired_status => 'running');
+SELECT citus_task_wait(:task_id6, desired_status => 'done');
  citus_task_wait
 ---------------------------------------------------------------------
 
@@ -880,16 +880,16 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
     WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4,
                       :task_id5, :task_id6, :task_id7, :task_id8)
     ORDER BY job_id, task_id;
- job_id  | task_id | status  | nodes_involved
+ job_id  | task_id | status | nodes_involved
 ---------------------------------------------------------------------
- 1450017 | 1450025 | done    | {1,2}
- 1450017 | 1450026 | done    | {3,4}
- 1450017 | 1450027 | done    | {1,2}
- 1450017 | 1450028 | done    | {1,3}
- 1450017 | 1450029 | done    | {2,4}
- 1450017 | 1450030 | running | {1,2}
- 1450017 | 1450031 | done    | {1,3}
- 1450017 | 1450032 | done    | {1,4}
+ 1450017 | 1450025 | done   | {1,2}
+ 1450017 | 1450026 | done   | {3,4}
+ 1450017 | 1450027 | done   | {1,2}
+ 1450017 | 1450028 | done   | {1,3}
+ 1450017 | 1450029 | done   | {2,4}
+ 1450017 | 1450030 | done   | {1,2}
+ 1450017 | 1450031 | done   | {1,3}
+ 1450017 | 1450032 | done   | {1,4}
 (8 rows)
 
 SELECT citus_job_cancel(:job_id1);

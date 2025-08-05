@@ -534,7 +534,7 @@ FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
  job_id | task_id |  status  | nodes_involved
 ---------------------------------------------------------------------
   17779 |    1013 | done     | {50,56}
-  17779 |    1014 | running  | {50,57}
+  17779 |    1014 | done     | {50,57}
   17779 |    1015 | running  | {50,56}
   17779 |    1016 | blocked  | {50,57}
   17779 |    1017 | runnable | {50,56}
