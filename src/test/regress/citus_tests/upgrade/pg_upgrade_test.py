@@ -67,11 +67,6 @@ def citus_finish_pg_upgrade(pg_path, node_ports):
         utils.psql(pg_path, port, "SELECT citus_finish_pg_upgrade();")
 
 
-def columnar_finish_pg_upgrade(pg_path, node_ports):
-    for port in node_ports:
-        utils.psql(pg_path, port, "SELECT columnar_finish_pg_upgrade();")
-
-
 def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir, config):
     common.stop_databases(
         old_bindir, old_datadir, config.node_name_to_ports, config.name
@@ -127,7 +122,6 @@ def main(config):
         {},
     )
     citus_finish_pg_upgrade(config.new_bindir, config.node_name_to_ports.values())
-    columnar_finish_pg_upgrade(config.new_bindir, config.node_name_to_ports.values())
 
     common.run_pg_regress(
         config.new_bindir,
