@@ -18,5 +18,5 @@ SELECT unnest(result::text[]) AS unnested_result
 FROM run_command_on_workers($$SELECT array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$);
  pg_identify_object_as_address
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 

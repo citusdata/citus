@@ -50,7 +50,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 -- Switch user that has been granted rights and read table
 SET ROLE rls_tenant_1;
@@ -59,7 +59,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Enable row level security
@@ -71,7 +71,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Switch user that has been granted rights, should not be able to see any rows
@@ -79,7 +79,7 @@ SET ROLE rls_tenant_1;
 SELECT * FROM events ORDER BY 1;
  tenant_id | id | type
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 -- Create policy for tenants to read access their own rows
@@ -112,7 +112,7 @@ SET ROLE rls_tenant_2;
 SELECT * FROM events ORDER BY 1;
  tenant_id | id | type
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 -- Test Force Row Level Security, should also apply RLS to table owner
@@ -123,14 +123,14 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 -- Switch user to owner, no rows should be visible
 SET ROLE rls_table_owner;
 SELECT * FROM events ORDER BY 1;
  tenant_id | id | type
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 -- Allow admins to read all rows
@@ -142,7 +142,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 -- Verify the owner can insert a record
 INSERT INTO events VALUES (3,3,'push');
@@ -153,7 +153,7 @@ SELECT * FROM events ORDER BY 1;
          1 |  1 | push
          2 |  2 | push
          3 |  3 | push
-(3 rows)
+(N rows)
 
 -- Verify the owner can delete a record
 DELETE FROM events WHERE tenant_id = 3;
@@ -163,7 +163,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Alter the policy and verify no rows are visible for admin
@@ -173,7 +173,7 @@ SET ROLE rls_table_owner;
 SELECT * FROM events ORDER BY 1;
  tenant_id | id | type
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 -- Test No Force Row Level Security, owner will not go through RLS anymore
@@ -185,7 +185,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Disable row level security
@@ -197,7 +197,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Clean up test
@@ -226,7 +226,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 -- Switch user that has been granted rights and read table
 SET ROLE rls_tenant_1;
@@ -235,7 +235,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Enable row level security
@@ -263,7 +263,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 -- Verify owner cannot insert anything
 INSERT INTO events VALUES (3,3,'push');
@@ -279,7 +279,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Switch user that has been granted rights, should not be able to see any rows
@@ -287,7 +287,7 @@ SET ROLE rls_tenant_1;
 SELECT * FROM events ORDER BY 1;
  tenant_id | id | type
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 -- Create policy for tenants to read access their own rows
@@ -325,7 +325,7 @@ SET ROLE rls_tenant_2;
 SELECT * FROM events ORDER BY 1;
  tenant_id | id | type
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 ALTER POLICY user_mod ON events TO rls_tenant_1, rls_tenant_2;
@@ -356,7 +356,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Disable row level security
@@ -368,7 +368,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Clean up test
@@ -397,7 +397,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 -- Switch user that has been granted rights and read table
 SET ROLE rls_tenant_1;
@@ -406,7 +406,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Configure FORCE and some policies before distribution
@@ -430,7 +430,7 @@ SET ROLE rls_table_owner;
 SELECT * FROM events ORDER BY 1;
  tenant_id | id | type
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 -- owner mod will only be set after distribution because it can test if FORCE has been
@@ -443,7 +443,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | push
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- Switch user that has been granted rights, should be able to see their own rows
@@ -481,7 +481,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | push
          2 |  2 | pull
-(2 rows)
+(N rows)
 
 -- allow all users to update their own values
 ALTER POLICY user_mod ON events WITH CHECK (true);
@@ -497,7 +497,7 @@ SELECT * FROM events ORDER BY 1;
 ---------------------------------------------------------------------
          1 |  1 | pull tenant 1
          2 |  2 | pull tenant 2
-(2 rows)
+(N rows)
 
 -- Clean up test
 DROP TABLE events;

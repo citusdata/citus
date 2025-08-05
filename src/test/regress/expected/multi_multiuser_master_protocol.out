@@ -38,7 +38,7 @@ SELECT * FROM master_get_table_ddl_events('lineitem') order by 1;
  GRANT UPDATE ON public.lineitem TO full_access
  GRANT UPDATE ON public.lineitem TO postgres
  REVOKE ALL ON public.lineitem FROM PUBLIC
-(22 rows)
+(N rows)
 
 SELECT * FROM master_get_new_shardid();
  master_get_new_shardid
@@ -51,7 +51,7 @@ SELECT * FROM master_get_active_worker_nodes();
 ---------------------------------------------------------------------
  localhost |     57638
  localhost |     57637
-(2 rows)
+(N rows)
 
 RESET ROLE;
 -- ensure GRANT/REVOKE's do something sane for creating shards of
@@ -67,7 +67,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
 ---------------------------------------------------------------------
  CREATE TABLE public.checkperm (key integer) USING heap
  ALTER TABLE public.checkperm OWNER TO postgres
-(2 rows)
+(N rows)
 
 REVOKE ALL ON checkperm FROM PUBLIC;
 SELECT * FROM master_get_table_ddl_events('checkperm');
@@ -84,7 +84,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRIGGER ON public.checkperm TO postgres
  GRANT MAINTAIN ON public.checkperm TO postgres
  ALTER TABLE public.checkperm OWNER TO postgres
-(11 rows)
+(N rows)
 
 GRANT SELECT ON checkperm TO read_access;
 GRANT ALL ON checkperm TO full_access;
@@ -111,7 +111,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT TRIGGER ON public.checkperm TO full_access
  GRANT MAINTAIN ON public.checkperm TO full_access
  ALTER TABLE public.checkperm OWNER TO postgres
-(20 rows)
+(N rows)
 
 REVOKE ALL ON checkperm FROM read_access;
 GRANT SELECT ON checkperm TO PUBLIC;
@@ -138,7 +138,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT MAINTAIN ON public.checkperm TO full_access
  GRANT SELECT ON public.checkperm TO PUBLIC
  ALTER TABLE public.checkperm OWNER TO postgres
-(20 rows)
+(N rows)
 
 GRANT ALL ON checkperm TO full_access WITH GRANT OPTION;
 SELECT * FROM master_get_table_ddl_events('checkperm');
@@ -164,7 +164,7 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
  GRANT MAINTAIN ON public.checkperm TO full_access WITH GRANT OPTION
  GRANT SELECT ON public.checkperm TO PUBLIC
  ALTER TABLE public.checkperm OWNER TO postgres
-(20 rows)
+(N rows)
 
 -- create table as superuser/postgres
 CREATE TABLE trivial_postgres (id int);
@@ -190,7 +190,7 @@ SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = p
 ---------------------------------------------------------------------
  trivial_full_access | full_access |
  trivial_postgres    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
-(2 rows)
+(N rows)
 
 SET citus.shard_replication_factor = 2; -- on all workers...
 -- create shards as each user, verify ownership
@@ -244,7 +244,7 @@ SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = p
  trivial_postgres_109080    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
  trivial_postgres_109082    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
  trivial_postgres_109084    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
-(6 rows)
+(N rows)
 
 \c - - - :worker_2_port
 SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = pg_class.relowner) WHERE relname LIKE 'trivial%' ORDER BY relname;
@@ -256,7 +256,7 @@ SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = p
  trivial_postgres_109080    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
  trivial_postgres_109082    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
  trivial_postgres_109084    | postgres    | {postgres=arwdDxtm/postgres,full_access=arwdDxtm/postgres}
-(6 rows)
+(N rows)
 
 \c - - - :master_port
 -- ensure COPY into append tables works
@@ -282,7 +282,7 @@ SELECT * FROM trivial_postgres ORDER BY id;
   1
   2
   2
-(4 rows)
+(N rows)
 
 SELECT * FROM trivial_full_access ORDER BY id;
  id
@@ -291,7 +291,7 @@ SELECT * FROM trivial_full_access ORDER BY id;
   1
   2
   2
-(4 rows)
+(N rows)
 
 SET ROLE full_access;
 SELECT * FROM trivial_postgres ORDER BY id;
@@ -301,7 +301,7 @@ SELECT * FROM trivial_postgres ORDER BY id;
   1
   2
   2
-(4 rows)
+(N rows)
 
 SELECT * FROM trivial_full_access ORDER BY id;
  id
@@ -310,7 +310,7 @@ SELECT * FROM trivial_full_access ORDER BY id;
   1
   2
   2
-(4 rows)
+(N rows)
 
 RESET ROLE;
 -- verify column level grants are supported
@@ -341,7 +341,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109092 | t       | f
  localhost |    57638 |  109091 | t       | f
  localhost |    57638 |  109093 | t       | f
-(4 rows)
+(N rows)
 
 -- grant select
 GRANT SELECT ON ALL TABLES IN SCHEMA multiuser_schema TO read_access;
@@ -354,7 +354,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109092 | t       | t
  localhost |    57638 |  109091 | t       | t
  localhost |    57638 |  109093 | t       | t
-(4 rows)
+(N rows)
 
 -- distribute the second table
 SELECT create_reference_table('multiuser_schema.reference_table');
@@ -371,7 +371,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57636 |  109094 | t       | t
  localhost |    57637 |  109094 | t       | t
  localhost |    57638 |  109094 | t       | t
-(3 rows)
+(N rows)
 
 -- create another table in the schema, verify select is not granted
 CREATE TABLE multiuser_schema.another_table(a int, b int);
@@ -389,7 +389,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109097 | t       | f
  localhost |    57638 |  109096 | t       | f
  localhost |    57638 |  109098 | t       | f
-(4 rows)
+(N rows)
 
 -- grant select again, verify it is granted
 GRANT SELECT ON ALL TABLES IN SCHEMA multiuser_schema TO read_access;
@@ -401,7 +401,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109097 | t       | t
  localhost |    57638 |  109096 | t       | t
  localhost |    57638 |  109098 | t       | t
-(4 rows)
+(N rows)
 
 -- verify isolate tenant carries grants
 SELECT isolate_tenant_to_new_shard('multiuser_schema.hash_table', 5, shard_transfer_mode => 'block_writes');
@@ -420,7 +420,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109101 | t       | t
  localhost |    57638 |  109091 | t       | t
  localhost |    57638 |  109093 | t       | t
-(6 rows)
+(N rows)
 
 -- revoke select
 REVOKE SELECT ON ALL TABLES IN SCHEMA multiuser_schema FROM read_access;
@@ -434,7 +434,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109101 | t       | f
  localhost |    57638 |  109091 | t       | f
  localhost |    57638 |  109093 | t       | f
-(6 rows)
+(N rows)
 
 -- test multi-schema grants
 CREATE SCHEMA multiuser_second_schema;
@@ -456,7 +456,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109101 | t       | t
  localhost |    57638 |  109091 | t       | t
  localhost |    57638 |  109093 | t       | t
-(6 rows)
+(N rows)
 
 SELECT * FROM run_command_on_placements('multiuser_second_schema.hash_table', $$ select has_table_privilege('read_access', '%s', 'select') $$)
 ORDER BY nodename, nodeport, shardid;
@@ -468,7 +468,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109106 | t       | t
  localhost |    57638 |  109105 | t       | t
  localhost |    57638 |  109107 | t       | t
-(6 rows)
+(N rows)
 
 -- revoke from multiple schemas, verify result
 REVOKE SELECT ON ALL TABLES IN SCHEMA multiuser_schema, multiuser_second_schema FROM read_access;
@@ -482,7 +482,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109101 | t       | f
  localhost |    57638 |  109091 | t       | f
  localhost |    57638 |  109093 | t       | f
-(6 rows)
+(N rows)
 
 SELECT * FROM run_command_on_placements('multiuser_second_schema.hash_table', $$ select has_table_privilege('read_access', '%s', 'select') $$)
 ORDER BY nodename, nodeport, shardid;
@@ -494,7 +494,7 @@ ORDER BY nodename, nodeport, shardid;
  localhost |    57637 |  109106 | t       | f
  localhost |    57638 |  109105 | t       | f
  localhost |    57638 |  109107 | t       | f
-(6 rows)
+(N rows)
 
 DROP SCHEMA multiuser_schema CASCADE;
 NOTICE:  drop cascades to 4 other objects

@@ -100,7 +100,7 @@ ORDER BY
           99 | 109604.3256 | 03-13-1994
  -1995148554 |  16890.6816 | 05-08-1995
  -1686493264 |   1988.7134 | 09-05-1997
-(7 rows)
+(N rows)
 
 -- Checks to see if metadata and data are isolated properly. If there are problems in
 -- metadata and/or data on workers, these queries should return different results below
@@ -174,7 +174,7 @@ SELECT * FROM pg_dist_shard
  orders_streaming   | 1230002 | t            | -2147483648   | -1
  lineitem_streaming | 1230001 | t            | 0             | 2147483647
  orders_streaming   | 1230003 | t            | 0             | 2147483647
-(4 rows)
+(N rows)
 
 -- check without cascade option
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, shard_transfer_mode => 'block_writes');
@@ -207,7 +207,7 @@ EXPLAIN (COSTS false) SELECT count(*) FROM lineitem_streaming WHERE l_orderkey =
          ->  Aggregate
                ->  Seq Scan on lineitem_streaming_1230011 lineitem_streaming
                      Filter: (l_orderkey = 101)
-(8 rows)
+(N rows)
 
 -- create an MX node
 \c - postgres - :master_port
@@ -322,7 +322,7 @@ ORDER BY
           99 | 109604.3256 | 03-13-1994
  -1995148554 |  16890.6816 | 05-08-1995
  -1686493264 |   1988.7134 | 09-05-1997
-(7 rows)
+(N rows)
 
 SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 99;
  count
@@ -413,7 +413,7 @@ SELECT * FROM pg_dist_shard
  orders_streaming   | 1230046 | t            | 412880113     | 2147483646
  lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
  orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
-(24 rows)
+(N rows)
 
 SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1230000 AND 1399999 ORDER BY nodeport, shardid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
@@ -442,7 +442,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1230000 AND 1399999 
  1230045 |          1 |           0 | localhost |    57638 |      100045
  1230046 |          1 |           0 | localhost |    57638 |      100046
  1230047 |          1 |           0 | localhost |    57638 |      100047
-(24 rows)
+(N rows)
 
 -- test failing foreign constraints after multiple tenant isolation
 \COPY lineitem_streaming FROM STDIN WITH DELIMITER '|'
@@ -495,7 +495,7 @@ ORDER BY
           99 | 109604.3256 | 03-13-1994
  -1995148554 |  16890.6816 | 05-08-1995
  -1686493264 |   1988.7134 | 09-05-1997
-(7 rows)
+(N rows)
 
 -- check shards
 SET citus.override_table_visibility TO false;
@@ -517,7 +517,7 @@ SET citus.override_table_visibility TO false;
  Tenant Isolation | orders_streaming_1230039   | table | mx_isolation_role_ent
  Tenant Isolation | orders_streaming_1230042   | table | mx_isolation_role_ent
  Tenant Isolation | orders_streaming_1230043   | table | mx_isolation_role_ent
-(14 rows)
+(N rows)
 
 \c - postgres - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -533,7 +533,7 @@ SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='orders_
  o_clerk         | character(15)         | not null
  o_shippriority  | integer               | not null
  o_comment       | character varying(79) | not null
-(9 rows)
+(N rows)
 
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -567,7 +567,7 @@ SELECT * FROM pg_dist_shard
  orders_streaming   | 1230046 | t            | 412880113     | 2147483646
  lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
  orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
-(24 rows)
+(N rows)
 
 -- return to master node
 \c - mx_isolation_role_ent - :master_port
@@ -710,7 +710,7 @@ SELECT * FROM pg_dist_shard
  orders_streaming   | 1230046 | t            | 412880113     | 2147483646
  lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
  orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
-(24 rows)
+(N rows)
 
 \c - postgres - :master_port
 SELECT public.wait_for_resource_cleanup();
@@ -753,7 +753,7 @@ SET citus.override_table_visibility TO false;
  Tenant Isolation | orders_streaming_1230039   | table | mx_isolation_role_ent
  Tenant Isolation | orders_streaming_1230042   | table | mx_isolation_role_ent
  Tenant Isolation | orders_streaming_1230043   | table | mx_isolation_role_ent
-(14 rows)
+(N rows)
 
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
@@ -782,7 +782,7 @@ SET citus.override_table_visibility TO false;
  Tenant Isolation | orders_streaming_1230039   | table | mx_isolation_role_ent
  Tenant Isolation | orders_streaming_1230042   | table | mx_isolation_role_ent
  Tenant Isolation | orders_streaming_1230043   | table | mx_isolation_role_ent
-(14 rows)
+(N rows)
 
 DROP EVENT TRIGGER abort_ddl;
 -- create a trigger for drops
@@ -839,7 +839,7 @@ ORDER BY
           99 | 109604.3256 | 03-13-1994
  -1995148554 |  16890.6816 | 05-08-1995
  -1686493264 |   1988.7134 | 09-05-1997
-(7 rows)
+(N rows)
 
 SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 99;
  count
@@ -1079,7 +1079,7 @@ ORDER BY 1, 2;
  test_colocated_table_3_1230093 | test_colocated_table_3_id_fkey1_1230093     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230090(id)
  test_colocated_table_3_1230093 | test_colocated_table_3_id_fkey_1230093      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230087(id)
  test_colocated_table_3_1230093 | test_colocated_table_3_value_1_fkey_1230093 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230060(id)
-(42 rows)
+(N rows)
 
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";

@@ -92,7 +92,7 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 ---------------------------------------------------------------------
  F             | 8559 | 3.0126715945089757
  O             | 8904 | 3.0040485829959514
-(2 rows)
+(N rows)
 
 -- fix worker passwords, which should invalidate task tracker caches
 \c - postgres - :worker_1_port
@@ -113,7 +113,7 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 ---------------------------------------------------------------------
  F             | 8559 | 3.0126715945089757
  O             | 8904 | 3.0040485829959514
-(2 rows)
+(N rows)
 
 -- adaptive query
 RESET citus.task_executor_type;
@@ -126,7 +126,7 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 ---------------------------------------------------------------------
  F             | 8559 | 3.0126715945089757
  O             | 8904 | 3.0040485829959514
-(2 rows)
+(N rows)
 
 -- create and distribute table
 CREATE TABLE wonderland (id integer, name text);

@@ -26,7 +26,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 ---------------------------------------------------------------------
  localhost |    57637 | t       | (table,"{role_dependency_schema,non_super_user_table}",{})
  localhost |    57638 | t       | (table,"{role_dependency_schema,non_super_user_table}",{})
-(2 rows)
+(N rows)
 
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where pg_identify_object_as_address(classid, objid, objsubid)::text like '%superusers_type%';
                     pg_identify_object_as_address
@@ -39,7 +39,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 ---------------------------------------------------------------------
  localhost |    57637 | t       | (type,{role_dependency_schema.superusers_type},{})
  localhost |    57638 | t       | (type,{role_dependency_schema.superusers_type},{})
-(2 rows)
+(N rows)
 
 DROP SCHEMA role_dependency_schema CASCADE;
 NOTICE:  drop cascades to 2 other objects

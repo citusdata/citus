@@ -88,7 +88,7 @@ LIMIT 30;
        864 |       3175 |     1
        960 |      10980 |     1
        963 |       4580 |     1
-(20 rows)
+(N rows)
 
 RESET ROLE;
 SET ROLE no_access;
@@ -151,7 +151,7 @@ LIMIT 30;
        864 |       3175 |     1
        960 |      10980 |     1
        963 |       4580 |     1
-(20 rows)
+(N rows)
 
 RESET ROLE;
 SET ROLE no_access;

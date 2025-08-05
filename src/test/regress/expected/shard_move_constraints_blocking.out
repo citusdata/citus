@@ -140,7 +140,7 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'
  fkey_from_parent_to_parent_8970000           | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
  fkey_from_parent_to_ref_8970000              | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
  sensors_8970000_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
-(5 rows)
+(N rows)
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass ORDER BY 1,2;
                        Constraint                        |                                                         Definition
@@ -154,7 +154,7 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_
  fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
  fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
  sensors_2020_01_01_8970008_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
-(9 rows)
+(N rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' ORDER BY 1,2;
     tablename    |                                                                                           indexdef
@@ -163,7 +163,7 @@ SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' OR
  sensors_8970000 | CREATE INDEX index_on_parent_8970000 ON ONLY "blocking shard Move Fkeys Indexes".sensors_8970000 USING btree (lower((measureid)::text))
  sensors_8970000 | CREATE INDEX index_with_include_8970000 ON ONLY "blocking shard Move Fkeys Indexes".sensors_8970000 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_8970000 | CREATE UNIQUE INDEX sensors_pkey_8970000 ON ONLY "blocking shard Move Fkeys Indexes".sensors_8970000 USING btree (measureid, eventdatetime, measure_data)
-(4 rows)
+(N rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_2020_01_01_8970008' ORDER BY 1,2;
          tablename          |                                                                                                                indexdef
@@ -173,7 +173,7 @@ SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_2020_01_01_
  sensors_2020_01_01_8970008 | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx_8970008 ON "blocking shard Move Fkeys Indexes".sensors_2020_01_01_8970008 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_2020_01_01_8970008 | CREATE INDEX sensors_2020_01_01_lower_idx_8970008 ON "blocking shard Move Fkeys Indexes".sensors_2020_01_01_8970008 USING btree (lower((measureid)::text))
  sensors_2020_01_01_8970008 | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8970008 ON "blocking shard Move Fkeys Indexes".sensors_2020_01_01_8970008 USING btree (measureid, eventdatetime, measure_data)
-(5 rows)
+(N rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='index_backed_rep_identity_8970029' ORDER BY 1,2;
              tablename             |                                                          indexdef
@@ -202,7 +202,7 @@ ORDER BY stxname ASC;
  s2
  s2_8970008
  s2_8970010
-(6 rows)
+(N rows)
 
 SELECT count(*) FROM pg_index
 WHERE indisclustered
@@ -238,7 +238,7 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'
  fkey_from_parent_to_parent_8970000           | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
  fkey_from_parent_to_ref_8970000              | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
  sensors_8970000_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
-(5 rows)
+(N rows)
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass ORDER BY 1,2;
                        Constraint                        |                                                         Definition
@@ -252,7 +252,7 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_
  fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
  fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
  sensors_2020_01_01_8970008_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
-(9 rows)
+(N rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' ORDER BY 1,2;
     tablename    |                                                                                           indexdef
@@ -261,7 +261,7 @@ SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' OR
  sensors_8970000 | CREATE INDEX index_on_parent_8970000 ON ONLY "blocking shard Move Fkeys Indexes".sensors_8970000 USING btree (lower((measureid)::text))
  sensors_8970000 | CREATE INDEX index_with_include_8970000 ON ONLY "blocking shard Move Fkeys Indexes".sensors_8970000 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_8970000 | CREATE UNIQUE INDEX sensors_pkey_8970000 ON ONLY "blocking shard Move Fkeys Indexes".sensors_8970000 USING btree (measureid, eventdatetime, measure_data)
-(4 rows)
+(N rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_2020_01_01_8970008' ORDER BY 1,2;
          tablename          |                                                                                                                indexdef
@@ -271,7 +271,7 @@ SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_2020_01_01_
  sensors_2020_01_01_8970008 | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx_8970008 ON "blocking shard Move Fkeys Indexes".sensors_2020_01_01_8970008 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_2020_01_01_8970008 | CREATE INDEX sensors_2020_01_01_lower_idx_8970008 ON "blocking shard Move Fkeys Indexes".sensors_2020_01_01_8970008 USING btree (lower((measureid)::text))
  sensors_2020_01_01_8970008 | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8970008 ON "blocking shard Move Fkeys Indexes".sensors_2020_01_01_8970008 USING btree (measureid, eventdatetime, measure_data)
-(5 rows)
+(N rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='index_backed_rep_identity_8970029' ORDER BY 1,2;
              tablename             |                                                          indexdef
@@ -302,7 +302,7 @@ ORDER BY stxname ASC;
  s2_8970008
  s2_8970009
  s2_8970011
-(8 rows)
+(N rows)
 
 SELECT count(*) FROM pg_index
 WHERE indisclustered

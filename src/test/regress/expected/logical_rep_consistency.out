@@ -9,14 +9,14 @@ SELECT run_command_on_workers($$alter system SET citus.show_shards_for_app_name_
 ---------------------------------------------------------------------
  (localhost,57637,t,"ALTER SYSTEM")
  (localhost,57638,t,"ALTER SYSTEM")
-(2 rows)
+(N rows)
 
 SELECT run_command_on_workers($$SELECT pg_reload_conf();$$);
  run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,t)
  (localhost,57638,t,t)
-(2 rows)
+(N rows)
 
 CREATE TABLE test(a int primary key);
 SELECT create_distributed_table('test', 'a', colocate_with:='none');

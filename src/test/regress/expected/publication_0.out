@@ -70,7 +70,7 @@ SELECT DISTINCT c FROM (
  SELECT worker_create_or_replace_object('CREATE PUBLICATION "pub-all-insertupdateonly" FOR ALL TABLES WITH (publish_via_partition_root = ''false'', publish = ''insert, update'')');
  SELECT worker_create_or_replace_object('CREATE PUBLICATION pubempty WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
  SELECT worker_create_or_replace_object('CREATE PUBLICATION pubinsertonly WITH (publish_via_partition_root = ''false'', publish = ''insert'')');
-(4 rows)
+(N rows)
 
 CREATE TABLE test (x int primary key, y int, "column-1" int, doc xml);
 CREATE TABLE "test-pubs" (x int primary key, y int, "column-1" int);

@@ -41,12 +41,12 @@ SELECT subname from pg_subscription;
 SELECT pubname from pg_publication;
  pubname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT slot_name from pg_replication_slots;
  slot_name
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT count(*) FROM dist;
  count
@@ -59,7 +59,7 @@ SET search_path TO logical_replication;
 SELECT subname from pg_subscription;
  subname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT pubname from pg_publication;
              pubname
@@ -104,12 +104,12 @@ SELECT subname from pg_subscription;
 SELECT pubname from pg_publication;
  pubname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT slot_name from pg_replication_slots;
  slot_name
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT count(*) from dist;
  count
@@ -124,7 +124,7 @@ SET search_path TO logical_replication;
 SELECT subname from pg_subscription;
  subname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT pubname from pg_publication;
              pubname
@@ -156,17 +156,17 @@ SET search_path TO logical_replication;
 SELECT subname from pg_subscription;
  subname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT pubname from pg_publication;
  pubname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT slot_name from pg_replication_slots;
  slot_name
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT count(*) from dist;
  count

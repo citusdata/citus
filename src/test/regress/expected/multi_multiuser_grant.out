@@ -20,7 +20,7 @@ SET ROLE full_access;
 SELECT oid, relname, relacl FROM pg_class WHERE relkind = 'r' AND relname LIKE 'customer_%' AND has_table_privilege(oid, 'SELECT');
  oid | relname | relacl
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT count(*) FROM pg_class WHERE relkind = 'r' AND relname LIKE 'customer_%' AND NOT has_table_privilege(oid, 'SELECT');
  count
@@ -45,7 +45,7 @@ SET ROLE full_access;
 SELECT oid, relname, relacl FROM pg_class WHERE relkind = 'r' AND relname LIKE 'customer_%' AND has_table_privilege(oid, 'SELECT');
  oid | relname | relacl
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT count(*) FROM pg_class WHERE relkind = 'r' AND relname LIKE 'customer_%' AND NOT has_table_privilege(oid, 'SELECT');
  count

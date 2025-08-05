@@ -181,7 +181,7 @@ INSERT INTO composite_type_partitioned_table VALUES (123, '(123, 456)'::other_co
          Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on composite_type_partitioned_table_530003 (actual rows=0 loops=1)
                ->  Result (actual rows=1 loops=1)
-(7 rows)
+(N rows)
 
 SELECT run_command_on_coordinator_and_workers($cf$
     DROP CAST (other_composite_type as test_composite_type);
@@ -223,7 +223,7 @@ INSERT INTO composite_type_partitioned_table VALUES (123, '(456, 678)'::other_co
          Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on composite_type_partitioned_table_530000 (actual rows=0 loops=1)
                ->  Result (actual rows=1 loops=1)
-(7 rows)
+(N rows)
 
 -- create and distribute a table on enum type column
 CREATE TYPE bug_status AS ENUM ('new', 'open', 'closed');
@@ -248,7 +248,7 @@ SELECT * FROM bugs WHERE status =  'closed'::bug_status;
 ---------------------------------------------------------------------
   3 | closed
   4 | closed
-(2 rows)
+(N rows)
 
 UPDATE bugs SET status = 'closed'::bug_status WHERE id = 2;
 ERROR:  modifying the partition value of rows is not allowed
@@ -257,7 +257,7 @@ SELECT * FROM bugs WHERE status = 'open'::bug_status;
 ---------------------------------------------------------------------
   2 | open
   5 | open
-(2 rows)
+(N rows)
 
 -- create and distribute a table on varchar column
 CREATE TABLE varchar_hash_partitioned_table

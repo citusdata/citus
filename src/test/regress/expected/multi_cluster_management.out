@@ -54,7 +54,7 @@ SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
 ---------------------------------------------------------------------
  f
  f
-(2 rows)
+(N rows)
 
 -- primary workers are primary node
 SELECT result FROM run_command_on_workers('SELECT citus_is_primary_node()');
@@ -62,7 +62,7 @@ SELECT result FROM run_command_on_workers('SELECT citus_is_primary_node()');
 ---------------------------------------------------------------------
  t
  t
-(2 rows)
+(N rows)
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
@@ -70,7 +70,7 @@ SELECT master_get_active_worker_nodes();
 ---------------------------------------------------------------------
  (localhost,57638)
  (localhost,57637)
-(2 rows)
+(N rows)
 
 -- get all nodes
 SELECT * from citus_nodes;
@@ -79,7 +79,7 @@ SELECT * from citus_nodes;
  localhost |    57637 | worker      | t
  localhost |    57638 | worker      | t
  localhost |    57636 | coordinator | t
-(3 rows)
+(N rows)
 
 -- get get active nodes
 SELECT * from citus_nodes where active = 't';
@@ -88,7 +88,7 @@ SELECT * from citus_nodes where active = 't';
  localhost |    57637 | worker      | t
  localhost |    57638 | worker      | t
  localhost |    57636 | coordinator | t
-(3 rows)
+(N rows)
 
 -- get coordinator nodes
 SELECT * from citus_nodes where role = 'coordinator';
@@ -103,13 +103,13 @@ SELECT * from citus_nodes where role = 'worker';
 ---------------------------------------------------------------------
  localhost |    57637 | worker | t
  localhost |    57638 | worker | t
-(2 rows)
+(N rows)
 
 -- get nodes with unknown role
 SELECT * from citus_nodes where role = 'foo';
  nodename | nodeport | role | active
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 -- try to add a node that is already in the cluster
 SELECT * FROM master_add_node('localhost', :worker_1_port);
@@ -124,7 +124,7 @@ SELECT master_get_active_worker_nodes();
 ---------------------------------------------------------------------
  (localhost,57638)
  (localhost,57637)
-(2 rows)
+(N rows)
 
 -- try to remove a node (with no placements)
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -171,7 +171,7 @@ SELECT * from citus_nodes where active = 't';
 ---------------------------------------------------------------------
  localhost |    57636 | coordinator | t
  localhost |    57637 | worker      | t
-(2 rows)
+(N rows)
 
 -- get get inactive nodes
 SELECT * from citus_nodes where active = 'f';
@@ -189,7 +189,7 @@ SELECT * FROM citus_nodes;
  localhost |    57636 | coordinator | t
  localhost |    57638 | worker      | f
  localhost |    57637 | worker      | t
-(3 rows)
+(N rows)
 
 SET ROLE postgres;
 DROP ROLE normaluser;
@@ -206,7 +206,7 @@ ROLLBACK;
 SELECT * FROM get_rebalance_table_shards_plan();
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT * FROM rebalance_table_shards();
  rebalance_table_shards
@@ -297,7 +297,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
  1220011 |          1 | localhost |    57638
  1220013 |          1 | localhost |    57638
  1220015 |          1 | localhost |    57638
-(8 rows)
+(N rows)
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -309,7 +309,7 @@ SELECT master_get_active_worker_nodes();
 ---------------------------------------------------------------------
  (localhost,57638)
  (localhost,57637)
-(2 rows)
+(N rows)
 
 -- insert a row so that citus_disable_node() exercises closing connections
 CREATE TABLE test_reference_table (y int primary key, name text);
@@ -337,7 +337,7 @@ SELECT master_get_active_worker_nodes();
 ---------------------------------------------------------------------
  (localhost,57638)
  (localhost,57637)
-(2 rows)
+(N rows)
 
 -- try to disable a node which does not exist and see that an error is thrown
 SELECT citus_disable_node('localhost.noexist', 2345);
@@ -359,7 +359,7 @@ SELECT 1 FROM run_command_on_workers('CREATE USER node_metadata_user');
 ---------------------------------------------------------------------
         1
         1
-(2 rows)
+(N rows)
 
 RESET client_min_messages;
 GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
@@ -376,28 +376,28 @@ SELECT run_command_on_workers('GRANT ALL ON pg_dist_node TO node_metadata_user')
 ---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
-(2 rows)
+(N rows)
 
 SELECT run_command_on_workers('GRANT ALL ON pg_dist_local_group TO node_metadata_user');
   run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
-(2 rows)
+(N rows)
 
 SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA citus TO node_metadata_user');
   run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
-(2 rows)
+(N rows)
 
 SELECT run_command_on_workers('GRANT ALL ON SCHEMA citus TO node_metadata_user');
   run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
-(2 rows)
+(N rows)
 
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
@@ -451,7 +451,7 @@ SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localh
 SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  master_update_node
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
  nodename  | nodeport | noderole
@@ -459,7 +459,7 @@ SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
  localhost |    57636 | primary
  localhost |    57637 | primary
  localhost |    57640 | secondary
-(3 rows)
+(N rows)
 
 ABORT;
 \c - postgres - :master_port
@@ -502,7 +502,7 @@ SELECT run_command_on_workers('UPDATE pg_dist_placement SET shardstate=3 WHERE g
 ---------------------------------------------------------------------
  (localhost,57637,t,"UPDATE 8")
  (localhost,57638,t,"UPDATE 8")
-(2 rows)
+(N rows)
 
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
  shardid | shardstate | nodename  | nodeport
@@ -515,7 +515,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
  1220011 |          3 | localhost |    57638
  1220013 |          3 | localhost |    57638
  1220015 |          3 | localhost |    57638
-(8 rows)
+(N rows)
 
 -- try to remove a node with only inactive placements and see that removal still fails
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -527,7 +527,7 @@ SELECT master_get_active_worker_nodes();
 ---------------------------------------------------------------------
  (localhost,57638)
  (localhost,57637)
-(2 rows)
+(N rows)
 
 -- clean-up
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -542,7 +542,7 @@ SELECT run_command_on_workers('UPDATE pg_dist_placement SET shardstate=1 WHERE g
 ---------------------------------------------------------------------
  (localhost,57637,t,"UPDATE 8")
  (localhost,57638,t,"UPDATE 8")
-(2 rows)
+(N rows)
 
 -- when there is no primary we should get a pretty error
 UPDATE pg_dist_node SET noderole = 'secondary' WHERE nodeport=:worker_2_port;
@@ -578,7 +578,7 @@ SELECT run_command_on_workers('UPDATE pg_dist_placement SET groupid = ' || :'new
 ---------------------------------------------------------------------
  (localhost,57637,t,"UPDATE 8")
  (localhost,57638,t,"UPDATE 0")
-(2 rows)
+(N rows)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
  start_metadata_sync_to_node
@@ -642,7 +642,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
  nodename | nodeport
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - - :master_port
 -- check that added nodes are not propagated to nodes without metadata
@@ -663,7 +663,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
  nodename | nodeport
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - - :master_port
 -- check that removing two nodes in the same transaction works
@@ -696,7 +696,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
       3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
      11 |       9 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
      12 |      10 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t
-(3 rows)
+(N rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
 BEGIN;
@@ -722,7 +722,7 @@ COMMIT;
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
  nodename | nodeport
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
@@ -770,7 +770,7 @@ SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 
 
 
-(3 rows)
+(N rows)
 
 SELECT citus_set_coordinator_host('localhost');
  citus_set_coordinator_host
@@ -820,7 +820,7 @@ SELECT col1, col2 FROM temp ORDER BY col1;
 ---------------------------------------------------------------------
  row1 |    1
  row2 |    2
-(2 rows)
+(N rows)
 
 SELECT
 	count(*)
@@ -1061,7 +1061,7 @@ SELECT start_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE i
 
 
 
-(3 rows)
+(N rows)
 
 RESET client_min_messages;
 SET citus.shard_replication_factor TO 1;
@@ -1115,7 +1115,7 @@ WHERE logicalrelid = 'test_dist_colocated'::regclass GROUP BY nodeport ORDER BY 
 ---------------------------------------------------------------------
     57637 |     2
     57638 |     2
-(2 rows)
+(N rows)
 
 -- non colocated tables should not be placed on shouldhaveshards false nodes anymore
 SELECT nodeport, count(*)
@@ -1145,7 +1145,7 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport ORDER BY nodeport;
     57636 |     1
     57637 |     1
     57638 |     1
-(3 rows)
+(N rows)
 
 -- cleanup for next test
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated, test_dist_colocated_with_non_colocated;
@@ -1190,7 +1190,7 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport ORDER BY nodeport;
     57636 |     1
     57637 |     1
     57638 |     1
-(3 rows)
+(N rows)
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
  master_set_node_property
@@ -1217,7 +1217,7 @@ WHERE logicalrelid = 'test_ref'::regclass GROUP BY nodeport ORDER BY nodeport;
     57636 |     1
     57637 |     1
     57638 |     1
-(3 rows)
+(N rows)
 
 SELECT create_distributed_table('test_dist_colocated', 'x');
  create_distributed_table
@@ -1250,7 +1250,7 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 ---------------------------------------------------------------------
     57637 |     2
     57638 |     2
-(2 rows)
+(N rows)
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 ERROR:  only the 'shouldhaveshards' property can be set using this function

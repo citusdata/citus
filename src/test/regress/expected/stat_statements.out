@@ -23,7 +23,7 @@ NOTICE:  extension "pg_stat_statements" does not exist, skipping
 SELECT extname FROM pg_extension WHERE extname = 'pg_stat_statements';
  extname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 -- this should error out since extension is not created yet
 SELECT * FROM citus_stat_statements;
@@ -90,7 +90,7 @@ SELECT citus_stat_statements_reset();
 SELECT normalize_query_string(query) FROM citus_stat_statements;
  normalize_query_string
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 -- run some queries
 SELECT count(*) FROM lineitem_hash_part;
@@ -108,12 +108,12 @@ SELECT count(*) FROM lineitem_hash_part;
 SELECT l_orderkey FROM lineitem_hash_part;
  l_orderkey
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT l_orderkey FROM lineitem_hash_part WHERE l_orderkey > 100;
  l_orderkey
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = 4;
  count
@@ -150,7 +150,7 @@ ORDER BY 1, 2, 3, 4;
  SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ?   | adaptive | 4             |     2
  SELECT l_orderkey FROM lineitem_hash_part                      | adaptive |               |     1
  SELECT l_orderkey FROM lineitem_hash_part WHERE l_orderkey > ? | adaptive |               |     1
-(6 rows)
+(N rows)
 
 -- test GUC citus.stat_statements_track
 SET citus.stat_statements_track TO 'none';
@@ -173,7 +173,7 @@ ORDER BY 1, 2, 3, 4;
  SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ?   | adaptive | 4             |     2
  SELECT l_orderkey FROM lineitem_hash_part                      | adaptive |               |     1
  SELECT l_orderkey FROM lineitem_hash_part WHERE l_orderkey > ? | adaptive |               |     1
-(6 rows)
+(N rows)
 
 -- reset the GUC to track stats
 SET citus.stat_statements_track TO 'all';
@@ -188,7 +188,7 @@ SELECT pg_stat_statements_reset() IS NOT NULL AS t;
 SELECT * FROM citus_stat_statements;
  queryid | userid | dbid | query | executor | partition_key | calls
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 -- run some queries
 SELECT count(*) FROM lineitem_hash_part;
@@ -206,12 +206,12 @@ SELECT count(*) FROM lineitem_hash_part;
 SELECT l_orderkey FROM lineitem_hash_part;
  l_orderkey
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT l_orderkey FROM lineitem_hash_part WHERE l_orderkey > 100;
  l_orderkey
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = 4;
  count
@@ -249,7 +249,7 @@ ORDER BY 1, 2, 3, 4;
  SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ?   | adaptive | 4             |     2
  SELECT l_orderkey FROM lineitem_hash_part                      | adaptive |               |     1
  SELECT l_orderkey FROM lineitem_hash_part WHERE l_orderkey > ? | adaptive |               |     1
-(6 rows)
+(N rows)
 
 SELECT pg_stat_statements_reset() IS NOT NULL AS t;
  t
@@ -281,7 +281,7 @@ ORDER BY 1, 2, 3, 4;
  SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ? | adaptive | 1             |     1
  SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ? | adaptive | 1200          |     1
  SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ? | adaptive | 4             |     3
-(4 rows)
+(N rows)
 
 -- citus_stat_statements_reset() must be called to reset call counts
 SELECT citus_stat_statements_reset();
@@ -310,7 +310,7 @@ ORDER BY 1, 2, 3, 4;
 ---------------------------------------------------------------------
  SELECT count(*) FROM lineitem_hash_part                      | adaptive |               |     1
  SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ? | adaptive | 4             |     1
-(2 rows)
+(N rows)
 
 -- create test tables to run update/delete scenarios
 CREATE TABLE stat_test_text(user_id text, value int);
@@ -325,19 +325,19 @@ SELECT citus_stat_statements_reset();
 SELECT * FROM stat_test_text;
  user_id | value
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT * FROM stat_test_bigint WHERE user_id = 1::bigint;
  user_id | value
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT normalize_query_string(query), executor, partition_key, calls
 FROM citus_stat_statements
 ORDER BY 1, 2, 3, 4;
  normalize_query_string | executor | partition_key | calls
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT create_distributed_table('stat_test_text', 'user_id');
  create_distributed_table
@@ -356,27 +356,27 @@ FROM citus_stat_statements
 ORDER BY 1, 2, 3, 4;
  normalize_query_string | executor | partition_key | calls
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT * FROM stat_test_text;
  user_id | value
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT * FROM stat_test_text WHERE user_id = 'me';
  user_id | value
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT * FROM stat_test_bigint;
  user_id | value
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT * FROM stat_test_bigint WHERE user_id = 2::bigint;
  user_id | value
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 SELECT normalize_query_string(query), executor, partition_key, calls
 FROM citus_stat_statements
@@ -387,7 +387,7 @@ ORDER BY 1, 2, 3, 4;
  SELECT * FROM stat_test_bigint WHERE user_id = ?::bigint | adaptive | 2             |     1
  SELECT * FROM stat_test_text                             | adaptive |               |     1
  SELECT * FROM stat_test_text WHERE user_id = ?           | adaptive | me            |     1
-(4 rows)
+(N rows)
 
 -- insert some rows and check stats
 INSERT INTO stat_test_bigint VALUES (1, 1);
@@ -407,7 +407,7 @@ ORDER BY 1, 2, 3, 4;
  SELECT * FROM stat_test_bigint WHERE user_id = ?::bigint | adaptive | 2             |     1
  SELECT * FROM stat_test_text                             | adaptive |               |     1
  SELECT * FROM stat_test_text WHERE user_id = ?           | adaptive | me            |     1
-(8 rows)
+(N rows)
 
 -- delete some rows and check stats
 SELECT citus_stat_statements_reset();
@@ -429,7 +429,7 @@ ORDER BY 1, 2, 3, 4;
  DELETE FROM stat_test_bigint WHERE user_id = ? | adaptive | 1000          |     2
  DELETE FROM stat_test_bigint WHERE user_id > ? | adaptive |               |     1
  DELETE FROM stat_test_bigint WHERE value > ?   | adaptive |               |     2
-(3 rows)
+(N rows)
 
 -- update some rows and check stats
 SELECT citus_stat_statements_reset();
@@ -451,7 +451,7 @@ ORDER BY 1, 2, 3, 4;
  UPDATE stat_test_bigint SET value = ? WHERE user_id = ? | adaptive | 3             |     2
  UPDATE stat_test_bigint SET value = ? WHERE user_id > ? | adaptive |               |     1
  UPDATE stat_test_bigint SET value = ? WHERE value = ?   | adaptive |               |     2
-(3 rows)
+(N rows)
 
 -- test joins
 CREATE TABLE stat_test_bigint_other(LIKE stat_test_bigint);
@@ -514,7 +514,7 @@ ORDER BY 1, 2, 3, 4;
  WHERE b.user_id = ?                                                                   |          |               |
  SELECT count(*) FROM stat_test_bigint b JOIN stat_test_bigint_other o USING (user_id)+| adaptive | 3             |     1
  WHERE o.user_id = ?                                                                   |          |               |
-(5 rows)
+(N rows)
 
 -- test reference table
 CREATE TABLE stat_test_reference(LIKE stat_test_bigint);
@@ -596,7 +596,7 @@ ORDER BY 1, 2, 3, 4;
  WHERE r.user_id = ?                                                                |          |               |
  SELECT count(*) FROM stat_test_reference                                           | adaptive |               |     1
  SELECT count(*) FROM stat_test_reference WHERE user_id = ?                         | adaptive |               |     2
-(6 rows)
+(N rows)
 
 -- non-stats role should only see its own entries, even when calling citus_query_stats directly
 CREATE USER nostats;

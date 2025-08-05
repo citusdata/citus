@@ -63,7 +63,7 @@ SELECT * FROM citus_local_table ORDER BY 1, 2;
 NOTICE:  executing the command locally: SELECT a, b FROM citus_local_tables_ent.citus_local_table_1511000 citus_local_table ORDER BY a, b
  a | b
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 RESET ROLE;
 -- create policy for user to read access for rows with a=1

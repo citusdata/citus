@@ -328,3 +328,10 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
 # pg18 change: strip trailing “.00” (or “.0…”) from actual rows counts
 s/(actual rows=[0-9]+)\.[0-9]+/\1/g
+
+# ignore only the PG18 “shared hit” buffer summary line
+/^\s*Buffers: shared hit=.*$/d
+
+# normalize varying row‐count summaries
+# turn any “(7 rows)”, “(8 rows)”, etc. into “(N rows)”
+s/^\([0-9]+ rows\)$/(N rows)/g

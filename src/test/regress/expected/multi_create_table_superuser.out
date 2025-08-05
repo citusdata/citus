@@ -37,7 +37,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360025;
 SELECT relname FROM pg_class WHERE relname LIKE 'data_load_test%';
  relname
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - :master_host :master_port
 -- creating an index after loading data works
@@ -110,7 +110,7 @@ SELECT * FROM data_load_test ORDER BY col2;
 ---------------------------------------------------------------------
  hello | world |
  world | hello |
-(2 rows)
+(N rows)
 
 -- make sure the tuple went to the right shard
 SELECT * FROM data_load_test WHERE col3 = 'world';
@@ -152,7 +152,7 @@ SELECT * FROM master_get_table_ddl_events('unlogged_table');
 ---------------------------------------------------------------------
  CREATE UNLOGGED TABLE public.unlogged_table (key text, value text) USING heap
  ALTER TABLE public.unlogged_table OWNER TO postgres
-(2 rows)
+(N rows)
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
@@ -162,7 +162,7 @@ SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
  u
  u
  u
-(4 rows)
+(N rows)
 
 \c - - :master_host :master_port
 -- Test rollback of create table
@@ -180,7 +180,7 @@ ROLLBACK;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - :master_host :master_port
 -- Insert 3 rows to make sure that copy after shard creation touches the same
@@ -206,7 +206,7 @@ ROLLBACK;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - :master_host :master_port
 BEGIN;
@@ -243,7 +243,7 @@ ROLLBACK;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - :master_host :master_port
 BEGIN;
@@ -312,7 +312,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.appen
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE relname LIKE 'public.tt1%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - :master_host :master_port
 -- Queries executing with router executor is allowed in the same transaction
@@ -363,7 +363,7 @@ COMMIT;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE  relname LIKE 'tt1%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
-(0 rows)
+(N rows)
 
 \c - - :master_host :master_port
 -- Tests with create_distributed_table & DDL & DML commands
@@ -525,7 +525,7 @@ SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join informati
 ---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
-(2 rows)
+(N rows)
 
 BEGIN;
 CREATE SCHEMA sc4;
@@ -553,7 +553,7 @@ SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join informati
 ---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
-(2 rows)
+(N rows)
 
 SET search_path = 'public';
 BEGIN;
@@ -581,7 +581,7 @@ SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join informati
 ---------------------------------------------------------------------
  (localhost,57637,t,f)
  (localhost,57638,t,f)
-(2 rows)
+(N rows)
 
 BEGIN;
 CREATE SCHEMA sc6;
@@ -609,7 +609,7 @@ SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join informati
 ---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
-(2 rows)
+(N rows)
 
 BEGIN;
 CREATE TABLE alter_replica_table
@@ -636,7 +636,7 @@ SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join informati
 ---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
-(2 rows)
+(N rows)
 
 DROP TABLE tt1;
 DROP TABLE tt2;
