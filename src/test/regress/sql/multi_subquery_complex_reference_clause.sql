@@ -279,6 +279,7 @@ ORDER BY 1 DESC;
 -- query is supported when a reference table inside union query is
 -- joined with a distributed table. reference table can be at
 -- the outer part.
+-- Update output when #8091 is fixed
 SELECT * FROM
 	(SELECT user_id FROM users_ref_test_table ref LEFT JOIN  user_buy_test_table dis
 		on (ref.id = dis.user_id)

@@ -2785,6 +2785,21 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		return false;
 	}
 
+	/* Push down for chained joins is not supported in this path. */
+	if (IsA(joinExpr->rarg, JoinExpr) || IsA(joinExpr->larg, JoinExpr))
+	{
+		ereport(DEBUG5, (errmsg(
+							 "One side is a join expression, pushdown is not supported in this path.")));
+		return false;
+	}
+
+	if (!IsA(joinExpr->larg, RangeTblRef) || !IsA(joinExpr->rarg, RangeTblRef))
+	{
+		ereport(DEBUG5, (errmsg(
+							 "One side is not a RangeTblRef, pushdown is not supported in this path.")));
+		return false;
+	}
+
 	*outerRtIndex = (((RangeTblRef *) joinExpr->larg)->rtindex);
 	*outerRte = rt_fetch(*outerRtIndex, query->rtable);
 
@@ -2793,11 +2808,12 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		return false;
 	}
 
-	/* Push down for chained joins is not supported in this path. */
-	if (IsA(joinExpr->rarg, JoinExpr) || IsA(joinExpr->larg, JoinExpr))
+	RangeTblEntry *rRte = rt_fetch((((RangeTblRef *) joinExpr->rarg)->rtindex),
+								   query->rtable);
+	if (rRte && rRte->lateral)
 	{
 		ereport(DEBUG5, (errmsg(
-							 "One side is a join expression, pushdown is not supported in this path.")));
+							 "Lateral join is not supported for pushdown in this path.")));
 		return false;
 	}
 

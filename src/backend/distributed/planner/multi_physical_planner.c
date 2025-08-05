@@ -2342,7 +2342,8 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
  * The function returns true only if all three conditions above hold true.
  */
 static bool
-IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction, Bitmapset *distributedTables)
+IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
+						Bitmapset *distributedTables)
 {
 	RestrictInfo *joinInfo = NULL;
 	foreach_declared_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
@@ -2364,7 +2365,8 @@ IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction, Bitmapset *dis
 		{
 			/* this table is joined in the inner part of an outer join */
 			/* check if the outer part has a distributed relation */
-			bool outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids, distributedTables);
+			bool outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids,
+															distributedTables);
 			if (outerPartHasDistributedTable)
 			{
 				/* this is an inner table of an outer join with a distributed table */

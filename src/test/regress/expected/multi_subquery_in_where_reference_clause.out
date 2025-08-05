@@ -361,12 +361,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		HAVING sum(submit_card_info) > 0
 )
 ORDER BY 1, 2;
- user_id | value_2
----------------------------------------------------------------------
-       5 |       5
-       5 |       5
-(2 rows)
-
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a reference table
 -- non-partition key equality with reference table
  SELECT
   user_id, count(*)
