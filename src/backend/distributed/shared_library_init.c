@@ -215,6 +215,7 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
 static void AdjustDynamicLibraryPathForCdcDecoders(void);
+static void EnableChangeDataCaptureAssignHook(bool newval, void *extra);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 static emit_log_hook_type original_emit_log_hook = NULL;
@@ -1245,7 +1246,7 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		NULL, EnableChangeDataCaptureAssignHook, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_cluster_clock",
@@ -3202,5 +3203,21 @@ CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int su
 		 * the provided objectId with extension oid so we will set the value
 		 * regardless if it's citus being created */
 		SetCreateCitusTransactionLevel(GetCurrentTransactionNestLevel());
+	}
+}
+
+
+/*
+ * EnableChangeDataCaptureAssignHook is called whenever the
+ * citus.enable_change_data_capture setting is changed to dynamically
+ * adjust the dynamic_library_path based on the new value.
+ */
+static void
+EnableChangeDataCaptureAssignHook(bool newval, void *extra)
+{
+	if (newval)
+	{
+		/* CDC enabled: add citus_decoders to the path */
+		AdjustDynamicLibraryPathForCdcDecoders();
 	}
 }
