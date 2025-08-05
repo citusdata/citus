@@ -320,10 +320,9 @@ static void CachedRelationNamespaceLookup(const char *relationName, Oid relnames
 static void CachedRelationNamespaceLookupExtended(const char *relationName,
 												  Oid renamespace, Oid *cachedOid,
 												  bool missing_ok);
-static ShardPlacement * ResolveGroupShardPlacement(GroupShardPlacement *
-												   groupShardPlacement,
-												   CitusTableCacheEntry *tableEntry,
-												   int shardIndex);
+static ShardPlacement * ResolveGroupShardPlacement(
+	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
+	int shardIndex);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
@@ -5036,6 +5035,7 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	{
 		memset(datumArray, 0, tupleDescriptor->natts * sizeof(Datum));
 		memset(isNullArray, 0, tupleDescriptor->natts * sizeof(bool));
+
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
@@ -5058,6 +5058,7 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
+
 	pfree(datumArray);
 	pfree(isNullArray);
 

@@ -127,11 +127,11 @@ static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[
 static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
 
 #define InitFieldValue(attno, values, isnull, initValue) \
-		(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
+	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
 #define InitFieldText(attno, values, isnull, initValue) \
-		(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
+	(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
 #define InitFieldNull(attno, values, isnull) \
-		(void) SetFieldNull((attno), (values), (isnull), NULL)
+	(void) SetFieldNull((attno), (values), (isnull), NULL)
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_local_disk_space_stats);
@@ -822,8 +822,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	/* SELECT SUM(worker_partitioned_...) FROM VALUES (...) */
 	char *subqueryForPartitionedShards =
 		GenerateSizeQueryForRelationNameList(partitionedShardNames,
-											 GetWorkerPartitionedSizeUDFNameBySizeQueryType
-											 (
+											 GetWorkerPartitionedSizeUDFNameBySizeQueryType(
 												 sizeQueryType));
 
 	/* SELECT SUM(pg_..._size) FROM VALUES (...) */
@@ -1934,8 +1933,8 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
-	newValues[GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor)] = BoolGetDatum(
-		autoConverted);
+	newValues[GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor)] =
+		BoolGetDatum(autoConverted);
 
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)
@@ -3166,8 +3165,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 
 		values[Anum_pg_dist_background_task_nodes_involved - 1] =
 			IntArrayToDatum(nodesInvolvedCount, nodesInvolved);
-		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = (nodesInvolvedCount == 0)
-		;
+		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = (nodesInvolvedCount == 0);
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
@@ -4243,8 +4241,7 @@ CancelTasksForJob(int64 jobid)
 
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-													DistBackgroundTaskJobIdTaskIdIndexId()
-													,
+													DistBackgroundTaskJobIdTaskIdIndexId(),
 													indexOK, NULL,
 													lengthof(scanKey), scanKey);
 
@@ -4447,14 +4444,14 @@ UnblockDependingBackgroundTasks(BackgroundTask *task)
  * the version where Citus started supporting downgrades, and it's only column that we've
  * introduced to pg_dist_partition since then.
  *
- * And in case of a downgrade + upgrade, tupleDEsc->natts becomes greater than
+ * And in case of a downgrade + upgrade, tupleDesc->natts becomes greater than
  * Natts_pg_dist_partition and when this happens, then we know that attrnum autoconverted is
- * not Anum_pg_dist_partition_autoconverted anymore but tupleDEsc->natts - 1.
+ * not Anum_pg_dist_partition_autoconverted anymore but tupleDesc->natts - 1.
  */
 int
-GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDEsc)
+GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDesc)
 {
-	return TupleDescSize(tupleDEsc) == Natts_pg_dist_partition
+	return TupleDescSize(tupleDesc) == Natts_pg_dist_partition
 		   ? (Anum_pg_dist_partition_autoconverted - 1)
-		   : tupleDEsc->natts - 1;
+		   : tupleDesc->natts - 1;
 }
