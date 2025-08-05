@@ -121,6 +121,22 @@ ORDER BY 1, 2;
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
+
+CREATE EXTENSION citus;
+
+-- When there are no relations using the columnar access method, we don't automatically create
+-- "citus_columnar" extension together with "citus" extension anymore. And as this will always
+-- be the case for a fresh "CREATE EXTENSION citus", we know that we should definitely not have
+-- "citus_columnar" extension created.
+SELECT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_not_exists;
+
+-- Likely, we should not have any columnar objects leftover from "old columnar", i.e., the
+-- columnar access method that we had before Citus 11.1, around.
+SELECT NOT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_not_exists;
+SELECT NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_not_exists;
+SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_not_exists;
+
+DROP EXTENSION citus;
 \c
 
 -- these tests switch between citus versions and call ddl's that require pg_dist_object to be created
@@ -326,6 +342,52 @@ GRANT ALL ON SCHEMA public TO public;
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 ALTER EXTENSION citus UPDATE TO '10.0-4';
 SELECT * FROM multi_extension.print_extension_changes();
+
+-- Update Citus to 13.2-1 and make sure that we don't automatically create
+-- citus_columnar extension as we don't have any relations created using columnar.
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_not_exists;
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_not_exists;
+SELECT NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_not_exists;
+SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_not_exists;
+
+-- Unfortunately, our downgrade scripts seem to assume that citus_columnar exists.
+-- Seems this has always been the case since the introduction of citus_columnar,
+-- so we need to create citus_columnar before the downgrade.
+CREATE EXTENSION citus_columnar;
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+
+-- Update Citus to 13.2-1 and make sure that already having citus_columnar extension
+-- doesn't cause any issues.
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+
+SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_exists;
+
+SELECT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_exists;
+SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_exists;
+SELECT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_exists;
+
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+
+DROP EXTENSION citus_columnar;
+
+-- Update Citus to 13.2-1 and make sure that NOT having citus_columnar extension
+-- doesn't cause any issues.
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_not_exists;
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_not_exists;
+SELECT NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_not_exists;
+SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_not_exists;
+
+-- Downgrade back to 10.0-4 for the rest of the tests.
+--
+-- same here - to downgrade Citus, first we need to create citus_columnar
+CREATE EXTENSION citus_columnar;
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 
 -- not print "HINT: " to hide current lib version
 \set VERBOSITY terse
@@ -546,6 +608,10 @@ CREATE EXTENSION citus;
 -- Snapshot of state at 11.1-1
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
+
+-- Make sure that citus_columnar is automatically created while updating Citus to 11.1-1
+-- as we created columnar tables using the columnar access method before.
+SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_exists;
 
 -- Test downgrade to 11.1-1 from 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
