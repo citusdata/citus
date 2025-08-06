@@ -754,7 +754,6 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 			case JOIN_LEFT:
 			{
 				/* <recurring> left join <distributed> */
-
 				if (leftNodeRecurs && !rightNodeRecurs)
 				{
 					if (chainedJoin || !CheckPushDownFeasibilityLeftJoin(joinExpr, query))

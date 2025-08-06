@@ -1722,21 +1722,19 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 	return NULL;
 }
 
- /*
-  * ContainsLateralSubquery checks if the given plannerInfo contains any
-  * lateral subqueries in its rtable. If it does, it returns true, otherwise false.
-  */
+
+/*
+ * ContainsLateralSubquery checks if the given plannerInfo contains any
+ * lateral subqueries in its rtable. If it does, it returns true, otherwise false.
+ */
 static bool
 ContainsLateralSubquery(PlannerInfo *plannerInfo)
 {
 	ListCell *lc;
-	int rteIndex = 0;
 
 	foreach(lc, plannerInfo->parse->rtable)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
-
-		rteIndex++;
 
 		/* We are only interested in subqueries that are lateral */
 		if (rte->lateral && rte->rtekind == RTE_SUBQUERY)

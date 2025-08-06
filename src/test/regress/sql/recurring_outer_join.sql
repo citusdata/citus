@@ -960,10 +960,10 @@ BEGIN;
       SELECT t1.a, t1.b FROM ref_1 t1
       LEFT JOIN
       (
-          SELECT * FROM dist_1 t2 WHERE EXISTS (
+          SELECT DISTINCT ON (a) * FROM dist_1 t2 WHERE EXISTS (
               SELECT * FROM dist_1 t4
               WHERE t4.a = t2.a
-          )
+          ) ORDER BY a, b
       ) t3
       USING (a)
   ) q
@@ -988,7 +988,7 @@ BEGIN;
   RETURNING *;
 ROLLBACK;
 
--- INSERT .. SELECT: pull to coordinator
+-- INSERT .. SELECT: Repartitioned
 BEGIN;
   DELETE FROM ref_1 WHERE a IS NULL;
 
@@ -997,6 +997,17 @@ BEGIN;
   FROM ref_1 t1
   LEFT JOIN dist_1 t2
   ON (t1.a = t2.a);
+ROLLBACK;
+
+-- INSERT .. SELECT: pull to coordinator
+BEGIN;
+  DELETE FROM ref_1 WHERE a IS NULL;
+
+  INSERT INTO dist_1
+  SELECT t1.*
+  FROM ref_1 t1
+  LEFT JOIN dist_1 t2
+  ON (t1.b = t2.b);
 ROLLBACK;
 
 -- INSERT .. SELECT: repartitioned (due to <t1.a*3>)

@@ -1811,19 +1811,17 @@ BEGIN;
       SELECT t1.a, t1.b FROM ref_1 t1
       LEFT JOIN
       (
-          SELECT * FROM dist_1 t2 WHERE EXISTS (
+          SELECT DISTINCT ON (a) * FROM dist_1 t2 WHERE EXISTS (
               SELECT * FROM dist_1 t4
               WHERE t4.a = t2.a
-          )
+          ) ORDER BY a, b
       ) t3
       USING (a)
   ) q
   WHERE dist_5.a = q.a
   RETURNING *;
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
-DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM recurring_outer_join.dist_5 USING (SELECT t1.a, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a))) q WHERE (dist_5.a OPERATOR(pg_catalog.=) q.a) RETURNING dist_5.a, dist_5.b, q.a, q.b
+DEBUG:  generating subplan XXX_1 for subquery SELECT t1.a, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT DISTINCT ON (t2.a) t2.a, t2.b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a))) ORDER BY t2.a, t2.b) t3 USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM recurring_outer_join.dist_5 USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) q WHERE (dist_5.a OPERATOR(pg_catalog.=) q.a) RETURNING dist_5.a, dist_5.b, q.a, q.b
  a | b  | a |  b
 ---------------------------------------------------------------------
  1 | 10 | 1 |  11
@@ -1851,10 +1849,8 @@ BEGIN;
     USING (a)
   )
   RETURNING *;
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
-DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recurring_outer_join.dist_5 SET b = 10 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT t1.a FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a)))) RETURNING a, b
+DEBUG:  generating subplan XXX_1 for subquery SELECT t1.a FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT t2.a, t2.b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))) t3 USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recurring_outer_join.dist_5 SET b = 10 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer))) RETURNING a, b
  a | b
 ---------------------------------------------------------------------
  1 | 10
@@ -1867,7 +1863,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recurring_out
 (7 rows)
 
 ROLLBACK;
--- INSERT .. SELECT: pull to coordinator
+-- INSERT .. SELECT: Repartitioned
 BEGIN;
   DELETE FROM ref_1 WHERE a IS NULL;
   INSERT INTO dist_1
@@ -1875,12 +1871,25 @@ BEGIN;
   FROM ref_1 t1
   LEFT JOIN dist_1 t2
   ON (t1.a = t2.a);
-DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  performing repartitioned INSERT ... SELECT
+ROLLBACK;
+-- INSERT .. SELECT: pull to coordinator
+BEGIN;
+  DELETE FROM ref_1 WHERE a IS NULL;
+  INSERT INTO dist_1
+  SELECT t1.*
+  FROM ref_1 t1
+  LEFT JOIN dist_1 t2
+  ON (t1.b = t2.b);
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT t2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t2_1) t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT NULL::integer AS a, t2_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) t2_1) t2 ON ((t1.b OPERATOR(pg_catalog.=) t2.b)))
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ROLLBACK;
 -- INSERT .. SELECT: repartitioned (due to <t1.a*3>)
