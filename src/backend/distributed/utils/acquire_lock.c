@@ -33,8 +33,8 @@
 #include "storage/latch.h"
 #include "utils/snapmgr.h"
 
-#include "distributed/citus_acquire_lock.h"
 #include "distributed/background_worker_utils.h"
+#include "distributed/citus_acquire_lock.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/version_compat.h"
