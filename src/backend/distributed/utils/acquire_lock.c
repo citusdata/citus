@@ -33,6 +33,7 @@
 #include "storage/latch.h"
 #include "utils/snapmgr.h"
 
+#include "distributed/background_worker_utils.h"
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
@@ -65,34 +66,33 @@ static bool got_sigterm = false;
 BackgroundWorkerHandle *
 StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 {
-	BackgroundWorkerHandle *handle = NULL;
 	LockAcquireHelperArgs args;
-	BackgroundWorker worker;
 	memset(&args, 0, sizeof(args));
-	memset(&worker, 0, sizeof(worker));
 
 	/* collect the extra arguments required for the background worker */
 	args.DatabaseId = MyDatabaseId;
 	args.lock_cooldown = lock_cooldown;
 
-	/* construct the background worker and start it */
-	SafeSnprintf(worker.bgw_name, sizeof(worker.bgw_name),
+	char workerName[BGW_MAXLEN];
+	SafeSnprintf(workerName, BGW_MAXLEN,
 				 "Citus Lock Acquire Helper: %d/%u", backendToHelp, MyDatabaseId);
-	strcpy_s(worker.bgw_type, sizeof(worker.bgw_type), "citus_lock_aqcuire");
 
-	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "LockAcquireHelperMain",
+		.mainArg = Int32GetDatum(backendToHelp),
+		.extensionOwner = InvalidOid,
+		.needsNotification = false,
+		.waitForStartup = false,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = BgWorkerStart_RecoveryFinished,
+		.workerType = "citus_lock_aqcuire",
+		.extraData = &args,
+		.extraDataSize = sizeof(args)
+	};
 
-	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_function_name),
-			 "LockAcquireHelperMain");
-	worker.bgw_main_arg = Int32GetDatum(backendToHelp);
-	worker.bgw_notify_pid = 0;
-
-	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &args, sizeof(args));
-
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
+	BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
+	if (!handle)
 	{
 		return NULL;
 	}
