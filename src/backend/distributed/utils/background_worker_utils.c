@@ -38,11 +38,22 @@ InitializeCitusBackgroundWorker(BackgroundWorker *worker,
 	/* Set worker name */
 	strcpy_s(worker->bgw_name, sizeof(worker->bgw_name), config->workerName);
 
+	/* Set worker type if provided, otherwise use default */
+	if (config->workerType != NULL)
+	{
+		strcpy_s(worker->bgw_type, sizeof(worker->bgw_type), config->workerType);
+	}
+	else
+	{
+		strcpy_s(worker->bgw_type, sizeof(worker->bgw_type), CITUS_BGW_DEFAULT_TYPE);
+	}
+
 	/* Set standard flags for Citus workers */
 	worker->bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 
-	/* Set start time - all Citus workers need consistent state */
-	worker->bgw_start_time = BgWorkerStart_ConsistentState;
+	/* Set start time - use custom start time if provided, otherwise use default */
+	worker->bgw_start_time = (config->startTime != 0) ? config->startTime :
+							 CITUS_BGW_DEFAULT_START_TIME;
 
 	/* Set restart behavior */
 	worker->bgw_restart_time = config->restartTime;

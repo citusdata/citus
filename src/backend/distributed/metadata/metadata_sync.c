@@ -3167,10 +3167,11 @@ SpawnSyncNodeMetadataToNodes(Oid database, Oid extensionOwner)
 		.needsNotification = true,
 		.waitForStartup = false,
 		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
 		.extraData = NULL,
 		.extraDataSize = 0
 	};
-
 	return RegisterCitusBackgroundWorker(&config);
 }
 

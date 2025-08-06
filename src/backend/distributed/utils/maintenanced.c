@@ -197,10 +197,11 @@ InitializeMaintenanceDaemonForMainDb(void)
 		.needsNotification = false,
 		.waitForStartup = false,
 		.restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
 		.extraData = NULL,
 		.extraDataSize = 0
 	};
-
 	BackgroundWorker worker;
 	InitializeCitusBackgroundWorker(&worker, &config);
 	RegisterBackgroundWorker(&worker);
@@ -259,10 +260,11 @@ InitializeMaintenanceDaemonBackend(void)
 			.needsNotification = true,
 			.waitForStartup = true,
 			.restartTime = CITUS_BGW_DEFAULT_RESTART_TIME,
+			.startTime = CITUS_BGW_DEFAULT_START_TIME,
+			.workerType = NULL, /* use default */
 			.extraData = NULL,
 			.extraDataSize = 0
 		};
-
 		BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
 
 		if (!handle)

@@ -24,6 +24,7 @@ typedef struct CitusBackgroundWorkerConfig
 	/* Worker identification */
 	const char *workerName;
 	const char *functionName;
+	const char *workerType;
 
 	/* Worker parameters */
 	Datum mainArg;
@@ -34,6 +35,9 @@ typedef struct CitusBackgroundWorkerConfig
 	bool waitForStartup;
 	int restartTime;
 
+	/* Worker timing */
+	BgWorkerStartTime startTime;
+
 	/* Optional extra data */
 	const void *extraData;
 	size_t extraDataSize;
@@ -42,6 +46,8 @@ typedef struct CitusBackgroundWorkerConfig
 /* Default configuration values */
 #define CITUS_BGW_DEFAULT_RESTART_TIME 5
 #define CITUS_BGW_NEVER_RESTART BGW_NEVER_RESTART
+#define CITUS_BGW_DEFAULT_START_TIME BgWorkerStart_ConsistentState
+#define CITUS_BGW_DEFAULT_TYPE "citus"
 
 /* Function declarations */
 extern BackgroundWorkerHandle * RegisterCitusBackgroundWorker(const

@@ -432,10 +432,11 @@ StartCitusBackgroundTaskQueueMonitor(Oid database, Oid extensionOwner)
 		.needsNotification = true,
 		.waitForStartup = true,
 		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
 		.extraData = NULL,
 		.extraDataSize = 0
 	};
-
 	return RegisterCitusBackgroundWorker(&config);
 }
 
@@ -1663,10 +1664,11 @@ StartCitusBackgroundTaskExecutor(char *database, char *user, char *command,
 		.needsNotification = true,
 		.waitForStartup = true,
 		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
 		.extraData = NULL,
 		.extraDataSize = 0
 	};
-
 	BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
 	if (!handle)
 	{
