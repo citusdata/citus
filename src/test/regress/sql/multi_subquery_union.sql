@@ -898,6 +898,3 @@ LANGUAGE sql stable;
 
 SELECT user_id FROM users_table
 UNION SELECT u.user_id FROM users_table, users_udf() u;
-
-DROP TABLE events_reference_table;
-DROP TABLE users_reference_table;

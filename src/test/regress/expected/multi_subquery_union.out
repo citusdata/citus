@@ -1246,5 +1246,3 @@ SELECT user_id FROM users_table
 UNION SELECT u.user_id FROM users_table, users_udf() u;
 ERROR:  cannot perform distributed planning on this query because parameterized queries for SQL functions referencing distributed tables are not supported
 HINT:  Consider using PL/pgSQL functions instead.
-DROP TABLE events_reference_table;
-DROP TABLE users_reference_table;
