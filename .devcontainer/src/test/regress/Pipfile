@@ -4,7 +4,7 @@ url = "https://pypi.python.org/simple"
 verify_ssl = true
 
 [packages]
-mitmproxy = {editable = true, ref = "main", git = "https://github.com/citusdata/mitmproxy.git"}
+mitmproxy = "==12.1.1"
 construct = "*"
 docopt = "==0.6.2"
 cryptography = ">=41.0.4"
@@ -25,4 +25,4 @@ flake8 = "*"
 flake8-bugbear = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.12"
