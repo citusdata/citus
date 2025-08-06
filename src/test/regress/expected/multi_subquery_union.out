@@ -1,7 +1,7 @@
 --
 -- multi subquery toplevel union queries aims to expand existing subquery pushdown
 -- regression tests to cover more cases
--- the tables that are used depends to multi_insert_select_behavioral_analytics_create_table.sql
+-- the tables that are used depends to multi_behavioral_analytics_create_table.sql
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
 -- a very simple union query
