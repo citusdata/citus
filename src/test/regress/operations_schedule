@@ -13,3 +13,4 @@ test: multi_colocated_shard_rebalance
 test: cpu_priority
 test: check_mx
 test: citus_drain_node
+test: background_rebalance_parallel_reference_tables
