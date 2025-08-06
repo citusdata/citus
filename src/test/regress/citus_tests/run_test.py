@@ -226,6 +226,15 @@ DEPS = {
         repeatable=False,
     ),
     "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
+    "multi_subquery_misc": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_union": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_in_where_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
 }
 
 

@@ -1,7 +1,7 @@
 --
 -- multi subquery in where queries aims to expand existing subquery pushdown
 -- regression tests to cover more cases specifically subqueries in WHERE clause
--- the tables that are used depends to multi_insert_select_behavioral_analytics_create_table.sql
+-- the tables that are used depends to multi_behavioral_analytics_create_table.sql
 --
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- subqueries in WHERE with greater operator
