@@ -4583,11 +4583,10 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 	else if (rangeTableEntry->rtekind == RTE_CTE)
 	{
 		/*
-		 * When outerVars are considered, we modify parentQueryList, so this
-		 * logic might need to change when we support outervars in CTEs.
+		 * Resolve through a CTE even when skipOuterVars == false.
+		 * Maintain the invariant that each recursion level owns a private,
+		 * correctly-bounded copy of parentQueryList.
 		 */
-		Assert(skipOuterVars);
-
 		int cteParentListIndex = list_length(parentQueryList) -
 								 rangeTableEntry->ctelevelsup - 1;
 		Query *cteParentQuery = NULL;
@@ -4618,14 +4617,26 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		if (cte != NULL)
 		{
 			Query *cteQuery = (Query *) cte->ctequery;
-			List *targetEntryList = cteQuery->targetList;
 			AttrNumber targetEntryIndex = candidateColumn->varattno - 1;
-			TargetEntry *targetEntry = list_nth(targetEntryList, targetEntryIndex);
 
-			parentQueryList = lappend(parentQueryList, query);
-			FindReferencedTableColumn(targetEntry->expr, parentQueryList,
-									  cteQuery, column, rteContainingReferencedColumn,
-									  skipOuterVars);
+			if (targetEntryIndex >= 0 &&
+				targetEntryIndex < list_length(cteQuery->targetList))
+			{
+				TargetEntry *targetEntry =
+					list_nth(cteQuery->targetList, targetEntryIndex);
+
+				/* hand a private, bounded parent list to the recursion */
+				List *newParent = list_copy(parentQueryList);
+				newParent = list_truncate(newParent, cteParentListIndex + 1);
+				newParent = lappend(newParent, query);
+
+				FindReferencedTableColumn(targetEntry->expr,
+										  newParent,
+										  cteQuery,
+										  column,
+										  rteContainingReferencedColumn,
+										  skipOuterVars);
+			}
 		}
 	}
 }
