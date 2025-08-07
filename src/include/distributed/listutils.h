@@ -160,7 +160,7 @@ typedef struct ListCellAndListWrapper
 	for (int var ## PositionDoNotUse = 0; \
 		 (var ## PositionDoNotUse) < list_length(l) && \
 		 (((var) = list_nth(l, var ## PositionDoNotUse)) || true); \
-		 var ## PositionDoNotUse ++)
+		 var ## PositionDoNotUse++)
 
 /* utility functions declaration shared within this module */
 extern List * SortList(List *pointerList,
