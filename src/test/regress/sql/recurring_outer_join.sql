@@ -297,7 +297,7 @@ LATERAL
 ) as foo;
 
 -- Qual is the same but top-level join is an anti-join. Right join
--- stays as is and hence requires recursive planning.
+-- is pushed down.
 SELECT COUNT(*) FROM dist_1 t1
 WHERE NOT EXISTS (
     SELECT * FROM dist_1 t2
@@ -350,7 +350,8 @@ LEFT JOIN
 (
     dist_1 t4
     JOIN
-    -- 1) t6 is recursively planned since the outer side is recurring
+    -- 1) t6 is not recursively planned since it is
+    -- safe to push down the recurring outer side with constraints
     (SELECT t6.a FROM dist_1 t6 RIGHT JOIN ref_1 t7 USING(a)) t5
     USING(a)
 ) q

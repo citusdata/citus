@@ -1985,11 +1985,8 @@ INSERT INTO raw_events_second (user_id, value_1)
   SELECT (a+5)*-1, b FROM cte;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  CTE cte is going to be inlined via distributed planning
-DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "distributed_table" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer), cte.b FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))) cte) citus_insert_select_subquery("?column?", b)
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT reference_table.a, 1 AS b FROM (query_single_shard_table.distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT "?column?" AS user_id, b AS value_1 FROM (SELECT ((cte.a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) '-1'::integer), cte.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte) citus_insert_select_subquery("?column?", b)
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- .. and via SELECT's cte list too
 INSERT INTO raw_events_second (user_id, value_1)
@@ -1999,12 +1996,10 @@ WITH cte AS (
 )
   SELECT (a+5)*2, b FROM cte;
 DEBUG:  CTE cte is going to be inlined via distributed planning
-DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
-DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "distributed_table" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) 2) AS user_id, b AS value_1 FROM (SELECT DISTINCT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))) cte
+DEBUG:  cannot push down this subquery
+DETAIL:  Distinct on columns without partition column is currently unsupported
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT reference_table.a, 1 AS b FROM (query_single_shard_table.distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) 2) AS user_id, b AS value_1 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- using set operations
 INSERT INTO
@@ -2241,13 +2236,6 @@ UPDATE nullkey_c1_t1 SET b = 5 WHERE nullkey_c1_t1.b IN (SELECT b FROM cte);
 DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  generating subplan XXX_1 for CTE cte: SELECT reference_table.a, 1 AS b FROM (query_single_shard_table.distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "distributed_table" to a subquery
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
-DEBUG:  Creating router plan
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.nullkey_c1_t1 SET b = 5 WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT cte.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
 DEBUG:  Creating router plan
 UPDATE nullkey_c1_t1 SET b = 5 FROM reference_table WHERE EXISTS (
@@ -2351,13 +2339,6 @@ DELETE FROM nullkey_c1_t1 WHERE nullkey_c1_t1.b IN (SELECT b FROM cte);
 DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  generating subplan XXX_1 for CTE cte: SELECT reference_table.a, 1 AS b FROM (query_single_shard_table.distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "distributed_table" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "distributed_table" to a subquery
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.distributed_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT reference_table.a, 1 AS b FROM ((SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
-DEBUG:  Creating router plan
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.nullkey_c1_t1 WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT cte.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte))
 DEBUG:  Creating router plan
 DELETE FROM nullkey_c1_t1 USING reference_table WHERE EXISTS (
@@ -3314,7 +3295,8 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.nullkey_c2_t1 table_3 ORDER BY a LIMIT 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, avg(a) AS avg FROM (SELECT table_0.a FROM (query_single_shard_table.nullkey_c1_t1 table_0 RIGHT JOIN (SELECT table_2.a FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) table_2 JOIN query_single_shard_table.nullkey_c2_t1 table_4 USING (a)) WHERE (table_4.a OPERATOR(pg_catalog.<) 8)) table_1 USING (a))) avgsub
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
-ERROR:  cannot perform a lateral outer join when a distributed subquery references complex subqueries, CTEs or local tables
+ERROR:  cannot push down this subquery
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t1 are not colocated
 -- test nested exec
 CREATE FUNCTION dist_query_single_shard(p_key int)
 RETURNS bigint
