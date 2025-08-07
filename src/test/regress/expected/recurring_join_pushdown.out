@@ -967,3 +967,49 @@ DEBUG:  assigned task to node localhost:xxxxx
                                                    Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
 (26 rows)
 
+ -- Basic cases with RIGHT JOIN
+SET client_min_messages TO DEBUG3;
+SELECT count(*) FROM d1 RIGHT JOIN r1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe right join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT count(*) FROM d1_local RIGHT JOIN r1_local USING (a);
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM d1) RIGHT JOIN r1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe right join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM d1_local) RIGHT JOIN r1_local USING (a);
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+

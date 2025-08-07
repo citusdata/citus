@@ -140,3 +140,12 @@ SELECT count(*) FROM (SELECT d1_1.a, r1_local.b FROM r1_local LEFT JOIN d1_local
  (SELECT d2_local.a, d2_local.c, r1_local.b FROM r1_local LEFT JOIN d2_local ON r1_local.a = d2_local.a) AS t2_local ON t1_local.a = t2_local.a;
 EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT d1_1.a, r1.b FROM r1 LEFT JOIN d1 as d1_1 ON r1.a = d1_1.a) AS t1 LEFT JOIN
  (SELECT d2.a, d2.c, r1.b FROM r1 LEFT JOIN d2 ON r1.a = d2.a) AS t2 ON t1.a = t2.a;
+
+
+ -- Basic cases with RIGHT JOIN
+SET client_min_messages TO DEBUG3;
+SELECT count(*) FROM d1 RIGHT JOIN r1 USING (a);
+SELECT count(*) FROM d1_local RIGHT JOIN r1_local USING (a);
+
+SELECT count(*) FROM (SELECT * FROM d1) RIGHT JOIN r1 USING (a);
+SELECT count(*) FROM (SELECT * FROM d1_local) RIGHT JOIN r1_local USING (a);
