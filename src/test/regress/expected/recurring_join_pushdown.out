@@ -1013,3 +1013,5 @@ SELECT count(*) FROM (SELECT * FROM d1_local) RIGHT JOIN r1_local USING (a);
     21
 (1 row)
 
+SET client_min_messages TO ERROR;
+DROP SCHEMA recurring_join_pushdown CASCADE;

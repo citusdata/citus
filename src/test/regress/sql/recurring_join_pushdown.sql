@@ -149,3 +149,6 @@ SELECT count(*) FROM d1_local RIGHT JOIN r1_local USING (a);
 
 SELECT count(*) FROM (SELECT * FROM d1) RIGHT JOIN r1 USING (a);
 SELECT count(*) FROM (SELECT * FROM d1_local) RIGHT JOIN r1_local USING (a);
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA recurring_join_pushdown CASCADE;

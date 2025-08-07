@@ -243,6 +243,9 @@ DEPS = {
         "minimal_schedule",
         ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
     ),
+    "multi_subquery_complex_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
 }
 
 
