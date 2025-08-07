@@ -159,7 +159,7 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
 
--- Right join is allowed as we recursively plan the distributed table (multi_outer_join_left_hash)
+-- Right join is allowed (multi_outer_join_left_hash)
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
@@ -259,7 +259,7 @@ FROM
 	ON (l_custkey = r_custkey AND r_custkey = 21);
 
 
--- Right join should be allowed in this case as we recursively plan the distributed table (multi_outer_join_left_hash
+-- Right join should be allowed in this case (multi_outer_join_left_hash)
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
