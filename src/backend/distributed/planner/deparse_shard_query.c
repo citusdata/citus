@@ -310,7 +310,7 @@ DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtinde
 		/* null test for the first shard */
 		NullTest *nullTest = makeNode(NullTest);
 		nullTest->nulltesttype = IS_NULL;  /* Check for IS NULL */
-		nullTest->arg = (Expr *) partitionColumnVar;  /* The variable to check */
+		nullTest->arg = (Expr *) outerTablePartitionColumnVar;  /* The variable to check */
 		nullTest->argisrow = false;
 		shardIntervalBoundQuals = (Node *) make_orclause(list_make2(nullTest,
 																	shardIntervalBoundQuals));

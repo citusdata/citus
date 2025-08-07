@@ -126,7 +126,7 @@ WHERE
 ORDER BY user_id
 LIMIT 3;
 
--- outer join could still recur
+-- outer join pushed down
 SELECT
   DISTINCT user_id
 FROM

@@ -756,7 +756,8 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 				/* <recurring> left join <distributed> */
 				if (leftNodeRecurs && !rightNodeRecurs)
 				{
-					if (chainedJoin || !CheckPushDownFeasibilityLeftJoin(joinExpr, query))
+					if (chainedJoin || !CheckPushDownFeasibilityOuterJoin(joinExpr,
+																		  query))
 					{
 						ereport(DEBUG1, (errmsg("recursively planning right side of "
 												"the left join since the outer side "
@@ -786,11 +787,21 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 				/* <distributed> right join <recurring> */
 				if (!leftNodeRecurs && rightNodeRecurs)
 				{
-					ereport(DEBUG1, (errmsg("recursively planning left side of "
-											"the right join since the outer side "
-											"is a recurring rel")));
-					RecursivelyPlanDistributedJoinNode(leftNode, query,
-													   recursivePlanningContext);
+					if (chainedJoin || !CheckPushDownFeasibilityOuterJoin(joinExpr,
+																		  query))
+					{
+						ereport(DEBUG1, (errmsg("recursively planning left side of "
+												"the right join since the outer side "
+												"is a recurring rel")));
+						RecursivelyPlanDistributedJoinNode(leftNode, query,
+														   recursivePlanningContext);
+					}
+					else
+					{
+						ereport(DEBUG3, (errmsg(
+											 "a push down safe right join with recurring left side")));
+						rightNodeRecurs = false; /* right node will be pushed down */
+					}
 				}
 
 				/*
@@ -2665,11 +2676,13 @@ hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
 
 
 /*
- * IsPushdownSafeForRTEInLeftJoin returns true if the given range table entry
- * is safe for pushdown. Currently, we only allow reference tables.
+ * IsPushdownSafeForOuterRTEInOuterJoin returns true if the given range table entry
+ * is safe for pushdown when it is the outer relation of a outer join when the
+ * inner relation is not recurring.
+ * Currently, we only allow reference tables.
  */
 bool
-IsPushdownSafeForRTEInLeftJoin(RangeTblEntry *rte)
+IsPushdownSafeForOuterRTEInOuterJoin(RangeTblEntry *rte)
 {
 	if (IsCitusTable(rte->relid) && IsCitusTableType(rte->relid, REFERENCE_TABLE))
 	{
@@ -2778,8 +2791,7 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		return false;
 	}
 
-	/* TODO: generalize to right joins */
-	if (joinExpr->jointype != JOIN_LEFT)
+	if (joinExpr->jointype != JOIN_LEFT && joinExpr->jointype != JOIN_RIGHT)
 	{
 		return false;
 	}
@@ -2799,10 +2811,18 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		return false;
 	}
 
-	*outerRtIndex = (((RangeTblRef *) joinExpr->larg)->rtindex);
+	if (joinExpr->jointype == JOIN_LEFT)
+	{
+		*outerRtIndex = (((RangeTblRef *) joinExpr->larg)->rtindex);
+	}
+	else /* JOIN_RIGHT */
+	{
+		*outerRtIndex = (((RangeTblRef *) joinExpr->rarg)->rtindex);
+	}
+
 	*outerRte = rt_fetch(*outerRtIndex, query->rtable);
 
-	if (!IsPushdownSafeForRTEInLeftJoin(*outerRte))
+	if (!IsPushdownSafeForOuterRTEInOuterJoin(*outerRte))
 	{
 		return false;
 	}
@@ -2902,7 +2922,7 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
  * See CheckPushDownFeasibilityAndComputeIndexes for more details.
  */
 bool
-CheckPushDownFeasibilityLeftJoin(JoinExpr *joinExpr, Query *query)
+CheckPushDownFeasibilityOuterJoin(JoinExpr *joinExpr, Query *query)
 {
 	int outerRtIndex;
 	RangeTblEntry *outerRte = NULL;
