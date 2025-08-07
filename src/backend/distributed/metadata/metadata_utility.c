@@ -812,6 +812,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		{
 			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
+
 		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
@@ -1919,23 +1920,22 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 {
 	char *distributionColumnString = NULL;
 
-	Datum newValues[Natts_pg_dist_partition];
-	bool newNulls[Natts_pg_dist_partition];
-
 	/* open system catalog and insert new tuple */
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	Datum *newValues = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *newNulls = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
 
 	/* form new tuple for pg_dist_partition */
-	memset(newValues, 0, sizeof(newValues));
-	memset(newNulls, false, sizeof(newNulls));
-
 	newValues[Anum_pg_dist_partition_logicalrelid - 1] =
 		ObjectIdGetDatum(relationId);
 	newValues[Anum_pg_dist_partition_partmethod - 1] =
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
-	newValues[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
+	newValues[GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor)] =
+		BoolGetDatum(autoConverted);
 
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)
@@ -1951,7 +1951,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		newNulls[Anum_pg_dist_partition_partkey - 1] = true;
 	}
 
-	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues,
+	HeapTuple newTuple = heap_form_tuple(tupleDescriptor, newValues,
 										 newNulls);
 
 	/* finally insert tuple, build index entries & register cache invalidation */
@@ -1963,6 +1963,9 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 
 	CommandCounterIncrement();
 	table_close(pgDistPartition, NoLock);
+
+	pfree(newValues);
+	pfree(newNulls);
 }
 
 
@@ -2154,13 +2157,13 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	bool indexOK = true;
-	Datum values[Natts_pg_dist_placement];
-	bool isnull[Natts_pg_dist_placement];
-	bool replace[Natts_pg_dist_placement];
 	bool colIsNull = false;
 
 	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
+	Datum *values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
 
@@ -2176,8 +2179,6 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 							   UINT64_FORMAT,
 							   placementId)));
 	}
-
-	memset(replace, 0, sizeof(replace));
 
 	values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupId);
 	isnull[Anum_pg_dist_placement_groupid - 1] = false;
@@ -2197,6 +2198,10 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPlacement, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 }
 
 
@@ -2210,12 +2215,13 @@ UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	bool indexOK = true;
-	Datum values[Natts_pg_dist_partition];
-	bool isnull[Natts_pg_dist_partition];
-	bool replace[Natts_pg_dist_partition];
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	Datum *values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(citusTableId));
 
@@ -2231,11 +2237,10 @@ UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
 							   citusTableId)));
 	}
 
-	memset(replace, 0, sizeof(replace));
-
-	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
-	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
-	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+	int autoconvertedindex = GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor);
+	values[autoconvertedindex] = BoolGetDatum(autoConverted);
+	isnull[autoconvertedindex] = false;
+	replace[autoconvertedindex] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
@@ -2247,6 +2252,10 @@ UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 }
 
 
@@ -2286,12 +2295,13 @@ UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distribut
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	bool indexOK = true;
-	Datum values[Natts_pg_dist_partition];
-	bool isnull[Natts_pg_dist_partition];
-	bool replace[Natts_pg_dist_partition];
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	Datum *values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 
@@ -2307,8 +2317,6 @@ UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distribut
 							   relationId)));
 	}
 
-	memset(replace, 0, sizeof(replace));
-
 	replace[Anum_pg_dist_partition_partmethod - 1] = true;
 	values[Anum_pg_dist_partition_partmethod - 1] = CharGetDatum(distributionMethod);
 	isnull[Anum_pg_dist_partition_partmethod - 1] = false;
@@ -2317,9 +2325,10 @@ UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distribut
 	values[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	isnull[Anum_pg_dist_partition_colocationid - 1] = false;
 
-	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
-	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(false);
-	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+	int autoconvertedindex = GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor);
+	replace[autoconvertedindex] = true;
+	values[autoconvertedindex] = BoolGetDatum(false);
+	isnull[autoconvertedindex] = false;
 
 	char *distributionColumnString = nodeToString((Node *) distributionColumn);
 
@@ -2337,6 +2346,10 @@ UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distribut
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 }
 
 
@@ -2380,12 +2393,13 @@ UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 coloca
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	bool indexOK = true;
-	Datum values[Natts_pg_dist_partition];
-	bool isnull[Natts_pg_dist_partition];
-	bool replace[Natts_pg_dist_partition];
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	Datum *values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 
@@ -2401,8 +2415,6 @@ UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 coloca
 							   relationId)));
 	}
 
-	memset(replace, 0, sizeof(replace));
-
 	values[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	isnull[Anum_pg_dist_partition_colocationid - 1] = false;
 	replace[Anum_pg_dist_partition_colocationid - 1] = true;
@@ -2411,9 +2423,10 @@ UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 coloca
 	isnull[Anum_pg_dist_partition_repmodel - 1] = false;
 	replace[Anum_pg_dist_partition_repmodel - 1] = true;
 
-	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
-	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
-	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+	int autoconvertedindex = GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor);
+	values[autoconvertedindex] = BoolGetDatum(autoConverted);
+	isnull[autoconvertedindex] = false;
+	replace[autoconvertedindex] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
@@ -2424,6 +2437,10 @@ UpdateNoneDistTableMetadata(Oid relationId, char replicationModel, uint32 coloca
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 }
 
 
@@ -3149,8 +3166,8 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 
 		values[Anum_pg_dist_background_task_nodes_involved - 1] =
 			IntArrayToDatum(nodesInvolvedCount, nodesInvolved);
-		nulls[Anum_pg_dist_background_task_nodes_involved - 1] = (nodesInvolvedCount ==
-																  0);
+		nulls[Anum_pg_dist_background_task_nodes_involved - 1] =
+			(nodesInvolvedCount == 0);
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
@@ -4419,4 +4436,24 @@ UnblockDependingBackgroundTasks(BackgroundTask *task)
 	systable_endscan(scanDescriptor);
 
 	table_close(pgDistBackgroundTasksDepend, NoLock);
+}
+
+
+/*
+ * GetAutoConvertedAttrIndexInPgDistPartition returns attrnum for autoconverted attr.
+ *
+ * autoconverted attr was added to table pg_dist_partition using alter operation after
+ * the version where Citus started supporting downgrades, and it's only column that we've
+ * introduced to pg_dist_partition since then.
+ *
+ * And in case of a downgrade + upgrade, tupleDesc->natts becomes greater than
+ * Natts_pg_dist_partition and when this happens, then we know that attrnum autoconverted is
+ * not Anum_pg_dist_partition_autoconverted anymore but tupleDesc->natts - 1.
+ */
+int
+GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDesc)
+{
+	return TupleDescSize(tupleDesc) == Natts_pg_dist_partition
+		   ? (Anum_pg_dist_partition_autoconverted - 1)
+		   : tupleDesc->natts - 1;
 }

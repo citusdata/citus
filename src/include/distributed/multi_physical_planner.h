@@ -174,8 +174,15 @@ typedef enum TaskQueryType
 	TASK_QUERY_NULL,
 	TASK_QUERY_TEXT,
 	TASK_QUERY_OBJECT,
-	TASK_QUERY_TEXT_LIST
+	TASK_QUERY_TEXT_LIST,
+	TASK_QUERY_LOCAL_PLAN,
 } TaskQueryType;
+
+typedef struct LocalCompilation
+{
+	PlannedStmt *plan; /* the local plan for this task */
+	Query *query; /* query to deparse for EXPLAIN ANALYZE or local command logging */
+} LocalCompilation;
 
 typedef struct TaskQuery
 {
@@ -219,6 +226,15 @@ typedef struct TaskQuery
 		 * when we want to access each query string.
 		 */
 		List *queryStringList;
+
+		/*
+		 * For tasks that can be executed locally, this field contains the
+		 * local plan for the task. This is only set when the shard that the
+		 * task is assigned to is local to the node that executes the task.
+		 * The query field is used to deparse the query for EXPLAIN ANALYZE
+		 * or local command logging.
+		 */
+		LocalCompilation *localCompiled; /* only applies to local tasks */
 	}data;
 }TaskQuery;
 
@@ -475,6 +491,24 @@ typedef struct DistributedPlan
 
 
 /*
+ * SubPlanExplainOutputData Holds the EXPLAIN ANALYZE output and collected
+ * statistics for a single task executed by a worker during distributed
+ * query execution.
+ * explainOutput — raw EXPLAIN ANALYZE output for the task
+ * executionDuration — wall‑clock time taken to run the task
+ * totalReceivedTupleData — total bytes of tuple data received from the worker
+ */
+typedef struct SubPlanExplainOutputData
+{
+	char *explainOutput;
+	double executionDuration;
+	double executionNtuples;
+	double executionNloops;
+	uint64 totalReceivedTupleData;
+} SubPlanExplainOutputData;
+
+
+/*
  * DistributedSubPlan contains a subplan of a distributed plan. Subplans are
  * executed before the distributed query and their results are written to
  * temporary files. This is used to execute CTEs and subquery joins that
@@ -492,6 +526,9 @@ typedef struct DistributedSubPlan
 	uint32 remoteWorkerCount;
 	double durationMillisecs;
 	bool writeLocalFile;
+	SubPlanExplainOutputData *totalExplainOutput;
+	uint32 numTasksOutput; /* actual size of the above array */
+	double ntuples; /* total tuples produced */
 } DistributedSubPlan;
 
 

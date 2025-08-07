@@ -760,7 +760,7 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 	 */
 	LockPartitionsForDistributedPlan(distributedPlan);
 
-	ExecuteSubPlans(distributedPlan);
+	ExecuteSubPlans(distributedPlan, RequestedForExplainAnalyze(scanState));
 
 	scanState->finishedPreScan = true;
 }
@@ -3804,7 +3804,7 @@ PopAssignedPlacementExecution(WorkerSession *session)
 
 
 /*
- * PopAssignedPlacementExecution finds an executable task from the queue of assigned tasks.
+ * PopUnAssignedPlacementExecution finds an executable task from the queue of unassigned tasks.
  */
 static TaskPlacementExecution *
 PopUnassignedPlacementExecution(WorkerPool *workerPool)

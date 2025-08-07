@@ -26,6 +26,7 @@
 #include "commands/tablecmds.h"
 #include "executor/tstoreReceiver.h"
 #include "lib/stringinfo.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/plannodes.h"
 #include "nodes/primnodes.h"
 #include "nodes/print.h"
@@ -73,6 +74,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/remote_commands.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/tuplestore.h"
 #include "distributed/version_compat.h"
@@ -83,6 +85,7 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 int ExplainAnalyzeSortMethod = EXPLAIN_ANALYZE_SORT_BY_TIME;
+extern MemoryContext SubPlanExplainAnalyzeContext;
 
 /*
  * If enabled, EXPLAIN ANALYZE output & other statistics of last worker task
@@ -90,6 +93,11 @@ int ExplainAnalyzeSortMethod = EXPLAIN_ANALYZE_SORT_BY_TIME;
  */
 static char *SavedExplainPlan = NULL;
 static double SavedExecutionDurationMillisec = 0.0;
+static double SavedExplainPlanNtuples = 0;
+static double SavedExplainPlanNloops = 0;
+extern SubPlanExplainOutputData *SubPlanExplainOutput;
+uint8 TotalExplainOutputCapacity = 0;
+uint8 NumTasksOutput = 0;
 
 /* struct to save explain flags */
 typedef struct
@@ -215,7 +223,8 @@ static const char * ExplainFormatStr(ExplainFormat format);
 #if PG_VERSION_NUM >= PG_VERSION_17
 static const char * ExplainSerializeStr(ExplainSerializeOption serializeOption);
 #endif
-static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
+static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DistributedSubPlan *subPlan,
+							  DestReceiver *dest,
 							  ExplainState *es,
 							  const char *queryString, ParamListInfo params,
 							  QueryEnvironment *queryEnv,
@@ -224,7 +233,9 @@ static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
 							  const BufferUsage *bufusage,
 							  const MemoryContextCounters *mem_counters,
 #endif
-							  double *executionDurationMillisec);
+							  double *executionDurationMillisec,
+							  double *executionTuples,
+							  double *executionLoops);
 static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
 											   ExplainFormat defaultValue);
 #if PG_VERSION_NUM >= PG_VERSION_17
@@ -256,7 +267,8 @@ static double elapsed_time(instr_time *starttime);
 static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es);
 static uint64 TaskReceivedTupleData(Task *task);
 static bool ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es);
-
+static bool PlanStateAnalyzeWalker(PlanState *planState, void *ctx);
+static void ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(worker_last_saved_explain_analyze);
@@ -433,6 +445,84 @@ NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
 
 
 /*
+ * ExtractAnalyzeStats parses the EXPLAIN ANALYZE output of the pre-executed
+ * subplans and injects the parsed statistics into queryDesc->planstate->instrument.
+ */
+static void
+ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
+{
+	if (!planState)
+	{
+		return;
+	}
+
+	Instrumentation *instr = planState->instrument;
+	if (!IsA(planState, CustomScanState))
+	{
+		instr->ntuples = subPlan->ntuples;
+		instr->nloops = 1; /* subplan nodes are executed only once */
+		return;
+	}
+
+	Assert(IsA(planState, CustomScanState));
+
+	if (subPlan->numTasksOutput <= 0)
+	{
+		return;
+	}
+
+	ListCell *lc;
+	int tasksOutput = 0;
+	double tasksNtuples = 0;
+	double tasksNloops = 0;
+	memset(instr, 0, sizeof(Instrumentation));
+	DistributedPlan *newdistributedPlan =
+		((CitusScanState *) planState)->distributedPlan;
+
+	/*
+	 * Inject the earlier executed results—extracted from the workers' EXPLAIN output—
+	 * into the newly created tasks.
+	 */
+	foreach(lc, newdistributedPlan->workerJob->taskList)
+	{
+		Task *task = (Task *) lfirst(lc);
+		uint32 taskId = task->taskId;
+
+		if (tasksOutput > subPlan->numTasksOutput)
+		{
+			break;
+		}
+
+		if (!subPlan->totalExplainOutput[taskId].explainOutput)
+		{
+			continue;
+		}
+
+		/*
+		 * Now feed the earlier saved output, which will be used
+		 * by RemoteExplain() when printing tasks
+		 */
+		MemoryContext taskContext = GetMemoryChunkContext(task);
+		task->totalReceivedTupleData =
+			subPlan->totalExplainOutput[taskId].totalReceivedTupleData;
+		task->fetchedExplainAnalyzeExecutionDuration =
+			subPlan->totalExplainOutput[taskId].executionDuration;
+		task->fetchedExplainAnalyzePlan =
+			MemoryContextStrdup(taskContext,
+								subPlan->totalExplainOutput[taskId].explainOutput);
+		tasksNtuples += subPlan->totalExplainOutput[taskId].executionNtuples;
+		tasksNloops = subPlan->totalExplainOutput[taskId].executionNloops;
+
+		subPlan->totalExplainOutput[taskId].explainOutput = NULL;
+		tasksOutput++;
+	}
+
+	instr->ntuples = tasksNtuples;
+	instr->nloops = tasksNloops;
+}
+
+
+/*
  * ExplainSubPlans generates EXPLAIN output for subplans for CTEs
  * and complex subqueries. Because the planning for these queries
  * is done along with the top-level plan, we cannot determine the
@@ -450,7 +540,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 	{
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
 		PlannedStmt *plan = subPlan->plan;
-		IntoClause *into = NULL;
 		ParamListInfo params = NULL;
 
 		/*
@@ -534,6 +623,11 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
 
+		DestReceiver *dest = None_Receiver; /* No query execution */
+		double executionDurationMillisec = 0.0;
+		double executionTuples = 0;
+		double executionLoops = 0;
+
 /* Capture memory stats on PG17+ */
 #if PG_VERSION_NUM >= PG_VERSION_17
 		if (es->memory)
@@ -541,46 +635,21 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			MemoryContextSwitchTo(saved_ctx);
 			MemoryContextMemConsumed(planner_ctx, &mem_counters);
 		}
-#endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-		ExplainOnePlan(
-			plan,                            /* PlannedStmt *plannedstmt */
-			NULL,                            /* CachedPlan *cplan */
-			NULL,                            /* CachedPlanSource *plansource */
-			0,                               /* query_index */
-			into,                            /* IntoClause *into */
-			es,                              /* struct ExplainState *es */
-			queryString,                     /* const char *queryString */
-			params,                          /* ParamListInfo params */
-			NULL,                            /* QueryEnvironment *queryEnv */
-			&planduration,                   /* const instr_time *planduration */
-			(es->buffers ? &bufusage : NULL),/* const BufferUsage *bufusage */
-			(es->memory ? &mem_counters : NULL)  /* const MemoryContextCounters *mem_counters */
-			);
-#elif PG_VERSION_NUM >= PG_VERSION_17
-		ExplainOnePlan(
-			plan,
-			into,
-			es,
-			queryString,
-			params,
-			NULL,                           /* QueryEnvironment *queryEnv */
-			&planduration,
-			(es->buffers ? &bufusage : NULL),
-			(es->memory ? &mem_counters : NULL)
-			);
+		/* Execute EXPLAIN without ANALYZE */
+		ExplainWorkerPlan(plan, subPlan, dest, es, queryString, params, NULL,
+						  &planduration,
+						  (es->buffers ? &bufusage : NULL),
+						  (es->memory ? &mem_counters : NULL),
+						  &executionDurationMillisec,
+						  &executionTuples,
+						  &executionLoops);
 #else
-		ExplainOnePlan(
-			plan,
-			into,
-			es,
-			queryString,
-			params,
-			NULL,                           /* QueryEnvironment *queryEnv */
-			&planduration,
-			(es->buffers ? &bufusage : NULL)
-			);
+
+		/* Execute EXPLAIN without ANALYZE */
+		ExplainWorkerPlan(plan, subPlan, dest, es, queryString, params, NULL,
+						  &planduration, &executionDurationMillisec,
+						  &executionTuples, &executionLoops);
 #endif
 
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
@@ -1251,17 +1320,19 @@ worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
 	if (SavedExplainPlan != NULL)
 	{
 		int columnCount = tupleDescriptor->natts;
-		if (columnCount != 2)
+		if (columnCount != 4)
 		{
-			ereport(ERROR, (errmsg("expected 3 output columns in definition of "
+			ereport(ERROR, (errmsg("expected 4 output columns in definition of "
 								   "worker_last_saved_explain_analyze, but got %d",
 								   columnCount)));
 		}
 
-		bool columnNulls[2] = { false };
-		Datum columnValues[2] = {
+		bool columnNulls[4] = { false };
+		Datum columnValues[4] = {
 			CStringGetTextDatum(SavedExplainPlan),
-			Float8GetDatum(SavedExecutionDurationMillisec)
+			Float8GetDatum(SavedExecutionDurationMillisec),
+			Float8GetDatum(SavedExplainPlanNtuples),
+			Float8GetDatum(SavedExplainPlanNloops)
 		};
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, columnValues, columnNulls);
@@ -1282,6 +1353,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
 	double executionDurationMillisec = 0.0;
+	double executionTuples = 0;
+	double executionLoops = 0;
 
 	Datum explainOptions = PG_GETARG_DATUM(1);
 	ExplainState *es = NewExplainState();
@@ -1398,16 +1471,19 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	}
 
 	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, boundParams, NULL,
+	ExplainWorkerPlan(plan, NULL, tupleStoreDest, es, queryString, boundParams, NULL,
 					  &planDuration,
 					  (es->buffers ? &bufusage : NULL),
 					  (es->memory ? &mem_counters : NULL),
-					  &executionDurationMillisec);
+					  &executionDurationMillisec,
+					  &executionTuples,
+					  &executionLoops);
 #else
 
 	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, boundParams, NULL,
-					  &planDuration, &executionDurationMillisec);
+	ExplainWorkerPlan(plan, NULL, tupleStoreDest, es, queryString, boundParams, NULL,
+					  &planDuration, &executionDurationMillisec,
+					  &executionTuples, &executionLoops);
 #endif
 
 	ExplainEndOutput(es);
@@ -1418,6 +1494,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	SavedExplainPlan = pstrdup(es->str->data);
 	SavedExecutionDurationMillisec = executionDurationMillisec;
+	SavedExplainPlanNtuples = executionTuples;
+	SavedExplainPlanNloops = executionLoops;
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -1606,22 +1684,7 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	}
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-	ExplainOnePlan(
-		plan,                          /* PlannedStmt *plannedstmt */
-		NULL,                          /* no CachedPlan */
-		NULL,                          /* no CachedPlanSource */
-		0,                             /* query_index */
-		into,                          /* IntoClause *into */
-		es,                            /* struct ExplainState *es */
-		queryString,                   /* const char *queryString */
-		params,                        /* ParamListInfo params */
-		queryEnv,                      /* QueryEnvironment *queryEnv */
-		&planduration,                 /* const instr_time *planduration */
-		(es->buffers ? &bufusage : NULL),   /* const BufferUsage *bufusage */
-		(es->memory ? &mem_counters : NULL) /* const MemoryContextCounters *mem_counters */
-		);
-#elif PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17
 
 	/* PostgreSQL 17 signature (9 args: includes mem_counters) */
 	ExplainOnePlan(
@@ -1662,11 +1725,13 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 	tupleDestination->originalTask = task;
 	tupleDestination->originalTaskDestination = taskDest;
 
-	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(2);
+	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(4);
 
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 1, "explain analyze", TEXTOID, 0,
 					   0);
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 2, "duration", FLOAT8OID, 0, 0);
+	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 3, "ntuples", FLOAT8OID, 0, 0);
+	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 4, "nloops", FLOAT8OID, 0, 0);
 
 	tupleDestination->lastSavedExplainAnalyzeTupDesc = lastSavedExplainAnalyzeTupDesc;
 
@@ -1674,6 +1739,51 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 	tupleDestination->pub.tupleDescForQuery = ExplainAnalyzeDestTupleDescForQuery;
 
 	return (TupleDestination *) tupleDestination;
+}
+
+
+/*
+ * EnsureExplainOutputCapacity is to ensure capacity for new entries. Input
+ * parameter requiredSize is minimum number of elements needed.
+ */
+static void
+EnsureExplainOutputCapacity(int requiredSize)
+{
+	if (requiredSize < TotalExplainOutputCapacity)
+	{
+		return;
+	}
+
+	int newCapacity =
+		(TotalExplainOutputCapacity == 0) ? 32 : TotalExplainOutputCapacity * 2;
+
+	while (newCapacity <= requiredSize)
+	{
+		newCapacity *= 2;
+	}
+
+	if (SubPlanExplainOutput == NULL)
+	{
+		SubPlanExplainOutput =
+			(SubPlanExplainOutputData *) MemoryContextAllocZero(
+				SubPlanExplainAnalyzeContext,
+				newCapacity *
+				sizeof(SubPlanExplainOutputData));
+	}
+	else
+	{
+		/* Use repalloc and manually zero the new memory */
+		int oldSize = TotalExplainOutputCapacity * sizeof(SubPlanExplainOutputData);
+		int newSize = newCapacity * sizeof(SubPlanExplainOutputData);
+
+		SubPlanExplainOutput =
+			(SubPlanExplainOutputData *) repalloc(SubPlanExplainOutput, newSize);
+
+		/* Zero out the newly allocated memory */
+		MemSet((char *) SubPlanExplainOutput + oldSize, 0, newSize - oldSize);
+	}
+
+	TotalExplainOutputCapacity = newCapacity;
 }
 
 
@@ -1686,6 +1796,8 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 						   int placementIndex, int queryNumber,
 						   HeapTuple heapTuple, uint64 tupleLibpqSize)
 {
+	uint32 taskId = task->taskId;
+
 	ExplainAnalyzeDestination *tupleDestination = (ExplainAnalyzeDestination *) self;
 	if (queryNumber == 0)
 	{
@@ -1693,6 +1805,13 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple,
 								  tupleLibpqSize);
 		tupleDestination->originalTask->totalReceivedTupleData += tupleLibpqSize;
+
+		if (SubPlanExplainAnalyzeContext)
+		{
+			EnsureExplainOutputCapacity(taskId + 1);
+			SubPlanExplainOutput[taskId].totalReceivedTupleData =
+				tupleDestination->originalTask->totalReceivedTupleData;
+		}
 	}
 	else if (queryNumber == 1)
 	{
@@ -1708,6 +1827,8 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		}
 
 		Datum executionDuration = heap_getattr(heapTuple, 2, tupDesc, &isNull);
+		Datum executionTuples = heap_getattr(heapTuple, 3, tupDesc, &isNull);
+		Datum executionLoops = heap_getattr(heapTuple, 4, tupDesc, &isNull);
 
 		if (isNull)
 		{
@@ -1717,6 +1838,8 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 
 		char *fetchedExplainAnalyzePlan = TextDatumGetCString(explainAnalyze);
 		double fetchedExplainAnalyzeExecutionDuration = DatumGetFloat8(executionDuration);
+		double fetchedExplainAnalyzeTuples = DatumGetFloat8(executionTuples);
+		double fetchedExplainAnalyzeLoops = DatumGetFloat8(executionLoops);
 
 		/*
 		 * Allocate fetchedExplainAnalyzePlan in the same context as the Task, since we are
@@ -1742,6 +1865,20 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 			placementIndex;
 		tupleDestination->originalTask->fetchedExplainAnalyzeExecutionDuration =
 			fetchedExplainAnalyzeExecutionDuration;
+
+		/* We should build tupleDestination in subPlan similar to the above */
+		if (SubPlanExplainAnalyzeContext)
+		{
+			EnsureExplainOutputCapacity(taskId + 1);
+			SubPlanExplainOutput[taskId].explainOutput =
+				MemoryContextStrdup(SubPlanExplainAnalyzeContext,
+									fetchedExplainAnalyzePlan);
+			SubPlanExplainOutput[taskId].executionDuration =
+				fetchedExplainAnalyzeExecutionDuration;
+			SubPlanExplainOutput[taskId].executionNtuples = fetchedExplainAnalyzeTuples;
+			SubPlanExplainOutput[taskId].executionNloops = fetchedExplainAnalyzeLoops;
+			NumTasksOutput++;
+		}
 	}
 	else
 	{
@@ -1804,7 +1941,14 @@ ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int queryNumber)
 bool
 RequestedForExplainAnalyze(CitusScanState *node)
 {
-	return (node->customScanState.ss.ps.state->es_instrument != 0);
+	/*
+	 * When running a distributed plan—either the root plan or a subplan’s
+	 * distributed fragment—we need to know if we’re under EXPLAIN ANALYZE.
+	 * Subplans can’t receive the EXPLAIN ANALYZE flag directly, so we use
+	 * SubPlanExplainAnalyzeContext as a flag to indicate that context.
+	 */
+	return (node->customScanState.ss.ps.state->es_instrument != 0) ||
+		   (SubPlanLevel > 0 && SubPlanExplainAnalyzeContext);
 }
 
 
@@ -1963,7 +2107,8 @@ FetchPlanQueryForExplainAnalyze(const char *queryString, ParamListInfo params)
 	}
 
 	appendStringInfoString(fetchQuery,
-						   "SELECT explain_analyze_output, execution_duration "
+						   "SELECT explain_analyze_output, execution_duration, "
+						   "execution_ntuples, execution_nloops "
 						   "FROM worker_last_saved_explain_analyze()");
 
 	return fetchQuery->data;
@@ -2107,22 +2252,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		}
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-		ExplainOnePlan(
-			plan,                 /* PlannedStmt *plannedstmt */
-			NULL,                 /* CachedPlan *cplan */
-			NULL,                 /* CachedPlanSource *plansource */
-			0,                    /* query_index */
-			into,                 /* IntoClause *into */
-			es,                   /* struct ExplainState *es */
-			queryString,          /* const char *queryString */
-			params,               /* ParamListInfo params */
-			queryEnv,             /* QueryEnvironment *queryEnv */
-			&planduration,        /* const instr_time *planduration */
-			(es->buffers  ? &bufusage    : NULL),
-			(es->memory   ? &mem_counters: NULL)
-		);
-#elif PG_VERSION_NUM >= PG_VERSION_17
+#if PG_VERSION_NUM >= PG_VERSION_17
 		ExplainOnePlan(
 			plan,
 			into,
@@ -2146,8 +2276,21 @@ ExplainOneQuery(Query *query, int cursorOptions,
 			(es->buffers ? &bufusage : NULL)
 		);
 #endif
-
 	}
+}
+
+
+/*
+ * PlanStateAnalyzeWalker Tree walker callback that visits each PlanState node in the
+ * plan tree and extracts analyze statistics from CustomScanState tasks using
+ * ExtractAnalyzeStats. Always returns false to recurse into all children.
+ */
+static bool
+PlanStateAnalyzeWalker(PlanState *planState, void *ctx)
+{
+	DistributedSubPlan *subplan = (DistributedSubPlan *) ctx;
+	ExtractAnalyzeStats(subplan, planState);
+	return false;
 }
 
 
@@ -2165,20 +2308,25 @@ ExplainOneQuery(Query *query, int cursorOptions,
  * destination.
  */
 static void
-ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es,
+ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestReceiver *dest, ExplainState *es,
 				  const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv,
 				  const instr_time *planduration,
 #if PG_VERSION_NUM >= PG_VERSION_17
 				  const BufferUsage *bufusage,
 			      const MemoryContextCounters *mem_counters,
 #endif
-				  double *executionDurationMillisec)
+				  double *executionDurationMillisec,
+				  double *executionTuples,
+				  double *executionLoops)
 {
 	QueryDesc  *queryDesc;
 	instr_time	starttime;
 	double		totaltime = 0;
 	int			eflags;
 	int			instrument_option = 0;
+	/* Sub-plan already executed; skipping execution */
+	bool executeQuery = (es->analyze && !subPlan);
+	bool executeSubplan = (es->analyze && subPlan);
 
 	Assert(plannedstmt->commandType != CMD_UTILITY);
 
@@ -2208,19 +2356,6 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	UpdateActiveSnapshotCommandId();
 
 	/* Create a QueryDesc for the query */
-	#if PG_VERSION_NUM >= PG_VERSION_18
-	queryDesc = CreateQueryDesc(
-		plannedstmt,    /* PlannedStmt *plannedstmt */
-		NULL,           /* CachedPlan *cplan (none) */
-		queryString,    /* const char *sourceText */
-		GetActiveSnapshot(),   /* Snapshot snapshot */
-		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
-		dest,           /* DestReceiver *dest */
-		params,         /* ParamListInfo params */
-		queryEnv,       /* QueryEnvironment *queryEnv */
-		instrument_option /* int instrument_options */
-	);
-	#else
 	queryDesc = CreateQueryDesc(
 		plannedstmt,    /* PlannedStmt *plannedstmt */
 		queryString,    /* const char *sourceText */
@@ -2231,10 +2366,9 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 		queryEnv,       /* QueryEnvironment *queryEnv */
 		instrument_option /* int instrument_options */
 	);
-	#endif
 
 	/* Select execution options */
-	if (es->analyze)
+	if (executeQuery)
 		eflags = 0;				/* default run-to-completion flags */
 	else
 		eflags = EXEC_FLAG_EXPLAIN_ONLY;
@@ -2243,7 +2377,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	ExecutorStart(queryDesc, eflags);
 
 	/* Execute the plan for statistics if asked for */
-	if (es->analyze)
+	if (executeQuery)
 	{
 		ScanDirection dir = ForwardScanDirection;
 
@@ -2265,6 +2399,12 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	}
 
 	ExplainOpenGroup("Query", NULL, true, es);
+
+	if (executeSubplan)
+	{
+		ExtractAnalyzeStats(subPlan, queryDesc->planstate);
+		planstate_tree_walker(queryDesc->planstate, PlanStateAnalyzeWalker, (void *) subPlan);
+	}
 
 	/* Create textual dump of plan tree */
 	ExplainPrintPlan(es, queryDesc);
@@ -2338,6 +2478,13 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	 */
 	INSTR_TIME_SET_CURRENT(starttime);
 
+	if (executeQuery)
+	{
+		Instrumentation *instr = queryDesc->planstate->instrument;
+		*executionTuples = instr->ntuples;
+		*executionLoops = instr->nloops;
+	}
+
 	ExecutorEnd(queryDesc);
 
 	FreeQueryDesc(queryDesc);
@@ -2345,7 +2492,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	PopActiveSnapshot();
 
 	/* We need a CCI just in case query expanded to multiple plans */
-	if (es->analyze)
+	if (executeQuery)
 		CommandCounterIncrement();
 
 	totaltime += elapsed_time(&starttime);

@@ -313,6 +313,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 		{
 			int taskNumParams = numParams;
 			Oid *taskParameterTypes = parameterTypes;
+			int taskType = GetTaskQueryType(task);
 
 			if (task->parametersInQueryStringResolved)
 			{
@@ -330,7 +331,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			 * for concatenated strings, we set queryStringList so that we can access
 			 * each query string.
 			 */
-			if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
+			if (taskType == TASK_QUERY_TEXT_LIST)
 			{
 				List *queryStringList = task->taskQuery.data.queryStringList;
 				totalRowsProcessed +=
@@ -342,22 +343,31 @@ ExecuteLocalTaskListExtended(List *taskList,
 				continue;
 			}
 
-			Query *shardQuery = ParseQueryString(TaskQueryString(task),
-												 taskParameterTypes,
-												 taskNumParams);
+			if (taskType != TASK_QUERY_LOCAL_PLAN)
+			{
+				Query *shardQuery = ParseQueryString(TaskQueryString(task),
+													 taskParameterTypes,
+													 taskNumParams);
 
+				int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
-			int cursorOptions = CURSOR_OPT_PARALLEL_OK;
-
-			/*
-			 * Altough the shardQuery is local to this node, we prefer planner()
-			 * over standard_planner(). The primary reason for that is Citus itself
-			 * is not very tolarent standard_planner() calls that doesn't go through
-			 * distributed_planner() because of the way that restriction hooks are
-			 * implemented. So, let planner to call distributed_planner() which
-			 * eventually calls standard_planner().
-			 */
-			localPlan = planner(shardQuery, NULL, cursorOptions, paramListInfo);
+				/*
+				 * Altough the shardQuery is local to this node, we prefer planner()
+				 * over standard_planner(). The primary reason for that is Citus itself
+				 * is not very tolarent standard_planner() calls that doesn't go through
+				 * distributed_planner() because of the way that restriction hooks are
+				 * implemented. So, let planner to call distributed_planner() which
+				 * eventually calls standard_planner().
+				 */
+				localPlan = planner(shardQuery, NULL, cursorOptions, paramListInfo);
+			}
+			else
+			{
+				ereport(DEBUG2, (errmsg(
+									 "Local executor: Using task's cached local plan for task %u",
+									 task->taskId)));
+				localPlan = TaskQueryLocalPlan(task);
+			}
 		}
 
 		char *shardQueryString = NULL;
@@ -754,24 +764,6 @@ ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 															 localPlacementIndex) :
 								 CreateDestReceiver(DestNone);
 
-	/* Create a QueryDesc for the query */
-	#if PG_VERSION_NUM >= PG_VERSION_18
-
-	/* PG18+: nine‐arg CreateQueryDesc with a CachedPlan slot */
-	QueryDesc *queryDesc = CreateQueryDesc(
-		taskPlan,          /* PlannedStmt *plannedstmt */
-		NULL,              /* CachedPlan *cplan (none) */
-		queryString,       /* const char *sourceText */
-		GetActiveSnapshot(),   /* Snapshot snapshot */
-		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
-		destReceiver,      /* DestReceiver *dest */
-		paramListInfo,     /* ParamListInfo params */
-		queryEnv,          /* QueryEnvironment *queryEnv */
-		0                  /* int instrument_options */
-		);
-	#else
-
-	/* PG15–17: eight‐arg CreateQueryDesc without CachedPlan */
 	QueryDesc *queryDesc = CreateQueryDesc(
 		taskPlan,          /* PlannedStmt *plannedstmt */
 		queryString,       /* const char *sourceText */
@@ -782,8 +774,6 @@ ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 		queryEnv,          /* QueryEnvironment *queryEnv */
 		0                  /* int instrument_options */
 		);
-	#endif
-
 
 	ExecutorStart(queryDesc, eflags);
 

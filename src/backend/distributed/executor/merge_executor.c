@@ -23,6 +23,7 @@
 #include "distributed/merge_executor.h"
 #include "distributed/merge_planner.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/repartition_executor.h"
@@ -132,7 +133,7 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 	ereport(DEBUG1, (errmsg("Executing subplans of the source query and "
 							"storing the results at the respective node(s)")));
 
-	ExecuteSubPlans(distSourcePlan);
+	ExecuteSubPlans(distSourcePlan, RequestedForExplainAnalyze(scanState));
 
 	/*
 	 * We have a separate directory for each transaction, so choosing
