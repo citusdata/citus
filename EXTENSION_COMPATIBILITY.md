@@ -1,3 +1,4 @@
+Below table is created with Citus 12.1.7 on PG16
 | Extension Name               | Works as Expected   | Notes   |
 |:-----------------------------|:--------------------|:--------|
 | address_standardizer         | Yes                 |         |
