@@ -81,29 +81,9 @@ SELECT create_distributed_table('tenk1', 'unique1');
 (1 row)
 
 SET citus.log_remote_commands TO on;
-EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SAVEPOINT citus_explain_savepoint
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, GENERIC_PLAN TRUE, TIMING FALSE, SUMMARY FALSE, FORMAT TEXT) SELECT unique1 FROM pg16.tenk1_950001 tenk1 WHERE (thousand OPERATOR(pg_catalog.=) 1000)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ROLLBACK TO SAVEPOINT citus_explain_savepoint
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-                                   QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on tenk1_950001 tenk1  (cost=0.00..35.50 rows=10 width=4)
-               Filter: (thousand = 1000)
-(7 rows)
-
-EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = $1;
+ERROR:  EXPLAIN GENERIC_PLAN is currently not supported for Citus tables
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = $1;
 ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
 SET citus.log_remote_commands TO off;
 -- Proper error when creating statistics without a name on a Citus table
@@ -330,14 +310,14 @@ SELECT create_distributed_table('test_collation_rules', 'a');
 (1 row)
 
 INSERT INTO test_collation_rules VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
-SELECT collname, collprovider, colliculocale, collicurules
+SELECT collname, collprovider, collicurules
 FROM pg_collation
 WHERE collname like '%_rule%'
 ORDER BY 1;
-   collname   | collprovider | colliculocale | collicurules
+   collname   | collprovider | collicurules
 ---------------------------------------------------------------------
- default_rule | i            | und           |
- special_rule | i            | und           | &a < g
+ default_rule | i            |
+ special_rule | i            | &a < g
 (2 rows)
 
 SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
@@ -364,14 +344,14 @@ SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
 
 \c - - - :worker_1_port
 SET search_path TO pg16;
-SELECT collname, collprovider, colliculocale, collicurules
+SELECT collname, collprovider, collicurules
 FROM pg_collation
 WHERE collname like '%_rule%'
 ORDER BY 1;
-   collname   | collprovider | colliculocale | collicurules
+   collname   | collprovider | collicurules
 ---------------------------------------------------------------------
- default_rule | i            | und           |
- special_rule | i            | und           | &a < g
+ default_rule | i            |
+ special_rule | i            | &a < g
 (2 rows)
 
 SELECT * FROM test_collation_rules ORDER BY a COLLATE default_rule;
@@ -517,7 +497,7 @@ COPY copy_default FROM stdin WITH (default E'\r');
 ERROR:  COPY default representation cannot use newline or carriage return
 -- DELIMITER cannot appear in DEFAULT spec
 COPY copy_default FROM stdin WITH (delimiter ';', default 'test;test');
-ERROR:  COPY delimiter must not appear in the DEFAULT specification
+ERROR:  COPY delimiter character must not appear in the DEFAULT specification
 -- CSV quote cannot appear in DEFAULT spec
 COPY copy_default FROM stdin WITH (format csv, quote '"', default 'test"test');
 ERROR:  CSV quote character must not appear in the DEFAULT specification
@@ -603,7 +583,7 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 -- DEFAULT cannot be used in COPY TO
 COPY (select 1 as test) TO stdout WITH (default '\D');
-ERROR:  COPY DEFAULT only available using COPY FROM
+ERROR:  COPY DEFAULT cannot be used with COPY TO
 -- Tests for SQL/JSON: JSON_ARRAYAGG and JSON_OBJECTAGG aggregates
 -- Relevant PG commit:
 -- https://github.com/postgres/postgres/commit/7081ac4

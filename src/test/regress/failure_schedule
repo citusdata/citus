@@ -33,8 +33,9 @@ test: failure_savepoints
 test: failure_multi_row_insert
 test: failure_mx_metadata_sync
 test: failure_mx_metadata_sync_multi_trans
+# Do not parallelize with others because this measures stat counters
+# for failed connections for a few queries.
 test: failure_connection_establishment
-test: failure_non_main_db_2pc
 test: failure_create_database
 
 # this test syncs metadata to the workers

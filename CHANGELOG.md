@@ -1,3 +1,232 @@
+### citus v13.1.0 (May 30th, 2025) ###
+
+* Adds `citus_stat_counters` view that can be used to query
+  stat counters that Citus collects while the feature is enabled, which is
+  controlled by citus.enable_stat_counters. `citus_stat_counters()` can be
+  used to query the stat counters for the provided database oid and
+  `citus_stat_counters_reset()` can be used to reset them for the provided
+  database oid or for the current database if nothing or 0 is provided (#7917)
+
+* Adds `citus_nodes` view that displays the node name, port role, and "active"
+  for nodes in the cluster (#7968)
+
+* Adds `citus_is_primary_node()` UDF to determine if the current node is a
+  primary node in the cluster (#7720)
+
+* Adds support for propagating `GRANT/REVOKE` rights on table columns (#7918)
+
+* Adds support for propagating `REASSIGN OWNED BY` commands (#7319)
+
+* Adds support for propagating `CREATE`/`DROP` database from all nodes (#7240,
+  #7253, #7359)
+
+* Propagates `SECURITY LABEL ON ROLE` statement from any node (#7508)
+
+* Adds support for issuing role management commands from worker nodes (#7278)
+
+* Adds support for propagating `ALTER USER RENAME` commands (#7204)
+
+* Adds support for propagating `ALTER DATABASE <db_name> SET ..` commands
+  (#7181)
+
+* Adds support for propagating `SECURITY LABEL` on tables and columns (#7956)
+
+* Adds support for propagating `COMMENT ON <database>/<role>` commands (#7388)
+
+* Moves some of the internal citus functions from `pg_catalog` to
+  `citus_internal` schema (#7473, #7470, #7466, 7456, 7450)
+
+* Adjusts `max_prepared_transactions` only when it's set to default on PG >= 16
+  (#7712)
+
+* Adds skip_qualify_public param to shard_name() UDF to allow qualifying for
+  "public" schema when needed (#8014)
+
+* Allows `citus_*_size` on indexes on a distributed tables (#7271)
+
+* Allows `GRANT ADMIN` to now also be `INHERIT` or `SET` in support of PG16
+
+* Makes sure `worker_copy_table_to_node` errors out with Citus tables (#7662)
+
+* Adds information to explain output when using
+  `citus.explain_distributed_queries=false` (#7412)
+
+* Logs username in the failed connection message (#7432)
+
+* Makes sure to avoid incorrectly pushing-down the outer joins between
+  distributed tables and recurring relations (like reference tables, local
+  tables and `VALUES(..)` etc.) prior to PG 17 (#7937)
+
+* Prevents incorrectly pushing `nextval()` call down to workers to avoid using
+  incorrect sequence value for some types of `INSERT .. SELECT`s (#7976)
+
+* Makes sure to prevent `INSERT INTO ... SELECT` queries involving subfield or
+  sublink, to avoid crashes (#7912)
+
+* Makes sure to take improvement_threshold into the account
+  in `citus_add_rebalance_strategy()` (#7247)
+
+* Makes sure to disallow creating a replicated distributed
+  table concurrently (#7219)
+
+* Fixes a bug that causes omitting `CASCADE` clause for the commands sent to
+  workers for `REVOKE` commands on tables (#7958)
+
+* Fixes an issue detected using address sanitizer (#7948, #7949)
+
+* Fixes a bug in deparsing of shard query in case of "output-table column" name
+  conflict (#7932)
+
+* Fixes a crash in columnar custom scan that happens when a columnar table is
+  used in a join (#7703)
+
+* Fixes `MERGE` command when insert value does not have source distributed
+  column (#7627)
+
+* Fixes performance issue when using `\d tablename` on a server with many
+  tables (#7577)
+
+* Fixes performance issue in `GetForeignKeyOids` on systems with many
+  constraints (#7580)
+
+* Fixes performance issue when distributing a table that depends on an
+  extension (#7574)
+
+* Fixes performance issue when creating distributed tables if many already
+  exist (#7575)
+
+* Fixes a crash caused by some form of `ALTER TABLE ADD COLUMN` statements. When
+  adding multiple columns, if one of the `ADD COLUMN` statements contains a
+  `FOREIGN` constraint ommitting the referenced
+  columns in the statement, a `SEGFAULT` occurs (#7522)
+
+* Fixes assertion failure in maintenance daemon during Citus upgrades  (#7537)
+
+* Fixes segmentation fault when using `CASE WHEN` in `DO` block functions
+  (#7554)
+
+* Fixes undefined behavior in `master_disable_node` due to argument mismatch
+  (#7492)
+
+* Fixes incorrect propagating of `GRANTED BY` and `CASCADE/RESTRICT` clauses
+  for `REVOKE` statements (#7451)
+
+* Fixes the incorrect column count after `ALTER TABLE` (#7379)
+
+* Fixes timeout when underlying socket is changed for an inter-node connection
+  (#7377)
+
+* Fixes memory leaks (#7441, #7440)
+
+* Fixes leaking of memory and memory contexts when tracking foreign keys between
+  Citus tables (#7236)
+
+* Fixes a potential segfault for background rebalancer (#7694)
+
+* Fixes potential `NULL` dereference in casual clocks (#7704)
+
+### citus v13.0.4 (May 29th, 2025) ###
+
+* Fixes an issue detected using address sanitizer (#7966)
+
+* Error out for queries with outer joins and pseudoconstant quals in versions
+  prior to PG 17 (#7937)
+
+### citus v12.1.8 (May 29, 2025) ###
+
+* Fixes a crash in left outer joins that can happen when there is an an
+  aggregate on a column from the inner side of the join (#7904)
+
+* Fixes an issue detected using address sanitizer (#7965)
+
+* Fixes a crash when executing a prepared CALL, which is not pure SQL but
+available with some drivers like npgsql and jpgdbc (#7288)
+
+### citus v13.0.3 (March 20th, 2025) ###
+
+* Fixes a version bump issue in 13.0.2
+
+### citus v13.0.2 (March 12th, 2025) ###
+
+* Fixes a crash in columnar custom scan that happens when a columnar table is
+  used in a join. (#7647)
+
+* Fixes a bug that breaks `UPDATE SET (...) = (SELECT some_func(),... )`
+  type of queries on Citus tables (#7914)
+
+* Fixes a planning error caused by a redundant WHERE clause (#7907)
+
+* Fixes a crash in left outer joins that can happen when there is an aggregate
+  on a column from the inner side of the join. (#7901)
+
+* Fixes deadlock with transaction recovery that is possible during Citus
+  upgrades. (#7910)
+
+* Fixes a bug that prevents inserting into Citus tables that uses
+  a GENERATED ALWAYS AS IDENTITY column. (#7920)
+
+* Ensures that a MERGE command on a distributed table with a WHEN NOT MATCHED BY
+  SOURCE clause runs against all shards of the distributed table. (#7900)
+
+* Fixes a bug that breaks router updates on distributed tables
+  when a reference table is used in the subquery (#7897)
+
+### citus v12.1.7 (Feb 6, 2025) ###
+
+* Fixes a crash that happens because of unsafe catalog access when re-assigning
+  the global pid after `application_name` changes (#7791)
+
+* Prevents crashes when another extension skips executing the
+  `ClientAuthentication_hook` of Citus. (#7836)
+
+### citus v13.0.1 (February 4th, 2025) ###
+
+* Drops support for PostgreSQL 14 (#7753)
+
+### citus v13.0.0 (January 22, 2025) ###
+
+* Adds support for PostgreSQL 17 (#7699, #7661)
+
+* Adds `JSON_TABLE()` support in distributed queries (#7816)
+
+* Propagates `MERGE ... WHEN NOT MATCHED BY SOURCE` (#7807)
+
+* Propagates `MEMORY` and `SERIALIZE` options of `EXPLAIN` (#7802)
+
+* Adds support for identity columns in distributed partitioned tables (#7785)
+
+* Allows specifying an access method for distributed partitioned tables (#7818)
+
+* Allows exclusion constraints on distributed partitioned tables (#7733)
+
+* Allows configuring sslnegotiation using `citus.node_conn_info` (#7821)
+
+* Avoids wal receiver timeouts during large shard splits (#7229)
+
+* Fixes a bug causing incorrect writing of data to target `MERGE` repartition
+  command (#7659)
+
+* Fixes a crash that happens because of unsafe catalog access when re-assigning
+  the global pid after `application_name` changes (#7791)
+
+* Fixes incorrect `VALID UNTIL` setting assumption made for roles when syncing
+  them to new nodes (#7534)
+
+* Fixes segfault when calling distributed procedure with a parameterized
+  distribution argument (#7242)
+
+* Fixes server crash when trying to execute `activate_node_snapshot()` on a
+  single-node cluster (#7552)
+
+* Improves `citus_move_shard_placement()` to fail early if there is a new node
+  without reference tables yet (#7467)
+
+### citus v12.1.6 (Nov 14, 2024) ###
+
+* Propagates `SECURITY LABEL .. ON ROLE` statements (#7304)
+
+* Fixes crash caused by running queries with window partition (#7718)
+
 ### citus v12.1.5 (July 17, 2024) ###
 
 * Adds support for MERGE commands with single shard distributed target tables
@@ -15,9 +244,8 @@
 * Allows overwriting host name for all inter-node connections by
   supporting "host" parameter in citus.node_conninfo (#7541)
 
-* Changes the order in which the locks are acquired for the target and
-  reference tables, when a modify request is initiated from a worker
-  node that is not the "FirstWorkerNode" (#7542)
+* Avoids distributed deadlocks by changing the order in which the locks are
+  acquired for the target and reference tables (#7542)
 
 * Fixes a performance issue when distributing a table that depends on an
   extension (#7574)

@@ -150,7 +150,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			AppendShardIdToName(relationName, shardId);
 
 			AlterTableCmd *command = NULL;
-			foreach_ptr(command, commandList)
+			foreach_declared_ptr(command, commandList)
 			{
 				if (command->subtype == AT_AddConstraint)
 				{
@@ -162,7 +162,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				{
 					ColumnDef *columnDefinition = (ColumnDef *) command->def;
 					Constraint *constraint = NULL;
-					foreach_ptr(constraint, columnDefinition->constraints)
+					foreach_declared_ptr(constraint, columnDefinition->constraints)
 					{
 						RelayEventExtendConstraintAndIndexNames(alterTableStmt,
 																constraint, shardId);
@@ -385,7 +385,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				List *shardStatisticsList = NIL;
 				List *objectNameList = NULL;
-				foreach_ptr(objectNameList, dropStmt->objects)
+				foreach_declared_ptr(objectNameList, dropStmt->objects)
 				{
 					RangeVar *stat = makeRangeVarFromNameList(objectNameList);
 
@@ -415,7 +415,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				grantStmt->objtype == OBJECT_TABLE)
 			{
 				RangeVar *relation = NULL;
-				foreach_ptr(relation, grantStmt->objects)
+				foreach_declared_ptr(relation, grantStmt->objects)
 				{
 					char **relationName = &(relation->relname);
 					char **relationSchemaName = &(relation->schemaname);
@@ -591,6 +591,58 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			break;
 		}
 
+		case T_SecLabelStmt:
+		{
+			SecLabelStmt *secLabelStmt = (SecLabelStmt *) parseTree;
+
+			/* Should be looking at a security label for a table or column */
+			if (secLabelStmt->objtype == OBJECT_TABLE || secLabelStmt->objtype ==
+				OBJECT_COLUMN)
+			{
+				List *qualified_name = (List *) secLabelStmt->object;
+				String *table_name = NULL;
+
+				switch (list_length(qualified_name))
+				{
+					case 1:
+					{
+						table_name = castNode(String, linitial(qualified_name));
+						break;
+					}
+
+					case 2:
+					case 3:
+					{
+						table_name = castNode(String, lsecond(qualified_name));
+						break;
+					}
+
+					default:
+					{
+						/* Unlikely, but just in case */
+						ereport(ERROR, (errmsg(
+											"unhandled name type in security label; name is: \"%s\"",
+											NameListToString(qualified_name))));
+						break;
+					}
+				}
+
+				/* Now change the table name: <dist table> -> <shard table> */
+				char *relationName = strVal(table_name);
+				AppendShardIdToName(&relationName, shardId);
+				strVal(table_name) = relationName;
+			}
+			else
+			{
+				ereport(WARNING, (errmsg(
+									  "unsafe object type in security label statement"),
+								  errdetail("Object type: %u",
+											(uint32) secLabelStmt->objtype)));
+			}
+
+			break; /* End of handling Security Label */
+		}
+
 		default:
 		{
 			ereport(WARNING, (errmsg("unsafe statement type in name extension"),
@@ -673,7 +725,7 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 			List *commandList = alterTableStmt->cmds;
 
 			AlterTableCmd *command = NULL;
-			foreach_ptr(command, commandList)
+			foreach_declared_ptr(command, commandList)
 			{
 				char **referencedTableName = NULL;
 				char **relationSchemaName = NULL;
@@ -693,7 +745,7 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 					List *columnConstraints = columnDefinition->constraints;
 
 					Constraint *constraint = NULL;
-					foreach_ptr(constraint, columnConstraints)
+					foreach_declared_ptr(constraint, columnConstraints)
 					{
 						if (constraint->contype == CONSTR_FOREIGN)
 						{
@@ -846,7 +898,6 @@ AppendShardIdToName(char **name, uint64 shardId)
 	{
 		SafeSnprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
 	}
-
 	/*
 	 * Otherwise, we need to truncate the name further to accommodate
 	 * a sufficient hash value. The resulting name will avoid collision
@@ -911,6 +962,7 @@ shard_name(PG_FUNCTION_ARGS)
 
 	Oid relationId = PG_GETARG_OID(0);
 	int64 shardId = PG_GETARG_INT64(1);
+	bool skipQualifyPublic = PG_GETARG_BOOL(2);
 
 	char *qualifiedName = NULL;
 
@@ -940,7 +992,7 @@ shard_name(PG_FUNCTION_ARGS)
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 
-	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
+	if (skipQualifyPublic && strncmp(schemaName, "public", NAMEDATALEN) == 0)
 	{
 		qualifiedName = (char *) quote_identifier(relationName);
 	}

@@ -137,7 +137,8 @@ static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 														RecursivePlanningContext *
 														context);
 static bool ContainsSubquery(Query *query);
-static bool ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context);
+static bool ShouldRecursivelyPlanOuterJoins(Query *query,
+											RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
 												  RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
@@ -192,6 +193,10 @@ static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
 static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
+#if PG_VERSION_NUM < PG_VERSION_17
+static bool hasPseudoconstantQuals(
+	RelationRestrictionContext *relationRestrictionContext);
+#endif
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -355,7 +360,7 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	 * result and logical planner can handle the new query since it's of the from
 	 * "<recurring> LEFT JOIN <recurring>".
 	 */
-	if (ShouldRecursivelyPlanOuterJoins(context))
+	if (ShouldRecursivelyPlanOuterJoins(query, context))
 	{
 		RecursivelyPlanRecurringTupleOuterJoinWalker((Node *) query->jointree,
 													 query, context);
@@ -468,7 +473,7 @@ ContainsSubquery(Query *query)
  * join(s) that might need to be recursively planned.
  */
 static bool
-ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context)
+ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 {
 	if (!context || !context->plannerRestrictionContext ||
 		!context->plannerRestrictionContext->joinRestrictionContext)
@@ -477,7 +482,37 @@ ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context)
 							   "planning context")));
 	}
 
-	return context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
+	bool hasOuterJoin =
+		context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
+#if PG_VERSION_NUM < PG_VERSION_17
+	if (!hasOuterJoin)
+	{
+		/*
+		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1
+		 * PG16 commit 695f5deb7902865901eb2d50a70523af655c3a00
+		 * disallows replacing joins with scans in queries with pseudoconstant quals.
+		 * This commit prevents the set_join_pathlist_hook from being called
+		 * if any of the join restrictions is a pseudo-constant.
+		 * So in these cases, citus has no info on the join, never sees that the query
+		 * has an outer join, and ends up producing an incorrect plan.
+		 * PG17 fixes this by commit 9e9931d2bf40e2fea447d779c2e133c2c1256ef3
+		 * Therefore, we take this extra measure here for PG versions less than 17.
+		 * hasOuterJoin can never be true when set_join_pathlist_hook is absent.
+		 */
+		if (hasPseudoconstantQuals(
+				context->plannerRestrictionContext->relationRestrictionContext) &&
+			FindNodeMatchingCheckFunction((Node *) query->jointree, IsOuterJoinExpr))
+		{
+			ereport(ERROR, (errmsg("Distributed queries with outer joins and "
+								   "pseudoconstant quals are not supported in PG15 and PG16."),
+							errdetail(
+								"PG15 and PG16 disallow replacing joins with scans when the"
+								" query has pseudoconstant quals"),
+							errhint("Consider upgrading your PG version to PG17+")));
+		}
+	}
+#endif
+	return hasOuterJoin;
 }
 
 
@@ -1736,7 +1771,7 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 	ExtractSublinkWalker(node, &sublinks);
 
 	SubLink *sublink;
-	foreach_ptr(sublink, sublinks)
+	foreach_declared_ptr(sublink, sublinks)
 	{
 		if (ContainsReferencesToOuterQuery(castNode(Query, sublink->subselect)))
 		{
@@ -1894,7 +1929,7 @@ GenerateRequiredColNamesFromTargetList(List *targetList)
 {
 	TargetEntry *entry = NULL;
 	List *innerSubqueryColNames = NIL;
-	foreach_ptr(entry, targetList)
+	foreach_declared_ptr(entry, targetList)
 	{
 		if (IsA(entry->expr, Var))
 		{
@@ -1921,7 +1956,7 @@ UpdateVarNosInNode(Node *node, Index newVarNo)
 	List *varList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |
 									PVC_RECURSE_PLACEHOLDERS);
 	Var *var = NULL;
-	foreach_ptr(var, varList)
+	foreach_declared_ptr(var, varList)
 	{
 		var->varno = newVarNo;
 	}
@@ -1958,7 +1993,7 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 	bool containsDistributedTable = false;
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
 														  IsDistributedOrReferenceTableRTE))
@@ -2109,7 +2144,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -2159,7 +2193,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{
@@ -2288,6 +2321,129 @@ BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 	return BuildReadIntermediateResultsQuery(targetEntryList, columnAliasList,
 											 resultIdConst, functionOid,
 											 useBinaryCopyFormat);
+}
+
+
+/*
+ * For the given target list, build an empty relation with the same target list.
+ * For example, if the target list is (a, b, c), and resultId is "empty", then
+ * it returns a Query object for this SQL:
+ *      SELECT a, b, c FROM (VALUES (NULL, NULL, NULL)) AS empty(a, b, c) WHERE false;
+ */
+Query *
+BuildEmptyResultQuery(List *targetEntryList, char *resultId)
+{
+	List *targetList = NIL;
+	ListCell *targetEntryCell = NULL;
+
+	List *colTypes = NIL;
+	List *colTypMods = NIL;
+	List *colCollations = NIL;
+	List *colNames = NIL;
+
+	List *valueConsts = NIL;
+	List *valueTargetList = NIL;
+	List *valueColNames = NIL;
+
+	int targetIndex = 1;
+
+	/* build the target list and column lists needed */
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Node *targetExpr = (Node *) targetEntry->expr;
+		char *columnName = targetEntry->resname;
+		Oid columnType = exprType(targetExpr);
+		Oid columnTypMod = exprTypmod(targetExpr);
+		Oid columnCollation = exprCollation(targetExpr);
+
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+
+		Var *tgtVar = makeVar(1, targetIndex, columnType, columnTypMod, columnCollation,
+							  0);
+		TargetEntry *tgtEntry = makeTargetEntry((Expr *) tgtVar, targetIndex, columnName,
+												false);
+		Const *valueConst = makeConst(columnType, columnTypMod, columnCollation, 0,
+									  (Datum) 0, true, false);
+
+		StringInfoData *columnString = makeStringInfo();
+		appendStringInfo(columnString, "column%d", targetIndex);
+
+		TargetEntry *valueTgtEntry = makeTargetEntry((Expr *) tgtVar, targetIndex,
+													 columnString->data, false);
+
+		valueConsts = lappend(valueConsts, valueConst);
+		valueTargetList = lappend(valueTargetList, valueTgtEntry);
+		valueColNames = lappend(valueColNames, makeString(columnString->data));
+
+		colNames = lappend(colNames, makeString(columnName));
+		colTypes = lappend_oid(colTypes, columnType);
+		colTypMods = lappend_oid(colTypMods, columnTypMod);
+		colCollations = lappend_oid(colCollations, columnCollation);
+
+		targetList = lappend(targetList, tgtEntry);
+
+		targetIndex++;
+	}
+
+	/* Build a RangeTable Entry for the VALUES relation */
+	RangeTblEntry *valuesRangeTable = makeNode(RangeTblEntry);
+	valuesRangeTable->rtekind = RTE_VALUES;
+	valuesRangeTable->values_lists = list_make1(valueConsts);
+	valuesRangeTable->colcollations = colCollations;
+	valuesRangeTable->coltypes = colTypes;
+	valuesRangeTable->coltypmods = colTypMods;
+	valuesRangeTable->alias = NULL;
+	valuesRangeTable->eref = makeAlias("*VALUES*", valueColNames);
+	valuesRangeTable->inFromCl = true;
+
+	RangeTblRef *valuesRTRef = makeNode(RangeTblRef);
+	valuesRTRef->rtindex = 1;
+
+	FromExpr *valuesJoinTree = makeNode(FromExpr);
+	valuesJoinTree->fromlist = list_make1(valuesRTRef);
+
+	/* build the VALUES query */
+	Query *valuesQuery = makeNode(Query);
+	valuesQuery->canSetTag = true;
+	valuesQuery->commandType = CMD_SELECT;
+	valuesQuery->rtable = list_make1(valuesRangeTable);
+	#if PG_VERSION_NUM >= PG_VERSION_16
+	valuesQuery->rteperminfos = NIL;
+	#endif
+	valuesQuery->jointree = valuesJoinTree;
+	valuesQuery->targetList = valueTargetList;
+
+	/* build the relation selecting from the VALUES */
+	RangeTblEntry *emptyRangeTable = makeNode(RangeTblEntry);
+	emptyRangeTable->rtekind = RTE_SUBQUERY;
+	emptyRangeTable->subquery = valuesQuery;
+	emptyRangeTable->alias = makeAlias(resultId, colNames);
+	emptyRangeTable->eref = emptyRangeTable->alias;
+	emptyRangeTable->inFromCl = true;
+
+	/* build the SELECT query */
+	Query *resultQuery = makeNode(Query);
+	resultQuery->commandType = CMD_SELECT;
+	resultQuery->canSetTag = true;
+	resultQuery->rtable = list_make1(emptyRangeTable);
+#if PG_VERSION_NUM >= PG_VERSION_16
+	resultQuery->rteperminfos = NIL;
+#endif
+	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
+	rangeTableRef->rtindex = 1;
+
+	/* insert a FALSE qual to ensure 0 rows returned */
+	FromExpr *joinTree = makeNode(FromExpr);
+	joinTree->fromlist = list_make1(rangeTableRef);
+	joinTree->quals = makeBoolConst(false, false);
+	resultQuery->jointree = joinTree;
+	resultQuery->targetList = targetList;
+
+	return resultQuery;
 }
 
 
@@ -2460,3 +2616,29 @@ GeneratingSubplans(void)
 {
 	return recursivePlanningDepth > 0;
 }
+
+
+#if PG_VERSION_NUM < PG_VERSION_17
+
+/*
+ * hasPseudoconstantQuals returns true if any of the planner infos in the
+ * relation restriction list of the input relation restriction context
+ * has a pseudoconstant qual
+ */
+static bool
+hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
+{
+	ListCell *objectCell = NULL;
+	foreach(objectCell, relationRestrictionContext->relationRestrictionList)
+	{
+		if (((RelationRestriction *) lfirst(
+				 objectCell))->plannerInfo->hasPseudoConstantQuals)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+#endif

@@ -35,6 +35,28 @@ To get citus installed from source we run `make install -s` in the first termina
 
 With the Citus cluster running you can connect to the coordinator in the first terminal via `psql -p9700`. Because the coordinator is the most common entrypoint the `PGPORT` environment is set accordingly, so a simple `psql` will connect directly to the coordinator.
 
+### Debugging in the VS code
+
+1. Start Debugging: Press F5 in VS Code to start debugging. When prompted, you'll need to attach the debugger to the appropriate PostgreSQL process.
+
+2. Identify the Process: If you're running a psql command, take note of the PID that appears in your psql prompt. For example:
+```
+[local] citus@citus:9700 (PID: 5436)=#
+```
+This PID (5436 in this case) indicates the process that you should attach the debugger to.
+If you are uncertain about which process to attach, you can list all running PostgreSQL processes using the following command:
+```
+ps aux | grep postgres
+```
+
+Look for the process associated with the PID you noted. For example:
+```
+citus      5436  0.0  0.0  0  0 ?        S    14:00   0:00 postgres: citus citus
+```
+4. Attach the Debugger: Once you've identified the correct PID, select that process when prompted in VS Code to attach the debugger. You should now be able to debug the PostgreSQL session tied to the psql command.
+
+5. Set Breakpoints and Debug: With the debugger attached, you can set breakpoints within the code. This allows you to step through the code execution, inspect variables, and fully debug the PostgreSQL instance running in your container.
+
 ### Getting and building
 
 [PostgreSQL documentation](https://www.postgresql.org/support/versioning/) has a
@@ -175,43 +197,7 @@ that are missing in earlier minor versions.
 
 ### Following our coding conventions
 
-CI pipeline will automatically reject any PRs which do not follow our coding
-conventions. The easiest way to ensure your PR adheres to those conventions is
-to use the [citus_indent](https://github.com/citusdata/tools/tree/develop/uncrustify)
-tool. This tool uses `uncrustify` under the hood.
-
-```bash
-# Uncrustify changes the way it formats code every release a bit. To make sure
-# everyone formats consistently we use version 0.68.1:
-curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.68.1.tar.gz | tar xz
-cd uncrustify-uncrustify-0.68.1/
-mkdir build
-cd build
-cmake ..
-make -j5
-sudo make install
-cd ../..
-
-git clone https://github.com/citusdata/tools.git
-cd tools
-make uncrustify/.install
-```
-
-Once you've done that, you can run the `make reindent` command from the top
-directory to recursively check and correct the style of any source files in the
-current directory. Under the hood, `make reindent` will run `citus_indent` and
-some other style corrections for you.
-
-You can also run the following in the directory of this repository to
-automatically format all the files that you have changed before committing:
-
-```bash
-cat > .git/hooks/pre-commit << __EOF__
-#!/bin/bash
-citus_indent --check --diff || { citus_indent --diff; exit 1; }
-__EOF__
-chmod +x .git/hooks/pre-commit
-```
+Our coding conventions are documented in [STYLEGUIDE.md](STYLEGUIDE.md).
 
 ### Making SQL changes
 
@@ -270,3 +256,28 @@ See [`src/test/regress/README.md`](https://github.com/citusdata/citus/blob/maste
 User-facing documentation is published on [docs.citusdata.com](https://docs.citusdata.com/). When adding a new feature, function, or setting, you can open a pull request or issue against the [Citus docs repo](https://github.com/citusdata/citus_docs/).
 
 Detailed descriptions of the implementation for Citus developers are provided in the [Citus Technical Documentation](src/backend/distributed/README.md). It is currently a single file for ease of searching. Please update the documentation if you make any changes that affect the design or add major new features.
+
+# Making a pull request ready for reviews
+
+Asking for help and asking for reviews are two different things. When you're asking for help, you're asking for someone to help you with something that you're not expected to know.
+
+But when you're asking for a review, you're asking for someone to review your work and provide feedback. So, when you're asking for a review, you're expected to make sure that:
+
+* Your changes don't perform **unnecessary line addition / deletions / style changes on unrelated files / lines**.
+
+* All CI jobs are **passing**, including **style checks** and **flaky test detection jobs**. Note that if you're an external contributor, you don't have to wait CI jobs to run (and finish) because they don't get automatically triggered for external contributors.
+
+* Your PR has necessary amount of **tests** and that they're passing.
+
+* You separated as much as possible work into **separate PRs**, e.g., a prerequisite bugfix, a refactoring etc..
+
+* Your PR doesn't introduce a typo or something that you can easily fix yourself.
+
+* After all CI jobs pass, code-coverage measurement job (CodeCov as of today) then kicks in. That's why it's important to make the **tests passing** first. At that point, you're expected to check **CodeCov annotations** that can be seen in the **Files Changed** tab and expected to make sure that it doesn't complain about any lines that are not covered. For example, it's ok if CodeCov complains about an `ereport()` call that you put for an "unexpected-but-better-than-crashing" case, but it's not ok if it complains about an uncovered `if` branch that you added.
+
+* And finally, perform a **self-review** to make sure that:
+  * Code and code-comments reflects the idea **without requiring an extra explanation** via a chat message / email / PR comment.
+    This is important because we don't expect developers to reach out to author / read about the whole discussion in the PR to understand the idea behind a commit merged into `main` branch.
+  * PR description is clear enough.
+  * If-and-only-if you're **introducing a user facing change / bugfix**, your PR has a line that starts with `DESCRIPTION: <Present simple tense word that starts with a capital letter, e.g., Adds support for / Fixes / Disallows>`.
+  * **Commit messages** are clear enough if the commits are doing logically different things.

@@ -2,6 +2,12 @@
 -- MULTI_MULTIUSER_MASTER_PROTOCOL
 --
 
+-- Test multi_multiuser_master_protocol has an alternative output file because
+-- PG17's support for the MAINTAIN privilege:
+-- https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=ecb0fd337
+-- means that calls of master_get_table_ddl_events() can show MAINTAIN and the
+-- pg_class.relacl column may have 'm' for MAINTAIN
+
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 109079;
 
 -- Tests that check the metadata returned by the master node. At the
@@ -115,7 +121,7 @@ SELECT * FROM trivial_postgres ORDER BY id;
 SELECT * FROM trivial_full_access ORDER BY id;
 RESET ROLE;
 
--- verify column level grants are not supported
+-- verify column level grants are supported
 GRANT UPDATE (id) ON trivial_postgres TO read_access;
 
 DROP TABLE trivial_full_access;

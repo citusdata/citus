@@ -212,6 +212,7 @@ RETURNING *;
 -- again a correlated subquery
 -- this time distribution key eq. exists
 -- however recursive planning is prevented due to correlated subqueries
+-- that cannot be folded to joins.
 UPDATE
 	second_distributed_table
 SET
@@ -231,7 +232,7 @@ FROM
 			AND
 			second_distributed_table.tenant_id IN
 			(
-					SELECT s2.tenant_id
+					SELECT s2.tenant_id || random()::text
 					FROM second_distributed_table as s2
 					GROUP BY d1.tenant_id, s2.tenant_id
 			)

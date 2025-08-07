@@ -89,7 +89,6 @@
 #include "distributed/placement_connection.h"
 #include "distributed/priority.h"
 #include "distributed/query_pushdown_planning.h"
-#include "distributed/query_stats.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
@@ -106,11 +105,13 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
+#include "distributed/stats/query_stats.h"
+#include "distributed/stats/stat_counters.h"
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/time_constants.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
-#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
@@ -175,15 +176,11 @@ static bool FinishedStartupCitusBackend = false;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
-#endif
 
 void _PG_init(void);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void citus_shmem_request(void);
-#endif
 static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
 								  subId, void *arg);
 static void DoInitialCleanup(void);
@@ -191,8 +188,10 @@ static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
+static void RegisterSaveBackendStatsIntoSavedBackendStatsHash(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
+static void SaveBackendStatsIntoSavedBackendStatsHashAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
@@ -213,9 +212,11 @@ static const char * MaxSharedPoolSizeGucShowHook(void);
 static const char * LocalPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
+static bool WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source);
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
 static void AdjustDynamicLibraryPathForCdcDecoders(void);
+static void EnableChangeDataCaptureAssignHook(bool newval, void *extra);
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 static emit_log_hook_type original_emit_log_hook = NULL;
@@ -384,6 +385,32 @@ static const struct config_enum_entry metadata_sync_mode_options[] = {
 /* *INDENT-ON* */
 
 
+/*----------------------------------------------------------------------*
+* On PG 18+ the hook signature changed; we wrap the old Citus handler
+* in a fresh function that matches the new typedef exactly.
+*----------------------------------------------------------------------*/
+static void
+citus_executor_run_adapter(QueryDesc *queryDesc,
+						   ScanDirection direction,
+						   uint64 count
+#if PG_VERSION_NUM < PG_VERSION_18
+						   , bool run_once
+#endif
+						   )
+{
+	/* PG18+ has no run_once flag */
+	CitusExecutorRun(queryDesc,
+					 direction,
+					 count,
+#if PG_VERSION_NUM >= PG_VERSION_18
+					 true
+#else
+					 run_once
+#endif
+					 );
+}
+
+
 /* shared library initialization function */
 void
 _PG_init(void)
@@ -459,7 +486,7 @@ _PG_init(void)
 	get_relation_info_hook = multi_get_relation_info_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
-	ExecutorRun_hook = CitusExecutorRun;
+	ExecutorRun_hook = citus_executor_run_adapter;
 	ExplainOneQuery_hook = CitusExplainOneQuery;
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = CitusAttributeToEnd;
@@ -476,10 +503,8 @@ _PG_init(void)
 	original_client_auth_hook = ClientAuthentication_hook;
 	ClientAuthentication_hook = CitusAuthHook;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	prev_shmem_request_hook = shmem_request_hook;
 	shmem_request_hook = citus_shmem_request;
-#endif
 
 	InitializeMaintenanceDaemon();
 	InitializeMaintenanceDaemonForMainDb();
@@ -510,6 +535,8 @@ _PG_init(void)
 	InitializeShardSplitSMHandleManagement();
 
 	InitializeMultiTenantMonitorSMHandleManagement();
+	InitializeStatCountersShmem();
+
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -604,8 +631,6 @@ AdjustDynamicLibraryPathForCdcDecoders(void)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 /*
  * Requests any additional shared memory required for citus.
  */
@@ -623,10 +648,9 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
+	RequestAddinShmemSpace(StatCountersShmemSize());
+	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
 }
-
-
-#endif
 
 
 /*
@@ -798,6 +822,8 @@ StartupCitusBackend(void)
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
+	RegisterSaveBackendStatsIntoSavedBackendStatsHash();
+
 	FinishedStartupCitusBackend = true;
 }
 
@@ -831,6 +857,24 @@ RegisterConnectionCleanup(void)
 		before_shmem_exit(CitusCleanupConnectionsAtExit, 0);
 
 		registeredCleanup = true;
+	}
+}
+
+
+/*
+ * RegisterSaveBackendStatsIntoSavedBackendStatsHash registers the function
+ * that saves the backend stats for the exited backends into the saved backend
+ * stats hash.
+ */
+static void
+RegisterSaveBackendStatsIntoSavedBackendStatsHash(void)
+{
+	static bool registeredSaveBackendStats = false;
+	if (registeredSaveBackendStats == false)
+	{
+		before_shmem_exit(SaveBackendStatsIntoSavedBackendStatsHashAtExit, 0);
+
+		registeredSaveBackendStats = true;
 	}
 }
 
@@ -872,6 +916,24 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	/* we don't want any monitoring view/udf to show already exited backends */
 	SetActiveMyBackend(false);
 	UnSetGlobalPID();
+}
+
+
+/*
+ * SaveBackendStatsIntoSavedBackendStatsHashAtExit is called before_shmem_exit()
+ * of the backend for the purposes of saving the backend stats for the exited
+ * backends into the saved backend stats hash.
+ */
+static void
+SaveBackendStatsIntoSavedBackendStatsHashAtExit(int code, Datum arg)
+{
+	if (code)
+	{
+		/* don't try to save the stats during a crash */
+		return;
+	}
+
+	SaveBackendStatsIntoSavedBackendStatsHash();
 }
 
 
@@ -1238,7 +1300,7 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		NULL, EnableChangeDataCaptureAssignHook, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_cluster_clock",
@@ -1342,6 +1404,17 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_local_fast_path_query_optimization",
+		gettext_noop("Enables the planner to avoid a query deparse and planning if "
+					 "the shard is local to the current node."),
+		NULL,
+		&EnableLocalFastPathQueryOptimization,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		WarnIfLocalExecutionDisabled, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_local_reference_table_foreign_keys",
@@ -1460,6 +1533,20 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_stat_counters",
+		gettext_noop("Enables the collection of statistic counters for Citus."),
+		gettext_noop("When enabled, Citus maintains a set of statistic "
+					 "counters for the Citus extension. These statistics are "
+					 "available in the citus_stat_counters view and are "
+					 "lost on server shutdown and can be reset by executing "
+					 "the function citus_stat_counters_reset() on demand."),
+		&EnableStatCounters,
+		ENABLE_STAT_COUNTERS_DEFAULT,
+		PGC_SUSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1832,16 +1919,6 @@ RegisterCitusConfigVariables(void)
 		2 * 60 * 60 * 1000, 0, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_UNIT_MS,
-		NULL, NULL, NULL);
-
-	DefineCustomStringVariable(
-		"citus.main_db",
-		gettext_noop("Which database is designated as the main_db"),
-		NULL,
-		&MainDb,
-		"",
-		PGC_POSTMASTER,
-		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2765,6 +2842,26 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 
 
 /*
+ * WarnIfLocalExecutionDisabled is used to emit a warning message when
+ * enabling citus.enable_local_fast_path_query_optimization if
+ * citus.enable_local_execution was disabled.
+ */
+static bool
+WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source)
+{
+	if (*newval == true && EnableLocalExecution == false)
+	{
+		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						  errmsg(
+							  "citus.enable_local_execution must be set in order for "
+							  "citus.enable_local_fast_path_query_optimization to be effective.")));
+	}
+
+	return true;
+}
+
+
+/*
  * NoticeIfSubqueryPushdownEnabled prints a notice when a user sets
  * citus.subquery_pushdown to ON. It doesn't print the notice if the
  * value is already true.
@@ -2842,7 +2939,7 @@ ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource sou
 	}
 
 	char *appNamePrefix = NULL;
-	foreach_ptr(appNamePrefix, prefixList)
+	foreach_declared_ptr(appNamePrefix, prefixList)
 	{
 		int prefixLength = strlen(appNamePrefix);
 		if (prefixLength >= NAMEDATALEN)
@@ -2890,14 +2987,27 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	DetermineCitusBackendType(newval);
 
 	/*
-	 * AssignGlobalPID might read from catalog tables to get the the local
-	 * nodeid. But ApplicationNameAssignHook might be called before catalog
-	 * access is available to the backend (such as in early stages of
-	 * authentication). We use StartupCitusBackend to initialize the global pid
-	 * after catalogs are available. After that happens this hook becomes
-	 * responsible to update the global pid on later application_name changes.
-	 * So we set the FinishedStartupCitusBackend flag in StartupCitusBackend to
-	 * indicate when this responsibility handoff has happened.
+	 * We use StartupCitusBackend to initialize the global pid after catalogs
+	 * are available. After that happens this hook becomes responsible to update
+	 * the global pid on later application_name changes. So we set the
+	 * FinishedStartupCitusBackend flag in StartupCitusBackend to indicate when
+	 * this responsibility handoff has happened.
+	 *
+	 * Also note that when application_name changes, we don't actually need to
+	 * try re-assigning the global pid for external client backends and
+	 * background workers because application_name doesn't affect the global
+	 * pid for such backends - note that !IsExternalClientBackend() check covers
+	 * both types of backends. Plus,
+	 * trying to re-assign the global pid for such backends would unnecessarily
+	 * cause performing a catalog access when the cached local node id is
+	 * invalidated. However, accessing to the catalog tables is dangerous in
+	 * certain situations like when we're not in a transaction block. And for
+	 * the other types of backends, i.e., the Citus internal backends, we need
+	 * to re-assign the global pid when the application_name changes because for
+	 * such backends we simply extract the global pid inherited from the
+	 * originating backend from the application_name -that's specified by
+	 * originating backend when openning that connection- and this doesn't require
+	 * catalog access.
 	 *
 	 * Another solution to the catalog table acccess problem would be to update
 	 * global pid lazily, like we do for HideShards. But that's not possible
@@ -2907,7 +3017,7 @@ ApplicationNameAssignHook(const char *newval, void *extra)
 	 * as reasonably possible, which is also why we extract global pids in the
 	 * AuthHook already (extracting doesn't require catalog access).
 	 */
-	if (FinishedStartupCitusBackend)
+	if (FinishedStartupCitusBackend && !IsExternalClientBackend())
 	{
 		AssignGlobalPID(newval);
 	}
@@ -2942,6 +3052,9 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslcrl",
 		"sslkey",
 		"sslmode",
+#if PG_VERSION_NUM >= PG_VERSION_17
+		"sslnegotiation",
+#endif
 		"sslrootcert",
 		"tcp_user_timeout",
 	};
@@ -3216,5 +3329,21 @@ CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int su
 		 * the provided objectId with extension oid so we will set the value
 		 * regardless if it's citus being created */
 		SetCreateCitusTransactionLevel(GetCurrentTransactionNestLevel());
+	}
+}
+
+
+/*
+ * EnableChangeDataCaptureAssignHook is called whenever the
+ * citus.enable_change_data_capture setting is changed to dynamically
+ * adjust the dynamic_library_path based on the new value.
+ */
+static void
+EnableChangeDataCaptureAssignHook(bool newval, void *extra)
+{
+	if (newval)
+	{
+		/* CDC enabled: add citus_decoders to the path */
+		AdjustDynamicLibraryPathForCdcDecoders();
 	}
 }

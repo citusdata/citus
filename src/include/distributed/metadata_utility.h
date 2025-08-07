@@ -400,7 +400,7 @@ extern bool ShouldPropagateAnyObject(List *addresses);
 /* Remaining metadata utility functions  */
 extern Oid TableOwnerOid(Oid relationId);
 extern char * TableOwner(Oid relationId);
-extern void EnsureTablePermissions(Oid relationId, AclMode mode);
+extern void EnsureTablePermissions(Oid relationId, AclMode mode, AclMaskHow mask);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureHashDistributedTable(Oid relationId);
 extern void EnsureHashOrSingleShardDistributedTable(Oid relationId);
@@ -466,4 +466,5 @@ extern bool IsBackgroundJobStatusTerminal(BackgroundJobStatus status);
 extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
 extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
+extern int GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDEsc);
 #endif   /* METADATA_UTILITY_H */

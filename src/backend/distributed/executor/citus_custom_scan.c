@@ -43,8 +43,9 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/query_stats.h"
 #include "distributed/shard_utils.h"
+#include "distributed/stats/query_stats.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_protocol.h"
@@ -206,7 +207,7 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	if (distributedPlan->modifyQueryViaCoordinatorOrRepartition != NULL)
 	{
 		/*
-		 * INSERT..SELECT via coordinator or re-partitioning are special because
+		 * INSERT..SELECT / MERGE via coordinator or re-partitioning are special because
 		 * the SELECT part is planned separately.
 		 */
 		return;
@@ -262,7 +263,18 @@ CitusExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
+		bool isMultiTaskPlan = IsMultiTaskPlan(scanState->distributedPlan);
+
 		AdaptiveExecutor(scanState);
+
+		if (isMultiTaskPlan)
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -524,7 +536,7 @@ static bool
 AnchorShardsInTaskListExist(List *taskList)
 {
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (!ShardExists(task->anchorShardId))
 		{
@@ -670,11 +682,13 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 	}
 
 	bool isLocalTableModification = false;
+	bool delayedFastPath = false;
 	GenerateSingleShardRouterTaskList(workerJob,
 									  relationShardList,
 									  placementList,
 									  shardId,
-									  isLocalTableModification);
+									  isLocalTableModification,
+									  delayedFastPath);
 }
 
 

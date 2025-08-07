@@ -106,6 +106,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
@@ -301,6 +302,7 @@ static SelectStmt * CitusCopySelect(CopyStmt *copyStatement);
 static void CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag);
 static int64 ForwardCopyDataFromConnection(CopyOutState copyOutState,
 										   MultiConnection *connection);
+static void ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement);
 
 /* Private functions copied and adapted from copy.c in PostgreSQL */
 static void SendCopyBegin(CopyOutState cstate);
@@ -346,6 +348,7 @@ static LocalCopyStatus GetLocalCopyStatus(void);
 static bool ShardIntervalListHasLocalPlacements(List *shardIntervalList);
 static void LogLocalCopyToRelationExecution(uint64 shardId);
 static void LogLocalCopyToFileExecution(uint64 shardId);
+static void ErrorIfMergeInCopy(CopyStmt *copyStatement);
 
 
 /* exports for SQL callable functions */
@@ -497,10 +500,14 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 
 	/* set up the destination for the COPY */
 	const bool publishableData = true;
+
+	/* we want to track query counters for "COPY (to) distributed-table .." commands */
+	const bool trackQueryCounters = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList,
 																  partitionColumnIndex,
 																  executorState, NULL,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	/* if the user specified an explicit append-to_shard option, write to it */
 	uint64 appendShardId = ProcessAppendToShardOption(tableId, copyStatement);
@@ -1875,11 +1882,15 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
  * of intermediate results that are co-located with the actual table.
  * The names of the intermediate results with be of the form:
  * intermediateResultIdPrefix_<shardid>
+ *
+ * If trackQueryCounters is true, the COPY will increment the query stat
+ * counters as needed at the end of the COPY.
  */
 CitusCopyDestReceiver *
 CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColumnIndex,
 							EState *executorState,
-							char *intermediateResultIdPrefix, bool isPublishable)
+							char *intermediateResultIdPrefix, bool isPublishable,
+							bool trackQueryCounters)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) palloc0(
 		sizeof(CitusCopyDestReceiver));
@@ -1899,6 +1910,7 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 	copyDest->colocatedIntermediateResultIdPrefix = intermediateResultIdPrefix;
 	copyDest->memoryContext = CurrentMemoryContext;
 	copyDest->isPublishable = isPublishable;
+	copyDest->trackQueryCounters = trackQueryCounters;
 
 	return copyDest;
 }
@@ -1957,7 +1969,7 @@ ShardIntervalListHasLocalPlacements(List *shardIntervalList)
 {
 	int32 localGroupId = GetLocalGroupId();
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
 		if (ActiveShardPlacementOnGroup(localGroupId, shardInterval->shardId) != NULL)
 		{
@@ -2452,7 +2464,7 @@ ProcessAppendToShardOption(Oid relationId, CopyStmt *copyStatement)
 	bool appendToShardSet = false;
 
 	DefElem *defel = NULL;
-	foreach_ptr(defel, copyStatement->options)
+	foreach_declared_ptr(defel, copyStatement->options)
 	{
 		if (strncmp(defel->defname, APPEND_TO_SHARD_OPTION, NAMEDATALEN) == 0)
 		{
@@ -2585,8 +2597,9 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 
 /*
  * CitusCopyDestReceiverShutdown implements the rShutdown interface of
- * CitusCopyDestReceiver. It ends the COPY on all the open connections and closes
- * the relation.
+ * CitusCopyDestReceiver. It ends the COPY on all the open connections, closes
+ * the relation and increments the query stat counters based on the shards
+ * copied into if requested.
  */
 static void
 CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
@@ -2596,6 +2609,26 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	HTAB *connectionStateHash = copyDest->connectionStateHash;
 	ListCell *connectionStateCell = NULL;
 	Relation distributedRelation = copyDest->distributedRelation;
+
+	/*
+	 * Increment the query stat counters based on the shards copied into
+	 * if requested.
+	 */
+	if (copyDest->trackQueryCounters)
+	{
+		int copiedShardCount =
+			copyDest->shardStateHash ?
+			hash_get_num_entries(copyDest->shardStateHash) :
+			0;
+		if (copiedShardCount <= 1)
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
+	}
 
 	List *connectionStateList = ConnectionStateList(connectionStateHash);
 
@@ -2824,6 +2857,70 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
 
 
 /*
+ * ErrorIfCopyHasOnErrorLogVerbosity errors out if the COPY statement
+ * has on_error option or log_verbosity option specified
+ */
+static void
+ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
+{
+#if PG_VERSION_NUM >= PG_VERSION_17
+	bool log_verbosity = false;
+	foreach_ptr(DefElem, option, copyStatement->options)
+	{
+		if (strcmp(option->defname, "on_error") == 0)
+		{
+			ereport(ERROR, (errmsg(
+								"Citus does not support COPY FROM with ON_ERROR option.")));
+		}
+		else if (strcmp(option->defname, "log_verbosity") == 0)
+		{
+			log_verbosity = true;
+		}
+	}
+
+	/*
+	 * Given that log_verbosity is currently used in COPY FROM
+	 * when ON_ERROR option is set to ignore, it makes more
+	 * sense to error out for ON_ERROR option first. For this reason,
+	 * we don't error out in the previous loop directly.
+	 * Relevant PG17 commit: https://github.com/postgres/postgres/commit/f5a227895
+	 */
+	if (log_verbosity)
+	{
+		ereport(ERROR, (errmsg(
+							"Citus does not support COPY FROM with LOG_VERBOSITY option.")));
+	}
+#endif
+}
+
+
+/*
+ * ErrorIfMergeInCopy Raises an exception if the MERGE is called in the COPY
+ * where Citus tables are involved, as we don't support this yet
+ * Relevant PG17 commit: c649fa24a
+ */
+static void
+ErrorIfMergeInCopy(CopyStmt *copyStatement)
+{
+#if PG_VERSION_NUM < 170000
+	return;
+#else
+	if (!copyStatement->relation && (IsA(copyStatement->query, MergeStmt)))
+	{
+		/*
+		 * This path is currently not reachable because Merge in COPY can
+		 * only work with a RETURNING clause, and a RETURNING check
+		 * will error out sooner for Citus
+		 */
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("MERGE with Citus tables "
+							   "is not yet supported in COPY")));
+	}
+#endif
+}
+
+
+/*
  * ProcessCopyStmt handles Citus specific concerns for COPY like supporting
  * COPYing from distributed tables and preventing unsupported actions. The
  * function returns a modified COPY statement to be executed, or NULL if no
@@ -2860,6 +2957,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 	 */
 	if (copyStatement->relation != NULL)
 	{
+		ErrorIfMergeInCopy(copyStatement);
+
 		bool isFrom = copyStatement->is_from;
 
 		/* consider using RangeVarGetRelidExtended to check perms before locking */
@@ -2896,6 +2995,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 					ereport(ERROR, (errmsg(
 										"Citus does not support COPY FROM with WHERE")));
 				}
+
+				ErrorIfCopyHasOnErrorLogVerbosity(copyStatement);
 
 				/* check permissions, we're bypassing postgres' normal checks */
 				CheckCopyPermissions(copyStatement);
@@ -2948,7 +3049,7 @@ CitusCopySelect(CopyStmt *copyStatement)
 
 	for (int i = 0; i < tupleDescriptor->natts; i++)
 	{
-		Form_pg_attribute attr = &tupleDescriptor->attrs[i];
+		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
 
 		if (attr->attisdropped ||
 			attr->attgenerated
@@ -3070,6 +3171,15 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag)
 	}
 
 	SendCopyEnd(copyOutState);
+
+	if (list_length(shardIntervalList) <= 1)
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+	}
+	else
+	{
+		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+	}
 
 	table_close(distributedRelation, AccessShareLock);
 

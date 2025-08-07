@@ -661,6 +661,18 @@ GetTableTypeName(Oid tableId)
 bool
 IsCitusTable(Oid relationId)
 {
+	/*
+	 * PostgreSQL's OID generator assigns user operation OIDs starting
+	 * from FirstNormalObjectId. This means no user object can have
+	 * an OID lower than FirstNormalObjectId. Therefore, if the
+	 * relationId is less than FirstNormalObjectId
+	 * (i.e. in PostgreSQL's reserved range), we can immediately
+	 * return false, since such objects cannot be Citus tables.
+	 */
+	if (relationId < FirstNormalObjectId)
+	{
+		return false;
+	}
 	return LookupCitusTableCacheEntry(relationId) != NULL;
 }
 
@@ -717,12 +729,13 @@ PartitionMethodViaCatalog(Oid relationId)
 		return DISTRIBUTE_BY_INVALID;
 	}
 
-	Datum datumArray[Natts_pg_dist_partition];
-	bool isNullArray[Natts_pg_dist_partition];
-
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
 	if (isNullArray[Anum_pg_dist_partition_partmethod - 1])
@@ -730,6 +743,8 @@ PartitionMethodViaCatalog(Oid relationId)
 		/* partition method cannot be NULL, still let's make sure */
 		heap_freetuple(partitionTuple);
 		table_close(pgDistPartition, NoLock);
+		pfree(datumArray);
+		pfree(isNullArray);
 		return DISTRIBUTE_BY_INVALID;
 	}
 
@@ -738,6 +753,8 @@ PartitionMethodViaCatalog(Oid relationId)
 
 	heap_freetuple(partitionTuple);
 	table_close(pgDistPartition, NoLock);
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	return partitionMethodChar;
 }
@@ -756,12 +773,12 @@ PartitionColumnViaCatalog(Oid relationId)
 		return NULL;
 	}
 
-	Datum datumArray[Natts_pg_dist_partition];
-	bool isNullArray[Natts_pg_dist_partition];
-
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
 	if (isNullArray[Anum_pg_dist_partition_partkey - 1])
@@ -769,6 +786,8 @@ PartitionColumnViaCatalog(Oid relationId)
 		/* partition key cannot be NULL, still let's make sure */
 		heap_freetuple(partitionTuple);
 		table_close(pgDistPartition, NoLock);
+		pfree(datumArray);
+		pfree(isNullArray);
 		return NULL;
 	}
 
@@ -783,6 +802,8 @@ PartitionColumnViaCatalog(Oid relationId)
 
 	heap_freetuple(partitionTuple);
 	table_close(pgDistPartition, NoLock);
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	return partitionColumn;
 }
@@ -801,12 +822,13 @@ ColocationIdViaCatalog(Oid relationId)
 		return INVALID_COLOCATION_ID;
 	}
 
-	Datum datumArray[Natts_pg_dist_partition];
-	bool isNullArray[Natts_pg_dist_partition];
-
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+
 	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
 
 	if (isNullArray[Anum_pg_dist_partition_colocationid - 1])
@@ -814,6 +836,8 @@ ColocationIdViaCatalog(Oid relationId)
 		/* colocation id cannot be NULL, still let's make sure */
 		heap_freetuple(partitionTuple);
 		table_close(pgDistPartition, NoLock);
+		pfree(datumArray);
+		pfree(isNullArray);
 		return INVALID_COLOCATION_ID;
 	}
 
@@ -822,6 +846,8 @@ ColocationIdViaCatalog(Oid relationId)
 
 	heap_freetuple(partitionTuple);
 	table_close(pgDistPartition, NoLock);
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	return colocationId;
 }
@@ -920,7 +946,7 @@ CitusTableList(void)
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, citusTableIdList)
+	foreach_declared_oid(relationId, citusTableIdList)
 	{
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
@@ -1729,10 +1755,11 @@ BuildCitusTableCacheEntry(Oid relationId)
 	}
 
 	MemoryContext oldContext = NULL;
-	Datum datumArray[Natts_pg_dist_partition];
-	bool isNullArray[Natts_pg_dist_partition];
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+
 	heap_deform_tuple(distPartitionTuple, tupleDescriptor, datumArray, isNullArray);
 
 	CitusTableCacheEntry *cacheEntry =
@@ -1785,7 +1812,7 @@ BuildCitusTableCacheEntry(Oid relationId)
 		cacheEntry->replicationModel = DatumGetChar(replicationModelDatum);
 	}
 
-	if (isNullArray[Anum_pg_dist_partition_autoconverted - 1])
+	if (isNullArray[GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor)])
 	{
 		/*
 		 * We don't expect this to happen, but set it to false (the default value)
@@ -1796,7 +1823,7 @@ BuildCitusTableCacheEntry(Oid relationId)
 	else
 	{
 		cacheEntry->autoConverted = DatumGetBool(
-			datumArray[Anum_pg_dist_partition_autoconverted - 1]);
+			datumArray[GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor)]);
 	}
 
 	heap_freetuple(distPartitionTuple);
@@ -1839,6 +1866,9 @@ BuildCitusTableCacheEntry(Oid relationId)
 	MemoryContextSwitchTo(oldContext);
 
 	table_close(pgDistPartition, NoLock);
+
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	cacheEntry->isValid = true;
 
@@ -1891,7 +1921,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 								   sizeof(int));
 
 		HeapTuple shardTuple = NULL;
-		foreach_ptr(shardTuple, distShardTupleList)
+		foreach_declared_ptr(shardTuple, distShardTupleList)
 		{
 			ShardInterval *shardInterval = TupleToShardInterval(shardTuple,
 																distShardTupleDesc,
@@ -2029,7 +2059,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		GroupShardPlacement *placementArray = palloc0(numberOfPlacements *
 													  sizeof(GroupShardPlacement));
 		GroupShardPlacement *srcPlacement = NULL;
-		foreach_ptr(srcPlacement, placementList)
+		foreach_declared_ptr(srcPlacement, placementList)
 		{
 			placementArray[placementOffset] = *srcPlacement;
 			placementOffset++;
@@ -2522,6 +2552,8 @@ AvailableExtensionVersion(void)
 
 	ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					errmsg("citus extension is not found")));
+
+	return NULL; /* keep compiler happy */
 }
 
 
@@ -4333,7 +4365,7 @@ InitializeWorkerNodeCache(void)
 
 	/* iterate over the worker node list */
 	WorkerNode *currentNode = NULL;
-	foreach_ptr(currentNode, workerNodeList)
+	foreach_declared_ptr(currentNode, workerNodeList)
 	{
 		bool handleFound = false;
 
@@ -4510,7 +4542,7 @@ GetLocalNodeId(void)
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		if (workerNode->groupId == localGroupId &&
 			workerNode->isActive)
@@ -4997,10 +5029,13 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNullArray[Natts_pg_dist_partition];
-		Datum datumArray[Natts_pg_dist_partition];
+		memset(datumArray, 0, tupleDescriptor->natts * sizeof(Datum));
+		memset(isNullArray, 0, tupleDescriptor->natts * sizeof(bool));
+
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
@@ -5023,6 +5058,9 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
+
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
@@ -5098,7 +5136,7 @@ CitusTableCacheFlushInvalidatedEntries()
 	if (DistTableCacheHash != NULL && DistTableCacheExpired != NIL)
 	{
 		CitusTableCacheEntry *cacheEntry = NULL;
-		foreach_ptr(cacheEntry, DistTableCacheExpired)
+		foreach_declared_ptr(cacheEntry, DistTableCacheExpired)
 		{
 			ResetCitusTableCacheEntry(cacheEntry);
 		}

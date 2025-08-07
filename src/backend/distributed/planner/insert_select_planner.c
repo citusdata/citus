@@ -96,6 +96,17 @@ static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetLis
 								   Oid targetRelationId);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 					   int targetTypeMod);
+static Oid GetNextvalReturnTypeCatalog(void);
+static void AppendCastedEntry(TargetEntry *insertEntry, TargetEntry *selectEntry,
+							  Oid castFromType, Oid targetType, Oid collation, int32
+							  typmod,
+							  int targetEntryIndex,
+							  List **projectedEntries, List **nonProjectedEntries);
+static void SetTargetEntryName(TargetEntry *tle, const char *format, int index);
+static void ResetTargetEntryResno(List *targetList);
+static void ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
+							 Form_pg_attribute attr, int targetEntryIndex,
+							 List **projectedEntries, List **nonProjectedEntries);
 
 
 /* depth of current insert/select planner. */
@@ -566,7 +577,7 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	List *funcCollations = NIL;
 
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, dependentTargetList)
+	foreach_declared_ptr(targetEntry, dependentTargetList)
 	{
 		Node *expr = (Node *) targetEntry->expr;
 
@@ -640,7 +651,7 @@ CreateTargetListForCombineQuery(List *targetList)
 
 	/* iterate over original target entries */
 	TargetEntry *originalTargetEntry = NULL;
-	foreach_ptr(originalTargetEntry, targetList)
+	foreach_declared_ptr(originalTargetEntry, targetList)
 	{
 		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
 
@@ -1072,9 +1083,11 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		AttrNumber originalAttrNo = get_attnum(insertRelationId,
 											   oldInsertTargetEntry->resname);
 
+		/* we need to explore the underlying expression */
+		Node *expr = strip_implicit_coercions((Node *) oldInsertTargetEntry->expr);
+
 		/* see transformInsertRow() for the details */
-		if (IsA(oldInsertTargetEntry->expr, SubscriptingRef) ||
-			IsA(oldInsertTargetEntry->expr, FieldStore))
+		if (IsA(expr, SubscriptingRef) || IsA(expr, FieldStore))
 		{
 			ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 							errmsg(
@@ -1234,7 +1247,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 
 		RangeTblEntry *subqueryPartitionColumnRelationIdRTE = NULL;
 		List *parentQueryList = list_make2(query, subquery);
-		bool skipOuterVars = true;
+		bool skipOuterVars = false;
 		FindReferencedTableColumn(selectTargetExpr,
 								  parentQueryList, subquery,
 								  &subqueryPartitionColumn,
@@ -1530,71 +1543,147 @@ InsertSelectResultIdPrefix(uint64 planId)
 
 
 /*
- * WrapSubquery wraps the given query as a subquery in a newly constructed
- * "SELECT * FROM (...subquery...) citus_insert_select_subquery" query.
+ * Return true if the expression tree can change value within a single scan
+ * (i.e. the planner must treat it as VOLATILE).
+ * We just delegate to PostgreSQL’s helper.
+ */
+static inline bool
+expr_is_volatile(Node *node)
+{
+	/* contain_volatile_functions() also returns true for set-returning
+	 * volatile functions and for nextval()/currval(). */
+	return contain_volatile_functions(node);
+}
+
+
+/*
+ * WrapSubquery
+ *
+ * Build a wrapper query:
+ *
+ *     SELECT <outer-TL>
+ *       FROM ( <subquery with any volatile items stripped> )
+ *            citus_insert_select_subquery
+ *
+ * Purpose:
+ *   - Preserve column numbering while lifting volatile expressions to the coordinator.
+ *   - Volatile (non-deterministic) expressions not used in GROUP BY / ORDER BY
+ *     are lifted to the outer SELECT to ensure they are evaluated only once.
+ *   - Stable/immutable expressions or volatile ones required by GROUP BY / ORDER BY
+ *     stay in the subquery and are accessed via Vars in the outer SELECT.
  */
 Query *
 WrapSubquery(Query *subquery)
 {
+	/*
+	 * 1. Build the wrapper skeleton: SELECT ... FROM (subquery) alias
+	 */
 	ParseState *pstate = make_parsestate(NULL);
-	List *newTargetList = NIL;
-
 	Query *outerQuery = makeNode(Query);
 	outerQuery->commandType = CMD_SELECT;
 
-	/* create range table entries */
-	Alias *selectAlias = makeAlias("citus_insert_select_subquery", NIL);
-	RangeTblEntry *newRangeTableEntry = RangeTableEntryFromNSItem(
-		addRangeTableEntryForSubquery(
-			pstate, subquery,
-			selectAlias, false, true));
-	outerQuery->rtable = list_make1(newRangeTableEntry);
+	Alias *alias = makeAlias("citus_insert_select_subquery", NIL);
+	RangeTblEntry *rte_subq =
+		RangeTableEntryFromNSItem(
+			addRangeTableEntryForSubquery(pstate,
+										  subquery,    /* still points to original subquery */
+										  alias,
+										  false,       /* not LATERAL */
+										  true));      /* in FROM clause */
+
+	outerQuery->rtable = list_make1(rte_subq);
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 
-	/*
-	 * This part of the code is more of a sanity check for readability,
-	 * it doesn't really do anything.
-	 * addRangeTableEntryForSubquery doesn't add permission info
-	 * because the range table is set to be RTE_SUBQUERY.
-	 * Hence we should also have no perminfos here.
-	 */
-	Assert(newRangeTableEntry->rtekind == RTE_SUBQUERY &&
-		   newRangeTableEntry->perminfoindex == 0);
+	/* Ensure RTE_SUBQUERY has proper permission handling */
+	Assert(rte_subq->rtekind == RTE_SUBQUERY &&
+		   rte_subq->perminfoindex == 0);
 	outerQuery->rteperminfos = NIL;
 #endif
 
-	/* set the FROM expression to the subquery */
-	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
-	newRangeTableRef->rtindex = 1;
-	outerQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
+	RangeTblRef *rtref = makeNode(RangeTblRef);
+	rtref->rtindex = 1;  /* Only one RTE, so index is 1 */
+	outerQuery->jointree = makeFromExpr(list_make1(rtref), NULL);
 
-	/* create a target list that matches the SELECT */
-	TargetEntry *selectTargetEntry = NULL;
-	foreach_ptr(selectTargetEntry, subquery->targetList)
+	/*
+	 * 2. Create new target lists for inner (worker) and outer (coordinator)
+	 */
+	List *newInnerTL = NIL;
+	List *newOuterTL = NIL;
+	int nextResno = 1;
+
+	TargetEntry *te = NULL;
+	foreach_declared_ptr(te, subquery->targetList)
 	{
-		/* exactly 1 entry in FROM */
-		int indexInRangeTable = 1;
-
-		if (selectTargetEntry->resjunk)
+		if (te->resjunk)
 		{
+			/* Keep resjunk entries only in subquery (not in outer query) */
+			newInnerTL = lappend(newInnerTL, te);
 			continue;
 		}
 
-		Var *newSelectVar = makeVar(indexInRangeTable, selectTargetEntry->resno,
-									exprType((Node *) selectTargetEntry->expr),
-									exprTypmod((Node *) selectTargetEntry->expr),
-									exprCollation((Node *) selectTargetEntry->expr), 0);
+		bool isVolatile = expr_is_volatile((Node *) te->expr);
+		bool usedInSort = (te->ressortgroupref != 0);
 
-		TargetEntry *newSelectTargetEntry = makeTargetEntry((Expr *) newSelectVar,
-															selectTargetEntry->resno,
-															selectTargetEntry->resname,
-															selectTargetEntry->resjunk);
+		if (isVolatile && !usedInSort)
+		{
+			/*
+			 * Lift volatile expression to outer query so it's evaluated once.
+			 * In inner query, place a NULL of the same type to preserve column position.
+			 */
+			TargetEntry *outerTE =
+				makeTargetEntry(copyObject(te->expr),
+								list_length(newOuterTL) + 1,
+								te->resname,
+								false);
+			newOuterTL = lappend(newOuterTL, outerTE);
 
-		newTargetList = lappend(newTargetList, newSelectTargetEntry);
+			Const *nullConst = makeNullConst(exprType((Node *) te->expr),
+											 exprTypmod((Node *) te->expr),
+											 exprCollation((Node *) te->expr));
+
+			TargetEntry *placeholder =
+				makeTargetEntry((Expr *) nullConst,
+								nextResno++,          /* preserve column position */
+								te->resname,
+								false);               /* visible, not resjunk */
+			newInnerTL = lappend(newInnerTL, placeholder);
+		}
+		else
+		{
+			/*
+			 * Either:
+			 *   - expression is stable or immutable, or
+			 *   - volatile but needed for sorting or grouping
+			 *
+			 * In both cases, keep it in subquery and reference it using a Var.
+			 */
+			TargetEntry *innerTE = te;          /* reuse original node */
+			innerTE->resno = nextResno++;
+			newInnerTL = lappend(newInnerTL, innerTE);
+
+			Var *v = makeVar(/* subquery reference index is 1 */
+				rtref->rtindex,     /* same as 1, but self‑documenting */
+				innerTE->resno,
+				exprType((Node *) innerTE->expr),
+				exprTypmod((Node *) innerTE->expr),
+				exprCollation((Node *) innerTE->expr),
+				0);
+
+			TargetEntry *outerTE =
+				makeTargetEntry((Expr *) v,
+								list_length(newOuterTL) + 1,
+								innerTE->resname,
+								false);
+			newOuterTL = lappend(newOuterTL, outerTE);
+		}
 	}
 
-	outerQuery->targetList = newTargetList;
+	/*
+	 * 3. Assign target lists and return the wrapper query
+	 */
+	subquery->targetList = newInnerTL;
+	outerQuery->targetList = newOuterTL;
 
 	return outerQuery;
 }
@@ -1617,11 +1706,11 @@ RelabelTargetEntryList(List *selectTargetList, List *insertTargetList)
 
 
 /*
- * AddInsertSelectCasts makes sure that the types in columns in the given
- * target lists have the same type as the columns of the given relation.
- * It might add casts to ensure that.
+ * AddInsertSelectCasts ensures that the columns in the given target lists
+ * have the same type as the corresponding columns of the target relation.
+ * It adds casts when necessary.
  *
- * It returns the updated selectTargetList.
+ * Returns the updated selectTargetList.
  */
 static List *
 AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
@@ -1631,9 +1720,9 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	List *nonProjectedEntries = NIL;
 
 	/*
-	 * ReorderInsertSelectTargetLists() makes sure that first few columns of
-	 * the SELECT query match the insert targets. It might contain additional
-	 * items for GROUP BY, etc.
+	 * ReorderInsertSelectTargetLists() ensures that the first few columns of the
+	 * SELECT query match the insert targets. It might also include additional
+	 * items (for GROUP BY, etc.), so the insertTargetList is shorter.
 	 */
 	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
 
@@ -1646,71 +1735,20 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 
 	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
 	{
+		/*
+		 * Retrieve the target attribute corresponding to the insert entry.
+		 * The attribute is located at (resno - 1) in the tuple descriptor.
+		 */
 		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
 											   insertEntry->resno - 1);
 
-		Oid sourceType = exprType((Node *) selectEntry->expr);
-		Oid targetType = attr->atttypid;
-		if (sourceType != targetType)
-		{
-			/* ReorderInsertSelectTargetLists ensures we only have Vars */
-			Assert(IsA(insertEntry->expr, Var));
-
-			/* we will cast the SELECT expression, so the type changes */
-			Var *insertVar = (Var *) insertEntry->expr;
-			insertVar->vartype = targetType;
-			insertVar->vartypmod = attr->atttypmod;
-			insertVar->varcollid = attr->attcollation;
-
-			/*
-			 * We cannot modify the selectEntry in-place, because ORDER BY or
-			 * GROUP BY clauses might be pointing to it with comparison types
-			 * of the source type. So instead we keep the original one as a
-			 * non-projected entry, so GROUP BY and ORDER BY are happy, and
-			 * create a duplicated projected entry with the coerced expression.
-			 */
-			TargetEntry *coercedEntry = copyObject(selectEntry);
-			coercedEntry->expr = CastExpr((Expr *) selectEntry->expr, sourceType,
-										  targetType, attr->attcollation,
-										  attr->atttypmod);
-			coercedEntry->ressortgroupref = 0;
-
-			/*
-			 * The only requirement is that users don't use this name in ORDER BY
-			 * or GROUP BY, and it should be unique across the same query.
-			 */
-			StringInfo resnameString = makeStringInfo();
-			appendStringInfo(resnameString, "auto_coerced_by_citus_%d", targetEntryIndex);
-			coercedEntry->resname = resnameString->data;
-
-			projectedEntries = lappend(projectedEntries, coercedEntry);
-
-			if (selectEntry->ressortgroupref != 0)
-			{
-				selectEntry->resjunk = true;
-
-				/*
-				 * This entry might still end up in the SELECT output list, so
-				 * rename it to avoid ambiguity.
-				 *
-				 * See https://github.com/citusdata/citus/pull/3470.
-				 */
-				resnameString = makeStringInfo();
-				appendStringInfo(resnameString, "discarded_target_item_%d",
-								 targetEntryIndex);
-				selectEntry->resname = resnameString->data;
-
-				nonProjectedEntries = lappend(nonProjectedEntries, selectEntry);
-			}
-		}
-		else
-		{
-			projectedEntries = lappend(projectedEntries, selectEntry);
-		}
+		ProcessEntryPair(insertEntry, selectEntry, attr, targetEntryIndex,
+						 &projectedEntries, &nonProjectedEntries);
 
 		targetEntryIndex++;
 	}
 
+	/* Append any additional non-projected entries from selectTargetList */
 	for (int entryIndex = list_length(insertTargetList);
 		 entryIndex < list_length(selectTargetList);
 		 entryIndex++)
@@ -1719,18 +1757,154 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 																	entryIndex));
 	}
 
-	/* selectEntry->resno must be the ordinal number of the entry */
+	/* Concatenate projected and non-projected entries and reset resno numbering */
 	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
-	int entryResNo = 1;
-	TargetEntry *selectTargetEntry = NULL;
-	foreach_ptr(selectTargetEntry, selectTargetList)
-	{
-		selectTargetEntry->resno = entryResNo++;
-	}
+	ResetTargetEntryResno(selectTargetList);
 
 	table_close(distributedRelation, NoLock);
 
 	return selectTargetList;
+}
+
+
+/*
+ * Processes a single pair of insert and select target entries.
+ * It compares the source and target types and appends either the
+ * original select entry or a casted version to the appropriate list.
+ */
+static void
+ProcessEntryPair(TargetEntry *insertEntry, TargetEntry *selectEntry,
+				 Form_pg_attribute attr, int targetEntryIndex,
+				 List **projectedEntries, List **nonProjectedEntries)
+{
+	Oid effectiveSourceType = exprType((Node *) selectEntry->expr);
+	Oid targetType = attr->atttypid;
+
+	/*
+	 * If the select expression is a NextValueExpr, use its actual return type.
+	 *
+	 * NextValueExpr represents a call to the nextval() function, which is used to
+	 * obtain the next value from a sequence—commonly for populating auto-increment
+	 * columns. In many cases, nextval() returns an INT8 (bigint), but the actual
+	 * return type may differ depending on database configuration or custom implementations.
+	 *
+	 * Since the target column might have a different type (e.g., INT4), we need to
+	 * obtain the real return type of nextval() to ensure that any type coercion is applied
+	 * correctly. This is done by calling GetNextvalReturnTypeCatalog(), which looks up the
+	 * function in the catalog and returns its return type. The effectiveSourceType is then
+	 * set to this value, ensuring that subsequent comparisons and casts use the correct type.
+	 */
+	if (IsA(selectEntry->expr, NextValueExpr))
+	{
+		effectiveSourceType = GetNextvalReturnTypeCatalog();
+	}
+
+	if (effectiveSourceType != targetType)
+	{
+		AppendCastedEntry(insertEntry, selectEntry,
+						  effectiveSourceType, targetType,
+						  attr->attcollation, attr->atttypmod,
+						  targetEntryIndex,
+						  projectedEntries, nonProjectedEntries);
+	}
+	else
+	{
+		/* Types match, no cast needed */
+		*projectedEntries = lappend(*projectedEntries, selectEntry);
+	}
+}
+
+
+/*
+ * Resets the resno field for each target entry in the list so that
+ * they are numbered sequentially.
+ */
+static void
+ResetTargetEntryResno(List *targetList)
+{
+	int entryResNo = 1;
+	ListCell *lc = NULL;
+	foreach(lc, targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+		tle->resno = entryResNo++;
+	}
+}
+
+
+/*
+ * Looks up the nextval(regclass) function in pg_proc, returning its actual
+ * rettype. In a standard build, that will be INT8OID, but this is more robust.
+ */
+static Oid
+GetNextvalReturnTypeCatalog(void)
+{
+	Oid argTypes[1] = { REGCLASSOID };
+	List *nameList = list_make1(makeString("nextval"));
+
+	/* Look up the nextval(regclass) function */
+	Oid nextvalFuncOid = LookupFuncName(nameList, 1, argTypes, false);
+	if (!OidIsValid(nextvalFuncOid))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_FUNCTION),
+				 errmsg("could not find function nextval(regclass)")));
+	}
+
+	/* Retrieve and validate the return type of the nextval function */
+	Oid nextvalReturnType = get_func_rettype(nextvalFuncOid);
+	if (!OidIsValid(nextvalReturnType))
+	{
+		elog(ERROR, "could not determine return type of nextval(regclass)");
+	}
+
+	return nextvalReturnType;
+}
+
+
+/**
+ * Modifies the given insert entry to match the target column's type and typmod,
+ * then creates and appends a new target entry containing a casted expression
+ * to the projected list. If the original select entry is used by ORDER BY or GROUP BY,
+ * it is marked as junk to avoid ambiguity.
+ */
+static void
+AppendCastedEntry(TargetEntry *insertEntry, TargetEntry *selectEntry,
+				  Oid castFromType, Oid targetType, Oid collation, int32 typmod,
+				  int targetEntryIndex,
+				  List **projectedEntries, List **nonProjectedEntries)
+{
+	/* Update the insert entry's Var to match the target column's type, typmod, and collation */
+	Assert(IsA(insertEntry->expr, Var));
+	{
+		Var *insertVar = (Var *) insertEntry->expr;
+		insertVar->vartype = targetType;
+		insertVar->vartypmod = typmod;
+		insertVar->varcollid = collation;
+	}
+
+	/* Create a new TargetEntry with the casted expression */
+	TargetEntry *coercedEntry = copyObject(selectEntry);
+	coercedEntry->expr = CastExpr((Expr *) selectEntry->expr,
+								  castFromType,
+								  targetType,
+								  collation,
+								  typmod);
+	coercedEntry->ressortgroupref = 0;
+
+	/* Assign a unique name to the coerced entry */
+	SetTargetEntryName(coercedEntry, "auto_coerced_by_citus_%d", targetEntryIndex);
+	*projectedEntries = lappend(*projectedEntries, coercedEntry);
+
+	/* If the original select entry is referenced in ORDER BY or GROUP BY,
+	 * mark it as junk and rename it to avoid ambiguity.
+	 */
+	if (selectEntry->ressortgroupref != 0)
+	{
+		selectEntry->resjunk = true;
+		SetTargetEntryName(selectEntry, "discarded_target_item_%d", targetEntryIndex);
+		*nonProjectedEntries = lappend(*nonProjectedEntries, selectEntry);
+	}
 }
 
 
@@ -1810,6 +1984,18 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 		ereport(ERROR, (errmsg("could not find a conversion path from type %d to %d",
 							   sourceType, targetType)));
 	}
+
+	return NULL; /* keep compiler happy */
+}
+
+
+/* Helper function to set the target entry name using a formatted string */
+static void
+SetTargetEntryName(TargetEntry *tle, const char *format, int index)
+{
+	StringInfo resnameString = makeStringInfo();
+	appendStringInfo(resnameString, format, index);
+	tle->resname = resnameString->data;
 }
 
 

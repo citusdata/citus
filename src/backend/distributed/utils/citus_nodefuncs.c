@@ -53,9 +53,6 @@ static const char *CitusNodeTagNamesD[] = {
 
 const char **CitusNodeTagNames = CitusNodeTagNamesD;
 
-/* support for CitusNewNode() macro */
-CitusNode *newCitusNodeMacroHolder;
-
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_extradata_container);
 
@@ -327,6 +324,16 @@ GetRangeTblKind(RangeTblEntry *rte)
 			break;
 		}
 
+		#if PG_VERSION_NUM >= PG_VERSION_18
+
+		/* new in PG18: GROUP RTE, just map it straight through */
+		case RTE_GROUP:
+		{
+			rteKind = (CitusRTEKind) rte->rtekind;
+			break;
+		}
+
+		#endif
 		case RTE_FUNCTION:
 		{
 			/*

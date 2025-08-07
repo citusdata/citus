@@ -38,6 +38,24 @@ $definition$ create_function_test_maintenance_worker
 CREATE TABLE multi_extension.prev_objects(description text);
 CREATE TABLE multi_extension.extension_diff(previous_object text COLLATE "C",
                             current_object text COLLATE "C");
+-- In PG17, Auto-generated array types, multirange types, and relation rowtypes
+-- are treated as dependent objects, hence changing the output of the
+-- print_extension_changes function.
+-- Relevant PG commit: e5bc9454e527b1cba97553531d8d4992892fdeef
+-- Here we create a table with only the basic extension types
+-- in order to avoid printing extra ones for now
+-- This can be removed when we drop PG16 support.
+CREATE TABLE multi_extension.extension_basic_types (description text);
+INSERT INTO multi_extension.extension_basic_types VALUES ('type citus.distribution_type'),
+                                                         ('type citus.shard_transfer_mode'),
+                                                         ('type citus_copy_format'),
+                                                         ('type noderole'),
+                                                         ('type citus_job_status'),
+                                                         ('type citus_task_status'),
+                                                         ('type replication_slot_info'),
+                                                         ('type split_copy_info'),
+                                                         ('type split_shard_info'),
+                                                         ('type cluster_clock');
 CREATE FUNCTION multi_extension.print_extension_changes()
 RETURNS TABLE(previous_object text, current_object text)
 AS $func$
@@ -53,14 +71,17 @@ BEGIN
 	WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
 		AND refobjid = e.oid
 		AND deptype = 'e'
-		AND e.extname='citus';
+		AND e.extname='citus'
+        AND (pg_catalog.pg_describe_object(classid, objid, 0) NOT LIKE 'type%'
+             OR
+             pg_catalog.pg_describe_object(classid, objid, 0) IN (SELECT * FROM extension_basic_types));
 
 	INSERT INTO extension_diff
 	SELECT p.description previous_object, c.description current_object
 	FROM current_objects c FULL JOIN prev_objects p
 	ON p.description = c.description
 	WHERE (p.description is null OR c.description is null)
-		  AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
+          AND c.description IS DISTINCT FROM 'function any_value(anyelement) anyelement'
           AND c.description IS DISTINCT FROM 'function any_value_agg(anyelement,anyelement) anyelement';
 
 	DROP TABLE prev_objects;
@@ -88,7 +109,8 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal') AND
+      pgio.type      != 'type'
 ORDER BY 1, 2;
  type |       identity
 ---------------------------------------------------------------------
@@ -725,14 +747,8 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- recreate public schema, and recreate citus_tables in the public schema by default
 CREATE SCHEMA public;
--- In PG15, public schema is owned by pg_database_owner role
--- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
+-- public schema is owned by pg_database_owner role
 ALTER SCHEMA public OWNER TO pg_database_owner;
-\endif
 GRANT ALL ON SCHEMA public TO public;
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 ALTER EXTENSION citus UPDATE TO '10.0-4';
@@ -1408,8 +1424,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_schema_move(regnamespace,text,integer,citus.shard_transfer_mode) void
 (5 rows)
 
--- Test downgrade to 12.1-1 from 12.2-1
-ALTER EXTENSION citus UPDATE TO '12.2-1';
+-- Test downgrade to 12.1-1 from 13.0-1
+ALTER EXTENSION citus UPDATE TO '13.0-1';
 ALTER EXTENSION citus UPDATE TO '12.1-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
@@ -1417,12 +1433,29 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
 (0 rows)
 
--- Snapshot of state at 12.2-1
-ALTER EXTENSION citus UPDATE TO '12.2-1';
+-- Snapshot of state at 13.0-1
+ALTER EXTENSION citus UPDATE TO '13.0-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test downgrade to 13.0-1 from 13.1-1
+ALTER EXTENSION citus UPDATE TO '13.1-1';
+ALTER EXTENSION citus UPDATE TO '13.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 13.1-1
+ALTER EXTENSION citus UPDATE TO '13.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
                         previous_object                         |                                        current_object
 ---------------------------------------------------------------------
  function citus_unmark_object_distributed(oid,oid,integer) void |
+ function shard_name(regclass,bigint) text                      |
                                                                 | function citus_internal.acquire_citus_advisory_object_class_lock(integer,cstring) void
                                                                 | function citus_internal.add_colocation_metadata(integer,integer,integer,regtype,oid) void
                                                                 | function citus_internal.add_object_metadata(text,text[],text[],integer,integer,boolean) void
@@ -1431,35 +1464,55 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                 | function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text) void
                                                                 | function citus_internal.add_tenant_schema(oid,integer) void
                                                                 | function citus_internal.adjust_local_clock_to_remote(cluster_clock) void
-                                                                | function citus_internal.commit_management_command_2pc() void
                                                                 | function citus_internal.database_command(text) void
                                                                 | function citus_internal.delete_colocation_metadata(integer) void
                                                                 | function citus_internal.delete_partition_metadata(regclass) void
                                                                 | function citus_internal.delete_placement_metadata(bigint) void
                                                                 | function citus_internal.delete_shard_metadata(bigint) void
                                                                 | function citus_internal.delete_tenant_schema(oid) void
-                                                                | function citus_internal.execute_command_on_remote_nodes_as_user(text,text) void
                                                                 | function citus_internal.global_blocked_processes() SETOF record
                                                                 | function citus_internal.is_replication_origin_tracking_active() boolean
                                                                 | function citus_internal.local_blocked_processes() SETOF record
                                                                 | function citus_internal.mark_node_not_synced(integer,integer) void
-                                                                | function citus_internal.mark_object_distributed(oid,text,oid,text) void
-                                                                | function citus_internal.start_management_transaction(xid8) void
                                                                 | function citus_internal.start_replication_origin_tracking() void
                                                                 | function citus_internal.stop_replication_origin_tracking() void
                                                                 | function citus_internal.unregister_tenant_schema_globally(oid,text) void
                                                                 | function citus_internal.update_none_dist_table_metadata(oid,"char",bigint,boolean) void
                                                                 | function citus_internal.update_placement_metadata(bigint,integer,integer) void
                                                                 | function citus_internal.update_relation_colocation(oid,integer) void
+                                                                | function citus_is_primary_node() boolean
+                                                                | function citus_stat_counters(oid) SETOF record
+                                                                | function citus_stat_counters_reset(oid) void
                                                                 | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
-(30 rows)
+                                                                | function shard_name(regclass,bigint,boolean) text
+                                                                | view citus_nodes
+                                                                | view citus_stat_counters
+(33 rows)
+
+-- Test downgrade to 13.1-1 from 13.2-1
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+ALTER EXTENSION citus UPDATE TO '13.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 13.2-1
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+ function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision) |
+ | function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision, execution_ntuples double precision, execution_nloops double precision)
+(2 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 12.2devel
+ 13.2devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -1470,7 +1523,8 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal') AND
+      pgio.type      != 'type'
 ORDER BY 1, 2;
  type |       identity
 ---------------------------------------------------------------------
@@ -1493,7 +1547,7 @@ DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 12.2, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 13.2, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -1538,7 +1592,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 12.2, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 13.2, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
@@ -1960,6 +2014,7 @@ RESET citus.enable_schema_based_sharding;
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
 DROP TABLE version_mismatch_table;
+DROP TABLE  multi_extension.extension_basic_types;
 DROP SCHEMA multi_extension;
 ERROR:  cannot drop schema multi_extension because other objects depend on it
 DETAIL:  function multi_extension.print_extension_changes() depends on schema multi_extension

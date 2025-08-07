@@ -260,6 +260,10 @@ FROM
 		tenant_id,
 		user_id) AS subquery;
 
+SELECT success FROM run_command_on_workers('alter system set enable_nestloop to off');
+SELECT success FROM run_command_on_workers('alter system set enable_sort to off');
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
+
 -- Union and left join subquery pushdown
 EXPLAIN (COSTS OFF)
 SELECT
@@ -395,6 +399,10 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
+
+SELECT success FROM run_command_on_workers('alter system reset enable_nestloop');
+SELECT success FROM run_command_on_workers('alter system reset enable_sort');
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
 -- Lateral join subquery pushdown
 -- set subquery_pushdown due to limit in the query
@@ -630,11 +638,13 @@ INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
 
 -- WHERE EXISTS forces pg12 to materialize cte
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
 WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
 SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
+$Q$);
 
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
@@ -949,9 +959,11 @@ SELECT count(distinct a) from r NATURAL JOIN ref_table;
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 
-EXPLAIN :default_analyze_flags
+SELECT public.explain_with_pg17_initplan_format($Q$
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
+$Q$);
 
 BEGIN;
 EXPLAIN :default_analyze_flags
@@ -1153,6 +1165,32 @@ EXPLAIN :default_analyze_flags EXECUTE q1('(1)');
 PREPARE q2(int_wrapper_type) AS WITH a AS (UPDATE tbl SET b = $1 WHERE a = 1 RETURNING *) SELECT * FROM a;
 EXPLAIN (COSTS false) EXECUTE q2('(1)');
 EXPLAIN :default_analyze_flags EXECUTE q2('(1)');
+
+-- EXPLAIN ANALYZE shouldn't execute SubPlans twice (bug #4212)
+SET search_path TO multi_explain;
+CREATE TABLE test_subplans (x int primary key, y int);
+SELECT create_distributed_table('test_subplans','x');
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+
+-- Only one row must exist
+SELECT * FROM test_subplans;
+
+-- Will fail with duplicate pk
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+
+-- Test JSON format
+TRUNCATE test_subplans;
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+
+-- Only one row must exist
+SELECT * FROM test_subplans;
 
 -- check when auto explain + analyze is enabled, we do not allow local execution.
 CREATE SCHEMA test_auto_explain;

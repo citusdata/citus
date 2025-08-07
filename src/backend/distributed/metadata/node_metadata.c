@@ -167,6 +167,7 @@ PG_FUNCTION_INFO_V1(citus_nodeport_for_nodeid);
 PG_FUNCTION_INFO_V1(citus_coordinator_nodeid);
 PG_FUNCTION_INFO_V1(citus_is_coordinator);
 PG_FUNCTION_INFO_V1(citus_internal_mark_node_not_synced);
+PG_FUNCTION_INFO_V1(citus_is_primary_node);
 
 /*
  * DefaultNodeMetadata creates a NodeMetadata struct with the fields set to
@@ -216,6 +217,9 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 	{
 		EnsureTransactionalMetadataSyncMode();
 	}
+
+	/* prevent concurrent modification */
+	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
 
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
@@ -987,7 +991,7 @@ MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 
 	List *commandList = NIL;
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, context->activatedWorkerNodeList)
+	foreach_declared_ptr(workerNode, context->activatedWorkerNodeList)
 	{
 		/*
 		 * We need to prevent self deadlock when we access pg_dist_node using separate
@@ -1020,7 +1024,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 		List *updatedActivatedNodeList = NIL;
 
 		WorkerNode *node = NULL;
-		foreach_ptr(node, context->activatedWorkerNodeList)
+		foreach_declared_ptr(node, context->activatedWorkerNodeList)
 		{
 			node = SetWorkerColumnLocalOnly(node, Anum_pg_dist_node_isactive,
 											BoolGetDatum(true));
@@ -1039,7 +1043,7 @@ SetNodeMetadata(MetadataSyncContext *context, bool localOnly)
 	if (!localOnly && EnableMetadataSync)
 	{
 		WorkerNode *node = NULL;
-		foreach_ptr(node, context->activatedWorkerNodeList)
+		foreach_declared_ptr(node, context->activatedWorkerNodeList)
 		{
 			SetNodeStateViaMetadataContext(context, node, BoolGetDatum(true));
 		}
@@ -1518,7 +1522,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	}
 
 	Oid relationId = PG_GETARG_OID(0);
-	EnsureTablePermissions(relationId, ACL_SELECT);
+	EnsureTablePermissions(relationId, ACL_SELECT, ACLMASK_ANY);
 
 	if (!IsCitusTable(relationId))
 	{
@@ -1659,6 +1663,36 @@ citus_is_coordinator(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_BOOL(isCoordinator);
+}
+
+
+/*
+ * citus_is_primary_node returns whether the current node is a primary for
+ * a given group_id. We consider the node a primary if it has
+ * pg_dist_node entries marked as primary
+ */
+Datum
+citus_is_primary_node(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int32 groupId = GetLocalGroupId();
+	WorkerNode *workerNode = PrimaryNodeForGroup(groupId, NULL);
+	if (workerNode == NULL)
+	{
+		ereport(WARNING, (errmsg("could not find the current node in pg_dist_node"),
+						  errdetail("If this is the coordinator node, consider adding it "
+									"into the metadata by using citus_set_coordinator_host() "
+									"UDF. Otherwise, if you're going to use this node as a "
+									"worker node for a new cluster, make sure to add this "
+									"node into the metadata from the coordinator by using "
+									"citus_add_node() UDF.")));
+		PG_RETURN_NULL();
+	}
+
+	bool isPrimary = workerNode->nodeId == GetLocalNodeId();
+
+	PG_RETURN_BOOL(isPrimary);
 }
 
 
@@ -1844,7 +1878,7 @@ FindNodeAnyClusterByNodeId(uint32 nodeId)
 	List *nodeList = ReadDistNode(includeNodesFromOtherClusters);
 	WorkerNode *node = NULL;
 
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		if (node->nodeId == nodeId)
 		{
@@ -1866,7 +1900,7 @@ FindNodeWithNodeId(int nodeId, bool missingOk)
 	List *nodeList = ActiveReadableNodeList();
 	WorkerNode *node = NULL;
 
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		if (node->nodeId == nodeId)
 		{
@@ -1894,7 +1928,7 @@ FindCoordinatorNodeId()
 	List *nodeList = ReadDistNode(includeNodesFromOtherClusters);
 	WorkerNode *node = NULL;
 
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		if (NodeIsCoordinator(node))
 		{
@@ -2024,7 +2058,7 @@ ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode)
 	shardPlacements = SortList(shardPlacements, CompareGroupShardPlacements);
 
 	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacements)
+	foreach_declared_ptr(placement, shardPlacements)
 	{
 		if (!PlacementHasActivePlacementOnAnotherGroup(placement))
 		{
@@ -2060,7 +2094,7 @@ PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement *sourcePlacement)
 
 	bool foundActivePlacementOnAnotherGroup = false;
 	ShardPlacement *activePlacement = NULL;
-	foreach_ptr(activePlacement, activePlacementList)
+	foreach_declared_ptr(activePlacement, activePlacementList)
 	{
 		if (activePlacement->groupId != sourcePlacement->groupId)
 		{
@@ -2411,7 +2445,7 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 
 	/* open connections in parallel */
 	WorkerNode *worker = NULL;
-	foreach_ptr(worker, workerNodeList)
+	foreach_declared_ptr(worker, workerNodeList)
 	{
 		bool success = SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 			worker->workerName, worker->workerPort,
@@ -2896,7 +2930,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
-	CatalogTupleInsert(pgDistNode, heapTuple);
+	CATALOG_INSERT_WITH_SNAPSHOT(pgDistNode, heapTuple);
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
@@ -2931,8 +2965,18 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	 * https://github.com/citusdata/citus/pull/2855#discussion_r313628554
 	 * https://github.com/citusdata/citus/issues/1890
 	 */
-	Relation replicaIndex = index_open(RelationGetPrimaryKeyIndex(pgDistNode),
-									   AccessShareLock);
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ adds a bool “deferrable_ok” parameter */
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode, false),
+				   AccessShareLock);
+#else
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode),
+				   AccessShareLock);
+#endif
+
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
@@ -3144,7 +3188,7 @@ static void
 ErrorIfAnyNodeNotExist(List *nodeList)
 {
 	WorkerNode *node = NULL;
-	foreach_ptr(node, nodeList)
+	foreach_declared_ptr(node, nodeList)
 	{
 		/*
 		 * First, locally mark the node is active, if everything goes well,
@@ -3193,7 +3237,7 @@ static void
 SendDeletionCommandsForReplicatedTablePlacements(MetadataSyncContext *context)
 {
 	WorkerNode *node = NULL;
-	foreach_ptr(node, context->activatedWorkerNodeList)
+	foreach_declared_ptr(node, context->activatedWorkerNodeList)
 	{
 		if (!node->isActive)
 		{

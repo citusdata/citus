@@ -170,12 +170,10 @@ static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 static void CopyLocalDataIntoShards(Oid distributedTableId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 static bool DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 															 Var *distributionColumn);
 static int numeric_typmod_scale(int32 typmod);
 static bool is_valid_numeric_typmod(int32 typmod);
-#endif
 
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 														Var *distributionColumn);
@@ -834,7 +832,7 @@ HashSplitPointsForShardList(List *shardList)
 	List *splitPointList = NIL;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		int32 shardMaxValue = DatumGetInt32(shardInterval->maxValue);
 
@@ -890,7 +888,7 @@ WorkerNodesForShardList(List *shardList)
 	List *nodeIdList = NIL;
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardList)
+	foreach_declared_ptr(shardInterval, shardList)
 	{
 		WorkerNode *workerNode = ActiveShardPlacementWorkerNode(shardInterval->shardId);
 		nodeIdList = lappend_int(nodeIdList, workerNode->nodeId);
@@ -1337,7 +1335,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 								  ALLOCSET_DEFAULT_SIZES);
 		MemoryContext oldContext = MemoryContextSwitchTo(citusPartitionContext);
 
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			MemoryContextReset(citusPartitionContext);
 
@@ -1551,7 +1549,7 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 		MemoryContext oldContext = MemoryContextSwitchTo(citusPartitionContext);
 
 		Oid partitionRelationId = InvalidOid;
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			MemoryContextReset(citusPartitionContext);
 
@@ -1701,7 +1699,7 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId
 	Oid attrDefOid;
 	List *attrDefOids = GetAttrDefsFromSequence(seqOid);
 
-	foreach_oid(attrDefOid, attrDefOids)
+	foreach_declared_oid(attrDefOid, attrDefOids)
 	{
 		ObjectAddress columnAddress = GetAttrDefaultColumnAddress(attrDefOid);
 
@@ -1783,7 +1781,7 @@ static void
 EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 {
 	SequenceInfo *seqInfo = NULL;
-	foreach_ptr(seqInfo, seqInfoList)
+	foreach_declared_ptr(seqInfo, seqInfoList)
 	{
 		if (!seqInfo->isNextValDefault)
 		{
@@ -2114,8 +2112,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 								  "AS (...) STORED.")));
 	}
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 	/* verify target relation is not distributed by a column of type numeric with negative scale */
 	if (distributionMethod != DISTRIBUTE_BY_NONE &&
 		DistributionColumnUsesNumericColumnNegativeScale(relationDesc,
@@ -2126,7 +2122,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 						errdetail("Distribution column must not use numeric type "
 								  "with negative scale")));
 	}
-#endif
 
 	/* check for support function needed by specified partition method */
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
@@ -2732,11 +2727,15 @@ CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId)
 	ExprContext *econtext = GetPerTupleExprContext(estate);
 	econtext->ecxt_scantuple = slot;
 	const bool nonPublishableData = false;
+
+	/* we don't track query counters when distributing a table */
+	const bool trackQueryCounters = false;
 	DestReceiver *copyDest =
 		(DestReceiver *) CreateCitusCopyDestReceiver(distributedTableId,
 													 columnNameList,
 													 partitionColumnIndex,
-													 estate, NULL, nonPublishableData);
+													 estate, NULL, nonPublishableData,
+													 trackQueryCounters);
 
 	/* initialise state for writing to shards, we'll open connections on demand */
 	copyDest->rStartup(copyDest, 0, sourceTupleDescriptor);
@@ -2844,8 +2843,6 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 }
 
 
-#if (PG_VERSION_NUM >= PG_VERSION_15)
-
 /*
  * is_valid_numeric_typmod checks if the typmod value is valid
  *
@@ -2894,8 +2891,6 @@ DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 	return false;
 }
 
-
-#endif
 
 /*
  * DistributionColumnUsesGeneratedStoredColumn returns whether a given relation uses

@@ -80,11 +80,11 @@ typedef enum DistOpsOperationType
  */
 typedef struct DistributeObjectOps
 {
-	char * (*deparse)(Node *);
+	char *(*deparse)(Node *);
 	void (*qualify)(Node *);
-	List * (*preprocess)(Node *, const char *, ProcessUtilityContext);
-	List * (*postprocess)(Node *, const char *);
-	List * (*address)(Node *, bool, bool);
+	List *(*preprocess)(Node *, const char *, ProcessUtilityContext);
+	List *(*postprocess)(Node *, const char *);
+	List *(*address)(Node *, bool, bool);
 	bool markDistributed;
 
 	/* fields used by common implementations, omitted for specialized implementations */
@@ -546,7 +546,9 @@ extern List * AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok, bo
 												 isPostprocess);
 
 /* seclabel.c - forward declarations*/
-extern List * PostprocessSecLabelStmt(Node *node, const char *queryString);
+extern List * PostprocessAnySecLabelStmt(Node *node, const char *queryString);
+extern List * PostprocessRoleSecLabelStmt(Node *node, const char *queryString);
+extern List * PostprocessTableOrColumnSecLabelStmt(Node *node, const char *queryString);
 extern List * SecLabelStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess);
 extern void citus_test_object_relabel(const ObjectAddress *object, const char *seclabel);
 
@@ -560,13 +562,11 @@ extern List * PostprocessAlterSequenceSchemaStmt(Node *node, const char *querySt
 extern List * PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 											   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 extern List * PreprocessAlterSequencePersistenceStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);
 extern List * PreprocessSequenceAlterTableStmt(Node *node, const char *queryString,
 											   ProcessUtilityContext processUtilityContext);
-#endif
 extern List * PreprocessDropSequenceStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 extern List * SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok, bool
@@ -582,10 +582,8 @@ extern List * AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok, 
 												   isPostprocess);
 extern List * AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok, bool
 												  isPostprocess);
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 extern List * AlterSequencePersistenceStmtObjectAddress(Node *node, bool missing_ok, bool
 														isPostprocess);
-#endif
 extern List * RenameSequenceStmtObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
@@ -784,8 +782,6 @@ extern List * CreateTriggerStmtObjectAddress(Node *node, bool missingOk, bool
 											 isPostprocess);
 extern void CreateTriggerEventExtendNames(CreateTrigStmt *createTriggerStmt,
 										  char *schemaName, uint64 shardId);
-extern List * PreprocessAlterTriggerRenameStmt(Node *node, const char *queryString,
-											   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString);
 extern void AlterTriggerRenameEventExtendNames(RenameStmt *renameTriggerStmt,
 											   char *schemaName, uint64 shardId);

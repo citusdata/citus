@@ -82,7 +82,10 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static const char * convert_aclright_to_string(int aclright);
 static void simple_quote_literal(StringInfo buf, const char *val);
+static SubscriptingRef * TargetEntryExprFindSubsRef(Expr *expr);
 static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
+static void process_acl_items(Acl *acl, const char *relationName,
+							  const char *attributeName, List **defs);
 
 
 /*
@@ -258,10 +261,8 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	char *typeName = format_type_be(pgSequenceForm->seqtypid);
 
 	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND,
-#if (PG_VERSION_NUM >= PG_VERSION_15)
 								 get_rel_persistence(sequenceRelationId) ==
 								 RELPERSISTENCE_UNLOGGED ? "UNLOGGED " : "",
-#endif
 								 qualifiedSequenceName,
 								 typeName,
 								 pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
@@ -315,6 +316,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 	AttrNumber defaultValueIndex = 0;
 	AttrNumber constraintIndex = 0;
 	AttrNumber constraintCount = 0;
+	bool relIsPartition = false;
 	StringInfoData buffer = { NULL, 0, 0, 0 };
 
 	/*
@@ -342,6 +344,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 		}
 
 		appendStringInfo(&buffer, "TABLE %s (", relationName);
+
+		relIsPartition = relation->rd_rel->relispartition;
 	}
 	else
 	{
@@ -392,10 +396,18 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 								 GetCompressionMethodName(attributeForm->attcompression));
 			}
 
-			if (attributeForm->attidentity && includeIdentityDefaults)
+			/*
+			 * If this is an identity column include its identity definition in the
+			 * DDL only if its relation is not a partition. If it is a partition, any
+			 * identity is inherited from the parent table by ATTACH PARTITION. This
+			 * is Postgres 17+ behavior (commit 699586315); prior PG versions did not
+			 * support identity columns in partitioned tables.
+			 */
+			if (attributeForm->attidentity && includeIdentityDefaults && !relIsPartition)
 			{
 				bool missing_ok = false;
-				Oid seqOid = getIdentitySequence(RelationGetRelid(relation),
+				Oid seqOid = getIdentitySequence(identitySequenceRelation_compat(
+													 relation),
 												 attributeForm->attnum, missing_ok);
 
 				if (includeIdentityDefaults == INCLUDE_IDENTITY)
@@ -738,7 +750,18 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 			 * If the user changed the column's statistics target, create
 			 * alter statement and add statement to a list for later processing.
 			 */
-			if (attributeForm->attstattarget >= 0)
+			HeapTuple atttuple = SearchSysCache2(ATTNUM,
+												 ObjectIdGetDatum(tableRelationId),
+												 Int16GetDatum(attributeForm->attnum));
+			if (!HeapTupleIsValid(atttuple))
+			{
+				elog(ERROR, "cache lookup failed for attribute %d of relation %u",
+					 attributeForm->attnum, tableRelationId);
+			}
+
+			int32 targetAttstattarget = getAttstattarget_compat(atttuple);
+			ReleaseSysCache(atttuple);
+			if (targetAttstattarget >= 0)
 			{
 				StringInfoData statement = { NULL, 0, 0, 0 };
 				initStringInfo(&statement);
@@ -746,7 +769,7 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 				appendStringInfo(&statement, "ALTER COLUMN %s ",
 								 quote_identifier(attributeName));
 				appendStringInfo(&statement, "SET STATISTICS %d",
-								 attributeForm->attstattarget);
+								 targetAttstattarget);
 
 				columnOptionList = lappend(columnOptionList, statement.data);
 			}
@@ -835,12 +858,10 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 		appendStringInfoString(buffer, ") ");
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	if (indexStmt->nulls_not_distinct)
 	{
 		appendStringInfoString(buffer, "NULLS NOT DISTINCT ");
 	}
-#endif /* PG_VERSION_15 */
 
 	if (indexStmt->options != NIL)
 	{
@@ -938,7 +959,7 @@ bool
 IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
 {
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, param) == 0)
 		{
@@ -963,7 +984,7 @@ AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
 
 	char *tableSpaceName = NULL;
 	DefElem *opt = NULL;
-	foreach_ptr(opt, reindexStmt->params)
+	foreach_declared_ptr(opt, reindexStmt->params)
 	{
 		if (strcmp(opt->defname, "tablespace") == 0)
 		{
@@ -1092,9 +1113,8 @@ pg_get_indexclusterdef_string(Oid indexRelationId)
 
 /*
  * pg_get_table_grants returns a list of sql statements which recreate the
- * permissions for a specific table.
+ * permissions for a specific table, including attributes privileges.
  *
- * This function is modeled after aclexplode(), don't change too heavily.
  */
 List *
 pg_get_table_grants(Oid relationId)
@@ -1118,6 +1138,8 @@ pg_get_table_grants(Oid relationId)
 				 errmsg("relation with OID %u does not exist",
 						relationId)));
 	}
+	Form_pg_class classForm = (Form_pg_class) GETSTRUCT(classTuple);
+	AttrNumber	nattrs = classForm->relnatts;
 
 	Datum aclDatum = SysCacheGetAttr(RELOID, classTuple, Anum_pg_class_relacl,
 							   &isNull);
@@ -1145,80 +1167,132 @@ pg_get_table_grants(Oid relationId)
 		/* iterate through the acl datastructure, emit GRANTs */
 
 		Acl *acl = DatumGetAclP(aclDatum);
-		AclItem *aidat = ACL_DAT(acl);
 
-		int offtype = -1;
-		int i = 0;
-		while (i < ACL_NUM(acl))
+		process_acl_items(acl, relationName, NULL, &defs);
+
+		/* if we have a detoasted copy, free it */
+		if ((Pointer) acl != DatumGetPointer(aclDatum))
+			pfree(acl);
+	}
+
+	resetStringInfo(&buffer);
+
+	/* lookup all attribute level grants */
+	for (AttrNumber attNum = 1; attNum <= nattrs; attNum++)
+	{
+		HeapTuple attTuple = SearchSysCache2(ATTNUM, ObjectIdGetDatum(relationId),
+											Int16GetDatum(attNum));
+		if (!HeapTupleIsValid(attTuple))
 		{
-			AclItem    *aidata = NULL;
-			AclMode		priv_bit = 0;
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_COLUMN),
+					errmsg("attribute with OID %u does not exist",
+							attNum)));
+		}
 
-			offtype++;
+		Form_pg_attribute thisAttribute = (Form_pg_attribute) GETSTRUCT(attTuple);
 
-			if (offtype == N_ACL_RIGHTS)
+		/* ignore dropped columns */
+		if (thisAttribute->attisdropped)
+		{
+			ReleaseSysCache(attTuple);
+			continue;
+		}
+
+		Datum aclAttDatum = SysCacheGetAttr(ATTNUM, attTuple, Anum_pg_attribute_attacl,
+								&isNull);
+		if (!isNull)
+		{
+			/* iterate through the acl datastructure, emit GRANTs */
+			Acl *acl = DatumGetAclP(aclAttDatum);
+
+			process_acl_items(acl, relationName, NameStr(thisAttribute->attname), &defs);
+
+			/* if we have a detoasted copy, free it */
+			if ((Pointer) acl != DatumGetPointer(aclAttDatum))
+				pfree(acl);
+		}
+		ReleaseSysCache(attTuple);
+	}
+
+	relation_close(relation, NoLock);
+	return defs;
+}
+
+
+/*
+ * Helper function to process ACL items.
+ * If attributeName is NULL, the function emits table-level GRANT commands;
+ * otherwise it emits column-level GRANT commands.
+ * This function was modeled after aclexplode(), previously in pg_get_table_grants().
+ */
+static void
+process_acl_items(Acl *acl, const char *relationName, const char *attributeName,
+				  List **defs)
+{
+	AclItem *aidat = ACL_DAT(acl);
+	int i = 0;
+	int offtype = -1;
+	StringInfoData buffer;
+
+	initStringInfo(&buffer);
+
+	while (i < ACL_NUM(acl))
+	{
+		offtype++;
+		if (offtype == N_ACL_RIGHTS)
+		{
+			offtype = 0;
+			i++;
+			if (i >= ACL_NUM(acl)) /* done */
 			{
-				offtype = 0;
-				i++;
-				if (i >= ACL_NUM(acl)) /* done */
-				{
-					break;
-				}
+				break;
+			}
+		}
+
+		AclItem *aidata = &aidat[i];
+		AclMode priv_bit = 1 << offtype;
+
+		if (ACLITEM_GET_PRIVS(*aidata) & priv_bit)
+		{
+			const char *roleName = NULL;
+			const char *withGrant = "";
+
+			if (aidata->ai_grantee != 0)
+			{
+				roleName = quote_identifier(GetUserNameFromId(aidata->ai_grantee, false));
+			}
+			else
+			{
+				roleName = "PUBLIC";
 			}
 
-			aidata = &aidat[i];
-			priv_bit = 1 << offtype;
-
-			if (ACLITEM_GET_PRIVS(*aidata) & priv_bit)
+			if ((ACLITEM_GET_GOPTIONS(*aidata) & priv_bit) != 0)
 			{
-				const char *roleName = NULL;
-				const char *withGrant = "";
+				withGrant = " WITH GRANT OPTION";
+			}
 
-				if (aidata->ai_grantee != 0)
-				{
-
-					HeapTuple htup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(aidata->ai_grantee));
-					if (HeapTupleIsValid(htup))
-					{
-						Form_pg_authid authForm = ((Form_pg_authid) GETSTRUCT(htup));
-
-						roleName = quote_identifier(NameStr(authForm->rolname));
-
-						ReleaseSysCache(htup);
-					}
-					else
-					{
-						elog(ERROR, "cache lookup failed for role %u", aidata->ai_grantee);
-					}
-				}
-				else
-				{
-					roleName = "PUBLIC";
-				}
-
-				if ((ACLITEM_GET_GOPTIONS(*aidata) & priv_bit) != 0)
-				{
-					withGrant = " WITH GRANT OPTION";
-				}
-
+			if (attributeName)
+			{
+				appendStringInfo(&buffer, "GRANT %s(%s) ON %s TO %s%s",
+								 convert_aclright_to_string(priv_bit),
+								 quote_identifier(attributeName),
+								 relationName,
+								 roleName,
+								 withGrant);
+			}
+			else
+			{
 				appendStringInfo(&buffer, "GRANT %s ON %s TO %s%s",
 								 convert_aclright_to_string(priv_bit),
 								 relationName,
 								 roleName,
 								 withGrant);
-
-				defs = lappend(defs, pstrdup(buffer.data));
-
-				resetStringInfo(&buffer);
 			}
+			*defs = lappend(*defs, pstrdup(buffer.data));
+			resetStringInfo(&buffer);
 		}
 	}
-
-	resetStringInfo(&buffer);
-
-	relation_close(relation, NoLock);
-	return defs;
-	/* *INDENT-ON* */
 }
 
 
@@ -1347,6 +1421,10 @@ convert_aclright_to_string(int aclright)
 			return "TEMPORARY";
 		case ACL_CONNECT:
 			return "CONNECT";
+#if PG_VERSION_NUM >= PG_VERSION_17
+		case ACL_MAINTAIN:
+			return "MAINTAIN";
+#endif
 		default:
 			elog(ERROR, "unrecognized aclright: %d", aclright);
 			return NULL;
@@ -1637,4 +1715,256 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 			elog(ERROR, "unexpected role type %d", spec->roletype);
 		}
 	}
+}
+
+
+/*
+ * Recursively search an expression for a Param and return its paramid
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ * Does not cover all options but those supported by Citus.
+ */
+static int
+GetParamId(Node *expr)
+{
+	int paramid = 0;
+
+	if (expr == NULL)
+	{
+		return paramid;
+	}
+
+	/* If it's a Param, return its attnum */
+	if (IsA(expr, Param))
+	{
+		Param *param = (Param *) expr;
+		paramid = param->paramid;
+	}
+	/* If it's a FuncExpr, search in arguments */
+	else if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *func = (FuncExpr *) expr;
+		ListCell *lc;
+
+		foreach(lc, func->args)
+		{
+			paramid = GetParamId((Node *) lfirst(lc));
+			if (paramid != 0)
+			{
+				break; /* Stop at the first valid paramid */
+			}
+		}
+	}
+
+	return paramid;
+}
+
+
+/*
+ * list_sort comparator to sort target list by paramid (in MULTIEXPR)
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ */
+static int
+target_list_cmp(const ListCell *a, const ListCell *b)
+{
+	TargetEntry *tleA = lfirst(a);
+	TargetEntry *tleB = lfirst(b);
+
+	/*
+	 * Deal with resjunk entries; sublinks are marked resjunk and
+	 * are placed at the end of the target list so this logic
+	 * ensures they stay grouped at the end of the target list:
+	 */
+	if (tleA->resjunk || tleB->resjunk)
+	{
+		return tleA->resjunk - tleB->resjunk;
+	}
+
+	int la = GetParamId((Node *) tleA->expr);
+	int lb = GetParamId((Node *) tleB->expr);
+
+	/*
+	 * Should be looking at legitimate param ids
+	 */
+	Assert(la > 0);
+	Assert(lb > 0);
+
+	/*
+	 * Return -1, 0 or 1 depending on if la is less than,
+	 * equal to or greater than lb
+	 */
+	return (la > lb) - (la < lb);
+}
+
+
+/*
+ * Used by get_update_query_targetlist_def() (in ruleutils) to reorder the target
+ * list on the left side of the update:
+ * SET () = (SELECT )
+ * Reordering the SELECT side only does not work, consider a case like:
+ * SET (col_1, col3) = (SELECT 1, 3), (col_2) = (SELECT 2)
+ * Without ensure_update_targetlist_in_param_order(), this will lead to an incorrect
+ * deparsed query:
+ * SET (col_1, col2) = (SELECT 1, 3), (col_3) = (SELECT 2)
+ */
+void
+ensure_update_targetlist_in_param_order(List *targetList)
+{
+	bool need_to_sort_target_list = false;
+	int previous_paramid = 0;
+	ListCell *l;
+
+	foreach(l, targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(l);
+
+		if (!tle->resjunk)
+		{
+			int paramid = GetParamId((Node *) tle->expr);
+			if (paramid < previous_paramid)
+			{
+				need_to_sort_target_list = true;
+				break;
+			}
+
+			previous_paramid = paramid;
+		}
+	}
+
+	if (need_to_sort_target_list)
+	{
+		list_sort(targetList, target_list_cmp);
+	}
+}
+
+
+/*
+ * ExpandMergedSubscriptingRefEntries takes a list of target entries and expands
+ * each one that references a SubscriptingRef node that indicates multiple (field)
+ * updates on the same attribute, which is applicable for array/json types atm.
+ */
+List *
+ExpandMergedSubscriptingRefEntries(List *targetEntryList)
+{
+	List *newTargetEntryList = NIL;
+	ListCell *tgtCell = NULL;
+
+	foreach(tgtCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(tgtCell);
+		List *expandedTargetEntries = NIL;
+
+		Expr *expr = targetEntry->expr;
+		while (expr)
+		{
+			SubscriptingRef *subsRef = TargetEntryExprFindSubsRef(expr);
+			if (!subsRef)
+			{
+				break;
+			}
+
+			/*
+			 * Remove refexpr from the SubscriptingRef that we are about to
+			 * wrap in a new TargetEntry and save it for the next one.
+			 */
+			Expr *refexpr = subsRef->refexpr;
+			subsRef->refexpr = NULL;
+
+			/*
+			 * Wrap the Expr that holds SubscriptingRef (directly or indirectly)
+			 * in a new TargetEntry; note that it doesn't have a refexpr anymore.
+			 */
+			TargetEntry *newTargetEntry = copyObject(targetEntry);
+			newTargetEntry->expr = expr;
+			expandedTargetEntries = lappend(expandedTargetEntries, newTargetEntry);
+
+			/* now inspect the refexpr that SubscriptingRef at hand were holding */
+			expr = refexpr;
+		}
+
+		if (expandedTargetEntries == NIL)
+		{
+			/* return original entry since it doesn't hold a SubscriptingRef node */
+			newTargetEntryList = lappend(newTargetEntryList, targetEntry);
+		}
+		else
+		{
+			/*
+			 * Need to concat expanded target list entries in reverse order
+			 * to preserve ordering of the original target entry list.
+			 */
+			List *reversedTgtEntries = NIL;
+			ListCell *revCell = NULL;
+			foreach(revCell, expandedTargetEntries)
+			{
+				TargetEntry *tgtEntry = (TargetEntry *) lfirst(revCell);
+				reversedTgtEntries = lcons(tgtEntry, reversedTgtEntries);
+			}
+			newTargetEntryList = list_concat(newTargetEntryList, reversedTgtEntries);
+		}
+	}
+
+	return newTargetEntryList;
+}
+
+
+/*
+ * TargetEntryExprFindSubsRef searches given Expr --assuming that it is part
+ * of a target list entry-- to see if it directly (i.e.: itself) or indirectly
+ * (e.g.: behind some level of coercions) holds a SubscriptingRef node.
+ *
+ * Returns the original SubscriptingRef node on success or NULL otherwise.
+ *
+ * Note that it wouldn't add much value to use expression_tree_walker here
+ * since we are only interested in a subset of the fields of a few certain
+ * node types.
+ */
+static SubscriptingRef *
+TargetEntryExprFindSubsRef(Expr *expr)
+{
+	Node *node = (Node *) expr;
+	while (node)
+	{
+		if (IsA(node, FieldStore))
+		{
+			/*
+			 * ModifyPartialQuerySupported doesn't allow INSERT/UPDATE via
+			 * FieldStore. If we decide supporting such commands, then we
+			 * should take the first element of "newvals" list into account
+			 * here. This is because, to support such commands, we will need
+			 * to expand merged FieldStore into separate target entries too.
+			 *
+			 * For this reason, this block is not reachable atm and need to
+			 * uncomment the following if we decide supporting such commands.
+			 *
+			 * """
+			 *   FieldStore *fieldStore = (FieldStore *) node;
+			 *   node = (Node *) linitial(fieldStore->newvals);
+			 * """
+			 */
+			ereport(ERROR, (errmsg("unexpectedly got FieldStore object when "
+								   "generating shard query")));
+		}
+		else if (IsA(node, CoerceToDomain))
+		{
+			CoerceToDomain *coerceToDomain = (CoerceToDomain *) node;
+			if (coerceToDomain->coercionformat != COERCE_IMPLICIT_CAST)
+			{
+				/* not an implicit coercion, cannot reach to a SubscriptingRef */
+				break;
+			}
+
+			node = (Node *) coerceToDomain->arg;
+		}
+		else if (IsA(node, SubscriptingRef))
+		{
+			return (SubscriptingRef *) node;
+		}
+		else
+		{
+			/* got a node that we are not interested in */
+			break;
+		}
+	}
+
+	return NULL;
 }

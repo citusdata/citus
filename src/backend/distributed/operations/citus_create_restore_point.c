@@ -122,7 +122,7 @@ OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode)
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
 
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		MultiConnection *connection = StartNodeConnection(connectionFlags,
 														  workerNode->workerName,
@@ -164,7 +164,7 @@ CreateRemoteRestorePoints(char *restoreName, List *connectionList)
 	const char *parameterValues[1] = { restoreName };
 
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		int querySent = SendRemoteCommandParams(connection, CREATE_RESTORE_POINT_COMMAND,
 												parameterCount, parameterTypes,
@@ -175,7 +175,7 @@ CreateRemoteRestorePoints(char *restoreName, List *connectionList)
 		}
 	}
 
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		PGresult *result = GetRemoteCommandResult(connection, true);
 		if (!IsResponseOK(result))

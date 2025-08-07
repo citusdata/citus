@@ -877,7 +877,7 @@ columnar_relation_set_new_filelocator(Relation rel,
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
-	SMgrRelation srel = RelationCreateStorage_compat(*newrlocator, persistence, true);
+	SMgrRelation srel = RelationCreateStorage(*newrlocator, persistence, true);
 
 	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
@@ -1012,7 +1012,7 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
-		if (tupdesc->attrs[i].attisdropped)
+		if (Attr(tupdesc, i)->attisdropped)
 		{
 			continue;
 		}
@@ -1121,10 +1121,27 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	bool frozenxid_updated;
 	bool minmulti_updated;
 
+/* for PG 18+, vac_update_relstats gained a new “all_frozen” param */
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* all frozen pages are always 0, because columnar stripes never store XIDs */
+	BlockNumber new_rel_allfrozen = 0;
+
+	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
+						new_rel_allvisible,  /* allvisible */
+						new_rel_allfrozen,   /* all_frozen */
+						nindexes > 0,
+						newRelFrozenXid, newRelminMxid,
+						&frozenxid_updated, &minmulti_updated,
+						false);
+#else
 	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
 						new_rel_allvisible, nindexes > 0,
 						newRelFrozenXid, newRelminMxid,
-						&frozenxid_updated, &minmulti_updated, false);
+						&frozenxid_updated, &minmulti_updated,
+						false);
+#endif
+
 #else
 	TransactionId oldestXmin;
 	TransactionId freezeLimit;
@@ -1187,10 +1204,19 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 #endif
 #endif
 
+#if PG_VERSION_NUM >= PG_VERSION_18
+	pgstat_report_vacuum(RelationGetRelid(rel),
+						 rel->rd_rel->relisshared,
+						 Max(new_live_tuples, 0), /* live tuples */
+						 0,                       /* dead tuples */
+						 GetCurrentTimestamp());  /* start time */
+#else
 	pgstat_report_vacuum(RelationGetRelid(rel),
 						 rel->rd_rel->relisshared,
 						 Max(new_live_tuples, 0),
 						 0);
+#endif
+
 	pgstat_progress_end_command();
 }
 
@@ -1225,7 +1251,7 @@ LogRelationStats(Relation rel, int elevel)
 													  GetTransactionSnapshot());
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
-			bool attrDropped = tupdesc->attrs[column].attisdropped;
+			bool attrDropped = Attr(tupdesc, column)->attisdropped;
 			for (uint32 chunk = 0; chunk < skiplist->chunkCount; chunk++)
 			{
 				ColumnChunkSkipNode *skipnode =
@@ -1424,15 +1450,32 @@ ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode, int timeout,
 
 
 static bool
-columnar_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
+columnar_scan_analyze_next_block(TableScanDesc scan,
+#if PG_VERSION_NUM >= PG_VERSION_17
+								 ReadStream *stream)
+#else
+								 BlockNumber blockno,
 								 BufferAccessStrategy bstrategy)
+#endif
 {
 	/*
 	 * Our access method is not pages based, i.e. tuples are not confined
 	 * to pages boundaries. So not much to do here. We return true anyway
 	 * so acquire_sample_rows() in analyze.c would call our
 	 * columnar_scan_analyze_next_tuple() callback.
+	 * In PG17, we return false in case there is no buffer left, since
+	 * the outer loop changed in acquire_sample_rows(), and it is
+	 * expected for the scan_analyze_next_block function to check whether
+	 * there are any blocks left in the block sampler.
 	 */
+#if PG_VERSION_NUM >= PG_VERSION_17
+	Buffer buf = read_stream_next_buffer(stream, NULL);
+	if (!BufferIsValid(buf))
+	{
+		return false;
+	}
+	ReleaseBuffer(buf);
+#endif
 	return true;
 }
 
@@ -2228,7 +2271,6 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 				columnarRangeVar = alterTableStmt->relation;
 			}
 		}
-#if PG_VERSION_NUM >= PG_VERSION_15
 		else if (alterTableCmd->subtype == AT_SetAccessMethod)
 		{
 			if (columnarRangeVar || *columnarOptions)
@@ -2239,14 +2281,15 @@ ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions
 									"Specify SET ACCESS METHOD before storage parameters, or use separate ALTER TABLE commands.")));
 			}
 
-			destIsColumnar = (strcmp(alterTableCmd->name, COLUMNAR_AM_NAME) == 0);
+			destIsColumnar = (strcmp(alterTableCmd->name ? alterTableCmd->name :
+									 default_table_access_method,
+									 COLUMNAR_AM_NAME) == 0);
 
 			if (srcIsColumnar && !destIsColumnar)
 			{
 				DeleteColumnarTableOptions(RelationGetRelid(rel), true);
 			}
 		}
-#endif /* PG_VERSION_15 */
 	}
 
 	relation_close(rel, NoLock);
@@ -2547,8 +2590,13 @@ static const TableAmRoutine columnar_am_methods = {
 
 	.relation_estimate_size = columnar_estimate_rel_size,
 
+#if PG_VERSION_NUM < PG_VERSION_18
+
+	/* these two fields were removed in PG 18 */
 	.scan_bitmap_next_block = NULL,
 	.scan_bitmap_next_tuple = NULL,
+#endif
+
 	.scan_sample_next_block = columnar_scan_sample_next_block,
 	.scan_sample_next_tuple = columnar_scan_sample_next_tuple
 };
@@ -2586,7 +2634,7 @@ detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
 
 	for (int i = 0; i < tupleDesc->natts; i++)
 	{
-		if (!isnull[i] && tupleDesc->attrs[i].attlen == -1 &&
+		if (!isnull[i] && Attr(tupleDesc, i)->attlen == -1 &&
 			VARATT_IS_EXTENDED(values[i]))
 		{
 			/* make a copy */
@@ -2630,21 +2678,12 @@ ColumnarCheckLogicalReplication(Relation rel)
 		return;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	{
 		PublicationDesc pubdesc;
 
 		RelationBuildPublicationDesc(rel, &pubdesc);
 		pubActionInsert = pubdesc.pubactions.pubinsert;
 	}
-#else
-	if (rel->rd_pubactions == NULL)
-	{
-		GetRelationPublicationActions(rel);
-		Assert(rel->rd_pubactions != NULL);
-	}
-	pubActionInsert = rel->rd_pubactions->pubinsert;
-#endif
 
 	if (pubActionInsert)
 	{
@@ -3021,6 +3060,8 @@ AvailableExtensionVersionColumnar(void)
 
 	ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					errmsg("citus extension is not found")));
+
+	return NULL; /* keep compiler happy */
 }
 
 
@@ -3083,7 +3124,7 @@ DefElem *
 GetExtensionOption(List *extensionOptions, const char *defname)
 {
 	DefElem *defElement = NULL;
-	foreach_ptr(defElement, extensionOptions)
+	foreach_declared_ptr(defElement, extensionOptions)
 	{
 		if (IsA(defElement, DefElem) &&
 			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)

@@ -12,7 +12,7 @@ SET citus.enable_fast_path_router_planner TO true;
 -- ===================================================================
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
-	author_id bigint NOT NULL,
+	author_id bigint,
 	title varchar(20) NOT NULL,
 	word_count integer
 );

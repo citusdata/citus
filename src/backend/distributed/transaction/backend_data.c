@@ -33,7 +33,7 @@
 #include "storage/spin.h"
 #include "utils/timestamp.h"
 
-#include "pg_version_constants.h"
+#include "pg_version_compat.h"
 
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
@@ -267,7 +267,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	foreach_declared_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
@@ -289,7 +289,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 
 	/* send commands in parallel */
 	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		int querySent = SendRemoteCommand(connection, queryToSend->data);
 		if (querySent == 0)
@@ -299,7 +299,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	}
 
 	/* receive query results */
-	foreach_ptr(connection, connectionList)
+	foreach_declared_ptr(connection, connectionList)
 	{
 		bool raiseInterrupts = true;
 		Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
@@ -519,15 +519,6 @@ UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 void
 InitializeBackendManagement(void)
 {
-/* on PG 15, we use shmem_request_hook_type */
-#if PG_VERSION_NUM < PG_VERSION_15
-
-	/* allocate shared memory */
-	if (!IsUnderPostmaster)
-	{
-		RequestAddinShmemSpace(BackendManagementShmemSize());
-	}
-#endif
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = BackendManagementShmemInit;
 }
@@ -700,7 +691,7 @@ InitializeBackendData(const char *applicationName)
 
 	uint64 gpid = ExtractGlobalPID(applicationName);
 
-	MyBackendData = &backendManagementShmemData->backends[MyProc->pgprocno];
+	MyBackendData = &backendManagementShmemData->backends[getProcNo_compat(MyProc)];
 
 	Assert(MyBackendData);
 
@@ -855,6 +846,16 @@ GetCurrentDistributedTransactionId(void)
 void
 AssignDistributedTransactionId(void)
 {
+	/*
+	 * MyBackendData should always be available. However, we observed some
+	 * crashes where certain hooks were not executed.
+	 * Bug 3697586: Server crashes when assigning distributed transaction
+	 */
+	if (!MyBackendData)
+	{
+		ereport(ERROR, (errmsg("backend is not ready for distributed transactions")));
+	}
+
 	pg_atomic_uint64 *transactionNumberSequence =
 		&backendManagementShmemData->nextTransactionNumber;
 
@@ -960,6 +961,23 @@ SetBackendDataGlobalPID(uint64 gpid)
 	}
 	SpinLockAcquire(&MyBackendData->mutex);
 	MyBackendData->globalPID = gpid;
+	SpinLockRelease(&MyBackendData->mutex);
+}
+
+
+/*
+ * SetBackendDataDistributedCommandOriginator sets the distributedCommandOriginator
+ * field on MyBackendData.
+ */
+void
+SetBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
+{
+	if (!MyBackendData)
+	{
+		return;
+	}
+	SpinLockAcquire(&MyBackendData->mutex);
+	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
 	SpinLockRelease(&MyBackendData->mutex);
 }
 
@@ -1174,11 +1192,11 @@ CurrentDistributedTransactionNumber(void)
 void
 GetBackendDataForProc(PGPROC *proc, BackendData *result)
 {
-	int pgprocno = proc->pgprocno;
+	int pgprocno = getProcNo_compat(proc);
 
 	if (proc->lockGroupLeader != NULL)
 	{
-		pgprocno = proc->lockGroupLeader->pgprocno;
+		pgprocno = getProcNo_compat(proc->lockGroupLeader);
 	}
 
 	BackendData *backendData = &backendManagementShmemData->backends[pgprocno];
@@ -1198,7 +1216,8 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 void
 CancelTransactionDueToDeadlock(PGPROC *proc)
 {
-	BackendData *backendData = &backendManagementShmemData->backends[proc->pgprocno];
+	BackendData *backendData = &backendManagementShmemData->backends[getProcNo_compat(
+																		 proc)];
 
 	/* backend might not have used citus yet and thus not initialized backend data */
 	if (!backendData)
@@ -1330,7 +1349,7 @@ ActiveDistributedTransactionNumbers(void)
 LocalTransactionId
 GetMyProcLocalTransactionId(void)
 {
-	return MyProc->lxid;
+	return getLxid_compat(MyProc);
 }
 
 

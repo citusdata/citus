@@ -174,7 +174,7 @@ EnsureTableKindSupportedForTenantSchema(Oid relationId)
 		List *partitionList = PartitionList(relationId);
 
 		Oid partitionRelationId = InvalidOid;
-		foreach_oid(partitionRelationId, partitionList)
+		foreach_declared_oid(partitionRelationId, partitionList)
 		{
 			ErrorIfIllegalPartitioningInTenantSchema(relationId, partitionRelationId);
 		}
@@ -199,7 +199,7 @@ EnsureFKeysForTenantTable(Oid relationId)
 	int fKeyReferencingFlags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *referencingForeignKeys = GetForeignKeyOids(relationId, fKeyReferencingFlags);
 	Oid foreignKeyId = InvalidOid;
-	foreach_oid(foreignKeyId, referencingForeignKeys)
+	foreach_declared_oid(foreignKeyId, referencingForeignKeys)
 	{
 		Oid referencingTableId = GetReferencingTableId(foreignKeyId);
 		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
@@ -232,7 +232,7 @@ EnsureFKeysForTenantTable(Oid relationId)
 
 	int fKeyReferencedFlags = INCLUDE_REFERENCED_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *referencedForeignKeys = GetForeignKeyOids(relationId, fKeyReferencedFlags);
-	foreach_oid(foreignKeyId, referencedForeignKeys)
+	foreach_declared_oid(foreignKeyId, referencedForeignKeys)
 	{
 		Oid referencingTableId = GetReferencingTableId(foreignKeyId);
 		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
@@ -429,7 +429,7 @@ EnsureSchemaCanBeDistributed(Oid schemaId, List *schemaTableIdList)
 	}
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, schemaTableIdList)
+	foreach_declared_oid(relationId, schemaTableIdList)
 	{
 		EnsureTenantTable(relationId, "citus_schema_distribute");
 	}
@@ -637,7 +637,7 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	List *tableIdListInSchema = SchemaGetNonShardTableIdList(schemaId);
 	List *tableIdListToConvert = NIL;
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, tableIdListInSchema)
+	foreach_declared_oid(relationId, tableIdListInSchema)
 	{
 		/* prevent concurrent drop of the relation */
 		LockRelationOid(relationId, AccessShareLock);
@@ -675,7 +675,7 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 	 * tables.
 	 */
 	List *originalForeignKeyRecreationCommands = NIL;
-	foreach_oid(relationId, tableIdListToConvert)
+	foreach_declared_oid(relationId, tableIdListToConvert)
 	{
 		List *fkeyCommandsForRelation =
 			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
@@ -741,7 +741,7 @@ citus_schema_undistribute(PG_FUNCTION_ARGS)
 	List *tableIdListInSchema = SchemaGetNonShardTableIdList(schemaId);
 	List *tableIdListToConvert = NIL;
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, tableIdListInSchema)
+	foreach_declared_oid(relationId, tableIdListInSchema)
 	{
 		/* prevent concurrent drop of the relation */
 		LockRelationOid(relationId, AccessShareLock);
@@ -883,7 +883,7 @@ TenantSchemaPickAnchorShardId(Oid schemaId)
 	}
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, tablesInSchema)
+	foreach_declared_oid(relationId, tablesInSchema)
 	{
 		/*
 		 * Make sure the relation isn't dropped for the remainder of

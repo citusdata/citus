@@ -36,6 +36,7 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_index.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_seclabel.h"
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
 #include "foreign/foreign.h"
@@ -57,6 +58,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -83,6 +85,7 @@ static char * CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 											   const ColumnarOptions *options);
 static char * GetTableDDLCommandColumnar(void *context);
 static TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);
+static List * CreateSecurityLabelCommands(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_get_table_metadata);
@@ -645,7 +648,7 @@ GetPreLoadTableCreationCommands(Oid relationId,
 	if (tableACLList != NIL)
 	{
 		char *tableACLCommand = NULL;
-		foreach_ptr(tableACLCommand, tableACLList)
+		foreach_declared_ptr(tableACLCommand, tableACLList)
 		{
 			tableDDLEventList = lappend(tableDDLEventList,
 										makeTableDDLCommandString(tableACLCommand));
@@ -664,6 +667,9 @@ GetPreLoadTableCreationCommands(Oid relationId,
 
 	List *policyCommands = CreatePolicyCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
+
+	List *securityLabelCommands = CreateSecurityLabelCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, securityLabelCommands);
 
 	/* revert back to original search_path */
 	PopEmptySearchPath(saveNestLevel);
@@ -740,7 +746,12 @@ GetRelationIdentityOrPK(Relation rel)
 
 	if (!OidIsValid(idxoid))
 	{
+/* Determine the index OID of the primary key (PG18 adds a second parameter) */
+#if PG_VERSION_NUM >= PG_VERSION_18
+		idxoid = RelationGetPrimaryKeyIndex(rel, false /* deferred_ok */);
+#else
 		idxoid = RelationGetPrimaryKeyIndex(rel);
+#endif
 	}
 
 	return idxoid;
@@ -822,7 +833,7 @@ GetTableRowLevelSecurityCommands(Oid relationId)
 	List *rowLevelSecurityEnableCommands = pg_get_row_level_security_commands(relationId);
 
 	char *rowLevelSecurityCommand = NULL;
-	foreach_ptr(rowLevelSecurityCommand, rowLevelSecurityEnableCommands)
+	foreach_declared_ptr(rowLevelSecurityCommand, rowLevelSecurityEnableCommands)
 	{
 		rowLevelSecurityCommandList = lappend(
 			rowLevelSecurityCommandList,
@@ -830,6 +841,109 @@ GetTableRowLevelSecurityCommands(Oid relationId)
 	}
 
 	return rowLevelSecurityCommandList;
+}
+
+
+/*
+ * CreateSecurityLabelCommands - return the SECURITY LABEL commands on
+ * the table identified by relationId. It is used by GetPreLoadTableCreationCommands()
+ * to reconstruct the security labels on the table and its columns.
+ */
+static List *
+CreateSecurityLabelCommands(Oid relationId)
+{
+	List *securityLabelCommands = NIL;
+
+	if (!RegularTable(relationId)) /* should be an Assert ? */
+	{
+		return securityLabelCommands;
+	}
+
+	Relation pg_seclabel = table_open(SecLabelRelationId, AccessShareLock);
+	ScanKeyData skey[1];
+	ScanKeyInit(&skey[0], Anum_pg_seclabel_objoid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+	SysScanDesc scan = systable_beginscan(pg_seclabel, SecLabelObjectIndexId,
+										  true, NULL, 1, &skey[0]);
+	HeapTuple tuple = NULL;
+	List *table_name = NIL;
+	Relation relation = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	List *securityLabelStmts = NULL;
+	ListCell *lc;
+
+	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
+	{
+		SecLabelStmt *secLabelStmt = makeNode(SecLabelStmt);
+
+		if (relation == NULL)
+		{
+			relation = relation_open(relationId, AccessShareLock);
+			if (!RelationIsVisible(relationId))
+			{
+				char *nsname = get_namespace_name(RelationGetNamespace(relation));
+				table_name = lappend(table_name, makeString(nsname));
+			}
+			char *relname = get_rel_name(relationId);
+			table_name = lappend(table_name, makeString(relname));
+		}
+
+		Datum datumArray[Natts_pg_seclabel];
+		bool isNullArray[Natts_pg_seclabel];
+
+		heap_deform_tuple(tuple, RelationGetDescr(pg_seclabel), datumArray,
+						  isNullArray);
+		int subObjectId = DatumGetInt32(
+			datumArray[Anum_pg_seclabel_objsubid - 1]);
+		secLabelStmt->provider = TextDatumGetCString(
+			datumArray[Anum_pg_seclabel_provider - 1]);
+		secLabelStmt->label = TextDatumGetCString(
+			datumArray[Anum_pg_seclabel_label - 1]);
+
+		if (subObjectId > 0)
+		{
+			/* Its a column; construct the name */
+			secLabelStmt->objtype = OBJECT_COLUMN;
+			List *col_name = list_copy(table_name);
+
+			if (tupleDescriptor == NULL)
+			{
+				tupleDescriptor = RelationGetDescr(relation);
+			}
+
+			Form_pg_attribute attrForm = TupleDescAttr(tupleDescriptor, subObjectId - 1);
+			char *attributeName = NameStr(attrForm->attname);
+			col_name = lappend(col_name, makeString(attributeName));
+
+			secLabelStmt->object = (Node *) col_name;
+		}
+		else
+		{
+			Assert(subObjectId == 0);
+			secLabelStmt->objtype = OBJECT_TABLE;
+			secLabelStmt->object = (Node *) table_name;
+		}
+
+		securityLabelStmts = lappend(securityLabelStmts, secLabelStmt);
+	}
+
+	foreach(lc, securityLabelStmts)
+	{
+		Node *stmt = (Node *) lfirst(lc);
+		char *secLabelStmtString = DeparseTreeNode(stmt);
+		TableDDLCommand *secLabelCommand = makeTableDDLCommandString(secLabelStmtString);
+		securityLabelCommands = lappend(securityLabelCommands, secLabelCommand);
+	}
+
+	systable_endscan(scan);
+	table_close(pg_seclabel, AccessShareLock);
+
+	if (relation != NULL)
+	{
+		relation_close(relation, AccessShareLock);
+	}
+
+	return securityLabelCommands;
 }
 
 

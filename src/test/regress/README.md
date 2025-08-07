@@ -165,3 +165,14 @@ help cleaning up in the future.
 
 In CI sometimes a test fails randomly, we call these tests "flaky". To fix these
 flaky tests see [`src/test/regress/flaky_tests.md`](https://github.com/citusdata/citus/blob/main/src/test/regress/flaky_tests.md)
+
+# Regression test best practices
+
+* Instead of connecting to different nodes to check catalog tables, should use `run_command_on_all_nodes()` because it's faster than keep disconnecting / connecting to different nodes.
+
+* Tests should **define functions** for repetitive actions, e.g., by wrapping usual queries used to check catalog tables.
+  If the function is presumed to be used by other tests in future, then the function needs to defined in `multi_test_helpers.sql`.
+
+* If you're adding a new file, consider using `src/test/regress/bin/create_test.py your_new_test_name` to create the file. Or if you want to manually create it, make sure that your test file creates a schema and that it drops the schema at the end of the test to make sure that it doesn't leak any objects behind. See which lines `src/test/regress/bin/create_test.py` adds to the test file to understand what you need to do.
+
+  For the object that are not bound to a schema, make sure to drop them at the end of the test too, such as databases and roles.

@@ -42,6 +42,7 @@
 #include "distributed/merge_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -50,6 +51,7 @@
 #include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
@@ -120,7 +122,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			bool binaryFormat =
 				CanUseBinaryCopyFormatForTargetList(selectQuery->targetList);
 
-			ExecuteSubPlans(distSelectPlan);
+			ExecuteSubPlans(distSelectPlan, RequestedForExplainAnalyze(scanState));
 
 			/*
 			 * We have a separate directory for each transaction, so choosing
@@ -178,6 +180,22 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 																	  targetRelation,
 																	  binaryFormat);
 
+			if (list_length(distSelectTaskList) <= 1)
+			{
+				/*
+				 * Probably we will never get here for a repartitioned
+				 * INSERT..SELECT because when the source is a single shard
+				 * table, we should most probably choose to use
+				 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
+				 * here.
+				 */
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+
 			/*
 			 * At this point select query has been executed on workers and results
 			 * have been fetched in such a way that they are colocated with corresponding
@@ -197,6 +215,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			uint64 rowsInserted = ExecuteTaskListIntoTupleDest(ROW_MODIFY_COMMUTATIVE,
 															   taskList, tupleDest,
 															   hasReturning);
+
+			if (list_length(taskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
 
 			executorState->es_processed = rowsInserted;
 
@@ -239,7 +266,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			 * on shards with connections.
 			 */
 			Task *task = NULL;
-			foreach_ptr(task, taskList)
+			foreach_declared_ptr(task, taskList)
 			{
 				uint64 shardId = task->anchorShardId;
 				bool shardModified = false;
@@ -271,6 +298,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				{
 					SortTupleStore(scanState);
 				}
+			}
+
+			if (list_length(prunedTaskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 			}
 		}
 		else
@@ -313,6 +349,12 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
 																  columnNameList);
 
+	/*
+	 * We don't track query counters for the COPY commands that are executed to
+	 * prepare intermediate results.
+	 */
+	const bool trackQueryCounters = false;
+
 	/* set up a DestReceiver that copies into the intermediate table */
 	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
@@ -320,7 +362,8 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  partitionColumnIndex,
 																  executorState,
 																  intermediateResultIdPrefix,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
@@ -349,13 +392,20 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
 																  columnNameList);
 
+	/*
+	 * We want to track query counters for the COPY commands that are executed to
+	 * perform the final INSERT for such INSERT..SELECT queries.
+	 */
+	const bool trackQueryCounters = true;
+
 	/* set up a DestReceiver that copies into the distributed table */
 	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
 																  executorState, NULL,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
@@ -376,7 +426,7 @@ BuildColumnNameListFromTargetList(Oid targetRelationId, List *insertTargetList)
 
 	/* build the list of column names for the COPY statement */
 	TargetEntry *insertTargetEntry = NULL;
-	foreach_ptr(insertTargetEntry, insertTargetList)
+	foreach_declared_ptr(insertTargetEntry, insertTargetList)
 	{
 		columnNameList = lappend(columnNameList, insertTargetEntry->resname);
 	}
@@ -397,7 +447,7 @@ PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 	int partitionColumnIndex = 0;
 
 	const char *columnName = NULL;
-	foreach_ptr(columnName, columnNameList)
+	foreach_declared_ptr(columnName, columnNameList)
 	{
 		AttrNumber attrNumber = get_attnum(relationId, columnName);
 
@@ -423,7 +473,7 @@ DistributionColumnIndex(List *insertTargetList, Var *distributionColumn)
 {
 	TargetEntry *insertTargetEntry = NULL;
 	int targetEntryIndex = 0;
-	foreach_ptr(insertTargetEntry, insertTargetList)
+	foreach_declared_ptr(insertTargetEntry, insertTargetList)
 	{
 		if (insertTargetEntry->resno == distributionColumn->varattno)
 		{
@@ -447,7 +497,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 	StringInfo projectedColumnsString = makeStringInfo();
 	int entryIndex = 0;
 	TargetEntry *targetEntry = NULL;
-	foreach_ptr(targetEntry, projectedTargetEntries)
+	foreach_declared_ptr(targetEntry, projectedTargetEntries)
 	{
 		if (entryIndex != 0)
 		{
@@ -462,7 +512,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 	}
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		StringInfo wrappedQuery = makeStringInfo();
 		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",

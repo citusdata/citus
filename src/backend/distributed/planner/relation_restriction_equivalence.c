@@ -171,6 +171,14 @@ static bool FindQueryContainingRTEIdentityInternal(Node *node,
 
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
 
+static bool PartitionColumnSelectedForOuterJoin(Query *query,
+												RelationRestrictionContext *
+												restrictionContext,
+												JoinRestrictionContext *
+												joinRestrictionContext);
+
+static bool PartitionColumnIsInTargetList(Query *query, JoinRestriction *joinRestriction,
+										  RelationRestrictionContext *restrictionContext);
 
 /*
  * AllDistributionKeysInQueryAreEqual returns true if either
@@ -389,6 +397,80 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 	{
 		/* distribution columns are equal, but tables are not co-located */
 		return false;
+	}
+
+	if (!PartitionColumnSelectedForOuterJoin(originalQuery,
+											 restrictionContext,
+											 joinRestrictionContext))
+	{
+		/* outer join does not select partition column of outer relation */
+		return false;
+	}
+	return true;
+}
+
+
+/*
+ * PartitionColumnSelectedForOuterJoin checks whether the partition column of
+ * the outer relation is selected in the target list of the query.
+ *
+ * If there is no outer join, it returns true.
+ */
+static bool
+PartitionColumnSelectedForOuterJoin(Query *query,
+									RelationRestrictionContext *restrictionContext,
+									JoinRestrictionContext *joinRestrictionContext)
+{
+	ListCell *joinRestrictionCell;
+	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
+	{
+		JoinRestriction *joinRestriction = (JoinRestriction *) lfirst(
+			joinRestrictionCell);
+
+		/* Restriction context includes alternative plans, sufficient to check for left joins.*/
+		if (joinRestriction->joinType != JOIN_LEFT)
+		{
+			continue;
+		}
+
+		if (!PartitionColumnIsInTargetList(query, joinRestriction, restrictionContext))
+		{
+			/* outer join does not select partition column of outer relation */
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * PartitionColumnIsInTargetList checks whether the partition column of
+ * the given relation is included in the target list of the query.
+ */
+static bool
+PartitionColumnIsInTargetList(Query *query, JoinRestriction *joinRestriction,
+							  RelationRestrictionContext *restrictionContext)
+{
+	Relids relids = joinRestriction->outerrelRelids;
+	int relationId = -1;
+	Index partitionKeyIndex = InvalidAttrNumber;
+	while ((relationId = bms_next_member(relids, relationId)) >= 0)
+	{
+		RangeTblEntry *rte = joinRestriction->plannerInfo->simple_rte_array[relationId];
+		if (rte->rtekind != RTE_RELATION)
+		{
+			/* skip if it is not a relation */
+			continue;
+		}
+		int targetRTEIndex = GetRTEIdentity(rte);
+		PartitionKeyForRTEIdentityInQuery(query, targetRTEIndex,
+										  &partitionKeyIndex);
+		if (partitionKeyIndex == 0)
+		{
+			/* partition key is not in the target list */
+			return false;
+		}
 	}
 
 	return true;
@@ -1516,7 +1598,7 @@ ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *targetAppendRelI
 	int targetParentIndex = targetAppendRelInfo->parent_relid;
 	Bitmapset *parent_ids = NULL;
 	AppendRelInfo *appendRelInfo = NULL;
-	foreach_ptr(appendRelInfo, appendRelList)
+	foreach_declared_ptr(appendRelInfo, appendRelList)
 	{
 		int curParentIndex = appendRelInfo->parent_relid;
 		if (curParentIndex <= targetParentIndex)
@@ -1962,7 +2044,7 @@ AllDistributedRelationsInRestrictionContextColocated(
 	List *relationIdList = NIL;
 
 	/* check whether all relations exists in the main restriction list */
-	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
+	foreach_declared_ptr(relationRestriction, restrictionContext->relationRestrictionList)
 	{
 		relationIdList = lappend_oid(relationIdList, relationRestriction->relationId);
 	}
@@ -1981,7 +2063,7 @@ AllDistributedRelationsInRTEListColocated(List *rangeTableEntryList)
 	RangeTblEntry *rangeTableEntry = NULL;
 	List *relationIdList = NIL;
 
-	foreach_ptr(rangeTableEntry, rangeTableEntryList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableEntryList)
 	{
 		relationIdList = lappend_oid(relationIdList, rangeTableEntry->relid);
 	}
@@ -2000,7 +2082,7 @@ AllDistributedRelationsInListColocated(List *relationList)
 	int initialColocationId = INVALID_COLOCATION_ID;
 	Oid relationId = InvalidOid;
 
-	foreach_oid(relationId, relationList)
+	foreach_declared_oid(relationId, relationList)
 	{
 		if (!IsCitusTable(relationId))
 		{
@@ -2155,7 +2237,7 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 
 	List *restrictExprList = NIL;
 	RestrictInfo *restrictInfo = NULL;
-	foreach_ptr(restrictInfo, baseRestrictInfo)
+	foreach_declared_ptr(restrictInfo, baseRestrictInfo)
 	{
 		Expr *restrictionClause = restrictInfo->clause;
 
@@ -2199,7 +2281,7 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		Expr *copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
 		List *varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
 		Var *column = NULL;
-		foreach_ptr(column, varClauses)
+		foreach_declared_ptr(column, varClauses)
 		{
 			column->varno = SINGLE_RTE_INDEX;
 			column->varnosyn = SINGLE_RTE_INDEX;

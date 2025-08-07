@@ -308,9 +308,11 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" "d1" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM query_single_shard_table.citus_local_table d1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d1_1) d1, query_single_shard_table.nullkey_c1_t1
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
    121
@@ -599,9 +601,11 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM query_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b FROM (query_single_shard_table.nullkey_c1_t1 JOIN (SELECT citus_local_table_1.a, citus_local_table_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table_1) citus_local_table USING (a)) ORDER BY nullkey_c1_t1.a, nullkey_c1_t1.b, citus_local_table.b
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
  a | b | b
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -850,9 +854,11 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (query_single_shard_table.nullkey_c1_t1 LEFT JOIN (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table USING (a))
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
     11
@@ -863,6 +869,7 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table WHERE true
 DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning distributed relation "nullkey_c1_t1" since it is part of a distributed join node that is outer joined with a recurring rel
@@ -872,6 +879,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM query_single_shard_table.nullkey_c1_t1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table LEFT JOIN (SELECT nullkey_c1_t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) nullkey_c1_t1_1) nullkey_c1_t1 USING (a))
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
     14
@@ -910,6 +918,7 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table WHERE true
 DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
 DEBUG:  recursively planning distributed relation "nullkey_c1_t1" since it is part of a distributed join node that is outer joined with a recurring rel
@@ -919,6 +928,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM query_single_shard_table.nullkey_c1_t1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT nullkey_c1_t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) nullkey_c1_t1_1) nullkey_c1_t1 FULL JOIN (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table USING (a))
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
     14
@@ -1183,7 +1193,7 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM citus_local_table t2 WHERE t2.b = t1.a
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
@@ -1222,12 +1232,14 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" "t1" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table t1 WHERE true
 DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
 DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 LEFT JOIN LATERAL (SELECT t2.a, t2.b FROM query_single_shard_table.nullkey_c1_t1 t2 WHERE (t2.b OPERATOR(pg_catalog.>) t1.a)) q USING (a))
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
     11
@@ -1258,7 +1270,7 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  direct joins between distributed and local tables are not supported
 SELECT COUNT(*) FROM citus_local_table t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
@@ -1279,9 +1291,11 @@ DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Wrapping relation "citus_local_table" "t1" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM query_single_shard_table.citus_local_table t1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 JOIN LATERAL (SELECT t2.a, t2.b FROM query_single_shard_table.nullkey_c1_t1 t2 WHERE (t2.b OPERATOR(pg_catalog.>) t1.a)) q USING (a))
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
      2
@@ -1312,7 +1326,7 @@ DEBUG:  skipping recursive planning for the subquery since it contains reference
 ERROR:  direct joins between distributed and local tables are not supported
 HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM postgres_local_table t2 WHERE t2.b = t1.a
 );
 DEBUG:  found no worker with all shard placements
@@ -1344,7 +1358,7 @@ DEBUG:  skipping recursive planning for the subquery since it contains reference
 ERROR:  direct joins between distributed and local tables are not supported
 HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT COUNT(*) FROM postgres_local_table t1
-WHERE t1.b IN (
+WHERE t1.b + random() IN (
     SELECT b+1 FROM nullkey_c1_t1 t2 WHERE t2.b = t1.a
 );
 DEBUG:  found no worker with all shard placements
@@ -1428,7 +1442,9 @@ DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT cannot select from a local relation when inserting into a distributed table
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Local executor: Using task's cached local plan for task 0
 INSERT INTO nullkey_c1_t1 SELECT * FROM postgres_local_table;
 DEBUG:  Creating router plan
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
@@ -2112,9 +2128,11 @@ DEBUG:  local table citus_local_table cannot be joined with these distributed ta
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE query_single_shard_table.nullkey_c1_t1 SET b = 5 FROM (SELECT NULL::integer AS a, citus_local_table_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) citus_local_table_1) citus_local_table WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) citus_local_table.b)
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
 UPDATE nullkey_c1_t1 SET b = 5 FROM postgres_local_table WHERE nullkey_c1_t1.b = postgres_local_table.b;
 DEBUG:  relation postgres_local_table is not distributed
 DEBUG:  Wrapping relation "postgres_local_table" to a subquery
@@ -2164,9 +2182,11 @@ DEBUG:  local table citus_local_table cannot be joined with these distributed ta
 DEBUG:  Wrapping relation "citus_local_table" to a subquery
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM query_single_shard_table.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM query_single_shard_table.nullkey_c1_t1 USING (SELECT NULL::integer AS a, citus_local_table_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) citus_local_table_1) citus_local_table WHERE (nullkey_c1_t1.b OPERATOR(pg_catalog.=) citus_local_table.b)
 DEBUG:  Creating router plan
+DEBUG:  Local executor: Using task's cached local plan for task 0
 DELETE FROM nullkey_c1_t1 USING postgres_local_table WHERE nullkey_c1_t1.b = postgres_local_table.b;
 DEBUG:  relation postgres_local_table is not distributed
 DEBUG:  Wrapping relation "postgres_local_table" to a subquery

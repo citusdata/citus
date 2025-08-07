@@ -58,8 +58,8 @@ CREATE TABLE tenk1 (
 SELECT create_distributed_table('tenk1', 'unique1');
 
 SET citus.log_remote_commands TO on;
-EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
-EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = 1000;
+EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = $1;
+EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = $1;
 SET citus.log_remote_commands TO off;
 
 -- Proper error when creating statistics without a name on a Citus table
@@ -159,7 +159,7 @@ CREATE TABLE test_collation_rules (a text);
 SELECT create_distributed_table('test_collation_rules', 'a');
 INSERT INTO test_collation_rules VALUES ('Abernathy'), ('apple'), ('bird'), ('Boston'), ('Graham'), ('green');
 
-SELECT collname, collprovider, colliculocale, collicurules
+SELECT collname, collprovider, collicurules
 FROM pg_collation
 WHERE collname like '%_rule%'
 ORDER BY 1;
@@ -170,7 +170,7 @@ SELECT * FROM test_collation_rules ORDER BY a COLLATE special_rule;
 \c - - - :worker_1_port
 SET search_path TO pg16;
 
-SELECT collname, collprovider, colliculocale, collicurules
+SELECT collname, collprovider, collicurules
 FROM pg_collation
 WHERE collname like '%_rule%'
 ORDER BY 1;

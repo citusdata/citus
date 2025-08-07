@@ -38,8 +38,6 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/shared_library_init.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 static int SourceResultPartitionColumnIndex(Query *mergeQuery,
 											List *sourceTargetList,
 											CitusTableCacheEntry *targetRelation);
@@ -97,8 +95,8 @@ static DistributedPlan * CreateNonPushableMergePlan(Oid targetRelationId, uint64
 													plannerRestrictionContext,
 													ParamListInfo boundParams);
 static char * MergeCommandResultIdPrefix(uint64 planId);
-
-#endif
+static void ErrorIfMergeHasReturningList(Query *query);
+static Node * GetMergeJoinCondition(Query *mergeQuery);
 
 
 /*
@@ -116,13 +114,6 @@ CreateMergePlan(uint64 planId, Query *originalQuery, Query *query,
 				PlannerRestrictionContext *plannerRestrictionContext,
 				ParamListInfo boundParams)
 {
-	/* function is void for pre-15 versions of Postgres */
-	#if PG_VERSION_NUM < PG_VERSION_15
-
-	ereport(ERROR, (errmsg("MERGE is not supported in pre-15 Postgres versions")));
-
-	#else
-
 	Oid targetRelationId = ModifyQueryResultRelationId(originalQuery);
 
 	/*
@@ -151,12 +142,50 @@ CreateMergePlan(uint64 planId, Query *originalQuery, Query *query,
 	}
 
 	return distributedPlan;
-
-	#endif
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
+/*
+ * GetMergeJoinTree constructs and returns the jointree for a MERGE query.
+ */
+FromExpr *
+GetMergeJoinTree(Query *mergeQuery)
+{
+	FromExpr *mergeJointree = NULL;
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+	/*
+	 * In Postgres 17, the query tree has a specific field for the merge condition.
+	 * For deriving the WhereClauseList from the merge condition, we construct a dummy
+	 * jointree with an empty fromlist. This works because the fromlist of a merge query
+	 * join tree consists of range table references only, and range table references are
+	 * disregarded by the WhereClauseList() walker.
+	 * Relevant PG17 commit: 0294df2f1
+	 */
+	mergeJointree = makeFromExpr(NIL, mergeQuery->mergeJoinCondition);
+#else
+	mergeJointree = mergeQuery->jointree;
+#endif
+
+	return mergeJointree;
+}
+
+
+/*
+ * GetMergeJoinCondition returns the quals of the ON condition
+ */
+static Node *
+GetMergeJoinCondition(Query *mergeQuery)
+{
+	Node *joinCondition = NULL;
+#if PG_VERSION_NUM >= PG_VERSION_17
+	joinCondition = (Node *) mergeQuery->mergeJoinCondition;
+#else
+	joinCondition = (Node *) mergeQuery->jointree->quals;
+#endif
+	return joinCondition;
+}
+
 
 /*
  * CreateRouterMergePlan attempts to create a pushable plan for the given MERGE
@@ -375,7 +404,7 @@ static void
 ErrorIfMergeHasUnsupportedTables(Oid targetRelationId, List *rangeTableList)
 {
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		Oid relationId = rangeTableEntry->relid;
 
@@ -562,7 +591,7 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, Query *query,
 										 List *targetList, CmdType commandType)
 {
 	uint32 targetRangeTableIndex = query->resultRelation;
-	FromExpr *joinTree = query->jointree;
+	FromExpr *joinTree = GetMergeJoinTree(query);
 	Var *distributionColumn = NULL;
 	if (IsCitusTable(resultRelationId) && HasDistributionKey(resultRelationId))
 	{
@@ -722,8 +751,9 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 	/*
 	 * Sub-queries and CTEs are not allowed in actions and ON clause
 	 */
-	if (FindNodeMatchingCheckFunction((Node *) mergeQuery->jointree->quals,
-									  IsNodeSubquery))
+	Node *joinCondition = GetMergeJoinCondition(mergeQuery);
+
+	if (FindNodeMatchingCheckFunction(joinCondition, IsNodeSubquery))
 	{
 		ereport(ERROR,
 				(errmsg("Sub-queries and CTEs are not allowed in ON clause for MERGE "
@@ -734,7 +764,7 @@ ErrorIfRepartitionMergeNotSupported(Oid targetRelationId, Query *mergeQuery,
 	}
 
 	MergeAction *action = NULL;
-	foreach_ptr(action, mergeQuery->mergeActionList)
+	foreach_declared_ptr(action, mergeQuery->mergeActionList)
 	{
 		if (FindNodeMatchingCheckFunction((Node *) action, IsNodeSubquery))
 		{
@@ -763,7 +793,7 @@ ConvertCteRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte)
 	 * Presently, CTEs are only permitted within the USING clause, and thus,
 	 * we search for the corresponding one
 	 */
-	foreach_ptr(candidateCte, mergeQuery->cteList)
+	foreach_declared_ptr(candidateCte, mergeQuery->cteList)
 	{
 		if (strcmp(candidateCte->ctename, sourceRte->ctename) == 0)
 		{
@@ -858,7 +888,7 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 	newRangeTableRef->rtindex = SINGLE_RTE_INDEX;
 	sourceResultsQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 	sourceResultsQuery->targetList =
-		CreateAllTargetListForRelation(sourceRte->relid, requiredAttributes);
+		CreateFilteredTargetListForRelation(sourceRte->relid, requiredAttributes);
 	List *restrictionList =
 		GetRestrictInfoListForRelation(sourceRte, plannerRestrictionContext);
 	List *copyRestrictionList = copyObject(restrictionList);
@@ -950,8 +980,25 @@ ConvertSourceRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 
 /*
+ * ErrorIfMergeHasReturningList raises an exception if the MERGE has
+ * a RETURNING clause, as we don't support this yet for Citus tables
+ * Relevant PG17 commit: c649fa24a
+ */
+static void
+ErrorIfMergeHasReturningList(Query *query)
+{
+	if (query->returningList)
+	{
+		ereport(ERROR, (errmsg("MERGE with RETURNING is not yet supported "
+							   "for Citus tables")));
+	}
+}
+
+
+/*
  * ErrorIfMergeNotSupported Checks for conditions that are not supported in either
  * the routable or repartition strategies. It checks for
+ * - MERGE with a RETURNING clause
  * - Supported table types and their combinations
  * - Check the target lists and quals of both the query and merge actions
  * - Supported CTEs
@@ -959,6 +1006,7 @@ ConvertSourceRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 static void
 ErrorIfMergeNotSupported(Query *query, Oid targetRelationId, List *rangeTableList)
 {
+	ErrorIfMergeHasReturningList(query);
 	ErrorIfMergeHasUnsupportedTables(targetRelationId, rangeTableList);
 	ErrorIfMergeQueryQualAndTargetListNotSupported(targetRelationId, query);
 	ErrorIfUnsupportedCTEs(query);
@@ -1018,7 +1066,7 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 	List *localTablesList = NIL;
 	RangeTblEntry *rangeTableEntry = NULL;
 
-	foreach_ptr(rangeTableEntry, rangeTableList)
+	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
 		Oid relationId = rangeTableEntry->relid;
 
@@ -1207,12 +1255,15 @@ ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *orig
 							   "supported in MERGE sql with distributed tables")));
 	}
 
+	Node *joinCondition = GetMergeJoinCondition(originalQuery);
+
 	DeferredErrorMessage *deferredError =
-		MergeQualAndTargetListFunctionsSupported(targetRelationId,
-												 originalQuery,
-												 originalQuery->jointree->quals,
-												 originalQuery->targetList,
-												 originalQuery->commandType);
+		MergeQualAndTargetListFunctionsSupported(
+			targetRelationId,
+			originalQuery,
+			joinCondition,
+			originalQuery->targetList,
+			originalQuery->commandType);
 
 	if (deferredError)
 	{
@@ -1224,7 +1275,7 @@ ErrorIfMergeQueryQualAndTargetListNotSupported(Oid targetRelationId, Query *orig
 	 * within itself. Check each INSERT/UPDATE/DELETE individually.
 	 */
 	MergeAction *action = NULL;
-	foreach_ptr(action, originalQuery->mergeActionList)
+	foreach_declared_ptr(action, originalQuery->mergeActionList)
 	{
 		Assert(originalQuery->returningList == NULL);
 		deferredError = MergeQualAndTargetListFunctionsSupported(targetRelationId,
@@ -1286,8 +1337,7 @@ static int
 SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 								 CitusTableCacheEntry *targetRelation)
 {
-	/* Get all the Join conditions from the ON clause */
-	List *mergeJoinConditionList = WhereClauseList(mergeQuery->jointree);
+	List *mergeJoinConditionList = WhereClauseList(GetMergeJoinTree(mergeQuery));
 	Var *targetColumn = targetRelation->partitionColumn;
 	Var *sourceRepartitionVar = NULL;
 	bool foundTypeMismatch = false;
@@ -1377,9 +1427,6 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 }
 
 
-#endif
-
-
 /*
  * ExtractMergeSourceRangeTableEntry returns the range table entry of source
  * table or source query in USING clause.
@@ -1387,13 +1434,6 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 RangeTblEntry *
 ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk)
 {
-	/* function is void for pre-15 versions of Postgres */
-	#if PG_VERSION_NUM < PG_VERSION_15
-
-	ereport(ERROR, (errmsg("MERGE is not supported in pre-15 Postgres versions")));
-
-	#else
-
 	Assert(IsMergeQuery(query));
 
 	List *fromList = query->jointree->fromlist;
@@ -1432,8 +1472,6 @@ ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk)
 	RangeTblEntry *subqueryRte = rt_fetch(reference->rtindex, query->rtable);
 
 	return subqueryRte;
-
-	#endif
 }
 
 
@@ -1450,13 +1488,6 @@ ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk)
 Var *
 FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 {
-	/* function is void for pre-15 versions of Postgres */
-	#if PG_VERSION_NUM < PG_VERSION_15
-
-	ereport(ERROR, (errmsg("MERGE is not supported in pre-15 Postgres versions")));
-
-	#else
-
 	Assert(IsMergeQuery(query));
 
 	if (!IsCitusTableType(targetRelationId, DISTRIBUTED_TABLE))
@@ -1472,16 +1503,16 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 	bool foundDistributionColumn = false;
 	MergeAction *action = NULL;
 	uint32 targetRangeTableIndex = query->resultRelation;
-	foreach_ptr(action, query->mergeActionList)
+	foreach_declared_ptr(action, query->mergeActionList)
 	{
 		/* Skip MATCHED clause as INSERTS are not allowed in it */
-		if (action->matched)
+		if (matched_compat(action))
 		{
 			continue;
 		}
 
-		/* NOT MATCHED can have either INSERT or DO NOTHING */
-		if (action->commandType == CMD_NOTHING)
+		/* NOT MATCHED can have either INSERT, DO NOTHING or UPDATE(PG17) */
+		if (action->commandType == CMD_NOTHING || action->commandType == CMD_UPDATE)
 		{
 			return NULL;
 		}
@@ -1502,7 +1533,7 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 			PartitionColumn(targetRelationId, targetRangeTableIndex);
 
 		TargetEntry *targetEntry = NULL;
-		foreach_ptr(targetEntry, action->targetList)
+		foreach_declared_ptr(targetEntry, action->targetList)
 		{
 			AttrNumber originalAttrNo = targetEntry->resno;
 
@@ -1527,8 +1558,6 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 	}
 
 	return NULL;
-
-	#endif
 }
 
 
@@ -1554,7 +1583,7 @@ IsLocalTableModification(Oid targetRelationId, Query *query, uint64 shardId,
 		return true;
 	}
 
-	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalTables(rteProperties))
+	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalOrReferenceTables(rteProperties))
 	{
 		return true;
 	}

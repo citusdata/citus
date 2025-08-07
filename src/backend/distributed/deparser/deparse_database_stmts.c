@@ -174,7 +174,7 @@ static void
 AppendBasicAlterDatabaseOptions(StringInfo buf, AlterDatabaseStmt *stmt)
 {
 	DefElem *def = NULL;
-	foreach_ptr(def, stmt->options)
+	foreach_declared_ptr(def, stmt->options)
 	{
 		DefElemOptionToStatement(buf, def, alterDatabaseOptionFormats, lengthof(
 									 alterDatabaseOptionFormats));
@@ -211,7 +211,6 @@ DeparseAlterDatabaseStmt(Node *node)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 char *
 DeparseAlterDatabaseRefreshCollStmt(Node *node)
 {
@@ -227,8 +226,6 @@ DeparseAlterDatabaseRefreshCollStmt(Node *node)
 	return str.data;
 }
 
-
-#endif
 
 static void
 AppendAlterDatabaseSetStmt(StringInfo buf, AlterDatabaseSetStmt *stmt)
@@ -290,7 +287,7 @@ AppendCreateDatabaseStmt(StringInfo buf, CreatedbStmt *stmt)
 					 quote_identifier(stmt->dbname));
 
 	DefElem *option = NULL;
-	foreach_ptr(option, stmt->options)
+	foreach_declared_ptr(option, stmt->options)
 	{
 		DefElemOptionToStatement(buf, option, createDatabaseOptionFormats,
 								 lengthof(createDatabaseOptionFormats));

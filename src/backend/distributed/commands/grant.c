@@ -17,6 +17,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
@@ -32,7 +33,6 @@ static List * CollectGrantTableIdList(GrantStmt *grantStmt);
  * needed during the worker node portion of DDL execution before returning the
  * DDLJobs in a List. If no distributed table is involved, this returns NIL.
  *
- * NB: So far column level privileges are not supported.
  */
 List *
 PreprocessGrantStmt(Node *node, const char *queryString,
@@ -70,9 +70,12 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	/* deparse the privileges */
 	if (grantStmt->privileges == NIL)
 	{
+		/* this is used for table level only */
 		appendStringInfo(&privsString, "ALL");
 	}
 	else
@@ -88,18 +91,44 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			{
 				appendStringInfoString(&privsString, ", ");
 			}
+
+			if (priv->priv_name)
+			{
+				appendStringInfo(&privsString, "%s", priv->priv_name);
+			}
+			/*
+			 * ALL can only be set alone.
+			 * And ALL is not added as a keyword in priv_name by parser, but
+			 * because there are column(s) defined, a grantStmt->privileges is
+			 * defined. So we need to handle this special case here (see if
+			 * condition above).
+			 */
+			else if (isFirst)
+			{
+				/* this is used for column level only */
+				appendStringInfo(&privsString, "ALL");
+			}
+			/*
+			 * Instead of relying only on the syntax check done by Postgres and
+			 * adding an assert here, add a default ERROR if ALL is not first
+			 * and no priv_name is defined.
+			 */
+			else
+			{
+				ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+								errmsg("Cannot parse GRANT/REVOKE privileges")));
+			}
+
 			isFirst = false;
 
 			if (priv->cols != NIL)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("grant/revoke on column list is currently "
-									   "unsupported")));
+				StringInfoData colsString;
+				initStringInfo(&colsString);
+
+				AppendColumnNameList(&colsString, priv->cols);
+				appendStringInfo(&privsString, "%s", colsString.data);
 			}
-
-			Assert(priv->priv_name != NULL);
-
-			appendStringInfo(&privsString, "%s", priv->priv_name);
 		}
 	}
 
@@ -153,6 +182,15 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s",
 							 grantOption, privsString.data, targetString.data,
 							 granteesString.data);
+
+			if (grantStmt->behavior == DROP_CASCADE)
+			{
+				appendStringInfoString(&ddlString, " CASCADE");
+			}
+			else
+			{
+				appendStringInfoString(&ddlString, " RESTRICT");
+			}
 		}
 
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));

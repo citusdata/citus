@@ -802,8 +802,18 @@ AdjustMaxPreparedTransactions(void)
 	 * (connections * 2 currently).  If the user explicitly configured 2PC, we
 	 * leave the configuration alone - there might have been intent behind the
 	 * decision.
+	 *
+	 * find_option is declared static in guc.c for older versions, so we can't
+	 * really check if max_prepared_xacts is configured by the user explicitly,
+	 * so check if it's value is default.
 	 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+	struct config_generic *gconf = find_option("max_prepared_transactions",
+											   false, false, ERROR);
+	if (gconf->source == PGC_S_DEFAULT)
+#else
 	if (max_prepared_xacts == 0)
+#endif
 	{
 		char newvalue[12];
 
@@ -1150,7 +1160,7 @@ TrackPropagatedTableAndSequences(Oid relationId)
 	/* track its sequences */
 	List *ownedSeqIdList = getOwnedSequences(relationId);
 	Oid ownedSeqId = InvalidOid;
-	foreach_oid(ownedSeqId, ownedSeqIdList)
+	foreach_declared_oid(ownedSeqId, ownedSeqIdList)
 	{
 		ObjectAddress *seqAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*seqAddress, RelationRelationId, ownedSeqId);
@@ -1178,7 +1188,7 @@ bool
 HasAnyObjectInPropagatedObjects(List *objectList)
 {
 	ObjectAddress *object = NULL;
-	foreach_ptr(object, objectList)
+	foreach_declared_ptr(object, objectList)
 	{
 		/* first search in root transaction */
 		if (DependencyInPropagatedObjectsHash(PropagatedObjectsInTx, object))
@@ -1192,7 +1202,7 @@ HasAnyObjectInPropagatedObjects(List *objectList)
 			continue;
 		}
 		SubXactContext *state = NULL;
-		foreach_ptr(state, activeSubXactContexts)
+		foreach_declared_ptr(state, activeSubXactContexts)
 		{
 			if (DependencyInPropagatedObjectsHash(state->propagatedObjects, object))
 			{

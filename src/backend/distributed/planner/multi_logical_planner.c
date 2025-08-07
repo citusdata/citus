@@ -35,6 +35,10 @@
 #include "utils/syscache.h"
 
 #include "pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_18
+typedef OpIndexInterpretation OpBtreeInterpretation;
+#endif
+
 
 #include "distributed/citus_clauses.h"
 #include "distributed/colocation_utils.h"
@@ -1170,7 +1174,8 @@ HasComplexRangeTableType(Query *queryTree)
 		if (rangeTableEntry->rtekind != RTE_RELATION &&
 			rangeTableEntry->rtekind != RTE_SUBQUERY &&
 			rangeTableEntry->rtekind != RTE_FUNCTION &&
-			rangeTableEntry->rtekind != RTE_VALUES)
+			rangeTableEntry->rtekind != RTE_VALUES &&
+			!IsJsonTableRTE(rangeTableEntry))
 		{
 			hasComplexRangeTableType = true;
 		}
@@ -1414,7 +1419,7 @@ IsJoinClause(Node *clause)
 	}
 	Var *initialVar = castNode(Var, linitial(varList));
 
-	foreach_ptr(var, varList)
+	foreach_declared_ptr(var, varList)
 	{
 		if (var->varno != initialVar->varno)
 		{
@@ -2292,7 +2297,12 @@ OperatorImplementsEquality(Oid opno)
 	{
 		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
 													lfirst(btreeInterpretationCell);
+
+	#if PG_VERSION_NUM >= PG_VERSION_18
+		if (btreeIntepretation->cmptype == BTEqualStrategyNumber)
+	#else
 		if (btreeIntepretation->strategy == BTEqualStrategyNumber)
+	#endif
 		{
 			equalityOperator = true;
 			break;

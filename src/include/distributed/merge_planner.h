@@ -32,6 +32,7 @@ extern void NonPushableMergeCommandExplainScan(CustomScanState *node, List *ance
 											   struct ExplainState *es);
 extern Var * FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query);
 extern RangeTblEntry * ExtractMergeSourceRangeTableEntry(Query *query, bool joinSourceOk);
+extern FromExpr * GetMergeJoinTree(Query *mergeQuery);
 
 
 #endif /* MERGE_PLANNER_H */

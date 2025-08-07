@@ -310,7 +310,7 @@ fake_relation_set_new_filenode(Relation rel,
 	 */
 	*minmulti = GetOldestMultiXactId();
 
-	SMgrRelation srel = RelationCreateStorage_compat(*newrnode, persistence, true);
+	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence, true);
 
 	/*
 	 * If required, set up an init fork for an unlogged table so that it can
@@ -372,8 +372,13 @@ fake_vacuum(Relation onerel, VacuumParams *params,
 
 
 static bool
-fake_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
+fake_scan_analyze_next_block(TableScanDesc scan,
+#if PG_VERSION_NUM >= PG_VERSION_17
+							 ReadStream *stream)
+#else
+							 BlockNumber blockno,
 							 BufferAccessStrategy bstrategy)
+#endif
 {
 	/* we don't support analyze, so return false */
 	return false;
@@ -480,6 +485,7 @@ fake_estimate_rel_size(Relation rel, int32 *attr_widths,
  * Executor related callbacks for the fake AM
  * ------------------------------------------------------------------------
  */
+#if PG_VERSION_NUM < PG_VERSION_18
 static bool
 fake_scan_bitmap_next_block(TableScanDesc scan,
 							TBMIterateResult *tbmres)
@@ -496,6 +502,8 @@ fake_scan_bitmap_next_tuple(TableScanDesc scan,
 	elog(ERROR, "fake_scan_bitmap_next_tuple not implemented");
 }
 
+
+#endif
 
 static bool
 fake_scan_sample_next_block(TableScanDesc scan,
@@ -573,8 +581,13 @@ static const TableAmRoutine fake_methods = {
 
 	.relation_estimate_size = fake_estimate_rel_size,
 
+#if PG_VERSION_NUM < PG_VERSION_18
+
+	/* these two fields were removed in PG 18 */
 	.scan_bitmap_next_block = fake_scan_bitmap_next_block,
 	.scan_bitmap_next_tuple = fake_scan_bitmap_next_tuple,
+#endif
+
 	.scan_sample_next_block = fake_scan_sample_next_block,
 	.scan_sample_next_tuple = fake_scan_sample_next_tuple
 };

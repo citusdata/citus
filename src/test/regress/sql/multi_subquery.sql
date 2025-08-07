@@ -665,18 +665,26 @@ SELECT create_distributed_table('keyval2', 'key');
 CREATE TABLE keyvalref (key int, value int);
 SELECT create_reference_table('keyvalref');
 
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyvalref GROUP BY key);
+$Q$) as "QUERY PLAN";
 
 -- For some reason 'ORDER BY 1 DESC LIMIT 1' triggers recursive planning
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyvalref GROUP BY key ORDER BY 1 DESC LIMIT 1);
+$Q$) as "QUERY PLAN";
 
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyval2 GROUP BY key ORDER BY 1 DESC LIMIT 1);
+$Q$) as "QUERY PLAN";
 
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 k1 WHERE k1.key = 2 HAVING sum(value) > (SELECT sum(value) FROM keyval2 k2 WHERE k2.key = 2 ORDER BY 1 DESC LIMIT 1);
+$Q$) as "QUERY PLAN";
 
 -- Simple join subquery pushdown
 SELECT

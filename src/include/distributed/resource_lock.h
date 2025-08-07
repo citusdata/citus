@@ -169,7 +169,7 @@ IsNodeWideObjectClass(ObjectClass objectClass)
 	 * If new object classes are added and none of them are node-wide, then update
 	 * this assertion check based on latest supported major Postgres version.
 	 */
-	StaticAssertStmt(PG_MAJORVERSION_NUM <= 16,
+	StaticAssertStmt(PG_MAJORVERSION_NUM <= 18,
 					 "better to check if any of newly added ObjectClass'es are node-wide");
 
 	switch (objectClass)
@@ -177,9 +177,7 @@ IsNodeWideObjectClass(ObjectClass objectClass)
 		case OCLASS_ROLE:
 		case OCLASS_DATABASE:
 		case OCLASS_TBLSPACE:
-#if PG_VERSION_NUM >= PG_VERSION_15
 		case OCLASS_PARAMETER_ACL:
-#endif
 #if PG_VERSION_NUM >= PG_VERSION_16
 		case OCLASS_ROLE_MEMBERSHIP:
 #endif

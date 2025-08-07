@@ -171,6 +171,7 @@
 #include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"
@@ -690,7 +691,7 @@ static bool SendNextQuery(TaskPlacementExecution *placementExecution,
 						  WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
 static bool HasUnfinishedTaskForSession(WorkerSession *session);
-static void HandleMultiConnectionSuccess(WorkerSession *session);
+static void HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection);
 static bool HasAnyConnectionFailure(WorkerPool *workerPool);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
@@ -718,10 +719,8 @@ static void RebuildWaitEventSetForSessions(DistributedExecution *execution);
 static void AddLatchWaitEventToExecution(DistributedExecution *execution);
 static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int
 							  eventCount, bool *cancellationReceived);
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void RemoteSocketClosedForAnySession(DistributedExecution *execution);
 static void ProcessWaitEventsForSocketClosed(WaitEvent *events, int eventCount);
-#endif
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
@@ -761,7 +760,7 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 	 */
 	LockPartitionsForDistributedPlan(distributedPlan);
 
-	ExecuteSubPlans(distributedPlan);
+	ExecuteSubPlans(distributedPlan, RequestedForExplainAnalyze(scanState));
 
 	scanState->finishedPreScan = true;
 }
@@ -1430,7 +1429,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 	List *taskList = execution->remoteTaskList;
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		bool placementExecutionReady = true;
 		int placementExecutionIndex = 0;
@@ -1453,7 +1452,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 
 		SetAttributeInputMetadata(execution, shardCommandExecution);
 		ShardPlacement *taskPlacement = NULL;
-		foreach_ptr(taskPlacement, task->taskPlacementList)
+		foreach_declared_ptr(taskPlacement, task->taskPlacementList)
 		{
 			int connectionFlags = 0;
 			char *nodeName = NULL;
@@ -1598,7 +1597,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 	 * connection may be be returned multiple times by GetPlacementListConnectionIfCached.
 	 */
 	WorkerSession *session = NULL;
-	foreach_ptr(session, execution->sessionList)
+	foreach_declared_ptr(session, execution->sessionList)
 	{
 		MultiConnection *connection = session->connection;
 
@@ -1721,7 +1720,7 @@ static WorkerPool *
 FindOrCreateWorkerPool(DistributedExecution *execution, char *nodeName, int nodePort)
 {
 	WorkerPool *workerPool = NULL;
-	foreach_ptr(workerPool, execution->workerList)
+	foreach_declared_ptr(workerPool, execution->workerList)
 	{
 		if (strncmp(nodeName, workerPool->nodeName, WORKER_LENGTH) == 0 &&
 			nodePort == workerPool->nodePort)
@@ -1768,7 +1767,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	static uint64 sessionId = 1;
 
 	WorkerSession *session = NULL;
-	foreach_ptr(session, workerPool->sessionList)
+	foreach_declared_ptr(session, workerPool->sessionList)
 	{
 		if (session->connection == connection)
 		{
@@ -1784,11 +1783,8 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	session->commandsSent = 0;
 	session->waitEventSetIndex = WAIT_EVENT_SET_INDEX_NOT_INITIALIZED;
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 	/* always detect closed sockets */
 	UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED);
-#endif
 
 	dlist_init(&session->pendingTaskQueue);
 	dlist_init(&session->readyTaskQueue);
@@ -1832,7 +1828,6 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
  * the events, even ignores cancellation events. Future callers of this
  * function should consider its limitations.
  */
-#if PG_VERSION_NUM >= PG_VERSION_15
 static void
 RemoteSocketClosedForAnySession(DistributedExecution *execution)
 {
@@ -1848,9 +1843,6 @@ RemoteSocketClosedForAnySession(DistributedExecution *execution)
 									  execution->eventSetSize, WAIT_EVENT_CLIENT_READ);
 	ProcessWaitEventsForSocketClosed(execution->events, eventCount);
 }
-
-
-#endif
 
 
 /*
@@ -1871,7 +1863,7 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 	 */
 	MultiShardConnectionType = SEQUENTIAL_CONNECTION;
 	Task *taskToExecute = NULL;
-	foreach_ptr(taskToExecute, taskList)
+	foreach_declared_ptr(taskToExecute, taskList)
 	{
 		execution->remoteAndLocalTaskList = list_make1(taskToExecute);
 		execution->remoteTaskList = list_make1(taskToExecute);
@@ -1911,7 +1903,7 @@ RunDistributedExecution(DistributedExecution *execution)
 	{
 		/* Preemptively step state machines in case of immediate errors */
 		WorkerSession *session = NULL;
-		foreach_ptr(session, execution->sessionList)
+		foreach_declared_ptr(session, execution->sessionList)
 		{
 			ConnectionStateMachine(session);
 		}
@@ -1943,7 +1935,7 @@ RunDistributedExecution(DistributedExecution *execution)
 				HasIncompleteConnectionEstablishment(execution)))
 		{
 			WorkerPool *workerPool = NULL;
-			foreach_ptr(workerPool, execution->workerList)
+			foreach_declared_ptr(workerPool, execution->workerList)
 			{
 				ManageWorkerPool(workerPool);
 			}
@@ -2028,7 +2020,7 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 {
 	bool foundFailedSession = false;
 	WorkerSession *session = NULL;
-	foreach_ptr(session, execution->sessionList)
+	foreach_declared_ptr(session, execution->sessionList)
 	{
 		if (session->waitEventSetIndex == WAIT_EVENT_SET_INDEX_FAILED)
 		{
@@ -2044,6 +2036,7 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 			else
 			{
 				connection->connectionState = MULTI_CONNECTION_FAILED;
+				IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 			}
 
 
@@ -2072,7 +2065,7 @@ HasIncompleteConnectionEstablishment(DistributedExecution *execution)
 	}
 
 	WorkerSession *session = NULL;
-	foreach_ptr(session, execution->sessionList)
+	foreach_declared_ptr(session, execution->sessionList)
 	{
 		MultiConnection *connection = session->connection;
 		if (connection->connectionState == MULTI_CONNECTION_INITIAL ||
@@ -2188,8 +2181,6 @@ ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int eventC
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 /*
  * ProcessWaitEventsForSocketClosed mainly checks for WL_SOCKET_CLOSED event.
  * If WL_SOCKET_CLOSED is found, the function sets the underlying connection's
@@ -2220,9 +2211,6 @@ ProcessWaitEventsForSocketClosed(WaitEvent *events, int eventCount)
 		}
 	}
 }
-
-
-#endif
 
 
 /*
@@ -2550,7 +2538,7 @@ AvgTaskExecutionTimeApproximation(WorkerPool *workerPool)
 	INSTR_TIME_SET_CURRENT(now);
 
 	WorkerSession *session = NULL;
-	foreach_ptr(session, workerPool->sessionList)
+	foreach_declared_ptr(session, workerPool->sessionList)
 	{
 		/*
 		 * Involve the tasks that are currently running. We do this to
@@ -2588,7 +2576,7 @@ AvgConnectionEstablishmentTime(WorkerPool *workerPool)
 	int sessionCount = 0;
 
 	WorkerSession *session = NULL;
-	foreach_ptr(session, workerPool->sessionList)
+	foreach_declared_ptr(session, workerPool->sessionList)
 	{
 		MultiConnection *connection = session->connection;
 
@@ -2719,7 +2707,6 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 	 * Instead, we prefer this slight difference, which in effect has almost no
 	 * difference, but doing things in different points in time.
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_15
 
 	/* we added new connections, rebuild the waitEventSet */
 	RebuildWaitEventSetForSessions(execution);
@@ -2739,12 +2726,9 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 	 * of the execution.
 	 */
 	AddLatchWaitEventToExecution(execution);
-#else
-	execution->rebuildWaitEventSet = true;
-#endif
 
 	WorkerSession *session = NULL;
-	foreach_ptr(session, newSessionsList)
+	foreach_declared_ptr(session, newSessionsList)
 	{
 		/* immediately run the state machine to handle potential failure */
 		ConnectionStateMachine(session);
@@ -2828,21 +2812,21 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 				logLevel = ERROR;
 			}
 
-			ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-							   errmsg("could not establish any connections to the node "
-									  "%s:%d after %u ms", workerPool->nodeName,
-									  workerPool->nodePort,
-									  NodeConnectionTimeout)));
-
 			/*
 			 * We hit the connection timeout. In that case, we should not let the
 			 * connection establishment to continue because the execution logic
 			 * pretends that failed sessions are not going to be used anymore.
 			 *
 			 * That's why we mark the connection as timed out to trigger the state
-			 * changes in the executor.
+			 * changes in the executor, if we don't throw an error below.
 			 */
 			MarkEstablishingSessionsTimedOut(workerPool);
+
+			ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+							   errmsg("could not establish any connections to the node "
+									  "%s:%d after %u ms", workerPool->nodeName,
+									  workerPool->nodePort,
+									  NodeConnectionTimeout)));
 		}
 		else
 		{
@@ -2862,7 +2846,7 @@ static void
 MarkEstablishingSessionsTimedOut(WorkerPool *workerPool)
 {
 	WorkerSession *session = NULL;
-	foreach_ptr(session, workerPool->sessionList)
+	foreach_declared_ptr(session, workerPool->sessionList)
 	{
 		MultiConnection *connection = session->connection;
 
@@ -2870,6 +2854,7 @@ MarkEstablishingSessionsTimedOut(WorkerPool *workerPool)
 			connection->connectionState == MULTI_CONNECTION_INITIAL)
 		{
 			connection->connectionState = MULTI_CONNECTION_TIMED_OUT;
+			IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 		}
 	}
 }
@@ -2914,7 +2899,7 @@ NextEventTimeout(DistributedExecution *execution)
 	long eventTimeout = 1000; /* milliseconds */
 
 	WorkerPool *workerPool = NULL;
-	foreach_ptr(workerPool, execution->workerList)
+	foreach_declared_ptr(workerPool, execution->workerList)
 	{
 		if (workerPool->failureState == WORKER_POOL_FAILED)
 		{
@@ -3027,6 +3012,10 @@ ConnectionStateMachine(WorkerSession *session)
 				 * the state machines might have already progressed and used
 				 * new pools/sessions instead. That's why we terminate the
 				 * connection, clear any state associated with it.
+				 *
+				 * Note that here we don't increment the failed connection
+				 * stat counter because MarkEstablishingSessionsTimedOut()
+				 * already did that.
 				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
 				break;
@@ -3037,7 +3026,12 @@ ConnectionStateMachine(WorkerSession *session)
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
 				{
-					HandleMultiConnectionSuccess(session);
+					/*
+					 * Connection was already established, possibly a cached
+					 * connection.
+					 */
+					bool newConnection = false;
+					HandleMultiConnectionSuccess(session, newConnection);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 					break;
@@ -3045,6 +3039,7 @@ ConnectionStateMachine(WorkerSession *session)
 				else if (status == CONNECTION_BAD)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
+					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 					break;
 				}
 
@@ -3060,6 +3055,7 @@ ConnectionStateMachine(WorkerSession *session)
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
+					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{
@@ -3077,7 +3073,12 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					HandleMultiConnectionSuccess(session);
+					/*
+					 * Connection was not established befoore (!= CONNECTION_OK)
+					 * but PQconnectPoll() did so now.
+					 */
+					bool newConnection = true;
+					HandleMultiConnectionSuccess(session, newConnection);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
@@ -3155,6 +3156,11 @@ ConnectionStateMachine(WorkerSession *session)
 					break;
 				}
 
+				/*
+				 * Here we don't increment the connection stat counter for failed
+				 * connections because we don't track the connections that we could
+				 * establish but lost later.
+				 */
 				connection->connectionState = MULTI_CONNECTION_FAILED;
 				break;
 			}
@@ -3317,12 +3323,12 @@ HasUnfinishedTaskForSession(WorkerSession *session)
  * connection's state.
  */
 static void
-HandleMultiConnectionSuccess(WorkerSession *session)
+HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection)
 {
 	MultiConnection *connection = session->connection;
 	WorkerPool *workerPool = session->workerPool;
 
-	MarkConnectionConnected(connection);
+	MarkConnectionConnected(connection, newConnection);
 
 	ereport(DEBUG4, (errmsg("established connection to %s:%d for "
 							"session %ld in %ld microseconds",
@@ -3678,13 +3684,8 @@ UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags)
 		return;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-
 	/* always detect closed sockets */
 	connection->waitFlags = waitFlags | WL_SOCKET_CLOSED;
-#else
-	connection->waitFlags = waitFlags;
-#endif
 
 	/* without signalling the execution, the flag changes won't be reflected */
 	execution->waitFlagsChanged = true;
@@ -3709,13 +3710,11 @@ CheckConnectionReady(WorkerSession *session)
 		return false;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_CLOSED) != 0)
 	{
 		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
 	}
-#endif
 
 	/* try to send all pending data */
 	int sendStatus = PQflush(connection->pgConn);
@@ -3805,7 +3804,7 @@ PopAssignedPlacementExecution(WorkerSession *session)
 
 
 /*
- * PopAssignedPlacementExecution finds an executable task from the queue of assigned tasks.
+ * PopUnAssignedPlacementExecution finds an executable task from the queue of unassigned tasks.
  */
 static TaskPlacementExecution *
 PopUnassignedPlacementExecution(WorkerPool *workerPool)
@@ -4255,7 +4254,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 	}
 
 	WorkerSession *session = NULL;
-	foreach_ptr(session, workerPool->sessionList)
+	foreach_declared_ptr(session, workerPool->sessionList)
 	{
 		WorkerSessionFailed(session);
 	}
@@ -4280,7 +4279,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 		List *workerList = workerPool->distributedExecution->workerList;
 
 		WorkerPool *pool = NULL;
-		foreach_ptr(pool, workerList)
+		foreach_declared_ptr(pool, workerList)
 		{
 			/* failed pools or pools without any connection attempts ignored */
 			if (pool->failureState == WORKER_POOL_FAILED ||
@@ -4633,7 +4632,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 
 		/* wake up an idle connection by checking whether the connection is writeable */
 		WorkerSession *session = NULL;
-		foreach_ptr(session, workerPool->sessionList)
+		foreach_declared_ptr(session, workerPool->sessionList)
 		{
 			MultiConnection *connection = session->connection;
 			RemoteTransaction *transaction = &(connection->remoteTransaction);
@@ -4755,10 +4754,10 @@ BuildWaitEventSet(List *sessionList)
 	int eventSetSize = GetEventSetSize(sessionList);
 
 	WaitEventSet *waitEventSet =
-		CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
+		CreateWaitEventSet(WaitEventSetTracker_compat, eventSetSize);
 
 	WorkerSession *session = NULL;
-	foreach_ptr(session, sessionList)
+	foreach_declared_ptr(session, sessionList)
 	{
 		AddSessionToWaitEventSet(session, waitEventSet);
 	}
@@ -4856,7 +4855,7 @@ static void
 RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 {
 	WorkerSession *session = NULL;
-	foreach_ptr(session, sessionList)
+	foreach_declared_ptr(session, sessionList)
 	{
 		MultiConnection *connection = session->connection;
 		int waitEventSetIndex = session->waitEventSetIndex;
@@ -4912,7 +4911,7 @@ CleanUpSessions(DistributedExecution *execution)
 
 	/* always trigger wait event set in the first round */
 	WorkerSession *session = NULL;
-	foreach_ptr(session, sessionList)
+	foreach_declared_ptr(session, sessionList)
 	{
 		MultiConnection *connection = session->connection;
 
@@ -4993,7 +4992,7 @@ static void
 UnclaimAllSessionConnections(List *sessionList)
 {
 	WorkerSession *session = NULL;
-	foreach_ptr(session, sessionList)
+	foreach_declared_ptr(session, sessionList)
 	{
 		MultiConnection *connection = session->connection;
 

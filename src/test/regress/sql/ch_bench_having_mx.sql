@@ -15,6 +15,7 @@ SELECT create_distributed_table('stock','s_w_id');
 
 \c - - - :worker_1_port
 SET search_path = ch_bench_having;
+SELECT public.explain_with_pg17_initplan_format($Q$
 explain (costs false, summary false, timing false)
 select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock
@@ -22,32 +23,40 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
+$Q$) as "QUERY PLAN";
 
+SELECT public.explain_with_pg17_initplan_format($Q$
 explain (costs false, summary false, timing false)
 select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
+$Q$) as "QUERY PLAN";
 
+SELECT public.explain_with_pg17_initplan_format($Q$
 explain (costs false, summary false, timing false)
 select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock);
+$Q$) as "QUERY PLAN";
 
-
+SELECT public.explain_with_pg17_initplan_format($Q$
 explain (costs false)
 select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
+$Q$) as "QUERY PLAN";
 
+SELECT public.explain_with_pg17_initplan_format($Q$
 explain select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock s
 group by s_i_id
 having   (select true);
+$Q$) as "QUERY PLAN";
 
 select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock

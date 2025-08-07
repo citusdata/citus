@@ -22,6 +22,7 @@ HAVING (
 (3 rows)
 
 -- lets pin the plan in the test as well
+SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*),
        o_orderstatus
@@ -31,16 +32,17 @@ HAVING (
            SELECT count(*)
            FROM customer
        ) > 0;
+$Q$) as "QUERY PLAN";
                                     QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.o_orderstatus
-   InitPlan 1 (returns $0)
+   InitPlan 1
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  Result
-         One-Time Filter: ($0 > 0)
+         One-Time Filter: ((InitPlan 1).col1 > 0)
          ->  Custom Scan (Citus Adaptive)
-               Filter: ($0 > 0)
+               Filter: ((InitPlan 1).col1 > 0)
                ->  Distributed Subplan XXX_1
                      ->  Custom Scan (Citus Adaptive)
                            Task Count: 1

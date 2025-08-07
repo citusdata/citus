@@ -28,11 +28,6 @@
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
 
-/* Hack to compile Citus on pre-MERGE Postgres versions */
-#if PG_VERSION_NUM < PG_VERSION_15
-#define CMD_MERGE CMD_UNKNOWN
-#endif
-
 
 /* level of planner calls */
 extern int PlannerLevel;
@@ -104,6 +99,12 @@ typedef struct FastPathRestrictionContext
 	 * Set to true when distKey = Param; in the queryTree
 	 */
 	bool distributionKeyHasParam;
+
+	/*
+	 * Indicates to hold off calling the fast path planner until its
+	 * known if the shard is local or not.
+	 */
+	bool delayFastPathPlanning;
 } FastPathRestrictionContext;
 
 typedef struct PlannerRestrictionContext

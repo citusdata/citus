@@ -340,8 +340,7 @@ SELECT id, name FROM local LEFT JOIN distributed USING (id) ORDER BY 1 LIMIT 1;
   foo1.id =  foo4.id AND
   foo1.id =  foo3.id AND
   foo1.id =  foo2.id AND
-  foo1.id =  foo10.id AND
-  foo1.id =  foo1.id
+  foo1.id =  foo10.id
 ORDER BY 1;
 
 SELECT

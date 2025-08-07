@@ -1,10 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-\else
-\q
-\endif
 -- MERGE command performs a join from data_source to target_table_name
 DROP SCHEMA IF EXISTS schema_shard_table1 CASCADE;
 NOTICE:  schema "schema_shard_table1" does not exist, skipping
@@ -199,7 +192,9 @@ DEBUG:  A mix of distributed and citus-local table, routable query is not possib
 DEBUG:  Creating MERGE repartition plan
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  Collect source query results on coordinator
+DEBUG:  Local executor: Using task's cached local plan for task 0
 DEBUG:  Create a MERGE task list that needs to be routed
 DEBUG:  <Deparsed MERGE query: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) citus_local_table.a) WHEN MATCHED THEN UPDATE SET b = citus_local_table.b>
 DEBUG:  distributed statement: MERGE INTO schema_shard_table1.nullkey_c1_t1_4005006 citus_table_alias USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('merge_into_XXX_4005006'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table ON (citus_table_alias.a OPERATOR(pg_catalog.=) citus_local_table.a) WHEN MATCHED THEN UPDATE SET b = citus_local_table.b

@@ -1,0 +1,651 @@
+--
+-- TDIGEST_AGGREGATE_SUPPORT
+--   test the integration of github.com/tvondra/tdigest aggregates into the citus planner
+--   for push down parts of the aggregate to use parallelized execution and reduced data
+--   transfer sizes for aggregates not grouped by the distribution column
+--
+SET citus.next_shard_id TO 20070000;
+CREATE SCHEMA tdigest_aggregate_support;
+SET search_path TO tdigest_aggregate_support, public;
+-- create the tdigest extension when installed
+SELECT CASE WHEN COUNT(*) > 0
+    THEN 'CREATE EXTENSION tdigest WITH SCHEMA public'
+    ELSE 'SELECT false AS tdigest_present' END
+AS create_cmd FROM pg_available_extensions()
+WHERE name = 'tdigest'
+\gset
+:create_cmd;
+SET citus.shard_count TO 4;
+SET citus.coordinator_aggregation_strategy TO 'disabled'; -- prevent aggregate execution when the aggregate can't be pushed down
+CREATE TABLE latencies (a int, b int, latency double precision);
+SELECT create_distributed_table('latencies', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT setseed(0.42); -- make the random data inserted deterministic
+ setseed
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO latencies
+SELECT (random()*20)::int AS a,
+       (random()*20)::int AS b,
+       random()*10000.0 AS latency
+FROM generate_series(1, 10000);
+-- explain no grouping to verify partially pushed down for tdigest(value, compression)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest(latency, 100)
+FROM latencies;
+                                                                 QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest(remote_scan.tdigest)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(latency, 100) AS tdigest FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(latency, 100)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest(value, compression)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest(latency, 100)
+FROM latencies
+GROUP BY a;
+                                                                     QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest(latency, 100) AS tdigest FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest(latency, 100)
+               Group Key: latencies.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                     Output: a, b, latency
+(12 rows)
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest(value, compression)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest(latency, 100)
+FROM latencies
+GROUP BY b;
+                                                                        QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate
+   Output: remote_scan.b, tdigest(remote_scan.tdigest)
+   Group Key: remote_scan.b
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.b, remote_scan.tdigest
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT b, public.tdigest(latency, 100) AS tdigest FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY b
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Output: b, tdigest(latency, 100)
+                     Group Key: latencies.b
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(15 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile(value, compression, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile(latency, 100, 0.99)
+FROM latencies;
+                                                                      QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile(remote_scan.tdigest_percentile, '0.99'::double precision)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(latency, 100) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(latency, 100)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, compression, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile(latency, 100, 0.99)
+FROM latencies
+GROUP BY a;
+                                                                                             QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile(latency, 100, '0.99'::double precision) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile(latency, 100, '0.99'::double precision)
+               Group Key: latencies.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                     Output: a, b, latency
+(12 rows)
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile(value, compression, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile(latency, 100, 0.99)
+FROM latencies
+GROUP BY b;
+                                                                             QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate
+   Output: remote_scan.b, tdigest_percentile(remote_scan.tdigest_percentile, '0.99'::double precision)
+   Group Key: remote_scan.b
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.b, remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT b, public.tdigest(latency, 100) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY b
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Output: b, tdigest(latency, 100)
+                     Group Key: latencies.b
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(15 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile(value, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
+FROM latencies;
+                                                                      QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile(remote_scan.tdigest_percentile, '{0.99,0.95}'::double precision[])
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(latency, 100) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(latency, 100)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
+FROM latencies
+GROUP BY a;
+                                                                                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile(latency, 100, '{0.99,0.95}'::double precision[]) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile(latency, 100, '{0.99,0.95}'::double precision[])
+               Group Key: latencies.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                     Output: a, b, latency
+(12 rows)
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile(value, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
+FROM latencies
+GROUP BY b;
+                                                                             QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate
+   Output: remote_scan.b, tdigest_percentile(remote_scan.tdigest_percentile, '{0.99,0.95}'::double precision[])
+   Group Key: remote_scan.b
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.b, remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT b, public.tdigest(latency, 100) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY b
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Output: b, tdigest(latency, 100)
+                     Group Key: latencies.b
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(15 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile_of(latency, 100, 9000)
+FROM latencies;
+                                                                        QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile_of(remote_scan.tdigest_percentile_of, '9000'::double precision)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(latency, 100) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(latency, 100)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile_of(latency, 100, 9000)
+FROM latencies
+GROUP BY a;
+                                                                                                QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile_of
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile_of(latency, 100, '9000'::double precision) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile_of(latency, 100, '9000'::double precision)
+               Group Key: latencies.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                     Output: a, b, latency
+(12 rows)
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile_of(latency, 100, 9000)
+FROM latencies
+GROUP BY b;
+                                                                               QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate
+   Output: remote_scan.b, tdigest_percentile_of(remote_scan.tdigest_percentile_of, '9000'::double precision)
+   Group Key: remote_scan.b
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.b, remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT b, public.tdigest(latency, 100) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY b
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Output: b, tdigest(latency, 100)
+                     Group Key: latencies.b
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(15 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
+FROM latencies;
+                                                                        QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile_of(remote_scan.tdigest_percentile_of, '{9000,9500}'::double precision[])
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(latency, 100) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(latency, 100)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
+FROM latencies
+GROUP BY a;
+                                                                                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile_of
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile_of(latency, 100, '{9000,9500}'::double precision[]) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile_of(latency, 100, '{9000,9500}'::double precision[])
+               Group Key: latencies.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                     Output: a, b, latency
+(12 rows)
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
+FROM latencies
+GROUP BY b;
+                                                                               QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate
+   Output: remote_scan.b, tdigest_percentile_of(remote_scan.tdigest_percentile_of, '{9000,9500}'::double precision[])
+   Group Key: remote_scan.b
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.b, remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT b, public.tdigest(latency, 100) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_20070000 latencies WHERE true GROUP BY b
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Output: b, tdigest(latency, 100)
+                     Group Key: latencies.b
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_20070000 latencies
+                           Output: a, b, latency
+(15 rows)
+
+-- verifying results - should be stable due to seed while inserting the data, if failure due to data these queries could be removed or check for certain ranges
+SELECT tdigest(latency, 100) FROM latencies;
+                                                                                                                                                                                                                                                                                                                                                                                                                                    tdigest
+---------------------------------------------------------------------
+ flags 1 count 10000 compression 100 centroids 46 (0.287235, 1) (1.025106, 1) (2.058216, 1) (5.335597, 1) (6.353631, 2) (8.434160, 3) (10.858766, 4) (15.597572, 5) (26.947867, 10) (39.185955, 13) (55.779949, 22) (97.378748, 35) (141.322218, 55) (212.927316, 65) (304.973404, 108) (435.651374, 148) (594.272516, 199) (820.494155, 292) (1214.081721, 463) (1727.098147, 547) (2337.903365, 749) (3325.589314, 1128) (4520.977007, 1300) (5638.186053, 1104) (6641.875581, 874) (7460.022115, 755) (8112.829059, 573) (8607.102557, 402) (8981.756066, 314) (9293.406295, 288) (9536.677260, 173) (9689.587344, 131) (9806.805461, 83) (9880.507729, 49) (9917.051853, 34) (9938.762095, 20) (9956.899980, 15) (9971.665384, 11) (9981.990769, 8) (9987.546338, 5) (9990.348725, 3) (9991.269368, 2) (9991.467422, 1) (9992.337047, 1) (9995.578357, 1) (9999.700339, 1)
+(1 row)
+
+SELECT tdigest_percentile(latency, 100, 0.99) FROM latencies;
+ tdigest_percentile
+---------------------------------------------------------------------
+   9903.84313359954
+(1 row)
+
+SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95]) FROM latencies;
+         tdigest_percentile
+---------------------------------------------------------------------
+ {9903.84313359954,9485.4900939991}
+(1 row)
+
+SELECT tdigest_percentile_of(latency, 100, 9000) FROM latencies;
+ tdigest_percentile_of
+---------------------------------------------------------------------
+     0.903462047211093
+(1 row)
+
+SELECT tdigest_percentile_of(latency, 100, ARRAY[9000, 9500]) FROM latencies;
+         tdigest_percentile_of
+---------------------------------------------------------------------
+ {0.903462047211093,0.951374818129208}
+(1 row)
+
+CREATE TABLE latencies_rollup (a int, tdigest tdigest);
+SELECT create_distributed_table('latencies_rollup', 'a', colocate_with => 'latencies');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO latencies_rollup
+SELECT a, tdigest(latency, 100)
+FROM latencies
+GROUP BY a;
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest(tdigest)
+FROM latencies_rollup;
+                                                                     QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest(remote_scan.tdigest)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(tdigest) AS tdigest FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest(tdigest)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest(tdigest)
+FROM latencies_rollup
+GROUP BY a;
+                                                                         QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest(tdigest) AS tdigest FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest(tdigest)
+               Group Key: latencies_rollup.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                     Output: a, tdigest
+(12 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile(tdigest, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile(tdigest, 0.99)
+FROM latencies_rollup;
+                                                                           QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile(remote_scan.tdigest_percentile, '0.99'::double precision)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(tdigest) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile(tdigest, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile(tdigest, 0.99)
+FROM latencies_rollup
+GROUP BY a;
+                                                                                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile(tdigest, '0.99'::double precision) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile(tdigest, '0.99'::double precision)
+               Group Key: latencies_rollup.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                     Output: a, tdigest
+(12 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile(value, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile(tdigest, ARRAY[0.99, 0.95])
+FROM latencies_rollup;
+                                                                           QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile(remote_scan.tdigest_percentile, '{0.99,0.95}'::double precision[])
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(tdigest) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile(tdigest, ARRAY[0.99, 0.95])
+FROM latencies_rollup
+GROUP BY a;
+                                                                                                      QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile(tdigest, '{0.99,0.95}'::double precision[]) AS tdigest_percentile FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile(tdigest, '{0.99,0.95}'::double precision[])
+               Group Key: latencies_rollup.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                     Output: a, tdigest
+(12 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile_of(tdigest, 9000)
+FROM latencies_rollup;
+                                                                            QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile_of(remote_scan.tdigest_percentile_of, '9000'::double precision)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(tdigest) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile_of(tdigest, 9000)
+FROM latencies_rollup
+GROUP BY a;
+                                                                                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile_of
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile_of(tdigest, '9000'::double precision) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile_of(tdigest, '9000'::double precision)
+               Group Key: latencies_rollup.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                     Output: a, tdigest
+(12 rows)
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile_of(tdigest, ARRAY[9000, 9500])
+FROM latencies_rollup;
+                                                                            QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile_of(remote_scan.tdigest_percentile_of, '{9000,9500}'::double precision[])
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Query: SELECT public.tdigest(tdigest) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(13 rows)
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile_of(tdigest, ARRAY[9000, 9500])
+FROM latencies_rollup
+GROUP BY a;
+                                                                                                         QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.tdigest_percentile_of
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Query: SELECT a, public.tdigest_percentile_of(tdigest, '{9000,9500}'::double precision[]) AS tdigest_percentile_of FROM tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup WHERE true GROUP BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Output: a, tdigest_percentile_of(tdigest, '{9000,9500}'::double precision[])
+               Group Key: latencies_rollup.a
+               ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                     Output: a, tdigest
+(12 rows)
+
+-- verifying results - should be stable due to seed while inserting the data, if failure due to data these queries could be removed or check for certain ranges
+SELECT tdigest(tdigest) FROM latencies_rollup;
+                                                                                                                                                                                                                                                                                                                                                                                                                                           tdigest
+---------------------------------------------------------------------
+ flags 1 count 10000 compression 100 centroids 47 (0.287235, 1) (1.025106, 1) (2.058216, 1) (5.335597, 1) (6.353631, 2) (8.434160, 3) (10.858766, 4) (15.597572, 5) (26.853448, 9) (36.608782, 11) (49.983794, 20) (85.586987, 27) (118.226702, 37) (173.623153, 56) (249.583971, 87) (354.777375, 112) (493.422943, 177) (697.499642, 262) (996.351736, 338) (1425.136508, 464) (1972.172107, 623) (2665.959054, 805) (3451.617535, 827) (4429.146575, 1195) (5587.124850, 1104) (6624.983751, 966) (7474.888557, 773) (8184.273132, 637) (8730.956261, 431) (9119.479419, 333) (9411.778428, 207) (9582.688196, 152) (9707.657431, 103) (9807.341000, 73) (9881.180119, 55) (9919.393423, 33) (9942.691902, 20) (9960.171491, 16) (9975.978413, 8) (9982.487777, 7) (9987.546338, 5) (9990.348725, 3) (9991.269368, 2) (9991.467422, 1) (9992.337047, 1) (9995.578357, 1) (9999.700339, 1)
+(1 row)
+
+SELECT tdigest_percentile(tdigest, 0.99) FROM latencies_rollup;
+ tdigest_percentile
+---------------------------------------------------------------------
+   9903.32646582201
+(1 row)
+
+SELECT tdigest_percentile(tdigest, ARRAY[0.99, 0.95]) FROM latencies_rollup;
+         tdigest_percentile
+---------------------------------------------------------------------
+ {9903.32646582201,9492.23455844906}
+(1 row)
+
+SELECT tdigest_percentile_of(tdigest, 9000) FROM latencies_rollup;
+ tdigest_percentile_of
+---------------------------------------------------------------------
+     0.902852659582613
+(1 row)
+
+SELECT tdigest_percentile_of(tdigest, ARRAY[9000, 9500]) FROM latencies_rollup;
+         tdigest_percentile_of
+---------------------------------------------------------------------
+ {0.902852659582613,0.950865574658712}
+(1 row)
+
+SET client_min_messages TO WARNING; -- suppress cascade messages
+DROP SCHEMA tdigest_aggregate_support CASCADE;

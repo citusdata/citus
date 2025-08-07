@@ -104,8 +104,8 @@
 #include "distributed/query_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/transaction_management.h"
-#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 
@@ -253,7 +253,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 													  ALLOCSET_DEFAULT_SIZES);
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		MemoryContext oldContext = MemoryContextSwitchTo(loopContext);
 
@@ -304,7 +304,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			LOCKMODE lockMode = GetQueryLockMode(jobQuery);
 
 			Oid relationId = InvalidOid;
-			foreach_oid(relationId, localPlan->relationOids)
+			foreach_declared_oid(relationId, localPlan->relationOids)
 			{
 				LockRelationOid(relationId, lockMode);
 			}
@@ -313,6 +313,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 		{
 			int taskNumParams = numParams;
 			Oid *taskParameterTypes = parameterTypes;
+			int taskType = GetTaskQueryType(task);
 
 			if (task->parametersInQueryStringResolved)
 			{
@@ -330,7 +331,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			 * for concatenated strings, we set queryStringList so that we can access
 			 * each query string.
 			 */
-			if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
+			if (taskType == TASK_QUERY_TEXT_LIST)
 			{
 				List *queryStringList = task->taskQuery.data.queryStringList;
 				totalRowsProcessed +=
@@ -342,22 +343,31 @@ ExecuteLocalTaskListExtended(List *taskList,
 				continue;
 			}
 
-			Query *shardQuery = ParseQueryString(TaskQueryString(task),
-												 taskParameterTypes,
-												 taskNumParams);
+			if (taskType != TASK_QUERY_LOCAL_PLAN)
+			{
+				Query *shardQuery = ParseQueryString(TaskQueryString(task),
+													 taskParameterTypes,
+													 taskNumParams);
 
+				int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
-			int cursorOptions = CURSOR_OPT_PARALLEL_OK;
-
-			/*
-			 * Altough the shardQuery is local to this node, we prefer planner()
-			 * over standard_planner(). The primary reason for that is Citus itself
-			 * is not very tolarent standard_planner() calls that doesn't go through
-			 * distributed_planner() because of the way that restriction hooks are
-			 * implemented. So, let planner to call distributed_planner() which
-			 * eventually calls standard_planner().
-			 */
-			localPlan = planner(shardQuery, NULL, cursorOptions, paramListInfo);
+				/*
+				 * Altough the shardQuery is local to this node, we prefer planner()
+				 * over standard_planner(). The primary reason for that is Citus itself
+				 * is not very tolarent standard_planner() calls that doesn't go through
+				 * distributed_planner() because of the way that restriction hooks are
+				 * implemented. So, let planner to call distributed_planner() which
+				 * eventually calls standard_planner().
+				 */
+				localPlan = planner(shardQuery, NULL, cursorOptions, paramListInfo);
+			}
+			else
+			{
+				ereport(DEBUG2, (errmsg(
+									 "Local executor: Using task's cached local plan for task %u",
+									 task->taskId)));
+				localPlan = TaskQueryLocalPlan(task);
+			}
 		}
 
 		char *shardQueryString = NULL;
@@ -393,7 +403,7 @@ SetColocationIdAndPartitionKeyValueForTasks(List *taskList, Job *workerJob)
 	if (workerJob->colocationId != INVALID_COLOCATION_ID)
 	{
 		Task *task = NULL;
-		foreach_ptr(task, taskList)
+		foreach_declared_ptr(task, taskList)
 		{
 			task->colocationId = workerJob->colocationId;
 			task->partitionKeyValue = workerJob->partitionKeyValue;
@@ -412,7 +422,7 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tuple
 {
 	char *queryString = NULL;
 	uint64 totalProcessedRows = 0;
-	foreach_ptr(queryString, queryStrings)
+	foreach_declared_ptr(queryString, queryStrings)
 	{
 		Query *shardQuery = ParseQueryString(queryString,
 											 NULL,
@@ -490,7 +500,7 @@ ExecuteUtilityCommand(const char *taskQueryCommand)
 	List *parseTreeList = pg_parse_query(taskQueryCommand);
 	RawStmt *taskRawStmt = NULL;
 
-	foreach_ptr(taskRawStmt, parseTreeList)
+	foreach_declared_ptr(taskRawStmt, parseTreeList)
 	{
 		Node *taskRawParseTree = taskRawStmt->stmt;
 
@@ -580,7 +590,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 	*localTaskList = NIL;
 
 	Task *task = NULL;
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		List *localTaskPlacementList = NULL;
 		List *remoteTaskPlacementList = NULL;
@@ -645,7 +655,7 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
 	*remoteTaskPlacementList = NIL;
 
 	ShardPlacement *taskPlacement = NULL;
-	foreach_ptr(taskPlacement, taskPlacementList)
+	foreach_declared_ptr(taskPlacement, taskPlacementList)
 	{
 		if (taskPlacement->groupId == localGroupId)
 		{
@@ -754,14 +764,29 @@ ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 															 localPlacementIndex) :
 								 CreateDestReceiver(DestNone);
 
-	/* Create a QueryDesc for the query */
-	QueryDesc *queryDesc = CreateQueryDesc(taskPlan, queryString,
-										   GetActiveSnapshot(), InvalidSnapshot,
-										   destReceiver, paramListInfo,
-										   queryEnv, 0);
+	QueryDesc *queryDesc = CreateQueryDesc(
+		taskPlan,          /* PlannedStmt *plannedstmt */
+		queryString,       /* const char *sourceText */
+		GetActiveSnapshot(),   /* Snapshot snapshot */
+		InvalidSnapshot,       /* Snapshot crosscheck_snapshot */
+		destReceiver,      /* DestReceiver *dest */
+		paramListInfo,     /* ParamListInfo params */
+		queryEnv,          /* QueryEnvironment *queryEnv */
+		0                  /* int instrument_options */
+		);
 
 	ExecutorStart(queryDesc, eflags);
+
+/* run the plan: count = 0 (all rows) */
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ dropped the “execute_once” boolean */
+	ExecutorRun(queryDesc, scanDirection, 0L);
+#else
+
+	/* PG 17 and prevs still expect the 4th ‘once’ argument */
 	ExecutorRun(queryDesc, scanDirection, 0L, true);
+#endif
 
 	/*
 	 * We'll set the executorState->es_processed later, for now only remember
@@ -817,7 +842,7 @@ RecordNonDistTableAccessesForTask(Task *task)
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
 	ShardPlacementAccess *placementAccess = NULL;
-	foreach_ptr(placementAccess, placementAccessList)
+	foreach_declared_ptr(placementAccess, placementAccessList)
 	{
 		uint64 placementAccessShardId = placementAccess->placement->shardId;
 		if (placementAccessShardId == INVALID_SHARD_ID)
@@ -968,7 +993,7 @@ AnyTaskAccessesLocalNode(List *taskList)
 {
 	Task *task = NULL;
 
-	foreach_ptr(task, taskList)
+	foreach_declared_ptr(task, taskList)
 	{
 		if (TaskAccessesLocalNode(task))
 		{
@@ -990,7 +1015,7 @@ TaskAccessesLocalNode(Task *task)
 	int32 localGroupId = GetLocalGroupId();
 
 	ShardPlacement *taskPlacement = NULL;
-	foreach_ptr(taskPlacement, task->taskPlacementList)
+	foreach_declared_ptr(taskPlacement, task->taskPlacementList)
 	{
 		if (taskPlacement->groupId == localGroupId)
 		{

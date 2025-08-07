@@ -1068,7 +1068,7 @@ $$);
 
 -- we hit https://github.com/citusdata/citus/blob/f00c63c33daf3d16f06462626ca14732b141ae7a/src/backend/distributed/planner/relation_restriction_equivalence.c#L235-L242
 SELECT public.explain_has_distributed_subplan($$
-EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1, user_id) IN
+EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1 + random(), user_id) IN
 (
 SELECT u1.user_id, user_id FROM users_table_part
 UNION
@@ -1108,6 +1108,50 @@ EXPLAIN
 SELECT k, COUNT(*) FROM v GROUP BY k ORDER BY k;
 $$);
 
+
+CREATE TABLE dist1 (a int, b int);
+CREATE TABLE dist2 (a int, b int);
+SET citus.shard_count to 4;
+SELECT create_distributed_table('dist1', 'a');
+SELECT create_distributed_table('dist2', 'a');
+INSERT INTO dist1 VALUES (1, 1), (2, 1), (3, 1), (4, 1), (5, 1);
+INSERT INTO dist2 VALUES (5, 2), (6, 2), (7, 2), (8, 2), (9, 2);
+
+-- safe to pushdown
+SELECT * FROM
+(
+  SELECT * FROM dist1 JOIN dist2 USING (a)
+  UNION
+  SELECT * FROM dist1 JOIN dist2 USING (a)
+) AS t1 ORDER BY 1;
+
+-- not safe to pushdown, the distribution key from the outer part of the outer join is not in the target list
+SELECT * FROM
+(
+  SELECT dist2.a FROM dist1 LEFT JOIN dist2 USING (a)
+  UNION
+  SELECT dist2.a FROM dist2
+) AS t1 ORDER BY 1;
+
+set client_min_messages to DEBUG3;
+-- not safe to pushdown, as is, sub-plan is generated
+-- the distribution key from the outer part of the outer join is not in the target list
+SELECT * FROM
+(
+  SELECT dist1.a FROM dist1 RIGHT JOIN dist2 USING (a)
+  UNION
+  SELECT dist2.a FROM dist2
+) AS t1 ORDER BY 1;
+
+-- safe to pushdown, the distribution key from the outer side of the RIGHT join is in the target list
+SELECT * FROM
+(
+  SELECT dist2.a
+    FROM dist1 RIGHT JOIN dist2 USING (a)
+  UNION
+  SELECT dist2.a FROM dist2
+) AS t1
+ORDER BY 1;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA union_pushdown CASCADE;

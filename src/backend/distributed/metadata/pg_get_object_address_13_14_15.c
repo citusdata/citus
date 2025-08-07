@@ -283,9 +283,7 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 		case OBJECT_FDW:
 		case OBJECT_FOREIGN_SERVER:
 		case OBJECT_LANGUAGE:
-#if PG_VERSION_NUM >= PG_VERSION_15
 		case OBJECT_PARAMETER_ACL:
-#endif
 		case OBJECT_PUBLICATION:
 		case OBJECT_ROLE:
 		case OBJECT_SCHEMA:
@@ -323,9 +321,7 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 			break;
 		}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 		case OBJECT_PUBLICATION_NAMESPACE:
-#endif
 		case OBJECT_USER_MAPPING:
 		{
 			objnode = (Node *) list_make2(linitial(name), linitial(args));

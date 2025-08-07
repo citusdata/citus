@@ -14,6 +14,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 
+#include "catalog/pg_collation.h"
 #include "lib/stringinfo.h"
 #include "storage/latch.h"
 #include "utils/builtins.h"
@@ -371,8 +372,9 @@ CommandMatchesLogGrepPattern(const char *command)
 	if (GrepRemoteCommands && strnlen(GrepRemoteCommands, NAMEDATALEN) > 0)
 	{
 		Datum boolDatum =
-			DirectFunctionCall2(textlike, CStringGetTextDatum(command),
-								CStringGetTextDatum(GrepRemoteCommands));
+			DirectFunctionCall2Coll(textlike, DEFAULT_COLLATION_OID,
+									CStringGetTextDatum(command),
+									CStringGetTextDatum(GrepRemoteCommands));
 
 		return DatumGetBool(boolDatum);
 	}
@@ -392,7 +394,7 @@ void
 ExecuteCriticalRemoteCommandList(MultiConnection *connection, List *commandList)
 {
 	const char *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_declared_ptr(command, commandList)
 	{
 		ExecuteCriticalRemoteCommand(connection, command);
 	}
@@ -435,7 +437,7 @@ ExecuteRemoteCommandInConnectionList(List *nodeConnectionList, const char *comma
 {
 	MultiConnection *connection = NULL;
 
-	foreach_ptr(connection, nodeConnectionList)
+	foreach_declared_ptr(connection, nodeConnectionList)
 	{
 		int querySent = SendRemoteCommand(connection, command);
 
@@ -446,7 +448,7 @@ ExecuteRemoteCommandInConnectionList(List *nodeConnectionList, const char *comma
 	}
 
 	/* Process the result */
-	foreach_ptr(connection, nodeConnectionList)
+	foreach_declared_ptr(connection, nodeConnectionList)
 	{
 		bool raiseInterrupts = true;
 		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
@@ -887,7 +889,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 
 	/* convert connection list to an array such that we can move items around */
 	MultiConnection *connectionItem = NULL;
-	foreach_ptr(connectionItem, connectionList)
+	foreach_declared_ptr(connectionItem, connectionList)
 	{
 		allConnections[connectionIndex] = connectionItem;
 		connectionReady[connectionIndex] = false;
@@ -1130,7 +1132,7 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 
 	/* allocate pending connections + 2 for the signal latch and postmaster death */
 	/* (CreateWaitEventSet makes room for pgwin32_signal_event automatically) */
-	WaitEventSet *waitEventSet = CreateWaitEventSet(CurrentMemoryContext,
+	WaitEventSet *waitEventSet = CreateWaitEventSet(WaitEventSetTracker_compat,
 													pendingConnectionCount + 2);
 
 	for (int connectionIndex = 0; connectionIndex < pendingConnectionCount;

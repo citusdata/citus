@@ -115,7 +115,7 @@ static bool
 IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt)
 {
 	DefElem *opt = NULL;
-	foreach_ptr(opt, clusterStmt->params)
+	foreach_declared_ptr(opt, clusterStmt->params)
 	{
 		if (strcmp(opt->defname, "verbose") == 0)
 		{

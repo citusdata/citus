@@ -234,6 +234,7 @@ SELECT kind, limit_price FROM limit_orders WHERE id = 246;
 
 -- multi-column UPDATE with RETURNING
 UPDATE limit_orders SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURNING *;
+UPDATE limit_orders SET (kind, limit_price) = (SELECT 'buy'::order_side, 999) WHERE id = 246 RETURNING *;
 
 -- Test that on unique contraint violations, we fail fast
 \set VERBOSITY terse
@@ -335,6 +336,9 @@ UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 
 -- should succeed with a CTE
 WITH deleted_orders AS (INSERT INTO limit_orders VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
+UPDATE limit_orders SET symbol = 'GM';
+
+WITH deleted_orders AS (INSERT INTO limit_orders SELECT 400, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43)
 UPDATE limit_orders SET symbol = 'GM';
 
 SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
@@ -505,6 +509,28 @@ VALUES (104, 'Wayz'), (105, 'Mynt') RETURNING *;
 SELECT * FROM app_analytics_events ORDER BY id;
 DROP TABLE app_analytics_events;
 
+-- test function call in UPDATE SET
+-- https://github.com/citusdata/citus/issues/7676
+CREATE FUNCTION citus_is_coordinator_stable() returns bool as $$
+  select citus_is_coordinator();
+$$ language sql stable;
+
+CREATE TABLE bool_test (
+  id bigint primary key,
+  col_bool bool
+  );
+SELECT create_reference_table('bool_test');
+
+INSERT INTO bool_test values (1, true);
+
+UPDATE bool_test
+SET (col_bool)
+  = (SELECT citus_is_coordinator_stable())
+RETURNING id, col_bool;
+
+DROP TABLE bool_test;
+DROP FUNCTION citus_is_coordinator_stable();
+
 -- Test multi-row insert with serial in a non-partition column
 CREATE TABLE app_analytics_events (id int, app_id serial, name text);
 SELECT create_distributed_table('app_analytics_events', 'id');
@@ -558,6 +584,13 @@ SELECT * FROM summary_table ORDER BY id;
 -- try different syntax
 UPDATE summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM raw_table WHERE id = 2)
+WHERE id = 2;
+
+SELECT * FROM summary_table ORDER BY id;
+
+-- try different order of update targets
+UPDATE summary_table SET (average_value, min_value) =
+ 	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
 WHERE id = 2;
 
 SELECT * FROM summary_table ORDER BY id;
@@ -686,6 +719,12 @@ WHERE id = 1;
 
 UPDATE reference_summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM reference_raw_table WHERE id = 2)
+WHERE id = 2;
+
+SELECT * FROM reference_summary_table ORDER BY id;
+
+UPDATE reference_summary_table SET (average_value, min_value) =
+	(SELECT avg(value), min(value) FROM reference_raw_table WHERE id = 2)
 WHERE id = 2;
 
 SELECT * FROM reference_summary_table ORDER BY id;
@@ -880,4 +919,15 @@ DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
 DROP TABLE reference_summary_table;
+DROP TABLE limit_orders;
+DROP TABLE multiple_hash;
+DROP TABLE range_partitioned;
+DROP TABLE append_partitioned;
+DROP TABLE bidders;
+
+DROP FUNCTION stable_append;
+DROP FUNCTION immutable_append;
+DROP FUNCTION temp_strict_func;
+DROP TYPE order_side;
+
 DROP SCHEMA multi_modifications CASCADE;
