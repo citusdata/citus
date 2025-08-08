@@ -680,7 +680,7 @@ SET client_min_messages TO WARNING;
 $Q$);
 
 -- EXPLAIN ANALYZE is not supported for INSERT ... SELECT via coordinator
-EXPLAIN (costs off, analyze on)
+EXPLAIN (costs off, analyze on, BUFFERS OFF)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id

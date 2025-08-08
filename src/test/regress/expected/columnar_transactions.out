@@ -219,7 +219,7 @@ EXPLAIN (COSTS OFF) EXECUTE p0;
 (2 rows)
 
 EXECUTE p0;
-EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p0;
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF) EXECUTE p0;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Insert on t (actual rows=0 loops=1)
@@ -252,7 +252,7 @@ EXPLAIN (COSTS OFF) EXECUTE p1(16);
 (2 rows)
 
 EXECUTE p1(16);
-EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p1(20);
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF) EXECUTE p1(20);
                        QUERY PLAN
 ---------------------------------------------------------------------
  Insert on t (actual rows=0 loops=1)
@@ -289,7 +289,7 @@ EXPLAIN (COSTS OFF) EXECUTE p2(30, 40);
 (2 rows)
 
 EXECUTE p2(30, 40);
-EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p2(50, 60);
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF) EXECUTE p2(50, 60);
                        QUERY PLAN
 ---------------------------------------------------------------------
  Insert on t (actual rows=0 loops=1)
@@ -342,7 +342,7 @@ EXECUTE p3;
  8 | 8
 (2 rows)
 
-EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p3;
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF) EXECUTE p3;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t (actual rows=2 loops=1)
@@ -397,7 +397,7 @@ EXECUTE p5(16);
 ---------------------------------------------------------------------
 (0 rows)
 
-EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p5(9);
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF) EXECUTE p5(9);
                        QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t (actual rows=2 loops=1)
@@ -453,7 +453,7 @@ EXECUTE p6(30, 40);
  31 | 41
 (1 row)
 
-EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p6(50, 60);
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF) EXECUTE p6(50, 60);
                        QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t (actual rows=1 loops=1)
