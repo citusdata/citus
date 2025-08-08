@@ -170,7 +170,7 @@ SELECT * FROM composite_type_partitioned_table WHERE id = 123;
  123 | (123,456)
 (1 row)
 
-EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(123, 456)'::other_composite_type);
                                       QUERY PLAN
 ---------------------------------------------------------------------
@@ -212,7 +212,7 @@ $cf$);
 (1 row)
 
 INSERT INTO composite_type_partitioned_table VALUES (456, '(456, 678)'::other_composite_type);
-EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(456, 678)'::other_composite_type);
                                       QUERY PLAN
 ---------------------------------------------------------------------
