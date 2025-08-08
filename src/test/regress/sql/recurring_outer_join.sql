@@ -143,7 +143,7 @@ SELECT COUNT(*) FROM ref_1 LEFT JOIN (dist_1 t1 LEFT JOIN dist_1 t2 USING (a)) q
 
   SELECT COUNT(*) FROM dist_1 t1 FULL JOIN (dist_1 RIGHT JOIN citus_local_1 USING(a)) t2 USING (a);
 
-  -- subqury without FROM
+  -- subquery without FROM
   SELECT COUNT(*) FROM dist_1 t1 RIGHT JOIN (SELECT generate_series(1,10) AS a) t2 USING (a);
 
 -- such semi joins / anti joins are supported too
@@ -249,7 +249,7 @@ SELECT COUNT(*) FROM ref_1 LEFT JOIN (dist_1 t1 LEFT JOIN dist_1 t2 USING (a)) q
   ON (t1.a = t2.a)
   WHERE t1.a IN (SELECT a FROM dist_1 t3);
 
-  -- subqury without FROM
+  -- subquery without FROM
   SELECT COUNT(*) FROM
   (SELECT generate_series(1,10) AS a) t1
   JOIN dist_1 t2
@@ -293,7 +293,7 @@ LATERAL
 ) as foo;
 
 -- Qual is the same but top-level join is an anti-join. Right join
--- stays as is and hence requires recursive planning.
+-- is pushed down.
 SELECT COUNT(*) FROM dist_1 t1
 WHERE NOT EXISTS (
     SELECT * FROM dist_1 t2
@@ -346,7 +346,8 @@ LEFT JOIN
 (
     dist_1 t4
     JOIN
-    -- 1) t6 is recursively planned since the outer side is recurring
+    -- 1) t6 is not recursively planned since it is
+    -- safe to push down the recurring outer side with constraints
     (SELECT t6.a FROM dist_1 t6 RIGHT JOIN ref_1 t7 USING(a)) t5
     USING(a)
 ) q
@@ -580,8 +581,8 @@ LEFT JOIN
 USING(a);
 
 -- cannot recursively plan because t3 (inner - distributed)
--- references t1 (outer - recurring)
-SELECT COUNT(*) FROM ref_1 t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
+-- references t1 (outer - recurring over non-distribution column)
+SELECT COUNT(*) FROM ref_1 t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (b);
 SELECT COUNT(*) FROM (SELECT * FROM dist_1 OFFSET 100) t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
 SELECT COUNT(*) FROM local_1 t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
 SELECT COUNT(*) FROM (SELECT 1 a, generate_series(1,2) b) t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
@@ -708,14 +709,13 @@ LEFT JOIN
 USING (a);
 
 SELECT COUNT(*) FROM ref_1 t1
--- 2) Since t8 is distributed and t1 is recurring, t8 needs be converted
---    to a recurring rel too. For this reason, subquery t8 is recursively
---    planned because t7 is recurring already.
+-- 2) It is also safe to push down this since the recurring outer side t1 and
+--    distributed inner side t8 are joined on the distribution column.
 LEFT JOIN
 (
     SELECT * FROM (SELECT * FROM ref_1 t2 RIGHT JOIN dist_1 t3 USING (a)) AS t4
     JOIN
-    -- 1) subquery t6 is recursively planned because t5 is recurring
+    -- 1) it is safe to push down subquery t7
     (SELECT * FROM ref_1 t5 LEFT JOIN (SELECT * FROM dist_2_columnar WHERE b < 150) t6 USING (a)) as t7
     USING(a)
 ) t8
@@ -724,14 +724,13 @@ USING (a);
 -- same test using a prepared statement
 PREPARE recurring_outer_join_p1 AS
 SELECT COUNT(*) FROM ref_1 t1
--- 2) Since t8 is distributed and t1 is recurring, t8 needs be converted
---    to a recurring rel too. For this reason, subquery t8 is recursively
---    planned because t7 is recurring already.
+-- 2) It is also safe to push down this since the recurring outer side t1 and
+--    distributed inner side t8 are joined on the distribution column.
 LEFT JOIN
 (
     SELECT * FROM (SELECT * FROM ref_1 t2 RIGHT JOIN dist_1 t3 USING (a)) AS t4
     JOIN
-    -- 1) subquery t6 is recursively planned because t5 is recurring
+    -- 1) it is safe to push down subquery t7
     (SELECT * FROM ref_1 t5 LEFT JOIN (SELECT * FROM dist_2_columnar WHERE b < $1) t6 USING (a)) as t7
     USING(a)
 ) t8
@@ -958,10 +957,10 @@ BEGIN;
       SELECT t1.a, t1.b FROM ref_1 t1
       LEFT JOIN
       (
-          SELECT * FROM dist_1 t2 WHERE EXISTS (
+          SELECT DISTINCT ON (a) * FROM dist_1 t2 WHERE EXISTS (
               SELECT * FROM dist_1 t4
               WHERE t4.a = t2.a
-          )
+          ) ORDER BY a, b
       ) t3
       USING (a)
   ) q
@@ -986,7 +985,7 @@ BEGIN;
   RETURNING *;
 ROLLBACK;
 
--- INSERT .. SELECT: pull to coordinator
+-- INSERT .. SELECT: Repartitioned
 BEGIN;
   DELETE FROM ref_1 WHERE a IS NULL;
 
@@ -995,6 +994,17 @@ BEGIN;
   FROM ref_1 t1
   LEFT JOIN dist_1 t2
   ON (t1.a = t2.a);
+ROLLBACK;
+
+-- INSERT .. SELECT: pull to coordinator
+BEGIN;
+  DELETE FROM ref_1 WHERE a IS NULL;
+
+  INSERT INTO dist_1
+  SELECT t1.*
+  FROM ref_1 t1
+  LEFT JOIN dist_1 t2
+  ON (t1.b = t2.b);
 ROLLBACK;
 
 -- INSERT .. SELECT: repartitioned (due to <t1.a*3>)

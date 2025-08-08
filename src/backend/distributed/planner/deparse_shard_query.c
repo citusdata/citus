@@ -16,6 +16,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_operator.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -38,6 +39,8 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/query_utils.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/shard_utils.h"
 #include "distributed/stats/stat_tenants.h"
 #include "distributed/version_compat.h"
@@ -205,6 +208,190 @@ UpdateTaskQueryString(Query *query, Task *task)
 
 
 /*
+ * DefineQualsForShardInterval creates the necessary qual conditions over the
+ * given attnum and rtindex for the given shard interval.
+ */
+Node *
+DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtindex)
+{
+	uint64 shardId = relationShard->shardId;
+	Oid relationId = relationShard->relationId;
+
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	Var *partitionColumnVar = cacheEntry->partitionColumn;
+
+	/*
+	 * Add constraints for the relation identified by rtindex, specifically on its column at attnum.
+	 * Create a Var node representing this column, which will be used to compare against the partition
+	 * column for shard interval qualification.
+	 */
+
+	Var *outerTablePartitionColumnVar = makeVar(
+		rtindex, attnum, partitionColumnVar->vartype,
+		partitionColumnVar->vartypmod,
+		partitionColumnVar->varcollid,
+		0);
+
+	bool isFirstShard = IsFirstShard(cacheEntry, shardId);
+
+	/* load the interval for the shard and create constant nodes for the upper/lower bounds */
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Const *constNodeLowerBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32),
+										   shardInterval->minValue, false, true);
+	Const *constNodeUpperBound = makeConst(INT4OID, -1, InvalidOid, sizeof(int32),
+										   shardInterval->maxValue, false, true);
+	Const *constNodeZero = makeConst(INT4OID, -1, InvalidOid, sizeof(int32),
+									 Int32GetDatum(0), false, true);
+
+	/* create a function expression node for the hash partition column */
+	FuncExpr *hashFunction = makeNode(FuncExpr);
+	hashFunction->funcid = cacheEntry->hashFunction->fn_oid;
+	hashFunction->args = list_make1(outerTablePartitionColumnVar);
+	hashFunction->funcresulttype = get_func_rettype(cacheEntry->hashFunction->fn_oid);
+	hashFunction->funcretset = false;
+
+	/* create a function expression for the lower bound of the shard interval */
+	Oid resultTypeOid = get_func_rettype(
+		cacheEntry->shardIntervalCompareFunction->fn_oid);
+	FuncExpr *lowerBoundFuncExpr = makeNode(FuncExpr);
+	lowerBoundFuncExpr->funcid = cacheEntry->shardIntervalCompareFunction->fn_oid;
+	lowerBoundFuncExpr->args = list_make2((Node *) constNodeLowerBound,
+										  (Node *) hashFunction);
+	lowerBoundFuncExpr->funcresulttype = resultTypeOid;
+	lowerBoundFuncExpr->funcretset = false;
+
+	Oid lessThan = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid, CStringGetDatum("<"),
+								  resultTypeOid, resultTypeOid, ObjectIdGetDatum(11));
+
+	/*
+	 * Finally, check if the comparison result is less than 0, i.e.,
+	 * shardInterval->minValue < hash(partitionColumn)
+	 * See SearchCachedShardInterval for the behavior at the boundaries.
+	 */
+	Expr *lowerBoundExpr = make_opclause(lessThan, BOOLOID, false,
+										 (Expr *) lowerBoundFuncExpr,
+										 (Expr *) constNodeZero, InvalidOid, InvalidOid);
+
+	/* create a function expression for the upper bound of the shard interval */
+	FuncExpr *upperBoundFuncExpr = makeNode(FuncExpr);
+	upperBoundFuncExpr->funcid = cacheEntry->shardIntervalCompareFunction->fn_oid;
+	upperBoundFuncExpr->args = list_make2((Node *) hashFunction,
+										  (Expr *) constNodeUpperBound);
+	upperBoundFuncExpr->funcresulttype = resultTypeOid;
+	upperBoundFuncExpr->funcretset = false;
+
+	Oid lessThanOrEqualTo = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid,
+										   CStringGetDatum("<="),
+										   resultTypeOid, resultTypeOid, ObjectIdGetDatum(
+											   11));
+
+
+	/*
+	 * Finally, check if the comparison result is less than or equal to 0, i.e.,
+	 * hash(partitionColumn) <= shardInterval->maxValue
+	 * See SearchCachedShardInterval for the behavior at the boundaries.
+	 */
+	Expr *upperBoundExpr = make_opclause(lessThanOrEqualTo, BOOLOID, false,
+										 (Expr *) upperBoundFuncExpr,
+										 (Expr *) constNodeZero, InvalidOid, InvalidOid);
+
+
+	/* create a node for both upper and lower bound */
+	Node *shardIntervalBoundQuals = make_and_qual((Node *) lowerBoundExpr,
+												  (Node *) upperBoundExpr);
+
+	/*
+	 * Add a null test for the partition column for the first shard.
+	 * This is because we need to include the null values in exactly one of the shard queries.
+	 * The null test is added as an OR clause to the existing AND clause.
+	 */
+	if (isFirstShard)
+	{
+		/* null test for the first shard */
+		NullTest *nullTest = makeNode(NullTest);
+		nullTest->nulltesttype = IS_NULL;  /* Check for IS NULL */
+		nullTest->arg = (Expr *) outerTablePartitionColumnVar;  /* The variable to check */
+		nullTest->argisrow = false;
+		shardIntervalBoundQuals = (Node *) make_orclause(list_make2(nullTest,
+																	shardIntervalBoundQuals));
+	}
+	return shardIntervalBoundQuals;
+}
+
+
+/*
+ * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals
+ * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard.
+ */
+void
+UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
+{
+	if (query == NULL || query->jointree == NULL || query->jointree->fromlist == NIL)
+	{
+		return;
+	}
+
+	FromExpr *fromExpr = query->jointree;
+	if (fromExpr == NULL || fromExpr->fromlist == NIL)
+	{
+		return;
+	}
+
+	ListCell *fromExprCell;
+	foreach(fromExprCell, fromExpr->fromlist)
+	{
+		Node *fromItem = (Node *) lfirst(fromExprCell);
+		if (!IsA(fromItem, JoinExpr))
+		{
+			continue;
+		}
+		JoinExpr *joinExpr = (JoinExpr *) fromItem;
+
+		/*
+		 * We will check if we need to add constraints to the WHERE clause.
+		 */
+		RangeTblEntry *innerRte = NULL;
+		RangeTblEntry *outerRte = NULL;
+		int outerRtIndex = -1;
+		int attnum;
+		if (!CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
+													   &outerRte, &innerRte, &attnum))
+		{
+			continue;
+		}
+
+		if (attnum == InvalidAttrNumber)
+		{
+			continue;
+		}
+		ereport(DEBUG5, (errmsg(
+							 "Distributed table from the inner part of the outer join: %s.",
+							 innerRte->eref->aliasname)));
+
+		RelationShard *relationShard = FindRelationShard(innerRte->relid,
+														 relationShardList);
+
+		if (relationShard == NULL || relationShard->shardId == INVALID_SHARD_ID)
+		{
+			continue;
+		}
+
+		Node *shardIntervalBoundQuals = DefineQualsForShardInterval(relationShard, attnum,
+																	outerRtIndex);
+		if (fromExpr->quals == NULL)
+		{
+			fromExpr->quals = (Node *) shardIntervalBoundQuals;
+		}
+		else
+		{
+			fromExpr->quals = make_and_qual(fromExpr->quals, shardIntervalBoundQuals);
+		}
+	}
+	return;
+}
+
+
+/*
  * UpdateRelationToShardNames walks over the query tree and appends shard ids to
  * relations. It uses unique identity value to establish connection between a
  * shard and the range table entry. If the range table id is not given a
@@ -226,6 +413,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	/* want to look at all RTEs, even in subqueries, CTEs and such */
 	if (IsA(node, Query))
 	{
+		UpdateWhereClauseForOuterJoin((Query *) node, relationShardList); /* TODO, check this again, we might want to skip this for fast path queries */
 		return query_tree_walker((Query *) node, UpdateRelationToShardNames,
 								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}

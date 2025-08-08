@@ -146,7 +146,7 @@ LIMIT 3;
        3
 (3 rows)
 
--- outer join could still recur
+-- outer join pushed down
 SELECT
   DISTINCT user_id
 FROM
@@ -162,7 +162,13 @@ WHERE
       )
 ORDER BY user_id
 LIMIT 3;
-ERROR:  correlated subqueries are not supported when the FROM clause contains a CTE or subquery
+ user_id
+---------------------------------------------------------------------
+       1
+       2
+       3
+(3 rows)
+
 -- subqueries in WHERE with IN operator without equality
 SELECT
   users_table.user_id, count(*)
@@ -300,7 +306,7 @@ ORDER BY 1, 2;
        5 |       5
 (2 rows)
 
--- reference table LEFT JOIN distributed table in WHERE is still not ok
+-- reference table LEFT JOIN distributed table in WHERE is ok
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 5

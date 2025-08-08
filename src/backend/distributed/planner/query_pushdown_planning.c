@@ -109,6 +109,7 @@ static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 static char * RecurringTypeDescription(RecurringTuplesType recurType);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
 	PlannerInfo *plannerInfo, Relids recurringRelIds, Relids nonRecurringRelIds);
+static bool ContainsLateralSubquery(PlannerInfo *plannerInfo);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
 static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
 static bool ContainsReferencesToRelidsWalker(Node *node,
@@ -830,12 +831,17 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			{
 				/*
 				 * Inner side contains distributed rels but the outer side only
-				 * contains recurring rels, must be an unsupported lateral outer
+				 * contains recurring rels, might be an unsupported lateral outer
 				 * join.
+				 * Note that plannerInfo->hasLateralRTEs is not always set to
+				 * true, so here we check rtes, see ContainsLateralSubquery for details.
 				 */
-				recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
 
-				break;
+				if (ContainsLateralSubquery(plannerInfo))
+				{
+					recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
+					break;
+				}
 			}
 		}
 		else if (joinType == JOIN_FULL)
@@ -1714,6 +1720,30 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 	}
 
 	return NULL;
+}
+
+
+/*
+ * ContainsLateralSubquery checks if the given plannerInfo contains any
+ * lateral subqueries in its rtable. If it does, it returns true, otherwise false.
+ */
+static bool
+ContainsLateralSubquery(PlannerInfo *plannerInfo)
+{
+	ListCell *lc;
+
+	foreach(lc, plannerInfo->parse->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+		/* We are only interested in subqueries that are lateral */
+		if (rte->lateral && rte->rtekind == RTE_SUBQUERY)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
