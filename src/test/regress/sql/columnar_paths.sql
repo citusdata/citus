@@ -361,12 +361,12 @@ CREATE INDEX uncorrelated_idx ON uncorrelated(x);
 ANALYZE correlated, uncorrelated;
 
 -- should choose chunk group filtering; selective and correlated
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM correlated WHERE x = 78910;
 SELECT * FROM correlated WHERE x = 78910;
 
 -- should choose index scan; selective but uncorrelated
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM uncorrelated WHERE x = 78910;
 SELECT * FROM uncorrelated WHERE x = 78910;
 
