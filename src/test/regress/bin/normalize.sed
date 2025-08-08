@@ -328,3 +328,12 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
 # pg18 change: strip trailing “.00” (or “.0…”) from actual rows counts
 s/(actual rows=[0-9]+)\.[0-9]+/\1/g
+
+# ignore any “Disabled:” lines in test output
+/^[ \t]*Disabled:/d
+
+ # ignore any JSON-style Disabled field
+ /^[[:space:]]*"Disabled":/d
+
+  # ignore XML <Disabled>true</Disabled> or <Disabled>false</Disabled>
+ /^[[:space:]]*<Disabled>.*<\/Disabled>/d
