@@ -2019,7 +2019,7 @@ DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t US
 DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t USING (SELECT intermediate_result.id, intermediate_result.some_number FROM read_intermediate_result('merge_into_XXX_4000079'::text, 'binary'::citus_copy_format) intermediate_result(id integer, some_number integer)) s ON (t.id OPERATOR(pg_catalog.=) s.some_number) WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.some_number, 'parag'::text)>
 DEBUG:  Execute MERGE task list
 -- let's verify if data inserted to second shard of target.
-EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM target_table;
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF) SELECT * FROM target_table;
                                     QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -2535,7 +2535,7 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 -- single shard query given source_json is filtered and Postgres is smart to pushdown
 -- filter to the target_json as well
 SELECT public.coordinator_plan($Q$
-EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 USING (SELECT * FROM source_json WHERE id = 1) sdn
 ON sda.id = sdn.id
 WHEN NOT matched THEN
@@ -2555,7 +2555,7 @@ SELECT * FROM target_json ORDER BY 1;
 
 -- zero shard query as filters do not match
 --SELECT public.coordinator_plan($Q$
---EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+--EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 --USING (SELECT * FROM source_json WHERE id = 1) sdn
 --ON sda.id = sdn.id AND sda.id = 2
 --WHEN NOT matched THEN
@@ -2564,7 +2564,7 @@ SELECT * FROM target_json ORDER BY 1;
 --SELECT * FROM target_json ORDER BY 1;
 -- join for source_json is happening at a different place
 SELECT public.coordinator_plan($Q$
-EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 USING source_json s1 LEFT JOIN (SELECT * FROM source_json) s2 USING(z)
 ON sda.id = s1.id AND s1.id = s2.id
 WHEN NOT matched THEN
@@ -2589,7 +2589,7 @@ SELECT * FROM target_json ORDER BY 1;
 
 -- update JSON column
 SELECT public.coordinator_plan($Q$
-EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
+EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
 USING source_json sdn
 ON sda.id = sdn.id
 WHEN matched THEN

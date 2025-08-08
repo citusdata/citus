@@ -253,7 +253,7 @@ set columnar.enable_custom_scan to 'off';
 set enable_seqscan to off;
 set seq_page_cost TO 10000000;
 
-EXPLAIN (costs off, timing off, summary off, analyze on)
+EXPLAIN (costs off, timing off, summary off, analyze on, BUFFERS OFF)
 	SELECT count(*) FROM less_common_data_types_table WHERE dist_key = 1 AND col1 = ARRAY[1];
 
 -- make sure that we re-enable columnar scan

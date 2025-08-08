@@ -942,7 +942,7 @@ NOTICE:  BEFORE UPDATE STATEMENT trigger
 NOTICE:  BEFORE UPDATE ROW trigger row: (3,30) -> (3,0)
 NOTICE:  AFTER UPDATE ROW trigger row: (3,30) -> (3,0)
 NOTICE:  AFTER UPDATE STATEMENT trigger
---EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
+--EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
@@ -1232,7 +1232,7 @@ USING (SELECT 1) s
 ON t.tid = $1
 WHEN MATCHED THEN
 UPDATE SET balance = $2;
---EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
+--EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 execute foom2 (1, 1);
 NOTICE:  BEFORE UPDATE STATEMENT trigger
 NOTICE:  BEFORE UPDATE ROW trigger row: (1,10) -> (1,1)
@@ -1372,7 +1372,7 @@ $$
 DECLARE ln text;
 BEGIN
     FOR ln IN
-        EXECUTE 'explain (analyze, timing off, summary off, costs off) ' ||
+        EXECUTE 'explain (analyze, timing off, summary off, costs off, buffers off) ' ||
 		  query
     LOOP
         ln := regexp_replace(ln, '(Memory( Usage)?|Buckets|Batches): \S*',  '\1: xxx', 'g');
