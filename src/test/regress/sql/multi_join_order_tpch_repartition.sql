@@ -19,7 +19,7 @@ SET client_min_messages TO LOG;
 
 -- Query #6 from the TPC-H decision support benchmark
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	sum(l_extendedprice * l_discount) as revenue
 FROM
@@ -32,7 +32,7 @@ WHERE
 
 -- Query #3 from the TPC-H decision support benchmark
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	l_orderkey,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -58,7 +58,7 @@ ORDER BY
 
 -- Query #10 from the TPC-H decision support benchmark
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	c_custkey,
 	c_name,
@@ -93,7 +93,7 @@ ORDER BY
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM
@@ -126,7 +126,7 @@ WHERE
 
 -- Query to test multiple re-partition jobs in a single query
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	l_partkey, count(*)
 FROM

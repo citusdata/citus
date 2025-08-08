@@ -517,27 +517,27 @@ WHERE foo.b = citus_local_table.b;
 ------------------------------------
 
 -- a bit different explain output than for postgres local tables
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT * FROM distributed_table
 ORDER BY distributed_table.*
 LIMIT 10;
 
 -- show that we do not pull to coordinator
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT * FROM citus_local_table;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT reference_table.* FROM reference_table;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT reference_table.* FROM reference_table, postgres_local_table;
 
 -- show that we pull to coordinator when a distributed table is involved
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 INSERT INTO citus_local_table
 SELECT reference_table.* FROM reference_table, distributed_table;
 

@@ -85,17 +85,17 @@ SET client_min_messages TO DEBUG3;
 
 SET citus.task_assignment_policy TO 'greedy';
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 
 -- Next test the first-replica task assignment policy
 
 SET citus.task_assignment_policy TO 'first-replica';
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT count(*) FROM task_assignment_test_table;
 
 COMMIT;
 
@@ -111,12 +111,12 @@ SET LOCAL citus.explain_distributed_queries TO off;
 
 -- Check how task_assignment_policy impact planning decisions for reference tables
 SET LOCAL citus.task_assignment_policy TO 'greedy';
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
 
 SET LOCAL citus.task_assignment_policy TO 'first-replica';
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
-EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * FROM task_assignment_reference_table;
 
 ROLLBACK;
 

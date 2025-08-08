@@ -144,7 +144,7 @@ SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_t
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 -- add an explain check to see if we hit the new isolated shard
-EXPLAIN (COSTS false) SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
+EXPLAIN (COSTS false, BUFFERS OFF) SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
 
 -- create an MX node
 \c - postgres - :master_port

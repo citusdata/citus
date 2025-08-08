@@ -63,7 +63,7 @@ SET client_min_messages TO WARNING;
 -- recursive planning
 SELECT * FROM
 coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 WITH ids_to_upsert AS
 (
 	SELECT tenant_id FROM distributed_table WHERE dept > 7

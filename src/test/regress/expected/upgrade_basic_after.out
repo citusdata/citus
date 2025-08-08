@@ -61,7 +61,7 @@ SELECT * FROM t WHERE a = 1;
 (1 row)
 
 INSERT INTO t SELECT * FROM generate_series(10, 15);
-EXPLAIN (COSTS FALSE) SELECT * from t;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * from t;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -72,7 +72,7 @@ EXPLAIN (COSTS FALSE) SELECT * from t;
          ->  Seq Scan on t_102008 t
 (6 rows)
 
-EXPLAIN (COSTS FALSE) SELECT * from t WHERE a = 1;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT * from t WHERE a = 1;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)

@@ -11,7 +11,7 @@ SET client_min_messages TO DEBUG2;
 SET citus.enable_repartition_joins to ON;
 
 -- Single range-repartition join to test join-pruning behaviour.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -27,7 +27,7 @@ WHERE
 
 -- Single range-repartition join with a selection clause on the partitioned
 -- table to test the case when all map tasks are pruned away.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -45,7 +45,7 @@ WHERE
 
 -- Single range-repartition join with a selection clause on the base table to
 -- test the case when all sql tasks are pruned away.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -64,7 +64,7 @@ WHERE
 -- Dual hash-repartition join test case. Note that this query doesn't produce
 -- meaningful results and is only to test hash-partitioning of two large tables
 -- on non-partition columns.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -80,7 +80,7 @@ WHERE
 
 -- Dual hash-repartition join with a selection clause on one of the tables to
 -- test the case when all map tasks are pruned away.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -97,7 +97,7 @@ WHERE
 	l_orderkey < 0 AND l_orderkey > 0;
 
 -- Test cases with false in the WHERE clause
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM
@@ -112,7 +112,7 @@ FROM
 WHERE
 	false;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM
@@ -120,13 +120,13 @@ FROM
 WHERE
 	1=0 AND c_custkey < 0;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey AND false);
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM

@@ -91,7 +91,7 @@ SELECT COUNT(*) FROM (SELECT a, random() FROM partitioned_distributed_table GROU
 RESET client_min_messages;
 SELECT public.explain_has_is_not_null(
 $$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO partitioned_distributed_table SELECT * FROM partitioned_distributed_table;
 $$);
 SET client_min_messages TO DEBUG1;
@@ -183,38 +183,38 @@ WHERE sub1.a = sub2.a AND sub1.a = dt.a AND dt.a = 1;
 RESET client_min_messages;
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO partitioned_distributed_table SELECT * FROM partitioned_distributed_table ORDER BY 1,2 LIMIT 5;
 $Q$);
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO unlogged_distributed_table SELECT * FROM partitioned_distributed_table ORDER BY 1,2 LIMIT 5;
 $Q$);
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO partitioned_distributed_table SELECT * FROM distributed_table ORDER BY 1 LIMIT 5;
 $Q$);
 
 -- INSERT .. SELECT via repartition
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO partitioned_distributed_table SELECT a + 1 FROM partitioned_distributed_table;
 $Q$);
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO unlogged_distributed_table SELECT a + 1 FROM partitioned_distributed_table;
 $Q$);
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO partitioned_distributed_table SELECT a + 1 FROM distributed_table;
 $Q$);
 
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 INSERT INTO partitioned_distributed_table SELECT a + 1 FROM unlogged_distributed_table;
 $Q$);
 
@@ -227,13 +227,13 @@ SELECT ceil(regr_syy(a, b)) FROM unlogged_distributed_table;
 
 -- pushdown WINDOW
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a) FROM partitioned_distributed_table ORDER BY 1,2;
 $Q$);
 
 -- pull to coordinator WINDOW
 SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a+1) FROM partitioned_distributed_table ORDER BY 1,2;
 $Q$);
 

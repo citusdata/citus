@@ -77,7 +77,7 @@ SELECT * FROM non_dist_1 ORDER BY 1, 2, 3;
 
 TRUNCATE non_dist_1;
 -- test EXPLAIN
-EXPLAIN (COSTS FALSE) INSERT INTO non_dist_1 SELECT * FROM dist_table;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO non_dist_1 SELECT * FROM dist_table;
                            QUERY PLAN
 ---------------------------------------------------------------------
  Insert on non_dist_1
@@ -89,7 +89,7 @@ EXPLAIN (COSTS FALSE) INSERT INTO non_dist_1 SELECT * FROM dist_table;
                ->  Seq Scan on dist_table_11235800 dist_table
 (7 rows)
 
-EXPLAIN (COSTS FALSE) INSERT INTO non_dist_1 SELECT * FROM dist_table WHERE a = 1;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO non_dist_1 SELECT * FROM dist_table WHERE a = 1;
                            QUERY PLAN
 ---------------------------------------------------------------------
  Insert on non_dist_1

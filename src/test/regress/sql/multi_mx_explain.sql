@@ -25,7 +25,7 @@ AS $BODY$
 DECLARE
   result jsonb;
 BEGIN
-  EXECUTE format('EXPLAIN (FORMAT JSON) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (FORMAT JSON, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -37,7 +37,7 @@ AS $BODY$
 DECLARE
   result xml;
 BEGIN
-  EXECUTE format('EXPLAIN (FORMAT XML) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (FORMAT XML, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -51,7 +51,7 @@ AS $BODY$
 DECLARE
   result jsonb;
 BEGIN
-  EXECUTE format('EXPLAIN (FORMAT JSON) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (FORMAT JSON, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -63,7 +63,7 @@ AS $BODY$
 DECLARE
   result xml;
 BEGIN
-  EXECUTE format('EXPLAIN (FORMAT XML) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (FORMAT XML, BUFFERS OFF) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -71,12 +71,12 @@ RESET citus.enable_metadata_sync;
 
 
 -- Test Text format
-EXPLAIN (COSTS FALSE, FORMAT TEXT)
+EXPLAIN (COSTS FALSE, FORMAT TEXT, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 -- Test JSON format
-EXPLAIN (COSTS FALSE, FORMAT JSON)
+EXPLAIN (COSTS FALSE, FORMAT JSON, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
@@ -88,7 +88,7 @@ SELECT true AS valid FROM explain_json($$
 \c - - - :worker_1_port
 
 -- Test XML format
-EXPLAIN (COSTS FALSE, FORMAT XML)
+EXPLAIN (COSTS FALSE, FORMAT XML, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
@@ -98,39 +98,39 @@ SELECT true AS valid FROM explain_xml($$
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
 
 -- Test YAML format
-EXPLAIN (COSTS FALSE, FORMAT YAML)
+EXPLAIN (COSTS FALSE, FORMAT YAML, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 -- Test Text format
-EXPLAIN (COSTS FALSE, FORMAT TEXT)
+EXPLAIN (COSTS FALSE, FORMAT TEXT, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 \c - - - :worker_2_port
 
 -- Test verbose
-EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem_mx;
 
 -- Test join
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT * FROM lineitem_mx
 	JOIN orders_mx ON l_orderkey = o_orderkey AND l_quantity < 5.0
 	ORDER BY l_quantity LIMIT 10;
 
 -- Test insert
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	INSERT INTO lineitem_mx VALUES(1,0);
 
 -- Test update
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	UPDATE lineitem_mx
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 
 -- Test delete
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	DELETE FROM lineitem_mx
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 
@@ -141,7 +141,7 @@ VACUUM ANALYZE customer_mx;
 VACUUM ANALYZE supplier_mx;
 
 -- Test single-shard SELECT
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT l_quantity FROM lineitem_mx WHERE l_orderkey = 5;
 
 SELECT true AS valid FROM explain_xml($$
@@ -151,14 +151,14 @@ SELECT true AS valid FROM explain_json($$
 	SELECT l_quantity FROM lineitem_mx WHERE l_orderkey = 5$$);
 
 -- Test CREATE TABLE ... AS
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem_mx;
 
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT avg(l_linenumber) FROM lineitem_mx WHERE l_orderkey > 9030;
 
 SELECT true AS valid FROM explain_xml($$
@@ -170,19 +170,19 @@ SELECT true AS valid FROM explain_json($$
 -- Test track tracker
 SET citus.explain_all_tasks TO off;
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT avg(l_linenumber) FROM lineitem_mx WHERE l_orderkey > 9030;
 
 -- Test re-partition join
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem_mx, orders_mx, customer_mx, supplier_mx
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
 
-EXPLAIN (COSTS FALSE, FORMAT JSON)
+EXPLAIN (COSTS FALSE, FORMAT JSON, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem_mx, orders_mx, customer_mx, supplier_mx
 	WHERE l_orderkey = o_orderkey
@@ -196,7 +196,7 @@ SELECT true AS valid FROM explain_json($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 
-EXPLAIN (COSTS FALSE, FORMAT XML)
+EXPLAIN (COSTS FALSE, FORMAT XML, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem_mx, orders_mx, customer_mx, supplier_mx
 	WHERE l_orderkey = o_orderkey
@@ -210,7 +210,7 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 
-EXPLAIN (COSTS FALSE, FORMAT YAML)
+EXPLAIN (COSTS FALSE, FORMAT YAML, BUFFERS OFF)
 	SELECT count(*)
 	FROM lineitem_mx, orders_mx, customer_mx, supplier_mx
 	WHERE l_orderkey = o_orderkey

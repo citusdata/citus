@@ -52,7 +52,7 @@ GRANT USAGE, CREATE ON SCHEMA pgmerge_schema TO regress_merge_privs;
 GRANT USAGE ON SCHEMA pgmerge_schema TO regress_merge_no_privs;
 SET SESSION AUTHORIZATION regress_merge_privs;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
@@ -221,19 +221,19 @@ INSERT INTO target SELECT generate_series(1000,2500), 0;
 ALTER TABLE target ADD CONSTRAINT targetidx PRIMARY KEY (tid);
 ANALYZE target;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
 WHEN MATCHED THEN
 	UPDATE SET balance = 0;
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
 WHEN MATCHED THEN
 	DELETE;
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
@@ -644,7 +644,7 @@ CREATE TRIGGER merge_ard AFTER DELETE ON target FOR EACH ROW EXECUTE PROCEDURE m
 -- now the classic UPSERT, with a DELETE
 BEGIN;
 UPDATE target SET balance = 0 WHERE tid = 3;
---EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
+--EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 MERGE INTO target t
 USING source AS s
 ON t.tid = s.sid
@@ -795,7 +795,7 @@ USING (SELECT 1) s
 ON t.tid = $1
 WHEN MATCHED THEN
 UPDATE SET balance = $2;
---EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
+--EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 execute foom2 (1, 1);
 SELECT * FROM target ORDER BY tid;
 ROLLBACK;
@@ -894,7 +894,7 @@ $$
 DECLARE ln text;
 BEGIN
     FOR ln IN
-        EXECUTE 'explain (analyze, timing off, summary off, costs off) ' ||
+        EXECUTE 'explain (analyze, timing off, summary off, costs off, buffers off) ' ||
 		  query
     LOOP
         ln := regexp_replace(ln, '(Memory( Usage)?|Buckets|Batches): \S*',  '\1: xxx', 'g');

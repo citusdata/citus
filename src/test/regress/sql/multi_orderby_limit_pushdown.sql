@@ -18,7 +18,7 @@ GROUP BY user_id
 ORDER BY avg(value_1) DESC
 LIMIT 1;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT user_id, avg(value_1)
 FROM users_table
 GROUP BY user_id
@@ -48,7 +48,7 @@ FROM users_table
 GROUP BY user_id
 ORDER BY 2  DESC;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT user_id, avg(value_1) + count(value_2)
 FROM users_table
 GROUP BY user_id
@@ -109,7 +109,7 @@ GROUP BY user_id
 ORDER BY (10000 / (sum(value_1 + value_2)))  DESC
 LIMIT 2;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT user_id
 FROM users_table
 GROUP BY user_id
@@ -139,7 +139,7 @@ GROUP BY user_id
 ORDER BY sum(value_1) DESC
 LIMIT 2;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT user_id
 FROM users_table
 GROUP BY user_id
@@ -153,7 +153,7 @@ GROUP BY ut.user_id
 ORDER BY MAX(et.time), AVG(ut.value_1)
 LIMIT 5;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT ut.user_id, avg(ut.value_2)
 FROM users_table ut, events_table et
 WHERE ut.user_id = et.user_id and et.value_2 < 5
@@ -176,7 +176,7 @@ GROUP BY ut.user_id
 ORDER BY 2, AVG(ut.value_1), 1 DESC
 LIMIT 2;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT ut.user_id, avg(ut.value_2)
 FROM users_table ut, events_table et
 WHERE ut.user_id = et.user_id and et.value_2 < 5

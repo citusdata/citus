@@ -6,7 +6,7 @@ SET citus.next_shard_id TO 700000;
 SET client_min_messages TO DEBUG2;
 SET citus.enable_repartition_joins to ON;
 -- Single range-repartition join to test join-pruning behaviour.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -150,7 +150,7 @@ DETAIL:  Creating dependency on merge taskId 24
 
 -- Single range-repartition join with a selection clause on the partitioned
 -- table to test the case when all map tasks are pruned away.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -296,7 +296,7 @@ DETAIL:  Creating dependency on merge taskId 24
 
 -- Single range-repartition join with a selection clause on the base table to
 -- test the case when all sql tasks are pruned away.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -443,7 +443,7 @@ DETAIL:  Creating dependency on merge taskId 24
 -- Dual hash-repartition join test case. Note that this query doesn't produce
 -- meaningful results and is only to test hash-partitioning of two large tables
 -- on non-partition columns.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -587,7 +587,7 @@ DETAIL:  Creating dependency on merge taskId 24
 
 -- Dual hash-repartition join with a selection clause on one of the tables to
 -- test the case when all map tasks are pruned away.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	count(*)
 FROM
@@ -732,7 +732,7 @@ DETAIL:  Creating dependency on merge taskId 24
 (1 row)
 
 -- Test cases with false in the WHERE clause
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM
@@ -765,7 +765,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 ---------------------------------------------------------------------
 (0 rows)
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM
@@ -786,7 +786,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
          Merge Task Count: 0
 (9 rows)
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM
@@ -799,7 +799,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
    Tasks Shown: All
 (3 rows)
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
 	o_orderkey
 FROM

@@ -944,7 +944,7 @@ SELECT create_distributed_table('weird_col_explain', 'bbbbbbbbbbbbbbbbbbbbbbbbb\
 
 (1 row)
 
-EXPLAIN (COSTS OFF, SUMMARY OFF)
+EXPLAIN (COSTS OFF, SUMMARY OFF, BUFFERS OFF)
 SELECT * FROM weird_col_explain;
                                                                                    QUERY PLAN
 ---------------------------------------------------------------------
@@ -958,7 +958,7 @@ SELECT * FROM weird_col_explain;
 (7 rows)
 
 \set VERBOSITY terse
-EXPLAIN (COSTS OFF, SUMMARY OFF)
+EXPLAIN (COSTS OFF, SUMMARY OFF, BUFFERS OFF)
 SELECT *, "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb"
 FROM weird_col_explain
 WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
@@ -978,7 +978,7 @@ NOTICE:  identifier "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa
 
 \set VERBOSITY default
 -- should not project any columns
-EXPLAIN (COSTS OFF, SUMMARY OFF)
+EXPLAIN (COSTS OFF, SUMMARY OFF, BUFFERS OFF)
 SELECT COUNT(*) FROM weird_col_explain;
                                              QUERY PLAN
 ---------------------------------------------------------------------

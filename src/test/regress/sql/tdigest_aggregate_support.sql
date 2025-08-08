@@ -31,86 +31,86 @@ SELECT (random()*20)::int AS a,
 FROM generate_series(1, 10000);
 
 -- explain no grouping to verify partially pushed down for tdigest(value, compression)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest(latency, 100)
 FROM latencies;
 
 -- explain grouping by distribution column is completely pushed down for tdigest(value, compression)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest(latency, 100)
 FROM latencies
 GROUP BY a;
 
 -- explain grouping by non-distribution column is partially pushed down for tdigest(value, compression)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT b, tdigest(latency, 100)
 FROM latencies
 GROUP BY b;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile(value, compression, quantile)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile(latency, 100, 0.99)
 FROM latencies;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, compression, quantile)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile(latency, 100, 0.99)
 FROM latencies
 GROUP BY a;
 
 -- explain grouping by non-distribution column is partially pushed down for tdigest_precentile(value, compression, quantile)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT b, tdigest_percentile(latency, 100, 0.99)
 FROM latencies
 GROUP BY b;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile(value, compression, quantiles[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
 FROM latencies;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, compression, quantiles[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
 FROM latencies
 GROUP BY a;
 
 -- explain grouping by non-distribution column is partially pushed down for tdigest_precentile(value, compression, quantiles[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT b, tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
 FROM latencies
 GROUP BY b;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile_of(latency, 100, 9000)
 FROM latencies;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile_of(latency, 100, 9000)
 FROM latencies
 GROUP BY a;
 
 -- explain grouping by non-distribution column is partially pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT b, tdigest_percentile_of(latency, 100, 9000)
 FROM latencies
 GROUP BY b;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
 FROM latencies;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
 FROM latencies
 GROUP BY a;
 
 -- explain grouping by non-distribution column is partially pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT b, tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
 FROM latencies
 GROUP BY b;
@@ -130,56 +130,56 @@ SELECT a, tdigest(latency, 100)
 FROM latencies
 GROUP BY a;
 
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest(tdigest)
 FROM latencies_rollup;
 
 -- explain grouping by distribution column is completely pushed down for tdigest(tdigest)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest(tdigest)
 FROM latencies_rollup
 GROUP BY a;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile(tdigest, quantile)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile(tdigest, 0.99)
 FROM latencies_rollup;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile(tdigest, quantile)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile(tdigest, 0.99)
 FROM latencies_rollup
 GROUP BY a;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile(value, compression, quantiles[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile(tdigest, ARRAY[0.99, 0.95])
 FROM latencies_rollup;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, compression, quantiles[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile(tdigest, ARRAY[0.99, 0.95])
 FROM latencies_rollup
 GROUP BY a;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile_of(tdigest, 9000)
 FROM latencies_rollup;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile_of(tdigest, 9000)
 FROM latencies_rollup
 GROUP BY a;
 
 -- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT tdigest_percentile_of(tdigest, ARRAY[9000, 9500])
 FROM latencies_rollup;
 
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
-EXPLAIN (COSTS OFF, VERBOSE)
+EXPLAIN (COSTS OFF, VERBOSE, BUFFERS OFF)
 SELECT a, tdigest_percentile_of(tdigest, ARRAY[9000, 9500])
 FROM latencies_rollup
 GROUP BY a;

@@ -133,14 +133,14 @@ INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename,
 SET client_min_messages TO ERROR;
 
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM varchar_partitioned_table WHERE varchar_column = 'BA2';
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM array_partitioned_table
 	WHERE array_column > '{BA1000U2AMO4ZGX, BZZXSP27F21T6}';
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*) FROM composite_partitioned_table
 	WHERE composite_column < '(b,5,c)'::composite_type;
 

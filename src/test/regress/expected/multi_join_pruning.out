@@ -97,7 +97,7 @@ DEBUG:  Creating router plan
 -- different type of columns including varchar, array types, composite types
 -- etc. This is in response to a bug we had where we were not able to resolve
 -- correct operator types for some kind of column types.
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*)
 	FROM array_partitioned_table table1, array_partitioned_table table2
 	WHERE table1.array_column = table2.array_column;
@@ -111,7 +111,7 @@ DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AM
          citus.explain_distributed_queries: false
 (3 rows)
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*)
 	FROM composite_partitioned_table table1, composite_partitioned_table table2
 	WHERE table1.composite_column = table2.composite_column;
@@ -126,7 +126,7 @@ DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
 (3 rows)
 
 -- Test that large table joins on partition varchar columns work
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;

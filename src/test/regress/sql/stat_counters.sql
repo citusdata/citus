@@ -431,7 +431,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- same with explain analyze
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     SELECT * FROM dist_table JOIN dist_table_1 ON dist_table.a = dist_table_1.a
     $$,
     0, 1
@@ -477,7 +477,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- same with explain analyze
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     SELECT * FROM (SELECT * FROM dist_table OFFSET 0) q
     $$,
     1, 1
@@ -604,7 +604,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- same with explain analyze
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     INSERT INTO single_shard SELECT * FROM single_shard_1
     $$,
     1, 0
@@ -685,7 +685,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- same with explain analyze, not supported today
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     INSERT INTO citus_local (a, b) SELECT * FROM dist_table
     $$,
     1, 1
@@ -787,7 +787,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- same with explain analyze, not supported today
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     INSERT INTO dist_table
     WITH cte AS (
         SELECT * FROM dist_table
@@ -806,7 +806,7 @@ CALL exec_query_and_check_query_counters($$
 -- for query_execution_single_shard and 2 for query_execution_multi_shard instead
 -- of 3 since the insert is not there anymore.
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     -- single-shard subplan (whole cte)
     WITH cte AS (
         -- multi-shard subplan (lhs of EXCEPT)
@@ -915,7 +915,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- same with explain analyze, not supported today
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     MERGE INTO dist_table AS t
     USING uncolocated_dist_table AS s ON t.a = s.a
     WHEN MATCHED THEN
@@ -1003,7 +1003,7 @@ CALL exec_query_and_check_query_counters($$
 
 -- same with explain analyze
 CALL exec_query_and_check_query_counters($$
-    EXPLAIN (ANALYZE)
+    EXPLAIN (ANALYZE, BUFFERS OFF)
     WITH cte AS (
         SELECT dist_table_1.a, dist_table_1.b * 2 as b FROM dist_table_1
     )

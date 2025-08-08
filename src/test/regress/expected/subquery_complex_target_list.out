@@ -536,7 +536,7 @@ ORDER BY 1;
 (2 rows)
 
 SELECT coordinator_plan($$
-EXPLAIN (VERBOSE ON, COSTS OFF)
+EXPLAIN (VERBOSE ON, COSTS OFF, BUFFERS OFF)
 SELECT
   a.key as k1,
   a.key as k2,

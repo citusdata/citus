@@ -73,7 +73,7 @@ ORDER BY 1;
 -- Test disabling hash_agg on coordinator query
 SET citus.explain_all_tasks to true;
 SET hll.force_groupagg to OFF;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_union_agg(unique_users)
 FROM
@@ -81,7 +81,7 @@ FROM
 GROUP BY(1);
 
 SET hll.force_groupagg to ON;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_union_agg(unique_users)
 FROM
@@ -90,7 +90,7 @@ GROUP BY(1);
 
 -- Test disabling hash_agg with operator on coordinator query
 SET hll.force_groupagg to OFF;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_union_agg(unique_users) || hll_union_agg(unique_users)
 FROM
@@ -98,7 +98,7 @@ FROM
 GROUP BY(1);
 
 SET hll.force_groupagg to ON;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_union_agg(unique_users) || hll_union_agg(unique_users)
 FROM
@@ -107,7 +107,7 @@ GROUP BY(1);
 
 -- Test disabling hash_agg with expression on coordinator query
 SET hll.force_groupagg to OFF;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_cardinality(hll_union_agg(unique_users))
 FROM
@@ -115,7 +115,7 @@ FROM
 GROUP BY(1);
 
 SET hll.force_groupagg to ON;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_cardinality(hll_union_agg(unique_users))
 FROM
@@ -124,7 +124,7 @@ GROUP BY(1);
 
 -- Test disabling hash_agg with having
 SET hll.force_groupagg to OFF;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_cardinality(hll_union_agg(unique_users))
 FROM
@@ -132,7 +132,7 @@ FROM
 GROUP BY(1);
 
 SET hll.force_groupagg to ON;
-EXPLAIN(COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT
   day, hll_cardinality(hll_union_agg(unique_users))
 FROM

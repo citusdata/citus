@@ -55,7 +55,7 @@ FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
   1 |
 (3 rows)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
                                                                                                                                                                              QUERY PLAN
@@ -93,7 +93,7 @@ FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id;
   1 |
 (3 rows)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id;
                                                                                                                                                                              QUERY PLAN
@@ -131,7 +131,7 @@ FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
   2 |  20
 (3 rows)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT DISTINCT t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
                                                                                                                                                                                 QUERY PLAN
@@ -179,7 +179,7 @@ ORDER BY t1.id;
   2 |    165
 (3 rows)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT t1.id, TEST_F(t2.a2 + nextval('test_seq') :: int)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 ORDER BY t1.id;
@@ -219,7 +219,7 @@ ORDER BY t1.id;
   2 |   20
 (3 rows)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT t1.id, CASE nextval('test_seq') %2 = 0 WHEN true THEN t2.a2 ELSE 1 END
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 ORDER BY t1.id;
@@ -261,7 +261,7 @@ FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
      2
 (1 row)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT COUNT(DISTINCT a2)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
                                                                                                                                             QUERY PLAN
@@ -302,7 +302,7 @@ HAVING COUNT(DISTINCT a2) > 1;
         1
 (1 row)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT 1
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 HAVING COUNT(DISTINCT a2) > 1;
@@ -344,7 +344,7 @@ FROM t2 RIGHT OUTER JOIN t1 ON t2.account_id = t1.id;
      2
 (1 row)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT COUNT(DISTINCT a2)
 FROM t2 RIGHT OUTER JOIN t1 ON t2.account_id = t1.id;
                                                                                                                                              QUERY PLAN
@@ -385,7 +385,7 @@ HAVING COUNT(DISTINCT t2.id) > 1;
      2
 (1 row)
 
-EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
+EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF, BUFFERS OFF)
 SELECT COUNT(DISTINCT a2)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 HAVING COUNT(DISTINCT t2.id) > 1;

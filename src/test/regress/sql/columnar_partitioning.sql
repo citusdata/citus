@@ -39,7 +39,7 @@ SET parallel_tuple_cost = 0;
 SET max_parallel_workers = 4;
 SET max_parallel_workers_per_gather = 4;
 
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent;
 SELECT count(*), sum(i), min(i), max(i) FROM parent;
 
 -- set older partitions as columnar
@@ -48,12 +48,12 @@ SELECT alter_table_set_access_method('p1','columnar');
 SELECT alter_table_set_access_method('p3','columnar');
 
 -- should also be parallel plan
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent;
 SELECT count(*), sum(i), min(i), max(i) FROM parent;
 
 -- and also parallel without custom scan
 SET columnar.enable_custom_scan = FALSE;
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent;
 SELECT count(*), sum(i), min(i), max(i) FROM parent;
 SET columnar.enable_custom_scan TO DEFAULT;
 
@@ -72,7 +72,7 @@ ANALYZE parent;
 
 -- will use columnar custom scan on columnar partitions but index
 -- scan on heap partition
-EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent
 WHERE ts > '2020-02-20' AND n < 5;
 
 BEGIN;
@@ -80,7 +80,7 @@ BEGIN;
 
   -- now that we disabled columnar custom scan, will use seq scan on columnar
   -- partitions since index scan is more expensive than seq scan too
-  EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+  EXPLAIN (costs off, BUFFERS OFF) SELECT count(*), sum(i), min(i), max(i) FROM parent
   WHERE ts > '2020-02-20' AND n < 5;
 ROLLBACK;
 
@@ -103,54 +103,54 @@ INSERT INTO ij_col_row VALUES(500, 3000);
 CREATE TABLE ij_col_col(j int) INHERITS(i_col) USING columnar;
 INSERT INTO ij_col_col VALUES(600, 4000);
 
-EXPLAIN (costs off) SELECT * FROM i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_row;
 SELECT * FROM i_row;
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_row;
 SELECT * FROM ONLY i_row;
 
-EXPLAIN (costs off) SELECT * FROM i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_col;
 SELECT * FROM i_col;
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_col;
 SELECT * FROM ONLY i_col;
 
-EXPLAIN (costs off) SELECT * FROM ij_row_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_row;
 SELECT * FROM ij_row_row;
 
-EXPLAIN (costs off) SELECT * FROM ij_row_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_col;
 SELECT * FROM ij_row_col;
 
-EXPLAIN (costs off) SELECT * FROM ij_col_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_row;
 SELECT * FROM ij_col_row;
 
-EXPLAIN (costs off) SELECT * FROM ij_col_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_col;
 SELECT * FROM ij_col_col;
 
 SET columnar.enable_custom_scan = FALSE;
 
-EXPLAIN (costs off) SELECT * FROM i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_row;
 SELECT * FROM i_row;
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_row;
 SELECT * FROM ONLY i_row;
 
-EXPLAIN (costs off) SELECT * FROM i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM i_col;
 SELECT * FROM i_col;
 
-EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ONLY i_col;
 SELECT * FROM ONLY i_col;
 
-EXPLAIN (costs off) SELECT * FROM ij_row_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_row;
 SELECT * FROM ij_row_row;
 
-EXPLAIN (costs off) SELECT * FROM ij_row_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_row_col;
 SELECT * FROM ij_row_col;
 
-EXPLAIN (costs off) SELECT * FROM ij_col_row;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_row;
 SELECT * FROM ij_col_row;
 
-EXPLAIN (costs off) SELECT * FROM ij_col_col;
+EXPLAIN (costs off, BUFFERS OFF) SELECT * FROM ij_col_col;
 SELECT * FROM ij_col_col;
 
 SET columnar.enable_custom_scan TO DEFAULT;
@@ -181,7 +181,7 @@ INSERT INTO prt2 SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(0, 
 
 SET enable_partitionwise_join to true;
 
-EXPLAIN (costs off, timing off, summary off)
+EXPLAIN (costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM
   prt1 t1 LEFT JOIN LATERAL
   (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b)

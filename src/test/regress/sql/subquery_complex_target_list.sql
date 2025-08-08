@@ -385,7 +385,7 @@ HAVING length(a.key) + length(a.value) < length(a.value || '_append')
 ORDER BY 1;
 
 SELECT coordinator_plan($$
-EXPLAIN (VERBOSE ON, COSTS OFF)
+EXPLAIN (VERBOSE ON, COSTS OFF, BUFFERS OFF)
 SELECT
   a.key as k1,
   a.key as k2,

@@ -100,7 +100,7 @@ SET LOCAL max_parallel_workers_per_gather TO 2;
 SET LOCAL parallel_tuple_cost TO 0;
 SET LOCAL parallel_setup_cost TO 0;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT a FROM parallel_id_test WHERE a = parallel_worker_transaction_id_test();
 SELECT a FROM parallel_id_test WHERE a = parallel_worker_transaction_id_test();
 ROLLBACK;

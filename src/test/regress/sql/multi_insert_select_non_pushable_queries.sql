@@ -411,7 +411,7 @@ ORDER BY user_lastseen DESC;
 
 -- not pushable since partition key is NOT IN. Use pull to coordinator instead.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
@@ -423,7 +423,7 @@ $Q$);
 -- not pushable since partition key is not selected from the second subquery.
 -- Use pull to coordinator instead.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
@@ -435,7 +435,7 @@ $Q$);
 -- not pushable since second subquery does not return bare partition key.
 -- Use pull to coordinator instead.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
@@ -574,7 +574,7 @@ INSERT INTO agg_results_third(user_id, value_2_agg)
 
 -- not pushable due to NOT IN. Use repartition insert/select.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -590,7 +590,7 @@ $Q$);
 -- not pushable since we're not selecting the partition key.
 -- Use repartition insert/select.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -606,7 +606,7 @@ $Q$);
  -- not pushable since we're not selecting the partition key
  -- from the events table. Use repartition insert/select.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -627,7 +627,7 @@ $Q$);
 
 -- not pushable due to NOT IN. Use pull to coordinator instead.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE user_id NOT IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
@@ -636,7 +636,7 @@ $Q$);
 
 -- not pushable due to not selecting the partition key. Use pull to coordinator.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE user_id IN (SELECT value_2 from events_table WHERE event_type > 500 and event_type < 505)
@@ -646,7 +646,7 @@ $Q$);
 -- not pushable due to not comparing user id from the events table.
 -- Use pull to coordinator.
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE event_type IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
@@ -728,7 +728,7 @@ SELECT create_distributed_table('dist_table_2','id2');
 -- verify that insert select with union can be pulled to coordinator. We cannot push down the query
 -- since UNION clause has no FROM clause at top level query.
 SELECT coordinator_plan($$
-  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
+  EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO dist_table_1(id) SELECT id FROM dist_table_1 UNION SELECT id FROM dist_table_2;
 $$);
 
 DROP SCHEMA multi_insert_select_non_pushable_queries CASCADE;

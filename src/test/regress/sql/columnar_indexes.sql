@@ -70,8 +70,8 @@ BEGIN;
   SELECT a FROM columnar_table WHERE a = 16050;
 ROLLBACK;
 
-EXPLAIN (COSTS OFF) SELECT * FROM columnar_table WHERE a=6456;
-EXPLAIN (COSTS OFF) SELECT a FROM columnar_table WHERE a=6456;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT * FROM columnar_table WHERE a=6456;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT a FROM columnar_table WHERE a=6456;
 SELECT (SELECT a FROM columnar_table WHERE a=6456 limit 1)=6456;
 SELECT (SELECT b FROM columnar_table WHERE a=6456 limit 1)=6456*2;
 
@@ -114,9 +114,9 @@ SELECT pg_total_relation_size('columnar_table_b_idx') * 5 <
        pg_total_relation_size('columnar_table_a_idx');
 
 -- can't use index scan due to partial index boundaries
-EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30000;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM columnar_table WHERE b = 30000;
 -- can use index scan
-EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30001;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM columnar_table WHERE b = 30001;
 
 -- some more rows
 INSERT INTO columnar_table (a, b) SELECT i,i*2 FROM generate_series(16000, 17000) i;
@@ -243,7 +243,7 @@ INSERT INTO include_test SELECT i, i, i, i FROM generate_series (1, 1000) i;
 CREATE UNIQUE INDEX CONCURRENTLY unique_a ON include_test (a);
 
 -- cannot use index only scan
-EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM include_test WHERE a = 500;
 
 CREATE UNIQUE INDEX unique_a_include_b_c_d ON include_test (a) INCLUDE(b, c, d);
 
@@ -254,12 +254,12 @@ SELECT pg_total_relation_size ('unique_a') * 1.5 <
 DROP INDEX unique_a;
 
 -- should use index only scan since unique_a_include_b_c_d includes column "b" too
-EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
+EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM include_test WHERE a = 500;
 
 BEGIN;
   SET enable_indexonlyscan = OFF;
   -- show that we respect enable_indexonlyscan GUC
-  EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
+  EXPLAIN (COSTS OFF, BUFFERS OFF) SELECT b FROM include_test WHERE a = 500;
 ROLLBACK;
 
 -- make sure that we read the correct value for "b" when doing index only scan

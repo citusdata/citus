@@ -81,9 +81,9 @@ SELECT create_distributed_table('tenk1', 'unique1');
 (1 row)
 
 SET citus.log_remote_commands TO on;
-EXPLAIN (GENERIC_PLAN) SELECT unique1 FROM tenk1 WHERE thousand = $1;
+EXPLAIN (GENERIC_PLAN, BUFFERS OFF) SELECT unique1 FROM tenk1 WHERE thousand = $1;
 ERROR:  EXPLAIN GENERIC_PLAN is currently not supported for Citus tables
-EXPLAIN (GENERIC_PLAN, ANALYZE) SELECT unique1 FROM tenk1 WHERE thousand = $1;
+EXPLAIN (GENERIC_PLAN, ANALYZE, BUFFERS OFF) SELECT unique1 FROM tenk1 WHERE thousand = $1;
 ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
 SET citus.log_remote_commands TO off;
 -- Proper error when creating statistics without a name on a Citus table

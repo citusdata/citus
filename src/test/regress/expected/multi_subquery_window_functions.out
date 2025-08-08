@@ -675,7 +675,7 @@ LIMIT
        2 |     1
 (5 rows)
 
-EXPLAIN (COSTS FALSE)
+EXPLAIN (COSTS FALSE, BUFFERS OFF)
     SELECT *
     FROM (
             ( SELECT user_id,

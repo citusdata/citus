@@ -167,7 +167,7 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 -- Query that should result in a repartition join on UDT column.
 SET citus.log_multi_join_order = true;
 
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
     WHERE repartition_udt.pk > 1;

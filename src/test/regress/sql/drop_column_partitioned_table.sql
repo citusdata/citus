@@ -105,39 +105,39 @@ VACUUM ANALYZE sensors, sensors_2000, sensors_2001, sensors_2002, sensors_2003;
 
 -- show that both INSERT and SELECT can route to a single node when distribution
 -- key is provided in the query
-EXPLAIN (COSTS FALSE) INSERT INTO sensors VALUES (3, '2000-02-02', row_to_json(row(1)));
-EXPLAIN (COSTS FALSE) INSERT INTO sensors_2000 VALUES (3, '2000-01-01', row_to_json(row(1)));
-EXPLAIN (COSTS FALSE) INSERT INTO sensors_2001 VALUES (3, '2001-01-01', row_to_json(row(1)));
-EXPLAIN (COSTS FALSE) INSERT INTO sensors_2002 VALUES (3, '2002-01-01', row_to_json(row(1)));
-EXPLAIN (COSTS FALSE) INSERT INTO sensors_2003 VALUES (3, '2003-01-01', row_to_json(row(1)));
+EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO sensors VALUES (3, '2000-02-02', row_to_json(row(1)));
+EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO sensors_2000 VALUES (3, '2000-01-01', row_to_json(row(1)));
+EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO sensors_2001 VALUES (3, '2001-01-01', row_to_json(row(1)));
+EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO sensors_2002 VALUES (3, '2002-01-01', row_to_json(row(1)));
+EXPLAIN (COSTS FALSE, BUFFERS OFF) INSERT INTO sensors_2003 VALUES (3, '2003-01-01', row_to_json(row(1)));
 
 SELECT public.explain_has_single_task(
 	$$
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors WHERE measureid = 3 AND eventdatetime = '2000-02-02';
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT count(*) FROM sensors WHERE measureid = 3 AND eventdatetime = '2000-02-02';
 	$$
 );
 
 SELECT public.explain_has_single_task(
 	$$
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2003 WHERE measureid = 3;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT count(*) FROM sensors_2003 WHERE measureid = 3;
 	$$
 );
 
 SELECT public.explain_has_single_task(
 	$$
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
 	$$
 );
 
 SELECT public.explain_has_single_task(
 	$$
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
 	$$
 );
 
 SELECT public.explain_has_single_task(
 	$$
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
+EXPLAIN (COSTS FALSE, BUFFERS OFF) SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
 	$$
 );
 

@@ -425,11 +425,11 @@ CREATE TABLE weird_col_explain (
 USING columnar;
 SELECT create_distributed_table('weird_col_explain', 'bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb''bbbbbbbbbbbbbbbbbbbbb''''bbbbbbbb');
 
-EXPLAIN (COSTS OFF, SUMMARY OFF)
+EXPLAIN (COSTS OFF, SUMMARY OFF, BUFFERS OFF)
 SELECT * FROM weird_col_explain;
 
 \set VERBOSITY terse
-EXPLAIN (COSTS OFF, SUMMARY OFF)
+EXPLAIN (COSTS OFF, SUMMARY OFF, BUFFERS OFF)
 SELECT *, "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb"
 FROM weird_col_explain
 WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
@@ -437,7 +437,7 @@ WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
 \set VERBOSITY default
 
 -- should not project any columns
-EXPLAIN (COSTS OFF, SUMMARY OFF)
+EXPLAIN (COSTS OFF, SUMMARY OFF, BUFFERS OFF)
 SELECT COUNT(*) FROM weird_col_explain;
 
 SET client_min_messages TO WARNING;

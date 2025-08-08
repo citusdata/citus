@@ -277,7 +277,7 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
 -- Following query is supported by using repartition join for the insert/select
 SELECT coordinator_plan($Q$
-EXPLAIN (costs off)
+EXPLAIN (costs off, BUFFERS OFF)
 WITH cte AS (
 	SELECT
 		col_1, col_2

@@ -17,7 +17,7 @@ HAVING (
 
 -- lets pin the plan in the test as well
 SELECT public.explain_with_pg17_initplan_format($Q$
-EXPLAIN (COSTS OFF)
+EXPLAIN (COSTS OFF, BUFFERS OFF)
 SELECT count(*),
        o_orderstatus
 FROM orders
