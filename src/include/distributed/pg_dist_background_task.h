@@ -27,4 +27,6 @@
 #define Anum_pg_dist_background_task_message 9
 #define Anum_pg_dist_background_task_nodes_involved 10
 
+extern int GetNodesInvolvedAttrIndexInPgDistBackgroundTask(TupleDesc tupleDesc);
+
 #endif /* CITUS_PG_DIST_BACKGROUND_TASK_H */
