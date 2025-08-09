@@ -1436,6 +1436,29 @@ ExtractColumns(RangeTblEntry *callingRTE, int rangeTableId,
 			  columnNames,
 			  columnVars);
 #endif
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+	/*
+	 * PostgreSQL 18 compatibility: expandRTE might return NULL or "?column?" names
+	 * for intermediate expressions. Fix these column names to avoid errors.
+	 */
+	List *fixedColumnNames = NIL;
+	ListCell *nameCell = NULL;
+	int colIndex = 1;
+	
+	foreach(nameCell, *columnNames)
+	{
+		char *colName = strVal(lfirst(nameCell));
+		if (colName == NULL || strcmp(colName, "?column?") == 0)
+		{
+			colName = psprintf("expand_col_%d", colIndex);
+		}
+		fixedColumnNames = lappend(fixedColumnNames, makeString(colName));
+		colIndex++;
+	}
+	
+	*columnNames = fixedColumnNames;
+#endif
 }
 
 

@@ -110,6 +110,19 @@ RemoteScanTargetList(List *workerTargetList)
 		 * entry's sort and group clauses will *break* us here.
 		 */
 		TargetEntry *remoteScanTargetEntry = flatCopyTargetEntry(workerTargetEntry);
+		
+		/*
+		 * PostgreSQL 18 fix: Handle "?column?" names from intermediate expressions.
+		 * When flatCopyTargetEntry copies a target entry that has "?column?" as resname,
+		 * we need to generate a proper column name to avoid parsing errors.
+		 */
+		if (remoteScanTargetEntry->resname == NULL || strcmp(remoteScanTargetEntry->resname, "?column?") == 0)
+		{
+			StringInfo generatedName = makeStringInfo();
+			appendStringInfo(generatedName, "remote_col_%d", workerTargetEntry->resno);
+			remoteScanTargetEntry->resname = generatedName->data;
+		}
+		
 		remoteScanTargetEntry->expr = (Expr *) remoteScanColumn;
 		remoteScanTargetList = lappend(remoteScanTargetList, remoteScanTargetEntry);
 	}
@@ -272,7 +285,18 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
 		TargetEntry *targetEntry = NULL;
 		foreach_declared_ptr(targetEntry, remoteScanTargetList)
 		{
-			columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+			char *resname = targetEntry->resname;
+			
+			/*
+			 * PostgreSQL 18 compatibility: handle NULL or "?column?" resname
+			 * by generating a proper column name for the remote scan RTE
+			 */
+			if (resname == NULL || strcmp(resname, "?column?") == 0)
+			{
+				resname = psprintf("remote_col_%d", targetEntry->resno);
+			}
+			
+			columnNameList = lappend(columnNameList, makeString(resname));
 		}
 		extradataContainerRTE->eref = makeAlias("remote_scan", columnNameList);
 	}
