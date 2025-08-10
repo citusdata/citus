@@ -181,9 +181,9 @@ IsNodeWideObjectClass(ObjectClass objectClass)
 #if PG_VERSION_NUM >= PG_VERSION_16
 		case OCLASS_ROLE_MEMBERSHIP:
 #endif
-		{
-			return true;
-		}
+			{
+				return true;
+			}
 
 		default:
 			return false;
