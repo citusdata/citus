@@ -1,6 +1,5 @@
 -- citus--13.2-1--13.1-1
 -- downgrade version to 13.1-1
-DROP FUNCTION IF EXISTS pg_catalog.citus_rebalance_start(name, boolean, citus.shard_transfer_mode, boolean, boolean);
 DROP FUNCTION IF EXISTS citus_internal.citus_internal_copy_single_shard_placement(bigint, integer, integer, integer, citus.shard_transfer_mode);
 #include "udfs/citus_rebalance_start/11.1-1.sql"
 
