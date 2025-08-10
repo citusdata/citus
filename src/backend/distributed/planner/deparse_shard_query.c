@@ -320,8 +320,38 @@ DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtinde
 
 
 /*
- * UpdateWhereClauseForOuterJoin walks over the query tree and appends quals
- * to the WHERE clause to filter w.r.to the distribution column of the corresponding shard.
+ * UpdateWhereClauseForOuterJoin
+ *
+ * Inject shard interval predicates into the query WHERE clause for certain
+ * outer joins to make the join semantically correct when distributed.
+ *
+ * Why this is needed:
+ *   When an inner side of an OUTER JOIN is a distributed table that has been
+ *   routed to a single shard, we cannot simply replace the RTE with the shard
+ *   name and rely on implicit pruning: the preserved (outer) side could still
+ *   produce rows whose join keys would hash to other shards. To keep results
+ *   consistent with the global execution semantics we restrict the preserved
+ *   (outer) side to only those partition key values that would route to the
+ *   chosen shard (plus NULLs, which are assigned to exactly one shard).
+ *
+ * What the function does:
+ *   1. Iterate over the top-level jointree->fromlist.
+ *   2. For each JoinExpr call CheckPushDownFeasibilityAndComputeIndexes() which:
+ *        - Verifies shape / join type is eligible.
+ *        - Returns:
+ *            outerRtIndex : RT index whose column we will constrain,
+ *            outerRte / innerRte,
+ *            attnum       : attribute number (partition column) on outer side.
+ *   3. Find the RelationShard for the inner distributed table (innerRte->relid)
+ *      in relationShardList; skip if absent (no fixed shard chosen).
+ *   4. Build the shard qualification with DefineQualsForShardInterval():
+ *        (minValue < hash(partcol) AND hash(partcol) <= maxValue)
+ *      and, for the first shard only, OR (partcol IS NULL).
+ *      The Var refers to (outerRtIndex, attnum) so the restriction applies to
+ *      the preserved outer input.
+ *   5. AND the new quals into jointree->quals (creating it if NULL).
+ *
+ * The function does not return anything, it modifies the query in place.
  */
 void
 UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
@@ -387,7 +417,6 @@ UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
 			fromExpr->quals = make_and_qual(fromExpr->quals, shardIntervalBoundQuals);
 		}
 	}
-	return;
 }
 
 

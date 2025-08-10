@@ -296,8 +296,11 @@ LATERAL
     WHERE r1.a > dist_1.b
 ) as foo;
 
--- Qual is the same but top-level join is an anti-join. Right join
--- is pushed down.
+-- Qual is the same but top-level join is an anti-join.
+-- The right join between t2 and t3 is pushed down.
+-- Citus determines that the whole query can be pushed down
+-- due to the equality constraint between two distributed
+-- tables t1 and t2.
 SELECT COUNT(*) FROM dist_1 t1
 WHERE NOT EXISTS (
     SELECT * FROM dist_1 t2
@@ -305,11 +308,17 @@ WHERE NOT EXISTS (
     WHERE t2.a = t1.a
 );
 
+SET client_min_messages TO DEBUG3;
+
 -- This time the semi-join qual is <t3.a = t1.a> (not <<t2.a = t1.a>)
 -- where t3 is the outer rel of the right join. Hence Postgres can't
--- replace right join with an inner join and so we recursively plan
--- inner side of the right join since the outer side is a recurring
--- rel.
+-- replace right join with an inner join.
+-- Citus pushes down the right join between t2 and t3 with constraints on
+-- the recurring outer part (t3). However, it cannnot push down the whole
+-- query as it can not establish an equivalence between the distribution
+-- tables t1 and t2. Hence, Citus tries to recursively plan the subquery.
+-- This attempt fails since the subquery has a reference to outer query.
+-- See #8113
 SELECT COUNT(*) FROM dist_1 t1
 WHERE EXISTS (
     SELECT * FROM dist_1 t2
@@ -322,6 +331,25 @@ WHERE NOT EXISTS (
     SELECT * FROM dist_1 t2
     RIGHT JOIN ref_1 t3 USING (a)
     WHERE t3.a = t1.a
+);
+
+SET client_min_messages TO DEBUG1;
+
+-- Force recursive planning of the right join with offset
+SELECT COUNT(*) FROM dist_1 t1
+WHERE EXISTS (
+    SELECT * FROM dist_1 t2
+    RIGHT JOIN ref_1 t3 USING (a)
+    WHERE t3.a = t1.a
+    OFFSET 0
+);
+
+SELECT COUNT(*) FROM dist_1 t1
+WHERE NOT EXISTS (
+    SELECT * FROM dist_1 t2
+    RIGHT JOIN ref_1 t3 USING (a)
+    WHERE t3.a = t1.a
+    OFFSET 0
 );
 
 --
@@ -844,7 +872,7 @@ SELECT * FROM ref_1 t36 WHERE (b,100,a) IN (
     DISTINCT t31.b,
     -- 1) we first search for such joins in the target list and recursively plan t33
     --    because t32 is recurring
-    (SELECT max(b) FROM ref_1 t32 LEFT JOIN dist_1 t33 USING(a,b) WHERE t31.a = t32.a),
+    (SELECT max(b) FROM ref_1 t32 LEFT JOIN dist_1 t33 USING(b) WHERE t31.a = t32.a),
     (SELECT t34.a)
   FROM ref_1 t35
   LEFT JOIN dist_1 t31 USING (a,b)
