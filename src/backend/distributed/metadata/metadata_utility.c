@@ -3166,10 +3166,10 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		values[Anum_pg_dist_background_task_message - 1] = CStringGetTextDatum("");
 		nulls[Anum_pg_dist_background_task_message - 1] = false;
 
-		int nodes_involved_index =
+		int nodesInvolvedIndex =
 			GetNodesInvolvedAttrIndexInPgDistBackgroundTask(tupleDescriptor);
-		values[nodes_involved_index] = IntArrayToDatum(nodesInvolvedCount, nodesInvolved);
-		nulls[nodes_involved_index] = (nodesInvolvedCount == 0);
+		values[nodesInvolvedIndex] = IntArrayToDatum(nodesInvolvedCount, nodesInvolved);
+		nulls[nodesInvolvedIndex] = (nodesInvolvedCount == 0);
 
 		HeapTuple newTuple = heap_form_tuple(tupleDescriptor, values, nulls);
 		CatalogTupleInsert(pgDistBackgroundTask, newTuple);
@@ -3490,12 +3490,12 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
 	}
 
-	int nodes_involved_index =
+	int nodesInvolvedIndex =
 		GetNodesInvolvedAttrIndexInPgDistBackgroundTask(tupleDescriptor);
-	if (!nulls[nodes_involved_index])
+	if (!nulls[nodesInvolvedIndex])
 	{
 		ArrayType *nodesInvolvedArrayObject =
-			DatumGetArrayTypeP(values[nodes_involved_index]);
+			DatumGetArrayTypeP(values[nodesInvolvedIndex]);
 		task->nodesInvolved = IntegerArrayTypeToList(nodesInvolvedArrayObject);
 	}
 
