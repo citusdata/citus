@@ -38,9 +38,6 @@ SELECT :columnar_stripes_before_drop - count(distinct storage_id) FROM columnar.
 
 SELECT current_database() datname \gset
 CREATE DATABASE db_to_drop;
-NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
-DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
-HINT:  You can manually create a database and its extensions on other nodes.
 \c db_to_drop
 CREATE EXTENSION citus_columnar;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset

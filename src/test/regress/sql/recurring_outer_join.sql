@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA recurring_outer_join;
 SET search_path TO recurring_outer_join;
 
@@ -1020,3 +1024,6 @@ ROLLBACK;
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA recurring_outer_join CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

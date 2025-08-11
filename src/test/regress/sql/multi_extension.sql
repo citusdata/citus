@@ -120,7 +120,10 @@ ORDER BY 1, 2;
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
-DROP EXTENSION citus_columnar;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION IF EXISTS citus_columnar;
+RESET client_min_messages;
 
 CREATE EXTENSION citus;
 

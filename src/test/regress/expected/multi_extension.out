@@ -120,7 +120,9 @@ ORDER BY 1, 2;
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
-DROP EXTENSION citus_columnar;
+SET client_min_messages TO WARNING;
+DROP EXTENSION IF EXISTS citus_columnar;
+RESET client_min_messages;
 CREATE EXTENSION citus;
 -- When there are no relations using the columnar access method, we don't automatically create
 -- "citus_columnar" extension together with "citus" extension anymore. And as this will always
