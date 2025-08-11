@@ -818,7 +818,7 @@ NodeListInsertCommand(List *workerNodeList)
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
 					 "noderack, hasmetadata, metadatasynced, isactive, noderole, "
-					 "nodecluster, shouldhaveshards, nodeisreplica, nodeprimarynodeid) VALUES ");
+					 "nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
@@ -828,7 +828,7 @@ NodeListInsertCommand(List *workerNodeList)
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
 		char *shouldHaveShards = workerNode->shouldHaveShards ? "TRUE" : "FALSE";
-		char *nodeisreplicaString = workerNode->nodeisreplica ? "TRUE" : "FALSE";
+		char *nodeiscloneString = workerNode->nodeisclone ? "TRUE" : "FALSE";
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
@@ -847,7 +847,7 @@ NodeListInsertCommand(List *workerNodeList)
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster),
 						 shouldHaveShards,
-						 nodeisreplicaString,
+						 nodeiscloneString,
 						 workerNode->nodeprimarynodeid);
 
 		processedWorkerNodeCount++;
@@ -885,7 +885,7 @@ NodeListIdempotentInsertCommand(List *workerNodeList)
 						  "nodecluster = EXCLUDED.nodecluster, "
 						  "metadatasynced = EXCLUDED.metadatasynced, "
 						  "shouldhaveshards = EXCLUDED.shouldhaveshards, "
-						  "nodeisreplica = EXCLUDED.nodeisreplica, "
+						  "nodeisclone = EXCLUDED.nodeisclone, "
 						  "nodeprimarynodeid = EXCLUDED.nodeprimarynodeid";
 	appendStringInfoString(nodeInsertIdempotentCommand, onConflictStr);
 	return nodeInsertIdempotentCommand->data;

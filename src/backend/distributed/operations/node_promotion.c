@@ -12,57 +12,57 @@
 static int64 GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode);
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
-static void PromoteReplicaNode(WorkerNode *replicaWorkerNode);
+static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
 
 
-PG_FUNCTION_INFO_V1(citus_promote_replica_and_rebalance);
+PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
 
 Datum
-citus_promote_replica_and_rebalance(PG_FUNCTION_ARGS)
+citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 {
 	// Ensure superuser and coordinator
 	EnsureSuperUser();
 	EnsureCoordinator();
 
-	// Get replica_nodeid argument
-	int32 replicaNodeIdArg = PG_GETARG_INT32(0);
+	// Get clone_nodeid argument
+	int32 cloneNodeIdArg = PG_GETARG_INT32(0);
 
-	WorkerNode *replicaNode = NULL;
+	WorkerNode *cloneNode = NULL;
 	WorkerNode *primaryNode = NULL;
 
 	// Lock pg_dist_node to prevent concurrent modifications during this operation
 	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
 
-	replicaNode = FindNodeAnyClusterByNodeId(replicaNodeIdArg);
-	if (replicaNode == NULL)
+	cloneNode = FindNodeAnyClusterByNodeId(cloneNodeIdArg);
+	if (cloneNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Replica node with ID %d not found.", replicaNodeIdArg)));
+						errmsg("Clone node with ID %d not found.", cloneNodeIdArg)));
 	}
 
-	if (!replicaNode->nodeisreplica || replicaNode->nodeprimarynodeid == 0)
+	if (!cloneNode->nodeisclone || cloneNode->nodeprimarynodeid == 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Node %s:%d (ID %d) is not a valid replica or its primary node ID is not set.",
-							   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId)));
+						errmsg("Node %s:%d (ID %d) is not a valid clone or its primary node ID is not set.",
+							   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
 	}
 
-	if (replicaNode->isActive)
+	if (cloneNode->isActive)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Replica node %s:%d (ID %d) is already active and cannot be promoted.",
-							   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId)));
+						errmsg("Clone node %s:%d (ID %d) is already active and cannot be promoted.",
+							   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
 	}
 
-	primaryNode = FindNodeAnyClusterByNodeId(replicaNode->nodeprimarynodeid);
+	primaryNode = FindNodeAnyClusterByNodeId(cloneNode->nodeprimarynodeid);
 	if (primaryNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Primary node with ID %d (for replica %s:%d) not found.",
-							   replicaNode->nodeprimarynodeid, replicaNode->workerName, replicaNode->workerPort)));
+						errmsg("Primary node with ID %d (for clone %s:%d) not found.",
+							   cloneNode->nodeprimarynodeid, cloneNode->workerName, cloneNode->workerPort)));
 	}
 
-	if (primaryNode->nodeisreplica)
+	if (primaryNode->nodeisclone)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Primary node %s:%d (ID %d) is itself a replica.",
@@ -75,17 +75,17 @@ citus_promote_replica_and_rebalance(PG_FUNCTION_ARGS)
 						errmsg("Primary node %s:%d (ID %d) is not active.",
 							   primaryNode->workerName, primaryNode->workerPort, primaryNode->nodeId)));
 	}
-	/* Ensure the primary node is related to the replica node */
-	if (primaryNode->nodeId != replicaNode->nodeprimarynodeid)
+	/* Ensure the primary node is related to the clone node */
+	if (primaryNode->nodeId != cloneNode->nodeprimarynodeid)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Replica node %s:%d (ID %d) is not replica of the primary node %s:%d (ID %d).",
-							   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId,
+						errmsg("Clone node %s:%d (ID %d) is not replica of the primary node %s:%d (ID %d).",
+							   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId,
 							   primaryNode->workerName, primaryNode->workerPort, primaryNode->nodeId)));
 	}
 
-	ereport(NOTICE, (errmsg("Starting promotion process for replica node %s:%d (ID %d), original primary %s:%d (ID %d)",
-						   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId,
+	ereport(NOTICE, (errmsg("Starting promotion process for clone node %s:%d (ID %d), original primary %s:%d (ID %d)",
+						   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId,
 						   primaryNode->workerName, primaryNode->workerPort, primaryNode->nodeId)));
 
 	/* Step 1: Block Writes on Original Primary's Shards */
@@ -94,9 +94,9 @@ citus_promote_replica_and_rebalance(PG_FUNCTION_ARGS)
 
 	BlockAllWritesToWorkerNode(primaryNode);
 
-	/* Step 2: Wait for Replica to Catch Up */
-	ereport(NOTICE, (errmsg("Waiting for replica %s:%d to catch up with primary %s:%d",
-						   replicaNode->workerName, replicaNode->workerPort,
+	/* Step 2: Wait for Clone to Catch Up */
+	ereport(NOTICE, (errmsg("Waiting for clone %s:%d to catch up with primary %s:%d",
+						   cloneNode->workerName, cloneNode->workerPort,
 						   primaryNode->workerName, primaryNode->workerPort)));
 
 	bool caughtUp = false;
@@ -106,7 +106,7 @@ citus_promote_replica_and_rebalance(PG_FUNCTION_ARGS)
 
 	while (elapsedTimeSeconds < catchUpTimeoutSeconds)
 	{
-		uint64 repLag = GetReplicationLag(primaryNode, replicaNode);
+		uint64 repLag = GetReplicationLag(primaryNode, cloneNode);
 		if (repLag <= 0)
 		{
 			caughtUp = true;
@@ -120,28 +120,28 @@ citus_promote_replica_and_rebalance(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Replica %s:%d failed to catch up with primary %s:%d within %d seconds.",
-							   replicaNode->workerName, replicaNode->workerPort,
+							   cloneNode->workerName, cloneNode->workerPort,
 							   primaryNode->workerName, primaryNode->workerPort,
 							   catchUpTimeoutSeconds)));
 	}
 
-	ereport(NOTICE, (errmsg("Replica %s:%d is now caught up with primary %s:%d.",
-						   replicaNode->workerName, replicaNode->workerPort,
+	ereport(NOTICE, (errmsg("Clone %s:%d is now caught up with primary %s:%d.",
+						   cloneNode->workerName, cloneNode->workerPort,
 						   primaryNode->workerName, primaryNode->workerPort)));
 						
 
 
-	/* Step 3: PostgreSQL Replica Promotion */
-	ereport(NOTICE, (errmsg("Attempting to promote replica %s:%d via pg_promote().",
-						   replicaNode->workerName, replicaNode->workerPort)));
+	/* Step 3: PostgreSQL Clone Promotion */
+	ereport(NOTICE, (errmsg("Attempting to promote clone %s:%d via pg_promote().",
+						   cloneNode->workerName, cloneNode->workerPort)));
 
-	PromoteReplicaNode(replicaNode);
+	PromoteCloneNode(cloneNode);
 
 	/* Step 4: Update Replica Metadata in pg_dist_node on Coordinator */
 
-	ereport(NOTICE, (errmsg("Updating metadata for promoted replica %s:%d (ID %d)",
-						   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId)));
-	ActivateReplicaNodeAsPrimary(replicaNode);
+	ereport(NOTICE, (errmsg("Updating metadata for promoted clone %s:%d (ID %d)",
+						   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
+	ActivateReplicaNodeAsPrimary(cloneNode);
 
 	/* We need to sync metadata changes to all nodes before rebalancing shards
 	 * since the rebalancing algorithm depends on the latest metadata.
@@ -149,7 +149,7 @@ citus_promote_replica_and_rebalance(PG_FUNCTION_ARGS)
 	SyncNodeMetadataToNodes();
 
 	/* Step 5: Split Shards Between Primary and Replica */
-	SplitShardsBetweenPrimaryAndReplica(primaryNode, replicaNode, PG_GETARG_NAME_OR_NULL(1));
+	SplitShardsBetweenPrimaryAndReplica(primaryNode, cloneNode, PG_GETARG_NAME_OR_NULL(1));
 
 
 	TransactionModifiedNodeMetadata = true; // Inform Citus about metadata change
@@ -157,8 +157,8 @@ citus_promote_replica_and_rebalance(PG_FUNCTION_ARGS)
 
 
 
-	ereport(NOTICE, (errmsg("Replica node %s:%d (ID %d) metadata updated. It is now a primary",
-						   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId)));
+	ereport(NOTICE, (errmsg("Clone node %s:%d (ID %d) metadata updated. It is now a primary",
+						   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
 
 
 
@@ -284,38 +284,38 @@ GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode)
 }
 
 static void
-PromoteReplicaNode(WorkerNode *replicaWorkerNode)
+PromoteCloneNode(WorkerNode *cloneWorkerNode)
 {
 	int connectionFlag = 0;
-	MultiConnection *replicaConnection = GetNodeConnection(connectionFlag,
-													replicaWorkerNode->workerName,
-													replicaWorkerNode->workerPort);
+	MultiConnection *cloneConnection = GetNodeConnection(connectionFlag,
+													cloneWorkerNode->workerName,
+													cloneWorkerNode->workerPort);
 
-	if (PQstatus(replicaConnection->pgConn) != CONNECTION_OK)
+	if (PQstatus(cloneConnection->pgConn) != CONNECTION_OK)
 	{
-		ereport(ERROR, (errmsg("cannot connect to %s:%d to promote replica",
-							   replicaWorkerNode->workerName, replicaWorkerNode->workerPort)));
+		ereport(ERROR, (errmsg("cannot connect to %s:%d to promote clone",
+							   cloneWorkerNode->workerName, cloneWorkerNode->workerPort)));
 	}
 
 	const char *promoteQuery = "SELECT pg_promote(wait := true);";
-	int resultCode = SendRemoteCommand(replicaConnection, promoteQuery);
+	int resultCode = SendRemoteCommand(cloneConnection, promoteQuery);
 	if (resultCode == 0)
 	{
-		ReportConnectionError(replicaConnection, ERROR);
+		ReportConnectionError(cloneConnection, ERROR);
 	}
-	ForgetResults(replicaConnection);
-	CloseConnection(replicaConnection);
-	/* connect again and verify the replica is promoted */
-	if ( GetNodeIsInRecoveryStatus(replicaWorkerNode) )
+	ForgetResults(cloneConnection);
+	CloseConnection(cloneConnection);
+	/* connect again and verify the clone is promoted */
+	if ( GetNodeIsInRecoveryStatus(cloneWorkerNode) )
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Failed to promote replica %s:%d (ID %d). It is still in recovery.",
-							   replicaWorkerNode->workerName, replicaWorkerNode->workerPort, replicaWorkerNode->nodeId)));
+						errmsg("Failed to promote clone %s:%d (ID %d). It is still in recovery.",
+							   cloneWorkerNode->workerName, cloneWorkerNode->workerPort, cloneWorkerNode->nodeId)));
 	}
 	else
 	{
-		ereport(NOTICE, (errmsg("Replica node %s:%d (ID %d) has been successfully promoted.",
-							   replicaWorkerNode->workerName, replicaWorkerNode->workerPort, replicaWorkerNode->nodeId)));
+		ereport(NOTICE, (errmsg("Clone node %s:%d (ID %d) has been successfully promoted.",
+							   cloneWorkerNode->workerName, cloneWorkerNode->workerPort, cloneWorkerNode->nodeId)));
 	}
 }
 

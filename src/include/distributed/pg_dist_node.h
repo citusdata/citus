@@ -32,7 +32,7 @@
 #define Anum_pg_dist_node_nodecluster 9
 #define Anum_pg_dist_node_metadatasynced 10
 #define Anum_pg_dist_node_shouldhaveshards 11
-#define Anum_pg_dist_node_nodeisreplica 12
+#define Anum_pg_dist_node_nodeisclone 12
 #define Anum_pg_dist_node_nodeprimarynodeid 13
 
 #define GROUPID_SEQUENCE_NAME "pg_dist_groupid_seq"

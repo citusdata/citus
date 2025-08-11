@@ -3815,13 +3815,13 @@ get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
 	WorkerNode *primaryNode = FindWorkerNodeOrError(primaryNodeName, primaryNodePort);
 	WorkerNode *replicaNode = FindWorkerNodeOrError(replicaNodeName, replicaNodePort);
 
-	if (!replicaNode->nodeisreplica || replicaNode->nodeprimarynodeid == 0)
+	if (!replicaNode->nodeisclone || replicaNode->nodeprimarynodeid == 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					errmsg("Node %s:%d (ID %d) is not a valid replica or its primary node ID is not set.",
 							   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId)));
 	}
-	if (primaryNode->nodeisreplica)
+	if (primaryNode->nodeisclone)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Primary node %s:%d (ID %d) is itself a replica.",

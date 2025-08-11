@@ -4398,7 +4398,7 @@ InitializeWorkerNodeCache(void)
 		workerNode->nodeRole = currentNode->nodeRole;
 		workerNode->shouldHaveShards = currentNode->shouldHaveShards;
 		workerNode->nodeprimarynodeid = currentNode->nodeprimarynodeid;
-		workerNode->nodeisreplica = currentNode->nodeisreplica;
+		workerNode->nodeisclone = currentNode->nodeisclone;
 		strlcpy(workerNode->nodeCluster, currentNode->nodeCluster, NAMEDATALEN);
 
 		newWorkerNodeArray[workerNodeIndex++] = workerNode;
