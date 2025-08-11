@@ -118,11 +118,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 -- Test that the join is not pushed down when we have non-colocated tables in the RHS
-SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
 ERROR:  cannot push down this subquery
 DETAIL:  d3_not_colocated and d1 are not colocated
 -- The same error with its RIGHT JOIN variant
-SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated JOIN d1 ON d3_not_colocated.a = d1.a) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
 ERROR:  cannot push down this subquery
 DETAIL:  d3_not_colocated and d1 are not colocated
 -- Basic test cases with ON syntax
@@ -281,7 +281,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 -- Test join pushdown behavior when the inner part of the join is a subquery
 -- Using 'using' syntax
 SET client_min_messages TO DEBUG3;
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) AS t1 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -297,7 +297,7 @@ DEBUG:  assigned task to node localhost:xxxxx
     21
 (1 row)
 
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) AS t1 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -313,7 +313,7 @@ DEBUG:  assigned task to node localhost:xxxxx
     15
 (1 row)
 
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM (SELECT * FROM d1) WHERE a > 1) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM (SELECT * FROM d1) AS t1 WHERE a > 1) AS t2 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -329,7 +329,7 @@ DEBUG:  assigned task to node localhost:xxxxx
     15
 (1 row)
 
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 JOIN d1 as d1_1 USING (a))  USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 JOIN d1 as d1_1 USING (a)) AS t1 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  no shard pruning constraints on d1 found
@@ -349,7 +349,7 @@ DEBUG:  assigned task to node localhost:xxxxx
     57
 (1 row)
 
-SELECT count(*) FROM r1 LEFT JOIN (d1 LEFT JOIN d1 as d1_1 USING (a))  USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (d1 LEFT JOIN d1 as d1_1 USING (a)) AS t1 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  no shard pruning constraints on d1 found
@@ -380,14 +380,14 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_join_pushdown.d1 d1_1 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN ((SELECT d1_2.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_2) d1 LEFT JOIN (SELECT d1_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_1_1) d1_1 USING (a)) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN ((SELECT d1_2.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_2) d1 LEFT JOIN (SELECT d1_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_1_1) d1_1 USING (a)) t1(a, b, b_1) USING (a))
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
     57
 (1 row)
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) USING (a);
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) AS t1 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -828,7 +828,7 @@ DEBUG:  assigned task to node localhost:xxxxx
     21
 (1 row)
 
-SELECT count(*) FROM (SELECT * FROM d1) RIGHT JOIN r1 USING (a);
+SELECT count(*) FROM (SELECT * FROM d1) AS t1 RIGHT JOIN r1 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
