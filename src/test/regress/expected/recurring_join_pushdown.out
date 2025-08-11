@@ -10,9 +10,6 @@ SELECT create_reference_table('r1');
 (1 row)
 
 INSERT INTO r1 VALUES (1,10), (1,11), (1,20), (2,10), (2,12), (2, 20), (3, 20), (10, 1), (10, 2);
---- For testing, remove before merge
-CREATE TABLE r1_local(like r1);
-INSERT INTO r1_local select * from r1;
 CREATE TABLE d1(a int, b int);
 SELECT create_distributed_table('d1', 'a');
  create_distributed_table
@@ -29,11 +26,6 @@ SELECT create_distributed_table('d2', 'a');
 (1 row)
 
 INSERT INTO d2(a, c) VALUES (1,'a'), (1,'b'), (1,'c'), (2,'d'), (2,'e'), (2,'f'), (4,'g');
---- For testing, remove before merge
-CREATE TABLE d1_local(like d1);
-INSERT INTO d1_local select * from d1;
-CREATE TABLE d2_local(like d2);
-INSERT INTO d2_local select * from d2;
 SET citus.shard_count TO 2;
 CREATE TABLE d3_not_colocated(like d1);
 SELECT create_distributed_table('d3_not_colocated', 'a');
@@ -61,12 +53,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     21
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN d1_local using (a);
- count
----------------------------------------------------------------------
-    21
-(1 row)
-
 SELECT * FROM r1 LEFT JOIN d1 using (a, b) ORDER BY 1, 2;
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
@@ -78,20 +64,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- a  | b
----------------------------------------------------------------------
-  1 | 10
-  1 | 11
-  1 | 20
-  2 | 10
-  2 | 12
-  2 | 20
-  3 | 20
- 10 |  1
- 10 |  2
-(9 rows)
-
-SELECT * FROM r1_local LEFT JOIN d1_local using (a, b) ORDER BY 1, 2;
  a  | b
 ---------------------------------------------------------------------
   1 | 10
@@ -145,12 +117,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
     16
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN d1_local USING (b);
- count
----------------------------------------------------------------------
-    16
-(1 row)
-
 -- Test that the join is not pushed down when we have non-colocated tables in the RHS
 SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) USING (a);
 ERROR:  cannot push down this subquery
@@ -178,12 +144,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     21
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a;
- count
----------------------------------------------------------------------
-    21
-(1 row)
-
 SELECT * FROM r1 LEFT JOIN d1 ON r1.a = d1.a AND r1.b = d1.b ORDER BY 1, 2;
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
@@ -195,20 +155,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- a  | b  | a | b
----------------------------------------------------------------------
-  1 | 10 | 1 | 10
-  1 | 11 | 1 | 11
-  1 | 20 | 1 | 20
-  2 | 10 | 2 | 10
-  2 | 12 | 2 | 12
-  2 | 20 | 2 | 20
-  3 | 20 |   |
- 10 |  1 |   |
- 10 |  2 |   |
-(9 rows)
-
-SELECT * FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a AND r1_local.b = d1_local.b ORDER BY 1, 2;
  a  | b  | a | b
 ---------------------------------------------------------------------
   1 | 10 | 1 | 10
@@ -270,12 +216,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     13
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.b = d1_local.a;
- count
----------------------------------------------------------------------
-    13
-(1 row)
-
 -- Test that the join is not pushed down when joined on a non-distributed column
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.b = d1.b;
 DEBUG:  no shard pruning constraints on d1 found
@@ -296,12 +236,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM recurring_join_pushdown.d1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT NULL::integer AS a, d1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) d1_1) d1 ON ((r1.b OPERATOR(pg_catalog.=) d1.b)))
 DEBUG:  Creating router plan
- count
----------------------------------------------------------------------
-    16
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.b = d1_local.b;
  count
 ---------------------------------------------------------------------
     16
@@ -331,12 +265,6 @@ DEBUG:  Creating router plan
     13
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.b;
- count
----------------------------------------------------------------------
-    13
-(1 row)
-
 SET client_min_messages TO DEBUG1;
 -- Test that the join is not pushed down when joined on a distributed column with disjunctive conditions
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.a OR r1.b = d1.b;
@@ -345,12 +273,6 @@ DEBUG:  recursively planning distributed relation "d1" since it is part of a dis
 DEBUG:  Wrapping relation "d1" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_join_pushdown.d1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT d1_1.a, d1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) d1_1) d1 ON (((r1.a OPERATOR(pg_catalog.=) d1.a) OR (r1.b OPERATOR(pg_catalog.=) d1.b))))
- count
----------------------------------------------------------------------
-    28
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a OR r1_local.b = d1_local.b;
  count
 ---------------------------------------------------------------------
     28
@@ -375,12 +297,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     21
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT * FROM d1_local) USING (a);
- count
----------------------------------------------------------------------
-    21
-(1 row)
-
 SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
@@ -392,12 +308,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count
----------------------------------------------------------------------
-    15
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT * FROM d1_local WHERE a > 1) USING (a);
  count
 ---------------------------------------------------------------------
     15
@@ -419,12 +329,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     15
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT * FROM (SELECT * FROM d1_local) WHERE a > 1) USING (a);
- count
----------------------------------------------------------------------
-    15
-(1 row)
-
 SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 JOIN d1 as d1_1 USING (a))  USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
@@ -440,12 +344,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count
----------------------------------------------------------------------
-    57
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT * FROM d1_local JOIN d1_local as d1_1 USING (a))  USING (a);
  count
 ---------------------------------------------------------------------
     57
@@ -484,12 +382,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_join_pushdown.d1 d1_1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN ((SELECT d1_2.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_2) d1 LEFT JOIN (SELECT d1_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_1_1) d1_1 USING (a)) USING (a))
 DEBUG:  Creating router plan
- count
----------------------------------------------------------------------
-    57
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (d1_local LEFT JOIN d1_local as d1_1 USING (a))  USING (a);
  count
 ---------------------------------------------------------------------
     57
@@ -541,12 +433,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     21
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT * FROM d1_local) AS d1_local ON r1_local.a = d1_local.a;
- count
----------------------------------------------------------------------
-    21
-(1 row)
-
 SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) AS d1 ON r1.a = d1.a;
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
@@ -558,12 +444,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count
----------------------------------------------------------------------
-    15
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT * FROM d1_local WHERE a > 1) AS d1_local ON r1_local.a = d1_local.a;
  count
 ---------------------------------------------------------------------
     15
@@ -585,12 +465,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     15
 (1 row)
 
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT * FROM (SELECT * FROM d1_local) AS d1_local WHERE a > 1) AS d1_local ON r1_local.a = d1_local.a;
- count
----------------------------------------------------------------------
-    15
-(1 row)
-
 SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a as a, d1.b, d1_1.a AS a_1 FROM d1 LEFT JOIN d1 as d1_1 ON d1.a = d1_1.a) AS d1_2 ON r1.a = d1_2.a;
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
@@ -606,12 +480,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count
----------------------------------------------------------------------
-    57
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT d1_local.a as a, d1_local.b, d1_1.a AS a_1 FROM d1_local LEFT JOIN d1_local as d1_1 ON d1_local.a = d1_1.a) AS d1_2 ON r1_local.a = d1_2.a;
  count
 ---------------------------------------------------------------------
     57
@@ -639,12 +507,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generating subplan XXX_1 for subquery SELECT r1.a, d1.b FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d1 ON ((r1.a OPERATOR(pg_catalog.=) d1.a)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 ON ((r1.a OPERATOR(pg_catalog.=) t1.a)))
 DEBUG:  Creating router plan
- count
----------------------------------------------------------------------
-    59
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT r1_local.a, d1_local.b FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a) AS t1 ON r1_local.a = t1.a;
  count
 ---------------------------------------------------------------------
     59
@@ -713,12 +575,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count
----------------------------------------------------------------------
-    57
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT d1_local.a, d1_local.b FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a) AS t1 ON r1_local.a = t1.a;
  count
 ---------------------------------------------------------------------
     57
@@ -795,12 +651,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generating subplan XXX_2 for subquery SELECT d2.a, d2.c FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d2 ON ((r1.a OPERATOR(pg_catalog.=) d2.a)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((recurring_join_pushdown.r1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 ON ((t1.a OPERATOR(pg_catalog.=) r1.a))) LEFT JOIN (SELECT intermediate_result.a, intermediate_result.c FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, c text)) t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a)))
 DEBUG:  Creating router plan
- count
----------------------------------------------------------------------
-   489
-(1 row)
-
-SELECT count(*) FROM r1_local LEFT JOIN (SELECT d1_local.a, d1_local.b FROM r1_local LEFT JOIN d1_local ON r1_local.a = d1_local.a) AS t1 ON t1.a = r1_local.a LEFT JOIN (SELECT d2_local.a, d2_local.c FROM r1_local LEFT JOIN d2_local ON r1_local.a = d2_local.a) AS t2 ON t1.a = t2.a;
  count
 ---------------------------------------------------------------------
    489
@@ -913,13 +763,6 @@ DEBUG:  assigned task to node localhost:xxxxx
    165
 (1 row)
 
-SELECT count(*) FROM (SELECT d1_1.a, r1_local.b FROM r1_local LEFT JOIN d1_local as d1_1 ON r1_local.a = d1_1.a) AS t1_local LEFT JOIN
- (SELECT d2_local.a, d2_local.c, r1_local.b FROM r1_local LEFT JOIN d2_local ON r1_local.a = d2_local.a) AS t2_local ON t1_local.a = t2_local.a;
- count
----------------------------------------------------------------------
-   165
-(1 row)
-
 EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT d1_1.a, r1.b FROM r1 LEFT JOIN d1 as d1_1 ON r1.a = d1_1.a) AS t1 LEFT JOIN
  (SELECT d2.a, d2.c, r1.b FROM r1 LEFT JOIN d2 ON r1.a = d2.a) AS t2 ON t1.a = t2.a;
 DEBUG:  no shard pruning constraints on d1 found
@@ -985,12 +828,6 @@ DEBUG:  assigned task to node localhost:xxxxx
     21
 (1 row)
 
-SELECT count(*) FROM d1_local RIGHT JOIN r1_local USING (a);
- count
----------------------------------------------------------------------
-    21
-(1 row)
-
 SELECT count(*) FROM (SELECT * FROM d1) RIGHT JOIN r1 USING (a);
 DEBUG:  no shard pruning constraints on d1 found
 DEBUG:  shard count after pruning for d1: 4
@@ -1002,12 +839,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count
----------------------------------------------------------------------
-    21
-(1 row)
-
-SELECT count(*) FROM (SELECT * FROM d1_local) RIGHT JOIN r1_local USING (a);
  count
 ---------------------------------------------------------------------
     21
