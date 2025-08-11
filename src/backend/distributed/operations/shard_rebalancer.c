@@ -100,8 +100,11 @@ typedef struct SplitPrimaryReplicaShards
 } SplitPrimaryReplicaShards;
 
 
-static SplitPrimaryReplicaShards *
-GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* replicaNode);
+static SplitPrimaryReplicaShards * GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *
+																		options,
+																		WorkerNode *
+																		replicaNode);
+
 /*
  * RebalanceState is used to keep the internal state of the rebalance
  * algorithm in one place.
@@ -544,8 +547,9 @@ GetRebalanceSteps(RebalanceOptions *options)
 		 */
 		options->involvedWorkerNodeList = SortedActiveWorkers();
 	}
+
 	/* sort the lists to make the function more deterministic */
-	List *activeWorkerList = options->involvedWorkerNodeList; //SortedActiveWorkers();
+	List *activeWorkerList = options->involvedWorkerNodeList; /*SortedActiveWorkers(); */
 	int shardAllowedNodeCount = 0;
 	WorkerNode *workerNode = NULL;
 	foreach_declared_ptr(workerNode, activeWorkerList)
@@ -3574,6 +3578,7 @@ EnsureShardCostUDF(Oid functionOid)
 	ReleaseSysCache(proctup);
 }
 
+
 /*
  * SplitShardsBetweenPrimaryAndReplica splits the shards in shardPlacementList
  * between the primary and replica nodes, adding them to the respective lists.
@@ -3604,15 +3609,17 @@ SplitShardsBetweenPrimaryAndReplica(WorkerNode *primaryNode,
 	SplitPrimaryReplicaShards *splitShards = NULL;
 	splitShards = GetPrimaryReplicaSplitRebalanceSteps(&options, replicaNode);
 	AdjustShardsForPrimaryReplicaNodeSplit(primaryNode, replicaNode,
-											splitShards->primaryShardIdList, splitShards->replicaShardIdList);
+										   splitShards->primaryShardIdList, splitShards->
+										   replicaShardIdList);
 }
+
 
 /*
  * GetPrimaryReplicaSplitRebalanceSteps returns a List of PlacementUpdateEvents that are needed to
  * rebalance a list of tables.
  */
 static SplitPrimaryReplicaShards *
-GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* replicaNode)
+GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *replicaNode)
 {
 	WorkerNode *sourceNode = options->workerNode;
 	WorkerNode *targetNode = replicaNode;
@@ -3685,7 +3692,8 @@ GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* repl
 		 * Initialize RebalanceState considering only the source node's shards
 		 * and the two active workers (source and target).
 		 */
-		RebalanceState *state = InitRebalanceState(activeWorkerList, allSourcePlacements, &rebalancePlanFunctions);
+		RebalanceState *state = InitRebalanceState(activeWorkerList, allSourcePlacements,
+												   &rebalancePlanFunctions);
 
 		NodeFillState *sourceFillState = NULL;
 		NodeFillState *targetFillState = NULL;
@@ -3722,7 +3730,9 @@ GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* repl
 			float4 targetCurrentCost = 0; /* Representing cost on target from these source shards */
 
 			/* Sort shards on source node by cost (descending). This is a common heuristic. */
-			sourceFillState->shardCostListDesc = SortList(sourceFillState->shardCostListDesc, CompareShardCostDesc);
+			sourceFillState->shardCostListDesc = SortList(sourceFillState->
+														  shardCostListDesc,
+														  CompareShardCostDesc);
 
 			List *potentialMoves = NIL;
 			ListCell *lc_shardcost = NULL;
@@ -3735,15 +3745,6 @@ GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* repl
 			foreach(lc_shardcost, sourceFillState->shardCostListDesc)
 			{
 				ShardCost *shardToConsider = (ShardCost *) lfirst(lc_shardcost);
-
-				/* Check if shard is allowed on the target node */
-				// if (!state->functions->shardAllowedOnNode(shardToConsider->shardId,
-				// 										  targetNode,
-				// 										  state->functions->context))
-				// {
-				// 	splitShards->primaryShardIdList = lappend_int(splitShards->primaryShardIdList, shardToConsider->shardId);
-				// 	continue; /* Cannot move this shard to the target */
-				// }
 
 				/*
 				 * If moving this shard makes the target less loaded than the source would become,
@@ -3758,7 +3759,8 @@ GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* repl
 				 */
 				float4 costOfShard = shardToConsider->cost;
 				float4 diffBefore = fabsf(sourceCurrentCost - targetCurrentCost);
-				float4 diffAfter = fabsf((sourceCurrentCost - costOfShard) - (targetCurrentCost + costOfShard));
+				float4 diffAfter = fabsf((sourceCurrentCost - costOfShard) - (
+											 targetCurrentCost + costOfShard));
 
 				if (diffAfter < diffBefore)
 				{
@@ -3768,7 +3770,10 @@ GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* repl
 					update->targetNode = targetNode;
 					update->updateType = PLACEMENT_UPDATE_MOVE;
 					potentialMoves = lappend(potentialMoves, update);
-					splitShards->replicaShardIdList = lappend_int(splitShards->replicaShardIdList, shardToConsider->shardId);
+					splitShards->replicaShardIdList = lappend_int(splitShards->
+																  replicaShardIdList,
+																  shardToConsider->shardId
+																  );
 
 
 					/* Update simulated costs for the next iteration */
@@ -3777,14 +3782,19 @@ GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode* repl
 				}
 				else
 				{
-					splitShards->primaryShardIdList = lappend_int(splitShards->primaryShardIdList, shardToConsider->shardId);
+					splitShards->primaryShardIdList = lappend_int(splitShards->
+																  primaryShardIdList,
+																  shardToConsider->shardId
+																  );
 				}
 			}
 		}
+
 		/* RebalanceState is in memory context, will be cleaned up */
 	}
 	return splitShards;
 }
+
 
 /*
  * Snapshot-based node split plan outputs the shard placement plan
@@ -3818,22 +3828,29 @@ get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
 	if (!replicaNode->nodeisclone || replicaNode->nodeprimarynodeid == 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					errmsg("Node %s:%d (ID %d) is not a valid replica or its primary node ID is not set.",
-							   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId)));
+						errmsg(
+							"Node %s:%d (ID %d) is not a valid replica or its primary node ID is not set.",
+							replicaNode->workerName, replicaNode->workerPort,
+							replicaNode->nodeId)));
 	}
 	if (primaryNode->nodeisclone)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Primary node %s:%d (ID %d) is itself a replica.",
-							   primaryNode->workerName, primaryNode->workerPort, primaryNode->nodeId)));
+							   primaryNode->workerName, primaryNode->workerPort,
+							   primaryNode->nodeId)));
 	}
+
 	/* Ensure the primary node is related to the replica node */
 	if (primaryNode->nodeId != replicaNode->nodeprimarynodeid)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Replica node %s:%d (ID %d) is not replica of the primary node %s:%d (ID %d).",
-							   replicaNode->workerName, replicaNode->workerPort, replicaNode->nodeId,
-							   primaryNode->workerName, primaryNode->workerPort, primaryNode->nodeId)));
+						errmsg(
+							"Replica node %s:%d (ID %d) is not replica of the primary node %s:%d (ID %d).",
+							replicaNode->workerName, replicaNode->workerPort,
+							replicaNode->nodeId,
+							primaryNode->workerName, primaryNode->workerPort,
+							primaryNode->nodeId)));
 	}
 
 	List *relationIdList = NIL;
@@ -3910,6 +3927,7 @@ get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
 
 	return (Datum) 0;
 }
+
 
 /*
  * EnsureNodeCapacityUDF checks that the UDF matching the oid has the correct

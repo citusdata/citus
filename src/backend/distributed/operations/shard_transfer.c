@@ -573,6 +573,7 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	FinalizeCurrentProgressMonitor();
 }
 
+
 /*
  * AdjustShardsForPrimaryReplicaNodeSplit is called when a primary-replica node split
  * occurs. It adjusts the shard placements such that the shards that should be on the
@@ -582,11 +583,10 @@ TransferShards(int64 shardId, char *sourceNodeName,
  */
 void
 AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
-											WorkerNode *replicaNode,
-											List* primaryShardList,
-											List* replicaShardList)
+									   WorkerNode *replicaNode,
+									   List *primaryShardList,
+									   List *replicaShardList)
 {
-	int shardId = 0;
 	/*
 	 * Remove all shards from the replica that should reside on the primary node,
 	 * and update the shard placement metadata for shards that will now be served
@@ -594,23 +594,74 @@ AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
 	 * the relevant shards from the replica and primary nodes and update the
 	 * corresponding shard placement metadata.
 	 */
-	foreach_declared_int(shardId, primaryShardList)
-	{
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
-		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
-		/* TODO: Drops shard table here */
-	}
-	/* Now drop all shards from primary that need to be on the replica node */
+	uint64 shardId = 0;
+	uint32 groupId = GroupForNode(replicaNode->workerName, replicaNode->workerPort);
+
+	RegisterOperationNeedingCleanup();
+
 	foreach_declared_int(shardId, replicaShardList)
 	{
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+
+		foreach_declared_ptr(shardInterval, colocatedShardList)
+		{
+			uint64 colocatedShardId = shardInterval->shardId;
+
+			uint64 placementId = GetNextPlacementId();
+			InsertShardPlacementRow(colocatedShardId, placementId,
+									ShardLength(colocatedShardId),
+									groupId);
+		}
+
 		UpdateColocatedShardPlacementMetadataOnWorkers(shardId,
-										primaryNode->workerName, primaryNode->workerPort,
-										replicaNode->workerName, replicaNode->workerPort);
-		/* TODO: Drop the not required table on primary here */
+													   primaryNode->workerName,
+													   primaryNode->workerPort,
+													   replicaNode->workerName,
+													   replicaNode->workerPort);
+
+		/* Now drop all shards from primary that need to be on the clone node */
+		DropShardPlacementsFromMetadata(colocatedShardList,
+										primaryNode->workerName, primaryNode->workerPort);
+		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
+													 groupId);
+	}
+
+	/* Now adjust all reference table shards */
+	int colocationId = GetReferenceTableColocationId();
+
+	if (colocationId == INVALID_COLOCATION_ID)
+	{
+		/* we have no reference table yet. */
+		return;
+	}
+	ShardInterval *shardInterval = NULL;
+	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+	Oid referenceTableId = linitial_oid(referenceTableIdList);
+	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+	foreach_declared_ptr(shardInterval, shardIntervalList)
+	{
+		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+		ShardInterval *colocatedShardInterval = NULL;
+
+		foreach_declared_ptr(colocatedShardInterval, colocatedShardList)
+		{
+			uint64 colocatedShardId = colocatedShardInterval->shardId;
+
+
+			uint64 placementId = GetNextPlacementId();
+			InsertShardPlacementRow(colocatedShardId, placementId,
+									ShardLength(colocatedShardId),
+									groupId);
+
+			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
+															0, groupId);
+
+			SendCommandToWorkersWithMetadata(placementCommand);
+		}
 	}
 }
+
 
 /*
  * Insert deferred cleanup records.
@@ -1579,7 +1630,8 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 		CopyShardForeignConstraintCommandListGrouped(shardInterval,
 													 &shardForeignConstraintCommandList,
-													 &referenceTableForeignConstraintList);
+													 &referenceTableForeignConstraintList)
+		;
 
 		ShardCommandList *shardCommandList = CreateShardCommandList(
 			shardInterval,
@@ -1685,7 +1737,8 @@ CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode, List *shardInte
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, copyTaskList,
 									  MaxAdaptiveExecutorPoolSize,
-									  NULL /* jobIdList (ignored by API implementation) */);
+									  NULL /* jobIdList (ignored by API implementation) */
+									  );
 }
 
 
@@ -2088,6 +2141,7 @@ UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 						 "SELECT citus_internal.update_placement_metadata(%ld, %d, %d)",
 						 colocatedShard->shardId,
 						 sourceGroupId, targetGroupId);
+
 		SendCommandToWorkersWithMetadata(updateCommand->data);
 	}
 }
