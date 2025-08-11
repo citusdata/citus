@@ -1587,7 +1587,7 @@ SELECT * FROM target_json ORDER BY 1;
 
 -- zero shard query as filters do not match
 --SELECT public.coordinator_plan($Q$
---EXPLAIN (ANALYZE ON, TIMING OFF, BUFFERS OFF) MERGE INTO target_json sda
+--EXPLAIN (ANALYZE ON, TIMING OFF) MERGE INTO target_json sda
 --USING (SELECT * FROM source_json WHERE id = 1) sdn
 --ON sda.id = sdn.id AND sda.id = 2
 --WHEN NOT matched THEN

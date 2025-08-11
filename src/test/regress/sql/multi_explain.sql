@@ -37,7 +37,7 @@ AS $BODY$
 DECLARE
   result jsonb;
 BEGIN
-  EXECUTE format('EXPLAIN (ANALYZE TRUE, FORMAT JSON, BUFFERS OFF) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (ANALYZE TRUE, FORMAT JSON) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -61,7 +61,7 @@ AS $BODY$
 DECLARE
   result xml;
 BEGIN
-  EXECUTE format('EXPLAIN (ANALYZE true, FORMAT XML, BUFFERS OFF) %s', query) INTO result;
+  EXECUTE format('EXPLAIN (ANALYZE true, FORMAT XML) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
