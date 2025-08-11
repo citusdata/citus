@@ -594,17 +594,19 @@ AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
 	 * the relevant shards from the replica and primary nodes and update the
 	 * corresponding shard placement metadata.
 	 */
-	foreach_declared_int(shardId, primaryShardList)
+	/* TODO: Drops shard table here */
+	/*
+    foreach_declared_int(shardId, primaryShardList)
 	{
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
-		/* TODO: Drops shard table here */
 	}
+    */
 	/* Now drop all shards from primary that need to be on the replica node */
 	foreach_declared_int(shardId, replicaShardList)
 	{
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
-		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+		//ShardInterval *shardInterval = LoadShardInterval(shardId);
+		//List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 		UpdateColocatedShardPlacementMetadataOnWorkers(shardId,
 										primaryNode->workerName, primaryNode->workerPort,
 										replicaNode->workerName, replicaNode->workerPort);
