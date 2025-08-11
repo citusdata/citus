@@ -3132,10 +3132,8 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 	{
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTask);
 
-		Datum *values = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-		bool *nulls = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
-
-		memset(nulls, true, tupleDescriptor->natts * sizeof(bool));
+		Datum *values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+		bool *nulls = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
 
 		int64 taskId = GetNextBackgroundTaskTaskId();
 
