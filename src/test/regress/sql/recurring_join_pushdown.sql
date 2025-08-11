@@ -39,9 +39,9 @@ SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM r1 LEFT JOIN d1 USING (b);
 
 -- Test that the join is not pushed down when we have non-colocated tables in the RHS
-SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
 -- The same error with its RIGHT JOIN variant
-SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated JOIN d1 ON d3_not_colocated.a = d1.a) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
 
 -- Basic test cases with ON syntax
 -- Test that the join is pushed down to the worker nodes, using "on" syntax
@@ -64,17 +64,17 @@ SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.a OR r1.b = d1.b;
 -- Test join pushdown behavior when the inner part of the join is a subquery
 -- Using 'using' syntax
 SET client_min_messages TO DEBUG3;
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) AS t1 USING (a);
 
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) AS t1 USING (a);
 
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM (SELECT * FROM d1) WHERE a > 1) USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM (SELECT * FROM d1) AS t1 WHERE a > 1) AS t2 USING (a);
 
-SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 JOIN d1 as d1_1 USING (a))  USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 JOIN d1 as d1_1 USING (a)) AS t1 USING (a);
 
-SELECT count(*) FROM r1 LEFT JOIN (d1 LEFT JOIN d1 as d1_1 USING (a))  USING (a);
+SELECT count(*) FROM r1 LEFT JOIN (d1 LEFT JOIN d1 as d1_1 USING (a)) AS t1 USING (a);
 
-EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) USING (a);
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) AS t1 USING (a);
 
 
 -- Using 'on' syntax
@@ -113,7 +113,7 @@ EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT d1_1.a, r1.b FROM r1 LEFT JOIN 
 SET client_min_messages TO DEBUG3;
 SELECT count(*) FROM d1 RIGHT JOIN r1 USING (a);
 
-SELECT count(*) FROM (SELECT * FROM d1) RIGHT JOIN r1 USING (a);
+SELECT count(*) FROM (SELECT * FROM d1) AS t1 RIGHT JOIN r1 USING (a);
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA recurring_join_pushdown CASCADE;
