@@ -2702,10 +2702,8 @@ FROM agg_events
 ORDER BY user_id
 LIMIT 5;
 
-----------------------------------------------------------------------
--- Cleanup
-----------------------------------------------------------------------
-DROP SCHEMA pr8106_cte_outervar CASCADE;
+-- End of PR #8106 — CTE traversal works when following outer Vars
 
 SET client_min_messages TO ERROR;
+DROP SCHEMA pr8106_cte_outervar CASCADE;
 DROP SCHEMA multi_insert_select CASCADE;

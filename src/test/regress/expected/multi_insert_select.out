@@ -3787,12 +3787,7 @@ LIMIT 5;
  t3_sample |       5 |          50
 (5 rows)
 
----------------------------------------------------------------------
--- Cleanup
----------------------------------------------------------------------
-DROP SCHEMA pr8106_cte_outervar CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table raw_events_first
-drop cascades to table agg_events
+-- End of PR #8106 — CTE traversal works when following outer Vars
 SET client_min_messages TO ERROR;
+DROP SCHEMA pr8106_cte_outervar CASCADE;
 DROP SCHEMA multi_insert_select CASCADE;
