@@ -27,6 +27,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -37,12 +38,11 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
-#include "distributed/shard_transfer.h"
-#include "distributed/hash_helpers.h"
 
 
 /* local function forward declarations */
