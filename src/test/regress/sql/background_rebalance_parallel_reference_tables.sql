@@ -84,14 +84,14 @@ SELECT create_reference_table('order_items');
 -- INSERT SOME DATA
 -- Insert 10 customers
 INSERT INTO customers (name, email)
-SELECT 
+SELECT
     'Customer ' || i,
     'customer' || i || '@example.com'
 FROM generate_series(1, 10) AS i;
 
 -- Insert 30 orders: each customer gets 3 orders
 INSERT INTO orders (customer_id, order_date)
-SELECT 
+SELECT
     (i % 10) + 1,  -- customer_id between 1 and 10
     CURRENT_DATE - (i % 7)
 FROM generate_series(1, 30) AS i;
@@ -136,7 +136,7 @@ SELECT D.task_id,
         END
        FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
        D.depends_on,
-       (SELECT 
+       (SELECT
        CASE
             WHEN T.command LIKE '%citus_internal.citus_internal_copy_single_shard_placement%' THEN
                 SUBSTRING(T.command FROM 'citus_internal\.citus_internal_copy_single_shard_placement\((\d+)')
@@ -144,7 +144,7 @@ SELECT D.task_id,
                 SUBSTRING(T.command FROM 'pg_catalog\.citus_move_shard_placement\((\d+)')
         ELSE
             T.command
-       END 
+       END
        FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
 FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
 
@@ -202,7 +202,7 @@ SELECT D.task_id,
         END
        FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
        D.depends_on,
-       (SELECT 
+       (SELECT
        CASE
             WHEN T.command LIKE '%citus_internal.citus_internal_copy_single_shard_placement%' THEN
                 SUBSTRING(T.command FROM 'citus_internal\.citus_internal_copy_single_shard_placement\((\d+)')
@@ -210,7 +210,7 @@ SELECT D.task_id,
                 SUBSTRING(T.command FROM 'pg_catalog\.citus_move_shard_placement\((\d+)')
         ELSE
             T.command
-       END 
+       END
        FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
 FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
 
