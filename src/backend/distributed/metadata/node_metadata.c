@@ -3377,8 +3377,9 @@ TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heap
 	Oid pgDistNodeRelId = RelationGetRelid(pgDistNode);
 
 	AttrNumber nodeClusterAttno = get_attnum(pgDistNodeRelId, "nodecluster");
+
 	if (nodeClusterAttno > 0 &&
-		TupleDescAttr(tupleDescriptor, nodeClusterAttno - 1)->attisdropped &&
+		!TupleDescAttr(tupleDescriptor, nodeClusterAttno - 1)->attisdropped &&
 		!isNullArray[nodeClusterAttno - 1])
 	{
 		Name nodeClusterName =
@@ -3391,14 +3392,14 @@ TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heap
 	{
 		AttrNumber nodeIsCloneAttno = get_attnum(pgDistNodeRelId, "nodeisclone");
 		if (nodeIsCloneAttno > 0 &&
-			TupleDescAttr(tupleDescriptor, nodeIsCloneAttno - 1)->attisdropped &&
+			!TupleDescAttr(tupleDescriptor, nodeIsCloneAttno - 1)->attisdropped &&
 			!isNullArray[nodeIsCloneAttno - 1])
 		{
 			workerNode->nodeisclone = DatumGetBool(datumArray[nodeIsCloneAttno - 1]);
 		}
 		AttrNumber nodePrimaryNodeIdAttno = get_attnum(pgDistNodeRelId, "nodeprimarynodeid");
 		if (nodePrimaryNodeIdAttno > 0 &&
-			TupleDescAttr(tupleDescriptor, nodePrimaryNodeIdAttno - 1)->attisdropped &&
+			!TupleDescAttr(tupleDescriptor, nodePrimaryNodeIdAttno - 1)->attisdropped &&
 			!isNullArray[nodePrimaryNodeIdAttno - 1])
 		{
 			workerNode->nodeprimarynodeid = DatumGetInt32(datumArray[nodePrimaryNodeIdAttno - 1]);
