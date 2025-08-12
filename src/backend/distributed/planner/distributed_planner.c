@@ -75,17 +75,6 @@
 #endif
 
 
-/* RouterPlanType is used to determine the router plan to invoke */
-typedef enum RouterPlanType
-{
-	INSERT_SELECT_INTO_CITUS_TABLE,
-	INSERT_SELECT_INTO_LOCAL_TABLE,
-	DML_QUERY,
-	SELECT_QUERY,
-	MERGE_QUERY,
-	REPLAN_WITH_BOUND_PARAMETERS
-} RouterPlanType;
-
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = CITUS_LOG_LEVEL_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
@@ -1097,7 +1086,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	 * set_plan_references>add_rtes_to_flat_rtable>add_rte_to_flat_rtable.
 	 */
 	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
-															 plannerRestrictionContext);
+															 plannerRestrictionContext,
+															 routerPlan);
 
 	/*
 	 * If subqueries were recursively planned then we need to replan the query

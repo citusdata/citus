@@ -760,15 +760,28 @@ DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_133000
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (multi_insert_select.raw_events_first_13300001 raw_events_first LEFT JOIN multi_insert_select.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_first.user_id IS NOT NULL)
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (multi_insert_select.raw_events_first_13300002 raw_events_first LEFT JOIN multi_insert_select.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_first.user_id IS NOT NULL)
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (multi_insert_select.raw_events_first_13300003 raw_events_first LEFT JOIN multi_insert_select.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_first.user_id IS NOT NULL)
+ SET client_min_messages to debug3;
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_second.user_id
  FROM
    reference_table LEFT JOIN raw_events_second ON reference_table.user_id = raw_events_second.user_id;
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300004 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_second.user_id IS NOT NULL) AND ((reference_table.user_id IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(reference_table.user_id)) OPERATOR(pg_catalog.<) 0) AND (btint4cmp(hashint4(reference_table.user_id), '-1073741825'::integer) OPERATOR(pg_catalog.<=) 0))))
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300005 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_second.user_id IS NOT NULL) AND ((btint4cmp('-1073741824'::integer, hashint4(reference_table.user_id)) OPERATOR(pg_catalog.<) 0) AND (btint4cmp(hashint4(reference_table.user_id), '-1'::integer) OPERATOR(pg_catalog.<=) 0)))
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300006 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_second.user_id IS NOT NULL) AND ((btint4cmp(0, hashint4(reference_table.user_id)) OPERATOR(pg_catalog.<) 0) AND (btint4cmp(hashint4(reference_table.user_id), 1073741823) OPERATOR(pg_catalog.<=) 0)))
-DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table_13300012 reference_table LEFT JOIN multi_insert_select.raw_events_second_13300007 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_second.user_id IS NOT NULL) AND ((btint4cmp(1073741824, hashint4(reference_table.user_id)) OPERATOR(pg_catalog.<) 0) AND (btint4cmp(hashint4(reference_table.user_id), 2147483647) OPERATOR(pg_catalog.<=) 0)))
+DEBUG:  no shard pruning constraints on raw_events_second found
+DEBUG:  shard count after pruning for raw_events_second: 4
+DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
+DEBUG:  no shard pruning constraints on raw_events_second found
+DEBUG:  shard count after pruning for raw_events_second: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on raw_events_second found
+DEBUG:  shard count after pruning for raw_events_second: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
+ SET client_min_messages to debug2;
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -3372,17 +3385,21 @@ $$);
          Task Count: 1
 (4 rows)
 
--- verify that insert select can be pushed down when we have reference table in outside of outer join.
-SELECT coordinator_plan($$
+-- verify that insert select cannot be pushed down when we have reference table in outside of outer join in a chained-join.
+ SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
 $$);
-       coordinator_plan
+                coordinator_plan
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 4
-(2 rows)
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
 
--- verify that insert select can be pushed down when we have reference table in outside of left join.
+-- verify that insert select can be pushed down when we have reference table in outside of outer join.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
 $$);
@@ -3394,7 +3411,7 @@ $$);
          Task Count: 4
 (4 rows)
 
--- verify that insert select cannot be pushed down when we have reference table in outside of left join and joined on non-distribution column.
+-- verify that insert select cannot be pushed down when we have reference table in outside of left join and joined on non-partition column.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT ref_table_1.id FROM ref_table_1 LEFT JOIN dist_table_5 ON ref_table_1.id = dist_table_5.id2;
 $$);

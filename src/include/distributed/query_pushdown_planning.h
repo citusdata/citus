@@ -37,11 +37,12 @@ extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
-																	  originalQuery,
-																	  PlannerRestrictionContext
-																	  *
-																	  plannerRestrictionContext);
+extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(
+	Query *originalQuery,
+	PlannerRestrictionContext
+	*
+	plannerRestrictionContext,
+	bool plannerPhase);
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
 																 outerMostQueryHasLimit);
