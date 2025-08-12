@@ -320,6 +320,35 @@ DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtinde
 
 
 /*
+ * UpdateWhereClauseForOuterJoinWalker walks over the query tree and
+ * updates the WHERE clause for outer joins satisfying feasibility conditions.
+ */
+bool
+UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		UpdateWhereClauseForOuterJoin((Query *) node, relationShardList);
+		return query_tree_walker((Query *) node, UpdateWhereClauseForOuterJoinWalker,
+								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, UpdateWhereClauseForOuterJoinWalker,
+									  relationShardList);
+	}
+
+	return false;
+}
+
+
+/*
  * UpdateWhereClauseForOuterJoin
  *
  * Inject shard interval predicates into the query WHERE clause for certain
@@ -442,7 +471,6 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	/* want to look at all RTEs, even in subqueries, CTEs and such */
 	if (IsA(node, Query))
 	{
-		UpdateWhereClauseForOuterJoin((Query *) node, relationShardList); /* TODO, check this again, we might want to skip this for fast path queries */
 		return query_tree_walker((Query *) node, UpdateRelationToShardNames,
 								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}

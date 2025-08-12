@@ -577,12 +577,14 @@ FROM
  FROM
    raw_events_first  LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id;
 
+ SET client_min_messages to debug3;
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_second.user_id
  FROM
    reference_table LEFT JOIN raw_events_second ON reference_table.user_id = raw_events_second.user_id;
 
+ SET client_min_messages to debug2;
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -2397,17 +2399,17 @@ SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id, (SELECT id FROM ref_table_1 WHERE id = 1) FROM ref_table_1;
 $$);
 
--- verify that insert select can be pushed down when we have reference table in outside of outer join.
+-- verify that insert select cannot be pushed down when we have reference table in outside of outer join in a chained-join.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
 $$);
 
--- verify that insert select can be pushed down when we have reference table in outside of left join.
+-- verify that insert select can be pushed down when we have reference table in outside of outer join.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
 $$);
 
--- verify that insert select cannot be pushed down when we have reference table in outside of left join and joined on non-distribution column.
+-- verify that insert select cannot be pushed down when we have reference table in outside of left join and joined on non-partition column.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT ref_table_1.id FROM ref_table_1 LEFT JOIN dist_table_5 ON ref_table_1.id = dist_table_5.id2;
 $$);

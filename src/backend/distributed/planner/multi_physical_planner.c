@@ -168,13 +168,15 @@ static uint32 HashPartitionCount(void);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
-									Bitmapset *distributedTables);
+									Bitmapset *distributedTables,
+									bool *outerPartHasDistributedTable);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
 									  uint32 taskId,
 									  TaskType taskType,
 									  bool modifyRequiresCoordinatorEvaluation,
+									  bool updateQualsForOuterJoin,
 									  DeferredErrorMessage **planningError);
 static List * SqlTaskList(Job *job);
 static bool DependsOnHashPartitionJob(Job *job);
@@ -2248,6 +2250,8 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	}
 
 	/* In the second loop, populate taskRequiredForShardIndex */
+	bool updateQualsForOuterJoin = false;
+	bool outerPartHasDistributedTable = false;
 	forboth_ptr(prunedShardList, prunedRelationShardList,
 				relationRestriction, relationRestrictionContext->relationRestrictionList)
 	{
@@ -2270,9 +2274,21 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		 * the table is part of the non-outer side of the join and the outer side has a
 		 * distributed table.
 		 */
-		if (IsInnerTableOfOuterJoin(relationRestriction, distributedTableIndex))
+		if (IsInnerTableOfOuterJoin(relationRestriction, distributedTableIndex,
+									&outerPartHasDistributedTable))
 		{
-			continue;
+			if (outerPartHasDistributedTable)
+			{
+				/* we can skip the shards from this relation restriction */
+				continue;
+			}
+			else
+			{
+				/* The outer part does not include distributed tables, we can not skip shards.
+				 * Also, we will possibly update the quals of the outer relation for recurring join push down, mark here.
+				 */
+				updateQualsForOuterJoin = true;
+			}
 		}
 
 		ShardInterval *shardInterval = NULL;
@@ -2305,6 +2321,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 													 taskIdIndex,
 													 taskType,
 													 modifyRequiresCoordinatorEvaluation,
+													 updateQualsForOuterJoin,
 													 planningError);
 		if (*planningError != NULL)
 		{
@@ -2337,13 +2354,16 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
  * RelationRestriction if the table accessed for this relation is
  *   a) in an outer join
  *   b) on the inner part of said join
- *   c) the outer part of the join has a distributed table
+ *
+ *  The function also sets outerPartHasDistributedTable if the outer part
+ *  of the corresponding join has a distributed table.
  *
  * The function returns true only if all three conditions above hold true.
  */
 static bool
 IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
-						Bitmapset *distributedTables)
+						Bitmapset *distributedTables,
+						bool *outerPartHasDistributedTable)
 {
 	RestrictInfo *joinInfo = NULL;
 	foreach_declared_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
@@ -2364,14 +2384,12 @@ IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
 		if (!isInOuter)
 		{
 			/* this table is joined in the inner part of an outer join */
-			/* check if the outer part has a distributed relation */
-			bool outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids,
-															distributedTables);
-			if (outerPartHasDistributedTable)
-			{
-				/* this is an inner table of an outer join with a distributed table */
-				return true;
-			}
+			/* set if the outer part has a distributed relation */
+			*outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids,
+														distributedTables);
+
+			/* this is an inner table of an outer join  */
+			return true;
 		}
 	}
 
@@ -2487,6 +2505,7 @@ static Task *
 QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 						RelationRestrictionContext *restrictionContext, uint32 taskId,
 						TaskType taskType, bool modifyRequiresCoordinatorEvaluation,
+						bool updateQualsForOuterJoin,
 						DeferredErrorMessage **planningError)
 {
 	Query *taskQuery = copyObject(originalQuery);
@@ -2579,6 +2598,10 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 */
 	UpdateRelationToShardNames((Node *) taskQuery, relationShardList);
 
+	if (updateQualsForOuterJoin)
+	{
+		UpdateWhereClauseForOuterJoinWalker((Node *) taskQuery, relationShardList);
+	}
 
 	/*
 	 * Ands are made implicit during shard pruning, as predicate comparison and

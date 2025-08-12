@@ -1996,8 +1996,7 @@ WITH cte AS (
 )
   SELECT (a+5)*2, b FROM cte;
 DEBUG:  CTE cte is going to be inlined via distributed planning
-DEBUG:  cannot push down this subquery
-DETAIL:  Distinct on columns without partition column is currently unsupported
+DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
 DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT reference_table.a, 1 AS b FROM (query_single_shard_table.distributed_table RIGHT JOIN query_single_shard_table.reference_table USING (a))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ((a OPERATOR(pg_catalog.+) 5) OPERATOR(pg_catalog.*) 2) AS user_id, b AS value_1 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte
 DEBUG:  Collecting INSERT ... SELECT results on coordinator

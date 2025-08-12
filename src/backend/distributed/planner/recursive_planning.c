@@ -110,6 +110,7 @@ struct RecursivePlanningContextInternal
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
 	bool restrictionEquivalenceCheck;
+	bool forceRecursivePlanning;
 };
 
 /* track depth of current recursive planner query */
@@ -214,7 +215,8 @@ static bool hasPseudoconstantQuals(
  */
 List *
 GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
-									 PlannerRestrictionContext *plannerRestrictionContext)
+									 PlannerRestrictionContext *plannerRestrictionContext,
+									 RouterPlanType routerPlan)
 {
 	RecursivePlanningContext context;
 
@@ -228,6 +230,17 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	context.planId = planId;
 	context.subPlanList = NIL;
 	context.plannerRestrictionContext = plannerRestrictionContext;
+	context.forceRecursivePlanning = false;
+
+	/*
+	 * Force recursive planning of recurring outer joins for these queries
+	 * since the planning error from the previous step is generated prior to
+	 * the actual planning attempt.
+	 */
+	if (routerPlan == DML_QUERY)
+	{
+		context.forceRecursivePlanning = true;
+	}
 
 	/*
 	 * Calculating the distribution key equality upfront is a trade-off for us.
@@ -756,7 +769,8 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 				/* <recurring> left join <distributed> */
 				if (leftNodeRecurs && !rightNodeRecurs)
 				{
-					if (chainedJoin || !CheckPushDownFeasibilityOuterJoin(joinExpr,
+					if (recursivePlanningContext->forceRecursivePlanning ||
+						chainedJoin || !CheckPushDownFeasibilityOuterJoin(joinExpr,
 																		  query))
 					{
 						ereport(DEBUG1, (errmsg("recursively planning right side of "
@@ -787,7 +801,8 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 				/* <distributed> right join <recurring> */
 				if (!leftNodeRecurs && rightNodeRecurs)
 				{
-					if (chainedJoin || !CheckPushDownFeasibilityOuterJoin(joinExpr,
+					if (recursivePlanningContext->forceRecursivePlanning ||
+						chainedJoin || !CheckPushDownFeasibilityOuterJoin(joinExpr,
 																		  query))
 					{
 						ereport(DEBUG1, (errmsg("recursively planning left side of "

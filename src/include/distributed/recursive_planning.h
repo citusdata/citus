@@ -16,6 +16,7 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
@@ -33,7 +34,8 @@ extern PlannerRestrictionContext * GetPlannerRestrictionContext(
 	RecursivePlanningContext *recursivePlanningContext);
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
-												   plannerRestrictionContext);
+												   plannerRestrictionContext,
+												   RouterPlanType routerPlan);
 extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
 extern Query * BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList,
 									   char *resultId);
