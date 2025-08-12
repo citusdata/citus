@@ -5245,7 +5245,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 		bool forceDelegationIsNull = false;
 		Datum forceDelegationDatum =
 			heap_getattr(nextTuple,
-						 Anum_pg_dist_object_force_delegation,
+						 GetForceDelegationAttrIndexInPgDistObject(tupleDesc) + 1,
 						 tupleDesc,
 						 &forceDelegationIsNull);
 		bool forceDelegation = DatumGetBool(forceDelegationDatum);
