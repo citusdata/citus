@@ -108,7 +108,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport,
 						  NodeMetadata *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void BlockDistributedQueriesOnMetadataNodes(void);
-static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
+static WorkerNode * TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort,
@@ -2172,7 +2172,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
 	if (heapTuple != NULL)
 	{
-		workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+		workerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple);
 	}
 
 	table_close(pgDistNode, NoLock);
@@ -2279,7 +2279,7 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		WorkerNode *workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+		WorkerNode *workerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple);
 
 		if (includeNodesFromOtherClusters ||
 			strncmp(workerNode->nodeCluster, CurrentCluster, WORKER_LENGTH) == 0)
@@ -2826,7 +2826,7 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 	CommandCounterIncrement();
 
-	WorkerNode *newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+	WorkerNode *newWorkerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple);
 
 	table_close(pgDistNode, NoLock);
 
@@ -3332,18 +3332,18 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
  * the caller already has locks on the tuple, and doesn't perform any locking.
  */
 static WorkerNode *
-TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
+TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
-	Datum datumArray[Natts_pg_dist_node];
-	bool isNullArray[Natts_pg_dist_node];
-
-	Assert(!HeapTupleHasNulls(heapTuple));
-
-	/*
-	 * This function can be called before "ALTER TABLE ... ADD COLUMN nodecluster ...",
-	 * and other columns. We initialize isNullArray to true to be safe.
+	/* we add remove columns from pg_dist_node during extension upgrade and
+	 * and downgrads. Now the issue here is PostgreSQL never reuses the old
+	 * attnum. Dropped columns leave “holes” (attributes with attisdropped = true),
+	 * and a re-added column with the same name gets a new attnum at the end. So
+	 * we cannot use the deined Natts_pg_dist_node to allocate memory and also
+	 * we need to cater for the holes when fetching the column values
 	 */
-	memset(isNullArray, true, sizeof(isNullArray));
+	int nAtts = tupleDescriptor->natts;
+	Datum *datumArray  = palloc0(sizeof(Datum) * nAtts);
+	bool  *isNullArray = palloc0(sizeof(bool)  * nAtts);
 
 	/*
 	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
@@ -3369,37 +3369,44 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		datumArray[Anum_pg_dist_node_shouldhaveshards -
 				   1]);
 
-	/* nodeisclone and nodeprimarynodeid might be null if row is from older version */
-	if (!isNullArray[Anum_pg_dist_node_nodeisclone - 1])
-	{
-		workerNode->nodeisclone = DatumGetBool(datumArray[Anum_pg_dist_node_nodeisclone - 1]);
-	}
-	else
-	{
-		workerNode->nodeisclone = false; /* Default value */
-	}
-
-	if (!isNullArray[Anum_pg_dist_node_nodeprimarynodeid - 1])
-	{
-		workerNode->nodeprimarynodeid = DatumGetInt32(datumArray[Anum_pg_dist_node_nodeprimarynodeid - 1]);
-	}
-	else
-	{
-		workerNode->nodeprimarynodeid = 0; /* Default value for InvalidNodeId */
-	}
-
 	/*
-	 * nodecluster column can be missing. In the case of extension creation/upgrade,
-	 * master_initialize_node_metadata function is called before the nodecluster
-	 * column is added to pg_dist_node table.
+	 * Attributes above this line are guaranteed to be present at the
+	 * exact defined attribute number. Atleast till now. If you are droping or
+	 * adding any of the above columns consider adjusting the code above
 	 */
-	if (!isNullArray[Anum_pg_dist_node_nodecluster - 1])
+	Oid pgDistNodeRelId = RelationGetRelid(pgDistNode);
+
+	AttrNumber nodeClusterAttno = get_attnum(pgDistNodeRelId, "nodecluster");
+	if (nodeClusterAttno > 0 &&
+		TupleDescAttr(tupleDescriptor, nodeClusterAttno - 1)->attisdropped &&
+		!isNullArray[nodeClusterAttno - 1])
 	{
 		Name nodeClusterName =
-			DatumGetName(datumArray[Anum_pg_dist_node_nodecluster - 1]);
+			DatumGetName(datumArray[nodeClusterAttno - 1]);
 		char *nodeClusterString = NameStr(*nodeClusterName);
 		strlcpy(workerNode->nodeCluster, nodeClusterString, NAMEDATALEN);
 	}
+
+	if (nAtts > Anum_pg_dist_node_nodeisclone)
+	{
+		AttrNumber nodeIsCloneAttno = get_attnum(pgDistNodeRelId, "nodeisclone");
+		if (nodeIsCloneAttno > 0 &&
+			TupleDescAttr(tupleDescriptor, nodeIsCloneAttno - 1)->attisdropped &&
+			!isNullArray[nodeIsCloneAttno - 1])
+		{
+			workerNode->nodeisclone = DatumGetBool(datumArray[nodeIsCloneAttno - 1]);
+		}
+		AttrNumber nodePrimaryNodeIdAttno = get_attnum(pgDistNodeRelId, "nodeprimarynodeid");
+		if (nodePrimaryNodeIdAttno > 0 &&
+			TupleDescAttr(tupleDescriptor, nodePrimaryNodeIdAttno - 1)->attisdropped &&
+			!isNullArray[nodePrimaryNodeIdAttno - 1])
+		{
+			workerNode->nodeprimarynodeid = DatumGetInt32(datumArray[nodePrimaryNodeIdAttno - 1]);
+		}
+	}
+
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	return workerNode;
 }
