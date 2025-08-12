@@ -4314,7 +4314,6 @@ static void
 PrepareWorkerNodeCache(void)
 {
 	InitializeCaches(); /* ensure relevant callbacks are registered */
-
 	/*
 	 * Simulate a SELECT from pg_dist_node, ensure pg_dist_node doesn't change while our
 	 * caller is using WorkerNodeHash.

@@ -162,8 +162,9 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 
 
-	/* TODO: Step 6: Unblock Writes (should be handled by transaction commit) */
-	ereport(NOTICE, (errmsg("TODO: Step 6: Unblock Writes")));
+	/* Step 6: Unblock Writes (should be handled by transaction commit) */
+	ereport(NOTICE, (errmsg("Clone node %s:%d (ID %d) successfully registered as a worker node",
+						   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
 
 	PG_RETURN_VOID();
 }

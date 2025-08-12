@@ -1203,10 +1203,14 @@ ActivateReplicaNodeAsPrimary(WorkerNode *workerNode)
 							 BoolGetDatum(true));
 	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_nodeisclone,
 							 BoolGetDatum(false));
-	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_shouldhaveshards,
-							 BoolGetDatum(true));
 	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_nodeprimarynodeid,
 							 Int32GetDatum(0));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
+							 BoolGetDatum(true));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+							 BoolGetDatum(true));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_shouldhaveshards,
+							 BoolGetDatum(true));
 }
 
 /*
