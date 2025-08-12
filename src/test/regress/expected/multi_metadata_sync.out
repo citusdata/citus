@@ -59,7 +59,7 @@ ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
 -- Show that, with no MX tables, activate node snapshot contains only the delete commands,
 -- pg_dist_node entries, pg_dist_object entries and roles.
 SELECT unnest(activate_node_snapshot()) order by 1;
-                                                                                                                                                                                                                             unnest
+                                                                                                                                                                                                                                                            unnest
 ---------------------------------------------------------------------
  ALTER DATABASE regression OWNER TO postgres;
  CALL pg_catalog.worker_drop_all_shell_tables(true)
@@ -75,7 +75,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
  GRANT USAGE ON SCHEMA public TO pg_database_owner;
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE, FALSE, 0),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0)
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
@@ -148,7 +148,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
  GRANT USAGE ON SCHEMA public TO pg_database_owner;
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE, FALSE, 0),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0)
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
@@ -216,7 +216,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
  GRANT USAGE ON SCHEMA public TO pg_database_owner;
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE, FALSE, 0),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0)
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
@@ -277,7 +277,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
  GRANT USAGE ON SCHEMA public TO pg_database_owner;
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE, FALSE, 0),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0)
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
@@ -345,7 +345,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
  GRANT USAGE ON SCHEMA public TO pg_database_owner;
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE, FALSE, 0),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0)
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
@@ -406,7 +406,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
  GRANT USAGE ON SCHEMA public TO pg_database_owner;
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES (1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE, FALSE, 0),(2, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0),(3, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0)
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
@@ -511,13 +511,13 @@ SELECT * FROM pg_dist_local_group;
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      1 |       0 | localhost |    57636 | default  | t           | t        | primary   | default        | t              | f
-      2 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t              | t
-      3 |       2 | localhost |    57638 | default  | f           | t        | primary   | default        | f              | t
-      5 |       1 | localhost |     8888 | default  | f           | t        | secondary | default        | f              | t
-      6 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
+      1 |       0 | localhost |    57636 | default  | t           | t        | primary   | default        | t              | f                | f           |                 0
+      2 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t              | t                | f           |                 0
+      3 |       2 | localhost |    57638 | default  | f           | t        | primary   | default        | f              | t                | f           |                 0
+      5 |       1 | localhost |     8888 | default  | f           | t        | secondary | default        | f              | t                | f           |                 0
+      6 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t                | f           |                 0
 (5 rows)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
@@ -650,13 +650,13 @@ SELECT * FROM pg_dist_local_group;
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      1 |       0 | localhost |    57636 | default  | t           | t        | primary   | default        | t              | f
-      2 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t              | t
-      3 |       2 | localhost |    57638 | default  | f           | t        | primary   | default        | f              | t
-      5 |       1 | localhost |     8888 | default  | f           | t        | secondary | default        | f              | t
-      6 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
+      1 |       0 | localhost |    57636 | default  | t           | t        | primary   | default        | t              | f                | f           |                 0
+      2 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t              | t                | f           |                 0
+      3 |       2 | localhost |    57638 | default  | f           | t        | primary   | default        | f              | t                | f           |                 0
+      5 |       1 | localhost |     8888 | default  | f           | t        | secondary | default        | f              | t                | f           |                 0
+      6 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t                | f           |                 0
 (5 rows)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
@@ -1982,7 +1982,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
  GRANT USAGE ON SCHEMA public TO pg_database_owner;
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (5, 1, 'localhost', 8888, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'default', TRUE),(6, 1, 'localhost', 8889, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'second-cluster', TRUE),(1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE),(2, 1, 'localhost', 57637, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE),(8, 5, 'localhost', 57638, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES (5, 1, 'localhost', 8888, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'default', TRUE, FALSE, 0),(6, 1, 'localhost', 8889, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'second-cluster', TRUE, FALSE, 0),(1, 0, 'localhost', 57636, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', FALSE, FALSE, 0),(2, 1, 'localhost', 57637, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0),(8, 5, 'localhost', 57638, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE, FALSE, 0)
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
