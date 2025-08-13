@@ -2357,8 +2357,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
  *
  *  The function also sets outerPartHasDistributedTable if the outer part
  *  of the corresponding join has a distributed table.
- *
- * The function returns true only if all three conditions above hold true.
  */
 static bool
 IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
@@ -2598,23 +2596,23 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 */
 	UpdateRelationToShardNames((Node *) taskQuery, relationShardList);
 
-	if (updateQualsForOuterJoin)
-	{
-		UpdateWhereClauseForOuterJoinWalker((Node *) taskQuery, relationShardList);
-	}
-
 	/*
 	 * Ands are made implicit during shard pruning, as predicate comparison and
 	 * refutation depend on it being so. We need to make them explicit again so
 	 * that the query string is generated as (...) AND (...) as opposed to
 	 * (...), (...).
-	 * TODO: do we need to run this before adding quals?
 	 */
 	if (taskQuery->jointree->quals != NULL && IsA(taskQuery->jointree->quals, List))
 	{
 		taskQuery->jointree->quals = (Node *) make_ands_explicit(
 			(List *) taskQuery->jointree->quals);
 	}
+
+	if (updateQualsForOuterJoin)
+	{
+		UpdateWhereClauseForOuterJoinWalker((Node *) taskQuery, relationShardList);
+	}
+
 
 	Task *subqueryTask = CreateBasicTask(jobId, taskId, taskType, NULL);
 
