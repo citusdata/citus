@@ -3605,8 +3605,9 @@ SplitShardsBetweenPrimaryAndReplica(WorkerNode *primaryNode,
 		.workerNode = primaryNode /* indicate Primary node as a source node */
 	};
 
-	SplitPrimaryReplicaShards *splitShards = NULL;
-	splitShards = GetPrimaryReplicaSplitRebalanceSteps(&options, replicaNode);
+	SplitPrimaryReplicaShards *splitShards = GetPrimaryReplicaSplitRebalanceSteps(&options
+																				  ,
+																				  replicaNode);
 	AdjustShardsForPrimaryReplicaNodeSplit(primaryNode, replicaNode,
 										   splitShards->primaryShardIdList, splitShards->
 										   replicaShardIdList);
@@ -3869,8 +3870,9 @@ get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
 		.workerNode = primaryNode /* indicate Primary node as a source node */
 	};
 
-	SplitPrimaryReplicaShards *splitShards = NULL;
-	splitShards = GetPrimaryReplicaSplitRebalanceSteps(&options, replicaNode);
+	SplitPrimaryReplicaShards *splitShards = GetPrimaryReplicaSplitRebalanceSteps(&options
+																				  ,
+																				  replicaNode);
 
 	if (splitShards == NULL)
 	{
