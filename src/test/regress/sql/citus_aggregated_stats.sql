@@ -28,7 +28,7 @@ SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_
   WHERE tablename IN ('current_check', 'dist_current_check_0', 'dist_current_check_1')
   ORDER BY 1;
 
-SELECT * FROM citus_column_stats
+SELECT * FROM citus_stats
   WHERE tablename IN ('current_check', 'dist_current_check_0', 'dist_current_check_1')
   ORDER BY 1;
 
@@ -60,7 +60,7 @@ SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_
   WHERE tablename IN ('current_check', 'dist_current_check_0', 'dist_current_check_1')
   ORDER BY 1;
 
-SELECT * FROM citus_column_stats
+SELECT * FROM citus_stats
   WHERE tablename IN ('current_check', 'dist_current_check_0', 'dist_current_check_1')
   ORDER BY 1;
 
