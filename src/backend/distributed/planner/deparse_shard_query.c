@@ -222,8 +222,8 @@ DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtinde
 
 	/*
 	 * Add constraints for the relation identified by rtindex, specifically on its column at attnum.
-	 * Create a Var node representing this column, which will be used to compare against the partition
-	 * column for shard interval qualification.
+	 * Create a Var node representing this column, which will be used to compare against the bounds
+	 * from the partition column of shard interval.
 	 */
 
 	Var *outerTablePartitionColumnVar = makeVar(
@@ -371,6 +371,7 @@ UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
  *            outerRtIndex : RT index whose column we will constrain,
  *            outerRte / innerRte,
  *            attnum       : attribute number (partition column) on outer side.
+ *                           This is compared to partition column of innerRte.
  *   3. Find the RelationShard for the inner distributed table (innerRte->relid)
  *      in relationShardList; skip if absent (no fixed shard chosen).
  *   4. Build the shard qualification with DefineQualsForShardInterval():
@@ -385,7 +386,7 @@ UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
 void
 UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
 {
-	if (query == NULL || query->jointree == NULL || query->jointree->fromlist == NIL)
+	if (query == NULL)
 	{
 		return;
 	}

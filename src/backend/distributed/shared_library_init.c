@@ -2334,7 +2334,6 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
-
 	DefineCustomIntVariable(
 		"citus.recover_2pc_interval",
 		gettext_noop("Sets the time to wait between recovering 2PCs."),
