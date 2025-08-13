@@ -3590,8 +3590,7 @@ SplitShardsBetweenPrimaryAndReplica(WorkerNode *primaryNode,
 {
 	CheckCitusVersion(ERROR);
 
-	List *relationIdList = NIL;
-	relationIdList = NonColocatedDistRelationIdList();
+	List *relationIdList = NonColocatedDistRelationIdList();
 
 	Form_pg_dist_rebalance_strategy strategy = GetRebalanceStrategy(strategyName);/* We use default strategy for now */
 
@@ -3854,8 +3853,7 @@ get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
 							primaryNode->nodeId)));
 	}
 
-	List *relationIdList = NIL;
-	relationIdList = NonColocatedDistRelationIdList();
+	List *relationIdList = NonColocatedDistRelationIdList();
 
 	Form_pg_dist_rebalance_strategy strategy = GetRebalanceStrategy(
 		PG_GETARG_NAME_OR_NULL(4));

@@ -29,13 +29,10 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	/* Get clone_nodeid argument */
 	int32 cloneNodeIdArg = PG_GETARG_INT32(0);
 
-	WorkerNode *cloneNode = NULL;
-	WorkerNode *primaryNode = NULL;
-
 	/* Lock pg_dist_node to prevent concurrent modifications during this operation */
 	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
 
-	cloneNode = FindNodeAnyClusterByNodeId(cloneNodeIdArg);
+	WorkerNode *cloneNode = FindNodeAnyClusterByNodeId(cloneNodeIdArg);
 	if (cloneNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -60,7 +57,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 							nodeId)));
 	}
 
-	primaryNode = FindNodeAnyClusterByNodeId(cloneNode->nodeprimarynodeid);
+	WorkerNode *primaryNode = FindNodeAnyClusterByNodeId(cloneNode->nodeprimarynodeid);
 	if (primaryNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
