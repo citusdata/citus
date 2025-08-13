@@ -1,12 +1,13 @@
 #include "postgres.h"
+
 #include "utils/fmgrprotos.h"
 #include "utils/pg_lsn.h"
 
 #include "distributed/argutils.h"
 #include "distributed/listutils.h"
-#include "distributed/remote_commands.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/remote_commands.h"
 #include "distributed/shard_rebalancer.h"
 
 
