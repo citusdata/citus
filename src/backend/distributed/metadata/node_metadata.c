@@ -1647,8 +1647,8 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 							errmsg(
 								"node %s:%d already exists but is not correctly configured as a clone for primary %s:%d",
-								cloneHostname, clonePort, primaryWorkerNode->workerName
-								, primaryWorkerNode->workerPort)));
+								cloneHostname, clonePort, primaryWorkerNode->workerName,
+								primaryWorkerNode->workerPort)));
 		}
 	}
 
