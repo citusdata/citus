@@ -1494,8 +1494,8 @@ ALTER EXTENSION citus UPDATE TO '13.2-1';
 ALTER EXTENSION citus UPDATE TO '13.1-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object |                             current_object                              
------------------+-------------------------------------------------------------------------
+ previous_object |                             current_object
+---------------------------------------------------------------------
                  | function citus_add_clone_node(text,integer,text,integer) integer
                  | function citus_add_clone_node_with_nodeid(text,integer,integer) integer
 (2 rows)
@@ -1503,9 +1503,9 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 13.2-1
 ALTER EXTENSION citus UPDATE TO '13.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
-                                                   previous_object                                                    |                                                                                       current_object                                                                                        
-----------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision) | 
+                                                   previous_object                                                    |                                                                                       current_object
+---------------------------------------------------------------------
+ function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision) |
                                                                                                                       | function citus_promote_clone_and_rebalance(integer,name) void
                                                                                                                       | function citus_remove_clone_node(text,integer) void
                                                                                                                       | function citus_remove_clone_node_with_nodeid(integer) void
@@ -1516,8 +1516,8 @@ SELECT * FROM multi_extension.print_extension_changes();
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
- citus.version 
----------------
+ citus.version
+---------------------------------------------------------------------
  13.2devel
 (1 row)
 
