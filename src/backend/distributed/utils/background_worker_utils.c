@@ -38,14 +38,10 @@ InitializeCitusBackgroundWorker(BackgroundWorker *worker,
 	/* Set worker name */
 	strcpy_s(worker->bgw_name, sizeof(worker->bgw_name), config->workerName);
 
-	/* Set worker type if provided, otherwise use default */
+	/* Set worker type if provided */
 	if (config->workerType != NULL)
 	{
 		strcpy_s(worker->bgw_type, sizeof(worker->bgw_type), config->workerType);
-	}
-	else
-	{
-		strcpy_s(worker->bgw_type, sizeof(worker->bgw_type), CITUS_BGW_DEFAULT_TYPE);
 	}
 
 	/* Set standard flags for Citus workers */

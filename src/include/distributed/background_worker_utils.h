@@ -47,7 +47,6 @@ typedef struct CitusBackgroundWorkerConfig
 #define CITUS_BGW_DEFAULT_RESTART_TIME 5
 #define CITUS_BGW_NEVER_RESTART BGW_NEVER_RESTART
 #define CITUS_BGW_DEFAULT_START_TIME BgWorkerStart_ConsistentState
-#define CITUS_BGW_DEFAULT_TYPE "citus"
 
 /* Function declarations */
 extern BackgroundWorkerHandle * RegisterCitusBackgroundWorker(const
