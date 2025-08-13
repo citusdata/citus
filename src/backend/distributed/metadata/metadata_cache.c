@@ -320,9 +320,10 @@ static void CachedRelationNamespaceLookup(const char *relationName, Oid relnames
 static void CachedRelationNamespaceLookupExtended(const char *relationName,
 												  Oid renamespace, Oid *cachedOid,
 												  bool missing_ok);
-static ShardPlacement * ResolveGroupShardPlacement(
-	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
-	int shardIndex);
+static ShardPlacement * ResolveGroupShardPlacement(GroupShardPlacement *
+												   groupShardPlacement,
+												   CitusTableCacheEntry *tableEntry,
+												   int shardIndex);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
@@ -3567,6 +3568,7 @@ SecondaryNodeRoleId(void)
 	return MetadataCache.secondaryNodeRoleId;
 }
 
+
 /* return the Oid of the 'unavailable' nodeRole enum value */
 Oid
 UnavailableNodeRoleId(void)
@@ -3579,6 +3581,7 @@ UnavailableNodeRoleId(void)
 
 	return MetadataCache.secondaryNodeRoleId;
 }
+
 
 Oid
 CitusJobStatusScheduledId(void)
@@ -4314,6 +4317,7 @@ static void
 PrepareWorkerNodeCache(void)
 {
 	InitializeCaches(); /* ensure relevant callbacks are registered */
+
 	/*
 	 * Simulate a SELECT from pg_dist_node, ensure pg_dist_node doesn't change while our
 	 * caller is using WorkerNodeHash.

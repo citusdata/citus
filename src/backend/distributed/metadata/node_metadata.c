@@ -108,7 +108,8 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport,
 						  NodeMetadata *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void BlockDistributedQueriesOnMetadataNodes(void);
-static WorkerNode * TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heapTuple);
+static WorkerNode * TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor,
+									  HeapTuple heapTuple);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort,
@@ -124,8 +125,8 @@ static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum val
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
 static void ErrorIfAnyNodeNotExist(List *nodeList);
 static void UpdateLocalGroupIdsViaMetadataContext(MetadataSyncContext *context);
-static void SendDeletionCommandsForReplicatedTablePlacements(
-	MetadataSyncContext *context);
+static void SendDeletionCommandsForReplicatedTablePlacements(MetadataSyncContext *context)
+;
 static void SyncNodeMetadata(MetadataSyncContext *context);
 static void SetNodeStateViaMetadataContext(MetadataSyncContext *context,
 										   WorkerNode *workerNode,
@@ -140,9 +141,9 @@ static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode
 	WorkerNode *workerNode, bool force, int32 lock_cooldown);
 
 static void EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode,
-					char* cloneHostname, int clonePort);
+										char *cloneHostname, int clonePort);
 static int32 CitusAddCloneNode(WorkerNode *primaryWorkerNode,
-					char *cloneHostname, int32 clonePort);
+							   char *cloneHostname, int32 clonePort);
 static void RemoveCloneNode(WorkerNode *cloneNode);
 
 /* Function definitions go here */
@@ -1187,6 +1188,7 @@ ActivateNodeList(MetadataSyncContext *context)
 	SetNodeMetadata(context, localOnly);
 }
 
+
 /*
  * ActivateReplicaNodeAsPrimary sets the given worker node as primary and active
  * in the pg_dist_node catalog and make the replica node as first class citizen.
@@ -1213,6 +1215,7 @@ ActivateReplicaNodeAsPrimary(WorkerNode *workerNode)
 							 BoolGetDatum(true));
 }
 
+
 /*
  * Acquires shard metadata locks on all shards residing in the given worker node
  *
@@ -1236,7 +1239,8 @@ BackgroundWorkerHandle *
 CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown)
 {
 	BackgroundWorkerHandle *handle = StartLockAcquireHelperBackgroundWorker(MyProcPid,
-																			lock_cooldown);
+																			lock_cooldown)
+	;
 	if (!handle)
 	{
 		/*
@@ -1457,10 +1461,10 @@ master_update_node(PG_FUNCTION_ARGS)
 	return citus_update_node(fcinfo);
 }
 
+
 /*
  * citus_add_clone_node adds a new node as a clone of an existing primary node.
  */
-
 Datum
 citus_add_clone_node(PG_FUNCTION_ARGS)
 {
@@ -1468,27 +1472,28 @@ citus_add_clone_node(PG_FUNCTION_ARGS)
 	EnsureSuperUser();
 	EnsureCoordinator();
 
-	text *replicaHostnameText = PG_GETARG_TEXT_P(0);
-	int32 replicaPort = PG_GETARG_INT32(1);
+	text *cloneHostnameText = PG_GETARG_TEXT_P(0);
+	int32 clonePort = PG_GETARG_INT32(1);
 	text *primaryHostnameText = PG_GETARG_TEXT_P(2);
 	int32 primaryPort = PG_GETARG_INT32(3);
 
-	char *replicaHostname = text_to_cstring(replicaHostnameText);
+	char *cloneHostname = text_to_cstring(cloneHostnameText);
 	char *primaryHostname = text_to_cstring(primaryHostnameText);
 
-	WorkerNode *primaryWorkerNode = FindWorkerNodeAnyCluster(primaryHostname, primaryPort);
+	WorkerNode *primaryWorker = FindWorkerNodeAnyCluster(primaryHostname, primaryPort);
 
-	if (primaryWorkerNode == NULL)
+	if (primaryWorker == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("primary node %s:%d not found in pg_dist_node",
 							   primaryHostname, primaryPort)));
 	}
 
-	int32 cloneNodeId = CitusAddCloneNode(primaryWorkerNode, replicaHostname, replicaPort);
+	int32 cloneNodeId = CitusAddCloneNode(primaryWorker, cloneHostname, clonePort);
 
 	PG_RETURN_INT32(cloneNodeId);
 }
+
 
 /*
  * citus_add_clone_node_with_nodeid adds a new node as a clone of an existing primary node
@@ -1497,7 +1502,7 @@ citus_add_clone_node(PG_FUNCTION_ARGS)
  *
  * This function is useful when you already know the primary node's ID and want to add a clone
  * without needing to look it up by hostname and port.
-*/
+ */
 Datum
 citus_add_clone_node_with_nodeid(PG_FUNCTION_ARGS)
 {
@@ -1505,11 +1510,11 @@ citus_add_clone_node_with_nodeid(PG_FUNCTION_ARGS)
 	EnsureSuperUser();
 	EnsureCoordinator();
 
-	text *replicaHostnameText = PG_GETARG_TEXT_P(0);
-	int32 replicaPort = PG_GETARG_INT32(1);
+	text *cloneHostnameText = PG_GETARG_TEXT_P(0);
+	int32 clonePort = PG_GETARG_INT32(1);
 	int32 primaryNodeId = PG_GETARG_INT32(2);
 
-	char *replicaHostname = text_to_cstring(replicaHostnameText);
+	char *cloneHostname = text_to_cstring(cloneHostnameText);
 
 	bool missingOk = false;
 	WorkerNode *primaryWorkerNode = FindNodeWithNodeId(primaryNodeId, missingOk);
@@ -1517,15 +1522,14 @@ citus_add_clone_node_with_nodeid(PG_FUNCTION_ARGS)
 	if (primaryWorkerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				errmsg("primary node with ID %d does not exist", primaryNodeId)));
-
+						errmsg("primary node with ID %d does not exist", primaryNodeId)));
 	}
 
-	int32 cloneNodeId = CitusAddCloneNode(primaryWorkerNode, replicaHostname, replicaPort);
+	int32 cloneNodeId = CitusAddCloneNode(primaryWorkerNode, cloneHostname, clonePort);
 
 	PG_RETURN_INT32(cloneNodeId);
-
 }
+
 
 /*
  * CitusAddCloneNode function adds a new node as a clone of an existing primary node.
@@ -1534,9 +1538,8 @@ citus_add_clone_node_with_nodeid(PG_FUNCTION_ARGS)
  */
 static int32
 CitusAddCloneNode(WorkerNode *primaryWorkerNode,
-					char *cloneHostname, int32 clonePort)
+				  char *cloneHostname, int32 clonePort)
 {
-
 	Assert(primaryWorkerNode != NULL);
 
 	/* Future-proofing: Ideally, a primary node should not itself be a clone.
@@ -1546,15 +1549,19 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 	if (primaryWorkerNode->nodeisclone)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("primary node %s:%d is itself a replica and cannot have replicas",
-							   primaryWorkerNode->workerName, primaryWorkerNode->workerPort)));
+						errmsg(
+							"primary node %s:%d is itself a clone and cannot have clones",
+							primaryWorkerNode->workerName, primaryWorkerNode->
+							workerPort)));
 	}
 
 	if (!primaryWorkerNode->shouldHaveShards)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("primary node %s:%d does not have shards, node without shards cannot have replicas",
-							   primaryWorkerNode->workerName, primaryWorkerNode->workerPort)));
+						errmsg(
+							"primary node %s:%d does not have shards, node without shards cannot have clones",
+							primaryWorkerNode->workerName, primaryWorkerNode->
+							workerPort)));
 	}
 
 	WorkerNode *existingCloneNode = FindWorkerNodeAnyCluster(cloneHostname, clonePort);
@@ -1567,16 +1574,19 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 		if (existingCloneNode->nodeisclone &&
 			existingCloneNode->nodeprimarynodeid == primaryWorkerNode->nodeId)
 		{
-			ereport(NOTICE, (errmsg("node %s:%d is already registered as a clone for primary %s:%d (nodeid %d)",
-									cloneHostname, clonePort,
-									primaryWorkerNode->workerName, primaryWorkerNode->workerPort, primaryWorkerNode->nodeId)));
+			ereport(NOTICE, (errmsg(
+								 "node %s:%d is already registered as a clone for primary %s:%d (nodeid %d)",
+								 cloneHostname, clonePort,
+								 primaryWorkerNode->workerName, primaryWorkerNode->
+								 workerPort, primaryWorkerNode->nodeId)));
 			PG_RETURN_INT32(existingCloneNode->nodeId);
 		}
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("a different node %s:%d (nodeid %d) already exists or is a clone for a different primary",
-								   cloneHostname, clonePort, existingCloneNode->nodeId)));
+							errmsg(
+								"a different node %s:%d (nodeid %d) already exists or is a clone for a different primary",
+								cloneHostname, clonePort, existingCloneNode->nodeId)));
 		}
 	}
 	EnsureValidStreamingReplica(primaryWorkerNode, cloneHostname, clonePort);
@@ -1590,6 +1600,7 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 	nodeMetadata.groupId = INVALID_GROUP_ID; /* Replicas get a new group ID and do not belong to any existing group */
 	nodeMetadata.nodeRole = UnavailableNodeRoleId(); /* The node role is set to 'unavailable' */
 	nodeMetadata.nodeCluster = primaryWorkerNode->nodeCluster; /* Same cluster as primary */
+
 	/* Other fields like hasMetadata, metadataSynced will take defaults from DefaultNodeMetadata
 	 * (typically true, true for hasMetadata and metadataSynced if it's a new node,
 	 * or might need adjustment based on replica strategy)
@@ -1607,7 +1618,7 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 	 * It also checks again if the node already exists after acquiring the lock.
 	 */
 	int cloneNodeId = AddNodeMetadata(cloneHostname, clonePort, &nodeMetadata,
-										&nodeAlreadyExists, localOnly);
+									  &nodeAlreadyExists, localOnly);
 
 	if (nodeAlreadyExists)
 	{
@@ -1622,17 +1633,22 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 		if (fetchedExistingNode != NULL && fetchedExistingNode->nodeisclone &&
 			fetchedExistingNode->nodeprimarynodeid == primaryWorkerNode->nodeId)
 		{
-			ereport(NOTICE, (errmsg("node %s:%d was already correctly registered as a clone for primary %s:%d (nodeid %d)",
-									cloneHostname, clonePort,
-									primaryWorkerNode->workerName, primaryWorkerNode->workerPort, primaryWorkerNode->nodeId)));
+			ereport(NOTICE, (errmsg(
+								 "node %s:%d was already correctly registered as a clone for primary %s:%d (nodeid %d)",
+								 cloneHostname, clonePort,
+								 primaryWorkerNode->workerName, primaryWorkerNode->
+								 workerPort, primaryWorkerNode->nodeId)));
+
 			/* Intentional fall-through to return cloneNodeId */
 		}
 		else
 		{
 			/* This state is less expected if our initial check passed or errored. */
 			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-							errmsg("node %s:%d already exists but is not correctly configured as a clone for primary %s:%d",
-								   cloneHostname, clonePort, primaryWorkerNode->workerName, primaryWorkerNode->workerPort)));
+							errmsg(
+								"node %s:%d already exists but is not correctly configured as a clone for primary %s:%d",
+								cloneHostname, clonePort, primaryWorkerNode->workerName
+								, primaryWorkerNode->workerPort)));
 		}
 	}
 
@@ -1651,6 +1667,7 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 
 	return cloneNodeId;
 }
+
 
 /*
  * citus_remove_clone_node removes an inactive streaming clone node from Citus metadata.
@@ -1679,6 +1696,7 @@ citus_remove_clone_node(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 /*
  * citus_remove_replica_node_with_nodeid removes an inactive streaming replica node from Citus metadata
  * using the node's ID.
@@ -1704,6 +1722,7 @@ citus_remove_clone_node_with_nodeid(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 static void
 RemoveCloneNode(WorkerNode *cloneNode)
 {
@@ -1714,16 +1733,19 @@ RemoveCloneNode(WorkerNode *cloneNode)
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Node %s:%d (ID %d) is not a clone node. "
 							   "Use citus_remove_node() to remove primary or already promoted nodes.",
-							   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
+							   cloneNode->workerName, cloneNode->workerPort, cloneNode->
+							   nodeId)));
 	}
 
 	if (cloneNode->isActive)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Clone node %s:%d (ID %d) is marked as active and cannot be removed with this function. "
-							   "This might indicate a promoted clone. Consider using citus_remove_node() if you are sure, "
-							   "or ensure it's properly deactivated if it's an unpromoted clone in an unexpected state.",
-							   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
+						errmsg(
+							"Clone node %s:%d (ID %d) is marked as active and cannot be removed with this function. "
+							"This might indicate a promoted clone. Consider using citus_remove_node() if you are sure, "
+							"or ensure it's properly deactivated if it's an unpromoted clone in an unexpected state.",
+							cloneNode->workerName, cloneNode->workerPort, cloneNode->
+							nodeId)));
 	}
 
 	/*
@@ -1731,13 +1753,15 @@ RemoveCloneNode(WorkerNode *cloneNode)
 	 * RemoveNodeFromCluster handles locking, catalog changes, connection closing, and metadata sync.
 	 */
 	ereport(NOTICE, (errmsg("Removing inactive clone node %s:%d (ID %d)",
-				   cloneNode->workerName, cloneNode->workerPort, cloneNode->nodeId)));
+							cloneNode->workerName, cloneNode->workerPort, cloneNode->
+							nodeId)));
 
 	RemoveNodeFromCluster(cloneNode->workerName, cloneNode->workerPort);
 
 	/* RemoveNodeFromCluster might set this, but setting it here ensures it's marked for this UDF's transaction. */
 	TransactionModifiedNodeMetadata = true;
 }
+
 
 /*
  * SetLockTimeoutLocally sets the lock_timeout to the given value.
@@ -2283,7 +2307,8 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		WorkerNode *workerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple);
+		WorkerNode *workerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple)
+		;
 
 		if (includeNodesFromOtherClusters ||
 			strncmp(workerNode->nodeCluster, CurrentCluster, WORKER_LENGTH) == 0)
@@ -3346,8 +3371,8 @@ TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heap
 	 * we need to cater for the holes when fetching the column values
 	 */
 	int nAtts = tupleDescriptor->natts;
-	Datum *datumArray  = palloc0(sizeof(Datum) * nAtts);
-	bool  *isNullArray = palloc0(sizeof(bool)  * nAtts);
+	Datum *datumArray = palloc0(sizeof(Datum) * nAtts);
+	bool *isNullArray = palloc0(sizeof(bool) * nAtts);
 
 	/*
 	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
@@ -3401,12 +3426,15 @@ TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heap
 		{
 			workerNode->nodeisclone = DatumGetBool(datumArray[nodeIsCloneAttno - 1]);
 		}
-		AttrNumber nodePrimaryNodeIdAttno = get_attnum(pgDistNodeRelId, "nodeprimarynodeid");
+		AttrNumber nodePrimaryNodeIdAttno = get_attnum(pgDistNodeRelId,
+													   "nodeprimarynodeid");
 		if (nodePrimaryNodeIdAttno > 0 &&
 			!TupleDescAttr(tupleDescriptor, nodePrimaryNodeIdAttno - 1)->attisdropped &&
 			!isNullArray[nodePrimaryNodeIdAttno - 1])
 		{
-			workerNode->nodeprimarynodeid = DatumGetInt32(datumArray[nodePrimaryNodeIdAttno - 1]);
+			workerNode->nodeprimarynodeid = DatumGetInt32(datumArray[
+															  nodePrimaryNodeIdAttno - 1])
+			;
 		}
 	}
 
@@ -3643,6 +3671,7 @@ SyncNodeMetadata(MetadataSyncContext *context)
 	SendOrCollectCommandListToActivatedNodes(context, recreateNodeSnapshotCommandList);
 }
 
+
 /*
  * EnsureValidStreamingReplica checks if the given replica is a valid streaming
  * replica. It connects to the replica and checks if it is in recovery mode.
@@ -3651,12 +3680,13 @@ SyncNodeMetadata(MetadataSyncContext *context)
  * to ensure they match.
  */
 static void
-EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname, int replicaPort)
+EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname, int
+							replicaPort)
 {
-
 	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *replicaConnection = GetNodeConnection(connectionFlag, replicaHostname,
-													replicaPort);
+	MultiConnection *replicaConnection = GetNodeConnection(connectionFlag, replicaHostname
+														   ,
+														   replicaPort);
 
 	const char *replica_recovery_query = "SELECT pg_is_in_recovery()";
 
@@ -3666,9 +3696,9 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 	{
 		CloseConnection(replicaConnection);
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-					errmsg("could not connect to %s:%d to execute pg_is_in_recovery()",
+						errmsg(
+							"could not connect to %s:%d to execute pg_is_in_recovery()",
 							replicaHostname, replicaPort)));
-
 	}
 
 	PGresult *result = GetRemoteCommandResult(replicaConnection, true);
@@ -3678,8 +3708,8 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 		CloseConnection(replicaConnection);
 
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				errmsg("node %s:%d does not support pg_is_in_recovery()",
-					   replicaHostname, replicaPort)));
+						errmsg("node %s:%d does not support pg_is_in_recovery()",
+							   replicaHostname, replicaPort)));
 	}
 
 	List *sizeList = ReadFirstColumnAsText(result);
@@ -3690,25 +3720,25 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 		CloseConnection(replicaConnection);
 
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						   errmsg("cannot parse pg_is_in_recovery() result from %s:%d",
-								  replicaHostname,
-								  replicaPort)));
-
+						errmsg("cannot parse pg_is_in_recovery() result from %s:%d",
+							   replicaHostname,
+							   replicaPort)));
 	}
 
 	StringInfo isInRecoveryQueryResInfo = (StringInfo) linitial(sizeList);
 	char *isInRecoveryQueryResStr = isInRecoveryQueryResInfo->data;
 
-	if (strcmp(isInRecoveryQueryResStr, "t") != 0 && strcmp(isInRecoveryQueryResStr, "true") != 0)
+	if (strcmp(isInRecoveryQueryResStr, "t") != 0 && strcmp(isInRecoveryQueryResStr,
+															"true") != 0)
 	{
 		PQclear(result);
 		ClearResults(replicaConnection, true);
 		CloseConnection(replicaConnection);
 
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						   errmsg("%s:%d is not a streaming replica",
-								  replicaHostname,
-								  replicaPort)));
+						errmsg("%s:%d is not a streaming replica",
+							   replicaHostname,
+							   replicaPort)));
 	}
 
 	PQclear(result);
@@ -3724,9 +3754,8 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 	{
 		CloseConnection(replicaConnection);
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-					errmsg("could not connect to %s:%d to get system identifier",
-							replicaHostname, replicaPort)));
-
+						errmsg("could not connect to %s:%d to get system identifier",
+							   replicaHostname, replicaPort)));
 	}
 
 	result = GetRemoteCommandResult(replicaConnection, true);
@@ -3743,16 +3772,16 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 		CloseConnection(replicaConnection);
 
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						   errmsg("cannot parse get system identifier result from %s:%d",
-								  replicaHostname,
-								  replicaPort)));
+						errmsg("cannot parse get system identifier result from %s:%d",
+							   replicaHostname,
+							   replicaPort)));
 	}
 
 	StringInfo sysidQueryResInfo = (StringInfo) linitial(sysidList);
 	char *sysidQueryResStr = sysidQueryResInfo->data;
 
-	ereport (DEBUG2, (errmsg("system identifier of %s:%d is %s",
-			replicaHostname, replicaPort, sysidQueryResStr)));
+	ereport(DEBUG2, (errmsg("system identifier of %s:%d is %s",
+							replicaHostname, replicaPort, sysidQueryResStr)));
 
 	/* We do not need the connection anymore */
 	PQclear(result);
@@ -3762,16 +3791,16 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 	/* Step3: Get system identifier from primary */
 	int primaryConnectionFlag = 0;
 	MultiConnection *primaryConnection = GetNodeConnection(primaryConnectionFlag,
-													primaryWorkerNode->workerName,
-													primaryWorkerNode->workerPort);
+														   primaryWorkerNode->workerName,
+														   primaryWorkerNode->workerPort);
 	int primaryResultCode = SendRemoteCommand(primaryConnection, sysidQuery);
 	if (primaryResultCode == 0)
 	{
 		CloseConnection(primaryConnection);
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-					errmsg("could not connect to %s:%d to get system identifier",
-							primaryWorkerNode->workerName, primaryWorkerNode->workerPort)));
-
+						errmsg("could not connect to %s:%d to get system identifier",
+							   primaryWorkerNode->workerName, primaryWorkerNode->
+							   workerPort)));
 	}
 	PGresult *primaryResult = GetRemoteCommandResult(primaryConnection, true);
 	if (primaryResult == NULL)
@@ -3779,8 +3808,9 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 		CloseConnection(primaryConnection);
 
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				errmsg("node %s:%d does not support pg_control_system queries",
-					   primaryWorkerNode->workerName, primaryWorkerNode->workerPort)));
+						errmsg("node %s:%d does not support pg_control_system queries",
+							   primaryWorkerNode->workerName, primaryWorkerNode->
+							   workerPort)));
 	}
 	List *primarySizeList = ReadFirstColumnAsText(primaryResult);
 	if (list_length(primarySizeList) != 1)
@@ -3790,25 +3820,26 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char* replicaHostname
 		CloseConnection(primaryConnection);
 
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						   errmsg("cannot parse get system identifier result from %s:%d",
-								  primaryWorkerNode->workerName,
-								  primaryWorkerNode->workerPort)));
-
+						errmsg("cannot parse get system identifier result from %s:%d",
+							   primaryWorkerNode->workerName,
+							   primaryWorkerNode->workerPort)));
 	}
 	StringInfo primarySysidQueryResInfo = (StringInfo) linitial(primarySizeList);
 	char *primarySysidQueryResStr = primarySysidQueryResInfo->data;
 
-	ereport (DEBUG2, (errmsg("system identifier of %s:%d is %s",
-			primaryWorkerNode->workerName, primaryWorkerNode->workerPort, primarySysidQueryResStr)));
+	ereport(DEBUG2, (errmsg("system identifier of %s:%d is %s",
+							primaryWorkerNode->workerName, primaryWorkerNode->workerPort,
+							primarySysidQueryResStr)));
+
 	/* verify both identifiers */
 	if (strcmp(sysidQueryResStr, primarySysidQueryResStr) != 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-					   errmsg("system identifiers do not match: %s (replica) vs %s (primary)",
-							  sysidQueryResStr, primarySysidQueryResStr)));
+						errmsg(
+							"system identifiers do not match: %s (replica) vs %s (primary)",
+							sysidQueryResStr, primarySysidQueryResStr)));
 	}
 	PQclear(primaryResult);
 	ClearResults(primaryConnection, true);
 	CloseConnection(primaryConnection);
 }
-

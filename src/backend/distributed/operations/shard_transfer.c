@@ -573,6 +573,7 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	FinalizeCurrentProgressMonitor();
 }
 
+
 /*
  * AdjustShardsForPrimaryReplicaNodeSplit is called when a primary-replica node split
  * occurs. It adjusts the shard placements such that the shards that should be on the
@@ -582,9 +583,9 @@ TransferShards(int64 shardId, char *sourceNodeName,
  */
 void
 AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
-											WorkerNode *replicaNode,
-											List* primaryShardList,
-											List* replicaShardList)
+									   WorkerNode *replicaNode,
+									   List *primaryShardList,
+									   List *replicaShardList)
 {
 	/*
 	 * Remove all shards from the replica that should reside on the primary node,
@@ -609,21 +610,23 @@ AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
 
 			uint64 placementId = GetNextPlacementId();
 			InsertShardPlacementRow(colocatedShardId, placementId,
-							ShardLength(colocatedShardId),
-							groupId);
-
+									ShardLength(colocatedShardId),
+									groupId);
 		}
 
 		UpdateColocatedShardPlacementMetadataOnWorkers(shardId,
-										primaryNode->workerName, primaryNode->workerPort,
-										replicaNode->workerName, replicaNode->workerPort);
+													   primaryNode->workerName,
+													   primaryNode->workerPort,
+													   replicaNode->workerName,
+													   replicaNode->workerPort);
+
 		/* Now drop all shards from primary that need to be on the clone node */
 		DropShardPlacementsFromMetadata(colocatedShardList,
 										primaryNode->workerName, primaryNode->workerPort);
 		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
-												  groupId);
-
+													 groupId);
 	}
+
 	/* Now adjust all reference table shards */
 	int colocationId = GetReferenceTableColocationId();
 
@@ -648,16 +651,17 @@ AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
 
 			uint64 placementId = GetNextPlacementId();
 			InsertShardPlacementRow(colocatedShardId, placementId,
-							ShardLength(colocatedShardId),
-							groupId);
+									ShardLength(colocatedShardId),
+									groupId);
 
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
-																0, groupId);
+															0, groupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
 }
+
 
 /*
  * Insert deferred cleanup records.
@@ -1626,7 +1630,8 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 		CopyShardForeignConstraintCommandListGrouped(shardInterval,
 													 &shardForeignConstraintCommandList,
-													 &referenceTableForeignConstraintList);
+													 &referenceTableForeignConstraintList)
+		;
 
 		ShardCommandList *shardCommandList = CreateShardCommandList(
 			shardInterval,
@@ -1732,7 +1737,8 @@ CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode, List *shardInte
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, copyTaskList,
 									  MaxAdaptiveExecutorPoolSize,
-									  NULL /* jobIdList (ignored by API implementation) */);
+									  NULL /* jobIdList (ignored by API implementation) */
+									  );
 }
 
 
