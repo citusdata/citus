@@ -3,6 +3,7 @@
 #include "utils/pg_lsn.h"
 
 #include "distributed/argutils.h"
+#include "distributed/listutils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -14,7 +15,7 @@ static int64 GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
 static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
-
+static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
 
 PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
 
@@ -96,6 +97,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 							primaryNode->nodeId)));
 	}
 
+	EnsureSingleNodePromotion(primaryNode);
 	ereport(NOTICE, (errmsg(
 						 "Starting promotion process for clone node %s:%d (ID %d), original primary %s:%d (ID %d)",
 						 cloneNode->workerName, cloneNode->workerPort, cloneNode->
@@ -415,4 +417,35 @@ GetNodeIsInRecoveryStatus(WorkerNode *workerNode)
 	CloseConnection(nodeConnection);
 
 	return isInRecovery;
+}
+
+
+static void
+EnsureSingleNodePromotion(WorkerNode *primaryNode)
+{
+	/* Error out if some rebalancer is running */
+	int64 jobId = 0;
+	if (HasNonTerminalJobOfType("rebalance", &jobId))
+	{
+		ereport(ERROR, (
+					errmsg("A rebalance operation is already running as job %ld", jobId),
+					errdetail("A rebalance was already scheduled as background job"),
+					errhint("To monitor progress, run: SELECT * FROM "
+							"citus_rebalance_status();")));
+	}
+	List *placementList = AllShardPlacementsOnNodeGroup(primaryNode->groupId);
+
+	/* lock shards in order of shard id to prevent deadlock */
+	placementList = SortList(placementList, CompareShardPlacementsByShardId);
+
+	GroupShardPlacement *placement = NULL;
+	foreach_declared_ptr(placement, placementList)
+	{
+		int64 shardId = placement->shardId;
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		Oid distributedTableId = shardInterval->relationId;
+
+		AcquirePlacementColocationLock(distributedTableId, ExclusiveLock, "promote clone")
+		;
+	}
 }
