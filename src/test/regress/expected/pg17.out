@@ -1262,15 +1262,17 @@ SET search_path TO pg17;
 ALTER TABLE distributed_partitioned_table DROP CONSTRAINT dist_exclude_named;
 ALTER TABLE local_partitioned_table DROP CONSTRAINT local_exclude_named;
 -- Step 10: Verify the constraints were dropped
-SELECT * FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
- oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
+SELECT COUNT(*) FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
-SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
- oid | conname | connamespace | contype | condeferrable | condeferred | convalidated | conrelid | contypid | conindid | conparentid | confrelid | confupdtype | confdeltype | confmatchtype | conislocal | coninhcount | connoinherit | conkey | confkey | conpfeqop | conppeqop | conffeqop | confdelsetcols | conexclop | conbin
+SELECT COUNT(*) FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
 -- Step 11: Clean up - Drop the tables
 DROP TABLE distributed_partitioned_table CASCADE;

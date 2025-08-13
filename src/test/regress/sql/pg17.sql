@@ -669,8 +669,8 @@ ALTER TABLE distributed_partitioned_table DROP CONSTRAINT dist_exclude_named;
 ALTER TABLE local_partitioned_table DROP CONSTRAINT local_exclude_named;
 
 -- Step 10: Verify the constraints were dropped
-SELECT * FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
-SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
+SELECT COUNT(*) FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
+SELECT COUNT(*) FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
 
 -- Step 11: Clean up - Drop the tables
 DROP TABLE distributed_partitioned_table CASCADE;
