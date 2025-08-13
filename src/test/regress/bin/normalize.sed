@@ -328,3 +328,19 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
 # pg18 change: strip trailing “.00” (or “.0…”) from actual rows counts
 s/(actual rows=[0-9]+)\.[0-9]+/\1/g
+
+# pg18 “Disabled” change start
+# ignore any “Disabled:” lines in test output
+/^\s*Disabled:/d
+
+# ignore any JSON-style Disabled field
+/^\s*"Disabled":/d
+
+# ignore XML <Disabled>true</Disabled> or <Disabled>false</Disabled>
+/^\s*<Disabled>.*<\/Disabled>/d
+# pg18 “Disabled” change end
+
+# PG18 psql: headings changed from "List of relations" to per-type titles
+s/^([ \t]*)List of tables$/\1List of relations/g
+s/^([ \t]*)List of indexes$/\1List of relations/g
+s/^([ \t]*)List of sequences$/\1List of relations/g
