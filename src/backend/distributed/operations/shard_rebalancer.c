@@ -3721,6 +3721,7 @@ GetPrimaryReplicaSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *repl
 			 * considered for this specific two-node balancing plan's shard distribution.
 			 * We calculate costs based *only* on the shards currently on the source node.
 			 */
+
 			/*
 			 * The core idea is to simulate the balancing process between these two nodes.
 			 * We have all shards on sourceFillState. TargetFillState is initially empty (in terms of these specific shards).
