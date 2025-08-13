@@ -3921,7 +3921,7 @@ get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
 			values[0] = ObjectIdGetDatum(RelationIdForShard(colocatedShardId));
 			values[1] = UInt64GetDatum(colocatedShardId);
 			values[2] = UInt64GetDatum(ShardLength(colocatedShardId));
-			values[3] = PointerGetDatum(cstring_to_text("Replica Node"));
+			values[3] = PointerGetDatum(cstring_to_text("Clone Node"));
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
 	}
