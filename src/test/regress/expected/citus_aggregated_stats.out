@@ -24,9 +24,9 @@ SELECT attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
  rlsuser   |  0.166667 | {user1}          | {0.666667}
 (3 rows)
 
-SELECT * FROM citus_column_stats('current_check');
+SELECT * FROM citus_stats('current_check');
 ERROR:  Not a Citus table
-CONTEXT:  PL/pgSQL function citus_column_stats(text) line XX at RAISE
+CONTEXT:  PL/pgSQL function citus_stats(text) line XX at RAISE
 CREATE TABLE dist_current_check (currentid int, payload text, rlsuser text);
 SELECT create_distributed_table('dist_current_check', 'currentid');
  create_distributed_table
@@ -49,7 +49,7 @@ SELECT attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * FROM citus_column_stats('dist_current_check');
+SELECT * FROM citus_stats('dist_current_check');
   attname  | null_frac | most_common_vals |  most_common_freqs
 ---------------------------------------------------------------------
  currentid |         0 | {3,4}            | {0.333333,0.333333}

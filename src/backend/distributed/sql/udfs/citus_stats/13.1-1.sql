@@ -1,7 +1,7 @@
 SET search_path = 'pg_catalog';
-DROP VIEW IF EXISTS pg_catalog.citus_column_stats;
+DROP VIEW IF EXISTS pg_catalog.citus_stats;
 
-CREATE OR REPLACE VIEW citus.citus_column_stats AS
+CREATE OR REPLACE VIEW citus.citus_stats AS
 
 WITH most_common_vals_double_json AS (
     SELECT ( SELECT json_agg(row_to_json(f)) FROM ( SELECT * FROM run_command_on_shards(logicalrelid,
@@ -53,7 +53,7 @@ FROM common_val_occurrence c, table_reltuples t, pg_class p, pg_namespace n
 WHERE c.dist_table = t.dist_table AND c.dist_table::regclass::oid = p.oid AND p.relnamespace = n.oid
 GROUP BY c.dist_table, c.attname, t.table_reltuples, n.nspname, p.relname;
 
-ALTER VIEW citus.citus_column_stats SET SCHEMA pg_catalog;
-GRANT SELECT ON pg_catalog.citus_column_stats TO PUBLIC;
+ALTER VIEW citus.citus_stats SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.citus_stats TO PUBLIC;
 
 RESET search_path;

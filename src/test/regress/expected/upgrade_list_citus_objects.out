@@ -57,7 +57,7 @@ ORDER BY 1;
  function citus_check_connection_to_node(text,integer)
  function citus_cleanup_orphaned_resources()
  function citus_cleanup_orphaned_shards()
- function citus_column_stats(text)
+ function citus_stats(text)
  function citus_conninfo_cache_invalidate()
  function citus_coordinator_nodeid()
  function citus_copy_shard_placement(bigint,integer,integer,citus.shard_transfer_mode)
