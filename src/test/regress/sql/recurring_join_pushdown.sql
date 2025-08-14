@@ -117,6 +117,11 @@ SELECT count(*) FROM (SELECT * FROM d1) AS t1 RIGHT JOIN r1 USING (a);
 
 SET client_min_messages TO ERROR;
 
+-- Ensure that even when CTEs are replaced, we insert push
+-- down conditions for outer joins when necessary.
+WITH  cte_0 AS ( SELECT table_0.a FROM d1 AS table_0 WHERE table_0.a IN ( SELECT table_1.a FROM d1 AS table_1 ORDER BY a LIMIT 2 )  ORDER BY a ) SELECT count(*), avg(avgsub.a) FROM ( SELECT table_2.a FROM cte_0 AS table_2 RIGHT JOIN r1 AS table_3 USING (a)) AS avgsub;
+
+
 -- The following queries trigger recursive computing, recurring outer-join push down
 -- methods introduced in#7973 can be enhanced to cover these cases in the future.
 CREATE TABLE r1_local AS SELECT * FROM r1;
