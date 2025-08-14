@@ -130,7 +130,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
             ORDER BY 1, 2;
      relname     |         Constraint         |                                 Definition
 ---------------------------------------------------------------------
- sensors_8981000 | fkey_table_to_dist_8981000 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981003(measureid)
+ sensors_8981000 | t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981003(measureid)
 (1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
@@ -171,7 +171,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
             ORDER BY 1, 2;
      relname     |         Constraint         |                                 Definition
 ---------------------------------------------------------------------
- sensors_8981001 | fkey_table_to_dist_8981001 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981004(measureid)
+ sensors_8981001 | t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981004(measureid)
 (1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
@@ -316,8 +316,8 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
             ORDER BY 1, 2;
      relname     |         Constraint         |                                 Definition
 ---------------------------------------------------------------------
- sensors_8981013 | fkey_table_to_dist_8981013 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981016(measureid)
- sensors_8981014 | fkey_table_to_dist_8981014 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981017(measureid)
+ sensors_8981013 | t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981016(measureid)
+ sensors_8981014 | t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981017(measureid)
 (2 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
@@ -364,9 +364,9 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
             ORDER BY 1, 2;
      relname     |         Constraint         |                                 Definition
 ---------------------------------------------------------------------
- sensors_8981007 | fkey_table_to_dist_8981007 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981009(measureid)
- sensors_8981008 | fkey_table_to_dist_8981008 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981010(measureid)
- sensors_8981015 | fkey_table_to_dist_8981015 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981018(measureid)
+ sensors_8981007 | t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981009(measureid)
+ sensors_8981008 | t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981010(measureid)
+ sensors_8981015 | t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981018(measureid)
 (3 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;

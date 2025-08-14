@@ -133,27 +133,27 @@ INSERT INTO sensors SELECT i, '2020-01-05', '{}' FROM generate_series(0,1000)i;
 SET search_path TO "blocking shard Move Fkeys Indexes", public, pg_catalog;
 -- show the current state of the constraints
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'::regclass ORDER BY 1,2;
-                  Constraint                  |                                                         Definition
+ Constraint |                                                         Definition
 ---------------------------------------------------------------------
- fkey_from_parent_to_child_8970000            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
- fkey_from_parent_to_dist_8970000             | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
- fkey_from_parent_to_parent_8970000           | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
- fkey_from_parent_to_ref_8970000              | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
- sensors_8970000_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
 (5 rows)
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass ORDER BY 1,2;
-                       Constraint                        |                                                         Definition
+ Constraint |                                                         Definition
 ---------------------------------------------------------------------
- fkey_from_child_to_child_8970008                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
- fkey_from_child_to_dist_8970008                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
- fkey_from_child_to_parent_8970008                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
- fkey_from_child_to_ref_8970008                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
- fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
- fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
- fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
- fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
- sensors_2020_01_01_8970008_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
 (9 rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' ORDER BY 1,2;
@@ -231,27 +231,27 @@ SELECT public.wait_for_resource_cleanup();
 \c - postgres - :worker_2_port
 SET search_path TO "blocking shard Move Fkeys Indexes", public, pg_catalog;
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'::regclass ORDER BY 1,2;
-                  Constraint                  |                                                         Definition
+ Constraint |                                                         Definition
 ---------------------------------------------------------------------
- fkey_from_parent_to_child_8970000            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
- fkey_from_parent_to_dist_8970000             | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
- fkey_from_parent_to_parent_8970000           | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
- fkey_from_parent_to_ref_8970000              | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
- sensors_8970000_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
 (5 rows)
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass ORDER BY 1,2;
-                       Constraint                        |                                                         Definition
+ Constraint |                                                         Definition
 ---------------------------------------------------------------------
- fkey_from_child_to_child_8970008                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
- fkey_from_child_to_dist_8970008                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
- fkey_from_child_to_parent_8970008                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
- fkey_from_child_to_ref_8970008                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
- fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
- fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
- fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
- fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
- sensors_2020_01_01_8970008_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970024(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
+ t          | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970020(eventdatetime, measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970016(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
+ t          | FOREIGN KEY (measureid) REFERENCES reference_table_8970028(measureid)
 (9 rows)
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' ORDER BY 1,2;
