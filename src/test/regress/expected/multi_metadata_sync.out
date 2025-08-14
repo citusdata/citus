@@ -621,7 +621,7 @@ SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schema_2.fk_test_2'::regclass;
         Constraint        |                                 Definition
 ---------------------------------------------------------------------
- fk_test_2_col1_col2_fkey | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
+ t          | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
 (1 row)
 
 \c - - - :master_port
@@ -895,7 +895,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
     Constraint    |                           Definition
 ---------------------------------------------------------------------
- mx_fk_constraint | FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+ t          | FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
 (1 row)
 
 SELECT create_distributed_table('mx_test_schema_1.mx_table_1', 'col1');
@@ -1071,7 +1071,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
     Constraint    |                           Definition
 ---------------------------------------------------------------------
- mx_fk_constraint | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
+ t          | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
 (1 row)
 
 -- Check that foreign key constraint with NOT VALID works as well
@@ -1090,7 +1090,7 @@ NOT VALID;
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
      Constraint     |                           Definition
 ---------------------------------------------------------------------
- mx_fk_constraint_2 | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
+ t          | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
 (1 row)
 
 -- Check that update_distributed_table_colocation call propagates the changes to the workers

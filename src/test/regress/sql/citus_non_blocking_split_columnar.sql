@@ -138,7 +138,7 @@ SELECT pg_reload_conf();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
-            ORDER BY 1, 2;
+            ORDER BY 1, 3;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -155,7 +155,7 @@ SELECT pg_reload_conf();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
-            ORDER BY 1, 2;
+            ORDER BY 1, 3;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -209,7 +209,7 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
-            ORDER BY 1, 2;
+            ORDER BY 1, 3;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -226,7 +226,7 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
-            ORDER BY 1, 2;
+            ORDER BY 1, 3;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -280,7 +280,7 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
-            ORDER BY 1, 2;
+            ORDER BY 1, 3;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -297,7 +297,7 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
-            ORDER BY 1, 2;
+            ORDER BY 1, 3;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (

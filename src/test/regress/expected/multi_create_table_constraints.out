@@ -453,9 +453,9 @@ SELECT create_distributed_table('raw_table_2', 'user_id');
 
 -- see that the constraint exists
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='raw_table_2'::regclass;
-        Constraint        |                      Definition
+ Constraint |                      Definition
 ---------------------------------------------------------------------
- raw_table_2_user_id_fkey | FOREIGN KEY (user_id) REFERENCES raw_table_1(user_id)
+ t          | FOREIGN KEY (user_id) REFERENCES raw_table_1(user_id)
 (1 row)
 
 -- should be prevented by the foreign key
