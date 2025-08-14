@@ -201,6 +201,7 @@ static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
 static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
+static bool JoinTreeContainsLateral(Node *node, List *rtable);
 #if PG_VERSION_NUM < PG_VERSION_17
 static bool hasPseudoconstantQuals(
 	RelationRestrictionContext *relationRestrictionContext);
@@ -2785,6 +2786,66 @@ CheckPushDownConditionOnInnerVar(Var *innerVar, RangeTblEntry *rte)
 
 
 /*
+ * JoinTreeContainsLateral checks if the given node contains a lateral
+ * join. It returns true if it does, otherwise false.
+ *
+ * It recursively traverses the join tree and checks each RangeTblRef and JoinExpr
+ * for lateral joins.
+ */
+static bool
+JoinTreeContainsLateral(Node *node, List *rtable)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblRef))
+    {
+        RangeTblEntry *rte = rt_fetch(((RangeTblRef *) node)->rtindex, rtable);
+		if (rte == NULL)
+		{
+			return false;
+		}
+
+		if (rte->lateral)
+        {
+			return true;
+		}
+		
+		if(rte->rtekind == RTE_SUBQUERY)
+		{
+			if (rte->subquery)
+			{
+				return JoinTreeContainsLateral((Node *) rte->subquery->jointree, rte->subquery->rtable);
+			}
+		}
+		return false;
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *join = (JoinExpr *) node;
+		return JoinTreeContainsLateral(join->larg, rtable) ||
+				JoinTreeContainsLateral(join->rarg, rtable);
+	}
+	else if (IsA(node, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) node;
+		ListCell *lc = NULL;
+		foreach(lc, fromExpr->fromlist)
+		{
+			if (JoinTreeContainsLateral((Node *) lfirst(lc), rtable))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+
+
+/*
  * CheckPushDownFeasibilityAndComputeIndexes checks if the given join expression
  * is a left outer join and if it is feasible to push down the join. If feasible,
  * it computes the outer relation's range table index, the outer relation's
@@ -2842,9 +2903,11 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		return false;
 	}
 
-	RangeTblEntry *rRte = rt_fetch((((RangeTblRef *) joinExpr->rarg)->rtindex),
-								   query->rtable);
-	if (rRte && rRte->lateral)
+	/* For now if we see any lateral join in the join tree, we return false. 
+	 * This check can be improved to support the cases where the lateral reference 
+	 * does not cause an error in the final planner checks.
+	*/
+	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) || JoinTreeContainsLateral(joinExpr->larg, query->rtable))
 	{
 		ereport(DEBUG5, (errmsg(
 							 "Lateral join is not supported for pushdown in this path.")));

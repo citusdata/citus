@@ -124,4 +124,14 @@ EXPLAIN (COSTS OFF) SELECT count(*) FROM r1_local LEFT JOIN d1 ON r1_local.a = d
 EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT * FROM r1) sq LEFT JOIN d1 ON sq.a = d1.a;
 EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (d1 INNER JOIN d2 on d1.a = d2.a) on r1.a = d2.a;
 
+SET client_min_messages TO DEBUG3;
+-- The following query is recursively computed due to the lateral join in the subquery.
+-- Leaving the inner side of the query to query push down causes an error in deferred error
+-- checks even if it is possible to push down the whole query.
+SELECT DISTINCT sq.a FROM (
+    SELECT d1.a FROM d1 JOIN LATERAL ( SELECT * FROM r1 WHERE r1.a = d1.a ) sq2 ON true ) AS sq RIGHT JOIN r1 USING (a)
+ORDER BY sq.a
+LIMIT 1;
+
+SET client_min_messages TO ERROR;
 DROP SCHEMA recurring_join_pushdown CASCADE;
