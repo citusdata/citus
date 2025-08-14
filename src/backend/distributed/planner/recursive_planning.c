@@ -2801,23 +2801,24 @@ JoinTreeContainsLateral(Node *node, List *rtable)
 	}
 
 	if (IsA(node, RangeTblRef))
-    {
-        RangeTblEntry *rte = rt_fetch(((RangeTblRef *) node)->rtindex, rtable);
+	{
+		RangeTblEntry *rte = rt_fetch(((RangeTblRef *) node)->rtindex, rtable);
 		if (rte == NULL)
 		{
 			return false;
 		}
 
 		if (rte->lateral)
-        {
+		{
 			return true;
 		}
-		
-		if(rte->rtekind == RTE_SUBQUERY)
+
+		if (rte->rtekind == RTE_SUBQUERY)
 		{
 			if (rte->subquery)
 			{
-				return JoinTreeContainsLateral((Node *) rte->subquery->jointree, rte->subquery->rtable);
+				return JoinTreeContainsLateral((Node *) rte->subquery->jointree,
+											   rte->subquery->rtable);
 			}
 		}
 		return false;
@@ -2826,7 +2827,7 @@ JoinTreeContainsLateral(Node *node, List *rtable)
 	{
 		JoinExpr *join = (JoinExpr *) node;
 		return JoinTreeContainsLateral(join->larg, rtable) ||
-				JoinTreeContainsLateral(join->rarg, rtable);
+			   JoinTreeContainsLateral(join->rarg, rtable);
 	}
 	else if (IsA(node, FromExpr))
 	{
@@ -2842,7 +2843,6 @@ JoinTreeContainsLateral(Node *node, List *rtable)
 	}
 	return false;
 }
-
 
 
 /*
@@ -2903,11 +2903,12 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 		return false;
 	}
 
-	/* For now if we see any lateral join in the join tree, we return false. 
-	 * This check can be improved to support the cases where the lateral reference 
+	/* For now if we see any lateral join in the join tree, we return false.
+	 * This check can be improved to support the cases where the lateral reference
 	 * does not cause an error in the final planner checks.
-	*/
-	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) || JoinTreeContainsLateral(joinExpr->larg, query->rtable))
+	 */
+	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) || JoinTreeContainsLateral(
+			joinExpr->larg, query->rtable))
 	{
 		ereport(DEBUG5, (errmsg(
 							 "Lateral join is not supported for pushdown in this path.")));
