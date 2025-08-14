@@ -2303,6 +2303,18 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	}
 
 	/*
+	 * We might fail to find outer joins from the relationRestrictionContext
+	 * when the original query has CTEs. In order to ensure that we always mark
+	 * the outer joins correctly and compute additional quals when necessary,
+	 * check the task query as well.
+	 */
+	if (!updateQualsForOuterJoin && FindNodeMatchingCheckFunction((Node *) query,
+																  IsOuterJoinExpr))
+	{
+		updateQualsForOuterJoin = true;
+	}
+
+	/*
 	 * We keep track of minShardOffset to skip over a potentially big amount of pruned
 	 * shards. However, we need to start at minShardOffset - 1 to make sure we don't
 	 * miss to first/min shard recorder as bms_next_member will return the first member
