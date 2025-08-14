@@ -40,5 +40,7 @@ typedef FormData_pg_dist_transaction *Form_pg_dist_transaction;
 #define Anum_pg_dist_transaction_gid 2
 #define Anum_pg_dist_transaction_outerxid 3
 
+extern int GetOuterXidAttrIndexInPgDistTransaction(TupleDesc tupleDesc);
+
 
 #endif   /* PG_DIST_TRANSACTION_H */
