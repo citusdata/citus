@@ -654,6 +654,18 @@ CreateTargetListForCombineQuery(List *targetList)
 	foreach_declared_ptr(originalTargetEntry, targetList)
 	{
 		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
+		
+		/*
+		 * PostgreSQL 18 fix: Handle "?column?" names from intermediate expressions.
+		 * When flatCopyTargetEntry copies a target entry that has "?column?" as resname,
+		 * we need to generate a proper column name to avoid parsing errors.
+		 */
+		if (newTargetEntry->resname == NULL || strcmp(newTargetEntry->resname, "?column?") == 0)
+		{
+			StringInfo generatedName = makeStringInfo();
+			appendStringInfo(generatedName, "insert_col_%d", originalTargetEntry->resno);
+			newTargetEntry->resname = generatedName->data;
+		}
 
 		Var *column = makeVarFromTargetEntry(masterTableId, originalTargetEntry);
 		column->varattno = columnId;
@@ -1116,6 +1128,14 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 
 			newSubqueryTargetEntry = copyObject(oldSubqueryTle);
 
+			/*
+			 * PostgreSQL 18 compatibility: handle NULL or "?column?" resname
+			 */
+			if (newSubqueryTargetEntry->resname == NULL || strcmp(newSubqueryTargetEntry->resname, "?column?") == 0)
+			{
+				newSubqueryTargetEntry->resname = psprintf("expr_col_%d", newSubqueryTargetEntry->resno);
+			}
+
 			newSubqueryTargetEntry->resno = resno;
 			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
 											newSubqueryTargetEntry);
@@ -1130,7 +1150,17 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 											newSubqueryTargetEntry);
 		}
 
-		String *columnName = makeString(newSubqueryTargetEntry->resname);
+		/*
+		 * PostgreSQL 18 compatibility: handle NULL or "?column?" resname
+		 * before creating columnName for eref->colnames
+		 */
+		char *resname = newSubqueryTargetEntry->resname;
+		if (resname == NULL || strcmp(resname, "?column?") == 0)
+		{
+			resname = psprintf("insert_col_%d", newSubqueryTargetEntry->resno);
+		}
+		
+		String *columnName = makeString(resname);
 		columnNameList = lappend(columnNameList, columnName);
 
 		/*
@@ -1174,6 +1204,14 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		}
 
 		TargetEntry *newSubqueryTargetEntry = copyObject(oldSubqueryTle);
+
+		/*
+		 * PostgreSQL 18 compatibility: handle NULL or "?column?" resname
+		 */
+		if (newSubqueryTargetEntry->resname == NULL || strcmp(newSubqueryTargetEntry->resname, "?column?") == 0)
+		{
+			newSubqueryTargetEntry->resname = psprintf("expr_col_%d", newSubqueryTargetEntry->resno);
+		}
 
 		newSubqueryTargetEntry->resno = resno;
 		newSubqueryTargetlist = lappend(newSubqueryTargetlist,
