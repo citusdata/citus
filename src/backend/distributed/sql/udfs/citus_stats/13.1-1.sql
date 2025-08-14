@@ -8,8 +8,11 @@ WITH most_common_vals_double_json AS (
             $$ SELECT json_agg(row_to_json(shard_stats)) FROM (
             SELECT '$$ || logicalrelid || $$' AS dist_table, attname, s.null_frac,
                    most_common_vals, most_common_freqs, c.reltuples AS reltuples
+            -- join on tablename is enough here, no need to join with pg_namespace
+            -- since shards have unique ids in their names, hence two shard names
+            -- could never be the same
             FROM pg_stats s RIGHT JOIN pg_class c ON (s.tablename = c.relname)
-            WHERE c.relname = '%s') shard_stats $$ ))f)
+            WHERE c.oid = '%s'::regclass) shard_stats $$ ))f)
         FROM pg_dist_partition),
 
 most_common_vals_json AS (
@@ -38,20 +41,20 @@ most_common_vals AS (
 common_val_occurrence AS (
     SELECT dist_table, m.attname, common_val,
             sum(common_freq * shard_reltuples)::bigint AS occurrence,
-            any_value(m.null_frac * shard_reltuples)::bigint AS null_occurrences
+            (m.null_frac * shard_reltuples)::bigint AS null_occurrences
     FROM most_common_vals m
-    GROUP BY dist_table, m.attname, common_val
+    GROUP BY dist_table, m.attname, common_val, shard_reltuples, m.null_frac
     ORDER BY m.attname, occurrence DESC, common_val)
 
 SELECT n.nspname AS schemaname, p.relname AS tablename, c.attname,
        CASE WHEN t.table_reltuples::bigint = 0 THEN 0
-       ELSE any_value((null_occurrences/t.table_reltuples)::float4) END AS null_frac,
+       ELSE (null_occurrences/t.table_reltuples)::float4 END AS null_frac,
        ARRAY_agg(common_val) AS most_common_vals,
        CASE WHEN t.table_reltuples::bigint = 0 THEN NULL
        ELSE ARRAY_agg((occurrence/t.table_reltuples)::float4) END AS most_common_freqs
 FROM common_val_occurrence c, table_reltuples t, pg_class p, pg_namespace n
 WHERE c.dist_table = t.dist_table AND c.dist_table::regclass::oid = p.oid AND p.relnamespace = n.oid
-GROUP BY c.dist_table, c.attname, t.table_reltuples, n.nspname, p.relname;
+GROUP BY c.dist_table, c.attname, t.table_reltuples, n.nspname, p.relname, t.table_reltuples, null_occurrences;
 
 ALTER VIEW citus.citus_stats SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_stats TO PUBLIC;
