@@ -693,9 +693,9 @@ INSERT INTO partitioning_test_2009 VALUES(18, '2009-02-01');
 ALTER TABLE partitioning_test_2012 ADD CONSTRAINT partitioning_2012_foreign FOREIGN KEY (id) REFERENCES partitioning_test_2009 (id) ON DELETE CASCADE;
 -- see FOREIGN KEY is created
 SELECT "Constraint" FROM table_fkeys WHERE relid = 'partitioning_test_2012'::regclass ORDER BY 1;
-        Constraint
+ Constraint
 ---------------------------------------------------------------------
- partitioning_2012_foreign
+ t
 (1 row)
 
 -- test ON DELETE CASCADE works
