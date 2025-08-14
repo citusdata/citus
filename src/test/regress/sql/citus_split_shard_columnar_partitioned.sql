@@ -126,7 +126,7 @@ SELECT pg_reload_conf();
 \c - - - :worker_1_port
     SET search_path TO "citus_split_test_schema_columnar_partitioned";
     SET citus.show_shards_for_app_name_prefixes = '*';
-    SELECT tbl.relname, fk."Constraint", fk."Definition"
+    SELECT tbl.relname, (fk."Constraint" IS NOT NULL) AS is_constraint_exist, fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
