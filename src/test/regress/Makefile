@@ -274,7 +274,7 @@ check-enterprise-failure: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_failure_schedule $(EXTRA_TESTS)
 
 check-pg-upgrade: all
-	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
+	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir) $(if $(filter true,$(test-with-columnar)),--test-with-columnar)
 
 check-arbitrary-configs: all
 	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed)
