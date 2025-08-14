@@ -769,12 +769,15 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	const bool indexOK = true;
 
 	ScanKeyData scanKey[3];
-	Datum values[Natts_pg_dist_object];
-	bool isnull[Natts_pg_dist_object];
-	bool replace[Natts_pg_dist_object];
 
 	Relation pgDistObjectRel = table_open(DistObjectRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
+
+	Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
+
+	int forseDelegationIndex = GetForceDelegationAttrIndexInPgDistObject(tupleDescriptor);
 
 	/* scan pg_dist_object for classid = $1 AND objid = $2 AND objsubid = $3 via index */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -797,12 +800,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   distAddress->objectId, distAddress->objectSubId)));
 	}
 
-	memset(values, 0, sizeof(values));
-	memset(isnull, 0, sizeof(isnull));
-	memset(replace, 0, sizeof(replace));
-
 	replace[Anum_pg_dist_object_distribution_argument_index - 1] = true;
-
 	if (distribution_argument_index != NULL)
 	{
 		values[Anum_pg_dist_object_distribution_argument_index - 1] = Int32GetDatum(
@@ -825,16 +823,15 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 		isnull[Anum_pg_dist_object_colocationid - 1] = true;
 	}
 
-	replace[Anum_pg_dist_object_force_delegation - 1] = true;
+	replace[forseDelegationIndex] = true;
 	if (forceDelegation != NULL)
 	{
-		values[Anum_pg_dist_object_force_delegation - 1] = BoolGetDatum(
-			*forceDelegation);
-		isnull[Anum_pg_dist_object_force_delegation - 1] = false;
+		values[forseDelegationIndex] = BoolGetDatum(*forceDelegation);
+		isnull[forseDelegationIndex] = false;
 	}
 	else
 	{
-		isnull[Anum_pg_dist_object_force_delegation - 1] = true;
+		isnull[forseDelegationIndex] = true;
 	}
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
@@ -848,6 +845,10 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	systable_endscan(scanDescriptor);
 
 	table_close(pgDistObjectRel, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 
 	if (EnableMetadataSync)
 	{
