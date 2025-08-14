@@ -22,9 +22,9 @@ SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_
   ORDER BY 1;
        schemaname       |   tablename   |  attname  | null_frac | most_common_vals |  most_common_freqs
 ---------------------------------------------------------------------
- citus_aggregated_stats | current_check | currentid |         0 | {3,4}            | {0.333333,0.333333}
- citus_aggregated_stats | current_check | payload   |  0.166667 | {cde,def}        | {0.333333,0.333333}
- citus_aggregated_stats | current_check | rlsuser   |  0.166667 | {user1}          | {0.666667}
+ citus_aggregated_stats | current_check | currentid |         0 | {4,3}            | {0.428571,0.285714}
+ citus_aggregated_stats | current_check | payload   |  0.142857 | {def,cde}        | {0.428571,0.285714}
+ citus_aggregated_stats | current_check | rlsuser   |  0.142857 | {user1}          | {0.714286}
 (3 rows)
 
 SELECT * FROM citus_stats
@@ -69,22 +69,22 @@ SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_
   ORDER BY 1;
        schemaname       |   tablename   |  attname  | null_frac | most_common_vals |  most_common_freqs
 ---------------------------------------------------------------------
- citus_aggregated_stats | current_check | currentid |         0 | {3,4}            | {0.333333,0.333333}
- citus_aggregated_stats | current_check | payload   |  0.166667 | {cde,def}        | {0.333333,0.333333}
- citus_aggregated_stats | current_check | rlsuser   |  0.166667 | {user1}          | {0.666667}
+ citus_aggregated_stats | current_check | currentid |         0 | {4,3}            | {0.428571,0.285714}
+ citus_aggregated_stats | current_check | payload   |  0.142857 | {def,cde}        | {0.428571,0.285714}
+ citus_aggregated_stats | current_check | rlsuser   |  0.142857 | {user1}          | {0.714286}
 (3 rows)
 
 SELECT * FROM citus_stats
   WHERE tablename IN ('current_check', 'dist_current_check', 'ref_current_check')
   ORDER BY 1;
-       schemaname       |   tablename   |  attname  | null_frac | most_common_vals |  most_common_freqs
----------------------------------------------------------------------
- citus_aggregated_stats | dist_current_check | currentid |         0 | {3,4}            | {0.333333,0.333333}
- citus_aggregated_stats | dist_current_check | payload   |  0.166667 | {cde,def}        | {0.333333,0.333333}
- citus_aggregated_stats | dist_current_check | rlsuser   |  0.166667 | {user1}          | {0.666667}
- citus_aggregated_stats | ref_current_check | currentid |         0 | {3,4}            | {0.333333,0.333333}
- citus_aggregated_stats | ref_current_check | payload   |  0.166667 | {cde,def}        | {0.333333,0.333333}
- citus_aggregated_stats | ref_current_check | rlsuser   |  0.166667 | {user1}          | {0.666667}
+       schemaname       |     tablename      |  attname  | null_frac  | most_common_vals |   most_common_freqs
+------------------------+--------------------+-----------+------------+------------------+------------------------
+ citus_aggregated_stats | dist_current_check | currentid |          0 | {4,3}            | {0.42857143,0.2857143}
+ citus_aggregated_stats | dist_current_check | payload   | 0.14285715 | {def,cde}        | {0.42857143,0.2857143}
+ citus_aggregated_stats | dist_current_check | rlsuser   | 0.14285715 | {user1}          | {0.71428573}
+ citus_aggregated_stats | ref_current_check  | currentid |          0 | {4,3}            | {0.42857143,0.2857143}
+ citus_aggregated_stats | ref_current_check  | payload   | 0.14285715 | {def,cde}        | {0.42857143,0.2857143}
+ citus_aggregated_stats | ref_current_check  | rlsuser   | 0.14285715 | {user1}          | {0.71428573}
 (6 rows)
 
 RESET SESSION AUTHORIZATION;

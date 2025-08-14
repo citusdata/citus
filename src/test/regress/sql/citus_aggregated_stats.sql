@@ -17,7 +17,8 @@ INSERT INTO current_check VALUES
     (4, 'def', 'user1'),
     (4, 'def', 'user1'),
     (3, 'cde', 'user2'),
-    (5, NULL, NULL);
+    (5, NULL, NULL),
+    (4, 'def', 'user1');
 
 ALTER TABLE current_check ENABLE ROW LEVEL SECURITY;
 
@@ -44,7 +45,8 @@ INSERT INTO dist_current_check VALUES
     (4, 'def', 'user1'),
     (4, 'def', 'user1'),
     (3, 'cde', 'user2'),
-    (5, NULL, NULL);
+    (5, NULL, NULL),
+    (4, 'def', 'user1');
 
 INSERT INTO ref_current_check VALUES
     (1, 'abc', 'user1'),
@@ -52,7 +54,8 @@ INSERT INTO ref_current_check VALUES
     (4, 'def', 'user1'),
     (4, 'def', 'user1'),
     (3, 'cde', 'user2'),
-    (5, NULL, NULL);
+    (5, NULL, NULL),
+    (4, 'def', 'user1');
 
 ANALYZE dist_current_check;
 ANALYZE ref_current_check;
