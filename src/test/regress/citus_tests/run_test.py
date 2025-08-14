@@ -209,7 +209,7 @@ DEPS = {
     ),
     "limit_intermediate_size": TestDeps("base_schedule"),
     "columnar_drop": TestDeps(
-        "minimal_schedule",
+        "minimal_columnar_schedule",
         ["columnar_create", "columnar_load"],
         repeatable=False,
     ),
