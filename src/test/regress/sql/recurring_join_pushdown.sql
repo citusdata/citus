@@ -116,4 +116,12 @@ SELECT count(*) FROM d1 RIGHT JOIN r1 USING (a);
 SELECT count(*) FROM (SELECT * FROM d1) AS t1 RIGHT JOIN r1 USING (a);
 
 SET client_min_messages TO ERROR;
+
+-- The following queries trigger recursive computing, recurring outer-join push down
+-- methods introduced in#7973 can be enhanced to cover these cases in the future.
+CREATE TABLE r1_local AS SELECT * FROM r1;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1_local LEFT JOIN d1 ON r1_local.a = d1.a;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT * FROM r1) sq LEFT JOIN d1 ON sq.a = d1.a;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (d1 INNER JOIN d2 on d1.a = d2.a) on r1.a = d2.a;
+
 DROP SCHEMA recurring_join_pushdown CASCADE;

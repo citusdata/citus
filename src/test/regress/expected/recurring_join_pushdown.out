@@ -845,4 +845,100 @@ DEBUG:  assigned task to node localhost:xxxxx
 (1 row)
 
 SET client_min_messages TO ERROR;
+-- The following queries trigger recursive computing, recurring outer-join push down
+-- methods introduced in#7973 can be enhanced to cover these cases in the future.
+CREATE TABLE r1_local AS SELECT * FROM r1;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1_local LEFT JOIN d1 ON r1_local.a = d1.a;
+                                          QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Seq Scan on r1_local
+   ->  Distributed Subplan XXX_2
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d1_1520001 d1
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Left Join
+                     Merge Cond: (intermediate_result.a = intermediate_result_1.a)
+                     ->  Sort
+                           Sort Key: intermediate_result.a
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Sort
+                           Sort Key: intermediate_result_1.a
+                           ->  Function Scan on read_intermediate_result intermediate_result_1
+(23 rows)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT * FROM r1) sq LEFT JOIN d1 ON sq.a = d1.a;
+                                         QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d1_1520001 d1
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Right Join
+                     Merge Cond: (intermediate_result.a = r1.a)
+                     ->  Sort
+                           Sort Key: intermediate_result.a
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Sort
+                           Sort Key: r1.a
+                           ->  Seq Scan on r1_1520000 r1
+(21 rows)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (d1 INNER JOIN d2 on d1.a = d2.a) on r1.a = d2.a;
+                                                QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d1_1520001 d1
+   ->  Distributed Subplan XXX_2
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d2_1520005 d2
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Left Join
+                     Merge Cond: (r1.a = intermediate_result_1.a)
+                     ->  Sort
+                           Sort Key: r1.a
+                           ->  Seq Scan on r1_1520000 r1
+                     ->  Materialize
+                           ->  Merge Join
+                                 Merge Cond: (intermediate_result.a = intermediate_result_1.a)
+                                 ->  Sort
+                                       Sort Key: intermediate_result.a
+                                       ->  Function Scan on read_intermediate_result intermediate_result
+                                 ->  Sort
+                                       Sort Key: intermediate_result_1.a
+                                       ->  Function Scan on read_intermediate_result intermediate_result_1
+(34 rows)
+
 DROP SCHEMA recurring_join_pushdown CASCADE;

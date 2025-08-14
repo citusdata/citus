@@ -169,8 +169,26 @@ WHERE d1.user_id = users.user_id
       AND users.dept IN (3,4)
 	AND users.user_id = d2.user_id) dt
 GROUP BY dept;
-RESET client_min_messages;
 
+SET client_min_messages TO DEBUG3;
+CREATE TABLE users_ref(user_id int, dept int);
+SELECT create_reference_table('users_ref');
+INSERT INTO users_ref VALUES (1, 3), (2, 4), (3, 3), (4, 4);
+-- In PG17, the planner can pull up a correlated ANY subquery to a join, resulting 
+-- in a different query plan compared to PG16. Specifically, for the following query
+-- the rewritten query has a lateral recurring outer join, which requires recursive
+-- computation of the inner part. However, this join is not analyzed during the recursive
+-- planning step, as it is performed on the original query structure. As a result,
+-- the lateral join is not recursively planned, and a lateral join error is raised
+-- at a later stage. 
+SELECT user_id FROM 
+users RIGHT JOIN users_ref USING (user_id)
+WHERE users_ref.dept IN 
+(
+  SELECT events.event_type FROM events WHERE events.user_id = users.user_id
+) ORDER BY 1 LIMIT 1;
+
+RESET client_min_messages;
 RESET search_path;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
 
