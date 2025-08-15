@@ -693,9 +693,9 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
 ---------------------------------------------------------------------
  1450017 | 1450025 | running  | {1,2}
  1450017 | 1450026 | running  | {3,4}
- 1450017 | 1450027 | running  | {1,2}
- 1450017 | 1450028 | running  | {1,3}
- 1450017 | 1450029 | running  | {2,4}
+ 1450017 | 1450027 | runnable | {1,2}
+ 1450017 | 1450028 | runnable | {1,3}
+ 1450017 | 1450029 | runnable | {2,4}
  1450017 | 1450030 | runnable | {1,2}
  1450017 | 1450031 | runnable | {1,3}
  1450017 | 1450032 | runnable | {1,4}
@@ -750,7 +750,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
  1450017 | 1450027 | running  | {1,2}
  1450017 | 1450028 | running  | {1,3}
  1450017 | 1450029 | running  | {2,4}
- 1450017 | 1450030 | running  | {1,2}
+ 1450017 | 1450030 | runnable | {1,2}
  1450017 | 1450031 | runnable | {1,3}
  1450017 | 1450032 | runnable | {1,4}
 (8 rows)
@@ -810,7 +810,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
  1450017 | 1450027 | done    | {1,2}
  1450017 | 1450028 | done    | {1,3}
  1450017 | 1450029 | done    | {2,4}
- 1450017 | 1450030 | done    | {1,2}
+ 1450017 | 1450030 | running | {1,2}
  1450017 | 1450031 | running | {1,3}
  1450017 | 1450032 | running | {1,4}
 (8 rows)
@@ -851,7 +851,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
  1450017 | 1450027 | done     | {1,2}
  1450017 | 1450028 | done     | {1,3}
  1450017 | 1450029 | done     | {2,4}
- 1450017 | 1450030 | done     | {1,2}
+ 1450017 | 1450030 | running  | {1,2}
  1450017 | 1450031 | runnable | {1,3}
  1450017 | 1450032 | running  | {1,4}
 (8 rows)
