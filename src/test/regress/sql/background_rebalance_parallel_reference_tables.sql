@@ -126,10 +126,14 @@ SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
 
 SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
 
+SET client_min_messages TO DEBUG2;
+
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'force_logical',
     parallel_transfer_colocated_shards := true,
     parallel_transfer_reference_tables := true) \gset
+
+SET client_min_messages TO ERROR;
 
 SELECT citus_rebalance_wait();
 
@@ -194,10 +198,15 @@ SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
 
 SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
 
+SET client_min_messages TO DEBUG2;
+
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'block_writes',
     parallel_transfer_colocated_shards := true,
     parallel_transfer_reference_tables := true) \gset
+
+
+SET client_min_messages TO ERROR;
 
 SELECT citus_rebalance_wait();
 

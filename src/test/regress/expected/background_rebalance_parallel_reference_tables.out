@@ -206,10 +206,40 @@ SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
  table2_colg3 | 85674021 |          0 | localhost  |      57638 | localhost  |      57639
 (12 rows)
 
+SET client_min_messages TO DEBUG2;
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'force_logical',
     parallel_transfer_colocated_shards := true,
     parallel_transfer_reference_tables := true) \gset
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  Added hash entry in scheduled task hash with task 1000 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1001 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1002 for shard xxxxx
+DEBUG:  creating relations for reference table 'order_items' on localhost:xxxxx ... QUERY= SET LOCAL application_name TO 'citus_rebalancer gpid=410000058021';
+SELECT citus_internal.citus_internal_copy_single_shard_placement(85674026,41,52,4,'force_logical')
+DEBUG:  Added hash entry in scheduled task hash with task 1004 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1005 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1006 for shard xxxxx
+DEBUG:  creating relations for reference table 'order_items' on localhost:xxxxx ... QUERY= SET LOCAL application_name TO 'citus_rebalancer gpid=410000058021';
+SELECT citus_internal.citus_internal_copy_single_shard_placement(85674026,41,53,4,'force_logical')
+DEBUG:  2 dependent copy reference table tasks for job 17777
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+NOTICE:  Scheduled 6 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+SET client_min_messages TO ERROR;
 SELECT citus_rebalance_wait();
  citus_rebalance_wait
 ---------------------------------------------------------------------
@@ -372,10 +402,40 @@ SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
  table2_colg3 | 85674021 |          0 | localhost  |      57639 | localhost  |      57642
 (8 rows)
 
+SET client_min_messages TO DEBUG2;
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'block_writes',
     parallel_transfer_colocated_shards := true,
     parallel_transfer_reference_tables := true) \gset
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  skipping child tables for relation named: table1_colg3
+DEBUG:  skipping child tables for relation named: table1_colg1
+DEBUG:  skipping child tables for relation named: table1_colg2
+DEBUG:  Added hash entry in scheduled task hash with task 1014 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1015 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1016 for shard xxxxx
+DEBUG:  creating relations for reference table 'order_items' on localhost:xxxxx ... QUERY= SET LOCAL application_name TO 'citus_rebalancer gpid=410000058021';
+SELECT citus_internal.citus_internal_copy_single_shard_placement(85674026,41,54,4,'block_writes')
+DEBUG:  Added hash entry in scheduled task hash with task 1018 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1019 for shard xxxxx
+DEBUG:  Added hash entry in scheduled task hash with task 1020 for shard xxxxx
+DEBUG:  creating relations for reference table 'order_items' on localhost:xxxxx ... QUERY= SET LOCAL application_name TO 'citus_rebalancer gpid=410000058021';
+SELECT citus_internal.citus_internal_copy_single_shard_placement(85674026,41,55,4,'block_writes')
+DEBUG:  2 dependent copy reference table tasks for job 17778
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+NOTICE:  Scheduled 4 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+SET client_min_messages TO ERROR;
 SELECT citus_rebalance_wait();
  citus_rebalance_wait
 ---------------------------------------------------------------------
