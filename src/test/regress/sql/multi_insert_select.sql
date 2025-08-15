@@ -2583,5 +2583,127 @@ SELECT id, val FROM version_dist_union ORDER BY id;
 
 -- End of Issue #7784
 
+-- PR #8106 — CTE traversal works when following outer Vars
+-- This script exercises three shapes:
+--  T1) CTE referenced inside a correlated subquery (one level down)
+--  T2) CTE referenced inside a nested subquery (two levels down)
+--  T3) Subquery targetlist uses a scalar sublink into the outer CTE
+
+CREATE SCHEMA pr8106_cte_outervar;
+SET search_path = pr8106_cte_outervar, public;
+
+-- Base tables for the tests
+DROP TABLE IF EXISTS raw_events_first CASCADE;
+DROP TABLE IF EXISTS agg_events CASCADE;
+
+CREATE TABLE raw_events_first(
+  user_id  int,
+  value_1  int
+);
+
+CREATE TABLE agg_events(
+  user_id      int,
+  value_1_agg  int
+);
+
+-- Distribute and colocate (distribution key = user_id)
+SELECT create_distributed_table('raw_events_first', 'user_id');
+SELECT create_distributed_table('agg_events', 'user_id');
+
+-- Seed data (duplicates on some user_ids; some NULL value_1’s)
+INSERT INTO raw_events_first(user_id, value_1) VALUES
+  (1, 10), (1, 20), (1, NULL),
+  (2, NULL),
+  (3, 30),
+  (4, NULL),
+  (5, 50), (5, NULL),
+  (6, NULL);
+
+----------------------------------------------------------------------
+-- T1) CTE referenced inside a correlated subquery (one level down)
+----------------------------------------------------------------------
+TRUNCATE agg_events;
+
+WITH c AS MATERIALIZED (
+  SELECT user_id FROM raw_events_first
+)
+INSERT INTO agg_events (user_id)
+SELECT t.user_id
+FROM raw_events_first t
+WHERE EXISTS (SELECT 1 FROM c WHERE c.user_id = t.user_id);
+
+-- Expect one insert per row in raw_events_first (EXISTS always true per user_id)
+SELECT 't1_count_matches' AS test,
+       (SELECT count(*) FROM agg_events) =
+       (SELECT count(*) FROM raw_events_first) AS ok;
+
+-- Spot-check: how many rows were inserted
+SELECT 't1_rows' AS test, count(*) AS rows FROM agg_events;
+
+----------------------------------------------------------------------
+-- T2) CTE referenced inside a nested subquery (two levels down)
+----------------------------------------------------------------------
+TRUNCATE agg_events;
+
+WITH c AS MATERIALIZED (
+  SELECT user_id FROM raw_events_first
+)
+INSERT INTO agg_events (user_id)
+SELECT t.user_id
+FROM raw_events_first t
+WHERE EXISTS (
+  SELECT 1
+  FROM (SELECT user_id FROM c) c2
+  WHERE c2.user_id = t.user_id
+);
+
+-- Same cardinality expectation as T1
+SELECT 't2_count_matches' AS test,
+       (SELECT count(*) FROM agg_events) =
+       (SELECT count(*) FROM raw_events_first) AS ok;
+
+SELECT 't2_rows' AS test, count(*) AS rows FROM agg_events;
+
+----------------------------------------------------------------------
+-- T3) Subquery targetlist uses a scalar sublink into the outer CTE
+--     (use MAX() to keep scalar subquery single-row)
+----------------------------------------------------------------------
+TRUNCATE agg_events;
+
+WITH c AS (SELECT user_id, value_1 FROM raw_events_first)
+INSERT INTO agg_events (user_id, value_1_agg)
+SELECT d.user_id, d.value_1_agg
+FROM (
+  SELECT t.user_id,
+         (SELECT max(c.value_1) FROM c WHERE c.user_id = t.user_id) AS value_1_agg
+  FROM raw_events_first t
+) AS d
+WHERE d.value_1_agg IS NOT NULL;
+
+-- Expect one insert per row in raw_events_first whose user_id has at least one non-NULL value_1
+SELECT 't3_count_matches' AS test,
+       (SELECT count(*) FROM agg_events) =
+       (
+         SELECT count(*)
+         FROM raw_events_first t
+         WHERE EXISTS (
+           SELECT 1 FROM raw_events_first c
+           WHERE c.user_id = t.user_id AND c.value_1 IS NOT NULL
+         )
+       ) AS ok;
+
+-- Also verify no NULLs were inserted into value_1_agg
+SELECT 't3_no_null_value_1_agg' AS test,
+       NOT EXISTS (SELECT 1 FROM agg_events WHERE value_1_agg IS NULL) AS ok;
+
+-- Deterministic sample of results
+SELECT 't3_sample' AS test, user_id, value_1_agg
+FROM agg_events
+ORDER BY user_id
+LIMIT 5;
+
+-- End of PR #8106 — CTE traversal works when following outer Vars
+
 SET client_min_messages TO ERROR;
+DROP SCHEMA pr8106_cte_outervar CASCADE;
 DROP SCHEMA multi_insert_select CASCADE;
