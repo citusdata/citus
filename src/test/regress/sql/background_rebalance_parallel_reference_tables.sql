@@ -106,6 +106,20 @@ SELECT
 FROM generate_series(1, 90) AS i;
 
 
+
+SELECT
+    c.id AS customer_id,
+    c.name AS customer_name,
+    c.email AS customer_email,
+    COUNT(oi.id) AS total_order_items
+FROM customers c
+JOIN orders o
+    ON c.id = o.customer_id
+JOIN order_items oi
+    ON o.id = oi.order_id
+GROUP BY c.id, c.name, c.email
+ORDER BY c.id;
+
 -- Add two new nodes so that we can rebalance
 SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
 SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
@@ -172,12 +186,13 @@ ORDER BY
 
 CALL citus_cleanup_orphaned_resources();
 
--- Activate and new  nodes so that we can rebalance.
 SELECT 1 FROM citus_activate_node('localhost', :worker_4_port);
 SELECT citus_set_node_property('localhost', :worker_4_port, 'shouldhaveshards', true);
 
 SELECT 1 FROM citus_add_node('localhost', :worker_5_port);
 SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
+
+SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
 
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'block_writes',
@@ -213,6 +228,19 @@ SELECT D.task_id,
        END
        FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
 FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
+
+SELECT
+    c.id AS customer_id,
+    c.name AS customer_name,
+    c.email AS customer_email,
+    COUNT(oi.id) AS total_order_items
+FROM customers c
+JOIN orders o
+    ON c.id = o.customer_id
+JOIN order_items oi
+    ON o.id = oi.order_id
+GROUP BY c.id, c.name, c.email
+ORDER BY c.id;
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;

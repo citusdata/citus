@@ -321,8 +321,8 @@ citus_internal_copy_single_shard_placement(PG_FUNCTION_ARGS)
 	if (!IsRebalancerInternalBackend())
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("This is an internal Citus function can only be "
-							   "used in by a rebalancer task")));
+						errmsg("This is an internal Citus function that can only"
+							   " be used by a rebalancer task")));
 	}
 
 	TransferShards(shardId, sourceNode->workerName, sourceNode->workerPort,

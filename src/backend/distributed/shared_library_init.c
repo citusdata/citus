@@ -1964,7 +1964,7 @@ RegisterCitusConfigVariables(void)
 			"for scheduled background tasks that involve a particular node"),
 		NULL,
 		&MaxBackgroundTaskExecutorsPerNode,
-		4, 1, 128,
+		1, 1, 128,
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

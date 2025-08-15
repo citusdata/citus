@@ -1546,12 +1546,15 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	 * 9) Logically replicate all the changes and do most of the table DDL,
 	 * like index and foreign key creation.
 	 */
+	bool skipInterShardRelationshipCreation = false;
+
 	CompleteNonBlockingShardTransfer(sourceColocatedShardIntervalList,
 									 sourceConnection,
 									 publicationInfoHash,
 									 logicalRepTargetList,
 									 groupedLogicalRepTargetsHash,
-									 SHARD_SPLIT, false);
+									 SHARD_SPLIT,
+									 skipInterShardRelationshipCreation);
 
 	/*
 	 * 10) Delete old shards metadata and mark the shards as to be deferred drop.

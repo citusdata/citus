@@ -42,7 +42,7 @@ typedef enum
 	 * table shards.
 	 * Finally if you are using this flag, you should also use consider defering
 	 * the creation of the relationships on the source node until all colocated
-	 * shards are transfered (see: SHARD_TRANSFER_NO_CREATE_RELATIONSHIPS).
+	 * shards are transfered (see: SHARD_TRANSFER_SKIP_CREATE_RELATIONSHIPS).
 	 */
 	SHARD_TRANSFER_SINGLE_SHARD_ONLY = 1 << 0,
 

@@ -150,6 +150,32 @@ SELECT
     (i % 10) + 1,
     round((random() * 100 + 10)::numeric, 2)
 FROM generate_series(1, 90) AS i;
+SELECT
+    c.id AS customer_id,
+    c.name AS customer_name,
+    c.email AS customer_email,
+    COUNT(oi.id) AS total_order_items
+FROM customers c
+JOIN orders o
+    ON c.id = o.customer_id
+JOIN order_items oi
+    ON o.id = oi.order_id
+GROUP BY c.id, c.name, c.email
+ORDER BY c.id;
+ customer_id | customer_name |     customer_email     | total_order_items
+---------------------------------------------------------------------
+           1 | Customer 1    | customer1@example.com  |                 9
+           2 | Customer 2    | customer2@example.com  |                 9
+           3 | Customer 3    | customer3@example.com  |                 9
+           4 | Customer 4    | customer4@example.com  |                 9
+           5 | Customer 5    | customer5@example.com  |                 9
+           6 | Customer 6    | customer6@example.com  |                 9
+           7 | Customer 7    | customer7@example.com  |                 9
+           8 | Customer 8    | customer8@example.com  |                 9
+           9 | Customer 9    | customer9@example.com  |                 9
+          10 | Customer 10   | customer10@example.com |                 9
+(10 rows)
+
 -- Add two new nodes so that we can rebalance
 SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
  ?column?
@@ -309,7 +335,6 @@ ORDER BY
 (4 rows)
 
 CALL citus_cleanup_orphaned_resources();
--- Activate and new  nodes so that we can rebalance.
 SELECT 1 FROM citus_activate_node('localhost', :worker_4_port);
  ?column?
 ---------------------------------------------------------------------
@@ -333,6 +358,19 @@ SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
 ---------------------------------------------------------------------
         1
 (1 row)
+
+SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
+  table_name  | shardid  | shard_size | sourcename | sourceport | targetname | targetport
+---------------------------------------------------------------------
+ table1_colg1 | 85674001 |          0 | localhost  |      57637 | localhost  |      57642
+ table1_colg1 | 85674003 |          0 | localhost  |      57638 | localhost  |      57641
+ table2_colg1 | 85674005 |          0 | localhost  |      57637 | localhost  |      57642
+ table2_colg1 | 85674007 |          0 | localhost  |      57638 | localhost  |      57641
+ table1_colg3 | 85674016 |          0 | localhost  |      57639 | localhost  |      57641
+ table1_colg3 | 85674017 |          0 | localhost  |      57639 | localhost  |      57642
+ table2_colg3 | 85674020 |          0 | localhost  |      57639 | localhost  |      57641
+ table2_colg3 | 85674021 |          0 | localhost  |      57639 | localhost  |      57642
+(8 rows)
 
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'block_writes',
@@ -418,6 +456,32 @@ FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task
     1025 | 85674001 |       1017 | 85674026
     1025 | 85674001 |       1021 | 85674026
 (20 rows)
+
+SELECT
+    c.id AS customer_id,
+    c.name AS customer_name,
+    c.email AS customer_email,
+    COUNT(oi.id) AS total_order_items
+FROM customers c
+JOIN orders o
+    ON c.id = o.customer_id
+JOIN order_items oi
+    ON o.id = oi.order_id
+GROUP BY c.id, c.name, c.email
+ORDER BY c.id;
+ customer_id | customer_name |     customer_email     | total_order_items
+---------------------------------------------------------------------
+           1 | Customer 1    | customer1@example.com  |                 9
+           2 | Customer 2    | customer2@example.com  |                 9
+           3 | Customer 3    | customer3@example.com  |                 9
+           4 | Customer 4    | customer4@example.com  |                 9
+           5 | Customer 5    | customer5@example.com  |                 9
+           6 | Customer 6    | customer6@example.com  |                 9
+           7 | Customer 7    | customer7@example.com  |                 9
+           8 | Customer 8    | customer8@example.com  |                 9
+           9 | Customer 9    | customer9@example.com  |                 9
+          10 | Customer 10   | customer10@example.com |                 9
+(10 rows)
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;

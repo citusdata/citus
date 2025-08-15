@@ -125,7 +125,7 @@ static volatile sig_atomic_t GotSighup = false;
 
 /* keeping track of parallel background tasks per node */
 HTAB *ParallelTasksPerNode = NULL;
-int MaxBackgroundTaskExecutorsPerNode = 4;
+int MaxBackgroundTaskExecutorsPerNode = 1;
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
