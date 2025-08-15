@@ -1,0 +1,16 @@
+# The basic tests runs analyze which depends on shard numbers
+test: multi_test_helpers multi_test_helpers_superuser upgrade_basic_before_non_mixed
+test: multi_test_catalog_views
+test: upgrade_basic_before
+test: upgrade_ref2ref_before
+test: upgrade_type_before
+test: upgrade_distributed_function_before upgrade_rebalance_strategy_before
+test: upgrade_autoconverted_before upgrade_single_shard_table_before upgrade_schema_based_sharding_before
+test: upgrade_citus_stat_activity
+test: upgrade_citus_locks
+test: upgrade_distributed_triggers_before
+
+# The last test, i.e., upgrade_columnar_before, in before_pg_upgrade_with_columnar_schedule
+# renames public schema to citus_schema and re-creates public schema, so we also do the same
+# here to have compatible output in after schedule tests for both schedules.
+test: rename_public_to_citus_schema_and_recreate

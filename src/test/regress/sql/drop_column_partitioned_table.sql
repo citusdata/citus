@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA drop_column_partitioned_table;
 SET search_path TO drop_column_partitioned_table;
 
@@ -209,3 +213,6 @@ ORDER BY 1,2;
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 DROP SCHEMA drop_column_partitioned_table CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

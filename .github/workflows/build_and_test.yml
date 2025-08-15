@@ -331,7 +331,15 @@ jobs:
           make -C src/test/regress \
             check-pg-upgrade \
             old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
-            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin
+            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin \
+            test-with-columnar=false
+
+        gosu circleci \
+          make -C src/test/regress \
+            check-pg-upgrade \
+            old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
+            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin \
+            test-with-columnar=true
     - name: Copy pg_upgrade logs for newData dir
       run: |-
         mkdir -p /tmp/pg_upgrade_newData_logs

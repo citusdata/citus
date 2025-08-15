@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA generated_identities;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
@@ -375,3 +379,6 @@ ORDER BY table_name, id;
 SET client_min_messages TO WARNING;
 DROP SCHEMA generated_identities CASCADE;
 DROP USER identity_test_user;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

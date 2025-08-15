@@ -301,10 +301,12 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 -- create only one shard & one partition so that the output easier to check
 SET citus.next_shard_id TO 915000;
 
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1370100;
+
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE parent_table (dist_col int, another_col int, partition_col timestamp, name text) PARTITION BY RANGE (partition_col);
-SELECT create_distributed_table('parent_table', 'dist_col');
+SELECT create_distributed_table('parent_table', 'dist_col', colocate_with=>'none');
 CREATE TABLE p1 PARTITION OF parent_table FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
 
 CREATE INDEX i1 ON parent_table(dist_col);
@@ -329,6 +331,14 @@ ALTER INDEX p1_pkey RENAME TO p1_pkey_renamed;
 ALTER INDEX p1_dist_col_partition_col_key RENAME TO p1_dist_col_partition_col_key_renamed;
 ALTER INDEX p1_dist_col_idx RENAME TO p1_dist_col_idx_renamed;
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
+SET search_path TO fix_idx_names, public;
+
+SET columnar.compression TO 'zstd';
+
 -- should be able to create a new partition that is columnar
 SET citus.log_remote_commands TO ON;
 CREATE TABLE p2(dist_col int NOT NULL, another_col int, partition_col timestamp NOT NULL, name text) USING columnar;
@@ -341,3 +351,6 @@ ALTER TABLE parent_table DROP CONSTRAINT unique_cst CASCADE;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA fix_idx_names CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

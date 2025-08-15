@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 create schema create_distributed_table_concurrently;
 set search_path to create_distributed_table_concurrently;
 set citus.shard_replication_factor to 1;
@@ -154,3 +158,6 @@ select count(*) from test_columnar_2;
 
 set client_min_messages to warning;
 drop schema create_distributed_table_concurrently cascade;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

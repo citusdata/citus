@@ -6,6 +6,10 @@ DROP SCHEMA IF EXISTS merge_schema CASCADE;
 --WHEN MATCHED AND <condition>
 --WHEN MATCHED
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA merge_schema;
 SET search_path TO merge_schema;
 SET citus.shard_count TO 4;
@@ -2610,3 +2614,6 @@ RESET client_min_messages;
 DROP SERVER foreign_server CASCADE;
 DROP FUNCTION merge_when_and_write();
 DROP SCHEMA merge_schema CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

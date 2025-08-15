@@ -1249,8 +1249,9 @@ IsObjectAddressOwnedByCitus(const ObjectAddress *objectAddress)
 		return false;
 	}
 
-	bool ownedByCitus = extObjectAddress.objectId == citusId;
-	bool ownedByCitusColumnar = extObjectAddress.objectId == citusColumnarId;
+	bool ownedByCitus = OidIsValid(citusId) && extObjectAddress.objectId == citusId;
+	bool ownedByCitusColumnar = OidIsValid(citusColumnarId) &&
+								extObjectAddress.objectId == citusColumnarId;
 
 	return ownedByCitus || ownedByCitusColumnar;
 }

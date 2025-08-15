@@ -4,6 +4,10 @@
 -- The results should match. This process is repeated for various combinations
 -- of MERGE SQL.
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 DROP SCHEMA IF EXISTS merge_repartition1_schema CASCADE;
 CREATE SCHEMA merge_repartition1_schema;
 SET search_path TO merge_repartition1_schema;
@@ -570,3 +574,6 @@ WHEN NOT MATCHED THEN
 SELECT compare_data();
 
 DROP SCHEMA merge_repartition1_schema CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

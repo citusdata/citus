@@ -146,7 +146,6 @@ check-isolation-custom-schedule-vg: all  $(isolation_test_files)
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
-
 check-empty: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
@@ -179,11 +178,6 @@ check-multi-1-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
-
-check-columnar-vg: all
-	$(pg_regress_multi_check) --load-extension=citus --valgrind \
-	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
 check-isolation: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
@@ -227,13 +221,41 @@ check-operations: all
 	$(pg_regress_multi_check) --load-extension=citus  --worker-count=6 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_schedule $(EXTRA_TESTS)
 
+check-columnar-minimal:
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/minimal_columnar_schedule $(EXTRA_TESTS)
+
 check-columnar: all
-	$(pg_regress_multi_check) --load-extension=citus_columnar --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
+
+check-columnar-vg: all
+	$(pg_regress_multi_check) --load-extension=citus_columnar --valgrind \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
 check-columnar-isolation: all  $(isolation_test_files)
-	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	$(pg_regress_multi_check) --load-extension=citus_columnar --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/columnar_isolation_schedule $(EXTRA_TESTS)
+
+check-columnar-custom-schedule: all
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-columnar-custom-schedule-vg: all
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 \
+	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-columnar-isolation-custom-schedule: all  $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus_columnar --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-columnar-isolation-custom-schedule-vg: all  $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus_columnar --isolationtester \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-split: all
 	$(pg_regress_multi_check) --load-extension=citus \
@@ -252,7 +274,7 @@ check-enterprise-failure: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_failure_schedule $(EXTRA_TESTS)
 
 check-pg-upgrade: all
-	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
+	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir) $(if $(filter true,$(test-with-columnar)),--test-with-columnar)
 
 check-arbitrary-configs: all
 	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed)
@@ -301,4 +323,3 @@ clean distclean maintainer-clean:
 	rm -rf input/ output/
 	rm -rf tmp_check/
 	rm -rf tmp_citus_test/
-

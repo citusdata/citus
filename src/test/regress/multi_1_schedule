@@ -51,6 +51,8 @@ test: citus_schema_distribute_undistribute
 # because it checks the value of stats_reset column before calling the function.
 test: stat_counters
 
+test: columnar_citus_integration
+
 test: multi_test_catalog_views
 test: multi_table_ddl
 test: multi_alias

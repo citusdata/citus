@@ -2,6 +2,10 @@
 -- ISSUE_5248
 --
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA issue_5248;
 SET search_path TO issue_5248;
 SET citus.shard_count TO 4;
@@ -197,3 +201,6 @@ WHERE    pg_catalog.pg_backup_stop() > cast(NULL AS record) limit 100;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA issue_5248 CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

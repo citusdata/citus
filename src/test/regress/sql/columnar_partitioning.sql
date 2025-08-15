@@ -43,9 +43,9 @@ EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
 SELECT count(*), sum(i), min(i), max(i) FROM parent;
 
 -- set older partitions as columnar
-SELECT alter_table_set_access_method('p0','columnar');
-SELECT alter_table_set_access_method('p1','columnar');
-SELECT alter_table_set_access_method('p3','columnar');
+ALTER TABLE p0 SET ACCESS METHOD columnar;
+ALTER TABLE p1 SET ACCESS METHOD columnar;
+ALTER TABLE p3 SET ACCESS METHOD columnar;
 
 -- should also be parallel plan
 EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;

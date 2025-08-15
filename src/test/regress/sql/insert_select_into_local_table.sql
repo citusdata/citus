@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA insert_select_into_local_table;
 SET search_path TO insert_select_into_local_table;
 
@@ -598,3 +602,6 @@ ROLLBACK;
 
 \set VERBOSITY terse
 DROP SCHEMA insert_select_into_local_table CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

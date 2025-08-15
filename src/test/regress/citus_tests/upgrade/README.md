@@ -30,8 +30,13 @@ Before running the script, make sure that:
 -   Finally run upgrade test in `citus/src/test/regress`:
 
 ```bash
-    pipenv run make check-pg-upgrade old-bindir=<old-bindir> new-bindir=<new-bindir>
+    pipenv run make check-pg-upgrade old-bindir=<old-bindir> new-bindir=<new-bindir> test-with-columnar=<true|false>
 ```
+
+When test-with-columnar is provided as true, before_pg_upgrade_with_columnar_schedule /
+after_pg_upgrade_with_columnar_schedule is used before / after upgrading Postgres during the
+tests and before_pg_upgrade_without_columnar_schedule / after_pg_upgrade_without_columnar_schedule
+is used otherwise.
 
 To see full command list:
 
@@ -43,9 +48,9 @@ How the postgres upgrade test works:
 
 -   Temporary folder `tmp_upgrade` is created in `src/test/regress/`, if one exists it is removed first.
 -   Database is initialized and citus cluster is created(1 coordinator + 2 workers) with old postgres.
--   `before_pg_upgrade_schedule` is run with `pg_regress`. This schedule sets up any
+-   `before_pg_upgrade_with_columnar_schedule` / `before_pg_upgrade_without_columnar_schedule` is run with `pg_regress`. This schedule sets up any
     objects and data that will be tested for preservation after the upgrade. It
--   `after_pg_upgrade_schedule` is run with `pg_regress` to verify that the output
+-   `after_pg_upgrade_with_columnar_schedule` / `after_pg_upgrade_without_columnar_schedule` is run with `pg_regress` to verify that the output
     of those tests is the same before the upgrade as after.
 -   `citus_prepare_pg_upgrade` is run in coordinators and workers.
 -   Old database is stopped.
@@ -53,7 +58,7 @@ How the postgres upgrade test works:
 -   Postgres upgrade is performed.
 -   New database is started in both coordinators and workers.
 -   `citus_finish_pg_upgrade` is run in coordinators and workers to finalize the upgrade step.
--   `after_pg_upgrade_schedule` is run with `pg_regress` to verify that the previously created tables, and data still exist. Router and realtime queries are used to verify this.
+-   `after_pg_upgrade_with_columnar_schedule` / `after_pg_upgrade_without_columnar_schedule` is run with `pg_regress` to verify that the previously created tables, and data still exist. Router and realtime queries are used to verify this.
 
 ### Writing new PG upgrade tests
 

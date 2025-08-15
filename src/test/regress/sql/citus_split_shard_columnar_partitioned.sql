@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA "citus_split_test_schema_columnar_partitioned";
 SET search_path TO "citus_split_test_schema_columnar_partitioned";
 SET citus.next_shard_id TO 8970000;
@@ -306,3 +310,6 @@ SELECT public.wait_for_resource_cleanup();
     SELECT pg_reload_conf();
     DROP SCHEMA "citus_split_test_schema_columnar_partitioned" CASCADE;
 --END : Cleanup
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

@@ -54,36 +54,9 @@ SELECT count(*), sum(i), min(i), max(i) FROM parent;
 (1 row)
 
 -- set older partitions as columnar
-SELECT alter_table_set_access_method('p0','columnar');
-NOTICE:  creating a new table for public.p0
-NOTICE:  moving the data of public.p0
-NOTICE:  dropping the old public.p0
-NOTICE:  renaming the new table to public.p0
- alter_table_set_access_method
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT alter_table_set_access_method('p1','columnar');
-NOTICE:  creating a new table for public.p1
-NOTICE:  moving the data of public.p1
-NOTICE:  dropping the old public.p1
-NOTICE:  renaming the new table to public.p1
- alter_table_set_access_method
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT alter_table_set_access_method('p3','columnar');
-NOTICE:  creating a new table for public.p3
-NOTICE:  moving the data of public.p3
-NOTICE:  dropping the old public.p3
-NOTICE:  renaming the new table to public.p3
- alter_table_set_access_method
----------------------------------------------------------------------
-
-(1 row)
-
+ALTER TABLE p0 SET ACCESS METHOD columnar;
+ALTER TABLE p1 SET ACCESS METHOD columnar;
+ALTER TABLE p3 SET ACCESS METHOD columnar;
 -- should also be parallel plan
 EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
                             QUERY PLAN

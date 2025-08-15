@@ -1,8 +1,5 @@
-test: multi_test_helpers multi_test_helpers_superuser columnar_test_helpers
-test: multi_cluster_management
-test: multi_test_catalog_views
+test: columnar_test_helpers
 
-test: remove_coordinator_from_metadata
 test: columnar_create
 test: columnar_load
 test: columnar_query
@@ -36,5 +33,3 @@ test: columnar_recursive
 test: columnar_transactions
 test: columnar_matview
 test: columnar_memory
-test: columnar_citus_integration
-test: check_mx

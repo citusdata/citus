@@ -2,12 +2,13 @@
 
 """upgrade_test
 Usage:
-    upgrade_test --old-bindir=<old-bindir> --new-bindir=<new-bindir> --pgxsdir=<pgxsdir>
+    upgrade_test --old-bindir=<old-bindir> --new-bindir=<new-bindir> --pgxsdir=<pgxsdir> [--test-with-columnar]
 
 Options:
     --old-bindir=<old-bindir>              The old PostgreSQL executable directory(ex: '~/.pgenv/pgsql-10.4/bin')
     --new-bindir=<new-bindir>              The new PostgreSQL executable directory(ex: '~/.pgenv/pgsql-11.3/bin')
-    --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
+    --pgxsdir=<pgxsdir>                    Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
+    --test-with-columnar                   Enable automatically creating citus_columnar extension
 """
 
 import atexit
@@ -26,8 +27,10 @@ import utils  # noqa: E402
 from utils import USER  # noqa: E402
 
 from config import (  # noqa: E402
-    AFTER_PG_UPGRADE_SCHEDULE,
-    BEFORE_PG_UPGRADE_SCHEDULE,
+    AFTER_PG_UPGRADE_WITH_COLUMNAR_SCHEDULE,
+    AFTER_PG_UPGRADE_WITHOUT_COLUMNAR_SCHEDULE,
+    BEFORE_PG_UPGRADE_WITH_COLUMNAR_SCHEDULE,
+    BEFORE_PG_UPGRADE_WITHOUT_COLUMNAR_SCHEDULE,
     PGUpgradeConfig,
 )
 
@@ -85,13 +88,21 @@ def main(config):
         config.old_bindir,
         config.pg_srcdir,
         config.coordinator_port(),
-        BEFORE_PG_UPGRADE_SCHEDULE,
+        (
+            BEFORE_PG_UPGRADE_WITH_COLUMNAR_SCHEDULE
+            if config.test_with_columnar
+            else BEFORE_PG_UPGRADE_WITHOUT_COLUMNAR_SCHEDULE
+        ),
     )
     common.run_pg_regress(
         config.old_bindir,
         config.pg_srcdir,
         config.coordinator_port(),
-        AFTER_PG_UPGRADE_SCHEDULE,
+        (
+            AFTER_PG_UPGRADE_WITH_COLUMNAR_SCHEDULE
+            if config.test_with_columnar
+            else AFTER_PG_UPGRADE_WITHOUT_COLUMNAR_SCHEDULE
+        ),
     )
 
     citus_prepare_pg_upgrade(config.old_bindir, config.node_name_to_ports.values())
@@ -127,7 +138,11 @@ def main(config):
         config.new_bindir,
         config.pg_srcdir,
         config.coordinator_port(),
-        AFTER_PG_UPGRADE_SCHEDULE,
+        (
+            AFTER_PG_UPGRADE_WITH_COLUMNAR_SCHEDULE
+            if config.test_with_columnar
+            else AFTER_PG_UPGRADE_WITHOUT_COLUMNAR_SCHEDULE
+        ),
     )
 
 

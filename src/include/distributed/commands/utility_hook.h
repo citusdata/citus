@@ -112,6 +112,5 @@ extern void UndistributeDisconnectedCitusLocalTables(void);
 extern void NotifyUtilityHookConstraintDropped(void);
 extern void ResetConstraintDropped(void);
 extern void ExecuteDistributedDDLJob(DDLJob *ddlJob);
-extern void ColumnarTableSetOptionsHook(Oid relationId, ColumnarOptions options);
 
 #endif /* MULTI_UTILITY_H */
