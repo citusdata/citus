@@ -1452,7 +1452,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 13.1-1
 ALTER EXTENSION citus UPDATE TO '13.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
-                        previous_object                         |                                        current_object
+                        previous_object                         |                                              current_object
 ---------------------------------------------------------------------
  function citus_unmark_object_distributed(oid,oid,integer) void |
  function shard_name(regclass,bigint) text                      |
@@ -1487,7 +1487,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                 | function shard_name(regclass,bigint,boolean) text
                                                                 | view citus_nodes
                                                                 | view citus_stat_counters
-(33 rows)
+                                                                | view citus_stats
+(34 rows)
 
 -- Test downgrade to 13.1-1 from 13.2-1
 ALTER EXTENSION citus UPDATE TO '13.2-1';
