@@ -27,6 +27,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -37,20 +38,27 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 
+
 /* local function forward declarations */
 static List * WorkersWithoutReferenceTablePlacement(uint64 shardId, LOCKMODE lockMode);
-static StringInfo CopyShardPlacementToWorkerNodeQuery(
-	ShardPlacement *sourceShardPlacement,
-	WorkerNode *workerNode,
-	char transferMode);
+static StringInfo CopyShardPlacementToWorkerNodeQuery(ShardPlacement *sourceShardPlacement
+													  ,
+													  WorkerNode *workerNode,
+													  char transferMode);
 static bool AnyRelationsModifiedInTransaction(List *relationIdList);
 static List * ReplicatedMetadataSyncedDistributedTableList(void);
 static bool NodeHasAllReferenceTableReplicas(WorkerNode *workerNode);
+typedef struct ShardTaskEntry
+{
+	uint64 shardId;
+	int64 taskId;
+} ShardTaskEntry;
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
@@ -179,7 +187,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		if (list_length(newWorkersList) == 0)
 		{
 			/*
-			 * All workers alreaddy have a copy of the reference tables, make sure that
+			 * All workers already have a copy of the reference tables, make sure that
 			 * any locks obtained earlier are released. It will probably not matter, but
 			 * we release the locks in the reverse order we obtained them in.
 			 */
@@ -230,7 +238,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	WorkerNode *newWorkerNode = NULL;
 	foreach_declared_ptr(newWorkerNode, newWorkersList)
 	{
-		ereport(NOTICE, (errmsg("replicating reference table '%s' to %s:%d ...",
+		ereport(DEBUG2, (errmsg("replicating reference table '%s' to %s:%d ...",
 								referenceTableName, newWorkerNode->workerName,
 								newWorkerNode->workerPort)));
 
@@ -280,6 +288,386 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	}
 
 	/*
+	 * Since reference tables have been copied via a loopback connection we do not have
+	 * to retain our locks. Since Citus only runs well in READ COMMITTED mode we can be
+	 * sure that other transactions will find the reference tables copied.
+	 * We have obtained and held multiple locks, here we unlock them all in the reverse
+	 * order we have obtained them in.
+	 */
+	for (int releaseLockmodeIndex = lengthof(lockmodes) - 1; releaseLockmodeIndex >= 0;
+		 releaseLockmodeIndex--)
+	{
+		UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+	}
+}
+
+
+/*
+ * ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes is essentially a
+ * twin of EnsureReferenceTablesExistOnAllNodesExtended. The difference is instead of
+ * copying the missing tables on to the worker nodes this function creates the background
+ * tasks for each required copy operation and schedule it in the background job.
+ * Another difference is that instead of moving all the colocated shards sequencially
+ * this function creates a seperate background task for each shard, even when the shards
+ * are part of same colocated shard group.
+ *
+ * For transfering the shards in parallel the function creates a task for each shard
+ * move and than schedules another task that creates the shard relationships (if any)
+ * between shards and that task wait for the completion of all shard transfer tasks.
+ *
+ * The function returns an array of task ids that are created for creating the shard
+ * relationships, effectively completion of these tasks signals the completion of
+ * of reference table setup on the worker nodes. Any process that needs to wait for
+ * the completion of the reference table setup can wait for these tasks to complete.
+ *
+ * The transferMode is passed to this function gets ignored for now and it only uses
+ * block write mode.
+ */
+int64 *
+ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char transferMode
+															,
+															int *nDependTasks)
+{
+	List *referenceTableIdList = NIL;
+	uint64 shardId = INVALID_SHARD_ID;
+	List *newWorkersList = NIL;
+	int64 *dependsTaskArray = NULL;
+	const char *referenceTableName = NULL;
+	int colocationId = GetReferenceTableColocationId();
+
+	*nDependTasks = 0;
+	if (colocationId == INVALID_COLOCATION_ID)
+	{
+		/* we have no reference table yet. */
+		return 0;
+	}
+
+	/*
+	 * Most of the time this function should result in a conclusion where we do not need
+	 * to copy any reference tables. To prevent excessive locking the majority of the time
+	 * we run our precondition checks first with a lower lock. If, after checking with the
+	 * lower lock, that we might need to copy reference tables we check with a more
+	 * aggressive and self conflicting lock. It is important to be self conflicting in the
+	 * second run to make sure that two concurrent calls to this routine will actually not
+	 * run concurrently after the initial check.
+	 *
+	 * If after two iterations of precondition checks we still find the need for copying
+	 * reference tables we exit the loop with all locks held. This will prevent concurrent
+	 * DROP TABLE and create_reference_table calls so that the list of reference tables we
+	 * operate on are stable.
+	 *
+	 *
+	 * Since the changes to the reference table placements are made via loopback
+	 * connections we release the locks held at the end of this function. Due to Citus
+	 * only running transactions in READ COMMITTED mode we can be sure that other
+	 * transactions correctly find the metadata entries.
+	 */
+	LOCKMODE lockmodes[] = { AccessShareLock, ExclusiveLock };
+	for (int lockmodeIndex = 0; lockmodeIndex < lengthof(lockmodes); lockmodeIndex++)
+	{
+		LockColocationId(colocationId, lockmodes[lockmodeIndex]);
+
+		referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+		if (referenceTableIdList == NIL)
+		{
+			/*
+			 * No reference tables exist, make sure that any locks obtained earlier are
+			 * released. It will probably not matter, but we release the locks in the
+			 * reverse order we obtained them in.
+			 */
+			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+				 releaseLockmodeIndex--)
+			{
+				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+			}
+			return 0;
+		}
+
+		Oid referenceTableId = linitial_oid(referenceTableIdList);
+		referenceTableName = get_rel_name(referenceTableId);
+		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+		if (list_length(shardIntervalList) == 0)
+		{
+			/* check for corrupt metadata */
+			ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
+								   referenceTableName)));
+		}
+
+		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+		shardId = shardInterval->shardId;
+
+		/*
+		 * We only take an access share lock, otherwise we'll hold up citus_add_node.
+		 * In case of create_reference_table() where we don't want concurrent writes
+		 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
+		 */
+		newWorkersList = WorkersWithoutReferenceTablePlacement(shardId, AccessShareLock);
+		if (list_length(newWorkersList) == 0)
+		{
+			/*
+			 * All workers already have a copy of the reference tables, make sure that
+			 * any locks obtained earlier are released. It will probably not matter, but
+			 * we release the locks in the reverse order we obtained them in.
+			 */
+			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+				 releaseLockmodeIndex--)
+			{
+				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+			}
+			return 0;
+		}
+	}
+
+	/*
+	 * citus_copy_shard_placement triggers metadata sync-up, which tries to
+	 * acquire a ShareLock on pg_dist_node. We do master_copy_shad_placement
+	 * in a separate connection. If we have modified pg_dist_node in the
+	 * current backend, this will cause a deadlock.
+	 */
+	if (TransactionModifiedNodeMetadata)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot replicate reference tables in a transaction "
+							   "that modified node metadata")));
+	}
+
+	/*
+	 * Modifications to reference tables in current transaction are not visible
+	 * to citus_copy_shard_placement, since it is done in a separate backend.
+	 */
+	if (AnyRelationsModifiedInTransaction(referenceTableIdList))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot replicate reference tables in a transaction "
+							   "that modified a reference table")));
+	}
+
+	bool missingOk = false;
+	ShardPlacement *sourceShardPlacement = ActiveShardPlacement(shardId, missingOk);
+	if (sourceShardPlacement == NULL)
+	{
+		/* check for corrupt metadata */
+		ereport(ERROR, (errmsg("reference table shard "
+							   UINT64_FORMAT
+							   " does not have an active shard placement",
+							   shardId)));
+	}
+
+	WorkerNode *newWorkerNode = NULL;
+	BackgroundTask *task = NULL;
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+	List *depTasksList = NIL;
+	const char *transferModeString =
+		transferMode == TRANSFER_MODE_BLOCK_WRITES ? "block_writes" :
+		transferMode == TRANSFER_MODE_FORCE_LOGICAL ? "force_logical" :
+		"auto";
+
+
+	foreach_declared_ptr(newWorkerNode, newWorkersList)
+	{
+		ereport(DEBUG2, (errmsg("replicating reference table '%s' to %s:%d ...",
+								referenceTableName, newWorkerNode->workerName,
+								newWorkerNode->workerPort)));
+
+		Oid relationId = InvalidOid;
+		List *nodeTasksList = NIL;
+		HTAB *shardTaskMap = CreateSimpleHashWithNameAndSize(uint64,
+															 ShardTaskEntry,
+															 "Shard_Task_Map",
+															 list_length(
+																 referenceTableIdList));
+
+		foreach_declared_oid(relationId, referenceTableIdList)
+		{
+			referenceTableName = get_rel_name(relationId);
+			List *shardIntervalList = LoadShardIntervalList(relationId);
+			if (list_length(shardIntervalList) != 1)
+			{
+				ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
+									   referenceTableName)));
+			}
+			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+			shardId = shardInterval->shardId;
+
+			resetStringInfo(&buf);
+			uint32 shardTransferFlags = SHARD_TRANSFER_SINGLE_SHARD_ONLY |
+										SHARD_TRANSFER_SKIP_CREATE_RELATIONSHIPS;
+
+			/* Temporary hack until we get background task config support PR */
+			appendStringInfo(&buf,
+							 "SET LOCAL application_name TO '%s%ld';",
+							 CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
+							 GetGlobalPID());
+
+			/*
+			 * In first step just create and load data in the shards but defer the
+			 * creation of the shard relationships to the next step.
+			 * The reason we want to defer the creation of the shard relationships is that
+			 * we want to make sure that all the parallel shard copy task are finished
+			 * before we create the relationships. Otherwise we might end up with
+			 * a situation where the dependent-shard task is still running and trying to
+			 * create the shard relationships will result in ERROR.
+			 */
+			appendStringInfo(&buf,
+							 "SELECT "
+							 "citus_internal.citus_internal_copy_single_shard_placement"
+							 "(%ld,%u,%u,%u,%s)",
+							 shardId,
+							 sourceShardPlacement->nodeId,
+							 newWorkerNode->nodeId,
+							 shardTransferFlags,
+							 quote_literal_cstr(transferModeString));
+
+			ereport(DEBUG2,
+					(errmsg("replicating reference table '%s' to %s:%d ... QUERY= %s",
+							referenceTableName, newWorkerNode->workerName,
+							newWorkerNode->workerPort, buf.data)));
+
+			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+			List *relatedRelations = list_concat(cacheEntry->
+												 referencedRelationsViaForeignKey,
+												 cacheEntry->
+												 referencingRelationsViaForeignKey);
+			List *dependencyTaskList = NIL;
+
+			Oid relatedRelationId = InvalidOid;
+			foreach_declared_oid(relatedRelationId, relatedRelations)
+			{
+				if (!list_member_oid(referenceTableIdList, relatedRelationId))
+				{
+					continue;
+				}
+
+				List *relatedShardIntervalList = LoadShardIntervalList(
+					relatedRelationId);
+				ShardInterval *relatedShardInterval = (ShardInterval *) linitial(
+					relatedShardIntervalList);
+				uint64 relatedShardId = relatedShardInterval->shardId;
+				bool taskFound = false;
+				ShardTaskEntry *taskEntry = hash_search(shardTaskMap, &relatedShardId,
+														HASH_FIND, &taskFound);
+				if (taskFound)
+				{
+					dependencyTaskList = lappend(dependencyTaskList, taskEntry);
+				}
+			}
+
+			int nDepends = list_length(dependencyTaskList);
+			int64 *dependsArray = NULL;
+			if (nDepends > 0)
+			{
+				dependsArray = (int64 *) palloc(sizeof(int64) * nDepends);
+				int i = 0;
+				ListCell *lc;
+				foreach(lc, dependencyTaskList)
+				{
+					dependsArray[i++] = ((ShardTaskEntry *) lfirst(lc))->taskId;
+				}
+			}
+
+			int32 nodesInvolved[2] = { 0 };
+			nodesInvolved[0] = sourceShardPlacement->nodeId;
+			nodesInvolved[1] = newWorkerNode->nodeId;
+
+			task = ScheduleBackgroundTask(jobId, CitusExtensionOwner(), buf.data,
+										  nDepends,
+										  dependsArray, 2,
+										  nodesInvolved);
+
+			bool found = false;
+			ShardTaskEntry *taskEntry = hash_search(shardTaskMap, &shardId, HASH_ENTER,
+													&found);
+			if (!found)
+			{
+				taskEntry->taskId = task->taskid;
+				ereport(DEBUG2,
+						(errmsg(
+							 "Added hash entry in scheduled task hash "
+							 "with task %ld for shard %ld",
+							 task->taskid, shardId)));
+			}
+			else
+			{
+				ereport(ERROR, (errmsg("failed to record task dependency for shard %ld",
+									   shardId)));
+			}
+
+			nodeTasksList = lappend(nodeTasksList, task);
+			if (dependsArray)
+			{
+				pfree(dependsArray);
+			}
+			list_free(dependencyTaskList);
+		}
+
+		if (list_length(nodeTasksList) > 0)
+		{
+			int nDepends = list_length(nodeTasksList);
+			int32 nodesInvolved[2] = { 0 };
+			nodesInvolved[0] = sourceShardPlacement->nodeId;
+			nodesInvolved[1] = newWorkerNode->nodeId;
+			int64 *dependsArray = palloc(sizeof(int64) * list_length(nodeTasksList));
+			int idx = 0;
+			foreach_declared_ptr(task, nodeTasksList)
+			{
+				dependsArray[idx++] = task->taskid;
+			}
+			resetStringInfo(&buf);
+			uint32 shardTransferFlags = SHARD_TRANSFER_CREATE_RELATIONSHIPS_ONLY;
+			appendStringInfo(&buf,
+							 "SET LOCAL application_name TO '%s%ld';\n",
+							 CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
+							 GetGlobalPID());
+			appendStringInfo(&buf,
+							 "SELECT "
+							 "citus_internal.citus_internal_copy_single_shard_placement"
+							 "(%ld,%u,%u,%u,%s)",
+							 shardId,
+							 sourceShardPlacement->nodeId,
+							 newWorkerNode->nodeId,
+							 shardTransferFlags,
+							 quote_literal_cstr(transferModeString));
+
+			ereport(DEBUG2,
+					(errmsg(
+						 "creating relations for reference table '%s' on %s:%d ... "
+						 "QUERY= %s",
+						 referenceTableName, newWorkerNode->workerName,
+						 newWorkerNode->workerPort, buf.data)));
+
+			task = ScheduleBackgroundTask(jobId, CitusExtensionOwner(), buf.data,
+										  nDepends,
+										  dependsArray, 2,
+										  nodesInvolved);
+
+			depTasksList = lappend(depTasksList, task);
+
+			pfree(dependsArray);
+			list_free(nodeTasksList);
+			nodeTasksList = NIL;
+		}
+
+		hash_destroy(shardTaskMap);
+	}
+
+	/*
+	 * compute a dependent task list array to be used to indicate the completion of all
+	 * reference table shards copy, so that we can start with distributed shard copy
+	 */
+	if (list_length(depTasksList) > 0)
+	{
+		*nDependTasks = list_length(depTasksList);
+		dependsTaskArray = palloc(sizeof(int64) * *nDependTasks);
+		int idx = 0;
+		foreach_declared_ptr(task, depTasksList)
+		{
+			dependsTaskArray[idx++] = task->taskid;
+		}
+		list_free(depTasksList);
+	}
+
+	/*
 	 * Since reference tables have been copied via a loopback connection we do not have to
 	 * retain our locks. Since Citus only runs well in READ COMMITTED mode we can be sure
 	 * that other transactions will find the reference tables copied.
@@ -291,6 +679,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	{
 		UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
 	}
+	return dependsTaskArray;
 }
 
 
@@ -614,8 +1003,9 @@ DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool localOnly)
  * connections.
  */
 void
-DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext(
-	MetadataSyncContext *context, int32 groupId, bool localOnly)
+DeleteAllReplicatedTablePlacementsFromNodeGroupViaMetadataContext(MetadataSyncContext *
+																  context, int32 groupId,
+																  bool localOnly)
 {
 	List *replicatedPlacementListForGroup = ReplicatedPlacementsForNodeGroup(groupId);
 

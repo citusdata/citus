@@ -118,7 +118,8 @@ static List * GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shard
 static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
 																uint64 shardId);
 static void CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
-														LogicalRepType type);
+														LogicalRepType type,
+														bool skipInterShardRelationships);
 static void ExecuteCreateIndexCommands(List *logicalRepTargetList);
 static void ExecuteCreateConstraintsBackedByIndexCommands(List *logicalRepTargetList);
 static List * ConvertNonExistingPlacementDDLCommandsToTasks(List *shardCommandList,
@@ -132,7 +133,6 @@ static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
-static void AcquireLogicalReplicationLock(void);
 
 static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
@@ -154,9 +154,9 @@ static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
  */
 void
 LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePort,
-						 char *targetNodeName, int targetNodePort)
+						 char *targetNodeName, int targetNodePort,
+						 bool skipInterShardRelationshipCreation)
 {
-	AcquireLogicalReplicationLock();
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 	int connectionFlags = FORCE_NEW_CONNECTION;
@@ -258,7 +258,8 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 									 publicationInfoHash,
 									 logicalRepTargetList,
 									 groupedLogicalRepTargetsHash,
-									 SHARD_MOVE);
+									 SHARD_MOVE,
+									 skipInterShardRelationshipCreation);
 
 	/*
 	 * We use these connections exclusively for subscription management,
@@ -317,7 +318,8 @@ CompleteNonBlockingShardTransfer(List *shardList,
 								 HTAB *publicationInfoHash,
 								 List *logicalRepTargetList,
 								 HTAB *groupedLogicalRepTargetsHash,
-								 LogicalRepType type)
+								 LogicalRepType type,
+								 bool skipInterShardRelationshipCreation)
 {
 	/* Start applying the changes from the replication slots to catch up. */
 	EnableSubscriptions(logicalRepTargetList);
@@ -345,7 +347,8 @@ CompleteNonBlockingShardTransfer(List *shardList,
 	 * and partitioning hierarchy. Once they are done, wait until the replication
 	 * catches up again. So we don't block writes too long.
 	 */
-	CreatePostLogicalReplicationDataLoadObjects(logicalRepTargetList, type);
+	CreatePostLogicalReplicationDataLoadObjects(logicalRepTargetList, type,
+												skipInterShardRelationshipCreation);
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
 		shardList,
@@ -372,7 +375,7 @@ CompleteNonBlockingShardTransfer(List *shardList,
 
 	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
-	if (type != SHARD_SPLIT)
+	if (type != SHARD_SPLIT && !skipInterShardRelationshipCreation)
 	{
 		UpdatePlacementUpdateStatusForShardIntervalList(
 			shardList,
@@ -494,25 +497,6 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 			publication->target->newShards, shardInterval);
 	}
 	return logicalRepTargetList;
-}
-
-
-/*
- * AcquireLogicalReplicationLock tries to acquire a lock for logical
- * replication. We need this lock, because at the start of logical replication
- * we clean up old subscriptions and publications. Because of this cleanup it's
- * not safe to run multiple logical replication based shard moves at the same
- * time. If multiple logical replication moves would run at the same time, the
- * second move might clean up subscriptions and publications that are in use by
- * another move.
- */
-static void
-AcquireLogicalReplicationLock(void)
-{
-	LOCKTAG tag;
-	SET_LOCKTAG_LOGICAL_REPLICATION(tag);
-
-	LockAcquire(&tag, ExclusiveLock, false, false);
 }
 
 
@@ -675,7 +659,8 @@ GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId)
  */
 static void
 CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
-											LogicalRepType type)
+											LogicalRepType type,
+											bool skipInterShardRelationships)
 {
 	/*
 	 * We create indexes in 4 steps.
@@ -705,7 +690,7 @@ CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
 	/*
 	 * Creating the partitioning hierarchy errors out in shard splits when
 	 */
-	if (type != SHARD_SPLIT)
+	if (type != SHARD_SPLIT && !skipInterShardRelationships)
 	{
 		/* create partitioning hierarchy, if any */
 		CreatePartitioningHierarchy(logicalRepTargetList);
