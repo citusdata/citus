@@ -16,6 +16,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_operator.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
@@ -261,7 +262,8 @@ DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtinde
 	lowerBoundFuncExpr->funcretset = false;
 
 	Oid lessThan = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid, CStringGetDatum("<"),
-								  resultTypeOid, resultTypeOid, ObjectIdGetDatum(11));
+								  resultTypeOid, resultTypeOid, ObjectIdGetDatum(
+									  PG_CATALOG_NAMESPACE));
 
 	/*
 	 * Finally, check if the comparison result is less than 0, i.e.,
@@ -282,8 +284,8 @@ DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtinde
 
 	Oid lessThanOrEqualTo = GetSysCacheOid(OPERNAMENSP, Anum_pg_operator_oid,
 										   CStringGetDatum("<="),
-										   resultTypeOid, resultTypeOid, ObjectIdGetDatum(
-											   11));
+										   resultTypeOid, resultTypeOid,
+										   ObjectIdGetDatum(PG_CATALOG_NAMESPACE));
 
 
 	/*
