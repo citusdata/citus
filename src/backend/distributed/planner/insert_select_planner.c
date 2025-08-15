@@ -766,7 +766,8 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	{
 		/* first apply toplevel pushdown checks to SELECT query */
 		error =
-			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext);
+			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext,
+													true);
 		if (error)
 		{
 			return error;

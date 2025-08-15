@@ -1,7 +1,7 @@
 --
 -- multi subquery complex queries aims to expand existing subquery pushdown
 -- regression tests to cover more caeses
--- the tables that are used depends to multi_insert_select_behavioral_analytics_create_table.sql
+-- the tables that are used depends to multi_behavioral_analytics_create_table.sql
 --
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
@@ -539,15 +539,12 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "user_buy_test_table" "dis" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "user_buy_test_table" "dis" to a subquery
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.user_buy_test_table dis WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT dis.user_id FROM (public.users_ref_test_table ref LEFT JOIN public.user_buy_test_table dis ON ((ref.id OPERATOR(pg_catalog.=) dis.user_id)))
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.user_buy_test_table
 DEBUG:  Creating router plan
-DEBUG:  generating subplan XXX_3 for subquery SELECT dis.user_id FROM (public.users_ref_test_table ref LEFT JOIN (SELECT dis_1.user_id, NULL::integer AS item_id, NULL::integer AS buy_count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dis_1) dis ON ((ref.id OPERATOR(pg_catalog.=) dis.user_id))) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) sub ORDER BY user_id DESC
 DEBUG:  Creating router plan
  user_id
@@ -2452,5 +2449,4 @@ SELECT count(*) FROM (SELECT ref1.* FROM users_ref_test_table ref1 INNER JOIN us
 (1 row)
 
 DROP TABLE user_buy_test_table;
-DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;

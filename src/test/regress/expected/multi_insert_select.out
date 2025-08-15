@@ -760,21 +760,28 @@ DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_133000
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (multi_insert_select.raw_events_first_13300001 raw_events_first LEFT JOIN multi_insert_select.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_first.user_id IS NOT NULL)
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (multi_insert_select.raw_events_first_13300002 raw_events_first LEFT JOIN multi_insert_select.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_first.user_id IS NOT NULL)
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (multi_insert_select.raw_events_first_13300003 raw_events_first LEFT JOIN multi_insert_select.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (raw_events_first.user_id IS NOT NULL)
+ SET client_min_messages to debug3;
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_second.user_id
  FROM
    reference_table LEFT JOIN raw_events_second ON reference_table.user_id = raw_events_second.user_id;
+DEBUG:  no shard pruning constraints on raw_events_second found
+DEBUG:  shard count after pruning for raw_events_second: 4
 DEBUG:  cannot perform a lateral outer join when a distributed subquery references a reference table
+DEBUG:  no shard pruning constraints on raw_events_second found
+DEBUG:  shard count after pruning for raw_events_second: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
-DEBUG:  recursively planning distributed relation "raw_events_second" since it is part of a distributed join node that is outer joined with a recurring rel
-DEBUG:  Wrapping relation "raw_events_second" to a subquery
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM multi_insert_select.raw_events_second WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT raw_events_second.user_id FROM (multi_insert_select.reference_table LEFT JOIN (SELECT raw_events_second_1.user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) raw_events_second_1) raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)))
-DEBUG:  Creating router plan
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on raw_events_second found
+DEBUG:  shard count after pruning for raw_events_second: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
+ SET client_min_messages to debug2;
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -3378,8 +3385,8 @@ $$);
          Task Count: 1
 (4 rows)
 
--- verify that insert select cannot be pushed down when we have reference table in outside of outer join.
-SELECT coordinator_plan($$
+-- verify that insert select cannot be pushed down when we have reference table in outside of outer join in a chained-join.
+ SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
 $$);
                 coordinator_plan
@@ -3392,9 +3399,21 @@ $$);
                      Task Count: 4
 (6 rows)
 
--- verify that insert select cannot be pushed down when it has a recurring outer join in a subquery.
+-- verify that insert select can be pushed down when we have reference table in outside of outer join.
 SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT id FROM ref_table_1 LEFT JOIN dist_table_5 USING(id);
+$$);
+           coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+(4 rows)
+
+-- verify that insert select cannot be pushed down when we have reference table in outside of left join and joined on non-partition column.
+SELECT coordinator_plan($$
+  EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT ref_table_1.id FROM ref_table_1 LEFT JOIN dist_table_5 ON ref_table_1.id = dist_table_5.id2;
 $$);
                 coordinator_plan
 ---------------------------------------------------------------------

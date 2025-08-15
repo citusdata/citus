@@ -126,15 +126,15 @@ WHERE
 ORDER BY user_id
 LIMIT 3;
 
--- outer join could still recur
+-- outer join pushed down
 SELECT
   DISTINCT user_id
 FROM
   users_table RIGHT JOIN users_reference_table USING (user_id)
 WHERE
-  users_reference_table.value_2 IN
+  (users_reference_table.value_2, random()*0) IN
       (SELECT
-          value_2
+          value_2, 0
        FROM
           events_table
        WHERE

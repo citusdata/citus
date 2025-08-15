@@ -1,7 +1,7 @@
 --
 -- multi subquery complex queries aims to expand existing subquery pushdown
 -- regression tests to cover more caeses
--- the tables that are used depends to multi_insert_select_behavioral_analytics_create_table.sql
+-- the tables that are used depends to multi_behavioral_analytics_create_table.sql
 --
 
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
@@ -1531,5 +1531,4 @@ SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER
 SELECT count(*) FROM (SELECT ref1.* FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LIMIT 5) as foo FULL JOIN user_buy_test_table ON true;
 
 DROP TABLE user_buy_test_table;
-DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;

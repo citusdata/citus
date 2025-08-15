@@ -1,0 +1,983 @@
+CREATE SCHEMA recurring_join_pushdown;
+SET search_path TO recurring_join_pushdown;
+SET citus.next_shard_id TO 1520000;
+SET citus.shard_count TO 4;
+CREATE TABLE r1(a int, b int);
+SELECT create_reference_table('r1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO r1 VALUES (1,10), (1,11), (1,20), (2,10), (2,12), (2, 20), (3, 20), (10, 1), (10, 2);
+CREATE TABLE d1(a int, b int);
+SELECT create_distributed_table('d1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO d1 VALUES (1,10), (1,11), (1,20), (2,10), (2,12), (2, 20), (4, 10);
+CREATE TABLE d2(a int, c text);
+SELECT create_distributed_table('d2', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO d2(a, c) VALUES (1,'a'), (1,'b'), (1,'c'), (2,'d'), (2,'e'), (2,'f'), (4,'g');
+SET citus.shard_count TO 2;
+CREATE TABLE d3_not_colocated(like d1);
+SELECT create_distributed_table('d3_not_colocated', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEBUG3;
+-- Basic test cases
+-- Test that the join is pushed down to the worker nodes, using "using" syntax
+SELECT count(*) FROM r1 LEFT JOIN d1 using (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT * FROM r1 LEFT JOIN d1 using (a, b) ORDER BY 1, 2;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ a  | b
+---------------------------------------------------------------------
+  1 | 10
+  1 | 11
+  1 | 20
+  2 | 10
+  2 | 12
+  2 | 20
+  3 | 20
+ 10 |  1
+ 10 |  2
+(9 rows)
+
+-- Disable the pushdown and verify that the join is not pushed down
+SET citus.enable_recurring_outer_join_pushdown TO off;
+SELECT count(*) FROM r1 LEFT JOIN d1 using (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "d1" to a subquery
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_join_pushdown.d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT d1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_1) d1 USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SET citus.enable_recurring_outer_join_pushdown TO on;
+SET client_min_messages TO DEBUG1;
+-- Test that the join is not pushed down when joined on a non-distributed column
+SELECT count(*) FROM r1 LEFT JOIN d1 USING (b);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM recurring_join_pushdown.d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT NULL::integer AS a, d1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) d1_1) d1 USING (b))
+ count
+---------------------------------------------------------------------
+    16
+(1 row)
+
+-- Test that the join is not pushed down when we have non-colocated tables in the RHS
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
+ERROR:  cannot push down this subquery
+DETAIL:  d3_not_colocated and d1 are not colocated
+-- The same error with its RIGHT JOIN variant
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
+ERROR:  cannot push down this subquery
+DETAIL:  d3_not_colocated and d1 are not colocated
+-- Basic test cases with ON syntax
+-- Test that the join is pushed down to the worker nodes, using "on" syntax
+SET client_min_messages TO DEBUG3;
+SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT * FROM r1 LEFT JOIN d1 ON r1.a = d1.a AND r1.b = d1.b ORDER BY 1, 2;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ a  | b  | a | b
+---------------------------------------------------------------------
+  1 | 10 | 1 | 10
+  1 | 11 | 1 | 11
+  1 | 20 | 1 | 20
+  2 | 10 | 2 | 10
+  2 | 12 | 2 | 12
+  2 | 20 | 2 | 20
+  3 | 20 |   |
+ 10 |  1 |   |
+ 10 |  2 |   |
+(9 rows)
+
+-- Verfiy that the join is pushed via the execution plan.
+EXPLAIN (COSTS OFF) SELECT * FROM r1 LEFT JOIN d1 ON r1.a = d1.a AND r1.b = d1.b ORDER BY 1, 2;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+                                                                                QUERY PLAN
+---------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.a, remote_scan.b
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Merge Left Join
+                     Merge Cond: ((r1.a = d1.a) AND (r1.b = d1.b))
+                     ->  Sort
+                           Sort Key: r1.a, r1.b
+                           ->  Seq Scan on r1_1520000 r1
+                                 Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+                     ->  Sort
+                           Sort Key: d1.a, d1.b
+                           ->  Seq Scan on d1_1520001 d1
+(16 rows)
+
+SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.b = d1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    13
+(1 row)
+
+-- Test that the join is not pushed down when joined on a non-distributed column
+SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.b = d1.b;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "d1" to a subquery
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM recurring_join_pushdown.d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT NULL::integer AS a, d1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) d1_1) d1 ON ((r1.b OPERATOR(pg_catalog.=) d1.b)))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    16
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.b;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "d1" to a subquery
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM recurring_join_pushdown.d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT NULL::integer AS a, d1_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) d1_1) d1 ON ((r1.a OPERATOR(pg_catalog.=) d1.b)))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    13
+(1 row)
+
+SET client_min_messages TO DEBUG1;
+-- Test that the join is not pushed down when joined on a distributed column with disjunctive conditions
+SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.a = d1.a OR r1.b = d1.b;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_join_pushdown.d1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT d1_1.a, d1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) d1_1) d1 ON (((r1.a OPERATOR(pg_catalog.=) d1.a) OR (r1.b OPERATOR(pg_catalog.=) d1.b))))
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+-- Test join pushdown behavior when the inner part of the join is a subquery
+-- Using 'using' syntax
+SET client_min_messages TO DEBUG3;
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) AS t1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) AS t1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM (SELECT * FROM d1) AS t1 WHERE a > 1) AS t2 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 JOIN d1 as d1_1 USING (a)) AS t1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    57
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN (d1 LEFT JOIN d1 as d1_1 USING (a)) AS t1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "d1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "d1" to a subquery
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_join_pushdown.d1 WHERE true
+DEBUG:  recursively planning distributed relation "d1" "d1_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "d1" "d1_1" to a subquery
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_join_pushdown.d1 d1_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN ((SELECT d1_2.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_2) d1 LEFT JOIN (SELECT d1_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) d1_1_1) d1_1 USING (a)) t1(a, b, b_1) USING (a))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    57
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) AS t1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+                                                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Right Join
+                           Hash Cond: (d1.a = r1.a)
+                           ->  Seq Scan on d1_1520001 d1
+                           ->  Hash
+                                 ->  Seq Scan on r1_1520000 r1
+                                       Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+(13 rows)
+
+-- Using 'on' syntax
+SET client_min_messages TO DEBUG3;
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1) AS d1 ON r1.a = d1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM d1 WHERE a > 1) AS d1 ON r1.a = d1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN (SELECT * FROM (SELECT * FROM d1) AS d1 WHERE a > 1) AS d1 ON r1.a = d1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a as a, d1.b, d1_1.a AS a_1 FROM d1 LEFT JOIN d1 as d1_1 ON d1.a = d1_1.a) AS d1_2 ON r1.a = d1_2.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    57
+(1 row)
+
+-- Nested joins
+-- It is safe to push the inner join to compute t1. However, as the var of the inner table for the top level join (t1.a) resolves to r1.a, the outer join cannot be pushed down.
+SELECT count(*) FROM r1 LEFT JOIN (SELECT r1.a, d1.b FROM r1 LEFT JOIN d1 ON r1.a = d1.a) AS t1 ON r1.a = t1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT r1.a, d1.b FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d1 ON ((r1.a OPERATOR(pg_catalog.=) d1.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 ON ((r1.a OPERATOR(pg_catalog.=) t1.a)))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+    59
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT r1.a, d1.b FROM r1 LEFT JOIN d1 ON r1.a = d1.a) AS t1 ON r1.a = t1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT r1.a, d1.b FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d1 ON ((r1.a OPERATOR(pg_catalog.=) d1.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_join_pushdown.r1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 ON ((r1.a OPERATOR(pg_catalog.=) t1.a)))
+DEBUG:  Creating router plan
+                                                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Hash Right Join
+                           Hash Cond: (d1.a = r1.a)
+                           ->  Seq Scan on d1_1520001 d1
+                           ->  Hash
+                                 ->  Seq Scan on r1_1520000 r1
+                                       Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Right Join
+                     Merge Cond: (intermediate_result.a = r1.a)
+                     ->  Sort
+                           Sort Key: intermediate_result.a
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Sort
+                           Sort Key: r1.a
+                           ->  Seq Scan on r1_1520000 r1
+(26 rows)
+
+-- In the following case, it is safe to push down both joins as t1.a resolves to d1.a.
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d1.b FROM r1 LEFT JOIN d1 ON r1.a = d1.a) AS t1 ON r1.a = t1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    57
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d1.b FROM r1 LEFT JOIN d1 ON r1.a = d1.a) AS t1 ON r1.a = t1.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+                                                                                      QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Right Join
+                           Hash Cond: (d1.a = r1.a)
+                           ->  Hash Join
+                                 Hash Cond: (d1.a = r1_1.a)
+                                 ->  Seq Scan on d1_1520001 d1
+                                 ->  Hash
+                                       ->  Seq Scan on r1_1520000 r1_1
+                                             Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+                           ->  Hash
+                                 ->  Seq Scan on r1_1520000 r1
+                                       Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+(18 rows)
+
+-- In the following case, the lower level joins will be pushed down, but as the top level join is chained, subquery pushdown will not be applied at the top level.
+SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d1.b FROM r1 LEFT JOIN d1 ON r1.a = d1.a) AS t1 ON t1.a = r1.a LEFT JOIN (SELECT d2.a, d2.c FROM r1 LEFT JOIN d2 ON r1.a = d2.a) AS t2 ON t1.a = t2.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT d1.a, d1.b FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d1 ON ((r1.a OPERATOR(pg_catalog.=) d1.a)))
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_2 for subquery SELECT d2.a, d2.c FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d2 ON ((r1.a OPERATOR(pg_catalog.=) d2.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((recurring_join_pushdown.r1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 ON ((t1.a OPERATOR(pg_catalog.=) r1.a))) LEFT JOIN (SELECT intermediate_result.a, intermediate_result.c FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, c text)) t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+   489
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d1.b FROM r1 LEFT JOIN d1 ON r1.a = d1.a) AS t1 ON t1.a = r1.a LEFT JOIN (SELECT d2.a, d2.c FROM r1 LEFT JOIN d2 ON r1.a = d2.a) AS t2 ON t1.a = t2.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT d1.a, d1.b FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d1 ON ((r1.a OPERATOR(pg_catalog.=) d1.a)))
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_2 for subquery SELECT d2.a, d2.c FROM (recurring_join_pushdown.r1 LEFT JOIN recurring_join_pushdown.d2 ON ((r1.a OPERATOR(pg_catalog.=) d2.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((recurring_join_pushdown.r1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 ON ((t1.a OPERATOR(pg_catalog.=) r1.a))) LEFT JOIN (SELECT intermediate_result.a, intermediate_result.c FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, c text)) t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  Creating router plan
+                                                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Hash Right Join
+                           Hash Cond: (d1.a = r1.a)
+                           ->  Seq Scan on d1_1520001 d1
+                           ->  Hash
+                                 ->  Seq Scan on r1_1520000 r1
+                                       Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+   ->  Distributed Subplan XXX_2
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Hash Right Join
+                           Hash Cond: (d2.a = r1.a)
+                           ->  Seq Scan on d2_1520005 d2
+                           ->  Hash
+                                 ->  Seq Scan on r1_1520000 r1
+                                       Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Left Join
+                     Merge Cond: (r1.a = intermediate_result.a)
+                     ->  Sort
+                           Sort Key: r1.a
+                           ->  Seq Scan on r1_1520000 r1
+                     ->  Materialize
+                           ->  Merge Left Join
+                                 Merge Cond: (intermediate_result.a = intermediate_result_1.a)
+                                 ->  Sort
+                                       Sort Key: intermediate_result.a
+                                       ->  Function Scan on read_intermediate_result intermediate_result
+                                 ->  Sort
+                                       Sort Key: intermediate_result_1.a
+                                       ->  Function Scan on read_intermediate_result intermediate_result_1
+(44 rows)
+
+--- As both subqueries are pushed and the top level join is over their results on distribution colums, the query is pushed down as a whole.
+SELECT count(*) FROM (SELECT d1_1.a, r1.b FROM r1 LEFT JOIN d1 as d1_1 ON r1.a = d1_1.a) AS t1 LEFT JOIN
+ (SELECT d2.a, d2.c, r1.b FROM r1 LEFT JOIN d2 ON r1.a = d2.a) AS t2 ON t1.a = t2.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+   165
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT d1_1.a, r1.b FROM r1 LEFT JOIN d1 as d1_1 ON r1.a = d1_1.a) AS t1 LEFT JOIN
+ (SELECT d2.a, d2.c, r1.b FROM r1 LEFT JOIN d2 ON r1.a = d2.a) AS t2 ON t1.a = t2.a;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  a push down safe left join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  no shard pruning constraints on d2 found
+DEBUG:  shard count after pruning for d2: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+                                                                                         QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Merge Right Join
+                           Merge Cond: (d2.a = d1_1.a)
+                           ->  Merge Join
+                                 Merge Cond: (r1_1.a = d2.a)
+                                 ->  Sort
+                                       Sort Key: r1_1.a
+                                       ->  Seq Scan on r1_1520000 r1_1
+                                             Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+                                 ->  Sort
+                                       Sort Key: d2.a
+                                       ->  Seq Scan on d2_1520005 d2
+                           ->  Sort
+                                 Sort Key: d1_1.a
+                                 ->  Hash Right Join
+                                       Hash Cond: (d1_1.a = r1.a)
+                                       ->  Seq Scan on d1_1520001 d1_1
+                                       ->  Hash
+                                             ->  Seq Scan on r1_1520000 r1
+                                                   Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+(26 rows)
+
+ -- Basic cases with RIGHT JOIN
+SET client_min_messages TO DEBUG3;
+SELECT count(*) FROM d1 RIGHT JOIN r1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe right join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM d1) AS t1 RIGHT JOIN r1 USING (a);
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe right join with recurring left side
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+SET client_min_messages TO ERROR;
+-- Ensure that even when CTEs are replaced, we insert push
+-- down conditions for outer joins when necessary.
+WITH  cte_0 AS ( SELECT table_0.a FROM d1 AS table_0 WHERE table_0.a IN ( SELECT table_1.a FROM d1 AS table_1 ORDER BY a LIMIT 2 )  ORDER BY a ) SELECT count(*), avg(avgsub.a) FROM ( SELECT table_2.a FROM cte_0 AS table_2 RIGHT JOIN r1 AS table_3 USING (a)) AS avgsub;
+ count |          avg
+---------------------------------------------------------------------
+    15 | 1.00000000000000000000
+(1 row)
+
+-- The following queries trigger recursive computing, recurring outer-join push down
+-- methods introduced in#7973 can be enhanced to cover these cases in the future.
+CREATE TABLE r1_local AS SELECT * FROM r1;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1_local LEFT JOIN d1 ON r1_local.a = d1.a;
+                                          QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Seq Scan on r1_local
+   ->  Distributed Subplan XXX_2
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d1_1520001 d1
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Left Join
+                     Merge Cond: (intermediate_result.a = intermediate_result_1.a)
+                     ->  Sort
+                           Sort Key: intermediate_result.a
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Sort
+                           Sort Key: intermediate_result_1.a
+                           ->  Function Scan on read_intermediate_result intermediate_result_1
+(23 rows)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM (SELECT * FROM r1) sq LEFT JOIN d1 ON sq.a = d1.a;
+                                         QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d1_1520001 d1
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Right Join
+                     Merge Cond: (intermediate_result.a = r1.a)
+                     ->  Sort
+                           Sort Key: intermediate_result.a
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Sort
+                           Sort Key: r1.a
+                           ->  Seq Scan on r1_1520000 r1
+(21 rows)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM r1 LEFT JOIN (d1 INNER JOIN d2 on d1.a = d2.a) on r1.a = d2.a;
+                                                QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d1_1520001 d1
+   ->  Distributed Subplan XXX_2
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on d2_1520005 d2
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Left Join
+                     Merge Cond: (r1.a = intermediate_result_1.a)
+                     ->  Sort
+                           Sort Key: r1.a
+                           ->  Seq Scan on r1_1520000 r1
+                     ->  Materialize
+                           ->  Merge Join
+                                 Merge Cond: (intermediate_result.a = intermediate_result_1.a)
+                                 ->  Sort
+                                       Sort Key: intermediate_result.a
+                                       ->  Function Scan on read_intermediate_result intermediate_result
+                                 ->  Sort
+                                       Sort Key: intermediate_result_1.a
+                                       ->  Function Scan on read_intermediate_result intermediate_result_1
+(34 rows)
+
+SET client_min_messages TO DEBUG3;
+-- The following query is recursively computed due to the lateral join in the subquery.
+-- Leaving the inner side of the query to query push down causes an error in deferred error
+-- checks even if it is possible to push down the whole query.
+SELECT DISTINCT sq.a FROM (
+    SELECT d1.a FROM d1 JOIN LATERAL ( SELECT * FROM r1 WHERE r1.a = d1.a ) sq2 ON true ) AS sq RIGHT JOIN r1 USING (a)
+ORDER BY sq.a
+LIMIT 1;
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no shard pruning constraints on d1 found
+DEBUG:  shard count after pruning for d1: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  generating subplan XXX_1 for subquery SELECT d1.a FROM (recurring_join_pushdown.d1 JOIN LATERAL (SELECT r1.a, r1.b FROM recurring_join_pushdown.r1 WHERE (r1.a OPERATOR(pg_catalog.=) d1.a)) sq2 ON (true))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT sq.a FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) sq RIGHT JOIN recurring_join_pushdown.r1 USING (a)) ORDER BY sq.a LIMIT 1
+DEBUG:  Creating router plan
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA recurring_join_pushdown CASCADE;

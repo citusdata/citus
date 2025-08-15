@@ -208,12 +208,11 @@ FROM
     20 |     0
 (1 row)
 
--- Right join is allowed as we recursively plan the distributed table (multi_outer_join_left_hash)
+-- Right join is allowed (multi_outer_join_left_hash)
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left_hash a RIGHT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ]
  min | max
 ---------------------------------------------------------------------
    1 |  15
@@ -323,12 +322,11 @@ FROM
     25 |     1
 (1 row)
 
--- Right join should be allowed in this case as we recursively plan the distributed table (multi_outer_join_left_hash
+-- Right join should be allowed in this case (multi_outer_join_left_hash)
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left_hash a RIGHT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ]
  min | max
 ---------------------------------------------------------------------
   11 |  30
