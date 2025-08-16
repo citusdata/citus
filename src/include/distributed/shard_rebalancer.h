@@ -222,7 +222,7 @@ extern void SetupRebalanceMonitor(List *placementUpdateList,
 								  uint64 initialProgressState,
 								  PlacementUpdateStatus initialStatus);
 
-extern void SplitShardsBetweenPrimaryAndReplica(WorkerNode *primaryNode,
-												WorkerNode *replicaNode,
-												Name strategyName);
+extern void SplitShardsBetweenPrimaryAndClone(WorkerNode *primaryNode,
+											  WorkerNode *cloneNode,
+											  Name strategyName);
 #endif   /* SHARD_REBALANCER_H */
