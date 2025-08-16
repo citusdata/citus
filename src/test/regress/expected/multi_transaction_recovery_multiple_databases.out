@@ -86,10 +86,10 @@ FROM test.maintenance_worker();
 
 SELECT *
 FROM pg_dist_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
-      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (2 rows)
 
 CREATE DATABASE db2;
@@ -147,10 +147,10 @@ FROM test.maintenance_worker();
 
 SELECT *
 FROM pg_dist_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
-      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (2 rows)
 
 SELECT groupid AS worker_1_group_id

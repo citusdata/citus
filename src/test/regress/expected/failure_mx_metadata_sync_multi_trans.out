@@ -906,11 +906,11 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 ERROR:  connection not open
 -- Show node metadata info on coordinator after failures
 SELECT * FROM pg_dist_node ORDER BY nodeport;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      2 |       2 | localhost |     9060 | default  | f           | t        | primary  | default     | f              | t
-      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
+      2 |       2 | localhost |     9060 | default  | f           | t        | primary  | default     | f              | t                | f           |                 0
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f                | f           |                 0
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (3 rows)
 
 -- Show that we can still query the node from coordinator
@@ -968,20 +968,20 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 -- Show node metadata info on worker2 and coordinator after success
 \c - - - :worker_2_port
 SELECT * FROM pg_dist_node ORDER BY nodeport;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
-      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
+      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f                | f           |                 0
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (3 rows)
 
 \c - - - :master_port
 SELECT * FROM pg_dist_node ORDER BY nodeport;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t
-      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
+      2 |       2 | localhost |     9060 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f                | f           |                 0
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (3 rows)
 
 SELECT citus.mitmproxy('conn.allow()');

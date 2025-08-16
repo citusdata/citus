@@ -113,6 +113,13 @@ DEPS = {
     ),
     "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
     "single_node_enterprise": TestDeps(None),
+    "multi_add_node_from_backup": TestDeps(None, repeatable=False, worker_count=5),
+    "multi_add_node_from_backup_negative": TestDeps(
+        None, ["multi_add_node_from_backup"], worker_count=5, repeatable=False
+    ),
+    "multi_add_node_from_backup_sync_replica": TestDeps(
+        None, repeatable=False, worker_count=5
+    ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
     "multi_explain": TestDeps(
