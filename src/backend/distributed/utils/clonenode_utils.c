@@ -125,26 +125,6 @@ GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode)
 	StringInfo replicaLsnQueryResInfo = (StringInfo) linitial(replicaLsnList);
 	char *replica_lsn_str = replicaLsnQueryResInfo->data;
 
-	if (!primary_lsn_str || !replica_lsn_str)
-	{
-		PQclear(primaryResult);
-		ClearResults(primaryConnection, true);
-		CloseConnection(primaryConnection);
-		PQclear(replicaResult);
-		ClearResults(replicaConnection, true);
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"received NULL LSN values from primary %s:%d or clone %s:%d",
-							primaryWorkerNode->workerName, primaryWorkerNode->
-							workerPort,
-							replicaWorkerNode->workerName, replicaWorkerNode->
-							workerPort),
-						errdetail(
-							"This indicates the nodes may not be properly configured for replication")));
-	}
-
 	int64 primary_lsn = DatumGetLSN(DirectFunctionCall1(pg_lsn_in, CStringGetDatum(
 															primary_lsn_str)));
 	int64 replica_lsn = DatumGetLSN(DirectFunctionCall1(pg_lsn_in, CStringGetDatum(
