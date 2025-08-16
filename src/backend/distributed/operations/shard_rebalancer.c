@@ -3874,11 +3874,6 @@ get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
 		&options,
 		cloneNode);
 
-	if (splitShards == NULL)
-	{
-		ereport(ERROR, (errmsg("No shards to split between primary and clone nodes.")));
-	}
-
 	int shardId = 0;
 	TupleDesc tupdesc;
 	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
