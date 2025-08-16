@@ -17,7 +17,7 @@ SELECT * from pg_dist_node ORDER by nodeid;
 -- this should fail as it is not a valid replica of worker_1
 SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_1_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 ERROR:  clone localhost:xxxxx is not connected to primary localhost:xxxxx
 DETAIL:  The clone must be actively replicating from the specified primary node. Check that the clone is running and properly configured for replication.
 SELECT * from pg_dist_node ORDER by nodeid;
@@ -71,7 +71,7 @@ SELECT nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY 
 -- Try to add replica of worker_node2 as a clone of worker_node1
 SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_1_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 ERROR:  clone localhost:xxxxx is not connected to primary localhost:xxxxx
 DETAIL:  The clone must be actively replicating from the specified primary node. Check that the clone is running and properly configured for replication.
 -- Test 1: Try to promote a non-existent clone node
@@ -87,7 +87,7 @@ ERROR:  Node localhost:xxxxx (ID 1) is not a valid clone or its primary node ID 
 -- register the new node as a clone, This should pass
 SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_2_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 SELECT * from pg_dist_node ORDER by nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
@@ -108,7 +108,7 @@ SELECT :clone_node_id;
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, rebalance_strategy => 'invalid_strategy');
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 4), original primary localhost:xxxxx (ID 2)
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 2)
 NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 2)
@@ -133,7 +133,7 @@ BEGIN;
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 4), original primary localhost:xxxxx (ID 2)
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 ERROR:  clone localhost:xxxxx is not connected to primary localhost:xxxxx
 DETAIL:  The clone must be actively replicating from the specified primary node. Check that the clone is running and properly configured for replication.
 ROLLBACK;
@@ -163,7 +163,7 @@ SELECT * from pg_dist_node ORDER by nodeid;
 SELECT master_add_node('localhost', :worker_3_port) AS nodeid_3 \gset
 SELECT citus_add_clone_node('localhost', :follower_worker_3_port, 'localhost', :worker_3_port) AS clone_node_id_3 \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 set citus.shard_count = 100;
 CREATE TABLE backup_test2(id int, value text);
@@ -216,7 +216,7 @@ SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'l
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3);
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 6), original primary localhost:xxxxx (ID 5)
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 5)
 NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 5)

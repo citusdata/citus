@@ -43,6 +43,6 @@ extern void InsertCleanupRecordsForShardPlacementsOnNode(List *shardIntervalList
 														 int32 groupId);
 
 extern void AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
-												   WorkerNode *cloneNode,
-												   List *primaryShardList,
-												   List *cloneShardList);
+												 WorkerNode *cloneNode,
+												 List *primaryShardList,
+												 List *cloneShardList);

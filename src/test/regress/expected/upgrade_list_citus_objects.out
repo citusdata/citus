@@ -156,7 +156,7 @@ ORDER BY 1;
  function citus_pause_node_within_txn(integer,boolean,integer)
  function citus_pid_for_gpid(bigint)
  function citus_prepare_pg_upgrade()
- function citus_promote_clone_and_rebalance(integer,name)
+ function citus_promote_clone_and_rebalance(integer,name,integer)
  function citus_query_stats()
  function citus_rebalance_start(name,boolean,citus.shard_transfer_mode)
  function citus_rebalance_status(boolean)

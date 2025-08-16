@@ -488,6 +488,9 @@ jobs:
 
         # split the tests to be skipped --today we only skip upgrade tests
         # and snapshot based node addition tests.
+        # snapshot based node addition tests are not flaky, as they promote
+        # the streaming replica (clone) to a PostgreSQL primary node that is one way
+        # operation
         skipped_tests=""
         not_skipped_tests=""
         for test in $tests; do

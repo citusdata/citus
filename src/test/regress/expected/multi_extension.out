@@ -1506,7 +1506,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                    previous_object                                                    |                                                                                       current_object
 ---------------------------------------------------------------------
  function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision) |
-                                                                                                                      | function citus_promote_clone_and_rebalance(integer,name) void
+                                                                                                                      | function citus_promote_clone_and_rebalance(integer,name,integer) void
                                                                                                                       | function citus_remove_clone_node(text,integer) void
                                                                                                                       | function citus_remove_clone_node_with_nodeid(integer) void
                                                                                                                       | function get_snapshot_based_node_split_plan(text,integer,text,integer,name) TABLE(table_name regclass, shardid bigint, shard_size bigint, placement_node text)

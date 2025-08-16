@@ -27,13 +27,13 @@ SELECT master_remove_node('localhost', :follower_worker_2_port);
 -- this should fail as the replica is a synchronous replica that is not allowed
 SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 ERROR:  cannot add clone localhost:xxxxx as it is configured as a synchronous replica
 DETAIL:  Promoting a synchronous clone can cause data consistency issues. Please configure it as an asynchronous replica first.
 -- this should fail as the replica is a synchronous replica that is not allowed
 SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_2_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  checking replication for node localhost (resolved IP: ::1)
 ERROR:  cannot add clone localhost:xxxxx as it is configured as a synchronous replica
 DETAIL:  Promoting a synchronous clone can cause data consistency issues. Please configure it as an asynchronous replica first.
 SELECT * from pg_dist_node ORDER by nodeid;

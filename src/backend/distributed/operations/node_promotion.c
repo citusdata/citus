@@ -106,7 +106,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 						 ->nodeId)));
 
 	/* Step 0: Check if clone is replica of provided primary node and is not synchronous */
-	char* operation = "promote";
+	char *operation = "promote";
 	EnsureReplicaIsNotSynchronous(primaryNode, cloneNode, operation);
 
 	/* Step 1: Block Writes on Original Primary's Shards */
@@ -118,10 +118,11 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	BlockAllWritesToWorkerNode(primaryNode);
 
 	/* Step 2: Wait for Clone to Catch Up */
-	ereport(NOTICE, (errmsg("Waiting for clone %s:%d to catch up with primary %s:%d (timeout: %d seconds)",
-							cloneNode->workerName, cloneNode->workerPort,
-							primaryNode->workerName, primaryNode->workerPort,
-							catchUpTimeoutSeconds)));
+	ereport(NOTICE, (errmsg(
+						 "Waiting for clone %s:%d to catch up with primary %s:%d (timeout: %d seconds)",
+						 cloneNode->workerName, cloneNode->workerPort,
+						 primaryNode->workerName, primaryNode->workerPort,
+						 catchUpTimeoutSeconds)));
 
 	bool caughtUp = false;
 	const int sleepIntervalSeconds = 5;

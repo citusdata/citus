@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_promote_clone_and_rebalance(
     clone_nodeid integer,
     rebalance_strategy name DEFAULT NULL,
-    catchUpTimeoutSeconds integer DEFAULT 300
+    catchup_timeout_seconds integer DEFAULT 300
 )
 RETURNS VOID
 AS 'MODULE_PATHNAME'
