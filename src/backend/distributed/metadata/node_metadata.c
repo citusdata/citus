@@ -35,6 +35,7 @@
 
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/clonenode_utils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -140,8 +141,7 @@ static BackgroundWorkerHandle * CheckBackgroundWorkerToObtainLocks(int32 lock_co
 static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode(
 	WorkerNode *workerNode, bool force, int32 lock_cooldown);
 
-static void EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode,
-										char *cloneHostname, int clonePort);
+
 static int32 CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 							   char *cloneHostname, int32 clonePort);
 static void RemoveCloneNode(WorkerNode *cloneNode);
@@ -1590,6 +1590,9 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 		}
 	}
 	EnsureValidStreamingReplica(primaryWorkerNode, cloneHostname, clonePort);
+
+	char *operation = "add";
+	EnsureValidCloneMode(primaryWorkerNode, cloneHostname, clonePort, operation);
 
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 
@@ -3669,177 +3672,4 @@ SyncNodeMetadata(MetadataSyncContext *context)
 	 * metadata just for activated workers.
 	 */
 	SendOrCollectCommandListToActivatedNodes(context, recreateNodeSnapshotCommandList);
-}
-
-
-/*
- * EnsureValidStreamingReplica checks if the given replica is a valid streaming
- * replica. It connects to the replica and checks if it is in recovery mode.
- * If it is not, it errors out.
- * It also checks the system identifier of the replica and the primary
- * to ensure they match.
- */
-static void
-EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname, int
-							replicaPort)
-{
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *replicaConnection = GetNodeConnection(connectionFlag, replicaHostname
-														   ,
-														   replicaPort);
-
-	const char *replica_recovery_query = "SELECT pg_is_in_recovery()";
-
-	int resultCode = SendRemoteCommand(replicaConnection, replica_recovery_query);
-
-	if (resultCode == 0)
-	{
-		CloseConnection(replicaConnection);
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"could not connect to %s:%d to execute pg_is_in_recovery()",
-							replicaHostname, replicaPort)));
-	}
-
-	PGresult *result = GetRemoteCommandResult(replicaConnection, true);
-
-	if (result == NULL)
-	{
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("node %s:%d does not support pg_is_in_recovery()",
-							   replicaHostname, replicaPort)));
-	}
-
-	List *sizeList = ReadFirstColumnAsText(result);
-	if (list_length(sizeList) != 1)
-	{
-		PQclear(result);
-		ClearResults(replicaConnection, true);
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot parse pg_is_in_recovery() result from %s:%d",
-							   replicaHostname,
-							   replicaPort)));
-	}
-
-	StringInfo isInRecoveryQueryResInfo = (StringInfo) linitial(sizeList);
-	char *isInRecoveryQueryResStr = isInRecoveryQueryResInfo->data;
-
-	if (strcmp(isInRecoveryQueryResStr, "t") != 0 && strcmp(isInRecoveryQueryResStr,
-															"true") != 0)
-	{
-		PQclear(result);
-		ClearResults(replicaConnection, true);
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("%s:%d is not a streaming replica",
-							   replicaHostname,
-							   replicaPort)));
-	}
-
-	PQclear(result);
-	ForgetResults(replicaConnection);
-
-	/* Step2: Get the system identifier from replica */
-	const char *sysidQuery =
-		"SELECT system_identifier FROM pg_control_system()";
-
-	resultCode = SendRemoteCommand(replicaConnection, sysidQuery);
-
-	if (resultCode == 0)
-	{
-		CloseConnection(replicaConnection);
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("could not connect to %s:%d to get system identifier",
-							   replicaHostname, replicaPort)));
-	}
-
-	result = GetRemoteCommandResult(replicaConnection, true);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(replicaConnection, result, ERROR);
-	}
-
-	List *sysidList = ReadFirstColumnAsText(result);
-	if (list_length(sysidList) != 1)
-	{
-		PQclear(result);
-		ClearResults(replicaConnection, true);
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot parse get system identifier result from %s:%d",
-							   replicaHostname,
-							   replicaPort)));
-	}
-
-	StringInfo sysidQueryResInfo = (StringInfo) linitial(sysidList);
-	char *sysidQueryResStr = sysidQueryResInfo->data;
-
-	ereport(DEBUG2, (errmsg("system identifier of %s:%d is %s",
-							replicaHostname, replicaPort, sysidQueryResStr)));
-
-	/* We do not need the connection anymore */
-	PQclear(result);
-	ForgetResults(replicaConnection);
-	CloseConnection(replicaConnection);
-
-	/* Step3: Get system identifier from primary */
-	int primaryConnectionFlag = 0;
-	MultiConnection *primaryConnection = GetNodeConnection(primaryConnectionFlag,
-														   primaryWorkerNode->workerName,
-														   primaryWorkerNode->workerPort);
-	int primaryResultCode = SendRemoteCommand(primaryConnection, sysidQuery);
-	if (primaryResultCode == 0)
-	{
-		CloseConnection(primaryConnection);
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("could not connect to %s:%d to get system identifier",
-							   primaryWorkerNode->workerName, primaryWorkerNode->
-							   workerPort)));
-	}
-	PGresult *primaryResult = GetRemoteCommandResult(primaryConnection, true);
-	if (primaryResult == NULL)
-	{
-		CloseConnection(primaryConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("node %s:%d does not support pg_control_system queries",
-							   primaryWorkerNode->workerName, primaryWorkerNode->
-							   workerPort)));
-	}
-	List *primarySizeList = ReadFirstColumnAsText(primaryResult);
-	if (list_length(primarySizeList) != 1)
-	{
-		PQclear(primaryResult);
-		ClearResults(primaryConnection, true);
-		CloseConnection(primaryConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot parse get system identifier result from %s:%d",
-							   primaryWorkerNode->workerName,
-							   primaryWorkerNode->workerPort)));
-	}
-	StringInfo primarySysidQueryResInfo = (StringInfo) linitial(primarySizeList);
-	char *primarySysidQueryResStr = primarySysidQueryResInfo->data;
-
-	ereport(DEBUG2, (errmsg("system identifier of %s:%d is %s",
-							primaryWorkerNode->workerName, primaryWorkerNode->workerPort,
-							primarySysidQueryResStr)));
-
-	/* verify both identifiers */
-	if (strcmp(sysidQueryResStr, primarySysidQueryResStr) != 0)
-	{
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"system identifiers do not match: %s (replica) vs %s (primary)",
-							sysidQueryResStr, primarySysidQueryResStr)));
-	}
-	PQclear(primaryResult);
-	ClearResults(primaryConnection, true);
-	CloseConnection(primaryConnection);
 }

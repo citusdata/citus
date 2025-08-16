@@ -1,0 +1,45 @@
+--
+-- Test for negative scenarios in clone promotion functionality
+-- We do not allow synchronous replicas to be added as clones
+-- this test is to ensure that we do not allow this
+--
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      3 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t              | t                | f           |                 0
+      4 |       2 | localhost |    57638 | default  | t           | t        | primary   | default        | t              | t                | f           |                 0
+      5 |       1 | localhost |     9071 | default  | f           | t        | secondary | second-cluster | f              | t                | f           |                 0
+      6 |       2 | localhost |     9072 | default  | f           | t        | secondary | second-cluster | f              | t                | f           |                 0
+(4 rows)
+
+SELECT master_remove_node('localhost', :follower_worker_1_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', :follower_worker_2_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should fail as the replica is a synchronous replica that is not allowed
+SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+ERROR:  cannot add clone localhost:xxxxx as it is configured as a synchronous replica
+DETAIL:  Promoting a synchronous clone can cause data consistency issues. Please configure it as an asynchronous replica first.
+-- this should fail as the replica is a synchronous replica that is not allowed
+SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_2_port) AS clone_node_id \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+ERROR:  cannot add clone localhost:xxxxx as it is configured as a synchronous replica
+DETAIL:  Promoting a synchronous clone can cause data consistency issues. Please configure it as an asynchronous replica first.
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      3 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      4 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+(2 rows)
+

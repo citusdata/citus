@@ -575,31 +575,77 @@ TransferShards(int64 shardId, char *sourceNodeName,
 
 
 /*
- * AdjustShardsForPrimaryReplicaNodeSplit is called when a primary-replica node split
+ * AdjustShardsForPrimaryCloneNodeSplit is called when a primary-clone node split
  * occurs. It adjusts the shard placements such that the shards that should be on the
- * primary node are removed from the replica node, and vice versa.
+ * primary node are removed from the clone node, and vice versa.
  *
  * This function does not move any data; it only updates the shard placement metadata.
  */
 void
-AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
-									   WorkerNode *replicaNode,
-									   List *primaryShardList,
-									   List *replicaShardList)
+AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
+									 WorkerNode *cloneNode,
+									 List *primaryShardList,
+									 List *cloneShardList)
 {
-	/*
-	 * Remove all shards from the replica that should reside on the primary node,
-	 * and update the shard placement metadata for shards that will now be served
-	 * from the replica node. No data movement is required; we only need to drop
-	 * the relevant shards from the replica and primary nodes and update the
-	 * corresponding shard placement metadata.
-	 */
-	uint64 shardId = 0;
-	uint32 groupId = GroupForNode(replicaNode->workerName, replicaNode->workerPort);
+	/* Input validation */
+	if (primaryNode == NULL || cloneNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("primary or clone worker node is NULL")));
+	}
+
+	if (primaryNode->nodeId == cloneNode->nodeId)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("primary and clone nodes must be different")));
+	}
+
+	ereport(NOTICE, (errmsg(
+						 "adjusting shard placements for primary %s:%d and clone %s:%d",
+						 primaryNode->workerName, primaryNode->workerPort,
+						 cloneNode->workerName, cloneNode->workerPort)));
 
 	RegisterOperationNeedingCleanup();
 
-	foreach_declared_int(shardId, replicaShardList)
+	/*
+	 * Register shard delete operation for clone node, for all shards that
+	 * are staying on the primary node needs to be deleted from the clone node.
+	 */
+	uint64 shardId = 0;
+	uint32 primaryGroupId = GroupForNode(primaryNode->workerName, primaryNode->workerPort)
+	;
+	uint32 cloneGroupId = GroupForNode(cloneNode->workerName, cloneNode->workerPort);
+
+	ereport(NOTICE, (errmsg("processing %d shards for primary node GroupID %d",
+							list_length(primaryShardList), primaryGroupId)));
+
+
+	/*
+	 * Remove all shards from the clone that should reside on the primary node,
+	 * and update the shard placement metadata for shards that will now be served
+	 * from the clone node. No data movement is required; we only need to drop
+	 * the relevant shards from the clone and primary nodes and update the
+	 * corresponding shard placement metadata.
+	 */
+	foreach_declared_int(shardId, primaryShardList)
+	{
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+
+		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+		ereport(NOTICE, (errmsg(
+							 "inserting DELETE shard record for shard %s from clone node GroupID %d",
+							 qualifiedShardName, cloneGroupId)));
+
+		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
+													 cloneGroupId);
+	}
+
+
+	ereport(NOTICE, (errmsg("processing %d shards for clone node GroupID %d", list_length(
+								cloneShardList), cloneGroupId)));
+
+	foreach_declared_int(shardId, cloneShardList)
 	{
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
@@ -611,20 +657,27 @@ AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
 			uint64 placementId = GetNextPlacementId();
 			InsertShardPlacementRow(colocatedShardId, placementId,
 									ShardLength(colocatedShardId),
-									groupId);
+									cloneGroupId);
 		}
 
 		UpdateColocatedShardPlacementMetadataOnWorkers(shardId,
 													   primaryNode->workerName,
 													   primaryNode->workerPort,
-													   replicaNode->workerName,
-													   replicaNode->workerPort);
+													   cloneNode->workerName,
+													   cloneNode->workerPort);
 
 		/* Now drop all shards from primary that need to be on the clone node */
+
 		DropShardPlacementsFromMetadata(colocatedShardList,
 										primaryNode->workerName, primaryNode->workerPort);
+
+		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+		ereport(NOTICE, (errmsg(
+							 "inserting DELETE shard record for shard %s from primary node GroupID %d",
+							 qualifiedShardName, primaryGroupId)));
+
 		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
-													 groupId);
+													 primaryGroupId);
 	}
 
 	/* Now adjust all reference table shards */
@@ -652,14 +705,19 @@ AdjustShardsForPrimaryReplicaNodeSplit(WorkerNode *primaryNode,
 			uint64 placementId = GetNextPlacementId();
 			InsertShardPlacementRow(colocatedShardId, placementId,
 									ShardLength(colocatedShardId),
-									groupId);
+									cloneGroupId);
 
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
-															0, groupId);
+															0, cloneGroupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
+
+	ereport(NOTICE, (errmsg(
+						 "shard placement adjustment complete for primary %s:%d and clone %s:%d",
+						 primaryNode->workerName, primaryNode->workerPort,
+						 cloneNode->workerName, cloneNode->workerPort)));
 }
 
 

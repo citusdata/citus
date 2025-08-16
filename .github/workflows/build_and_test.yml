@@ -487,6 +487,7 @@ jobs:
         tests=${detected_changes}
 
         # split the tests to be skipped --today we only skip upgrade tests
+        # and snapshot based node addition tests.
         skipped_tests=""
         not_skipped_tests=""
         for test in $tests; do

@@ -1,0 +1,304 @@
+--
+-- Test for negative scenarios in clone promotion functionality
+--
+--try to add follower_worker_1 as a clone of worker_1 to the cluster
+-- this should fail as previous test has already promoted worker_1 to a primary node
+SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
+ERROR:  a different node localhost:xxxxx (nodeid 3) already exists or is a clone for a different primary
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+(3 rows)
+
+--try to add worker_node2 as a clone of worker_node1
+-- this should fail as it is not a valid replica of worker_1
+SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_1_port) AS clone_node_id \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+ERROR:  clone localhost:xxxxx is not connected to primary localhost:xxxxx
+DETAIL:  The clone must be actively replicating from the specified primary node. Check that the clone is running and properly configured for replication.
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+(3 rows)
+
+--try add
+-- create a distributed table and load data
+CREATE TABLE backup_test(id int, value text);
+SELECT create_distributed_table('backup_test', 'id', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO backup_test SELECT g, 'test' || g FROM generate_series(1, 10) g;
+-- Create reference table
+CREATE TABLE ref_table(id int PRIMARY KEY);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_table SELECT i FROM generate_series(1, 5) i;
+SELECT COUNT(*) from backup_test;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) from ref_table;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+-- verify initial shard placement
+SELECT nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY nodename, nodeport ORDER BY nodename, nodeport;
+ nodename  | nodeport | count
+---------------------------------------------------------------------
+ localhost |     9071 |    10
+ localhost |    57637 |    12
+ localhost |    57638 |    18
+(3 rows)
+
+-- Try to add replica of worker_node2 as a clone of worker_node1
+SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_1_port) AS clone_node_id \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+ERROR:  clone localhost:xxxxx is not connected to primary localhost:xxxxx
+DETAIL:  The clone must be actively replicating from the specified primary node. Check that the clone is running and properly configured for replication.
+-- Test 1: Try to promote a non-existent clone node
+SELECT citus_promote_clone_and_rebalance(clone_nodeid =>99999);
+ERROR:  Clone node with ID 99999 not found.
+-- Test 2: Try to promote a regular worker node (not a clone)
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => 1);
+ERROR:  Node localhost:xxxxx (ID 1) is not a valid clone or its primary node ID is not set.
+-- Test 3: Try to promote with invalid timeout (negative)
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => 1,
+         catchup_timeout_seconds => -100);
+ERROR:  Node localhost:xxxxx (ID 1) is not a valid clone or its primary node ID is not set.
+-- register the new node as a clone, This should pass
+SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_2_port) AS clone_node_id \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      4 |       4 | localhost |     9072 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 2
+(4 rows)
+
+SELECT :clone_node_id;
+ ?column?
+---------------------------------------------------------------------
+        4
+(1 row)
+
+-- Test 4: Try to promote clone with invalid strategy name
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, rebalance_strategy => 'invalid_strategy');
+NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 4), original primary localhost:xxxxx (ID 2)
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 2)
+NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 2)
+NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
+NOTICE:  replication lag between localhost:xxxxx and localhost:xxxxx is 0 bytes
+NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
+NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
+NOTICE:  Clone node localhost:xxxxx (ID 4) has been successfully promoted.
+NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 4)
+ERROR:  could not find rebalance strategy with name invalid_strategy
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      4 |       4 | localhost |     9072 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 2
+(4 rows)
+
+-- Test 9: Rollback the citus_promote_clone_and_rebalance transaction
+BEGIN;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 4), original primary localhost:xxxxx (ID 2)
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+ERROR:  clone localhost:xxxxx is not connected to primary localhost:xxxxx
+DETAIL:  The clone must be actively replicating from the specified primary node. Check that the clone is running and properly configured for replication.
+ROLLBACK;
+-- Verify no data is lost after rooling back the transaction
+SELECT COUNT(*) from backup_test;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) from ref_table;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      4 |       4 | localhost |     9072 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 2
+(4 rows)
+
+-- Test 5: Try to add and promote a proper replica after rollback
+SELECT master_add_node('localhost', :worker_3_port) AS nodeid_3 \gset
+SELECT citus_add_clone_node('localhost', :follower_worker_3_port, 'localhost', :worker_3_port) AS clone_node_id_3 \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+set citus.shard_count = 100;
+CREATE TABLE backup_test2(id int, value text);
+SELECT create_distributed_table('backup_test2', 'id', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO backup_test2 SELECT g, 'test' || g FROM generate_series(1, 10) g;
+-- Create reference table
+CREATE TABLE ref_table2(id int PRIMARY KEY);
+SELECT create_reference_table('ref_table2');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_table2 SELECT i FROM generate_series(1, 5) i;
+SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'localhost', :follower_worker_3_port);
+  table_name  | shardid | shard_size | placement_node
+---------------------------------------------------------------------
+ backup_test2 |  102091 |          0 | Primary Node
+ backup_test2 |  102095 |          0 | Primary Node
+ backup_test2 |  102099 |          0 | Primary Node
+ backup_test2 |  102103 |          0 | Primary Node
+ backup_test2 |  102111 |          0 | Primary Node
+ backup_test2 |  102115 |          0 | Primary Node
+ backup_test2 |  102119 |          0 | Primary Node
+ backup_test2 |  102123 |          0 | Primary Node
+ backup_test2 |  102127 |          0 | Primary Node
+ backup_test2 |  102131 |          0 | Primary Node
+ backup_test2 |  102135 |          0 | Primary Node
+ backup_test2 |  102139 |          0 | Primary Node
+ backup_test2 |  102143 |          0 | Primary Node
+ backup_test2 |  102063 |          0 | Clone Node
+ backup_test2 |  102071 |          0 | Clone Node
+ backup_test2 |  102107 |          0 | Clone Node
+ backup_test2 |  102047 |          0 | Clone Node
+ backup_test2 |  102051 |          0 | Clone Node
+ backup_test2 |  102055 |          0 | Clone Node
+ backup_test2 |  102059 |          0 | Clone Node
+ backup_test2 |  102067 |          0 | Clone Node
+ backup_test2 |  102075 |          0 | Clone Node
+ backup_test2 |  102079 |          0 | Clone Node
+ backup_test2 |  102083 |          0 | Clone Node
+ backup_test2 |  102087 |          0 | Clone Node
+(25 rows)
+
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3);
+NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 6), original primary localhost:xxxxx (ID 5)
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 5)
+NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 5)
+NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
+NOTICE:  replication lag between localhost:xxxxx and localhost:xxxxx is 0 bytes
+NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
+NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
+NOTICE:  Clone node localhost:xxxxx (ID 6) has been successfully promoted.
+NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 6)
+NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  processing 13 shards for primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102091 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102095 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102099 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102103 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102111 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102115 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102119 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102123 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102127 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102131 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102135 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102139 from clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102143 from clone node GroupID 6
+NOTICE:  processing 12 shards for clone node GroupID 6
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102063 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102071 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102107 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102047 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102051 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102055 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102059 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102067 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102075 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102079 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102083 from primary node GroupID 5
+NOTICE:  inserting DELETE shard record for shard public.backup_test2_102087 from primary node GroupID 5
+NOTICE:  shard placement adjustment complete for primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  Clone node localhost:xxxxx (ID 6) metadata updated. It is now a primary
+NOTICE:  Clone node localhost:xxxxx (ID 6) successfully registered as a worker node
+ citus_promote_clone_and_rebalance
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT COUNT(*) from backup_test;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) from ref_table;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      4 |       4 | localhost |     9072 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 2
+      5 |       5 | localhost |    57639 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      6 |       6 | localhost |     9073 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+(6 rows)
+
+-- check the shard placement
+SELECT nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY nodename, nodeport ORDER BY nodename, nodeport;
+ nodename  | nodeport | count
+---------------------------------------------------------------------
+ localhost |     9071 |    36
+ localhost |     9073 |    17
+ localhost |    57637 |    38
+ localhost |    57638 |    44
+ localhost |    57639 |    18
+(5 rows)
+
+set citus.shard_count to default;
+-- cleanup
+DROP TABLE backup_test;
+DROP TABLE ref_table;
+DROP TABLE backup_test2;
+DROP TABLE ref_table2;

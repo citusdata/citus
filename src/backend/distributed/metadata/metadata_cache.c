@@ -221,6 +221,7 @@ typedef struct MetadataCacheData
 	Oid textCopyFormatId;
 	Oid primaryNodeRoleId;
 	Oid secondaryNodeRoleId;
+	Oid unavailableNodeRoleId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
 	Oid distAuthinfoRelationId;
@@ -3573,13 +3574,13 @@ SecondaryNodeRoleId(void)
 Oid
 UnavailableNodeRoleId(void)
 {
-	if (!MetadataCache.secondaryNodeRoleId)
+	if (!MetadataCache.unavailableNodeRoleId)
 	{
-		MetadataCache.secondaryNodeRoleId = LookupStringEnumValueId("noderole",
-																	"unavailable");
+		MetadataCache.unavailableNodeRoleId = LookupStringEnumValueId("noderole",
+																	  "unavailable");
 	}
 
-	return MetadataCache.secondaryNodeRoleId;
+	return MetadataCache.unavailableNodeRoleId;
 }
 
 

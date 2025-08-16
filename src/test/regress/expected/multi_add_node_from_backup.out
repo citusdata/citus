@@ -166,12 +166,15 @@ SELECT pg_sleep(5);
 -- register the new node as a clone
 -- the function returns the new node id
 SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
-SELECT * from pg_dist_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default     | t              | t                | f           |                 0
-      2 |       2 | localhost |    57638 | default  | t           | t        | primary   | default     | t              | t                | f           |                 0
-      3 |       3 | localhost |     9071 | default  | f           | f        | secondary | default     | f              | f                | t           |                 1
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 1
 (3 rows)
 
 SELECT :clone_node_id ;
@@ -180,17 +183,78 @@ SELECT :clone_node_id ;
         3
 (1 row)
 
+SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
+ shardid | nodename  | node_type
+---------------------------------------------------------------------
+  102008 | localhost | PRIMARY
+  102010 | localhost | PRIMARY
+  102012 | localhost | PRIMARY
+  102014 | localhost | PRIMARY
+  102016 | localhost | PRIMARY
+  102018 | localhost | PRIMARY
+  102020 | localhost | PRIMARY
+  102022 | localhost | PRIMARY
+  102024 | localhost | PRIMARY
+  102026 | localhost | PRIMARY
+  102028 | localhost | PRIMARY
+  102030 | localhost | PRIMARY
+  102032 | localhost | PRIMARY
+  102034 | localhost | PRIMARY
+  102036 | localhost | PRIMARY
+  102037 | localhost | PRIMARY
+  102038 | localhost | PRIMARY
+(17 rows)
+
+SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_1_port ORDER BY shardid;
+ shardid | nodename | node_type
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_1_port, 'localhost', :follower_worker_1_port);
+  table_name  | shardid | shard_size | placement_node
+---------------------------------------------------------------------
+ table1_colg2 |  102020 |          0 | Primary Node
+ table2_colg2 |  102024 |          0 | Primary Node
+ table1_colg2 |  102022 |          0 | Primary Node
+ table2_colg2 |  102026 |          0 | Primary Node
+ table1_colg3 |  102028 |          0 | Primary Node
+ table2_colg3 |  102032 |          0 | Primary Node
+ table1_colg3 |  102030 |          0 | Primary Node
+ table2_colg3 |  102034 |          0 | Primary Node
+ backup_test  |  102008 |          0 | Clone Node
+ backup_test  |  102010 |          0 | Clone Node
+ table1_colg1 |  102012 |          0 | Clone Node
+ table2_colg1 |  102016 |          0 | Clone Node
+ table1_colg1 |  102014 |          0 | Clone Node
+ table2_colg1 |  102018 |          0 | Clone Node
+(14 rows)
+
 -- promote the clone and rebalance the shards
 SELECT citus_promote_clone_and_rebalance(:clone_node_id);
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 3), original primary localhost:xxxxx (ID 1)
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication for node localhost (resolved IP: 127.0.0.1)
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 1)
 NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 1)
-NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx
+NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
 NOTICE:  replication lag between localhost:xxxxx and localhost:xxxxx is 0 bytes
 NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
 NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
 NOTICE:  Clone node localhost:xxxxx (ID 3) has been successfully promoted.
 NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 3)
+NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  processing 4 shards for primary node GroupID 1
+NOTICE:  inserting DELETE shard record for shard public.table1_colg2_102020 from clone node GroupID 3
+NOTICE:  inserting DELETE shard record for shard public.table1_colg2_102022 from clone node GroupID 3
+NOTICE:  inserting DELETE shard record for shard public.table1_colg3_102028 from clone node GroupID 3
+NOTICE:  inserting DELETE shard record for shard public.table1_colg3_102030 from clone node GroupID 3
+NOTICE:  processing 4 shards for clone node GroupID 3
+NOTICE:  inserting DELETE shard record for shard public.backup_test_102008 from primary node GroupID 1
+NOTICE:  inserting DELETE shard record for shard public.backup_test_102010 from primary node GroupID 1
+NOTICE:  inserting DELETE shard record for shard public.table2_colg1_102016 from primary node GroupID 1
+NOTICE:  inserting DELETE shard record for shard public.table2_colg1_102018 from primary node GroupID 1
+NOTICE:  shard placement adjustment complete for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  Clone node localhost:xxxxx (ID 3) metadata updated. It is now a primary
 NOTICE:  Clone node localhost:xxxxx (ID 3) successfully registered as a worker node
  citus_promote_clone_and_rebalance
@@ -198,7 +262,36 @@ NOTICE:  Clone node localhost:xxxxx (ID 3) successfully registered as a worker n
 
 (1 row)
 
---SELECT pg_sleep(10);
+SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
+ shardid | nodename  | node_type
+---------------------------------------------------------------------
+  102020 | localhost | PRIMARY
+  102022 | localhost | PRIMARY
+  102024 | localhost | PRIMARY
+  102026 | localhost | PRIMARY
+  102028 | localhost | PRIMARY
+  102030 | localhost | PRIMARY
+  102032 | localhost | PRIMARY
+  102034 | localhost | PRIMARY
+  102036 | localhost | PRIMARY
+  102037 | localhost | PRIMARY
+  102038 | localhost | PRIMARY
+(11 rows)
+
+SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_1_port ORDER BY shardid;
+ shardid | nodename  | node_type
+---------------------------------------------------------------------
+  102008 | localhost | CLONE
+  102010 | localhost | CLONE
+  102012 | localhost | CLONE
+  102014 | localhost | CLONE
+  102016 | localhost | CLONE
+  102018 | localhost | CLONE
+  102036 | localhost | CLONE
+  102037 | localhost | CLONE
+  102038 | localhost | CLONE
+(9 rows)
+
 \c - - - :worker_1_port
 SELECT 'WORKER' as node_type,* from pg_dist_node;
  node_type | nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid

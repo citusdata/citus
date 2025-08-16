@@ -8,6 +8,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SELECT * from pg_dist_node;
 
+
 -- create a distributed table and load data
 CREATE TABLE backup_test(id int, value text);
 SELECT create_distributed_table('backup_test', 'id', 'hash');
@@ -100,14 +101,21 @@ SELECT pg_sleep(5);
 -- the function returns the new node id
 SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
 
-SELECT * from pg_dist_node;
+SELECT * from pg_dist_node ORDER by nodeid;
 
 SELECT :clone_node_id ;
+
+SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
+SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_1_port ORDER BY shardid;
+
+SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_1_port, 'localhost', :follower_worker_1_port);
 
 -- promote the clone and rebalance the shards
 SELECT citus_promote_clone_and_rebalance(:clone_node_id);
 
---SELECT pg_sleep(10);
+SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
+SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_1_port ORDER BY shardid;
+
 \c - - - :worker_1_port
 SELECT 'WORKER' as node_type,* from pg_dist_node;
 SELECT 'WORKER' as node_type, nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY nodename, nodeport ORDER BY nodename, nodeport;

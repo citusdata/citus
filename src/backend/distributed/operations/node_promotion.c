@@ -4,6 +4,7 @@
 #include "utils/pg_lsn.h"
 
 #include "distributed/argutils.h"
+#include "distributed/clonenode_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -11,8 +12,6 @@
 #include "distributed/shard_rebalancer.h"
 
 
-static int64 GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *
-							   replicaWorkerNode);
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
 static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
@@ -29,6 +28,9 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 	/* Get clone_nodeid argument */
 	int32 cloneNodeIdArg = PG_GETARG_INT32(0);
+
+	/* Get catchUpTimeoutSeconds argument with default value of 300 */
+	int32 catchUpTimeoutSeconds = PG_ARGISNULL(2) ? 300 : PG_GETARG_INT32(2);
 
 	/* Lock pg_dist_node to prevent concurrent modifications during this operation */
 	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
@@ -70,7 +72,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	if (primaryNode->nodeisclone)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Primary node %s:%d (ID %d) is itself a replica.",
+						errmsg("Primary node %s:%d (ID %d) is itself a clone.",
 							   primaryNode->workerName, primaryNode->workerPort,
 							   primaryNode->nodeId)));
 	}
@@ -88,7 +90,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg(
-							"Clone node %s:%d (ID %d) is not replica of the primary node %s:%d (ID %d).",
+							"Clone node %s:%d (ID %d) is not a clone of the primary node %s:%d (ID %d).",
 							cloneNode->workerName, cloneNode->workerPort, cloneNode->
 							nodeId,
 							primaryNode->workerName, primaryNode->workerPort,
@@ -103,6 +105,10 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 						 primaryNode->workerName, primaryNode->workerPort, primaryNode
 						 ->nodeId)));
 
+	/* Step 0: Check if clone is replica of provided primary node and is not synchronous */
+	char* operation = "promote";
+	EnsureReplicaIsNotSynchronous(primaryNode, cloneNode, operation);
+
 	/* Step 1: Block Writes on Original Primary's Shards */
 	ereport(NOTICE, (errmsg(
 						 "Blocking writes on shards of original primary node %s:%d (group %d)",
@@ -112,12 +118,12 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	BlockAllWritesToWorkerNode(primaryNode);
 
 	/* Step 2: Wait for Clone to Catch Up */
-	ereport(NOTICE, (errmsg("Waiting for clone %s:%d to catch up with primary %s:%d",
+	ereport(NOTICE, (errmsg("Waiting for clone %s:%d to catch up with primary %s:%d (timeout: %d seconds)",
 							cloneNode->workerName, cloneNode->workerPort,
-							primaryNode->workerName, primaryNode->workerPort)));
+							primaryNode->workerName, primaryNode->workerPort,
+							catchUpTimeoutSeconds)));
 
 	bool caughtUp = false;
-	const int catchUpTimeoutSeconds = 300; /* 5 minutes, TODO: Make GUC */
 	const int sleepIntervalSeconds = 5;
 	int elapsedTimeSeconds = 0;
 
@@ -137,7 +143,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg(
-							"Replica %s:%d failed to catch up with primary %s:%d within %d seconds.",
+							"Clone %s:%d failed to catch up with primary %s:%d within %d seconds.",
 							cloneNode->workerName, cloneNode->workerPort,
 							primaryNode->workerName, primaryNode->workerPort,
 							catchUpTimeoutSeconds)));
@@ -154,7 +160,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 	PromoteCloneNode(cloneNode);
 
-	/* Step 4: Update Replica Metadata in pg_dist_node on Coordinator */
+	/* Step 4: Update Clone Metadata in pg_dist_node on Coordinator */
 
 	ereport(NOTICE, (errmsg("Updating metadata for promoted clone %s:%d (ID %d)",
 							cloneNode->workerName, cloneNode->workerPort, cloneNode->
@@ -166,8 +172,8 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	 */
 	SyncNodeMetadataToNodes();
 
-	/* Step 5: Split Shards Between Primary and Replica */
-	SplitShardsBetweenPrimaryAndReplica(primaryNode, cloneNode, PG_GETARG_NAME_OR_NULL(1))
+	/* Step 5: Split Shards Between Primary and Clone */
+	SplitShardsBetweenPrimaryAndClone(primaryNode, cloneNode, PG_GETARG_NAME_OR_NULL(1))
 	;
 
 
@@ -192,123 +198,12 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 
 /*
- * GetReplicationLag calculates the replication lag between the primary and replica nodes.
- * It returns the lag in bytes.
+ * PromoteCloneNode promotes a clone node to a primary node.
+ * It uses the pg_promote() function to promote the clone node.
+ * It also checks if the clone node is in recovery status.
+ * If the clone node is in recovery status, it will return an error.
+ * If the clone node is not in recovery status, it will return a success message.
  */
-static int64
-GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode)
-{
-#if PG_VERSION_NUM >= 100000
-	const char *primary_lsn_query = "SELECT pg_current_wal_lsn()";
-	const char *replica_lsn_query = "SELECT pg_last_wal_replay_lsn()";
-#else
-	const char *primary_lsn_query = "SELECT pg_current_xlog_location()";
-	const char *replica_lsn_query = "SELECT pg_last_xlog_replay_location()";
-#endif
-
-	int connectionFlag = 0;
-	MultiConnection *primaryConnection = GetNodeConnection(connectionFlag,
-														   primaryWorkerNode->workerName,
-														   primaryWorkerNode->workerPort);
-	if (PQstatus(primaryConnection->pgConn) != CONNECTION_OK)
-	{
-		ereport(ERROR, (errmsg("cannot connect to %s:%d to fetch replication status",
-							   primaryWorkerNode->workerName, primaryWorkerNode->
-							   workerPort)));
-	}
-	MultiConnection *replicaConnection = GetNodeConnection(connectionFlag,
-														   replicaWorkerNode->workerName,
-														   replicaWorkerNode->workerPort);
-
-	if (PQstatus(replicaConnection->pgConn) != CONNECTION_OK)
-	{
-		ereport(ERROR, (errmsg("cannot connect to %s:%d to fetch replication status",
-							   replicaWorkerNode->workerName, replicaWorkerNode->
-							   workerPort)));
-	}
-
-	int primaryResultCode = SendRemoteCommand(primaryConnection, primary_lsn_query);
-	if (primaryResultCode == 0)
-	{
-		ReportConnectionError(primaryConnection, ERROR);
-	}
-
-	PGresult *primaryResult = GetRemoteCommandResult(primaryConnection, true);
-	if (!IsResponseOK(primaryResult))
-	{
-		ReportResultError(primaryConnection, primaryResult, ERROR);
-	}
-
-	int replicaResultCode = SendRemoteCommand(replicaConnection, replica_lsn_query);
-	if (replicaResultCode == 0)
-	{
-		ReportConnectionError(replicaConnection, ERROR);
-	}
-	PGresult *replicaResult = GetRemoteCommandResult(replicaConnection, true);
-	if (!IsResponseOK(replicaResult))
-	{
-		ReportResultError(replicaConnection, replicaResult, ERROR);
-	}
-
-
-	List *primaryLsnList = ReadFirstColumnAsText(primaryResult);
-	if (list_length(primaryLsnList) != 1)
-	{
-		PQclear(primaryResult);
-		ClearResults(primaryConnection, true);
-		CloseConnection(primaryConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot parse get primary LSN result from %s:%d",
-							   primaryWorkerNode->workerName,
-							   primaryWorkerNode->workerPort)));
-	}
-	StringInfo primaryLsnQueryResInfo = (StringInfo) linitial(primaryLsnList);
-	char *primary_lsn_str = primaryLsnQueryResInfo->data;
-
-	List *replicaLsnList = ReadFirstColumnAsText(replicaResult);
-	if (list_length(replicaLsnList) != 1)
-	{
-		PQclear(replicaResult);
-		ClearResults(replicaConnection, true);
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot parse get replica LSN result from %s:%d",
-							   replicaWorkerNode->workerName,
-							   replicaWorkerNode->workerPort)));
-	}
-	StringInfo replicaLsnQueryResInfo = (StringInfo) linitial(replicaLsnList);
-	char *replica_lsn_str = replicaLsnQueryResInfo->data;
-
-	if (!primary_lsn_str || !replica_lsn_str)
-	{
-		return -1;
-	}
-
-	int64 primary_lsn = DatumGetLSN(DirectFunctionCall1(pg_lsn_in, CStringGetDatum(
-															primary_lsn_str)));
-	int64 replica_lsn = DatumGetLSN(DirectFunctionCall1(pg_lsn_in, CStringGetDatum(
-															replica_lsn_str)));
-
-	int64 lag_bytes = primary_lsn - replica_lsn;
-
-	PQclear(primaryResult);
-	ForgetResults(primaryConnection);
-	CloseConnection(primaryConnection);
-
-	PQclear(replicaResult);
-	ForgetResults(replicaConnection);
-	CloseConnection(replicaConnection);
-
-	ereport(NOTICE, (errmsg("replication lag between %s:%d and %s:%d is %ld bytes",
-							primaryWorkerNode->workerName, primaryWorkerNode->workerPort,
-							replicaWorkerNode->workerName, replicaWorkerNode->workerPort,
-							lag_bytes)));
-	return lag_bytes;
-}
-
-
 static void
 PromoteCloneNode(WorkerNode *cloneWorkerNode)
 {
