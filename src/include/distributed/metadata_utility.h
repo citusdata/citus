@@ -471,5 +471,5 @@ extern int GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDEsc);
 
 /* from node_metadata.c */
 extern void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode);
-extern void ActivateReplicaNodeAsPrimary(WorkerNode *workerNode);
+extern void ActivateCloneNodeAsPrimary(WorkerNode *workerNode);
 #endif   /* METADATA_UTILITY_H */

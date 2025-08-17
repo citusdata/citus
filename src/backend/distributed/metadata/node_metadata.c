@@ -1190,11 +1190,11 @@ ActivateNodeList(MetadataSyncContext *context)
 
 
 /*
- * ActivateReplicaNodeAsPrimary sets the given worker node as primary and active
- * in the pg_dist_node catalog and make the replica node as first class citizen.
+ * ActivateCloneNodeAsPrimary sets the given worker node as primary and active
+ * in the pg_dist_node catalog and make the clone node as first class citizen.
  */
 void
-ActivateReplicaNodeAsPrimary(WorkerNode *workerNode)
+ActivateCloneNodeAsPrimary(WorkerNode *workerNode)
 {
 	/*
 	 * Set the node as primary and active.
@@ -1658,14 +1658,9 @@ CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 	TransactionModifiedNodeMetadata = true;
 
 	/*
-	 * Note: Replicas added this way are inactive.
-	 * A separate mechanism or UDF (e.g., citus_activate_replica_node or citus_promote_replica_node)
-	 * would be needed to activate them, potentially after verifying replication lag, etc.
-	 * Activation would typically involve:
-	 * 1. Setting isActive = true.
-	 * 2. Ensuring metadata is synced (hasMetadata=true, metadataSynced=true).
-	 * 3. Potentially other logic like adding to specific scheduler lists.
-	 * For now, citus_add_node_clone just registers it.
+	 * Note: Clones added this way are inactive.
+	 * A separate UDF citus_promote_clone_and_rebalance
+	 * would be needed to activate them.
 	 */
 
 	return cloneNodeId;
@@ -1701,7 +1696,7 @@ citus_remove_clone_node(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_remove_replica_node_with_nodeid removes an inactive streaming replica node from Citus metadata
+ * citus_remove_clone_node_with_nodeid removes an inactive clone node from Citus metadata
  * using the node's ID.
  */
 Datum

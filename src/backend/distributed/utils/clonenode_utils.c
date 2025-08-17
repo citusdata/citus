@@ -150,21 +150,34 @@ GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode)
 	return lag_bytes;
 }
 
-
 /*
- * EnsureReplicaIsNotSynchronous verifies that the clone is not configured as a synchronous replica
- * and that it is actually replicating from the specified primary node.
- * If the clone is synchronous or not connected to the primary, it throws an ERROR.
+ * EnsureValidCloneMode verifies that a clone node has a valid replication
+ * relationship with the specified primary node.
+ *
+ * This function performs several critical checks:
+ * 1. Validates that the clone is actually connected to and replicating from
+ *    the specified primary node
+ * 2. Ensures the clone is not configured as a synchronous replica, which
+ *    would block 2PC commits on the primary when the clone gets promoted
+ * 3. Verifies the replication connection is active and healthy
+ *
+ * The function connects to the primary node and queries pg_stat_replication
+ * to find the clone's replication slot. It resolves hostnames to IP addresses
+ * for robust matching since PostgreSQL may report different address formats.
+ *
+ * Parameters:
+ *   primaryWorkerNode - The primary node that should be sending replication data
+ *   cloneHostname - Hostname/IP of the clone node to verify
+ *   clonePort - Port of the clone node to verify
+ *   operation - Description of the operation being performed (for error messages)
+ *
+ * Throws ERROR if:
+ *   - Primary or clone parameters are invalid
+ *   - Cannot connect to the primary node
+ *   - Clone is not found in the primary's replication slots
+ *   - Clone is configured as a synchronous replica
+ *   - Replication connection is not active
  */
-void
-EnsureReplicaIsNotSynchronous(WorkerNode *primaryWorkerNode,
-							  WorkerNode *replicaWorkerNode,
-							  char *operation)
-{
-	EnsureValidCloneMode(primaryWorkerNode, replicaWorkerNode->workerName,
-						 replicaWorkerNode->workerPort, operation);
-}
-
 
 void
 EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
@@ -190,13 +203,7 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 														   primaryWorkerNode->workerPort);
 	if (PQstatus(primaryConnection->pgConn) != CONNECTION_OK)
 	{
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"cannot connect to primary node %s:%d to check replication status",
-							primaryWorkerNode->workerName, primaryWorkerNode->
-							workerPort),
-						errdetail(
-							"This is required to verify clone relationship and sync state")));
+		ReportConnectionError(primaryConnection, ERROR);
 	}
 
 	/* Build query to check if clone is connected and get its sync state */
@@ -284,9 +291,6 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 	PGresult *replicationCheckResult = GetRemoteCommandResult(primaryConnection, true);
 	if (!IsResponseOK(replicationCheckResult))
 	{
-		pfree(replicationCheckQuery->data);
-		pfree(replicationCheckQuery);
-		CloseConnection(primaryConnection);
 		ReportResultError(primaryConnection, replicationCheckResult, ERROR);
 	}
 
@@ -295,12 +299,6 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 	/* Check if clone is connected to this primary */
 	if (list_length(replicationStateList) == 0)
 	{
-		pfree(replicationCheckQuery->data);
-		pfree(replicationCheckQuery);
-		PQclear(replicationCheckResult);
-		ClearResults(primaryConnection, true);
-		CloseConnection(primaryConnection);
-
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("clone %s:%d is not connected to primary %s:%d",
 							   cloneHostname, clonePort,
@@ -319,12 +317,6 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 			(strcmp(syncStateInfo->data, "sync") == 0 || strcmp(syncStateInfo->data,
 																"quorum") == 0))
 		{
-			pfree(replicationCheckQuery->data);
-			pfree(replicationCheckQuery);
-			PQclear(replicationCheckResult);
-			ClearResults(primaryConnection, true);
-			CloseConnection(primaryConnection);
-
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg(
 								"cannot %s clone %s:%d as it is configured as a synchronous replica",
@@ -337,10 +329,11 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 	}
 
 	/* Cleanup resources */
+	bool raiseErrors = false;
+	PQclear(replicationCheckResult);
+	ClearResults(primaryConnection, raiseErrors);
 	pfree(replicationCheckQuery->data);
 	pfree(replicationCheckQuery);
-	PQclear(replicationCheckResult);
-	ClearResults(primaryConnection, true);
 	CloseConnection(primaryConnection);
 
 	ereport(NOTICE, (errmsg(
@@ -352,11 +345,29 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 
 
 /*
- * EnsureValidStreamingReplica checks if the given replica is a valid streaming
- * replica. It connects to the replica and checks if it is in recovery mode.
- * If it is not, it errors out.
- * It also checks the system identifier of the replica and the primary
- * to ensure they match.
+ * EnsureValidStreamingReplica verifies that a node is a valid streaming replica
+ * of the specified primary node.
+ *
+ * This function performs comprehensive validation to ensure the replica is:
+ * 1. Currently in recovery mode (acting as a replica, not a primary)
+ * 2. Has the same system identifier as the primary (ensuring they're part of
+ *    the same PostgreSQL cluster/timeline)
+ *
+ * The function connects to both the replica and primary nodes to perform these
+ * checks. This validation is critical before performing operations like promotion
+ * or failover to ensure data consistency and prevent split-brain scenarios.
+ *
+ * Parameters:
+ *   primaryWorkerNode - The primary node that should be the source of replication
+ *   replicaHostname - Hostname/IP of the replica node to validate
+ *   replicaPort - Port of the replica node to validate
+ *
+ * Throws ERROR if:
+ *   - Cannot connect to the replica or primary node
+ *   - Replica is not in recovery mode (indicating it's not acting as a replica)
+ *   - System identifiers don't match between primary and replica
+ *   - Any database queries fail during validation
+ *
  */
 void
 EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname, int
@@ -367,37 +378,34 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 														   ,
 														   replicaPort);
 
+	if (PQstatus(replicaConnection->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(replicaConnection, ERROR);
+	}
+
 	const char *replica_recovery_query = "SELECT pg_is_in_recovery()";
 
 	int resultCode = SendRemoteCommand(replicaConnection, replica_recovery_query);
 
 	if (resultCode == 0)
 	{
-		CloseConnection(replicaConnection);
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"could not connect to %s:%d to execute pg_is_in_recovery()",
-							replicaHostname, replicaPort)));
+		ereport(DEBUG2, (errmsg("cannot connect to %s:%d to check if it is in recovery mode",
+								replicaHostname, replicaPort)));
+		ReportConnectionError(replicaConnection, ERROR);
 	}
 
-	PGresult *result = GetRemoteCommandResult(replicaConnection, true);
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(replicaConnection, raiseInterrupts);
 
-	if (result == NULL)
+	if (!IsResponseOK(result))
 	{
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("node %s:%d does not support pg_is_in_recovery()",
-							   replicaHostname, replicaPort)));
+		ereport(DEBUG2, (errmsg("failed to execute pg_is_in_recovery")));
+		ReportResultError(replicaConnection, result, ERROR);
 	}
 
 	List *sizeList = ReadFirstColumnAsText(result);
 	if (list_length(sizeList) != 1)
 	{
-		PQclear(result);
-		ClearResults(replicaConnection, true);
-		CloseConnection(replicaConnection);
-
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg("cannot parse pg_is_in_recovery() result from %s:%d",
 							   replicaHostname,
@@ -410,14 +418,9 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 	if (strcmp(isInRecoveryQueryResStr, "t") != 0 && strcmp(isInRecoveryQueryResStr,
 															"true") != 0)
 	{
-		PQclear(result);
-		ClearResults(replicaConnection, true);
-		CloseConnection(replicaConnection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("%s:%d is not a streaming replica",
-							   replicaHostname,
-							   replicaPort)));
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("node %s:%d is not in recovery mode",
+							   replicaHostname, replicaPort)));
 	}
 
 	PQclear(result);
@@ -431,25 +434,22 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 
 	if (resultCode == 0)
 	{
-		CloseConnection(replicaConnection);
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("could not connect to %s:%d to get system identifier",
-							   replicaHostname, replicaPort)));
+		ereport(DEBUG2, (errmsg("cannot connect to %s:%d to get system identifier",
+								replicaHostname, replicaPort)));
+		ReportConnectionError(replicaConnection, ERROR);
 	}
 
-	result = GetRemoteCommandResult(replicaConnection, true);
+	result = GetRemoteCommandResult(replicaConnection, raiseInterrupts);
 	if (!IsResponseOK(result))
 	{
+		ereport(DEBUG2, (errmsg("failed to execute get system identifier")));
 		ReportResultError(replicaConnection, result, ERROR);
 	}
 
 	List *sysidList = ReadFirstColumnAsText(result);
 	if (list_length(sysidList) != 1)
 	{
-		PQclear(result);
-		ClearResults(replicaConnection, true);
 		CloseConnection(replicaConnection);
-
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg("cannot parse get system identifier result from %s:%d",
 							   replicaHostname,
@@ -468,6 +468,10 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 	CloseConnection(replicaConnection);
 
 	/* Step3: Get system identifier from primary */
+	ereport(DEBUG2, (errmsg("getting system identifier from primary %s:%d",
+							primaryWorkerNode->workerName,
+							primaryWorkerNode->workerPort)));
+
 	int primaryConnectionFlag = 0;
 	MultiConnection *primaryConnection = GetNodeConnection(primaryConnectionFlag,
 														   primaryWorkerNode->workerName,
@@ -475,11 +479,7 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 
 	if (PQstatus(primaryConnection->pgConn) != CONNECTION_OK)
 	{
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"cannot connect to primary node %s:%d to fetch replication status",
-							primaryWorkerNode->workerName, primaryWorkerNode->
-							workerPort)));
+		ReportConnectionError(primaryConnection, ERROR);
 	}
 
 	int primaryResultCode = SendRemoteCommand(primaryConnection, sysidQuery);
@@ -488,22 +488,16 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 		ReportConnectionError(primaryConnection, ERROR);
 	}
 
-	PGresult *primaryResult = GetRemoteCommandResult(primaryConnection, true);
-	if (primaryResult == NULL)
+	PGresult *primaryResult = GetRemoteCommandResult(primaryConnection, raiseInterrupts);
+	if (!IsResponseOK(primaryResult))
 	{
-		CloseConnection(primaryConnection);
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("node %s:%d does not support pg_control_system queries",
-							   primaryWorkerNode->workerName, primaryWorkerNode->
-							   workerPort)));
+		ereport(DEBUG2, (errmsg("failed to execute get system identifier")));
+		ReportResultError(primaryConnection, primaryResult, ERROR);
 	}
 	List *primarySizeList = ReadFirstColumnAsText(primaryResult);
 	if (list_length(primarySizeList) != 1)
 	{
-		PQclear(primaryResult);
-		ClearResults(primaryConnection, true);
 		CloseConnection(primaryConnection);
-
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg("cannot parse get system identifier result from %s:%d",
 							   primaryWorkerNode->workerName,
@@ -521,7 +515,7 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 	{
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg(
-							"system identifiers do not match: %s (replica) vs %s (primary)",
+							"system identifiers do not match: %s (clone) vs %s (primary)",
 							sysidQueryResStr, primarySysidQueryResStr)));
 	}
 	PQclear(primaryResult);

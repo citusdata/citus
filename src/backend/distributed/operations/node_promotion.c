@@ -19,6 +19,28 @@ static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
 
 PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
 
+/*
+ * citus_promote_clone_and_rebalance promotes an inactive clone node to become
+ * the new primary node, replacing its original primary node.
+ *
+ * This function performs the following steps:
+ * 1. Validates that the clone node exists and is properly configured
+ * 2. Ensures the clone is inactive and has a valid primary node reference
+ * 3. Blocks all writes to the primary node to prevent data divergence
+ * 4. Waits for the clone to catch up with the primary's WAL position
+ * 5. Promotes the clone node to become a standalone primary
+ * 6. Updates metadata to mark the clone as active and primary
+ * 7. Rebalances shards between the old primary and new primary
+ * 8. Returns information about the promotion and any shard movements
+ *
+ * Arguments:
+ * - clone_nodeid: The node ID of the clone to promote
+ * - catchUpTimeoutSeconds: Maximum time to wait for clone to catch up (default: 300)
+ *
+ * The function ensures data consistency by blocking writes during the promotion
+ * process and verifying replication lag before proceeding.
+ */
+
 Datum
 citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 {
@@ -107,7 +129,8 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 	/* Step 0: Check if clone is replica of provided primary node and is not synchronous */
 	char *operation = "promote";
-	EnsureReplicaIsNotSynchronous(primaryNode, cloneNode, operation);
+	EnsureValidCloneMode(primaryNode, cloneNode->workerName, cloneNode->workerPort,
+						 operation);
 
 	/* Step 1: Block Writes on Original Primary's Shards */
 	ereport(NOTICE, (errmsg(
@@ -166,7 +189,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	ereport(NOTICE, (errmsg("Updating metadata for promoted clone %s:%d (ID %d)",
 							cloneNode->workerName, cloneNode->workerPort, cloneNode->
 							nodeId)));
-	ActivateReplicaNodeAsPrimary(cloneNode);
+	ActivateCloneNodeAsPrimary(cloneNode);
 
 	/* We need to sync metadata changes to all nodes before rebalancing shards
 	 * since the rebalancing algorithm depends on the latest metadata.
@@ -199,15 +222,29 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 
 /*
- * PromoteCloneNode promotes a clone node to a primary node.
- * It uses the pg_promote() function to promote the clone node.
- * It also checks if the clone node is in recovery status.
- * If the clone node is in recovery status, it will return an error.
- * If the clone node is not in recovery status, it will return a success message.
+ * PromoteCloneNode promotes a clone node to a primary node using PostgreSQL's
+ * pg_promote() function.
+ *
+ * This function performs the following steps:
+ * 1. Connects to the clone node
+ * 2. Executes pg_promote(wait := true) to promote the clone to primary
+ * 3. Reconnects to verify the promotion was successful
+ * 4. Checks if the node is still in recovery mode (which would indicate failure)
+ *
+ * The function throws an ERROR if:
+ * - Connection to the clone node fails
+ * - The pg_promote() command fails
+ * - The clone is still in recovery mode after promotion attempt
+ *
+ * On success, it logs a NOTICE message confirming the promotion.
+ *
+ * Note: This function assumes the clone has already been validated for promotion
+ * (e.g., replication lag is acceptable, clone is not synchronous, etc.)
  */
 static void
 PromoteCloneNode(WorkerNode *cloneWorkerNode)
 {
+	/* Step 1: Connect to the clone node */
 	int connectionFlag = 0;
 	MultiConnection *cloneConnection = GetNodeConnection(connectionFlag,
 														 cloneWorkerNode->workerName,
@@ -215,11 +252,10 @@ PromoteCloneNode(WorkerNode *cloneWorkerNode)
 
 	if (PQstatus(cloneConnection->pgConn) != CONNECTION_OK)
 	{
-		ereport(ERROR, (errmsg("cannot connect to %s:%d to promote clone",
-							   cloneWorkerNode->workerName, cloneWorkerNode->workerPort)))
-		;
+		ReportConnectionError(cloneConnection, ERROR);
 	}
 
+	/* Step 2: Execute pg_promote() to promote the clone to primary */
 	const char *promoteQuery = "SELECT pg_promote(wait := true);";
 	int resultCode = SendRemoteCommand(cloneConnection, promoteQuery);
 	if (resultCode == 0)
@@ -229,7 +265,7 @@ PromoteCloneNode(WorkerNode *cloneWorkerNode)
 	ForgetResults(cloneConnection);
 	CloseConnection(cloneConnection);
 
-	/* connect again and verify the clone is promoted */
+	/* Step 3: Reconnect and verify the promotion was successful */
 	if (GetNodeIsInRecoveryStatus(cloneWorkerNode))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -258,8 +294,29 @@ BlockAllWritesToWorkerNode(WorkerNode *workerNode)
 	LockShardsInWorkerPlacementList(workerNode, AccessExclusiveLock);
 }
 
-
-bool
+/*
+ * GetNodeIsInRecoveryStatus checks if a PostgreSQL node is currently in recovery mode.
+ *
+ * This function connects to the specified worker node and executes pg_is_in_recovery()
+ * to determine if the node is still acting as a replica (in recovery) or has been
+ * promoted to a primary (not in recovery).
+ *
+ * Arguments:
+ * - workerNode: The WorkerNode to check recovery status for
+ *
+ * Returns:
+ * - true if the node is in recovery mode (acting as a replica)
+ * - false if the node is not in recovery mode (acting as a primary)
+ *
+ * The function will ERROR if:
+ * - Cannot establish connection to the node
+ * - The remote query fails
+ * - The query result cannot be parsed
+ *
+ * This is used after promoting a clone node to verify that the
+ * promotion was successful and the node is no longer in recovery mode.
+ */
+static bool
 GetNodeIsInRecoveryStatus(WorkerNode *workerNode)
 {
 	int connectionFlag = 0;
@@ -269,8 +326,7 @@ GetNodeIsInRecoveryStatus(WorkerNode *workerNode)
 
 	if (PQstatus(nodeConnection->pgConn) != CONNECTION_OK)
 	{
-		ereport(ERROR, (errmsg("cannot connect to %s:%d to check recovery status",
-							   workerNode->workerName, workerNode->workerPort)));
+		ReportConnectionError(nodeConnection, ERROR);
 	}
 
 	const char *recoveryQuery = "SELECT pg_is_in_recovery();";
@@ -313,6 +369,27 @@ GetNodeIsInRecoveryStatus(WorkerNode *workerNode)
 	return isInRecovery;
 }
 
+/*
+ * EnsureSingleNodePromotion ensures that only one node promotion operation
+ * can proceed at a time by acquiring necessary locks and checking for
+ * conflicting operations.
+ *
+ * This function performs the following safety checks:
+ * 1. Verifies no rebalance operations are currently running, as they would
+ *    conflict with the shard redistribution that occurs during promotion
+ * 2. Acquires exclusive placement colocation locks on all shards residing
+ *    on the primary node's group to prevent concurrent shard operations
+ *
+ * The locks are acquired in shard ID order to prevent deadlocks when
+ * multiple operations attempt to lock the same set of shards.
+ *
+ * Arguments:
+ * - primaryNode: The primary node whose shards need to be locked
+ *
+ * Throws ERROR if:
+ * - A rebalance operation is already running
+ * - Unable to acquire necessary locks
+ */
 
 static void
 EnsureSingleNodePromotion(WorkerNode *primaryNode)

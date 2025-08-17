@@ -5,8 +5,6 @@
 
 extern int64 GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *
 							   replicaWorkerNode);
-extern void EnsureReplicaIsNotSynchronous(WorkerNode *primaryWorkerNode, WorkerNode *
-										  replicaWorkerNode, char *operation);
 extern void EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *
 										replicaHostname, int replicaPort);
 extern void EnsureValidCloneMode(WorkerNode *primaryWorkerNode, char *cloneHostname, int
