@@ -439,7 +439,34 @@ AcquireShardPlacementLock(uint64_t shardId, int lockMode, Oid relationId,
 
 
 /*
- * TransferShards is the function for shard transfers.
+ * TransferShards is responsible for handling shard transfers.
+ *
+ * The optionFlags parameter controls the transfer behavior:
+ *
+ * - By default, shard colocation groups are treated as a single unit. This works
+ *   well for distributed tables, since they can contain multiple colocated shards
+ *   on the same node, and shard transfers can still be parallelized at the group level.
+ *
+ * - Reference tables are different: every reference table belongs to the same
+ *   colocation group but has only a single shard. To parallelize reference table
+ *   transfers, we must bypass the colocation group. The
+ *   SHARD_TRANSFER_SINGLE_SHARD_ONLY flag enables this behavior by transferring
+ *   only the specific shardId passed into the function, ignoring colocated shards.
+ *
+ * - Reference tables may also define foreign key relationships with each other.
+ *   Since we cannot create those relationships until all shards have been moved,
+ *   the SHARD_TRANSFER_SKIP_CREATE_RELATIONSHIPS flag is used to defer their
+ *   creation until shard transfer completes.
+ *
+ * - After shards are transferred, the SHARD_TRANSFER_CREATE_RELATIONSHIPS_ONLY
+ *   flag is used to create the foreign key relationships for already-transferred
+ *   reference tables.
+ *
+ * Currently, optionFlags are only used to customize reference table transfers.
+ * For distributed tables, optionFlags should always be set to 0.
+ * passing 0 as optionFlags means that the default behavior will be used for
+ * all aspects of the shard transfer. That is to consider all colocated shards
+ * as a single unit and return after creating the necessary relationships.
  */
 void
 TransferShards(int64 shardId, char *sourceNodeName,

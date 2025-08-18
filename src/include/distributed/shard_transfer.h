@@ -27,6 +27,8 @@ typedef enum
  * ShardTransferOperationMode is used to pass flags to the shard transfer
  * function. The flags are used to control the behavior of the transfer
  * function.
+ * Currently, optionFlags are only used to customize reference table transfers.
+ * For distributed tables, optionFlags should always be set to 0.
  */
 typedef enum
 {
