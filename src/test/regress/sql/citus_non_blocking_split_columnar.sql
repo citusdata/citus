@@ -1,9 +1,17 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA "citus_split_non_blocking_schema_columnar_partitioned";
 SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
 SET citus.next_shard_id TO 8970000;
 SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
+
+-- remove coordinator if it is added to pg_dist_node
+SELECT COUNT(master_remove_node(nodename, nodeport)) >= 0
+FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:master_port;
 
 -- Disable Deferred drop auto cleanup to avoid flaky tests.
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
@@ -306,3 +314,6 @@ SELECT public.wait_for_resource_cleanup();
     SELECT pg_reload_conf();
     DROP SCHEMA "citus_split_non_blocking_schema_columnar_partitioned" CASCADE;
 --END : Cleanup
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

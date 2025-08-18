@@ -1,4 +1,12 @@
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
+-- remove coordinator if it is added to pg_dist_node
+SELECT COUNT(master_remove_node(nodename, nodeport)) >= 0
+FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:master_port;
+
 SELECT success, result FROM run_command_on_all_nodes($cmd$
   ALTER SYSTEM SET columnar.compression TO 'none'
 $cmd$);
@@ -440,5 +448,48 @@ WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
 EXPLAIN (COSTS OFF, SUMMARY OFF)
 SELECT COUNT(*) FROM weird_col_explain;
 
+-- some tests with distributed & partitioned tables --
+
+CREATE TABLE dist_part_table(
+  dist_col INT,
+  part_col TIMESTAMPTZ,
+  col1 TEXT
+) PARTITION BY RANGE (part_col);
+
+-- create an index before creating a columnar partition
+CREATE INDEX dist_part_table_btree ON dist_part_table (col1);
+
+-- columnar partition
+CREATE TABLE p0 PARTITION OF dist_part_table
+FOR VALUES FROM ('2020-01-01') TO ('2020-02-01')
+USING columnar;
+
+SELECT create_distributed_table('dist_part_table', 'dist_col');
+
+-- columnar partition
+CREATE TABLE p1 PARTITION OF dist_part_table
+FOR VALUES FROM ('2020-02-01') TO ('2020-03-01')
+USING columnar;
+
+-- row partition
+CREATE TABLE p2 PARTITION OF dist_part_table
+FOR VALUES FROM ('2020-03-01') TO ('2020-04-01');
+
+INSERT INTO dist_part_table VALUES (1, '2020-03-15', 'str1', POINT(1, 1));
+
+-- insert into columnar partitions
+INSERT INTO dist_part_table VALUES (1, '2020-01-15', 'str2', POINT(2, 2));
+INSERT INTO dist_part_table VALUES (1, '2020-02-15', 'str3', POINT(3, 3));
+
+-- create another index after creating a columnar partition
+CREATE UNIQUE INDEX dist_part_table_unique ON dist_part_table (dist_col, part_col);
+
+-- verify that indexes are created on columnar partitions
+SELECT COUNT(*)=2 FROM pg_indexes WHERE tablename = 'p0';
+SELECT COUNT(*)=2 FROM pg_indexes WHERE tablename = 'p1';
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_citus_integration CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

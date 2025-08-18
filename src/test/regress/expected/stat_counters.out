@@ -701,7 +701,7 @@ RESET citus.enable_repartition_joins;
 -- ref_table, this increments query_execution_single_shard by 1 because it
 -- is a single shard query.
 CALL exec_query_and_check_query_counters($$
-    SELECT * FROM ref_table LEFT JOIN dist_table ON dist_table.a = ref_table.a
+    SELECT * FROM ref_table LEFT JOIN dist_table ON dist_table.b = ref_table.b
     $$,
     1, 1
 );
