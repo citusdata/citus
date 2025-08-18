@@ -2311,6 +2311,10 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	if (!updateQualsForOuterJoin && FindNodeMatchingCheckFunction((Node *) query,
 																  IsOuterJoinExpr))
 	{
+		/*
+		 * We have an outer join, so assume "might" need to update quals.
+		 * See the usage of this flag in QueryPushdownTaskCreate().
+		 */
 		updateQualsForOuterJoin = true;
 	}
 
@@ -2622,6 +2626,14 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	if (updateQualsForOuterJoin)
 	{
+		/*
+		 * QueryPushdownSqlTaskList() might set this when it detects an outer join,
+		 * even if the outer join is not surely known to be happening between a
+		 * recurring and a distributed rel. However, it's still safe to call
+		 * UpdateWhereClauseToPushdownRecurringOuterJoinWalker() here as it only
+		 * acts on the where clause if the join is happening between a
+		 * recurring and a distributed rel.
+		 */
 		UpdateWhereClauseToPushdownRecurringOuterJoinWalker((Node *) taskQuery,
 															relationShardList);
 	}
