@@ -1730,8 +1730,11 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 
 	if (HeapTupleIsValid(pgDistObjectTup))
 	{
-		Datum datumArray[Natts_pg_dist_object];
-		bool isNullArray[Natts_pg_dist_object];
+		Datum *datumArray = palloc(pgDistObjectTupleDesc->natts * sizeof(Datum));
+		bool *isNullArray = palloc(pgDistObjectTupleDesc->natts * sizeof(bool));
+
+		int forseDelegationIndex =
+			GetForceDelegationAttrIndexInPgDistObject(pgDistObjectTupleDesc);
 
 		heap_deform_tuple(pgDistObjectTup, pgDistObjectTupleDesc, datumArray,
 						  isNullArray);
@@ -1746,7 +1749,10 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 			DatumGetInt32(datumArray[Anum_pg_dist_object_colocationid - 1]);
 
 		cacheEntry->forceDelegation =
-			DatumGetBool(datumArray[Anum_pg_dist_object_force_delegation - 1]);
+			DatumGetBool(datumArray[forseDelegationIndex]);
+
+		pfree(datumArray);
+		pfree(isNullArray);
 	}
 	else
 	{
