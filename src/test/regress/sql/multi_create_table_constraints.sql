@@ -269,7 +269,7 @@ SELECT create_distributed_table('check_example', 'partition_col', 'hash');
 \c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'check_example_partition_col_key_365068'::regclass;
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365068'::regclass;
+SELECT DISTINCT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365068'::regclass;
 \c - - :master_host :master_port
 
 -- Index-based constraints are created with shard-extended names, but others
