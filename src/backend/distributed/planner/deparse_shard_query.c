@@ -209,11 +209,11 @@ UpdateTaskQueryString(Query *query, Task *task)
 
 
 /*
- * DefineQualsForShardInterval creates the necessary qual conditions over the
+ * CreateQualsForShardInterval creates the necessary qual conditions over the
  * given attnum and rtindex for the given shard interval.
  */
 Node *
-DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtindex)
+CreateQualsForShardInterval(RelationShard *relationShard, int attnum, int rtindex)
 {
 	uint64 shardId = relationShard->shardId;
 	Oid relationId = relationShard->relationId;
@@ -322,11 +322,11 @@ DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int rtinde
 
 
 /*
- * UpdateWhereClauseForOuterJoinWalker walks over the query tree and
+ * UpdateWhereClauseToPushdownRecurringOuterJoinWalker walks over the query tree and
  * updates the WHERE clause for outer joins satisfying feasibility conditions.
  */
 bool
-UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
+UpdateWhereClauseToPushdownRecurringOuterJoinWalker(Node *node, List *relationShardList)
 {
 	if (node == NULL)
 	{
@@ -335,14 +335,16 @@ UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
 
 	if (IsA(node, Query))
 	{
-		UpdateWhereClauseForOuterJoin((Query *) node, relationShardList);
-		return query_tree_walker((Query *) node, UpdateWhereClauseForOuterJoinWalker,
+		UpdateWhereClauseToPushdownRecurringOuterJoin((Query *) node, relationShardList);
+		return query_tree_walker((Query *) node,
+								 UpdateWhereClauseToPushdownRecurringOuterJoinWalker,
 								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}
 
 	if (!IsA(node, RangeTblEntry))
 	{
-		return expression_tree_walker(node, UpdateWhereClauseForOuterJoinWalker,
+		return expression_tree_walker(node,
+									  UpdateWhereClauseToPushdownRecurringOuterJoinWalker,
 									  relationShardList);
 	}
 
@@ -351,7 +353,7 @@ UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
 
 
 /*
- * UpdateWhereClauseForOuterJoin
+ * UpdateWhereClauseToPushdownRecurringOuterJoin
  *
  * Inject shard interval predicates into the query WHERE clause for certain
  * outer joins to make the join semantically correct when distributed.
@@ -367,7 +369,7 @@ UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
  *
  * What the function does:
  *   1. Iterate over the top-level jointree->fromlist.
- *   2. For each JoinExpr call CheckPushDownFeasibilityAndComputeIndexes() which:
+ *   2. For each JoinExpr call CanPushdownRecurringOuterJoinExtended() which:
  *        - Verifies shape / join type is eligible.
  *        - Returns:
  *            outerRtIndex : RT index whose column we will constrain,
@@ -376,7 +378,7 @@ UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
  *                           This is compared to partition column of innerRte.
  *   3. Find the RelationShard for the inner distributed table (innerRte->relid)
  *      in relationShardList; skip if absent (no fixed shard chosen).
- *   4. Build the shard qualification with DefineQualsForShardInterval():
+ *   4. Build the shard qualification with CreateQualsForShardInterval():
  *        (minValue < hash(partcol) AND hash(partcol) <= maxValue)
  *      and, for the first shard only, OR (partcol IS NULL).
  *      The Var refers to (outerRtIndex, attnum) so the restriction applies to
@@ -386,7 +388,7 @@ UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList)
  * The function does not return anything, it modifies the query in place.
  */
 void
-UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
+UpdateWhereClauseToPushdownRecurringOuterJoin(Query *query, List *relationShardList)
 {
 	if (query == NULL)
 	{
@@ -416,8 +418,8 @@ UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
 		RangeTblEntry *outerRte = NULL;
 		int outerRtIndex = -1;
 		int attnum;
-		if (!CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
-													   &outerRte, &innerRte, &attnum))
+		if (!CanPushdownRecurringOuterJoinExtended(joinExpr, query, &outerRtIndex,
+												   &outerRte, &innerRte, &attnum))
 		{
 			continue;
 		}
@@ -438,7 +440,7 @@ UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList)
 			continue;
 		}
 
-		Node *shardIntervalBoundQuals = DefineQualsForShardInterval(relationShard, attnum,
+		Node *shardIntervalBoundQuals = CreateQualsForShardInterval(relationShard, attnum,
 																	outerRtIndex);
 		if (fromExpr->quals == NULL)
 		{

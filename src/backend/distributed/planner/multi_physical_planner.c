@@ -2622,7 +2622,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	if (updateQualsForOuterJoin)
 	{
-		UpdateWhereClauseForOuterJoinWalker((Node *) taskQuery, relationShardList);
+		UpdateWhereClauseToPushdownRecurringOuterJoinWalker((Node *) taskQuery,
+															relationShardList);
 	}
 
 
