@@ -1,36 +1,26 @@
 ### citus v13.2.0 (August 18, 2025) ###
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes potential memory corruptions that could happen when accessing pg_dist_transaction after a Citus downgrade is followed by a Citus upgrade.
+* Adds citus.enable_recurring_outer_join_pushdown GUC (enabled by default)
+  to allow pushing down LEFT/RIGHT outer joins having a reference table in
+  the outer side and a distributed table on the inner side (e.g.,
+  \<reference table\> LEFT JOIN \<distributed table\>) (#7973)
 
-* Not automatically create citus_columnar when there are no relations using it.
+* Adds citus.enable_local_execution_local_plan GUC to allow avoiding
+  unnecessary query deparsing to improve performance of fast-path queries
+  targeting local shards (#8035)
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixes potential memory corruptions that could happen when accessing pg_dist_background_task after a Citus downgrade is followed by a Citus upgrade.
+* Avoids automatically creating citus_columnar when there are no relations
+  using it (#8081)
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Introduce a new check to push down a query including union and outer join to fix #8091 .
+* Makes sure to check if the distribution key is in the target list before
+  pushing down a query with a union and an outer join (#8092)
 
-* Automatically updates dynamic_library_path when CDC is enabled
+* Fixes a bug in EXPLAIN ANALYZE to prevent unintended (duplicate) execution
+  of the (sub)plans during the explain phase (#8017)
 
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Fixed a bug in EXPLAIN ANALYZE to prevent unintended (duplicate) execution of the (sub)plans during the explain phase. 
-
-* function comment correctio
-
-* Fix assert expression on number of shards
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds citus.enable_local_execution_local_plan GUC to allow avoiding unnecessary query deparsing to improve performance of fast-path queries targeting local shards.
-
-* Automatically updates dynamic_library_path when CDC is enabled
-
-TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
-* Adds skip_qualify_public param to `shard_name()` UDF to allow qualifying for "public" schema when needed.
-
-* bumbed codeql version to v
-
-* bumbed codeql version to v
+* Fixes potential memory corruptions that could happen when accessing
+  various catalog tables after a Citus downgrade is followed by a Citus
+  upgrade (#7950, #8120, #8124, #8121, #8114)
 
 ### citus v13.1.0 (May 30th, 2025) ###
 
