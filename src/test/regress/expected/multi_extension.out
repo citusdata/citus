@@ -1638,9 +1638,12 @@ ALTER EXTENSION citus UPDATE TO '13.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
                                                    previous_object                                                    |                                                                                       current_object
 ---------------------------------------------------------------------
+ function citus_rebalance_start(name,boolean,citus.shard_transfer_mode) bigint                                        |
  function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision) |
+                                                                                                                      | function citus_internal.citus_internal_copy_single_shard_placement(bigint,integer,integer,integer,citus.shard_transfer_mode) void
+                                                                                                                      | function citus_rebalance_start(name,boolean,citus.shard_transfer_mode,boolean,boolean) bigint
                                                                                                                       | function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision, execution_ntuples double precision, execution_nloops double precision)
-(2 rows)
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

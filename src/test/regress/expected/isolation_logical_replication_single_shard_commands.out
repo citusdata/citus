@@ -594,10 +594,15 @@ step s2-move-placement:
  SELECT master_move_shard_placement(
   get_shard_id_for_distribution_column('logical_replicate_placement', 4),
   'localhost', 57637, 'localhost', 57638);
+ <waiting ...>
+step s1-end: 
+	COMMIT;
 
-ERROR:  could not acquire the lock required to move public.logical_replicate_placement
-step s1-end:
- COMMIT;
+step s2-move-placement: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
 
 step s2-end:
    COMMIT;

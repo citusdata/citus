@@ -30,7 +30,7 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value(anyelement)'
   AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value_agg(anyelement,anyelement)'
 ORDER BY 1;
-                                                       description
+                                                         description
 ---------------------------------------------------------------------
  event trigger citus_cascade_to_partition
  function alter_distributed_table(regclass,text,integer,text,boolean)
@@ -86,6 +86,7 @@ ORDER BY 1;
  function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text)
  function citus_internal.add_tenant_schema(oid,integer)
  function citus_internal.adjust_local_clock_to_remote(cluster_clock)
+ function citus_internal.citus_internal_copy_single_shard_placement(bigint,integer,integer,integer,citus.shard_transfer_mode)
  function citus_internal.database_command(text)
  function citus_internal.delete_colocation_metadata(integer)
  function citus_internal.delete_partition_metadata(regclass)
@@ -156,7 +157,7 @@ ORDER BY 1;
  function citus_pid_for_gpid(bigint)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
- function citus_rebalance_start(name,boolean,citus.shard_transfer_mode)
+ function citus_rebalance_start(name,boolean,citus.shard_transfer_mode,boolean,boolean)
  function citus_rebalance_status(boolean)
  function citus_rebalance_stop()
  function citus_rebalance_wait()
@@ -394,6 +395,6 @@ ORDER BY 1;
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(362 rows)
+(363 rows)
 
 DROP TABLE extension_basic_types;
