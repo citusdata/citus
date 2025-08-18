@@ -1481,6 +1481,21 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_recurring_outer_join_pushdown",
+		gettext_noop("Enables outer join pushdown for recurring relations."),
+		gettext_noop("When enabled, Citus will try to push down outer joins "
+					 "between recurring and non-recurring relations to workers "
+					 "whenever feasible by introducing correctness constraints "
+					 "to the where clause of the query. Note that if this is "
+					 "disabled, or push down is not feasible, the result will "
+					 "be computed via recursive planning."),
+		&EnableRecurringOuterJoinPushdown,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_repartition_joins",
 		gettext_noop("Allows Citus to repartition data between nodes."),
 		NULL,

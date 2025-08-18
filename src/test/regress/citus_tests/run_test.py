@@ -215,7 +215,7 @@ DEPS = {
     ),
     "limit_intermediate_size": TestDeps("base_schedule"),
     "columnar_drop": TestDeps(
-        "minimal_schedule",
+        "minimal_columnar_schedule",
         ["columnar_create", "columnar_load"],
         repeatable=False,
     ),
@@ -239,6 +239,20 @@ DEPS = {
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "multi_subquery_in_where_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_limit_clause_approximate": TestDeps(
+        "minimal_schedule",
+        ["multi_create_table", "multi_create_users", "multi_load_data"],
+    ),
+    "multi_single_relation_subquery": TestDeps(
+        "minimal_schedule",
+        ["multi_create_table", "multi_create_users", "multi_load_data"],
+    ),
+    "multi_subquery_complex_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_in_where_reference_clause": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
 }
@@ -341,6 +355,15 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
         "failure"
     ):
         make_recipe = "check-failure-custom-schedule"
+    elif test_name.startswith("columnar"):
+        if dependencies.schedule is None:
+            # Columanar isolation tests don't depend on a base schedule,
+            # so this must be a columnar isolation test.
+            make_recipe = "check-columnar-isolation-custom-schedule"
+        elif dependencies.schedule == "minimal_columnar_schedule":
+            make_recipe = "check-columnar-custom-schedule"
+        else:
+            raise Exception("Columnar test could not be found in any schedule")
     else:
         make_recipe = "check-custom-schedule"
 
@@ -358,6 +381,9 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
 
 def default_base_schedule(test_schedule, args):
     if "isolation" in test_schedule:
+        if "columnar" in test_schedule:
+            # we don't have pre-requisites for columnar isolation tests
+            return None
         return "base_isolation_schedule"
 
     if "failure" in test_schedule:
@@ -379,6 +405,9 @@ def default_base_schedule(test_schedule, args):
 
     if "pg_upgrade" in test_schedule:
         return "minimal_pg_upgrade_schedule"
+
+    if "columnar" in test_schedule:
+        return "minimal_columnar_schedule"
 
     if test_schedule in ARBITRARY_SCHEDULE_NAMES:
         print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")

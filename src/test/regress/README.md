@@ -54,6 +54,8 @@ of the following commands to do so:
 ```bash
 # If your tests needs almost no setup you can use check-minimal
 make install -j9 && make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_utility_warnings'
+# For columnar specific tests, use check-columnar-minimal instead of check-minimal
+make install -j9 && make -C src/test/regress/ check-columnar-minimal
 # Often tests need some testing data, if you get missing table errors using
 # check-minimal you should try check-base
 make install -j9 && make -C src/test/regress/ check-base EXTRA_TESTS='with_prepare'
@@ -89,6 +91,13 @@ in the `results` directory to the `expected` directory, e.g.:
 
 ```bash
 make install -j9 && make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_utility_warnings'
+cp src/test/regress/{results,expected}/multi_utility_warnings.out
+```
+
+Or if it's a columnar test, you can use:
+
+```bash
+make install -j9 && make -C src/test/regress/ check-columnar-minimal EXTRA_TESTS='multi_utility_warnings'
 cp src/test/regress/{results,expected}/multi_utility_warnings.out
 ```
 
