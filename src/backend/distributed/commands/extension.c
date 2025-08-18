@@ -25,6 +25,12 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
+#include "pg_version_constants.h"
+
+#if PG_VERSION_NUM < PG_VERSION_17
+#include "catalog/pg_am_d.h"
+#endif
+
 #include "citus_version.h"
 
 #include "columnar/columnar.h"
@@ -52,6 +58,10 @@ static void MarkExistingObjectDependenciesDistributedIfSupported(void);
 static List * GetAllViews(void);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
+static bool HasAnyRelationsUsingOldColumnar(void);
+static Oid GetOldColumnarAMIdIfExists(void);
+static bool AccessMethodDependsOnAnyExtensions(Oid accessMethodId);
+static bool HasAnyRelationsUsingAccessMethod(Oid accessMethodId);
 static Node * RecreateExtensionStmt(Oid extensionOid);
 static List * GenerateGrantCommandsOnExtensionDependentFDWs(Oid extensionId);
 
@@ -783,7 +793,8 @@ PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree)
 		/*citus version >= 11.1 requires install citus_columnar first*/
 		if (versionNumber >= 1110 && !CitusHasBeenLoaded())
 		{
-			if (get_extension_oid("citus_columnar", true) == InvalidOid)
+			if (get_extension_oid("citus_columnar", true) == InvalidOid &&
+				(versionNumber < 1320 || HasAnyRelationsUsingOldColumnar()))
 			{
 				CreateExtensionWithVersion("citus_columnar", NULL);
 			}
@@ -894,9 +905,10 @@ PreprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
 		double newVersionNumber = GetExtensionVersionNumber(pstrdup(newVersion));
 
 		/*alter extension citus update to version >= 11.1-1, and no citus_columnar installed */
-		if (newVersionNumber >= 1110 && citusColumnarOid == InvalidOid)
+		if (newVersionNumber >= 1110 && citusColumnarOid == InvalidOid &&
+			(newVersionNumber < 1320 || HasAnyRelationsUsingOldColumnar()))
 		{
-			/*it's upgrade citus to 11.1-1 or further version */
+			/*it's upgrade citus to 11.1-1 or further version and there are relations using old columnar */
 			CreateExtensionWithVersion("citus_columnar", CITUS_COLUMNAR_INTERNAL_VERSION);
 		}
 		else if (newVersionNumber < 1110 && citusColumnarOid != InvalidOid)
@@ -911,13 +923,125 @@ PreprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
 		int versionNumber = (int) (100 * strtod(CITUS_MAJORVERSION, NULL));
 		if (versionNumber >= 1110)
 		{
-			if (citusColumnarOid == InvalidOid)
+			if (citusColumnarOid == InvalidOid &&
+				(versionNumber < 1320 || HasAnyRelationsUsingOldColumnar()))
 			{
 				CreateExtensionWithVersion("citus_columnar",
 										   CITUS_COLUMNAR_INTERNAL_VERSION);
 			}
 		}
 	}
+}
+
+
+/*
+ * HasAnyRelationsUsingOldColumnar returns true if there are any relations
+ * using the old columnar access method.
+ */
+static bool
+HasAnyRelationsUsingOldColumnar(void)
+{
+	Oid oldColumnarAMId = GetOldColumnarAMIdIfExists();
+	return OidIsValid(oldColumnarAMId) &&
+		   HasAnyRelationsUsingAccessMethod(oldColumnarAMId);
+}
+
+
+/*
+ * GetOldColumnarAMIdIfExists returns the oid of the old columnar access
+ * method, i.e., the columnar access method that we had as part of "citus"
+ * extension before we split it into "citus_columnar" at version 11.1, if
+ * it exists. Otherwise, it returns InvalidOid.
+ *
+ * We know that it's "old columnar" only if the access method doesn't depend
+ * on any extensions. This is because, in citus--11.0-4--11.1-1.sql, we
+ * detach the columnar objects (including the access method) from citus
+ * in preparation for splitting of the columnar into a separate extension.
+ */
+static Oid
+GetOldColumnarAMIdIfExists(void)
+{
+	Oid columnarAMId = get_am_oid("columnar", true);
+	if (OidIsValid(columnarAMId) && !AccessMethodDependsOnAnyExtensions(columnarAMId))
+	{
+		return columnarAMId;
+	}
+
+	return InvalidOid;
+}
+
+
+/*
+ * AccessMethodDependsOnAnyExtensions returns true if the access method
+ * with the given accessMethodId depends on any extensions.
+ */
+static bool
+AccessMethodDependsOnAnyExtensions(Oid accessMethodId)
+{
+	ScanKeyData key[3];
+
+	Relation pgDepend = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(AccessMethodRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(accessMethodId));
+
+	ScanKeyInit(&key[2],
+				Anum_pg_depend_objsubid,
+				BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(0));
+
+	SysScanDesc scan = systable_beginscan(pgDepend, DependDependerIndexId, true,
+										  NULL, 3, key);
+
+	bool result = false;
+
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scan)))
+	{
+		Form_pg_depend dependForm = (Form_pg_depend) GETSTRUCT(heapTuple);
+
+		if (dependForm->refclassid == ExtensionRelationId)
+		{
+			result = true;
+			break;
+		}
+	}
+
+	systable_endscan(scan);
+	table_close(pgDepend, AccessShareLock);
+
+	return result;
+}
+
+
+/*
+ * HasAnyRelationsUsingAccessMethod returns true if there are any relations
+ * using the access method with the given accessMethodId.
+ */
+static bool
+HasAnyRelationsUsingAccessMethod(Oid accessMethodId)
+{
+	ScanKeyData key[1];
+	Relation pgClass = table_open(RelationRelationId, AccessShareLock);
+	ScanKeyInit(&key[0],
+				Anum_pg_class_relam,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(accessMethodId));
+
+	SysScanDesc scan = systable_beginscan(pgClass, InvalidOid, false, NULL, 1, key);
+
+	bool result = HeapTupleIsValid(systable_getnext(scan));
+
+	systable_endscan(scan);
+	table_close(pgClass, AccessShareLock);
+
+	return result;
 }
 
 
@@ -959,7 +1083,7 @@ PostprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
 	{
 		/*alter extension citus update, need upgrade citus_columnar from Y to Z*/
 		int versionNumber = (int) (100 * strtod(CITUS_MAJORVERSION, NULL));
-		if (versionNumber >= 1110)
+		if (versionNumber >= 1110 && citusColumnarOid != InvalidOid)
 		{
 			char *curColumnarVersion = get_extension_version(citusColumnarOid);
 			if (strcmp(curColumnarVersion, CITUS_COLUMNAR_INTERNAL_VERSION) == 0)

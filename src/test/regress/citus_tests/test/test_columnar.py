@@ -3,6 +3,8 @@ import pytest
 
 
 def test_freezing(coord):
+    coord.sql("CREATE EXTENSION IF NOT EXISTS citus_columnar")
+
     coord.configure("vacuum_freeze_min_age = 50000", "vacuum_freeze_table_age = 50000")
     coord.restart()
 
@@ -38,8 +40,12 @@ def test_freezing(coord):
     )
     assert frozen_age < 70_000, "columnar table was not frozen"
 
+    coord.sql("DROP EXTENSION citus_columnar CASCADE")
+
 
 def test_recovery(coord):
+    coord.sql("CREATE EXTENSION IF NOT EXISTS citus_columnar")
+
     # create columnar table and insert simple data to verify the data survives a crash
     coord.sql("CREATE TABLE t1 (a int, b text) USING columnar")
     coord.sql(
@@ -115,3 +121,5 @@ def test_recovery(coord):
 
     row_count = coord.sql_value("SELECT count(*) FROM t1")
     assert row_count == 1007, "columnar didn't recover after copy"
+
+    coord.sql("DROP EXTENSION citus_columnar CASCADE")

@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA alter_distributed_table;
 SET search_path TO alter_distributed_table;
 SET citus.shard_count TO 4;
@@ -482,3 +486,6 @@ RESET search_path;
 DROP SCHEMA alter_distributed_table CASCADE;
 DROP SCHEMA schema_to_test_alter_dist_table CASCADE;
 DROP USER alter_dist_table_test_user;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;
