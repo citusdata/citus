@@ -22,6 +22,12 @@
   various catalog tables after a Citus downgrade is followed by a Citus
   upgrade (#7950, #8120, #8124, #8121, #8114)
 
+* Fixes UPDATE statements with indirection and array/jsonb subscripting with
+  more than one field (#7675)
+
+* Fixes an assertion failure when an expression in the query references a
+  CTE (#8106)
+
 ### citus v13.1.0 (May 30th, 2025) ###
 
 * Adds `citus_stat_counters` view that can be used to query
