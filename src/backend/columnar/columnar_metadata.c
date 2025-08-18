@@ -1546,7 +1546,7 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
 	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 
 	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
-	bool *isNullArray = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 
 	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
