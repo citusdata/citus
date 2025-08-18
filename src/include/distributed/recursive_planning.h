@@ -54,11 +54,11 @@ extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
 extern bool IsRelationLocalTableOrMatView(Oid relationId);
 extern bool ContainsReferencesToOuterQuery(Query *query);
 extern void UpdateVarNosInNode(Node *node, Index newVarNo);
-extern bool CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
-													  int *outerRtIndex,
-													  RangeTblEntry **outerRte,
-													  RangeTblEntry **distRte,
-													  int *attnum);
+extern bool CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
+												  int *outerRtIndex,
+												  RangeTblEntry **outerRte,
+												  RangeTblEntry **distRte,
+												  int *attnum);
 bool ResolveBaseVarFromSubquery(Var *var, Query *query, Var **baseVar,
 								RangeTblEntry **baseRte);
 #endif /* RECURSIVE_PLANNING_H */

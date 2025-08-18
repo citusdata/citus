@@ -25,10 +25,12 @@
 
 extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
-extern void UpdateWhereClauseForOuterJoin(Query *query, List *relationShardList);
-extern bool UpdateWhereClauseForOuterJoinWalker(Node *node, List *relationShardList);
-Node * DefineQualsForShardInterval(RelationShard *relationShard, int attnum, int
-								   outerRtIndex);
+extern void UpdateWhereClauseToPushdownRecurringOuterJoin(Query *query,
+														  List *relationShardList);
+extern bool UpdateWhereClauseToPushdownRecurringOuterJoinWalker(Node *node,
+																List *relationShardList);
+Node * CreateQualsForShardInterval(RelationShard *relationShard, int attnum,
+								   int outerRtIndex);
 extern void SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);
 extern void SetTaskQueryStringList(Task *task, List *queryStringList);

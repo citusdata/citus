@@ -2859,7 +2859,7 @@ JoinTreeContainsLateral(Node *node, List *rtable)
 
 
 /*
- * CheckPushDownFeasibilityAndComputeIndexes checks if the given join expression
+ * CanPushdownRecurringOuterJoinExtended checks if the given join expression
  * is an outer join between recurring rel -on outer part- and a distributed
  * rel -on the inner side- and if it is feasible to push down the join. If feasible,
  * it computes the outer relation's range table index, the outer relation's
@@ -2867,9 +2867,9 @@ JoinTreeContainsLateral(Node *node, List *rtable)
  * attribute number of the partition column in the outer relation.
  */
 bool
-CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
-										  int *outerRtIndex, RangeTblEntry **outerRte,
-										  RangeTblEntry **distRte, int *attnum)
+CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
+									  int *outerRtIndex, RangeTblEntry **outerRte,
+									  RangeTblEntry **distRte, int *attnum)
 {
 	if (!EnableRecurringOuterJoinPushdown)
 	{
@@ -3013,8 +3013,8 @@ CheckPushDownFeasibilityAndComputeIndexes(JoinExpr *joinExpr, Query *query,
 
 /*
  * CanPushdownRecurringOuterJoin initializes input variables to call
- * CheckPushDownFeasibilityAndComputeIndexes.
- * See CheckPushDownFeasibilityAndComputeIndexes for more details.
+ * CanPushdownRecurringOuterJoinExtended.
+ * See CanPushdownRecurringOuterJoinExtended for more details.
  */
 bool
 CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query)
@@ -3023,6 +3023,6 @@ CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query)
 	RangeTblEntry *outerRte = NULL;
 	RangeTblEntry *innerRte = NULL;
 	int attnum;
-	return CheckPushDownFeasibilityAndComputeIndexes(joinExpr, query, &outerRtIndex,
-													 &outerRte, &innerRte, &attnum);
+	return CanPushdownRecurringOuterJoinExtended(joinExpr, query, &outerRtIndex,
+												 &outerRte, &innerRte, &attnum);
 }
