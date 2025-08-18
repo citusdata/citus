@@ -786,8 +786,10 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 					}
 					else
 					{
-						ereport(DEBUG3, (errmsg(
-											 "a push down safe left join with recurring left side")));
+						ereport(DEBUG1, (errmsg("can pushdown the left join with "
+												"the recurring relation on the left "
+												"side and distributed relation on "
+												"the right side")));
 						leftNodeRecurs = false; /* left node will be pushed down */
 					}
 				}
@@ -819,8 +821,10 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 					}
 					else
 					{
-						ereport(DEBUG3, (errmsg(
-											 "a push down safe right join with recurring left side")));
+						ereport(DEBUG1, (errmsg("can pushdown the right join with "
+												"the recurring relation on the right "
+												"side and distributed relation on "
+												"the left side")));
 						rightNodeRecurs = false; /* right node will be pushed down */
 					}
 				}
@@ -2705,16 +2709,26 @@ hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
 static bool
 CanPushdownRecurringOuterJoinOnOuterRTE(RangeTblEntry *rte)
 {
-	if (IsCitusTable(rte->relid) && IsCitusTableType(rte->relid, REFERENCE_TABLE))
+	if (rte->relid != RTE_RELATION)
 	{
-		return true;
+		ereport(DEBUG2, (errmsg("cannot pushdown the recurring outer "
+								"join because recurring relation \"%s\" "
+								"(rte kind: %d) is not a table",
+								GetRelationNameAndAliasName(rte), rte->rtekind)));
+	}
+	else if (!IsCitusTableType(rte->relid, REFERENCE_TABLE))
+	{
+		ereport(DEBUG2, (errmsg("cannot pushdown the recurring outer "
+								"join because recurring relation \"%s\" "
+								"is not a reference table",
+								GetRelationNameAndAliasName(rte))));
 	}
 	else
 	{
-		ereport(DEBUG5, (errmsg("RTE type %d is not safe for pushdown",
-								rte->rtekind)));
-		return false;
+		return true;
 	}
+
+	return false;
 }
 
 
@@ -2764,22 +2778,23 @@ ResolveBaseVarFromSubquery(Var *var, Query *query,
  * it is the partition column and hash distributed, otherwise it returns false.
  */
 static bool
-CanPushdownRecurringOuterJoinOnInnerVar(Var *innerVar, RangeTblEntry *rte)
+CanPushdownRecurringOuterJoinOnInnerVar(Var *innerVar, RangeTblEntry *citusTableRte)
 {
-	if (!innerVar || !rte)
+	if (!innerVar || innerVar->varattno == InvalidAttrNumber)
 	{
+		ereport(DEBUG3, (errmsg("cannot pushdown the recurring outer join on this qual "
+								"because inner variable is NULL or doesn't reference to "
+								"a valid attribute number")));
 		return false;
 	}
 
-	if (innerVar->varattno == InvalidAttrNumber)
-	{
-		return false;
-	}
-
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(rte->relid);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(citusTableRte->relid);
 
 	if (!cacheEntry || GetCitusTableType(cacheEntry) != HASH_DISTRIBUTED)
 	{
+		ereport(DEBUG3, (errmsg("cannot pushdown the recurring outer join on this qual "
+								"because inner variable is not part of a hash distributed "
+								"table")));
 		return false;
 	}
 
@@ -2790,6 +2805,9 @@ CanPushdownRecurringOuterJoinOnInnerVar(Var *innerVar, RangeTblEntry *rte)
 		return true;
 	}
 
+	ereport(DEBUG3, (errmsg("cannot pushdown the recurring outer join on this qual "
+							"because inner variable is not part of the distribution "
+							"column of the hash distributed table")));
 	return false;
 }
 
@@ -2873,9 +2891,15 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 {
 	if (!EnableRecurringOuterJoinPushdown)
 	{
+		ereport(DEBUG1, (errmsg("cannot pushdown the recurring outer joins "
+								"because citus.enable_recurring_outer_join_pushdown "
+								"was disabled")));
 		return false;
 	}
 
+	/* TODO: ideally should not have this check once we implement the changes to not call */
+	/*       CanPushdownRecurringOuterJoinExtended in deparse_shard_query.c */
+	/*       when we don't have an outer join between a recurring and a distributed rel */
 	if (!IS_OUTER_JOIN(joinExpr->jointype))
 	{
 		return false;
@@ -2883,22 +2907,25 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 
 	if (joinExpr->jointype != JOIN_LEFT && joinExpr->jointype != JOIN_RIGHT)
 	{
-		return false;
+		ereport(DEBUG2, (errmsg("cannot pushdown the recurring outer "
+								"join because join is not a left or "
+								"right outer join")));
 	}
 
 	/* Push down for chained joins is not supported in this path. */
 	if (IsA(joinExpr->rarg, JoinExpr) || IsA(joinExpr->larg, JoinExpr))
 	{
-		ereport(DEBUG5, (errmsg(
-							 "One side is a join expression, pushdown is not supported in this path.")));
+		ereport(DEBUG2, (errmsg("cannot pushdown the recurring outer "
+								"join because chained joins are not "
+								"supported yet")));
 		return false;
 	}
 
 	/* Push down for joins with fromExpr on one side is not supported in this path. */
 	if (!IsA(joinExpr->larg, RangeTblRef) || !IsA(joinExpr->rarg, RangeTblRef))
 	{
-		ereport(DEBUG5, (errmsg(
-							 "One side is not a RangeTblRef, pushdown is not supported in this path.")));
+		ereport(DEBUG2, (errmsg("cannot pushdown the recurring outer "
+								"join because one side is a FromExpr")));
 		return false;
 	}
 
@@ -2922,11 +2949,12 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 	 * This check can be improved to support the cases where the lateral reference
 	 * does not cause an error in the final planner checks.
 	 */
-	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) || JoinTreeContainsLateral(
-			joinExpr->larg, query->rtable))
+	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) ||
+		JoinTreeContainsLateral(joinExpr->larg, query->rtable))
 	{
-		ereport(DEBUG5, (errmsg(
-							 "Lateral join is not supported for pushdown in this path.")));
+		ereport(DEBUG2, (errmsg("cannot pushdown the recurring outer "
+								"join because lateral joins are not "
+								"supported yet")));
 		return false;
 	}
 
@@ -2934,6 +2962,8 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 	List *joinClauseList = make_ands_implicit((Expr *) joinExpr->quals);
 	if (joinClauseList == NIL)
 	{
+		ereport(DEBUG2, (errmsg("cannot pushdown the recurring outer "
+								"join because join has no clauses")));
 		return false;
 	}
 
@@ -3006,6 +3036,11 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 			}
 		}
 	}
+
+	ereport(DEBUG2, (errmsg(
+						 "cannot pushdown the recurring outer join because no eligible "
+						 "join quals were found to inject quals for recurring rel to "
+						 "match distribution column of the distributed table on shards")));
 
 	return false;
 }

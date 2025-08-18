@@ -428,9 +428,10 @@ UpdateWhereClauseToPushdownRecurringOuterJoin(Query *query, List *relationShardL
 		{
 			continue;
 		}
-		ereport(DEBUG5, (errmsg(
-							 "Distributed table from the inner part of the outer join: %s.",
-							 innerRte->eref->aliasname)));
+		ereport(DEBUG1, (errmsg("injecting quals for the distributed rel \"%s\" to "
+								"pushdown the outer join because the outer rel is a "
+								"recurring rel",
+								GetRelationNameAndAliasName(innerRte))));
 
 		RelationShard *relationShard = FindRelationShard(innerRte->relid,
 														 relationShardList);
