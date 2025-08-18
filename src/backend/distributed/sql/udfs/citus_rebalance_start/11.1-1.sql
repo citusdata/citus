@@ -1,5 +1,3 @@
-DROP FUNCTION IF EXISTS pg_catalog.citus_rebalance_start(name, boolean, citus.shard_transfer_mode, boolean, boolean);
-
 CREATE OR REPLACE FUNCTION pg_catalog.citus_rebalance_start(
         rebalance_strategy name DEFAULT NULL,
         drain_only boolean DEFAULT false,
