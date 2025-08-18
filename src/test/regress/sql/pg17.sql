@@ -5,6 +5,10 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
 \gset
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 -- PG17 has the capabilty to pull up a correlated ANY subquery to a join if
 -- the subquery only refers to its immediate parent query. Previously, the
 -- subquery needed to be implemented as a SubPlan node, typically as a
@@ -165,8 +169,26 @@ WHERE d1.user_id = users.user_id
       AND users.dept IN (3,4)
 	AND users.user_id = d2.user_id) dt
 GROUP BY dept;
-RESET client_min_messages;
 
+SET client_min_messages TO DEBUG3;
+CREATE TABLE users_ref(user_id int, dept int);
+SELECT create_reference_table('users_ref');
+INSERT INTO users_ref VALUES (1, 3), (2, 4), (3, 3), (4, 4);
+-- In PG17, the planner can pull up a correlated ANY subquery to a join, resulting
+-- in a different query plan compared to PG16. Specifically, for the following query
+-- the rewritten query has a lateral recurring outer join, which requires recursive
+-- computation of the inner part. However, this join is not analyzed during the recursive
+-- planning step, as it is performed on the original query structure. As a result,
+-- the lateral join is not recursively planned, and a lateral join error is raised
+-- at a later stage.
+SELECT user_id FROM
+users RIGHT JOIN users_ref USING (user_id)
+WHERE users_ref.dept IN
+(
+  SELECT events.event_type FROM events WHERE events.user_id = users.user_id
+) ORDER BY 1 LIMIT 1;
+
+RESET client_min_messages;
 RESET search_path;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
 
@@ -1018,12 +1040,14 @@ CREATE TABLE test_partition_2 PARTITION OF test_partitioned_alter
 SELECT create_distributed_table('test_partitioned_alter', 'id');
 
 -- Step 4: Verify that the table and partitions are created and distributed correctly on the coordinator
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partitioned_alter';
 
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
 
@@ -1032,13 +1056,15 @@ ORDER BY relname;
 SET search_path TO pg17;
 
 -- Verify the table's access method on the worker node
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partitioned_alter';
 
 -- Verify the partitions' access methods on the worker node
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
 
@@ -1055,13 +1081,15 @@ ALTER TABLE test_partitioned_alter SET ACCESS METHOD columnar;
 -- Reference: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=374c7a2290429eac3217b0c7b0b485db9c2bcc72
 
 -- Verify the parent table's access method
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partitioned_alter';
 
 -- Verify the partitions' access methods
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
 
@@ -1069,8 +1097,9 @@ ORDER BY relname;
 CREATE TABLE test_partition_3 PARTITION OF test_partitioned_alter
   FOR VALUES FROM (200) TO (300);
 
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partition_3';
 
 -- Step 6 (Repeat on a Worker Node): Verify that the new partition is created correctly
@@ -1078,8 +1107,9 @@ WHERE relname = 'test_partition_3';
 SET search_path TO pg17;
 
 -- Verify the new partition's access method on the worker node
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partition_3';
 
 \c - - - :master_port
@@ -1764,3 +1794,6 @@ RESET client_min_messages;
 
 DROP ROLE regress_maintain;
 DROP ROLE regress_no_maintain;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA "Mx Regular User";
 SET search_path TO "Mx Regular User";
 
@@ -345,3 +349,6 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 DROP SCHEMA "Mx Regular User" CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

@@ -3,6 +3,9 @@
 -- and compare the final results of the target tables in Postgres and Citus.
 -- The results should match. This process is repeated for various combinations
 -- of MERGE SQL.
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
 DROP SCHEMA IF EXISTS merge_repartition1_schema CASCADE;
 NOTICE:  schema "merge_repartition1_schema" does not exist, skipping
 CREATE SCHEMA merge_repartition1_schema;
@@ -1339,3 +1342,5 @@ drop cascades to function check_data(text,text,text,text)
 drop cascades to function compare_data()
 drop cascades to table citus_target
 drop cascades to table citus_source
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

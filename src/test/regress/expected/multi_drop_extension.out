@@ -2,6 +2,9 @@
 -- MULTI_DROP_EXTENSION
 --
 -- Tests around dropping and recreating the extension
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
 SET citus.next_shard_id TO 550000;
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
@@ -168,3 +171,5 @@ SELECT * FROM testtableddl;
 (0 rows)
 
 DROP TABLE testtableddl;
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;
