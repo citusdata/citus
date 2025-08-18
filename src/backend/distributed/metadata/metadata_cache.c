@@ -522,6 +522,32 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
 
 
 /*
+ * IsFirstShard returns true if the given shardId is the first shard.
+ */
+bool
+IsFirstShard(CitusTableCacheEntry *tableEntry, uint64 shardId)
+{
+	if (tableEntry == NULL || tableEntry->sortedShardIntervalArray == NULL)
+	{
+		return false;
+	}
+	if (tableEntry->sortedShardIntervalArray[0]->shardId == INVALID_SHARD_ID)
+	{
+		return false;
+	}
+
+	if (shardId == tableEntry->sortedShardIntervalArray[0]->shardId)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+
+/*
  * HasDistributionKey returns true if given Citus table has a distribution key.
  */
 bool
