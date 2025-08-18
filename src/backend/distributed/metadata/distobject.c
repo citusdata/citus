@@ -680,8 +680,8 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 	HeapTuple heapTuple;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum *values = palloc(tupleDescriptor->natts * sizeof(Datum));
-		bool *isnull = palloc(tupleDescriptor->natts * sizeof(bool));
+		Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+		bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
 		bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
 
 		replace[Anum_pg_dist_object_colocationid - 1] = true;
