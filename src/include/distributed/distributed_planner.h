@@ -33,6 +33,18 @@
 extern int PlannerLevel;
 
 
+/* RouterPlanType is used to determine the router plan to invoke */
+typedef enum RouterPlanType
+{
+	INSERT_SELECT_INTO_CITUS_TABLE,
+	INSERT_SELECT_INTO_LOCAL_TABLE,
+	DML_QUERY,
+	SELECT_QUERY,
+	MERGE_QUERY,
+	REPLAN_WITH_BOUND_PARAMETERS
+} RouterPlanType;
+
+
 typedef struct RelationRestrictionContext
 {
 	bool allReferenceTables;

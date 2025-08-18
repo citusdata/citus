@@ -235,6 +235,20 @@ DEPS = {
     "multi_subquery_in_where_clause": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
+    "multi_limit_clause_approximate": TestDeps(
+        "minimal_schedule",
+        ["multi_create_table", "multi_create_users", "multi_load_data"],
+    ),
+    "multi_single_relation_subquery": TestDeps(
+        "minimal_schedule",
+        ["multi_create_table", "multi_create_users", "multi_load_data"],
+    ),
+    "multi_subquery_complex_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_in_where_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
 }
 
 

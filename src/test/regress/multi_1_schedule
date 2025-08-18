@@ -235,6 +235,7 @@ test: local_table_join
 test: local_dist_join_mixed
 test: citus_local_dist_joins
 test: recurring_outer_join
+test: recurring_join_pushdown
 test: query_single_shard_table
 test: insert_select_single_shard_table
 test: pg_dump
