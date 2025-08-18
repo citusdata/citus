@@ -5,9 +5,9 @@
   the outer side and a distributed table on the inner side (e.g.,
   \<reference table\> LEFT JOIN \<distributed table\>) (#7973)
 
-* Adds citus.enable_local_execution_local_plan GUC to allow avoiding
-  unnecessary query deparsing to improve performance of fast-path queries
-  targeting local shards (#8035)
+* Adds citus.enable_local_fast_path_query_optimization (enabled by default)
+  GUC to avoid unnecessary query deparsing to improve performance of
+  fast-path queries targeting local shards (#8035)
 
 * Avoids automatically creating citus_columnar when there are no relations
   using it (#8081)
