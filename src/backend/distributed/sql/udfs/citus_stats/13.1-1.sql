@@ -27,12 +27,26 @@ table_reltuples_json AS (
     FROM most_common_vals_json),
 
 table_reltuples AS (
-        SELECT dist_table, sum(shard_reltuples) AS table_reltuples FROM table_reltuples_json GROUP BY dist_table),
+        SELECT dist_table, sum(shard_reltuples) AS table_reltuples
+        FROM table_reltuples_json GROUP BY dist_table),
+
+null_frac_json AS (
+    SELECT (json_array_elements(result::json)->>'dist_table')::regclass AS dist_table,
+           (json_array_elements(result::json)->>'reltuples')::bigint AS shard_reltuples,
+           (json_array_elements(result::json)->>'null_frac')::float4 AS null_frac,
+           (json_array_elements(result::json)->>'attname')::text AS attname
+    FROM most_common_vals_json
+),
+
+null_occurrences AS (
+    SELECT dist_table, attname, sum(null_frac * shard_reltuples)::bigint AS null_occurrences
+    FROM null_frac_json
+    GROUP BY dist_table, attname
+),
 
 most_common_vals AS (
     SELECT (json_array_elements(result::json)->>'dist_table')::regclass AS dist_table,
            (json_array_elements(result::json)->>'attname')::text AS attname,
-           (json_array_elements(result::json)->>'null_frac')::float4 AS null_frac,
            json_array_elements_text((json_array_elements(result::json)->>'most_common_vals')::json)::text AS common_val,
            json_array_elements_text((json_array_elements(result::json)->>'most_common_freqs')::json)::float4 AS common_freq,
            (json_array_elements(result::json)->>'reltuples')::bigint AS shard_reltuples
@@ -40,21 +54,26 @@ most_common_vals AS (
 
 common_val_occurrence AS (
     SELECT dist_table, m.attname, common_val,
-            sum(common_freq * shard_reltuples)::bigint AS occurrence,
-            (m.null_frac * shard_reltuples)::bigint AS null_occurrences
+            sum(common_freq * shard_reltuples)::bigint AS occurrence
     FROM most_common_vals m
-    GROUP BY dist_table, m.attname, common_val, shard_reltuples, m.null_frac
+    GROUP BY dist_table, m.attname, common_val
     ORDER BY m.attname, occurrence DESC, common_val)
 
-SELECT n.nspname AS schemaname, p.relname AS tablename, c.attname,
-       CASE WHEN t.table_reltuples::bigint = 0 THEN 0
-       ELSE (null_occurrences/t.table_reltuples)::float4 END AS null_frac,
+SELECT nsp.nspname AS schemaname, p.relname AS tablename, c.attname,
+
+       CASE WHEN max(t.table_reltuples::bigint) = 0 THEN 0
+       ELSE max(n.null_occurrences/t.table_reltuples)::float4 END AS null_frac,
+
        ARRAY_agg(common_val) AS most_common_vals,
-       CASE WHEN t.table_reltuples::bigint = 0 THEN NULL
+
+       CASE WHEN max(t.table_reltuples::bigint) = 0 THEN NULL
        ELSE ARRAY_agg((occurrence/t.table_reltuples)::float4) END AS most_common_freqs
-FROM common_val_occurrence c, table_reltuples t, pg_class p, pg_namespace n
-WHERE c.dist_table = t.dist_table AND c.dist_table::regclass::oid = p.oid AND p.relnamespace = n.oid
-GROUP BY c.dist_table, c.attname, t.table_reltuples, n.nspname, p.relname, t.table_reltuples, null_occurrences;
+
+FROM common_val_occurrence c, table_reltuples t, null_occurrences n, pg_class p, pg_namespace nsp
+WHERE c.dist_table = t.dist_table
+      AND c.dist_table = n.dist_table AND c.attname = n.attname
+      AND c.dist_table::regclass::oid = p.oid AND p.relnamespace = nsp.oid
+GROUP BY nsp.nspname, c.dist_table, p.relname, c.attname;
 
 ALTER VIEW citus.citus_stats SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_stats TO PUBLIC;
