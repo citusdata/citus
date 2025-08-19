@@ -230,6 +230,7 @@ SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_1_port, 'l
 (14 rows)
 
 -- promote the clone and rebalance the shards
+SET client_min_messages to 'LOG';
 SELECT citus_promote_clone_and_rebalance(:clone_node_id);
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 3), original primary localhost:xxxxx (ID 1)
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
@@ -245,15 +246,15 @@ NOTICE:  Clone node localhost:xxxxx (ID 3) has been successfully promoted.
 NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 3)
 NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  processing 4 shards for primary node GroupID 1
-NOTICE:  inserting DELETE shard record for shard public.table1_colg2_102020 from clone node GroupID 3
-NOTICE:  inserting DELETE shard record for shard public.table1_colg2_102022 from clone node GroupID 3
-NOTICE:  inserting DELETE shard record for shard public.table1_colg3_102028 from clone node GroupID 3
-NOTICE:  inserting DELETE shard record for shard public.table1_colg3_102030 from clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.table1_colg2_102020 from clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.table1_colg2_102022 from clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.table1_colg3_102028 from clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.table1_colg3_102030 from clone node GroupID 3
 NOTICE:  processing 4 shards for clone node GroupID 3
-NOTICE:  inserting DELETE shard record for shard public.backup_test_102008 from primary node GroupID 1
-NOTICE:  inserting DELETE shard record for shard public.backup_test_102010 from primary node GroupID 1
-NOTICE:  inserting DELETE shard record for shard public.table2_colg1_102016 from primary node GroupID 1
-NOTICE:  inserting DELETE shard record for shard public.table2_colg1_102018 from primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.backup_test_102008 from primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.backup_test_102010 from primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.table2_colg1_102016 from primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.table2_colg1_102018 from primary node GroupID 1
 NOTICE:  shard placement adjustment complete for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  Clone node localhost:xxxxx (ID 3) metadata updated. It is now a primary
 NOTICE:  Clone node localhost:xxxxx (ID 3) successfully registered as a worker node
@@ -262,6 +263,7 @@ NOTICE:  Clone node localhost:xxxxx (ID 3) successfully registered as a worker n
 
 (1 row)
 
+SET client_min_messages to DEFAULT;
 SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
  shardid | nodename  | node_type
 ---------------------------------------------------------------------

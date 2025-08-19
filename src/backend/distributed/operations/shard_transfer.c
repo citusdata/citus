@@ -761,10 +761,28 @@ TransferShards(int64 shardId, char *sourceNodeName,
 
 /*
  * AdjustShardsForPrimaryCloneNodeSplit is called when a primary-clone node split
- * occurs. It adjusts the shard placements such that the shards that should be on the
- * primary node are removed from the clone node, and vice versa.
+ * occurs. It adjusts the shard placements between the primary and clone nodes based
+ * on the provided shard lists. Since the clone is an exact replica of the primary
+ * but the metadata is not aware of this replication, this function updates the
+ * metadata to reflect the new shard distribution.
  *
- * This function does not move any data; it only updates the shard placement metadata.
+ * The function handles three types of shards:
+ *
+ * 1. Shards moving to clone node (cloneShardList):
+ *    - Updates shard placement metadata to move placements from primary to clone
+ *    - No data movement is needed since the clone already has the data
+ *    - Adds cleanup records to remove the shard data from primary at transaction commit
+ *
+ * 2. Shards staying on primary node (primaryShardList):
+ *    - Metadata already correctly reflects these shards on primary
+ *    - Adds cleanup records to remove the shard data from clone node
+ *
+ * 3. Reference tables:
+ *    - Inserts new placement records on the clone node
+ *    - Data is already present on clone, so only metadata update is needed
+ *
+ * This function does not perform any actual data movement; it only updates the
+ * shard placement metadata and schedules cleanup operations for later execution.
  */
 void
 AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
@@ -793,8 +811,9 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 	RegisterOperationNeedingCleanup();
 
 	/*
-	 * Register shard delete operation for clone node, for all shards that
-	 * are staying on the primary node needs to be deleted from the clone node.
+	 * Process shards that will stay on the primary node.
+	 * For these shards, we need to remove their data from the clone node
+	 * since the metadata already correctly reflects them on primary.
 	 */
 	uint64 shardId = 0;
 	uint32 primaryGroupId = GroupForNode(primaryNode->workerName, primaryNode->workerPort)
@@ -806,11 +825,9 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 
 
 	/*
-	 * Remove all shards from the clone that should reside on the primary node,
-	 * and update the shard placement metadata for shards that will now be served
-	 * from the clone node. No data movement is required; we only need to drop
-	 * the relevant shards from the clone and primary nodes and update the
-	 * corresponding shard placement metadata.
+	 * For each shard staying on primary, insert cleanup records to remove
+	 * the shard data from the clone node. The metadata already correctly
+	 * reflects these shards on primary, so no metadata changes are needed.
 	 */
 	foreach_declared_int(shardId, primaryShardList)
 	{
@@ -818,7 +835,7 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-		ereport(NOTICE, (errmsg(
+		ereport(LOG, (errmsg(
 							 "inserting DELETE shard record for shard %s from clone node GroupID %d",
 							 qualifiedShardName, cloneGroupId)));
 
@@ -827,6 +844,13 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 	}
 
 
+	/*
+	 * Process shards that will move to the clone node.
+	 * For these shards, we need to:
+	 * 1. Update metadata to move placements from primary to clone
+	 * 2. Remove the shard data from primary (via cleanup records)
+	 * 3. No data movement needed since clone already has the data
+	 */
 	ereport(NOTICE, (errmsg("processing %d shards for clone node GroupID %d", list_length(
 								cloneShardList), cloneGroupId)));
 
@@ -835,6 +859,11 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
+		/*
+		 * Create new shard placement records on the clone node for all
+		 * colocated shards. This moves the shard placements from primary
+		 * to clone in the metadata.
+		 */
 		foreach_declared_ptr(shardInterval, colocatedShardList)
 		{
 			uint64 colocatedShardId = shardInterval->shardId;
@@ -845,27 +874,42 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 									cloneGroupId);
 		}
 
+		/*
+		 * Update the metadata on worker nodes to reflect the new shard
+		 * placement distribution between primary and clone nodes.
+		 */
 		UpdateColocatedShardPlacementMetadataOnWorkers(shardId,
 													   primaryNode->workerName,
 													   primaryNode->workerPort,
 													   cloneNode->workerName,
 													   cloneNode->workerPort);
 
-		/* Now drop all shards from primary that need to be on the clone node */
-
+		/*
+		 * Remove the shard placement records from primary node metadata
+		 * since these shards are now served from the clone node.
+		 */
 		DropShardPlacementsFromMetadata(colocatedShardList,
 										primaryNode->workerName, primaryNode->workerPort);
 
 		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-		ereport(NOTICE, (errmsg(
+		ereport(LOG, (errmsg(
 							 "inserting DELETE shard record for shard %s from primary node GroupID %d",
 							 qualifiedShardName, primaryGroupId)));
 
+		/*
+		 * Insert cleanup records to remove the shard data from primary node
+		 * at transaction commit. This frees up space on the primary node
+		 * since the data is now served from the clone node.
+		 */
 		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
 													 primaryGroupId);
 	}
 
-	/* Now adjust all reference table shards */
+	/*
+	 * Handle reference tables - these need to be available on both
+	 * primary and clone nodes. Since the clone already has the data,
+	 * we just need to insert placement records for the clone node.
+	 */
 	int colocationId = GetReferenceTableColocationId();
 
 	if (colocationId == INVALID_COLOCATION_ID)
@@ -882,11 +926,19 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 		ShardInterval *colocatedShardInterval = NULL;
 
+		/*
+		 * For each reference table shard, create placement records on the
+		 * clone node. The data is already present on the clone, so we only
+		 * need to update the metadata to make the clone aware of these shards.
+		 */
 		foreach_declared_ptr(colocatedShardInterval, colocatedShardList)
 		{
 			uint64 colocatedShardId = colocatedShardInterval->shardId;
 
-
+			/*
+			 * Insert shard placement record for the clone node and
+			 * propagate the metadata change to worker nodes.
+			 */
 			uint64 placementId = GetNextPlacementId();
 			InsertShardPlacementRow(colocatedShardId, placementId,
 									ShardLength(colocatedShardId),

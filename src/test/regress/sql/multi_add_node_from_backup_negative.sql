@@ -83,7 +83,9 @@ INSERT INTO ref_table2 SELECT i FROM generate_series(1, 5) i;
 
 SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'localhost', :follower_worker_3_port);
 
+SET client_min_messages to 'LOG';
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3);
+SET client_min_messages to DEFAULT;
 
 SELECT COUNT(*) from backup_test;
 SELECT COUNT(*) from ref_table;

@@ -213,6 +213,7 @@ SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'l
  backup_test2 |  102087 |          0 | Clone Node
 (25 rows)
 
+SET client_min_messages to 'LOG';
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3);
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 6), original primary localhost:xxxxx (ID 5)
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
@@ -228,32 +229,32 @@ NOTICE:  Clone node localhost:xxxxx (ID 6) has been successfully promoted.
 NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 6)
 NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  processing 13 shards for primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102091 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102095 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102099 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102103 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102111 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102115 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102119 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102123 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102127 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102131 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102135 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102139 from clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102143 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102091 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102095 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102099 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102103 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102111 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102115 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102119 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102123 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102127 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102131 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102135 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102139 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102143 from clone node GroupID 6
 NOTICE:  processing 12 shards for clone node GroupID 6
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102063 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102071 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102107 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102047 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102051 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102055 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102059 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102067 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102075 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102079 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102083 from primary node GroupID 5
-NOTICE:  inserting DELETE shard record for shard public.backup_test2_102087 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102063 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102071 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102107 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102047 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102051 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102055 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102059 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102067 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102075 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102079 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102083 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102087 from primary node GroupID 5
 NOTICE:  shard placement adjustment complete for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  Clone node localhost:xxxxx (ID 6) metadata updated. It is now a primary
 NOTICE:  Clone node localhost:xxxxx (ID 6) successfully registered as a worker node
@@ -262,6 +263,7 @@ NOTICE:  Clone node localhost:xxxxx (ID 6) successfully registered as a worker n
 
 (1 row)
 
+SET client_min_messages to DEFAULT;
 SELECT COUNT(*) from backup_test;
  count
 ---------------------------------------------------------------------

@@ -111,7 +111,9 @@ SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHER
 SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_1_port, 'localhost', :follower_worker_1_port);
 
 -- promote the clone and rebalance the shards
+SET client_min_messages to 'LOG';
 SELECT citus_promote_clone_and_rebalance(:clone_node_id);
+SET client_min_messages to DEFAULT;
 
 SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
 SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_1_port ORDER BY shardid;
