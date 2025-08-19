@@ -43,6 +43,8 @@ ORDER BY 1;
  function broadcast_intermediate_result(text,text)
  function check_distributed_deadlocks()
  function citus_activate_node(text,integer)
+ function citus_add_clone_node(text,integer,text,integer)
+ function citus_add_clone_node_with_nodeid(text,integer,integer)
  function citus_add_inactive_node(text,integer,integer,noderole,name)
  function citus_add_local_table_to_metadata(regclass,boolean)
  function citus_add_node(text,integer,integer,noderole,name)
@@ -156,6 +158,7 @@ ORDER BY 1;
  function citus_pause_node_within_txn(integer,boolean,integer)
  function citus_pid_for_gpid(bigint)
  function citus_prepare_pg_upgrade()
+ function citus_promote_clone_and_rebalance(integer,name,integer)
  function citus_query_stats()
  function citus_rebalance_start(name,boolean,citus.shard_transfer_mode,boolean,boolean)
  function citus_rebalance_status(boolean)
@@ -163,6 +166,8 @@ ORDER BY 1;
  function citus_rebalance_wait()
  function citus_relation_size(regclass)
  function citus_remote_connection_stats()
+ function citus_remove_clone_node(text,integer)
+ function citus_remove_clone_node_with_nodeid(integer)
  function citus_remove_node(text,integer)
  function citus_run_local_command(text)
  function citus_schema_distribute(regnamespace)
@@ -244,6 +249,7 @@ ORDER BY 1;
  function get_rebalance_progress()
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
  function get_shard_id_for_distribution_column(regclass,"any")
+ function get_snapshot_based_node_split_plan(text,integer,text,integer,name)
  function isolate_tenant_to_new_shard(regclass,"any",text,citus.shard_transfer_mode)
  function json_cat_agg(json)
  function jsonb_cat_agg(jsonb)
@@ -395,6 +401,6 @@ ORDER BY 1;
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(363 rows)
+(369 rows)
 
 DROP TABLE extension_basic_types;

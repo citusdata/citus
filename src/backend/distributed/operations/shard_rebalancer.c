@@ -81,8 +81,29 @@ typedef struct RebalanceOptions
 	Form_pg_dist_rebalance_strategy rebalanceStrategy;
 	const char *operationName;
 	WorkerNode *workerNode;
+	List *involvedWorkerNodeList;
 } RebalanceOptions;
 
+typedef struct SplitPrimaryCloneShards
+{
+	/*
+	 * primaryShardPlacementList contains the placements that
+	 * should stay on primary worker node.
+	 */
+	List *primaryShardIdList;
+
+	/*
+	 * cloneShardPlacementList contains the placements that should stay on
+	 * clone worker node.
+	 */
+	List *cloneShardIdList;
+} SplitPrimaryCloneShards;
+
+
+static SplitPrimaryCloneShards * GetPrimaryCloneSplitRebalanceSteps(RebalanceOptions
+																	*options,
+																	WorkerNode
+																	*cloneNode);
 
 /*
  * RebalanceState is used to keep the internal state of the rebalance
@@ -324,6 +345,7 @@ PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
 PG_FUNCTION_INFO_V1(citus_rebalance_start);
 PG_FUNCTION_INFO_V1(citus_rebalance_stop);
 PG_FUNCTION_INFO_V1(citus_rebalance_wait);
+PG_FUNCTION_INFO_V1(get_snapshot_based_node_split_plan);
 
 bool RunningUnderCitusTestSuite = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
@@ -523,8 +545,17 @@ GetRebalanceSteps(RebalanceOptions *options)
 		.context = &context,
 	};
 
+	if (options->involvedWorkerNodeList == NULL)
+	{
+		/*
+		 * If the user did not specify a list of worker nodes, we use all the
+		 * active worker nodes.
+		 */
+		options->involvedWorkerNodeList = SortedActiveWorkers();
+	}
+
 	/* sort the lists to make the function more deterministic */
-	List *activeWorkerList = SortedActiveWorkers();
+	List *activeWorkerList = options->involvedWorkerNodeList; /*SortedActiveWorkers(); */
 	int shardAllowedNodeCount = 0;
 	WorkerNode *workerNode = NULL;
 	foreach_declared_ptr(workerNode, activeWorkerList)
@@ -987,6 +1018,7 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
 		.excludedShardArray = PG_GETARG_ARRAYTYPE_P(3),
 		.drainOnly = PG_GETARG_BOOL(5),
 		.rebalanceStrategy = strategy,
+		.involvedWorkerNodeList = NULL,
 		.improvementThreshold = strategy->improvementThreshold,
 	};
 	Oid shardTransferModeOid = PG_GETARG_OID(4);
@@ -3604,6 +3636,352 @@ EnsureShardCostUDF(Oid functionOid)
 						errdetail("return type of %s should be real", name)));
 	}
 	ReleaseSysCache(proctup);
+}
+
+
+/*
+ * SplitShardsBetweenPrimaryAndClone splits the shards in shardPlacementList
+ * between the primary and clone nodes, adding them to the respective lists.
+ */
+void
+SplitShardsBetweenPrimaryAndClone(WorkerNode *primaryNode,
+								  WorkerNode *cloneNode,
+								  Name strategyName)
+{
+	CheckCitusVersion(ERROR);
+
+	List *relationIdList = NonColocatedDistRelationIdList();
+
+	Form_pg_dist_rebalance_strategy strategy = GetRebalanceStrategy(strategyName);/* We use default strategy for now */
+
+	RebalanceOptions options = {
+		.relationIdList = relationIdList,
+		.threshold = 0, /* Threshold is not strictly needed for two nodes */
+		.maxShardMoves = -1, /* No limit on moves between these two nodes */
+		.excludedShardArray = construct_empty_array(INT8OID),
+		.drainOnly = false, /* Not a drain operation */
+		.rebalanceStrategy = strategy,
+		.improvementThreshold = 0, /* Consider all beneficial moves */
+		.workerNode = primaryNode /* indicate Primary node as a source node */
+	};
+
+	SplitPrimaryCloneShards *splitShards = GetPrimaryCloneSplitRebalanceSteps(&options
+																			  ,
+																			  cloneNode);
+	AdjustShardsForPrimaryCloneNodeSplit(primaryNode, cloneNode,
+										 splitShards->primaryShardIdList, splitShards->
+										 cloneShardIdList);
+}
+
+
+/*
+ * GetPrimaryCloneSplitRebalanceSteps returns a List of PlacementUpdateEvents that are needed to
+ * rebalance a list of tables.
+ */
+static SplitPrimaryCloneShards *
+GetPrimaryCloneSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *cloneNode)
+{
+	WorkerNode *sourceNode = options->workerNode;
+	WorkerNode *targetNode = cloneNode;
+
+	/* Initialize rebalance plan functions and context */
+	EnsureShardCostUDF(options->rebalanceStrategy->shardCostFunction);
+	EnsureNodeCapacityUDF(options->rebalanceStrategy->nodeCapacityFunction);
+	EnsureShardAllowedOnNodeUDF(options->rebalanceStrategy->shardAllowedOnNodeFunction);
+
+	RebalanceContext context;
+	memset(&context, 0, sizeof(RebalanceContext));
+	fmgr_info(options->rebalanceStrategy->shardCostFunction, &context.shardCostUDF);
+	fmgr_info(options->rebalanceStrategy->nodeCapacityFunction, &context.nodeCapacityUDF);
+	fmgr_info(options->rebalanceStrategy->shardAllowedOnNodeFunction,
+			  &context.shardAllowedOnNodeUDF);
+
+	RebalancePlanFunctions rebalancePlanFunctions = {
+		.shardAllowedOnNode = ShardAllowedOnNode,
+		.nodeCapacity = NodeCapacity,
+		.shardCost = GetShardCost,
+		.context = &context,
+	};
+
+	/*
+	 * Collect all active shard placements on the source node for the given relations.
+	 * Unlike the main rebalancer, we build a single list of all relevant source placements
+	 * across all specified relations (or all relations if none specified).
+	 */
+	List *allSourcePlacements = NIL;
+	Oid relationIdItr = InvalidOid;
+	foreach_declared_oid(relationIdItr, options->relationIdList)
+	{
+		List *shardPlacementList = FullShardPlacementList(relationIdItr,
+														  options->excludedShardArray);
+		List *activeShardPlacementsForRelation =
+			FilterShardPlacementList(shardPlacementList, IsActiveShardPlacement);
+
+		ShardPlacement *placement = NULL;
+		foreach_declared_ptr(placement, activeShardPlacementsForRelation)
+		{
+			if (placement->nodeId == sourceNode->nodeId)
+			{
+				/* Ensure we don't add duplicate shardId if it's somehow listed under multiple relations */
+				bool alreadyAdded = false;
+				ShardPlacement *existingPlacement = NULL;
+				foreach_declared_ptr(existingPlacement, allSourcePlacements)
+				{
+					if (existingPlacement->shardId == placement->shardId)
+					{
+						alreadyAdded = true;
+						break;
+					}
+				}
+				if (!alreadyAdded)
+				{
+					allSourcePlacements = lappend(allSourcePlacements, placement);
+				}
+			}
+		}
+	}
+
+	List *activeWorkerList = list_make2(options->workerNode, cloneNode);
+	SplitPrimaryCloneShards *splitShards = palloc0(sizeof(SplitPrimaryCloneShards));
+	splitShards->primaryShardIdList = NIL;
+	splitShards->cloneShardIdList = NIL;
+
+	if (list_length(allSourcePlacements) > 0)
+	{
+		/*
+		 * Initialize RebalanceState considering only the source node's shards
+		 * and the two active workers (source and target).
+		 */
+		RebalanceState *state = InitRebalanceState(activeWorkerList, allSourcePlacements,
+												   &rebalancePlanFunctions);
+
+		NodeFillState *sourceFillState = NULL;
+		NodeFillState *targetFillState = NULL;
+		ListCell *fsc = NULL;
+
+		/* Identify the fill states for our specific source and target nodes */
+		foreach(fsc, state->fillStateListAsc) /* Could be fillStateListDesc too, order doesn't matter here */
+		{
+			NodeFillState *fs = (NodeFillState *) lfirst(fsc);
+			if (fs->node->nodeId == sourceNode->nodeId)
+			{
+				sourceFillState = fs;
+			}
+			else if (fs->node->nodeId == targetNode->nodeId)
+			{
+				targetFillState = fs;
+			}
+		}
+
+		if (sourceFillState != NULL && targetFillState != NULL)
+		{
+			/*
+			 * The goal is to move roughly half the total cost from source to target.
+			 * The target node is assumed to be empty or its existing load is not
+			 * considered for this specific two-node balancing plan's shard distribution.
+			 * We calculate costs based *only* on the shards currently on the source node.
+			 */
+
+			/*
+			 * The core idea is to simulate the balancing process between these two nodes.
+			 * We have all shards on sourceFillState. TargetFillState is initially empty (in terms of these specific shards).
+			 * We want to move shards from source to target until their costs are as balanced as possible.
+			 */
+			float4 sourceCurrentCost = sourceFillState->totalCost;
+			float4 targetCurrentCost = 0; /* Representing cost on target from these source shards */
+
+			/* Sort shards on source node by cost (descending). This is a common heuristic. */
+			sourceFillState->shardCostListDesc = SortList(sourceFillState->
+														  shardCostListDesc,
+														  CompareShardCostDesc);
+
+			List *potentialMoves = NIL;
+			ListCell *lc_shardcost = NULL;
+
+			/*
+			 * Iterate through each shard on the source node. For each shard, decide if moving it
+			 * to the target node would improve the balance (or is necessary to reach balance).
+			 * A simple greedy approach: move shard if target node's current cost is less than source's.
+			 */
+			foreach(lc_shardcost, sourceFillState->shardCostListDesc)
+			{
+				ShardCost *shardToConsider = (ShardCost *) lfirst(lc_shardcost);
+
+				/*
+				 * If moving this shard makes the target less loaded than the source would become,
+				 * or if target is simply less loaded currently, consider the move.
+				 * More accurately, we move if target's cost + shard's cost < source's cost - shard's cost (approximately)
+				 * or if target is significantly emptier.
+				 * The condition (targetCurrentCost < sourceCurrentCost - shardToConsider->cost) is a greedy choice.
+				 * A better check: would moving this shard reduce the difference in costs?
+				 * Current difference: abs(sourceCurrentCost - targetCurrentCost)
+				 * Difference after move: abs((sourceCurrentCost - shardToConsider->cost) - (targetCurrentCost + shardToConsider->cost))
+				 * Move if new difference is smaller.
+				 */
+				float4 costOfShard = shardToConsider->cost;
+				float4 diffBefore = fabsf(sourceCurrentCost - targetCurrentCost);
+				float4 diffAfter = fabsf((sourceCurrentCost - costOfShard) - (
+											 targetCurrentCost + costOfShard));
+
+				if (diffAfter < diffBefore)
+				{
+					PlacementUpdateEvent *update = palloc0(sizeof(PlacementUpdateEvent));
+					update->shardId = shardToConsider->shardId;
+					update->sourceNode = sourceNode;
+					update->targetNode = targetNode;
+					update->updateType = PLACEMENT_UPDATE_MOVE;
+					potentialMoves = lappend(potentialMoves, update);
+					splitShards->cloneShardIdList = lappend_int(splitShards->
+																cloneShardIdList,
+																shardToConsider->shardId
+																);
+
+
+					/* Update simulated costs for the next iteration */
+					sourceCurrentCost -= costOfShard;
+					targetCurrentCost += costOfShard;
+				}
+				else
+				{
+					splitShards->primaryShardIdList = lappend_int(splitShards->
+																  primaryShardIdList,
+																  shardToConsider->shardId
+																  );
+				}
+			}
+		}
+
+		/* RebalanceState is in memory context, will be cleaned up */
+	}
+	return splitShards;
+}
+
+
+/*
+ * Snapshot-based node split plan outputs the shard placement plan
+ * for primary and replica based node split
+ *
+ * SQL signature:
+ * get_snapshot_based_node_split_plan(
+ *     primary_node_name text,
+ *     primary_node_port integer,
+ *     replica_node_name text,
+ *     replica_node_port integer,
+ *     rebalance_strategy name DEFAULT NULL
+ *
+ */
+Datum
+get_snapshot_based_node_split_plan(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	text *primaryNodeNameText = PG_GETARG_TEXT_P(0);
+	int32 primaryNodePort = PG_GETARG_INT32(1);
+	text *cloneNodeNameText = PG_GETARG_TEXT_P(2);
+	int32 cloneNodePort = PG_GETARG_INT32(3);
+
+	char *primaryNodeName = text_to_cstring(primaryNodeNameText);
+	char *cloneNodeName = text_to_cstring(cloneNodeNameText);
+
+	WorkerNode *primaryNode = FindWorkerNodeOrError(primaryNodeName, primaryNodePort);
+	WorkerNode *cloneNode = FindWorkerNodeOrError(cloneNodeName, cloneNodePort);
+
+	if (!cloneNode->nodeisclone || cloneNode->nodeprimarynodeid == 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg(
+							"Node %s:%d (ID %d) is not a valid clone or its primary node ID is not set.",
+							cloneNode->workerName, cloneNode->workerPort,
+							cloneNode->nodeId)));
+	}
+	if (primaryNode->nodeisclone)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Primary node %s:%d (ID %d) is itself a replica.",
+							   primaryNode->workerName, primaryNode->workerPort,
+							   primaryNode->nodeId)));
+	}
+
+	/* Ensure the primary node is related to the replica node */
+	if (primaryNode->nodeId != cloneNode->nodeprimarynodeid)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg(
+							"Clone node %s:%d (ID %d) is not a clone of the primary node %s:%d (ID %d).",
+							cloneNode->workerName, cloneNode->workerPort,
+							cloneNode->nodeId,
+							primaryNode->workerName, primaryNode->workerPort,
+							primaryNode->nodeId)));
+	}
+
+	List *relationIdList = NonColocatedDistRelationIdList();
+
+	Form_pg_dist_rebalance_strategy strategy = GetRebalanceStrategy(
+		PG_GETARG_NAME_OR_NULL(4));
+
+	RebalanceOptions options = {
+		.relationIdList = relationIdList,
+		.threshold = 0, /* Threshold is not strictly needed for two nodes */
+		.maxShardMoves = -1, /* No limit on moves between these two nodes */
+		.excludedShardArray = construct_empty_array(INT8OID),
+		.drainOnly = false, /* Not a drain operation */
+		.rebalanceStrategy = strategy,
+		.improvementThreshold = 0, /* Consider all beneficial moves */
+		.workerNode = primaryNode /* indicate Primary node as a source node */
+	};
+
+	SplitPrimaryCloneShards *splitShards = GetPrimaryCloneSplitRebalanceSteps(
+		&options,
+		cloneNode);
+
+	int shardId = 0;
+	TupleDesc tupdesc;
+	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
+	Datum values[4];
+	bool nulls[4];
+
+
+	foreach_declared_int(shardId, splitShards->primaryShardIdList)
+	{
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+		ListCell *colocatedShardCell = NULL;
+		foreach(colocatedShardCell, colocatedShardList)
+		{
+			ShardInterval *colocatedShard = lfirst(colocatedShardCell);
+			int colocatedShardId = colocatedShard->shardId;
+			memset(values, 0, sizeof(values));
+			memset(nulls, 0, sizeof(nulls));
+
+			values[0] = ObjectIdGetDatum(RelationIdForShard(colocatedShardId));
+			values[1] = UInt64GetDatum(colocatedShardId);
+			values[2] = UInt64GetDatum(ShardLength(colocatedShardId));
+			values[3] = PointerGetDatum(cstring_to_text("Primary Node"));
+			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+		}
+	}
+
+	foreach_declared_int(shardId, splitShards->cloneShardIdList)
+	{
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+		ListCell *colocatedShardCell = NULL;
+		foreach(colocatedShardCell, colocatedShardList)
+		{
+			ShardInterval *colocatedShard = lfirst(colocatedShardCell);
+			int colocatedShardId = colocatedShard->shardId;
+			memset(values, 0, sizeof(values));
+			memset(nulls, 0, sizeof(nulls));
+
+			values[0] = ObjectIdGetDatum(RelationIdForShard(colocatedShardId));
+			values[1] = UInt64GetDatum(colocatedShardId);
+			values[2] = UInt64GetDatum(ShardLength(colocatedShardId));
+			values[3] = PointerGetDatum(cstring_to_text("Clone Node"));
+			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+		}
+	}
+
+	return (Datum) 0;
 }
 
 

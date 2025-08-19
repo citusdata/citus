@@ -8,6 +8,16 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_rebalance_start(name, boolean, citus.sh
 DROP FUNCTION IF EXISTS pg_catalog.worker_last_saved_explain_analyze();
 #include "../udfs/worker_last_saved_explain_analyze/9.4-1.sql"
 
+DROP FUNCTION IF EXISTS pg_catalog.citus_add_clone_node(text, integer, text, integer);
+DROP FUNCTION IF EXISTS pg_catalog.citus_add_clone_node_with_nodeid(text, integer, integer);
+
+DROP FUNCTION IF EXISTS pg_catalog.citus_remove_clone_node(text, integer);
+DROP FUNCTION IF EXISTS pg_catalog.citus_remove_clone_node_with_nodeid(integer);
+
+DROP FUNCTION IF EXISTS pg_catalog.citus_promote_clone_and_rebalance(integer, name, integer);
+DROP FUNCTION IF EXISTS pg_catalog.get_snapshot_based_node_split_plan(text, integer, text, integer, name);
+
+#include "../cat_upgrades/remove_clone_info_to_pg_dist_node.sql"
 #include "../udfs/citus_finish_pg_upgrade/13.1-1.sql"
 
 -- Note that we intentionally don't add the old columnar objects back to the "citus"
