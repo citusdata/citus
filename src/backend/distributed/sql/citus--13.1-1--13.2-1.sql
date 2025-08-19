@@ -14,6 +14,8 @@
 
 #include "udfs/citus_finish_pg_upgrade/13.2-1.sql"
 
+#include "udfs/citus_stats/13.2-1.sql"
+
 DO $drop_leftover_old_columnar_objects$
 BEGIN
   -- If old columnar exists, i.e., the columnar access method that we had before Citus 11.1,
