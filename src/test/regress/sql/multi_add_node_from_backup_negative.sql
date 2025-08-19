@@ -14,7 +14,7 @@ SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :
 
 SELECT * from pg_dist_node ORDER by nodeid;
 
---try add 
+--try add
 -- create a distributed table and load data
 CREATE TABLE backup_test(id int, value text);
 SELECT create_distributed_table('backup_test', 'id', 'hash');

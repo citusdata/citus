@@ -1,9 +1,9 @@
-#include "postgres.h"
-
-#include <netdb.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+#include "postgres.h"
 
 #include "utils/fmgrprotos.h"
 #include "utils/pg_lsn.h"
