@@ -836,8 +836,8 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 
 		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 		ereport(LOG, (errmsg(
-							 "inserting DELETE shard record for shard %s from clone node GroupID %d",
-							 qualifiedShardName, cloneGroupId)));
+						  "inserting DELETE shard record for shard %s from clone node GroupID %d",
+						  qualifiedShardName, cloneGroupId)));
 
 		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
 													 cloneGroupId);
@@ -893,8 +893,8 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 
 		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 		ereport(LOG, (errmsg(
-							 "inserting DELETE shard record for shard %s from primary node GroupID %d",
-							 qualifiedShardName, primaryGroupId)));
+						  "inserting DELETE shard record for shard %s from primary node GroupID %d",
+						  qualifiedShardName, primaryGroupId)));
 
 		/*
 		 * Insert cleanup records to remove the shard data from primary node

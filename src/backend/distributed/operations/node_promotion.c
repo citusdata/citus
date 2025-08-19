@@ -40,7 +40,6 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * The function ensures data consistency by blocking writes during the promotion
  * process and verifying replication lag before proceeding.
  */
-
 Datum
 citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 {
@@ -294,6 +293,7 @@ BlockAllWritesToWorkerNode(WorkerNode *workerNode)
 	LockShardsInWorkerPlacementList(workerNode, AccessExclusiveLock);
 }
 
+
 /*
  * GetNodeIsInRecoveryStatus checks if a PostgreSQL node is currently in recovery mode.
  *
@@ -369,6 +369,7 @@ GetNodeIsInRecoveryStatus(WorkerNode *workerNode)
 	return isInRecovery;
 }
 
+
 /*
  * EnsureSingleNodePromotion ensures that only one node promotion operation
  * can proceed at a time by acquiring necessary locks and checking for
@@ -390,7 +391,6 @@ GetNodeIsInRecoveryStatus(WorkerNode *workerNode)
  * - A rebalance operation is already running
  * - Unable to acquire necessary locks
  */
-
 static void
 EnsureSingleNodePromotion(WorkerNode *primaryNode)
 {

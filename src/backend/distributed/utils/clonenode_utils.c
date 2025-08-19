@@ -150,6 +150,7 @@ GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode)
 	return lag_bytes;
 }
 
+
 /*
  * EnsureValidCloneMode verifies that a clone node has a valid replication
  * relationship with the specified primary node.
@@ -178,7 +179,6 @@ GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode)
  *   - Clone is configured as a synchronous replica
  *   - Replication connection is not active
  */
-
 void
 EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 					 char *cloneHostname, int clonePort, char *operation)
@@ -389,8 +389,9 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 
 	if (resultCode == 0)
 	{
-		ereport(DEBUG2, (errmsg("cannot connect to %s:%d to check if it is in recovery mode",
-								replicaHostname, replicaPort)));
+		ereport(DEBUG2, (errmsg(
+							 "cannot connect to %s:%d to check if it is in recovery mode",
+							 replicaHostname, replicaPort)));
 		ReportConnectionError(replicaConnection, ERROR);
 	}
 
