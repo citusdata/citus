@@ -58,6 +58,7 @@
 
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
+#include "distributed/background_worker_utils.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -3161,37 +3162,26 @@ MetadataSyncSigAlrmHandler(SIGNAL_ARGS)
 BackgroundWorkerHandle *
 SpawnSyncNodeMetadataToNodes(Oid database, Oid extensionOwner)
 {
-	BackgroundWorker worker;
-	BackgroundWorkerHandle *handle = NULL;
+	char workerName[BGW_MAXLEN];
 
-	/* Configure a worker. */
-	memset(&worker, 0, sizeof(worker));
-	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
+	SafeSnprintf(workerName, BGW_MAXLEN,
 				 "Citus Metadata Sync: %u/%u",
 				 database, extensionOwner);
-	worker.bgw_flags =
-		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 
-	/* don't restart, we manage restarts from maintenance daemon */
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
-	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "SyncNodeMetadataToNodesMain");
-	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
-	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
-			 sizeof(Oid));
-	worker.bgw_notify_pid = MyProcPid;
-
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-	{
-		return NULL;
-	}
-
-	pid_t pid;
-	WaitForBackgroundWorkerStartup(handle, &pid);
-
-	return handle;
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "SyncNodeMetadataToNodesMain",
+		.mainArg = ObjectIdGetDatum(MyDatabaseId),
+		.extensionOwner = extensionOwner,
+		.needsNotification = true,
+		.waitForStartup = false,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
+	return RegisterCitusBackgroundWorker(&config);
 }
 
 
@@ -5250,7 +5240,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 		bool forceDelegationIsNull = false;
 		Datum forceDelegationDatum =
 			heap_getattr(nextTuple,
-						 Anum_pg_dist_object_force_delegation,
+						 GetForceDelegationAttrIndexInPgDistObject(tupleDesc) + 1,
 						 tupleDesc,
 						 &forceDelegationIsNull);
 		bool forceDelegation = DatumGetBool(forceDelegationDatum);

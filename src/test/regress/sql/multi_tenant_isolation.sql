@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 --
 -- MULTI_TENANT_ISOLATION
 --
@@ -610,3 +614,6 @@ TRUNCATE TABLE pg_catalog.pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
 
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

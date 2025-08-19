@@ -51,6 +51,8 @@ test: citus_schema_distribute_undistribute
 # because it checks the value of stats_reset column before calling the function.
 test: stat_counters
 
+test: columnar_citus_integration
+
 test: multi_test_catalog_views
 test: multi_table_ddl
 test: multi_alias
@@ -233,6 +235,7 @@ test: local_table_join
 test: local_dist_join_mixed
 test: citus_local_dist_joins
 test: recurring_outer_join
+test: recurring_join_pushdown
 test: query_single_shard_table
 test: insert_select_single_shard_table
 test: pg_dump

@@ -243,6 +243,7 @@ typedef struct ShardMoveDependencies
 {
 	HTAB *colocationDependencies;
 	HTAB *nodeDependencies;
+	bool parallelTransferColocatedShards;
 } ShardMoveDependencies;
 
 char *VariablesToBePassedToNewConnections = NULL;
@@ -291,7 +292,9 @@ static ShardCost GetShardCost(uint64 shardId, void *context);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
 static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
-											shardReplicationModeOid);
+											shardReplicationModeOid,
+											bool ParallelTransferReferenceTables,
+											bool ParallelTransferColocatedShards);
 static void AcquireRebalanceColocationLock(Oid relationId, const char *operationName);
 static void ExecutePlacementUpdates(List *placementUpdateList, Oid
 									shardReplicationModeOid, char *noticeOperation);
@@ -317,9 +320,12 @@ static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStati
 static void ErrorOnConcurrentRebalance(RebalanceOptions *);
 static List * GetSetCommandListForNewConnections(void);
 static int64 GetColocationId(PlacementUpdateEvent *move);
-static ShardMoveDependencies InitializeShardMoveDependencies();
-static int64 * GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64
-											  colocationId,
+static ShardMoveDependencies InitializeShardMoveDependencies(bool
+															 ParallelTransferColocatedShards);
+static int64 * GenerateTaskMoveDependencyList(PlacementUpdateEvent *move,
+											  int64 colocationId,
+											  int64 *refTablesDepTaskIds,
+											  int refTablesDepTaskIdsCount,
 											  ShardMoveDependencies shardMoveDependencies,
 											  int *nDepends);
 static void UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId,
@@ -1046,6 +1052,12 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(2, "shard_transfer_mode");
 	Oid shardTransferModeOid = PG_GETARG_OID(2);
 
+	PG_ENSURE_ARGNOTNULL(3, "parallel_transfer_reference_tables");
+	bool ParallelTransferReferenceTables = PG_GETARG_BOOL(3);
+
+	PG_ENSURE_ARGNOTNULL(4, "parallel_transfer_colocated_shards");
+	bool ParallelTransferColocatedShards = PG_GETARG_BOOL(4);
+
 	RebalanceOptions options = {
 		.relationIdList = relationIdList,
 		.threshold = strategy->defaultThreshold,
@@ -1055,7 +1067,9 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 		.rebalanceStrategy = strategy,
 		.improvementThreshold = strategy->improvementThreshold,
 	};
-	int jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid);
+	int jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid,
+											   ParallelTransferReferenceTables,
+											   ParallelTransferColocatedShards);
 
 	if (jobId == 0)
 	{
@@ -2020,17 +2034,20 @@ GetColocationId(PlacementUpdateEvent *move)
  * given colocation group and the other one is for tracking source nodes of all moves.
  */
 static ShardMoveDependencies
-InitializeShardMoveDependencies()
+InitializeShardMoveDependencies(bool ParallelTransferColocatedShards)
 {
 	ShardMoveDependencies shardMoveDependencies;
 	shardMoveDependencies.colocationDependencies = CreateSimpleHashWithNameAndSize(int64,
 																				   ShardMoveDependencyInfo,
 																				   "colocationDependencyHashMap",
 																				   6);
+
 	shardMoveDependencies.nodeDependencies = CreateSimpleHashWithNameAndSize(int32,
 																			 ShardMoveSourceNodeHashEntry,
 																			 "nodeDependencyHashMap",
 																			 6);
+	shardMoveDependencies.parallelTransferColocatedShards =
+		ParallelTransferColocatedShards;
 	return shardMoveDependencies;
 }
 
@@ -2041,6 +2058,7 @@ InitializeShardMoveDependencies()
  */
 static int64 *
 GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
+							   int64 *refTablesDepTaskIds, int refTablesDepTaskIdsCount,
 							   ShardMoveDependencies shardMoveDependencies, int *nDepends)
 {
 	HTAB *dependsList = CreateSimpleHashSetWithNameAndSize(int64,
@@ -2048,13 +2066,17 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 
 	bool found;
 
-	/* Check if there exists a move in the same colocation group scheduled earlier. */
-	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-		shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, &found);
-
-	if (found)
+	if (!shardMoveDependencies.parallelTransferColocatedShards)
 	{
-		hash_search(dependsList, &shardMoveDependencyInfo->taskId, HASH_ENTER, NULL);
+		/* Check if there exists a move in the same colocation group scheduled earlier. */
+		ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
+			shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, &
+			found);
+
+		if (found)
+		{
+			hash_search(dependsList, &shardMoveDependencyInfo->taskId, HASH_ENTER, NULL);
+		}
 	}
 
 	/*
@@ -2074,6 +2096,23 @@ GenerateTaskMoveDependencyList(PlacementUpdateEvent *move, int64 colocationId,
 		foreach_declared_ptr(taskId, shardMoveSourceNodeHashEntry->taskIds)
 		{
 			hash_search(dependsList, taskId, HASH_ENTER, NULL);
+		}
+	}
+
+	*nDepends = hash_get_num_entries(dependsList);
+	if (*nDepends == 0)
+	{
+		/*
+		 * shard copy can only start after finishing copy of reference table shards
+		 * so each shard task will have a dependency on the task that indicates the
+		 * copy complete of reference tables
+		 */
+		while (refTablesDepTaskIdsCount > 0)
+		{
+			int64 refTableTaskId = *refTablesDepTaskIds;
+			hash_search(dependsList, &refTableTaskId, HASH_ENTER, NULL);
+			refTablesDepTaskIds++;
+			refTablesDepTaskIdsCount--;
 		}
 	}
 
@@ -2108,9 +2147,13 @@ static void
 UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int64 taskId,
 							ShardMoveDependencies shardMoveDependencies)
 {
-	ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
-		shardMoveDependencies.colocationDependencies, &colocationId, HASH_ENTER, NULL);
-	shardMoveDependencyInfo->taskId = taskId;
+	if (!shardMoveDependencies.parallelTransferColocatedShards)
+	{
+		ShardMoveDependencyInfo *shardMoveDependencyInfo = hash_search(
+			shardMoveDependencies.colocationDependencies, &colocationId,
+			HASH_ENTER, NULL);
+		shardMoveDependencyInfo->taskId = taskId;
+	}
 
 	bool found;
 	ShardMoveSourceNodeHashEntry *shardMoveSourceNodeHashEntry = hash_search(
@@ -2135,7 +2178,9 @@ UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 colocationId, int
  * background job+task infrastructure.
  */
 static int64
-RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid)
+RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid,
+							   bool ParallelTransferReferenceTables,
+							   bool ParallelTransferColocatedShards)
 {
 	if (list_length(options->relationIdList) == 0)
 	{
@@ -2206,7 +2251,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	initStringInfo(&buf);
 
 	List *referenceTableIdList = NIL;
-	int64 replicateRefTablesTaskId = 0;
+	int64 *refTablesDepTaskIds = NULL;
+	int refTablesDepTaskIdsCount = 0;
 
 	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
@@ -2219,22 +2265,41 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		 * Reference tables need to be copied to (newly-added) nodes, this needs to be the
 		 * first task before we can move any other table.
 		 */
-		appendStringInfo(&buf,
-						 "SELECT pg_catalog.replicate_reference_tables(%s)",
-						 quote_literal_cstr(shardTranferModeLabel));
+		if (ParallelTransferReferenceTables)
+		{
+			refTablesDepTaskIds =
+				ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(
+					jobId, shardTransferMode, &refTablesDepTaskIdsCount);
+			ereport(DEBUG2,
+					(errmsg("%d dependent copy reference table tasks for job %ld",
+							refTablesDepTaskIdsCount, jobId),
+					 errdetail("Rebalance scheduled as background job"),
+					 errhint("To monitor progress, run: SELECT * FROM "
+							 "citus_rebalance_status();")));
+		}
+		else
+		{
+			/* Move all reference tables as single task. Classical way */
+			appendStringInfo(&buf,
+							 "SELECT pg_catalog.replicate_reference_tables(%s)",
+							 quote_literal_cstr(shardTranferModeLabel));
 
-		int32 nodesInvolved[] = { 0 };
+			int32 nodesInvolved[] = { 0 };
 
-		/* replicate_reference_tables permissions require superuser */
-		Oid superUserId = CitusExtensionOwner();
-		BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data, 0,
-													  NULL, 0, nodesInvolved);
-		replicateRefTablesTaskId = task->taskid;
+			/* replicate_reference_tables permissions require superuser */
+			Oid superUserId = CitusExtensionOwner();
+			BackgroundTask *task = ScheduleBackgroundTask(jobId, superUserId, buf.data, 0,
+														  NULL, 0, nodesInvolved);
+			refTablesDepTaskIds = palloc0(sizeof(int64));
+			refTablesDepTaskIds[0] = task->taskid;
+			refTablesDepTaskIdsCount = 1;
+		}
 	}
 
 	PlacementUpdateEvent *move = NULL;
 
-	ShardMoveDependencies shardMoveDependencies = InitializeShardMoveDependencies();
+	ShardMoveDependencies shardMoveDependencies =
+		InitializeShardMoveDependencies(ParallelTransferColocatedShards);
 
 	foreach_declared_ptr(move, placementUpdateList)
 	{
@@ -2252,15 +2317,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		int nDepends = 0;
 
 		int64 *dependsArray = GenerateTaskMoveDependencyList(move, colocationId,
+															 refTablesDepTaskIds,
+															 refTablesDepTaskIdsCount,
 															 shardMoveDependencies,
 															 &nDepends);
-
-		if (nDepends == 0 && replicateRefTablesTaskId > 0)
-		{
-			nDepends = 1;
-			dependsArray = palloc(nDepends * sizeof(int64));
-			dependsArray[0] = replicateRefTablesTaskId;
-		}
 
 		int32 nodesInvolved[2] = { 0 };
 		nodesInvolved[0] = move->sourceNode->nodeId;

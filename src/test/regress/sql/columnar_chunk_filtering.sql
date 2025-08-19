@@ -415,7 +415,7 @@ SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 2000
 SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
 
 SET hash_mem_multiplier = 1.0;
-SELECT public.explain_with_pg16_subplan_format($Q$
+SELECT columnar_test_helpers.explain_with_pg16_subplan_format($Q$
 EXPLAIN (analyze on, costs off, timing off, summary off)
 SELECT sum(a) FROM pushdown_test where
 (

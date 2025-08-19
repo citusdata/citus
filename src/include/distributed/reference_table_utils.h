@@ -21,6 +21,11 @@
 
 extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern void EnsureReferenceTablesExistOnAllNodesExtended(char transferMode);
+extern int64 * ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId,
+																		   char
+																		   transferMode,
+																		   int *
+																		   nDependTasks);
 extern bool HasNodesWithMissingReferenceTables(List **referenceTableList);
 extern uint32 CreateReferenceTableColocationId(void);
 extern uint32 GetReferenceTableColocationId(void);

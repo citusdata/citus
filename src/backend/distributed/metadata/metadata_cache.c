@@ -524,6 +524,32 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
 
 
 /*
+ * IsFirstShard returns true if the given shardId is the first shard.
+ */
+bool
+IsFirstShard(CitusTableCacheEntry *tableEntry, uint64 shardId)
+{
+	if (tableEntry == NULL || tableEntry->sortedShardIntervalArray == NULL)
+	{
+		return false;
+	}
+	if (tableEntry->sortedShardIntervalArray[0]->shardId == INVALID_SHARD_ID)
+	{
+		return false;
+	}
+
+	if (shardId == tableEntry->sortedShardIntervalArray[0]->shardId)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+
+/*
  * HasDistributionKey returns true if given Citus table has a distribution key.
  */
 bool
@@ -1706,8 +1732,11 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 
 	if (HeapTupleIsValid(pgDistObjectTup))
 	{
-		Datum datumArray[Natts_pg_dist_object];
-		bool isNullArray[Natts_pg_dist_object];
+		Datum *datumArray = palloc(pgDistObjectTupleDesc->natts * sizeof(Datum));
+		bool *isNullArray = palloc(pgDistObjectTupleDesc->natts * sizeof(bool));
+
+		int forseDelegationIndex =
+			GetForceDelegationAttrIndexInPgDistObject(pgDistObjectTupleDesc);
 
 		heap_deform_tuple(pgDistObjectTup, pgDistObjectTupleDesc, datumArray,
 						  isNullArray);
@@ -1722,7 +1751,10 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 			DatumGetInt32(datumArray[Anum_pg_dist_object_colocationid - 1]);
 
 		cacheEntry->forceDelegation =
-			DatumGetBool(datumArray[Anum_pg_dist_object_force_delegation - 1]);
+			DatumGetBool(datumArray[forseDelegationIndex]);
+
+		pfree(datumArray);
+		pfree(isNullArray);
 	}
 	else
 	{

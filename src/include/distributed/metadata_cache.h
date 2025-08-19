@@ -146,6 +146,7 @@ extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern CitusTableType GetCitusTableType(CitusTableCacheEntry *tableEntry);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
+extern bool IsFirstShard(CitusTableCacheEntry *tableEntry, uint64 shardId);
 bool HasDistributionKey(Oid relationId);
 bool HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry);
 extern char * GetTableTypeName(Oid tableId);

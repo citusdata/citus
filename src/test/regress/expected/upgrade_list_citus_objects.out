@@ -5,6 +5,7 @@
 -- Here we create a table with only the basic extension types
 -- in order to avoid printing extra ones for now
 -- This can be removed when we drop PG16 support.
+SET search_path TO citus_schema;
 CREATE TABLE extension_basic_types (description text);
 INSERT INTO extension_basic_types VALUES ('type citus.distribution_type'),
                                          ('type citus.shard_transfer_mode'),
@@ -29,7 +30,7 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value(anyelement)'
   AND pg_catalog.pg_describe_object(classid, objid, 0) != 'function any_value_agg(anyelement,anyelement)'
 ORDER BY 1;
-                                                       description
+                                                         description
 ---------------------------------------------------------------------
  event trigger citus_cascade_to_partition
  function alter_distributed_table(regclass,text,integer,text,boolean)
@@ -87,6 +88,7 @@ ORDER BY 1;
  function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text)
  function citus_internal.add_tenant_schema(oid,integer)
  function citus_internal.adjust_local_clock_to_remote(cluster_clock)
+ function citus_internal.citus_internal_copy_single_shard_placement(bigint,integer,integer,integer,citus.shard_transfer_mode)
  function citus_internal.database_command(text)
  function citus_internal.delete_colocation_metadata(integer)
  function citus_internal.delete_partition_metadata(regclass)
@@ -158,7 +160,7 @@ ORDER BY 1;
  function citus_prepare_pg_upgrade()
  function citus_promote_clone_and_rebalance(integer,name,integer)
  function citus_query_stats()
- function citus_rebalance_start(name,boolean,citus.shard_transfer_mode)
+ function citus_rebalance_start(name,boolean,citus.shard_transfer_mode,boolean,boolean)
  function citus_rebalance_status(boolean)
  function citus_rebalance_stop()
  function citus_rebalance_wait()
@@ -387,8 +389,7 @@ ORDER BY 1;
  view citus_lock_waits
  view citus_locks
  view citus_nodes
- view citus_schema.citus_schemas
- view citus_schema.citus_tables
+ view citus_schemas
  view citus_shard_indexes_on_worker
  view citus_shards
  view citus_shards_on_worker
@@ -397,6 +398,7 @@ ORDER BY 1;
  view citus_stat_statements
  view citus_stat_tenants
  view citus_stat_tenants_local
+ view citus_tables
  view pg_dist_shard_placement
  view time_partitions
 (368 rows)

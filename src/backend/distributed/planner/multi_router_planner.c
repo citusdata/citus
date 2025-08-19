@@ -1321,7 +1321,8 @@ MultiShardUpdateDeleteSupported(Query *originalQuery,
 	{
 		errorMessage = DeferErrorIfUnsupportedSubqueryPushdown(
 			originalQuery,
-			plannerRestrictionContext);
+			plannerRestrictionContext,
+			true);
 	}
 
 	return errorMessage;

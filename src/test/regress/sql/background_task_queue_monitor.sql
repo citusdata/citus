@@ -345,11 +345,11 @@ SELECT pg_reload_conf();
 -- if pg_cancel_backend is called on one of the running task PIDs
 -- task doesn't restart because it's not allowed anymore by the limit.
 -- node with id 1 can be used only once, unless there are previously running tasks
-SELECT pid AS task_id6_pid FROM pg_dist_background_task WHERE task_id IN (:task_id6) \gset
-SELECT pg_cancel_backend(:task_id6_pid); -- cancel task_id6 process
+SELECT pid AS task_id7_pid FROM pg_dist_background_task WHERE task_id IN (:task_id7) \gset
+SELECT pg_cancel_backend(:task_id7_pid); -- cancel task_id7 process
 
 -- task goes to only runnable state, not running anymore.
-SELECT citus_task_wait(:task_id6, desired_status => 'runnable');
+SELECT citus_task_wait(:task_id7, desired_status => 'runnable');
 
 -- show that cancelled task hasn't restarted because limit doesn't allow it
 SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
@@ -359,7 +359,7 @@ SELECT job_id, task_id, status, nodes_involved FROM pg_dist_background_task
 
 SELECT citus_task_wait(:task_id7, desired_status => 'done');
 SELECT citus_task_wait(:task_id8, desired_status => 'done');
-SELECT citus_task_wait(:task_id6, desired_status => 'running');
+SELECT citus_task_wait(:task_id6, desired_status => 'done');
 
 -- show that the 6th task has restarted only after both 6 and 7 are done
 -- since we have a limit of 1 background task executor per node with id 1

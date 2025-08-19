@@ -680,11 +680,9 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 	HeapTuple heapTuple;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum values[Natts_pg_dist_object];
-		bool isnull[Natts_pg_dist_object];
-		bool replace[Natts_pg_dist_object];
-
-		memset(replace, 0, sizeof(replace));
+		Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+		bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
+		bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
 
 		replace[Anum_pg_dist_object_colocationid - 1] = true;
 
@@ -698,6 +696,10 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 
 		CatalogTupleUpdate(pgDistObjectRel, &heapTuple->t_self, heapTuple);
 		CitusInvalidateRelcacheByRelid(DistObjectRelationId());
+
+		pfree(values);
+		pfree(isnull);
+		pfree(replace);
 	}
 
 	systable_endscan(scanDescriptor);
@@ -782,4 +784,24 @@ DistributedSequenceList(void)
 	systable_endscan(pgDistObjectScan);
 	relation_close(pgDistObjectRel, AccessShareLock);
 	return distributedSequenceList;
+}
+
+
+/*
+ * GetForceDelegationAttrIndexInPgDistObject returns attrnum for force_delegation attr.
+ *
+ * force_delegation attr was added to table pg_dist_object using alter operation after
+ * the version where Citus started supporting downgrades, and it's only column that we've
+ * introduced to pg_dist_object since then.
+ *
+ * And in case of a downgrade + upgrade, tupleDesc->natts becomes greater than
+ * Natts_pg_dist_object and when this happens, then we know that attrnum force_delegation is
+ * not Anum_pg_dist_object_force_delegation anymore but tupleDesc->natts - 1.
+ */
+int
+GetForceDelegationAttrIndexInPgDistObject(TupleDesc tupleDesc)
+{
+	return TupleDescSize(tupleDesc) == Natts_pg_dist_object
+		   ? (Anum_pg_dist_object_force_delegation - 1)
+		   : tupleDesc->natts - 1;
 }

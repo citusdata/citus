@@ -4,6 +4,10 @@
 -- Test user permissions.
 --
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 SET citus.next_shard_id TO 1420000;
 
 SET citus.shard_replication_factor TO 1;
@@ -332,3 +336,6 @@ DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;
 DROP ROLE some_role;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;
