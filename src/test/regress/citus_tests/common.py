@@ -827,6 +827,21 @@ class Postgres(QueryRunner):
             pgconf.write("max_worker_processes = 50\n")
             pgconf.write("max_replication_slots = 50\n")
 
+            pgconf.write("log_min_messages = DEBUG1\n")
+            pgconf.write("citus.work_min_messages = DEBUG1\n")
+
+            # Enable logging of all SQL statements
+            # pgconf.write("log_statement = 'all'\n")
+            
+            # # Enable logging of query execution time (duration)
+            # pgconf.write("log_duration = on\n")
+            
+            # # Enable logging of statement execution statistics
+            # pgconf.write("log_statement_stats = on\n")
+            
+            # # Optionally, log queries that take 0 ms (this logs every query)
+            # pgconf.write("log_min_duration_statement = 0\n")
+
             # We need to make the log go to stderr so that the tests can
             # check what is being logged.  This should be the default, but
             # some packagings change the default configuration.
