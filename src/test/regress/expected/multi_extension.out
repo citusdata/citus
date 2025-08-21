@@ -1649,7 +1649,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function citus_remove_clone_node_with_nodeid(integer) void
                                                                                                                       | function get_snapshot_based_node_split_plan(text,integer,text,integer,name) TABLE(table_name regclass, shardid bigint, shard_size bigint, placement_node text)
                                                                                                                       | function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision, execution_ntuples double precision, execution_nloops double precision)
-(11 rows)
+                                                                                                                      | view citus_stats
+(12 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

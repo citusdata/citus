@@ -25,3 +25,5 @@ DROP FUNCTION IF EXISTS pg_catalog.get_snapshot_based_node_split_plan(text, inte
 --
 -- If the user wants to create "citus_columnar" extension later, "citus_columnar"
 -- will anyway properly create them at the scope of that extension.
+
+DROP VIEW IF EXISTS pg_catalog.citus_stats;

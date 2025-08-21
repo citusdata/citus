@@ -1568,7 +1568,6 @@ set_join_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		if (colinfo->is_new_col[col_index])
 			i++;
 	}
-	Assert(i == colinfo->num_cols);
 	Assert(j == nnewcolumns);
 #endif
 

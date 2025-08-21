@@ -398,9 +398,10 @@ ORDER BY 1;
  view citus_stat_statements
  view citus_stat_tenants
  view citus_stat_tenants_local
+ view citus_stats
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(369 rows)
+(370 rows)
 
 DROP TABLE extension_basic_types;
