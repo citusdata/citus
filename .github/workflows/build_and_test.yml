@@ -153,6 +153,7 @@ jobs:
           - check-isolation
           - check-operations
           - check-follower-cluster
+          - check-add-backup-node
           - check-columnar
           - check-columnar-isolation
           - check-enterprise
@@ -494,10 +495,14 @@ jobs:
         tests=${detected_changes}
 
         # split the tests to be skipped --today we only skip upgrade tests
+        # and snapshot based node addition tests.
+        # snapshot based node addition tests are not flaky, as they promote
+        # the streaming replica (clone) to a PostgreSQL primary node that is one way
+        # operation
         skipped_tests=""
         not_skipped_tests=""
         for test in $tests; do
-            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]]; then
+            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]]; then
                 skipped_tests="$skipped_tests $test"
             else
                 not_skipped_tests="$not_skipped_tests $test"

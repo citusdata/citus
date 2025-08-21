@@ -113,6 +113,13 @@ DEPS = {
     ),
     "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
     "single_node_enterprise": TestDeps(None),
+    "multi_add_node_from_backup": TestDeps(None, repeatable=False, worker_count=5),
+    "multi_add_node_from_backup_negative": TestDeps(
+        None, ["multi_add_node_from_backup"], worker_count=5, repeatable=False
+    ),
+    "multi_add_node_from_backup_sync_replica": TestDeps(
+        None, repeatable=False, worker_count=5
+    ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
     "multi_explain": TestDeps(
@@ -139,6 +146,12 @@ DEPS = {
     ),
     "background_rebalance_parallel": TestDeps(
         None, ["multi_test_helpers", "multi_cluster_management"], worker_count=6
+    ),
+    "background_rebalance_parallel_reference_tables": TestDeps(
+        None,
+        ["multi_test_helpers", "multi_cluster_management"],
+        repeatable=False,
+        worker_count=6,
     ),
     "function_propagation": TestDeps("minimal_schedule"),
     "citus_shards": TestDeps("minimal_schedule"),

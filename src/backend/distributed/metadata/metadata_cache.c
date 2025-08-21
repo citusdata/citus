@@ -221,6 +221,7 @@ typedef struct MetadataCacheData
 	Oid textCopyFormatId;
 	Oid primaryNodeRoleId;
 	Oid secondaryNodeRoleId;
+	Oid unavailableNodeRoleId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
 	Oid distAuthinfoRelationId;
@@ -320,9 +321,10 @@ static void CachedRelationNamespaceLookup(const char *relationName, Oid relnames
 static void CachedRelationNamespaceLookupExtended(const char *relationName,
 												  Oid renamespace, Oid *cachedOid,
 												  bool missing_ok);
-static ShardPlacement * ResolveGroupShardPlacement(
-	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
-	int shardIndex);
+static ShardPlacement * ResolveGroupShardPlacement(GroupShardPlacement *
+												   groupShardPlacement,
+												   CitusTableCacheEntry *tableEntry,
+												   int shardIndex);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
@@ -1730,8 +1732,11 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 
 	if (HeapTupleIsValid(pgDistObjectTup))
 	{
-		Datum datumArray[Natts_pg_dist_object];
-		bool isNullArray[Natts_pg_dist_object];
+		Datum *datumArray = palloc(pgDistObjectTupleDesc->natts * sizeof(Datum));
+		bool *isNullArray = palloc(pgDistObjectTupleDesc->natts * sizeof(bool));
+
+		int forseDelegationIndex =
+			GetForceDelegationAttrIndexInPgDistObject(pgDistObjectTupleDesc);
 
 		heap_deform_tuple(pgDistObjectTup, pgDistObjectTupleDesc, datumArray,
 						  isNullArray);
@@ -1746,7 +1751,10 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 			DatumGetInt32(datumArray[Anum_pg_dist_object_colocationid - 1]);
 
 		cacheEntry->forceDelegation =
-			DatumGetBool(datumArray[Anum_pg_dist_object_force_delegation - 1]);
+			DatumGetBool(datumArray[forseDelegationIndex]);
+
+		pfree(datumArray);
+		pfree(isNullArray);
 	}
 	else
 	{
@@ -3594,6 +3602,20 @@ SecondaryNodeRoleId(void)
 }
 
 
+/* return the Oid of the 'unavailable' nodeRole enum value */
+Oid
+UnavailableNodeRoleId(void)
+{
+	if (!MetadataCache.unavailableNodeRoleId)
+	{
+		MetadataCache.unavailableNodeRoleId = LookupStringEnumValueId("noderole",
+																	  "unavailable");
+	}
+
+	return MetadataCache.unavailableNodeRoleId;
+}
+
+
 Oid
 CitusJobStatusScheduledId(void)
 {
@@ -4411,6 +4433,8 @@ InitializeWorkerNodeCache(void)
 		workerNode->isActive = currentNode->isActive;
 		workerNode->nodeRole = currentNode->nodeRole;
 		workerNode->shouldHaveShards = currentNode->shouldHaveShards;
+		workerNode->nodeprimarynodeid = currentNode->nodeprimarynodeid;
+		workerNode->nodeisclone = currentNode->nodeisclone;
 		strlcpy(workerNode->nodeCluster, currentNode->nodeCluster, NAMEDATALEN);
 
 		newWorkerNodeArray[workerNodeIndex++] = workerNode;

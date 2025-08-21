@@ -345,7 +345,8 @@ extern bool IsDummyPlacement(ShardPlacement *taskPlacement);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 														Oid indexId,
 														SizeQueryType sizeQueryType,
-														bool optimizePartitionCalculations);
+														bool optimizePartitionCalculations
+														);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
@@ -467,4 +468,8 @@ extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
 extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
 extern int GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDEsc);
+
+/* from node_metadata.c */
+extern void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode);
+extern void ActivateCloneNodeAsPrimary(WorkerNode *workerNode);
 #endif   /* METADATA_UTILITY_H */

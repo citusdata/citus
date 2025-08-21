@@ -299,6 +299,7 @@ extern Oid CitusDependentObjectFuncId(void);
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);
 extern Oid SecondaryNodeRoleId(void);
+extern Oid UnavailableNodeRoleId(void);
 extern Oid CitusCopyFormatTypeId(void);
 extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);

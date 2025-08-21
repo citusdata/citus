@@ -819,7 +819,7 @@ NodeListInsertCommand(List *workerNodeList)
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
 					 "noderack, hasmetadata, metadatasynced, isactive, noderole, "
-					 "nodecluster, shouldhaveshards) VALUES ");
+					 "nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
@@ -829,13 +829,14 @@ NodeListInsertCommand(List *workerNodeList)
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
 		char *shouldHaveShards = workerNode->shouldHaveShards ? "TRUE" : "FALSE";
+		char *nodeiscloneString = workerNode->nodeisclone ? "TRUE" : "FALSE";
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s)",
+						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s, %s, %d)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
@@ -846,7 +847,9 @@ NodeListInsertCommand(List *workerNodeList)
 						 isActiveString,
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster),
-						 shouldHaveShards);
+						 shouldHaveShards,
+						 nodeiscloneString,
+						 workerNode->nodeprimarynodeid);
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
@@ -880,9 +883,11 @@ NodeListIdempotentInsertCommand(List *workerNodeList)
 						  "hasmetadata = EXCLUDED.hasmetadata, "
 						  "isactive = EXCLUDED.isactive, "
 						  "noderole = EXCLUDED.noderole, "
-						  "nodecluster = EXCLUDED.nodecluster ,"
+						  "nodecluster = EXCLUDED.nodecluster, "
 						  "metadatasynced = EXCLUDED.metadatasynced, "
-						  "shouldhaveshards = EXCLUDED.shouldhaveshards";
+						  "shouldhaveshards = EXCLUDED.shouldhaveshards, "
+						  "nodeisclone = EXCLUDED.nodeisclone, "
+						  "nodeprimarynodeid = EXCLUDED.nodeprimarynodeid";
 	appendStringInfoString(nodeInsertIdempotentCommand, onConflictStr);
 	return nodeInsertIdempotentCommand->data;
 }
@@ -5235,7 +5240,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 		bool forceDelegationIsNull = false;
 		Datum forceDelegationDatum =
 			heap_getattr(nextTuple,
-						 Anum_pg_dist_object_force_delegation,
+						 GetForceDelegationAttrIndexInPgDistObject(tupleDesc) + 1,
 						 tupleDesc,
 						 &forceDelegationIsNull);
 		bool forceDelegation = DatumGetBool(forceDelegationDatum);

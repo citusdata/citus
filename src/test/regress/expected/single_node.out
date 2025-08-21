@@ -1758,9 +1758,9 @@ BEGIN
 	 INSERT INTO test (x) VALUES ($1);
 END;$$;
 SELECT * FROM pg_dist_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      5 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | t
+      5 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (1 row)
 
 SELECT create_distributed_function('call_delegation(int)', '$1', 'test');
