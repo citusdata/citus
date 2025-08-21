@@ -326,8 +326,23 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
 
-# pg18 change: strip trailing “.00” (or “.0…”) from actual rows counts
-s/(actual rows=[0-9]+)\.[0-9]+/\1/g
+# PG18 change: strip trailing ".0..." from Actual Rows across formats
+# Text EXPLAIN (simple case: "actual rows=50.00")
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)([0-9]+)\.0+/\1\2/gI
+# Text EXPLAIN (inside "(actual time=... rows=50.00 ...)")
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)([0-9]+)\.0+/\1\2/gI
+# YAML (e.g., "Actual Rows: 1.00")
+s/(Actual[[:space:]]+Rows:[[:space:]]*[0-9]+)\.0+/\1/gI
+# XML (e.g., "<Actual-Rows>1.00</Actual-Rows>")
+s/(<Actual-Rows>[0-9]+)\.0+(<\/Actual-Rows>)/\1\2/g
+# JSON (e.g., '"Actual Rows": 1.00')
+s/("Actual[[:space:]]+Rows":[[:space:]]*[0-9]+)\.0+/\1/gI
+# JSON placeholder cleanup: '"Actual Rows": N.0...' -> N
+s/("Actual[[:space:]]+Rows":[[:space:]]*)N\.N/\1N/gI
+# Collapse placeholder in text EXPLAIN: "rows=N.N" -> "rows=N"
+s/(rows[[:space:]]*=[[:space:]]*)N\.N/\1N/gI
+# YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
+s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
 
 # pg18 “Disabled” change start
 # ignore any “Disabled:” lines in test output
