@@ -2132,7 +2132,7 @@ GetHighestUsedRowNumber(uint64 storageId)
 static int
 GetFirstRowNumberAttrIndexInColumnarStripe(TupleDesc tupleDesc)
 {
-	return TupleDescSize(tupleDesc) == Natts_columnar_stripe
+	return tupleDesc->natts == Natts_columnar_stripe
 		   ? (Anum_columnar_stripe_first_row_number - 1)
 		   : tupleDesc->natts - 1;
 }
