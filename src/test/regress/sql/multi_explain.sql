@@ -130,7 +130,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -142,9 +142,9 @@ CREATE TABLE t2(a int, b int);
 SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
 BEGIN;
 SET LOCAL citus.enable_repartition_joins TO true;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
 -- Confirm repartiton join in distributed subplan works
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
 SELECT count(*) from repartition;
 END;
@@ -152,7 +152,7 @@ DROP TABLE t1, t2;
 
 -- Test query text output, with ANALYZE ON
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -184,7 +184,7 @@ EXPLAIN (COSTS FALSE)
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 BEGIN;
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
@@ -488,7 +488,7 @@ EXPLAIN (COSTS FALSE)
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -597,7 +597,7 @@ EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5);
 
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
@@ -605,7 +605,7 @@ BEGIN;
 EXPLAIN (COSTS OFF) EXECUTE multi_shard_query_param(5);
 ROLLBACK;
 BEGIN;
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE multi_shard_query_param(5);
 ROLLBACK;
 \set VERBOSITY DEFAULT
 
@@ -865,7 +865,7 @@ SET citus.shard_count TO 4;
 SET client_min_messages TO WARNING;
 SELECT create_distributed_table('explain_analyze_test', 'a');
 
-\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off)'
+\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)'
 \set default_explain_flags '(ANALYZE off, COSTS off, TIMING off, SUMMARY off)'
 
 -- router SELECT
@@ -928,16 +928,16 @@ ROLLBACK;
 
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
 
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
 
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
 
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) SELECT * FROM explain_pk;
 
 DROP TABLE explain_pk;
 
@@ -960,7 +960,7 @@ EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 
 SELECT public.explain_with_pg17_initplan_format($Q$
-EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off)
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
 $Q$);
@@ -1114,9 +1114,9 @@ SELECT create_distributed_table('explain_analyze_execution_time', 'a');
 -- sleep for the shard that has the single row, so that
 -- will definitely be slower
 set citus.explain_analyze_sort_method to "taskId";
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
 set citus.explain_analyze_sort_method to "execution-time";
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
 -- reset back
 reset citus.explain_analyze_sort_method;
 DROP TABLE explain_analyze_execution_time;
@@ -1171,7 +1171,7 @@ SET search_path TO multi_explain;
 CREATE TABLE test_subplans (x int primary key, y int);
 SELECT create_distributed_table('test_subplans','x');
 
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
 SELECT * FROM a;
 
@@ -1179,13 +1179,13 @@ SELECT * FROM a;
 SELECT * FROM test_subplans;
 
 -- Will fail with duplicate pk
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
 SELECT * FROM a;
 
 -- Test JSON format
 TRUNCATE test_subplans;
-EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
 SELECT * FROM a;
 

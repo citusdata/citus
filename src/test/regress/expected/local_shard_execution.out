@@ -327,7 +327,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distribute
                Filter: (age = 20)
 (10 rows)
 
-EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 WITH r AS ( SELECT GREATEST(random(), 2) z,* FROM distributed_table)
 SELECT 1 FROM r WHERE z < 3;
                                                QUERY PLAN
