@@ -1,5 +1,18 @@
 ### citus v13.2.0 (August 18, 2025) ###
 
+* Adds `citus_add_clone_node()`, `citus_add_clone_node_with_nodeid()`,
+  `citus_remove_clone_node()` and `citus_remove_clone_node_with_nodeid()`
+  UDFs to support snapshot-based node splits. This feature allows promoting
+  a streaming replica (clone) to a primary node and rebalancing shards
+  between the original and newly promoted node without requiring a full data
+  copy. This greatly reduces rebalance times for scale-out operations when
+  the new node already has the data via streaming replication (#8122)
+
+* Improves performance of shard rebalancer by parallelizing moves and removing
+  bottlenecks that blocked concurrent logical-replication transfers. This
+  reduces rebalance windows especially for clusters with large reference
+  tables and allows multiple shard transfers to run in parallel (#7983)
+
 * Adds citus.enable_recurring_outer_join_pushdown GUC (enabled by default)
   to allow pushing down LEFT/RIGHT outer joins having a reference table in
   the outer side and a distributed table on the inner side (e.g.,
@@ -8,6 +21,9 @@
 * Adds citus.enable_local_fast_path_query_optimization (enabled by default)
   GUC to avoid unnecessary query deparsing to improve performance of
   fast-path queries targeting local shards (#8035)
+
+* Adds `citus_stats()` UDF that can be used to retrieve distributed `pg_stats`
+  for the provided Citus table. (#8026)
 
 * Avoids automatically creating citus_columnar when there are no relations
   using it (#8081)
@@ -25,8 +41,11 @@
 * Fixes UPDATE statements with indirection and array/jsonb subscripting with
   more than one field (#7675)
 
-* Fixes an assertion failure when an expression in the query references a
-  CTE (#8106)
+* Fixes an assertion failure that happens when an expression in the query
+  references a CTE (#8106)
+
+* Fixes an assertion failure that happens when querying a view that is
+  defined on distributed tables (#8136)
 
 ### citus v13.1.0 (May 30th, 2025) ###
 
