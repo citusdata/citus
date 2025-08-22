@@ -36,7 +36,7 @@
 
 * Fixes potential memory corruptions that could happen when accessing
   various catalog tables after a Citus downgrade is followed by a Citus
-  upgrade (#7950, #8120, #8124, #8121, #8114)
+  upgrade (#7950, #8120, #8124, #8121, #8114, #8146)
 
 * Fixes UPDATE statements with indirection and array/jsonb subscripting with
   more than one field (#7675)

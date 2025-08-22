@@ -801,7 +801,7 @@ DistributedSequenceList(void)
 int
 GetForceDelegationAttrIndexInPgDistObject(TupleDesc tupleDesc)
 {
-	return TupleDescSize(tupleDesc) == Natts_pg_dist_object
+	return tupleDesc->natts == Natts_pg_dist_object
 		   ? (Anum_pg_dist_object_force_delegation - 1)
 		   : tupleDesc->natts - 1;
 }

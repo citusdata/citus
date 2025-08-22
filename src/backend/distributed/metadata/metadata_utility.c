@@ -4486,7 +4486,7 @@ UnblockDependingBackgroundTasks(BackgroundTask *task)
 int
 GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDesc)
 {
-	return TupleDescSize(tupleDesc) == Natts_pg_dist_partition
+	return tupleDesc->natts == Natts_pg_dist_partition
 		   ? (Anum_pg_dist_partition_autoconverted - 1)
 		   : tupleDesc->natts - 1;
 }
@@ -4506,7 +4506,7 @@ GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDesc)
 int
 GetNodesInvolvedAttrIndexInPgDistBackgroundTask(TupleDesc tupleDesc)
 {
-	return TupleDescSize(tupleDesc) == Natts_pg_dist_background_task
+	return tupleDesc->natts == Natts_pg_dist_background_task
 		   ? (Anum_pg_dist_background_task_nodes_involved - 1)
 		   : tupleDesc->natts - 1;
 }

@@ -685,7 +685,7 @@ DeleteWorkerTransactions(WorkerNode *workerNode)
 int
 GetOuterXidAttrIndexInPgDistTransaction(TupleDesc tupleDesc)
 {
-	return TupleDescSize(tupleDesc) == Natts_pg_dist_transaction
+	return tupleDesc->natts == Natts_pg_dist_transaction
 		   ? (Anum_pg_dist_transaction_outerxid - 1)
 		   : tupleDesc->natts - 1;
 }
