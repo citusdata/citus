@@ -659,8 +659,9 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 				nulls[Anum_columnar_chunk_minimum_value - 1] = true;
 				nulls[Anum_columnar_chunk_maximum_value - 1] = true;
 			}
-
+			PushActiveSnapshot(GetTransactionSnapshot());
 			InsertTupleAndEnforceConstraints(modifyState, values, nulls);
+			PopActiveSnapshot();
 		}
 	}
 
