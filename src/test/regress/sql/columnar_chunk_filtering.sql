@@ -497,4 +497,6 @@ SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
 
 SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_chunk_filtering CASCADE;
+RESET client_min_messages;
