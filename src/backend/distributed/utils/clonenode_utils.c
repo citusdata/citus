@@ -140,10 +140,10 @@ GetReplicationLag(WorkerNode *primaryWorkerNode, WorkerNode *replicaWorkerNode)
 	ForgetResults(replicaConnection);
 	CloseConnection(replicaConnection);
 
-	ereport(DEBUG1, (errmsg(
+	ereport(DEBUG2, (errmsg(
 						 "successfully measured replication lag: primary LSN %s, clone LSN %s",
 						 primary_lsn_str, replica_lsn_str)));
-	ereport(NOTICE, (errmsg("replication lag between %s:%d and %s:%d is %ld bytes",
+	ereport(DEBUG1, (errmsg("replication lag between %s:%d and %s:%d is %ld bytes",
 							primaryWorkerNode->workerName, primaryWorkerNode->workerPort,
 							replicaWorkerNode->workerName, replicaWorkerNode->workerPort,
 							lag_bytes)));
@@ -244,9 +244,9 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 		freeaddrinfo(result);
 	}
 
-	ereport(NOTICE, (errmsg("checking replication for node %s (resolved IP: %s)",
+	ereport(NOTICE, (errmsg("checking replication status of clone node %s:%d",
 							cloneHostname,
-							resolvedIP ? resolvedIP : "unresolved")));
+							clonePort)));
 
 	/* Build query to check if clone is connected and get its sync state */
 
@@ -278,6 +278,11 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 						 cloneHostname);
 	}
 
+	ereport(DEBUG2, (errmsg("sending replication status check query: %s to primary %s:%d",
+							replicationCheckQuery->data,
+							primaryWorkerNode->workerName,
+							primaryWorkerNode->workerPort)));
+
 	int replicationCheckResultCode = SendRemoteCommand(primaryConnection,
 													   replicationCheckQuery->data);
 	if (replicationCheckResultCode == 0)
@@ -305,8 +310,9 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 							   primaryWorkerNode->workerName, primaryWorkerNode->
 							   workerPort),
 						errdetail(
-							"The clone must be actively replicating from the specified primary node. "
-							"Check that the clone is running and properly configured for replication.")));
+							"The clone must be actively replicating from the specified primary node"),
+						errhint(
+							"Verify the clone is running and properly configured for replication")));
 	}
 
 	/* Check if clone is synchronous */
@@ -322,9 +328,9 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 								"cannot %s clone %s:%d as it is configured as a synchronous replica",
 								operation, cloneHostname, clonePort),
 							errdetail(
-								"Promoting a synchronous clone can cause data consistency issues. "
-								"Please configure it as an asynchronous replica first.")))
-			;
+								"Promoting a synchronous clone can cause data consistency issues"),
+							errhint(
+								"Configure clone as an asynchronous replica")));
 		}
 	}
 
