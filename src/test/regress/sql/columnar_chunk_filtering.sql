@@ -12,6 +12,10 @@
 -- If chunks get filtered by columnar, less rows are passed to WHERE
 -- clause, so this function should return a lower number.
 --
+
+CREATE SCHEMA columnar_chunk_filtering;
+SET search_path TO columnar_chunk_filtering, public;
+
 CREATE OR REPLACE FUNCTION filtered_row_count (query text) RETURNS bigint AS
 $$
     DECLARE
@@ -493,4 +497,4 @@ SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
 
 SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
 
-DROP TABLE pushdown_test;
+DROP SCHEMA columnar_chunk_filtering CASCADE;
