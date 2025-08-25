@@ -108,6 +108,18 @@ RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
+FROM base AS pg18
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 18beta3
+RUN rm .pgenv/src/*.tar*
+RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/src/include install
+
+# Stage the pgenv artifacts for PG18
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+
+
 FROM base AS uncrustify-builder
 
 RUN sudo apt update && sudo apt install -y cmake tree
@@ -201,6 +213,7 @@ COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg17 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg18 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
 COPY --link --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
@@ -216,7 +229,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch 17.6
+RUN pgenv switch 18beta3
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
