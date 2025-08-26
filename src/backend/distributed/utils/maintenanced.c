@@ -1040,12 +1040,30 @@ MaintenanceDaemonShmemExit(int code, Datum arg)
 	if (myDbData != NULL)
 	{
 		/*
-		 * Confirm that I am still the registered maintenance daemon before exiting.
+		 * Once the maintenance daemon fails (e.g., due to an error in the main loop),
+		 * both Postgres tries to restart the failed daemon and Citus attempt to start
+		 * a new one. In that case, the one started by Citus ends up here.
+		 *
+		 * As the maintenance daemon that Citus tried to start, we might see the entry
+		 * for the daemon restarted by Postgres if the system was so slow that it
+		 * took a long time for us to be re-scheduled to call MaintenanceDaemonShmemExit(),
+		 * e.g., under valgrind testing.
+		 *
+		 * In that case, we should unregister ourself only if we are still the registered
+		 * maintenance daemon.
 		 */
-		Assert(myDbData->workerPid == MyProcPid);
-
-		myDbData->daemonStarted = false;
-		myDbData->workerPid = 0;
+		if (myDbData->workerPid == MyProcPid)
+		{
+			myDbData->daemonStarted = false;
+			myDbData->workerPid = 0;
+		}
+		else
+		{
+			ereport(LOG, (errmsg(
+							  "maintenance daemon for database %u has already been replaced by "
+							  "Postgres, skipping to unregister this maintenance daemon",
+							  databaseOid)));
+		}
 	}
 
 	LWLockRelease(&MaintenanceDaemonControl->lock);
