@@ -167,7 +167,7 @@ SELECT pg_sleep(5);
 -- the function returns the new node id
 SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: ::1)
+NOTICE:  checking replication status of clone node localhost:xxxxx
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 SELECT * from pg_dist_node ORDER by nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
@@ -234,12 +234,11 @@ SET client_min_messages to 'LOG';
 SELECT citus_promote_clone_and_rebalance(:clone_node_id);
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 3), original primary localhost:xxxxx (ID 1)
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: ::1)
+NOTICE:  checking replication status of clone node localhost:xxxxx
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 1)
 NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 1)
 NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
-NOTICE:  replication lag between localhost:xxxxx and localhost:xxxxx is 0 bytes
 NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
 NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
 NOTICE:  Clone node localhost:xxxxx (ID 3) has been successfully promoted.
