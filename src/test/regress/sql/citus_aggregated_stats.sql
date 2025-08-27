@@ -109,25 +109,24 @@ SELECT attname, null_frac, most_common_vals, most_common_freqs FROM citus_stats
 SELECT setseed(0.42);
 
 CREATE TABLE orders (id bigint , custid int, product text, quantity int);
-SET citus.shard_count two 4;
 
 INSERT INTO orders(id, custid, product, quantity)
-SELECT i, random(1, 101), 'product' || random(1,5), random(1, 25)
+SELECT i, (random() * 100)::int, 'product' || (random() * 10)::int, NULL
 FROM generate_series(1,11) d(i);
 
 -- frequent customer
 INSERT INTO orders(id, custid, product, quantity)
-SELECT 1200, 17, 'product' || random(1,5), random(1,25)
+SELECT 1200, 17, 'product' || (random() * 10)::int, NULL
 FROM generate_series(1, 57) sk(i);
 
 -- popular product
 INSERT INTO orders(id, custid, product, quantity)
-SELECT i+100 % 17, random(1,89), 'product3', random(15,25)
+SELECT i+100 % 17, NULL, 'product3', (random() * 40)::int
 FROM generate_series(1, 37) sk(i);
 
 -- frequent customer
 INSERT INTO orders(id, custid, product, quantity)
-SELECT 1390, 76, 'product' || (random(9,15) % 3), random(11,23)
+SELECT 1390, 76, 'product' || ((random() * 20)::int % 3), (random() * 30)::int
 FROM generate_series(1, 33) sk(i);
 
 ANALYZE orders;
