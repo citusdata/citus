@@ -259,7 +259,7 @@ exec $valgrindPath \\
     --leak-check=no \\
     --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \\
     --max-stackframe=16000000 \\
-    --log-file=$valgrindLogFile \\
+    --log-file=$valgrindLogFile.%p \\
     --fullpath-after=/ \\
     $bindir/postgres.orig \\
     "\$@"
