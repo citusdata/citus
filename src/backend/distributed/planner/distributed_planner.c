@@ -151,10 +151,9 @@ static RouterPlanType GetRouterPlanType(Query *query,
 										bool hasUnresolvedParams);
 static void ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan,
 										   PlannedStmt *concatPlan);
-static bool CheckPostPlanDistribution(bool isDistributedQuery,
-									  Query *origQuery,
-									  List *rangeTableList,
-									  Query *plannedQuery);
+static bool CheckPostPlanDistribution(DistributedPlanningContext *planContext,
+									  bool isDistributedQuery,
+									  List *rangeTableList);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -275,10 +274,9 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
-			needsDistributedPlanning = CheckPostPlanDistribution(needsDistributedPlanning,
-																 planContext.originalQuery,
-																 rangeTableList,
-																 planContext.query);
+			needsDistributedPlanning = CheckPostPlanDistribution(&planContext,
+																 needsDistributedPlanning,
+																 rangeTableList);
 
 			if (needsDistributedPlanning)
 			{
@@ -2739,12 +2737,13 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 
 
 static bool
-CheckPostPlanDistribution(bool isDistributedQuery,
-						  Query *origQuery, List *rangeTableList,
-						  Query *plannedQuery)
+CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
+						  isDistributedQuery, List *rangeTableList)
 {
 	if (isDistributedQuery)
 	{
+		Query *origQuery = planContext->originalQuery;
+		Query *plannedQuery = planContext->query;
 		Node *origQuals = origQuery->jointree->quals;
 		Node *plannedQuals = plannedQuery->jointree->quals;
 
@@ -2763,6 +2762,23 @@ CheckPostPlanDistribution(bool isDistributedQuery,
 		 */
 		if (origQuals != NULL && plannedQuals == NULL)
 		{
+			bool planHasDistTable = ListContainsDistributedTableRTE(
+				planContext->plan->rtable, NULL);
+
+			/*
+			 * If the Postgres plan has a distributed table, we know for sure that
+			 * the query requires distributed planning.
+			 */
+			if (planHasDistTable)
+			{
+				return true;
+			}
+
+			/*
+			 * Otherwise, if the query has less range table entries after Postgres,
+			 * planning, we should re-evaluate the distribution of the query. Postgres
+			 * may have optimized away all citus tables, per issues 7782, 7783.
+			 */
 			List *rtesPostPlan = ExtractRangeTableEntryList(plannedQuery);
 			if (list_length(rtesPostPlan) < list_length(rangeTableList))
 			{
