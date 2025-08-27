@@ -1405,6 +1405,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17",
+		gettext_noop("Enables running distributed queries with outer joins "
+					 "and pseudoconstant quals pre PG17."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "running distributed queries with outer joins and  "
+					 "pseudoconstant quals, at user's own risk, because "
+					 "pre PG17, Citus doesn't have access to "
+					 "set_join_pathlist_hook, which doesn't guarantee correct"
+					 "query results. Note that in PG17+, this GUC has no effect"
+					 "and the user can run such queries"),
+		&EnableOuterJoinsWithPseudoconstantQualsPrePG17,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_repartition_joins",
 		gettext_noop("Allows Citus to repartition data between nodes."),
 		NULL,

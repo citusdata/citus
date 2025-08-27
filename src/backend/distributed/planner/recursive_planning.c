@@ -92,6 +92,8 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 
+bool EnableOuterJoinsWithPseudoconstantQualsPrePG17 = false;
+
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
  * and CTEs, pull results to the coordinator, and push it back into
@@ -483,7 +485,7 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 	bool hasOuterJoin =
 		context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
 
-	if (!hasOuterJoin)
+	if (!EnableOuterJoinsWithPseudoconstantQualsPrePG17 && !hasOuterJoin)
 	{
 		/*
 		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1

@@ -20,6 +20,7 @@
 #include "distributed/log_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 
+extern bool EnableOuterJoinsWithPseudoconstantQualsPrePG17;
 typedef struct RecursivePlanningContextInternal RecursivePlanningContext;
 
 typedef struct RangeTblEntryIndex
