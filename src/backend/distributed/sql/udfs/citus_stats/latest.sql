@@ -22,7 +22,7 @@ most_common_vals_json AS (
 
 table_reltuples_json AS (
     SELECT distinct(shardid),
-           (json_array_elements(result::json)->>'reltuples')::bigint AS shard_reltuples,
+           CAST( CAST((json_array_elements(result::json)->>'reltuples') AS DOUBLE PRECISION) AS bigint) AS shard_reltuples,
 	       (json_array_elements(result::json)->>'citus_table')::regclass AS citus_table
     FROM most_common_vals_json),
 
@@ -32,8 +32,8 @@ table_reltuples AS (
 
 null_frac_json AS (
     SELECT (json_array_elements(result::json)->>'citus_table')::regclass AS citus_table,
-           (json_array_elements(result::json)->>'reltuples')::bigint AS shard_reltuples,
-           (json_array_elements(result::json)->>'null_frac')::float4 AS null_frac,
+           CAST( CAST((json_array_elements(result::json)->>'reltuples') AS DOUBLE PRECISION) AS bigint) AS shard_reltuples,
+           CAST((json_array_elements(result::json)->>'null_frac') AS float4) AS null_frac,
            (json_array_elements(result::json)->>'attname')::text AS attname
     FROM most_common_vals_json
 ),
@@ -49,8 +49,8 @@ most_common_vals AS (
     SELECT (json_array_elements(result::json)->>'citus_table')::regclass AS citus_table,
            (json_array_elements(result::json)->>'attname')::text AS attname,
            json_array_elements_text((json_array_elements(result::json)->>'most_common_vals')::json)::text AS common_val,
-           json_array_elements_text((json_array_elements(result::json)->>'most_common_freqs')::json)::float4 AS common_freq,
-           (json_array_elements(result::json)->>'reltuples')::bigint AS shard_reltuples
+           CAST(json_array_elements_text((json_array_elements(result::json)->>'most_common_freqs')::json) AS float4) AS common_freq,
+           CAST( CAST((json_array_elements(result::json)->>'reltuples') AS DOUBLE PRECISION) AS bigint) AS shard_reltuples
     FROM most_common_vals_json),
 
 common_val_occurrence AS (
