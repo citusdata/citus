@@ -1838,6 +1838,62 @@ ensure_update_targetlist_in_param_order(List *targetList)
 
 
 /*
+ * isSubsRef checks if a given node is a SubscriptingRef or can be
+ * reached through an implicit coercion.
+ */
+static
+bool
+isSubsRef(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, CoerceToDomain))
+	{
+		CoerceToDomain *coerceToDomain = (CoerceToDomain *) node;
+		if (coerceToDomain->coercionformat != COERCE_IMPLICIT_CAST)
+		{
+			/* not an implicit coercion, cannot reach to a SubscriptingRef */
+			return false;
+		}
+
+		node = (Node *) coerceToDomain->arg;
+	}
+
+	return (IsA(node, SubscriptingRef));
+}
+
+
+/*
+ * checkTlistForSubsRef - checks if any target entry in the list contains a
+ * SubscriptingRef or can be reached through an implicit coercion. Used by
+ * ExpandMergedSubscriptingRefEntries() to identify if any target entries
+ * need to be expanded - if not the original target list is preserved.
+ */
+static
+bool
+checkTlistForSubsRef(List *targetEntryList)
+{
+	ListCell *tgtCell = NULL;
+
+	foreach(tgtCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(tgtCell);
+		Expr *expr = targetEntry->expr;
+
+		if (isSubsRef((Node *) expr))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * ExpandMergedSubscriptingRefEntries takes a list of target entries and expands
  * each one that references a SubscriptingRef node that indicates multiple (field)
  * updates on the same attribute, which is applicable for array/json types atm.
@@ -1847,6 +1903,12 @@ ExpandMergedSubscriptingRefEntries(List *targetEntryList)
 {
 	List *newTargetEntryList = NIL;
 	ListCell *tgtCell = NULL;
+
+	if (!checkTlistForSubsRef(targetEntryList))
+	{
+		/* No subscripting refs found, return original list */
+		return targetEntryList;
+	}
 
 	foreach(tgtCell, targetEntryList)
 	{
