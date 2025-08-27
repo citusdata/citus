@@ -102,6 +102,49 @@ SELECT attname, null_frac, most_common_vals, most_common_freqs FROM citus_stats
   WHERE tablename IN ('organizations')
   ORDER BY 1;
 
+-- more real-world scenario:
+-- outputs of pg_stats and citus_stats are NOT the same
+-- but citus_stats does a fair estimation job
+
+SELECT setseed(0.42);
+
+CREATE TABLE orders (id bigint , custid int, product text, quantity int);
+SET citus.shard_count two 4;
+
+INSERT INTO orders(id, custid, product, quantity)
+SELECT i, random(1, 101), 'product' || random(1,5), random(1, 25)
+FROM generate_series(1,11) d(i);
+
+-- frequent customer
+INSERT INTO orders(id, custid, product, quantity)
+SELECT 1200, 17, 'product' || random(1,5), random(1,25)
+FROM generate_series(1, 57) sk(i);
+
+-- popular product
+INSERT INTO orders(id, custid, product, quantity)
+SELECT i+100 % 17, random(1,89), 'product3', random(15,25)
+FROM generate_series(1, 37) sk(i);
+
+-- frequent customer
+INSERT INTO orders(id, custid, product, quantity)
+SELECT 1390, 76, 'product' || (random(9,15) % 3), random(11,23)
+FROM generate_series(1, 33) sk(i);
+
+ANALYZE orders;
+
+-- pg_stats
+SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
+  WHERE tablename IN ('orders')
+ORDER BY 3;
+
+SELECT create_distributed_table('orders', 'id');
+ANALYZE orders;
+
+-- citus_stats
+SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_freqs FROM citus_stats
+  WHERE tablename IN ('orders')
+ORDER BY 3;
+
 RESET SESSION AUTHORIZATION;
 DROP SCHEMA citus_aggregated_stats CASCADE;
 DROP USER user1;
