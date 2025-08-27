@@ -97,6 +97,7 @@
 #include "distributed/version_compat.h"
 
 bool EnableRecurringOuterJoinPushdown = true;
+bool EnableOuterJoinsWithPseudoconstantQualsPrePG17 = false;
 
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
@@ -509,7 +510,7 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 	bool hasOuterJoin =
 		context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
 #if PG_VERSION_NUM < PG_VERSION_17
-	if (!hasOuterJoin)
+	if (!EnableOuterJoinsWithPseudoconstantQualsPrePG17 && !hasOuterJoin)
 	{
 		/*
 		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1

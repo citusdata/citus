@@ -422,6 +422,19 @@ where (exists (select  * from t4)) order by 1, 2, 3;
       |                          |    1 | Tue Mar 26 17:36:53 2024
 (2 rows)
 
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+-- wrong result pre-pg17
+select * from
+  (t0 full outer join t3
+    on (t0.c3 = t3.c26 ))
+where (exists (select  * from t4)) order by 1, 2, 3;
+ vkey |            c3            | vkey |           c26
+---------------------------------------------------------------------
+   13 | Wed Oct 23 15:34:50 2019 |      |
+      |                          |    1 | Tue Mar 26 17:36:53 2024
+(2 rows)
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
 -- issue https://github.com/citusdata/citus/issues/7696
 create table t1 ( vkey int4 );
 create table t2 ( vkey int4 );
@@ -456,6 +469,16 @@ where not((85) in (select 1 from t2));
     5 |
 (1 row)
 
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+-- wrong result pre-pg17
+select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
+where not((85) in (select 1 from t2));
+ vkey | vkey
+---------------------------------------------------------------------
+    5 |
+(1 row)
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
 -- issue https://github.com/citusdata/citus/issues/7698
 create table t5 ( vkey int4, c10 int4 );
 create table t6 ( vkey int4 );
@@ -489,6 +512,18 @@ where exists (select * from t6);
     1
 (1 row)
 
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+-- wrong result pre-pg17
+select t6.vkey
+from (t5 right outer join t6
+    on (t5.c10 = t6.vkey))
+where exists (select * from t6);
+ vkey
+---------------------------------------------------------------------
+    1
+(1 row)
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
 -- issue https://github.com/citusdata/citus/issues/7119
 -- this test was removed in
 -- https://github.com/citusdata/citus/commit/a5ce601c0

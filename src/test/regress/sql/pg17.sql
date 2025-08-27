@@ -220,6 +220,16 @@ select * from
     on (t0.c3 = t3.c26 ))
 where (exists (select  * from t4)) order by 1, 2, 3;
 
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+
+-- wrong result pre-pg17
+select * from
+  (t0 full outer join t3
+    on (t0.c3 = t3.c26 ))
+where (exists (select  * from t4)) order by 1, 2, 3;
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
+
 -- issue https://github.com/citusdata/citus/issues/7696
 create table t1 ( vkey int4 );
 create table t2 ( vkey int4 );
@@ -233,6 +243,14 @@ SELECT create_reference_table('t2');
 
 select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
 where not((85) in (select 1 from t2));
+
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+
+-- wrong result pre-pg17
+select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
+where not((85) in (select 1 from t2));
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
 
 -- issue https://github.com/citusdata/citus/issues/7698
 create table t5 ( vkey int4, c10 int4 );
@@ -251,6 +269,16 @@ select t6.vkey
 from (t5 right outer join t6
     on (t5.c10 = t6.vkey))
 where exists (select * from t6);
+
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+
+-- wrong result pre-pg17
+select t6.vkey
+from (t5 right outer join t6
+    on (t5.c10 = t6.vkey))
+where exists (select * from t6);
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
 
 -- issue https://github.com/citusdata/citus/issues/7119
 -- this test was removed in
