@@ -82,6 +82,26 @@ SELECT * FROM citus_stats
   WHERE tablename IN ('current_check', 'dist_current_check', 'ref_current_check', 'citus_local_current_check')
   ORDER BY 1;
 
+-- create a dist table with million rows to simulate 3.729223e+06 in reltuples
+-- this tests casting numbers like 3.729223e+06 to bigint
+
+CREATE TABLE organizations (
+    org_id bigint,
+    id int
+);
+
+SELECT create_distributed_table('organizations', 'org_id');
+
+INSERT INTO organizations(org_id, id)
+  SELECT i, 1
+  FROM generate_series(1,2000000) i;
+
+ANALYZE organizations;
+
+SELECT attname, null_frac, most_common_vals, most_common_freqs FROM citus_stats
+  WHERE tablename IN ('organizations')
+  ORDER BY 1;
+
 RESET SESSION AUTHORIZATION;
 DROP SCHEMA citus_aggregated_stats CASCADE;
 DROP USER user1;
