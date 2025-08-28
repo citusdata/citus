@@ -58,7 +58,7 @@ common_val_occurrence AS (
             sum(common_freq * shard_reltuples)::bigint AS occurrence
     FROM most_common_vals m
     GROUP BY citus_table, m.attname, common_val
-    ORDER BY 1, 2, occurrence DESC)
+    ORDER BY 1, 2, occurrence DESC, 3)
 
 SELECT nsp.nspname AS schemaname, p.relname AS tablename, c.attname,
 

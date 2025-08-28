@@ -134,9 +134,70 @@ SELECT attname, null_frac, most_common_vals, most_common_freqs FROM citus_stats
  id      |         0 | {1}              | {1}
 (1 row)
 
+-- more real-world scenario:
+-- outputs of pg_stats and citus_stats are NOT the same
+-- but citus_stats does a fair estimation job
+SELECT setseed(0.42);
+ setseed
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE orders (id bigint , custid int, product text, quantity int);
+INSERT INTO orders(id, custid, product, quantity)
+SELECT i, (random() * 100)::int, 'product' || (random() * 10)::int, NULL
+FROM generate_series(1,11) d(i);
+-- frequent customer
+INSERT INTO orders(id, custid, product, quantity)
+SELECT 1200, 17, 'product' || (random() * 10)::int, NULL
+FROM generate_series(1, 57) sk(i);
+-- popular product
+INSERT INTO orders(id, custid, product, quantity)
+SELECT i+100 % 17, NULL, 'product3', (random() * 40)::int
+FROM generate_series(1, 37) sk(i);
+-- frequent customer
+INSERT INTO orders(id, custid, product, quantity)
+SELECT 1390, 76, 'product' || ((random() * 20)::int % 3), (random() * 30)::int
+FROM generate_series(1, 33) sk(i);
+ANALYZE orders;
+-- pg_stats
+SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
+  WHERE tablename IN ('orders')
+ORDER BY 3;
+       schemaname       | tablename | attname  | null_frac |                                       most_common_vals                                       |                                                                                                       most_common_freqs
+---------------------------------------------------------------------
+ citus_aggregated_stats | orders    | custid   |  0.268116 | {17,76}                                                                                      | {0.413043,0.23913}
+ citus_aggregated_stats | orders    | id       |         0 | {1200,1390}                                                                                  | {0.413043,0.23913}
+ citus_aggregated_stats | orders    | product  |         0 | {product3,product2,product0,product1,product9,product4,product8,product5,product10,product6} | {0.347826,0.15942,0.115942,0.108696,0.0652174,0.057971,0.0507246,0.0362319,0.0289855,0.0289855}
+ citus_aggregated_stats | orders    | quantity |  0.492754 | {26,23,6,8,11,12,13,17,20,25,30,4,14,15,16,19,24,27,35,36,38,40}                             | {0.0362319,0.0289855,0.0217391,0.0217391,0.0217391,0.0217391,0.0217391,0.0217391,0.0217391,0.0217391,0.0217391,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928}
+(4 rows)
+
+SELECT create_distributed_table('orders', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$citus_aggregated_stats.orders$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ANALYZE orders;
+-- citus_stats
+SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_freqs FROM citus_stats
+  WHERE tablename IN ('orders')
+ORDER BY 3;
+       schemaname       | tablename | attname  | null_frac |                                       most_common_vals                                       |                                                                                        most_common_freqs
+---------------------------------------------------------------------
+ citus_aggregated_stats | orders    | custid   |  0.268116 | {17,76}                                                                                      | {0.413043,0.23913}
+ citus_aggregated_stats | orders    | id       |         0 | {1200,1390}                                                                                  | {0.413043,0.23913}
+ citus_aggregated_stats | orders    | product  |         0 | {product3,product2,product0,product1,product9,product4,product8,product5,product10,product6} | {0.347826,0.15942,0.115942,0.108696,0.0652174,0.057971,0.0507246,0.0362319,0.0289855,0.0289855}
+ citus_aggregated_stats | orders    | quantity |  0.492754 | {26,13,17,20,23,8,11,12,14,16,19,24,25,27,30,35,38,40,6}                                     | {0.0362319,0.0217391,0.0217391,0.0217391,0.0217391,0.0217391,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928,0.0144928}
+(4 rows)
+
 RESET SESSION AUTHORIZATION;
 DROP SCHEMA citus_aggregated_stats CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 8 other objects
 DETAIL:  drop cascades to table current_check
 drop cascades to table dist_current_check
 drop cascades to table ref_current_check
@@ -144,4 +205,5 @@ drop cascades to table citus_local_current_check_1870003
 drop cascades to table ref_current_check_1870002
 drop cascades to table citus_local_current_check
 drop cascades to table organizations
+drop cascades to table orders
 DROP USER user1;
