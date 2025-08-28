@@ -110,13 +110,38 @@ SELECT * FROM citus_stats
  citus_aggregated_stats | citus_local_current_check | rlsuser   |  0.142857 | {user1}          | {0.714286}
 (9 rows)
 
+-- create a dist table with million rows to simulate 3.729223e+06 in reltuples
+-- this tests casting numbers like 3.729223e+06 to bigint
+CREATE TABLE organizations (
+    org_id bigint,
+    id int
+);
+SELECT create_distributed_table('organizations', 'org_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO organizations(org_id, id)
+  SELECT i, 1
+  FROM generate_series(1,2000000) i;
+ANALYZE organizations;
+SELECT attname, null_frac, most_common_vals, most_common_freqs FROM citus_stats
+  WHERE tablename IN ('organizations')
+  ORDER BY 1;
+ attname | null_frac | most_common_vals | most_common_freqs
+---------------------------------------------------------------------
+ id      |         0 | {1}              | {1}
+(1 row)
+
 RESET SESSION AUTHORIZATION;
 DROP SCHEMA citus_aggregated_stats CASCADE;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table current_check
 drop cascades to table dist_current_check
 drop cascades to table ref_current_check
 drop cascades to table citus_local_current_check_1870003
 drop cascades to table ref_current_check_1870002
 drop cascades to table citus_local_current_check
+drop cascades to table organizations
 DROP USER user1;
