@@ -43,6 +43,8 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
 Datum
 citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	/* Ensure superuser and coordinator */
 	EnsureSuperUser();
 	EnsureCoordinator();
