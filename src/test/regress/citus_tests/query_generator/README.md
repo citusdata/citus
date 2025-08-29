@@ -53,6 +53,7 @@ targetTables: <Table[]>
           name: <string>
           type: <string>
       distinctCopyCount: <int>
+      colocateWith: Optional<string>
 ```
 
 Explanation:
@@ -72,6 +73,7 @@ targetTables: "array of tables that will be used in generated queries"
           name: "name of column"
           type: "name of data type of column(only support 'int' now)"
       distinctCopyCount: "how many tables with the same configuration we should create(only by changing full name, still using the same name prefix)"
+      colocateWith: "colocated_with parameter"
 ```
 
 
@@ -87,6 +89,8 @@ Schema for Query configuration:
 ```yaml
 queryCount: <int>
 queryOutFile: <string>
+repartitionJoin: <bool>
+singleRepartitionJoin: <bool>
 semiAntiJoin: <bool>
 cartesianProduct: <bool>
 limit: <bool>
@@ -114,6 +118,8 @@ Explanation:
 ```yaml
 queryCount: "number of queries to generate"
 queryOutFile: "file to write generated queries"
+repartitionJoin: "should we enable repartition join"
+singleRepartitionJoin: "should we make default repartition join mode as single repartition join (default is dual)"
 semiAntiJoin: "should we support semi joins (WHERE col IN (Subquery))"
 cartesianProduct: "should we support cartesian joins"
 limit: "should we support limit clause"
@@ -172,7 +178,7 @@ Tool supports following citus table types:
 targetTables:
   - Table:
     ...
-    citusType: <one of (DISTRIBUTED || REFERENCE || POSTGRES)>
+    citusType: <one of (HASH_DISTRIBUTED || SINGLE_SHARD_DISTRIBUTED || REFERENCE || POSTGRES)>
     ...
 ```
 
