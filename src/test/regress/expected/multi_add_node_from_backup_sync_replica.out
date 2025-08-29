@@ -27,15 +27,17 @@ SELECT master_remove_node('localhost', :follower_worker_2_port);
 -- this should fail as the replica is a synchronous replica that is not allowed
 SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: ::1)
+NOTICE:  checking replication status of clone node localhost:xxxxx
 ERROR:  cannot add clone localhost:xxxxx as it is configured as a synchronous replica
-DETAIL:  Promoting a synchronous clone can cause data consistency issues. Please configure it as an asynchronous replica first.
+DETAIL:  Promoting a synchronous clone can cause data consistency issues
+HINT:  Configure clone as an asynchronous replica
 -- this should fail as the replica is a synchronous replica that is not allowed
 SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_2_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication for node localhost (resolved IP: ::1)
+NOTICE:  checking replication status of clone node localhost:xxxxx
 ERROR:  cannot add clone localhost:xxxxx as it is configured as a synchronous replica
-DETAIL:  Promoting a synchronous clone can cause data consistency issues. Please configure it as an asynchronous replica first.
+DETAIL:  Promoting a synchronous clone can cause data consistency issues
+HINT:  Configure clone as an asynchronous replica
 SELECT * from pg_dist_node ORDER by nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------

@@ -22,6 +22,7 @@
 #include "distributed/relation_restriction_equivalence.h"
 
 extern bool EnableRecurringOuterJoinPushdown;
+extern bool EnableOuterJoinsWithPseudoconstantQualsPrePG17;
 typedef struct RecursivePlanningContextInternal RecursivePlanningContext;
 
 typedef struct RangeTblEntryIndex
