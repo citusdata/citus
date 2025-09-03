@@ -1,3 +1,9 @@
+### citus v12.1.9 (Sep 3, 2025) ###
+
+* Adds a GUC for queries with outer joins and pseudoconstant quals (#8163)
+
+* Updates dynamic_library_path automatically when CDC is enabled (#7715)
+
 ### citus v12.1.8 (May 29, 2025) ###
 
 * Fixes a crash in left outer joins that can happen when there is an an
