@@ -12,6 +12,10 @@
 -- If chunks get filtered by columnar, less rows are passed to WHERE
 -- clause, so this function should return a lower number.
 --
+
+CREATE SCHEMA columnar_chunk_filtering;
+SET search_path TO columnar_chunk_filtering, public;
+
 CREATE OR REPLACE FUNCTION filtered_row_count (query text) RETURNS bigint AS
 $$
     DECLARE
@@ -79,10 +83,10 @@ SELECT * FROM collation_chunk_filtering_test WHERE A > 'B';
 
 CREATE TABLE simple_chunk_filtering(i int) USING COLUMNAR;
 INSERT INTO simple_chunk_filtering SELECT generate_series(0,234567);
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT * FROM simple_chunk_filtering WHERE i > 123456;
 SET columnar.enable_qual_pushdown = false;
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT * FROM simple_chunk_filtering WHERE i > 123456;
 SET columnar.enable_qual_pushdown TO DEFAULT;
 
@@ -90,7 +94,7 @@ SET columnar.enable_qual_pushdown TO DEFAULT;
 TRUNCATE simple_chunk_filtering;
 INSERT INTO simple_chunk_filtering SELECT generate_series(0,200000);
 COPY (SELECT * FROM simple_chunk_filtering WHERE i > 180000) TO '/dev/null';
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT * FROM simple_chunk_filtering WHERE i > 180000;
 
 DROP TABLE simple_chunk_filtering;
@@ -99,39 +103,39 @@ DROP TABLE simple_chunk_filtering;
 CREATE TABLE multi_column_chunk_filtering(a int, b int) USING columnar;
 INSERT INTO multi_column_chunk_filtering SELECT i,i+1 FROM generate_series(0,234567) i;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
 
 -- make next tests faster
 TRUNCATE multi_column_chunk_filtering;
 INSERT INTO multi_column_chunk_filtering SELECT generate_series(0,5);
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT b FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT b, a FROM multi_column_chunk_filtering WHERE b > 50000;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT FROM multi_column_chunk_filtering WHERE a > 50000;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT FROM multi_column_chunk_filtering;
 
 BEGIN;
   ALTER TABLE multi_column_chunk_filtering DROP COLUMN a;
   ALTER TABLE multi_column_chunk_filtering DROP COLUMN b;
-  EXPLAIN (analyze on, costs off, timing off, summary off)
+  EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT * FROM multi_column_chunk_filtering;
 ROLLBACK;
 
 CREATE TABLE another_columnar_table(x int, y int) USING columnar;
 INSERT INTO another_columnar_table SELECT generate_series(0,5);
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT a, y FROM multi_column_chunk_filtering, another_columnar_table WHERE x > 1;
 
 EXPLAIN (costs off, timing off, summary off)
@@ -219,7 +223,7 @@ set enable_hashjoin=false;
 set enable_material=false;
 
 -- test different kinds of expressions
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM r1, coltest WHERE
   id1 = id AND x1 > 15000 AND x1::text > '000000' AND n1 % 10 = 0;
 SELECT * FROM r1, coltest WHERE
@@ -227,7 +231,7 @@ SELECT * FROM r1, coltest WHERE
 
 -- test equivalence classes
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM r1, r2, r3, r4, r5, r6, r7, coltest WHERE
   id = id1 AND id1 = id2 AND id2 = id3 AND id3 = id4 AND
   id4 = id5 AND id5 = id6 AND id6 = id7;
@@ -258,7 +262,7 @@ set columnar.planner_debug_level to default;
 
 set columnar.planner_debug_level = 'notice';
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM r1, r2, r3, coltest WHERE
   id1 = id2 AND id2 = id3 AND id3 = id AND
   n1 > x1 AND n2 > x2 AND n3 > x3;
@@ -270,7 +274,7 @@ SELECT * FROM r1, r2, r3, coltest WHERE
   n1 > x1 AND n2 > x2 AND n3 > x3;
 
 -- test partitioning parameterization
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM r1, coltest_part WHERE
   id1 = id AND n1 > x1;
 SELECT * FROM r1, coltest_part WHERE
@@ -300,7 +304,7 @@ END;
 $$;
 select * from coltest where x3 = vol();
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
   SELECT * FROM coltest c1 WHERE ceil(x1) > 4222;
 
 set columnar.planner_debug_level to default;
@@ -391,32 +395,32 @@ COMMIT;
 SET columnar.max_custom_scan_paths TO 50;
 SET columnar.qual_pushdown_correlation_threshold TO 0.0;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a = 104356 or a = 76556;
 SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a = 104356 or a = 76556;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test WHERE a = 194356 or a = 104356 or a = 76556;
 SELECT sum(a) FROM pushdown_test WHERE a = 194356 or a = 104356 or a = 76556;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a > a*-1 + b;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test where (a > 1000 and a < 10000) or (a > 20000 and a < 50000);
 SELECT sum(a) FROM pushdown_test where (a > 1000 and a < 10000) or (a > 20000 and a < 50000);
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test where (a > random() and a < 2*a) or (a > 100);
 SELECT sum(a) FROM pushdown_test where (a > random() and a < 2*a) or (a > 100);
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
 SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
 
 SET hash_mem_multiplier = 1.0;
-SELECT public.explain_with_pg16_subplan_format($Q$
-EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT columnar_test_helpers.explain_with_pg16_subplan_format($Q$
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test where
 (
   a > random()
@@ -445,7 +449,7 @@ or
 create function stable_1(arg int) returns int language plpgsql STRICT IMMUTABLE as
 $$ BEGIN RETURN 1+arg; END; $$;
 
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test where (a = random() and a < stable_1(a) and a < stable_1(6000));
 SELECT sum(a) FROM pushdown_test where (a = random() and a < stable_1(a) and a < stable_1(6000));
 
@@ -476,7 +480,7 @@ BEGIN;
     INSERT INTO pushdown_test VALUES(7, 'USA');
     INSERT INTO pushdown_test VALUES(8, 'ZW');
 END;
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT id FROM pushdown_test WHERE country IN ('USA', 'BR', 'ZW');
 
 SELECT id FROM pushdown_test WHERE country IN ('USA', 'BR', 'ZW');
@@ -488,9 +492,11 @@ BEGIN
     return 'AL';
 END;
 $$;
-EXPLAIN (analyze on, costs off, timing off, summary off)
+EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
 
 SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
 
-DROP TABLE pushdown_test;
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_chunk_filtering CASCADE;
+RESET client_min_messages;

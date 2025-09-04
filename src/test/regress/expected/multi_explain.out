@@ -338,7 +338,7 @@ Sort
                           ->  Seq Scan on lineitem_360000 lineitem
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -365,7 +365,7 @@ SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
 |
 BEGIN;
 SET LOCAL citus.enable_repartition_joins TO true;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
         Task Count: 6
@@ -378,7 +378,7 @@ Aggregate (actual rows=1 loops=1)
               Map Task Count: 3
               Merge Task Count: 6
 -- Confirm repartiton join in distributed subplan works
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
 WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
 SELECT count(*) from repartition;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -408,7 +408,7 @@ END;
 DROP TABLE t1, t2;
 -- Test query text output, with ANALYZE ON
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -519,7 +519,7 @@ Custom Scan (Citus Adaptive)
                     Filter: (l_partkey = 0)
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 BEGIN;
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
@@ -1074,7 +1074,7 @@ Custom Scan (Citus Adaptive)
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 SELECT public.plan_normalize_memory($Q$
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 $Q$);
@@ -1387,7 +1387,7 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
   Task Count: 1
   Tuple data received from nodes: 30 bytes
@@ -1410,7 +1410,7 @@ Custom Scan (Citus Adaptive)
               ->  Seq Scan on lineitem_360000 lineitem
 ROLLBACK;
 BEGIN;
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE multi_shard_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
   Tasks Shown: One of 2
@@ -1993,7 +1993,7 @@ SET citus.shard_count TO 4;
 SET client_min_messages TO WARNING;
 SELECT create_distributed_table('explain_analyze_test', 'a');
 
-\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off)'
+\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)'
 \set default_explain_flags '(ANALYZE off, COSTS off, TIMING off, SUMMARY off)'
 -- router SELECT
 EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
@@ -2168,7 +2168,7 @@ SELECT * FROM explain_pk ORDER BY 1;
 ROLLBACK;
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 [
   {
     "Plan": {
@@ -2224,7 +2224,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
   }
 ]
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
 [
   {
     "Plan": {
@@ -2271,7 +2271,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * F
   }
 ]
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 <explain xmlns="http://www.postgresql.org/2009/explain">
   <Query>
     <Plan>
@@ -2326,7 +2326,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
   </Query>
 </explain>
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) SELECT * FROM explain_pk;
 <explain xmlns="http://www.postgresql.org/2009/explain">
   <Query>
     <Plan>
@@ -2438,7 +2438,7 @@ Aggregate (actual rows=1 loops=1)
                                 Sort Method: quicksort  Memory: 25kB
                                 ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
 SELECT public.explain_with_pg17_initplan_format($Q$
-EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off)
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
 $Q$);
@@ -2492,15 +2492,15 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
         Intermediate Data Size: 100 bytes
         Result destination: Write locally
-        ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
+        ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
-              Tuple data received from nodes: 160 bytes
+              Tuple data received from nodes: 80 bytes
               Tasks Shown: One of 4
               ->  Task
-                    Tuple data received from node: 64 bytes
+                    Tuple data received from node: 32 bytes
                     Node: host=localhost port=xxxxx dbname=regression
-                    ->  Insert on dist_table_570017 citus_table_alias (actual rows=8 loops=1)
-                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
+                    ->  Insert on dist_table_570017 citus_table_alias (actual rows=4 loops=1)
+                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
                                 Filter: (a IS NOT NULL)
   ->  Distributed Subplan XXX_2
         Intermediate Data Size: 150 bytes
@@ -3076,7 +3076,7 @@ SELECT create_distributed_table('explain_analyze_execution_time', 'a');
 -- sleep for the shard that has the single row, so that
 -- will definitely be slower
 set citus.explain_analyze_sort_method to "taskId";
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 2
   Tuple data received from nodes: 4 bytes
@@ -3086,7 +3086,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on explain_analyze_execution_time_570029 explain_analyze_execution_time (actual rows=0 loops=1)
 set citus.explain_analyze_sort_method to "execution-time";
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF) select a, CASE WHEN pg_sleep(0.4) IS NULL THEN  'x' END from explain_analyze_execution_time;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 2
   Tuple data received from nodes: 4 bytes
@@ -3228,6 +3228,159 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
                 ->  Update on tbl_570036 tbl (actual rows=0 loops=1)
                       ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
                             Filter: (a = 1)
+-- EXPLAIN ANALYZE shouldn't execute SubPlans twice (bug #4212)
+SET search_path TO multi_explain;
+CREATE TABLE test_subplans (x int primary key, y int);
+SELECT create_distributed_table('test_subplans','x');
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 18 bytes
+        Result destination: Write locally
+        ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+              Task Count: 1
+              Tuple data received from nodes: 16 bytes
+              Tasks Shown: All
+              ->  Task
+                    Tuple data received from node: 16 bytes
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Insert on test_subplans_570038 (actual rows=1 loops=1)
+                          ->  Result (actual rows=1 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 8 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 8 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
+-- Only one row must exist
+SELECT * FROM test_subplans;
+1|2
+-- Will fail with duplicate pk
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+ERROR:  duplicate key value violates unique constraint "test_subplans_pkey_570038"
+DETAIL:  Key (x)=(1) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+-- Test JSON format
+TRUNCATE test_subplans;
+EXPLAIN (FORMAT JSON, COSTS off, ANALYZE on, TIMING off, SUMMARY off, BUFFERS OFF)
+WITH a AS (INSERT INTO test_subplans VALUES (1,2) RETURNING *)
+SELECT * FROM a;
+[
+  {
+    "Plan": {
+      "Node Type": "Custom Scan",
+      "Custom Plan Provider": "Citus Adaptive",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Actual Rows": 1,
+      "Actual Loops": 1,
+      "Distributed Query": {
+        "Subplans": [
+          {
+            "Intermediate Data Size": "18 bytes",
+            "Result destination": "Write locally",
+            "PlannedStmt": [
+              {
+                "Plan": {
+                  "Node Type": "Custom Scan",
+                  "Custom Plan Provider": "Citus Adaptive",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Actual Rows": 1,
+                  "Actual Loops": 1,
+                  "Distributed Query": {
+                    "Job": {
+                      "Task Count": 1,
+                      "Tuple data received from nodes": "16 bytes",
+                      "Tasks Shown": "All",
+                      "Tasks": [
+                        {
+                          "Tuple data received from node": "16 bytes",
+                          "Node": "host=localhost port=xxxxx dbname=regression",
+                          "Remote Plan": [
+                            [
+                              {
+                                "Plan": {
+                                  "Node Type": "ModifyTable",
+                                  "Operation": "Insert",
+                                  "Parallel Aware": false,
+                                  "Async Capable": false,
+                                  "Relation Name": "test_subplans_570038",
+                                  "Alias": "test_subplans_570038",
+                                  "Actual Rows": 1,
+                                  "Actual Loops": 1,
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Result",
+                                      "Parent Relationship": "Outer",
+                                      "Parallel Aware": false,
+                                      "Async Capable": false,
+                                      "Actual Rows": 1,
+                                      "Actual Loops": 1
+                                    }
+                                  ]
+                                },
+                                "Triggers": [
+                                ]
+                              }
+                            ]
+
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                "Triggers": [
+                ]
+              }
+            ]
+          }
+        ],
+        "Job": {
+          "Task Count": 1,
+          "Tuple data received from nodes": "8 bytes",
+          "Tasks Shown": "All",
+          "Tasks": [
+            {
+              "Tuple data received from node": "8 bytes",
+              "Node": "host=localhost port=xxxxx dbname=regression",
+              "Remote Plan": [
+                [
+                  {
+                    "Plan": {
+                      "Node Type": "Function Scan",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Function Name": "read_intermediate_result",
+                      "Alias": "intermediate_result",
+                      "Actual Rows": 1,
+                      "Actual Loops": 1
+                    },
+                    "Triggers": [
+                    ]
+                  }
+                ]
+
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Triggers": [
+    ]
+  }
+]
+-- Only one row must exist
+SELECT * FROM test_subplans;
+1|2
 -- check when auto explain + analyze is enabled, we do not allow local execution.
 CREATE SCHEMA test_auto_explain;
 SET search_path TO 'test_auto_explain';

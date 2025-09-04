@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 create schema pg14;
 set search_path to pg14;
 SET citus.shard_replication_factor TO 1;
@@ -760,3 +764,6 @@ drop extension postgres_fdw cascade;
 drop schema pg14 cascade;
 DROP ROLE role_1, r1;
 reset client_min_messages;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

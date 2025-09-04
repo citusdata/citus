@@ -120,7 +120,41 @@ ORDER BY 1, 2;
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
-DROP EXTENSION citus_columnar;
+SET client_min_messages TO WARNING;
+DROP EXTENSION IF EXISTS citus_columnar;
+RESET client_min_messages;
+CREATE EXTENSION citus;
+-- When there are no relations using the columnar access method, we don't automatically create
+-- "citus_columnar" extension together with "citus" extension anymore. And as this will always
+-- be the case for a fresh "CREATE EXTENSION citus", we know that we should definitely not have
+-- "citus_columnar" extension created.
+SELECT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_not_exists;
+ citus_columnar_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Likely, we should not have any columnar objects leftover from "old columnar", i.e., the
+-- columnar access method that we had before Citus 11.1, around.
+SELECT NOT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_not_exists;
+ columnar_am_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_not_exists;
+ columnar_catalog_schemas_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_not_exists;
+ columnar_utilities_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP EXTENSION citus;
 \c
 -- these tests switch between citus versions and call ddl's that require pg_dist_object to be created
 SET citus.enable_metadata_sync TO 'false';
@@ -759,6 +793,99 @@ SELECT * FROM multi_extension.print_extension_changes();
                     | view public.citus_tables
 (2 rows)
 
+-- Update Citus to 13.2-1 and make sure that we don't automatically create
+-- citus_columnar extension as we don't have any relations created using columnar.
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+SELECT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_not_exists;
+ citus_columnar_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_not_exists;
+ columnar_am_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_not_exists;
+ columnar_catalog_schemas_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_not_exists;
+ columnar_utilities_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Unfortunately, our downgrade scripts seem to assume that citus_columnar exists.
+-- Seems this has always been the case since the introduction of citus_columnar,
+-- so we need to create citus_columnar before the downgrade.
+CREATE EXTENSION citus_columnar;
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+-- Update Citus to 13.2-1 and make sure that already having citus_columnar extension
+-- doesn't cause any issues.
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_exists;
+ citus_columnar_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_exists;
+ columnar_am_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_exists;
+ columnar_catalog_schemas_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_exists;
+ columnar_utilities_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+DROP EXTENSION citus_columnar;
+-- Update Citus to 13.2-1 and make sure that NOT having citus_columnar extension
+-- doesn't cause any issues.
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+SELECT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_not_exists;
+ citus_columnar_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_am WHERE pg_am.amname = 'columnar') as columnar_am_not_exists;
+ columnar_am_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('columnar', 'columnar_internal')) as columnar_catalog_schemas_not_exists;
+ columnar_catalog_schemas_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('alter_columnar_table_set', 'alter_columnar_table_reset', 'upgrade_columnar_storage', 'downgrade_columnar_storage', 'columnar_ensure_am_depends_catalog')) as columnar_utilities_not_exists;
+ columnar_utilities_not_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Downgrade back to 10.0-4 for the rest of the tests.
+--
+-- same here - to downgrade Citus, first we need to create citus_columnar
+CREATE EXTENSION citus_columnar;
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 -- not print "HINT: " to hide current lib version
 \set VERBOSITY terse
 CREATE TABLE columnar_table(a INT, b INT) USING columnar;
@@ -1010,7 +1137,7 @@ FROM
 	pg_dist_node_metadata;
  partitioned_citus_table_exists_pre_11 | is_null
 ---------------------------------------------------------------------
-                                       | t
+ f                                     | f
 (1 row)
 
 -- Test downgrade to 10.2-5 from 11.0-1
@@ -1211,6 +1338,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                                                                                                                                                    | type split_shard_info
                                                                                                                                                                                                                                                                    | view citus_locks
 (57 rows)
+
+-- Make sure that citus_columnar is automatically created while updating Citus to 11.1-1
+-- as we created columnar tables using the columnar access method before.
+SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citus_columnar') as citus_columnar_exists;
+ citus_columnar_exists
+---------------------------------------------------------------------
+ t
+(1 row)
 
 -- Test downgrade to 11.1-1 from 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
@@ -1455,6 +1590,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                         previous_object                         |                                        current_object
 ---------------------------------------------------------------------
  function citus_unmark_object_distributed(oid,oid,integer) void |
+ function shard_name(regclass,bigint) text                      |
                                                                 | function citus_internal.acquire_citus_advisory_object_class_lock(integer,cstring) void
                                                                 | function citus_internal.add_colocation_metadata(integer,integer,integer,regtype,oid) void
                                                                 | function citus_internal.add_object_metadata(text,text[],text[],integer,integer,boolean) void
@@ -1480,15 +1616,48 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                 | function citus_internal.update_placement_metadata(bigint,integer,integer) void
                                                                 | function citus_internal.update_relation_colocation(oid,integer) void
                                                                 | function citus_is_primary_node() boolean
+                                                                | function citus_stat_counters(oid) SETOF record
+                                                                | function citus_stat_counters_reset(oid) void
                                                                 | function citus_unmark_object_distributed(oid,oid,integer,boolean) void
-(27 rows)
+                                                                | function shard_name(regclass,bigint,boolean) text
+                                                                | view citus_nodes
+                                                                | view citus_stat_counters
+(33 rows)
+
+-- Test downgrade to 13.1-1 from 13.2-1
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+ALTER EXTENSION citus UPDATE TO '13.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 13.2-1
+ALTER EXTENSION citus UPDATE TO '13.2-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                                                   previous_object                                                    |                                                                                       current_object
+---------------------------------------------------------------------
+ function citus_rebalance_start(name,boolean,citus.shard_transfer_mode) bigint                                        |
+ function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision) |
+                                                                                                                      | function citus_add_clone_node(text,integer,text,integer) integer
+                                                                                                                      | function citus_add_clone_node_with_nodeid(text,integer,integer) integer
+                                                                                                                      | function citus_internal.citus_internal_copy_single_shard_placement(bigint,integer,integer,integer,citus.shard_transfer_mode) void
+                                                                                                                      | function citus_promote_clone_and_rebalance(integer,name,integer) void
+                                                                                                                      | function citus_rebalance_start(name,boolean,citus.shard_transfer_mode,boolean,boolean) bigint
+                                                                                                                      | function citus_remove_clone_node(text,integer) void
+                                                                                                                      | function citus_remove_clone_node_with_nodeid(integer) void
+                                                                                                                      | function get_snapshot_based_node_split_plan(text,integer,text,integer,name) TABLE(table_name regclass, shardid bigint, shard_size bigint, placement_node text)
+                                                                                                                      | function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision, execution_ntuples double precision, execution_nloops double precision)
+                                                                                                                      | view citus_stats
+(12 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 13.1devel
+ 13.2devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -1523,7 +1692,7 @@ DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 13.1, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 13.2, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -1568,7 +1737,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 13.1, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 13.2, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
@@ -1597,13 +1766,11 @@ NOTICE:  version "9.1-1" of extension "citus" is already installed
 ALTER EXTENSION citus UPDATE;
 -- re-create in newest version
 DROP EXTENSION citus;
-DROP EXTENSION citus_columnar;
 \c
 CREATE EXTENSION citus;
 -- test cache invalidation in workers
 \c - - - :worker_1_port
 DROP EXTENSION citus;
-DROP EXTENSION citus_columnar;
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '8.0-1';
@@ -1975,8 +2142,7 @@ SELECT citus_add_local_table_to_metadata('test');
 
 DROP TABLE test;
 -- Verify that we don't consider the schemas created by extensions as tenant schemas.
--- Easiest way of verifying this is to drop and re-create columnar extension.
-DROP EXTENSION citus_columnar;
+-- Easiest way of verifying this is to create columnar extension.
 SET citus.enable_schema_based_sharding TO ON;
 CREATE EXTENSION citus_columnar;
 SELECT COUNT(*)=0 FROM pg_dist_schema

@@ -2,6 +2,10 @@
 -- ALTER_TABLE_SET_ACCESS_METHOD
 --
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE TABLE alter_am_pg_version_table (a INT);
 SELECT alter_table_set_access_method('alter_am_pg_version_table', 'columnar');
 DROP TABLE alter_am_pg_version_table;
@@ -288,3 +292,6 @@ select alter_table_set_access_method('view_test_view','columnar');
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

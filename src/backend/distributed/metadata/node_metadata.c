@@ -35,6 +35,7 @@
 
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/clonenode_utils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -84,6 +85,8 @@ typedef struct NodeMetadata
 	bool isActive;
 	Oid nodeRole;
 	bool shouldHaveShards;
+	uint32 nodeprimarynodeid;
+	bool nodeisclone;
 	char *nodeCluster;
 } NodeMetadata;
 
@@ -106,11 +109,14 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport,
 						  NodeMetadata *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void BlockDistributedQueriesOnMetadataNodes(void);
-static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
+static WorkerNode * TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor,
+									  HeapTuple heapTuple);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort,
 							   bool localOnly);
+static int GetNodePrimaryNodeIdAttrIndexInPgDistNode(TupleDesc tupleDesc);
+static int GetNodeIsCloneAttrIndexInPgDistNode(TupleDesc tupleDesc);
 static bool UnsetMetadataSyncedForAllWorkers(void);
 static char * GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode,
 													int columnIndex,
@@ -120,11 +126,10 @@ static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
-static WorkerNode * FindNodeAnyClusterByNodeId(uint32 nodeId);
 static void ErrorIfAnyNodeNotExist(List *nodeList);
 static void UpdateLocalGroupIdsViaMetadataContext(MetadataSyncContext *context);
-static void SendDeletionCommandsForReplicatedTablePlacements(
-	MetadataSyncContext *context);
+static void SendDeletionCommandsForReplicatedTablePlacements(MetadataSyncContext *context)
+;
 static void SyncNodeMetadata(MetadataSyncContext *context);
 static void SetNodeStateViaMetadataContext(MetadataSyncContext *context,
 										   WorkerNode *workerNode,
@@ -134,11 +139,14 @@ static void MarkNodesNotSyncedInLoopBackConnection(MetadataSyncContext *context,
 static void EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid);
 static void SetNodeMetadata(MetadataSyncContext *context, bool localOnly);
 static void EnsureTransactionalMetadataSyncMode(void);
-static void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE
-											lockMode);
 static BackgroundWorkerHandle * CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown);
 static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode(
 	WorkerNode *workerNode, bool force, int32 lock_cooldown);
+
+
+static int32 CitusAddCloneNode(WorkerNode *primaryWorkerNode,
+							   char *cloneHostname, int32 clonePort);
+static void RemoveCloneNode(WorkerNode *cloneNode);
 
 /* Function definitions go here */
 
@@ -168,6 +176,10 @@ PG_FUNCTION_INFO_V1(citus_coordinator_nodeid);
 PG_FUNCTION_INFO_V1(citus_is_coordinator);
 PG_FUNCTION_INFO_V1(citus_internal_mark_node_not_synced);
 PG_FUNCTION_INFO_V1(citus_is_primary_node);
+PG_FUNCTION_INFO_V1(citus_add_clone_node);
+PG_FUNCTION_INFO_V1(citus_add_clone_node_with_nodeid);
+PG_FUNCTION_INFO_V1(citus_remove_clone_node);
+PG_FUNCTION_INFO_V1(citus_remove_clone_node_with_nodeid);
 
 /*
  * DefaultNodeMetadata creates a NodeMetadata struct with the fields set to
@@ -183,6 +195,8 @@ DefaultNodeMetadata()
 	nodeMetadata.nodeRack = WORKER_DEFAULT_RACK;
 	nodeMetadata.shouldHaveShards = true;
 	nodeMetadata.groupId = INVALID_GROUP_ID;
+	nodeMetadata.nodeisclone = false;
+	nodeMetadata.nodeprimarynodeid = 0; /* 0 typically means InvalidNodeId */
 
 	return nodeMetadata;
 }
@@ -1178,6 +1192,42 @@ ActivateNodeList(MetadataSyncContext *context)
 
 
 /*
+ * ActivateCloneNodeAsPrimary sets the given worker node as primary and active
+ * in the pg_dist_node catalog and make the clone node as first class citizen.
+ */
+void
+ActivateCloneNodeAsPrimary(WorkerNode *workerNode)
+{
+	Relation pgDistNode = table_open(DistNodeRelationId(), AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+	TupleDesc copiedTupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
+	table_close(pgDistNode, AccessShareLock);
+
+	/*
+	 * Set the node as primary and active.
+	 */
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_noderole,
+							 ObjectIdGetDatum(PrimaryNodeRoleId()));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
+							 BoolGetDatum(true));
+	SetWorkerColumnLocalOnly(workerNode,
+							 GetNodeIsCloneAttrIndexInPgDistNode(copiedTupleDescriptor) +
+							 1,
+							 BoolGetDatum(false));
+	SetWorkerColumnLocalOnly(workerNode,
+							 GetNodePrimaryNodeIdAttrIndexInPgDistNode(
+								 copiedTupleDescriptor) + 1,
+							 Int32GetDatum(0));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
+							 BoolGetDatum(true));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+							 BoolGetDatum(true));
+	SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_shouldhaveshards,
+							 BoolGetDatum(true));
+}
+
+
+/*
  * Acquires shard metadata locks on all shards residing in the given worker node
  *
  * TODO: This function is not compatible with query from any node feature.
@@ -1200,7 +1250,8 @@ BackgroundWorkerHandle *
 CheckBackgroundWorkerToObtainLocks(int32 lock_cooldown)
 {
 	BackgroundWorkerHandle *handle = StartLockAcquireHelperBackgroundWorker(MyProcPid,
-																			lock_cooldown);
+																			lock_cooldown)
+	;
 	if (!handle)
 	{
 		/*
@@ -1423,6 +1474,305 @@ master_update_node(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_add_clone_node adds a new node as a clone of an existing primary node.
+ */
+Datum
+citus_add_clone_node(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+	EnsureCoordinator();
+
+	text *cloneHostnameText = PG_GETARG_TEXT_P(0);
+	int32 clonePort = PG_GETARG_INT32(1);
+	text *primaryHostnameText = PG_GETARG_TEXT_P(2);
+	int32 primaryPort = PG_GETARG_INT32(3);
+
+	char *cloneHostname = text_to_cstring(cloneHostnameText);
+	char *primaryHostname = text_to_cstring(primaryHostnameText);
+
+	WorkerNode *primaryWorker = FindWorkerNodeAnyCluster(primaryHostname, primaryPort);
+
+	if (primaryWorker == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("primary node %s:%d not found in pg_dist_node",
+							   primaryHostname, primaryPort)));
+	}
+
+	int32 cloneNodeId = CitusAddCloneNode(primaryWorker, cloneHostname, clonePort);
+
+	PG_RETURN_INT32(cloneNodeId);
+}
+
+
+/*
+ * citus_add_clone_node_with_nodeid adds a new node as a clone of an existing primary node
+ * using the primary node's ID. It records the clone's hostname, port, and links it to the
+ * primary node's ID.
+ *
+ * This function is useful when you already know the primary node's ID and want to add a clone
+ * without needing to look it up by hostname and port.
+ */
+Datum
+citus_add_clone_node_with_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+	EnsureCoordinator();
+
+	text *cloneHostnameText = PG_GETARG_TEXT_P(0);
+	int32 clonePort = PG_GETARG_INT32(1);
+	int32 primaryNodeId = PG_GETARG_INT32(2);
+
+	char *cloneHostname = text_to_cstring(cloneHostnameText);
+
+	bool missingOk = false;
+	WorkerNode *primaryWorkerNode = FindNodeWithNodeId(primaryNodeId, missingOk);
+
+	if (primaryWorkerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("primary node with ID %d does not exist", primaryNodeId)));
+	}
+
+	int32 cloneNodeId = CitusAddCloneNode(primaryWorkerNode, cloneHostname, clonePort);
+
+	PG_RETURN_INT32(cloneNodeId);
+}
+
+
+/*
+ * CitusAddCloneNode function adds a new node as a clone of an existing primary node.
+ * It records the clone's hostname, port, and links it to the primary node's ID.
+ * The clone is initially marked as inactive and not having shards.
+ */
+static int32
+CitusAddCloneNode(WorkerNode *primaryWorkerNode,
+				  char *cloneHostname, int32 clonePort)
+{
+	Assert(primaryWorkerNode != NULL);
+
+	/* Future-proofing: Ideally, a primary node should not itself be a clone.
+	 * This check might be more relevant once replica promotion logic exists.
+	 * For now, pg_dist_node.nodeisclone defaults to false for existing nodes.
+	 */
+	if (primaryWorkerNode->nodeisclone)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg(
+							"primary node %s:%d is itself a clone and cannot have clones",
+							primaryWorkerNode->workerName, primaryWorkerNode->
+							workerPort)));
+	}
+
+	if (!primaryWorkerNode->shouldHaveShards)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg(
+							"primary node %s:%d does not have shards, node without shards cannot have clones",
+							primaryWorkerNode->workerName, primaryWorkerNode->
+							workerPort)));
+	}
+
+	WorkerNode *existingCloneNode = FindWorkerNodeAnyCluster(cloneHostname, clonePort);
+	if (existingCloneNode != NULL)
+	{
+		/*
+		 * Idempotency check: If the node already exists, is it already correctly
+		 * registered as a clone for THIS primary?
+		 */
+		if (existingCloneNode->nodeisclone &&
+			existingCloneNode->nodeprimarynodeid == primaryWorkerNode->nodeId)
+		{
+			ereport(NOTICE, (errmsg(
+								 "node %s:%d is already registered as a clone for primary %s:%d (nodeid %d)",
+								 cloneHostname, clonePort,
+								 primaryWorkerNode->workerName, primaryWorkerNode->
+								 workerPort, primaryWorkerNode->nodeId)));
+			PG_RETURN_INT32(existingCloneNode->nodeId);
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg(
+								"a different node %s:%d (nodeid %d) already exists or is a clone for a different primary",
+								cloneHostname, clonePort, existingCloneNode->nodeId)));
+		}
+	}
+	EnsureValidStreamingReplica(primaryWorkerNode, cloneHostname, clonePort);
+
+	char *operation = "add";
+	EnsureValidCloneMode(primaryWorkerNode, cloneHostname, clonePort, operation);
+
+	NodeMetadata nodeMetadata = DefaultNodeMetadata();
+
+	nodeMetadata.nodeisclone = true;
+	nodeMetadata.nodeprimarynodeid = primaryWorkerNode->nodeId;
+	nodeMetadata.isActive = false; /* Replicas start as inactive */
+	nodeMetadata.shouldHaveShards = false; /* Replicas do not directly own primary shards */
+	nodeMetadata.groupId = INVALID_GROUP_ID; /* Replicas get a new group ID and do not belong to any existing group */
+	nodeMetadata.nodeRole = UnavailableNodeRoleId(); /* The node role is set to 'unavailable' */
+	nodeMetadata.nodeCluster = primaryWorkerNode->nodeCluster; /* Same cluster as primary */
+
+	/* Other fields like hasMetadata, metadataSynced will take defaults from DefaultNodeMetadata
+	 * (typically true, true for hasMetadata and metadataSynced if it's a new node,
+	 * or might need adjustment based on replica strategy)
+	 * For now, let's assume DefaultNodeMetadata provides suitable defaults for these
+	 * or they will be set by AddNodeMetadata/ActivateNodeList if needed.
+	 * Specifically, hasMetadata is often true, and metadataSynced true after activation.
+	 * Since this replica is inactive, metadata sync status might be less critical initially.
+	 */
+
+	bool nodeAlreadyExists = false;
+	bool localOnly = false; /* Propagate change to other workers with metadata */
+
+	/*
+	 * AddNodeMetadata will take an ExclusiveLock on pg_dist_node.
+	 * It also checks again if the node already exists after acquiring the lock.
+	 */
+	int cloneNodeId = AddNodeMetadata(cloneHostname, clonePort, &nodeMetadata,
+									  &nodeAlreadyExists, localOnly);
+
+	if (nodeAlreadyExists)
+	{
+		/* This case should ideally be caught by the FindWorkerNodeAnyCluster check above,
+		 * but AddNodeMetadata does its own check after locking.
+		 * If it already exists and is correctly configured, we might have returned NOTICE above.
+		 * If it exists but is NOT correctly configured as our replica, an ERROR would be more appropriate.
+		 * AddNodeMetadata returns the existing node's ID if it finds one.
+		 * We need to ensure it is the *correct* replica.
+		 */
+		WorkerNode *fetchedExistingNode = FindNodeAnyClusterByNodeId(cloneNodeId);
+		if (fetchedExistingNode != NULL && fetchedExistingNode->nodeisclone &&
+			fetchedExistingNode->nodeprimarynodeid == primaryWorkerNode->nodeId)
+		{
+			ereport(NOTICE, (errmsg(
+								 "node %s:%d was already correctly registered as a clone for primary %s:%d (nodeid %d)",
+								 cloneHostname, clonePort,
+								 primaryWorkerNode->workerName, primaryWorkerNode->
+								 workerPort, primaryWorkerNode->nodeId)));
+
+			/* Intentional fall-through to return cloneNodeId */
+		}
+		else
+		{
+			/* This state is less expected if our initial check passed or errored. */
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg(
+								"node %s:%d already exists but is not correctly configured as a clone for primary %s:%d",
+								cloneHostname, clonePort, primaryWorkerNode->workerName,
+								primaryWorkerNode->workerPort)));
+		}
+	}
+
+	TransactionModifiedNodeMetadata = true;
+
+	/*
+	 * Note: Clones added this way are inactive.
+	 * A separate UDF citus_promote_clone_and_rebalance
+	 * would be needed to activate them.
+	 */
+
+	return cloneNodeId;
+}
+
+
+/*
+ * citus_remove_clone_node removes an inactive streaming clone node from Citus metadata.
+ */
+Datum
+citus_remove_clone_node(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+	EnsureCoordinator();
+
+	text *nodeNameText = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	char *nodeName = text_to_cstring(nodeNameText);
+
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("node \"%s:%d\" does not exist", nodeName, nodePort)));
+	}
+
+	RemoveCloneNode(workerNode);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_remove_clone_node_with_nodeid removes an inactive clone node from Citus metadata
+ * using the node's ID.
+ */
+Datum
+citus_remove_clone_node_with_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+	EnsureCoordinator();
+
+	uint32 replicaNodeId = PG_GETARG_INT32(0);
+
+	WorkerNode *replicaNode = FindNodeAnyClusterByNodeId(replicaNodeId);
+
+	if (replicaNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Clone node with ID %d does not exist", replicaNodeId)));
+	}
+	RemoveCloneNode(replicaNode);
+
+	PG_RETURN_VOID();
+}
+
+
+static void
+RemoveCloneNode(WorkerNode *cloneNode)
+{
+	Assert(cloneNode != NULL);
+
+	if (!cloneNode->nodeisclone)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Node %s:%d (ID %d) is not a clone node. "
+							   "Use citus_remove_node() to remove primary or already promoted nodes.",
+							   cloneNode->workerName, cloneNode->workerPort, cloneNode->
+							   nodeId)));
+	}
+
+	if (cloneNode->isActive)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg(
+							"Clone node %s:%d (ID %d) is marked as active and cannot be removed with this function. "
+							"This might indicate a promoted clone. Consider using citus_remove_node() if you are sure, "
+							"or ensure it's properly deactivated if it's an unpromoted clone in an unexpected state.",
+							cloneNode->workerName, cloneNode->workerPort, cloneNode->
+							nodeId)));
+	}
+
+	/*
+	 * All checks passed, proceed with removal.
+	 * RemoveNodeFromCluster handles locking, catalog changes, connection closing, and metadata sync.
+	 */
+	ereport(NOTICE, (errmsg("Removing inactive clone node %s:%d (ID %d)",
+							cloneNode->workerName, cloneNode->workerPort, cloneNode->
+							nodeId)));
+
+	RemoveNodeFromCluster(cloneNode->workerName, cloneNode->workerPort);
+
+	/* RemoveNodeFromCluster might set this, but setting it here ensures it's marked for this UDF's transaction. */
+	TransactionModifiedNodeMetadata = true;
+}
+
+
+/*
  * SetLockTimeoutLocally sets the lock_timeout to the given value.
  * This setting is local.
  */
@@ -1440,13 +1790,13 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort, bool loca
 {
 	const bool indexOK = true;
 
-	ScanKeyData scanKey[1];
-	Datum values[Natts_pg_dist_node];
-	bool isnull[Natts_pg_dist_node];
-	bool replace[Natts_pg_dist_node];
-
 	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+
+	ScanKeyData scanKey[1];
+	Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodeid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodeId));
@@ -1461,8 +1811,6 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort, bool loca
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
 							   newNodeName, newNodePort)));
 	}
-
-	memset(replace, 0, sizeof(replace));
 
 	values[Anum_pg_dist_node_nodeport - 1] = Int32GetDatum(newNodePort);
 	isnull[Anum_pg_dist_node_nodeport - 1] = false;
@@ -1496,6 +1844,10 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort, bool loca
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistNode, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 }
 
 
@@ -1766,11 +2118,10 @@ citus_internal_mark_node_not_synced(PG_FUNCTION_ARGS)
 	Relation pgDistNode = table_open(DistNodeRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
-	Datum values[Natts_pg_dist_node];
-	bool isnull[Natts_pg_dist_node];
-	bool replace[Natts_pg_dist_node];
+	Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
 
-	memset(replace, 0, sizeof(replace));
 	values[Anum_pg_dist_node_metadatasynced - 1] = DatumGetBool(false);
 	isnull[Anum_pg_dist_node_metadatasynced - 1] = false;
 	replace[Anum_pg_dist_node_metadatasynced - 1] = true;
@@ -1783,6 +2134,10 @@ citus_internal_mark_node_not_synced(PG_FUNCTION_ARGS)
 	CommandCounterIncrement();
 
 	table_close(pgDistNode, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 
 	PG_RETURN_VOID();
 }
@@ -1859,7 +2214,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
 	if (heapTuple != NULL)
 	{
-		workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+		workerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple);
 	}
 
 	table_close(pgDistNode, NoLock);
@@ -1871,7 +2226,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
  * FindNodeAnyClusterByNodeId searches pg_dist_node and returns the node with
  * the nodeId. If the node can't be found returns NULL.
  */
-static WorkerNode *
+WorkerNode *
 FindNodeAnyClusterByNodeId(uint32 nodeId)
 {
 	bool includeNodesFromOtherClusters = true;
@@ -1966,7 +2321,8 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		WorkerNode *workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+		WorkerNode *workerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple)
+		;
 
 		if (includeNodesFromOtherClusters ||
 			strncmp(workerNode->nodeCluster, CurrentCluster, WORKER_LENGTH) == 0)
@@ -2491,9 +2847,9 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = GetNodeTuple(workerNode->workerName, workerNode->workerPort);
 
-	Datum values[Natts_pg_dist_node];
-	bool isnull[Natts_pg_dist_node];
-	bool replace[Natts_pg_dist_node];
+	Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
 
 	if (heapTuple == NULL)
 	{
@@ -2501,7 +2857,6 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 							   workerNode->workerName, workerNode->workerPort)));
 	}
 
-	memset(replace, 0, sizeof(replace));
 	values[columnIndex - 1] = value;
 	isnull[columnIndex - 1] = false;
 	replace[columnIndex - 1] = true;
@@ -2513,9 +2868,13 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 	CommandCounterIncrement();
 
-	WorkerNode *newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+	WorkerNode *newWorkerNode = TupleToWorkerNode(pgDistNode, tupleDescriptor, heapTuple);
 
 	table_close(pgDistNode, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 
 	return newWorkerNode;
 }
@@ -2901,15 +3260,14 @@ InsertPlaceholderCoordinatorRecord(void)
 static void
 InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMetadata)
 {
-	Datum values[Natts_pg_dist_node];
-	bool isNulls[Natts_pg_dist_node];
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+
+	Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNulls = palloc0(tupleDescriptor->natts * sizeof(bool));
 
 	Datum nodeClusterStringDatum = CStringGetDatum(nodeMetadata->nodeCluster);
 	Datum nodeClusterNameDatum = DirectFunctionCall1(namein, nodeClusterStringDatum);
-
-	/* form new shard tuple */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
 
 	values[Anum_pg_dist_node_nodeid - 1] = UInt32GetDatum(nodeid);
 	values[Anum_pg_dist_node_groupid - 1] = Int32GetDatum(nodeMetadata->groupId);
@@ -2924,13 +3282,15 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
 	values[Anum_pg_dist_node_shouldhaveshards - 1] = BoolGetDatum(
 		nodeMetadata->shouldHaveShards);
-
-	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
-
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+	values[GetNodeIsCloneAttrIndexInPgDistNode(tupleDescriptor)] =
+		BoolGetDatum(nodeMetadata->nodeisclone);
+	values[GetNodePrimaryNodeIdAttrIndexInPgDistNode(tupleDescriptor)] =
+		Int32GetDatum(nodeMetadata->nodeprimarynodeid);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
+	PushActiveSnapshot(GetTransactionSnapshot());
 	CatalogTupleInsert(pgDistNode, heapTuple);
+	PopActiveSnapshot();
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
@@ -2939,6 +3299,9 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 
 	/* close relation */
 	table_close(pgDistNode, NoLock);
+
+	pfree(values);
+	pfree(isNulls);
 }
 
 
@@ -2965,8 +3328,18 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	 * https://github.com/citusdata/citus/pull/2855#discussion_r313628554
 	 * https://github.com/citusdata/citus/issues/1890
 	 */
-	Relation replicaIndex = index_open(RelationGetPrimaryKeyIndex(pgDistNode),
-									   AccessShareLock);
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ adds a bool “deferrable_ok” parameter */
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode, false),
+				   AccessShareLock);
+#else
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistNode),
+				   AccessShareLock);
+#endif
+
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
@@ -3005,19 +3378,18 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
  * the caller already has locks on the tuple, and doesn't perform any locking.
  */
 static WorkerNode *
-TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
+TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
-	Datum datumArray[Natts_pg_dist_node];
-	bool isNullArray[Natts_pg_dist_node];
-
-	Assert(!HeapTupleHasNulls(heapTuple));
-
-	/*
-	 * This function can be called before "ALTER TABLE ... ADD COLUMN nodecluster ...",
-	 * therefore heap_deform_tuple() won't set the isNullArray for this column. We
-	 * initialize it true to be safe in that case.
+	/* we add remove columns from pg_dist_node during extension upgrade and
+	 * and downgrads. Now the issue here is PostgreSQL never reuses the old
+	 * attnum. Dropped columns leave “holes” (attributes with attisdropped = true),
+	 * and a re-added column with the same name gets a new attnum at the end. So
+	 * we cannot use the deined Natts_pg_dist_node to allocate memory and also
+	 * we need to cater for the holes when fetching the column values
 	 */
-	memset(isNullArray, true, sizeof(isNullArray));
+	int nAtts = tupleDescriptor->natts;
+	Datum *datumArray = palloc0(sizeof(Datum) * nAtts);
+	bool *isNullArray = palloc0(sizeof(bool) * nAtts);
 
 	/*
 	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
@@ -3044,10 +3416,11 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 				   1]);
 
 	/*
-	 * nodecluster column can be missing. In the case of extension creation/upgrade,
-	 * master_initialize_node_metadata function is called before the nodecluster
-	 * column is added to pg_dist_node table.
+	 * nodecluster, nodeisclone and nodeprimarynodeid columns can be missing. In case
+	 * of extension creation/upgrade, master_initialize_node_metadata function is
+	 * called before the nodecluster column is added to pg_dist_node table.
 	 */
+
 	if (!isNullArray[Anum_pg_dist_node_nodecluster - 1])
 	{
 		Name nodeClusterName =
@@ -3056,7 +3429,65 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		strlcpy(workerNode->nodeCluster, nodeClusterString, NAMEDATALEN);
 	}
 
+	int nodeIsCloneIdx = GetNodeIsCloneAttrIndexInPgDistNode(tupleDescriptor);
+	int nodePrimaryNodeIdIdx = GetNodePrimaryNodeIdAttrIndexInPgDistNode(tupleDescriptor);
+
+	if (!isNullArray[nodeIsCloneIdx])
+	{
+		workerNode->nodeisclone = DatumGetBool(datumArray[nodeIsCloneIdx]);
+	}
+
+	if (!isNullArray[nodePrimaryNodeIdIdx])
+	{
+		workerNode->nodeprimarynodeid = DatumGetInt32(datumArray[nodePrimaryNodeIdIdx]);
+	}
+
+	pfree(datumArray);
+	pfree(isNullArray);
+
 	return workerNode;
+}
+
+
+/*
+ * GetNodePrimaryNodeIdAttrIndexInPgDistNode returns attrnum for nodeprimarynodeid attr.
+ *
+ * nodeprimarynodeid attr was added to table pg_dist_node using alter operation
+ * after the version where Citus started supporting downgrades, and it's one of
+ * the two columns that we've introduced to pg_dist_node since then.
+ *
+ * And in case of a downgrade + upgrade, tupleDesc->natts becomes greater than
+ * Natts_pg_dist_node and when this happens, then we know that attrnum
+ * nodeprimarynodeid is not Anum_pg_dist_node_nodeprimarynodeid anymore but
+ * tupleDesc->natts - 1.
+ */
+static int
+GetNodePrimaryNodeIdAttrIndexInPgDistNode(TupleDesc tupleDesc)
+{
+	return tupleDesc->natts == Natts_pg_dist_node
+		   ? (Anum_pg_dist_node_nodeprimarynodeid - 1)
+		   : tupleDesc->natts - 1;
+}
+
+
+/*
+ * GetNodeIsCloneAttrIndexInPgDistNode returns attrnum for nodeisclone attr.
+ *
+ * Like, GetNodePrimaryNodeIdAttrIndexInPgDistNode(), performs a similar
+ * calculation for nodeisclone attribute because this is column added to
+ * pg_dist_node after we started supporting downgrades.
+ *
+ * Only difference with the mentioned function is that we know
+ * the attrnum for nodeisclone is not Anum_pg_dist_node_nodeisclone anymore
+ * but tupleDesc->natts - 2 because we added these columns consecutively
+ * and we first add nodeisclone attribute and then nodeprimarynodeid attribute.
+ */
+static int
+GetNodeIsCloneAttrIndexInPgDistNode(TupleDesc tupleDesc)
+{
+	return tupleDesc->natts == Natts_pg_dist_node
+		   ? (Anum_pg_dist_node_nodeisclone - 1)
+		   : tupleDesc->natts - 2;
 }
 
 
@@ -3136,15 +3567,15 @@ UnsetMetadataSyncedForAllWorkers(void)
 		updatedAtLeastOne = true;
 	}
 
+	Datum *values = palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = palloc(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = palloc(tupleDescriptor->natts * sizeof(bool));
+
 	while (HeapTupleIsValid(heapTuple))
 	{
-		Datum values[Natts_pg_dist_node];
-		bool isnull[Natts_pg_dist_node];
-		bool replace[Natts_pg_dist_node];
-
-		memset(replace, false, sizeof(replace));
-		memset(isnull, false, sizeof(isnull));
-		memset(values, 0, sizeof(values));
+		memset(values, 0, tupleDescriptor->natts * sizeof(Datum));
+		memset(isnull, 0, tupleDescriptor->natts * sizeof(bool));
+		memset(replace, 0, tupleDescriptor->natts * sizeof(bool));
 
 		values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(false);
 		replace[Anum_pg_dist_node_metadatasynced - 1] = true;
@@ -3166,6 +3597,10 @@ UnsetMetadataSyncedForAllWorkers(void)
 	systable_endscan(scanDescriptor);
 	CatalogCloseIndexes(indstate);
 	table_close(relation, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 
 	return updatedAtLeastOne;
 }

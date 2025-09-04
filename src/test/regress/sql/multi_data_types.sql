@@ -125,7 +125,7 @@ $cf$);
 INSERT INTO composite_type_partitioned_table VALUES (123, '(123, 456)'::other_composite_type);
 SELECT * FROM composite_type_partitioned_table WHERE id = 123;
 
-EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(123, 456)'::other_composite_type);
 
 SELECT run_command_on_coordinator_and_workers($cf$
@@ -144,7 +144,7 @@ SELECT run_command_on_coordinator_and_workers($cf$
 $cf$);
 INSERT INTO composite_type_partitioned_table VALUES (456, '(456, 678)'::other_composite_type);
 
-EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(456, 678)'::other_composite_type);
 
 

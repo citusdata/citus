@@ -1,0 +1,514 @@
+--
+-- Test for adding a worker node from a backup
+--
+-- setup cluster
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT * from pg_dist_node;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+(2 rows)
+
+-- create a distributed table and load data
+CREATE TABLE backup_test(id int, value text);
+SELECT create_distributed_table('backup_test', 'id', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO backup_test SELECT g, 'test' || g FROM generate_series(1, 10) g;
+-- Colocation group 1: create two tables table1_colg1, table2_colg1 and in a colocation group
+CREATE TABLE table1_colg1 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg1', 'a', shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE table2_colg1 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg1', 'b', colocate_with => 'table1_colg1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Colocation group 2: create two tables table1_colg2, table2_colg2 and in a colocation group
+CREATE TABLE table1_colg2 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg2', 'a', shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE  table2_colg2 (b int primary key);
+SELECT create_distributed_table('table2_colg2', 'b', colocate_with => 'table1_colg2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Colocation group 3: create two tables table1_colg3, table2_colg3 and in a colocation group
+CREATE TABLE table1_colg3 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg3', 'a', shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE  table2_colg3 (b int primary key);
+SELECT create_distributed_table('table2_colg3', 'b', colocate_with => 'table1_colg3');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Create reference tables with primary-foreign key relationships
+CREATE TABLE customers (
+     id SERIAL PRIMARY KEY,
+     name TEXT NOT NULL,
+     email TEXT UNIQUE NOT NULL );
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    order_date DATE NOT NULL DEFAULT CURRENT_DATE);
+CREATE TABLE order_items (
+     id SERIAL PRIMARY KEY,
+     order_id INTEGER NOT NULL REFERENCES orders(id),
+     product_name TEXT NOT NULL,
+     quantity INTEGER NOT NULL,
+     price NUMERIC(10, 2) NOT NULL
+ );
+SELECT create_reference_table('customers');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('orders');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('order_items');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ -- INSERT SOME DATA
+ -- Insert 10 customers
+ INSERT INTO customers (name, email)
+ SELECT
+   'Customer ' || i,
+   'customer' || i || '@example.com'
+FROM generate_series(1, 10) AS i;
+-- Insert 30 orders: each customer gets 3 orders
+INSERT INTO orders (customer_id, order_date)
+SELECT
+    (i % 10) + 1,  -- customer_id between 1 and 10
+    CURRENT_DATE - (i % 7)
+    FROM generate_series(1, 30) AS i;
+-- Insert 90 order_items: each order has 3 items
+INSERT INTO order_items (order_id, product_name, quantity, price)
+SELECT
+    (i % 30) + 1,  -- order_id between 1 and 30
+    'Product ' || (i % 5 + 1),
+    (i % 10) + 1,
+    round((random() * 100 + 10)::numeric, 2)
+    FROM generate_series(1, 90) AS i;
+SELECT count(*) from customers;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT count(*) from orders;
+ count
+---------------------------------------------------------------------
+    30
+(1 row)
+
+SELECT count(*) from order_items;
+ count
+---------------------------------------------------------------------
+    90
+(1 row)
+
+-- verify initial shard placement
+SELECT nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY nodename, nodeport ORDER BY nodename, nodeport;
+ nodename  | nodeport | count
+---------------------------------------------------------------------
+ localhost |    57637 |    17
+ localhost |    57638 |    17
+(2 rows)
+
+-- wait for the new node to be ready
+SELECT pg_sleep(5);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+-- register the new node as a clone
+-- the function returns the new node id
+SELECT citus_add_clone_node('localhost', :follower_worker_1_port, 'localhost', :worker_1_port) AS clone_node_id \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication status of clone node localhost:xxxxx
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+SELECT * from pg_dist_node ORDER by nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 1
+(3 rows)
+
+SELECT :clone_node_id ;
+ ?column?
+---------------------------------------------------------------------
+        3
+(1 row)
+
+SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
+ shardid | nodename  | node_type
+---------------------------------------------------------------------
+  102008 | localhost | PRIMARY
+  102010 | localhost | PRIMARY
+  102012 | localhost | PRIMARY
+  102014 | localhost | PRIMARY
+  102016 | localhost | PRIMARY
+  102018 | localhost | PRIMARY
+  102020 | localhost | PRIMARY
+  102022 | localhost | PRIMARY
+  102024 | localhost | PRIMARY
+  102026 | localhost | PRIMARY
+  102028 | localhost | PRIMARY
+  102030 | localhost | PRIMARY
+  102032 | localhost | PRIMARY
+  102034 | localhost | PRIMARY
+  102036 | localhost | PRIMARY
+  102037 | localhost | PRIMARY
+  102038 | localhost | PRIMARY
+(17 rows)
+
+SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_1_port ORDER BY shardid;
+ shardid | nodename | node_type
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_1_port, 'localhost', :follower_worker_1_port);
+  table_name  | shardid | shard_size | placement_node
+---------------------------------------------------------------------
+ table1_colg2 |  102020 |          0 | Primary Node
+ table2_colg2 |  102024 |          0 | Primary Node
+ table1_colg2 |  102022 |          0 | Primary Node
+ table2_colg2 |  102026 |          0 | Primary Node
+ table1_colg3 |  102028 |          0 | Primary Node
+ table2_colg3 |  102032 |          0 | Primary Node
+ table1_colg3 |  102030 |          0 | Primary Node
+ table2_colg3 |  102034 |          0 | Primary Node
+ backup_test  |  102008 |          0 | Clone Node
+ backup_test  |  102010 |          0 | Clone Node
+ table1_colg1 |  102012 |          0 | Clone Node
+ table2_colg1 |  102016 |          0 | Clone Node
+ table1_colg1 |  102014 |          0 | Clone Node
+ table2_colg1 |  102018 |          0 | Clone Node
+(14 rows)
+
+-- promote the clone and rebalance the shards
+SET client_min_messages to 'LOG';
+SELECT citus_promote_clone_and_rebalance(:clone_node_id);
+NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 3), original primary localhost:xxxxx (ID 1)
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication status of clone node localhost:xxxxx
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 1)
+NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 1)
+NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
+NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
+NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
+NOTICE:  Clone node localhost:xxxxx (ID 3) has been successfully promoted.
+NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 3)
+NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  processing 4 shards for primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.table1_colg2_102020 from clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.table1_colg2_102022 from clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.table1_colg3_102028 from clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.table1_colg3_102030 from clone node GroupID 3
+NOTICE:  processing 4 shards for clone node GroupID 3
+LOG:  inserting DELETE shard record for shard public.backup_test_102008 from primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.backup_test_102010 from primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.table2_colg1_102016 from primary node GroupID 1
+LOG:  inserting DELETE shard record for shard public.table2_colg1_102018 from primary node GroupID 1
+NOTICE:  shard placement adjustment complete for primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  Clone node localhost:xxxxx (ID 3) metadata updated. It is now a primary
+NOTICE:  Clone node localhost:xxxxx (ID 3) successfully registered as a worker node
+ citus_promote_clone_and_rebalance
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages to DEFAULT;
+SELECT shardid, nodename, 'PRIMARY' as node_type FROM pg_dist_shard_placement WHERE nodeport = :worker_1_port ORDER BY shardid;
+ shardid | nodename  | node_type
+---------------------------------------------------------------------
+  102020 | localhost | PRIMARY
+  102022 | localhost | PRIMARY
+  102024 | localhost | PRIMARY
+  102026 | localhost | PRIMARY
+  102028 | localhost | PRIMARY
+  102030 | localhost | PRIMARY
+  102032 | localhost | PRIMARY
+  102034 | localhost | PRIMARY
+  102036 | localhost | PRIMARY
+  102037 | localhost | PRIMARY
+  102038 | localhost | PRIMARY
+(11 rows)
+
+SELECT shardid, nodename, 'CLONE' as node_type FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_1_port ORDER BY shardid;
+ shardid | nodename  | node_type
+---------------------------------------------------------------------
+  102008 | localhost | CLONE
+  102010 | localhost | CLONE
+  102012 | localhost | CLONE
+  102014 | localhost | CLONE
+  102016 | localhost | CLONE
+  102018 | localhost | CLONE
+  102036 | localhost | CLONE
+  102037 | localhost | CLONE
+  102038 | localhost | CLONE
+(9 rows)
+
+\c - - - :worker_1_port
+SELECT 'WORKER' as node_type,* from pg_dist_node;
+ node_type | nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+ WORKER    |      3 |       3 | localhost |     9071 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+ WORKER    |      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+ WORKER    |      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+(3 rows)
+
+SELECT 'WORKER' as node_type, nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY nodename, nodeport ORDER BY nodename, nodeport;
+ node_type | nodename  | nodeport | count
+---------------------------------------------------------------------
+ WORKER    | localhost |     9071 |     9
+ WORKER    | localhost |    57637 |    11
+ WORKER    | localhost |    57638 |    17
+(3 rows)
+
+SELECT * from citus_tables;
+  table_name  | citus_table_type | distribution_column | colocation_id | table_size | shard_count | table_owner | access_method
+---------------------------------------------------------------------
+ backup_test  | distributed      | id                  |             1 | 64 kB      |           4 | postgres    | heap
+ customers    | reference        | <none>              |             5 | 144 kB     |           1 | postgres    | heap
+ order_items  | reference        | <none>              |             5 | 96 kB      |           1 | postgres    | heap
+ orders       | reference        | <none>              |             5 | 72 kB      |           1 | postgres    | heap
+ table1_colg1 | distributed      | a                   |             2 | 32 kB      |           4 | postgres    | heap
+ table1_colg2 | distributed      | a                   |             3 | 32 kB      |           4 | postgres    | heap
+ table1_colg3 | distributed      | a                   |             4 | 32 kB      |           4 | postgres    | heap
+ table2_colg1 | distributed      | b                   |             2 | 32 kB      |           4 | postgres    | heap
+ table2_colg2 | distributed      | b                   |             3 | 32 kB      |           4 | postgres    | heap
+ table2_colg3 | distributed      | b                   |             4 | 32 kB      |           4 | postgres    | heap
+(10 rows)
+
+SELECT id, value FROM backup_test ORDER BY id;
+ id | value
+---------------------------------------------------------------------
+  1 | test1
+  2 | test2
+  3 | test3
+  4 | test4
+  5 | test5
+  6 | test6
+  7 | test7
+  8 | test8
+  9 | test9
+ 10 | test10
+(10 rows)
+
+SELECT count(*) from customers;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT count(*) from orders;
+ count
+---------------------------------------------------------------------
+    30
+(1 row)
+
+SELECT count(*) from order_items;
+ count
+---------------------------------------------------------------------
+    90
+(1 row)
+
+\c - - - :follower_worker_1_port
+SELECT 'CLONE' as node_type ,* from pg_dist_node;
+ node_type | nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+ CLONE     |      3 |       3 | localhost |     9071 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+ CLONE     |      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+ CLONE     |      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+(3 rows)
+
+SELECT 'CLONE' as node_type, nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY nodename, nodeport ORDER BY nodename, nodeport;
+ node_type | nodename  | nodeport | count
+---------------------------------------------------------------------
+ CLONE     | localhost |     9071 |     9
+ CLONE     | localhost |    57637 |    11
+ CLONE     | localhost |    57638 |    17
+(3 rows)
+
+SELECT * from citus_tables;
+  table_name  | citus_table_type | distribution_column | colocation_id | table_size | shard_count | table_owner | access_method
+---------------------------------------------------------------------
+ backup_test  | distributed      | id                  |             1 | 64 kB      |           4 | postgres    | heap
+ customers    | reference        | <none>              |             5 | 144 kB     |           1 | postgres    | heap
+ order_items  | reference        | <none>              |             5 | 96 kB      |           1 | postgres    | heap
+ orders       | reference        | <none>              |             5 | 72 kB      |           1 | postgres    | heap
+ table1_colg1 | distributed      | a                   |             2 | 32 kB      |           4 | postgres    | heap
+ table1_colg2 | distributed      | a                   |             3 | 32 kB      |           4 | postgres    | heap
+ table1_colg3 | distributed      | a                   |             4 | 32 kB      |           4 | postgres    | heap
+ table2_colg1 | distributed      | b                   |             2 | 32 kB      |           4 | postgres    | heap
+ table2_colg2 | distributed      | b                   |             3 | 32 kB      |           4 | postgres    | heap
+ table2_colg3 | distributed      | b                   |             4 | 32 kB      |           4 | postgres    | heap
+(10 rows)
+
+SELECT id, value FROM backup_test ORDER BY id;
+ id | value
+---------------------------------------------------------------------
+  1 | test1
+  2 | test2
+  3 | test3
+  4 | test4
+  5 | test5
+  6 | test6
+  7 | test7
+  8 | test8
+  9 | test9
+ 10 | test10
+(10 rows)
+
+SELECT count(*) from customers;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT count(*) from orders;
+ count
+---------------------------------------------------------------------
+    30
+(1 row)
+
+SELECT count(*) from order_items;
+ count
+---------------------------------------------------------------------
+    90
+(1 row)
+
+\c - - - :master_port
+SELECT 'MASTER' as node_type, * from pg_dist_node;
+ node_type | nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+---------------------------------------------------------------------
+ MASTER    |      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+ MASTER    |      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+ MASTER    |      3 |       3 | localhost |     9071 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+(3 rows)
+
+SELECT 'MASTER' as node_type, nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY nodename, nodeport ORDER BY nodename, nodeport;
+ node_type | nodename  | nodeport | count
+---------------------------------------------------------------------
+ MASTER    | localhost |     9071 |     9
+ MASTER    | localhost |    57637 |    11
+ MASTER    | localhost |    57638 |    17
+(3 rows)
+
+SELECT * from citus_tables;
+  table_name  | citus_table_type | distribution_column | colocation_id | table_size | shard_count | table_owner | access_method
+---------------------------------------------------------------------
+ backup_test  | distributed      | id                  |             1 | 64 kB      |           4 | postgres    | heap
+ customers    | reference        | <none>              |             5 | 144 kB     |           1 | postgres    | heap
+ order_items  | reference        | <none>              |             5 | 96 kB      |           1 | postgres    | heap
+ orders       | reference        | <none>              |             5 | 72 kB      |           1 | postgres    | heap
+ table1_colg1 | distributed      | a                   |             2 | 32 kB      |           4 | postgres    | heap
+ table1_colg2 | distributed      | a                   |             3 | 32 kB      |           4 | postgres    | heap
+ table1_colg3 | distributed      | a                   |             4 | 32 kB      |           4 | postgres    | heap
+ table2_colg1 | distributed      | b                   |             2 | 32 kB      |           4 | postgres    | heap
+ table2_colg2 | distributed      | b                   |             3 | 32 kB      |           4 | postgres    | heap
+ table2_colg3 | distributed      | b                   |             4 | 32 kB      |           4 | postgres    | heap
+(10 rows)
+
+SELECT id, value FROM backup_test ORDER BY id;
+ id | value
+---------------------------------------------------------------------
+  1 | test1
+  2 | test2
+  3 | test3
+  4 | test4
+  5 | test5
+  6 | test6
+  7 | test7
+  8 | test8
+  9 | test9
+ 10 | test10
+(10 rows)
+
+SELECT count(*) from customers;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT count(*) from orders;
+ count
+---------------------------------------------------------------------
+    30
+(1 row)
+
+SELECT count(*) from order_items;
+ count
+---------------------------------------------------------------------
+    90
+(1 row)
+
+-- verify data
+SELECT count(*) FROM backup_test;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT id, value FROM backup_test ORDER BY id;
+ id | value
+---------------------------------------------------------------------
+  1 | test1
+  2 | test2
+  3 | test3
+  4 | test4
+  5 | test5
+  6 | test6
+  7 | test7
+  8 | test8
+  9 | test9
+ 10 | test10
+(10 rows)
+
+-- cleanup
+DROP TABLE backup_test;

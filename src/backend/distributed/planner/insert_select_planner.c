@@ -766,7 +766,8 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	{
 		/* first apply toplevel pushdown checks to SELECT query */
 		error =
-			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext);
+			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext,
+													true);
 		if (error)
 		{
 			return error;
@@ -1247,7 +1248,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 
 		RangeTblEntry *subqueryPartitionColumnRelationIdRTE = NULL;
 		List *parentQueryList = list_make2(query, subquery);
-		bool skipOuterVars = true;
+		bool skipOuterVars = false;
 		FindReferencedTableColumn(selectTargetExpr,
 								  parentQueryList, subquery,
 								  &subqueryPartitionColumn,
@@ -1543,71 +1544,147 @@ InsertSelectResultIdPrefix(uint64 planId)
 
 
 /*
- * WrapSubquery wraps the given query as a subquery in a newly constructed
- * "SELECT * FROM (...subquery...) citus_insert_select_subquery" query.
+ * Return true if the expression tree can change value within a single scan
+ * (i.e. the planner must treat it as VOLATILE).
+ * We just delegate to PostgreSQL’s helper.
+ */
+static inline bool
+expr_is_volatile(Node *node)
+{
+	/* contain_volatile_functions() also returns true for set-returning
+	 * volatile functions and for nextval()/currval(). */
+	return contain_volatile_functions(node);
+}
+
+
+/*
+ * WrapSubquery
+ *
+ * Build a wrapper query:
+ *
+ *     SELECT <outer-TL>
+ *       FROM ( <subquery with any volatile items stripped> )
+ *            citus_insert_select_subquery
+ *
+ * Purpose:
+ *   - Preserve column numbering while lifting volatile expressions to the coordinator.
+ *   - Volatile (non-deterministic) expressions not used in GROUP BY / ORDER BY
+ *     are lifted to the outer SELECT to ensure they are evaluated only once.
+ *   - Stable/immutable expressions or volatile ones required by GROUP BY / ORDER BY
+ *     stay in the subquery and are accessed via Vars in the outer SELECT.
  */
 Query *
 WrapSubquery(Query *subquery)
 {
+	/*
+	 * 1. Build the wrapper skeleton: SELECT ... FROM (subquery) alias
+	 */
 	ParseState *pstate = make_parsestate(NULL);
-	List *newTargetList = NIL;
-
 	Query *outerQuery = makeNode(Query);
 	outerQuery->commandType = CMD_SELECT;
 
-	/* create range table entries */
-	Alias *selectAlias = makeAlias("citus_insert_select_subquery", NIL);
-	RangeTblEntry *newRangeTableEntry = RangeTableEntryFromNSItem(
-		addRangeTableEntryForSubquery(
-			pstate, subquery,
-			selectAlias, false, true));
-	outerQuery->rtable = list_make1(newRangeTableEntry);
+	Alias *alias = makeAlias("citus_insert_select_subquery", NIL);
+	RangeTblEntry *rte_subq =
+		RangeTableEntryFromNSItem(
+			addRangeTableEntryForSubquery(pstate,
+										  subquery,    /* still points to original subquery */
+										  alias,
+										  false,       /* not LATERAL */
+										  true));      /* in FROM clause */
+
+	outerQuery->rtable = list_make1(rte_subq);
 
 #if PG_VERSION_NUM >= PG_VERSION_16
 
-	/*
-	 * This part of the code is more of a sanity check for readability,
-	 * it doesn't really do anything.
-	 * addRangeTableEntryForSubquery doesn't add permission info
-	 * because the range table is set to be RTE_SUBQUERY.
-	 * Hence we should also have no perminfos here.
-	 */
-	Assert(newRangeTableEntry->rtekind == RTE_SUBQUERY &&
-		   newRangeTableEntry->perminfoindex == 0);
+	/* Ensure RTE_SUBQUERY has proper permission handling */
+	Assert(rte_subq->rtekind == RTE_SUBQUERY &&
+		   rte_subq->perminfoindex == 0);
 	outerQuery->rteperminfos = NIL;
 #endif
 
-	/* set the FROM expression to the subquery */
-	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
-	newRangeTableRef->rtindex = 1;
-	outerQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
+	RangeTblRef *rtref = makeNode(RangeTblRef);
+	rtref->rtindex = 1;  /* Only one RTE, so index is 1 */
+	outerQuery->jointree = makeFromExpr(list_make1(rtref), NULL);
 
-	/* create a target list that matches the SELECT */
-	TargetEntry *selectTargetEntry = NULL;
-	foreach_declared_ptr(selectTargetEntry, subquery->targetList)
+	/*
+	 * 2. Create new target lists for inner (worker) and outer (coordinator)
+	 */
+	List *newInnerTL = NIL;
+	List *newOuterTL = NIL;
+	int nextResno = 1;
+
+	TargetEntry *te = NULL;
+	foreach_declared_ptr(te, subquery->targetList)
 	{
-		/* exactly 1 entry in FROM */
-		int indexInRangeTable = 1;
-
-		if (selectTargetEntry->resjunk)
+		if (te->resjunk)
 		{
+			/* Keep resjunk entries only in subquery (not in outer query) */
+			newInnerTL = lappend(newInnerTL, te);
 			continue;
 		}
 
-		Var *newSelectVar = makeVar(indexInRangeTable, selectTargetEntry->resno,
-									exprType((Node *) selectTargetEntry->expr),
-									exprTypmod((Node *) selectTargetEntry->expr),
-									exprCollation((Node *) selectTargetEntry->expr), 0);
+		bool isVolatile = expr_is_volatile((Node *) te->expr);
+		bool usedInSort = (te->ressortgroupref != 0);
 
-		TargetEntry *newSelectTargetEntry = makeTargetEntry((Expr *) newSelectVar,
-															selectTargetEntry->resno,
-															selectTargetEntry->resname,
-															selectTargetEntry->resjunk);
+		if (isVolatile && !usedInSort)
+		{
+			/*
+			 * Lift volatile expression to outer query so it's evaluated once.
+			 * In inner query, place a NULL of the same type to preserve column position.
+			 */
+			TargetEntry *outerTE =
+				makeTargetEntry(copyObject(te->expr),
+								list_length(newOuterTL) + 1,
+								te->resname,
+								false);
+			newOuterTL = lappend(newOuterTL, outerTE);
 
-		newTargetList = lappend(newTargetList, newSelectTargetEntry);
+			Const *nullConst = makeNullConst(exprType((Node *) te->expr),
+											 exprTypmod((Node *) te->expr),
+											 exprCollation((Node *) te->expr));
+
+			TargetEntry *placeholder =
+				makeTargetEntry((Expr *) nullConst,
+								nextResno++,          /* preserve column position */
+								te->resname,
+								false);               /* visible, not resjunk */
+			newInnerTL = lappend(newInnerTL, placeholder);
+		}
+		else
+		{
+			/*
+			 * Either:
+			 *   - expression is stable or immutable, or
+			 *   - volatile but needed for sorting or grouping
+			 *
+			 * In both cases, keep it in subquery and reference it using a Var.
+			 */
+			TargetEntry *innerTE = te;          /* reuse original node */
+			innerTE->resno = nextResno++;
+			newInnerTL = lappend(newInnerTL, innerTE);
+
+			Var *v = makeVar(/* subquery reference index is 1 */
+				rtref->rtindex,     /* same as 1, but self‑documenting */
+				innerTE->resno,
+				exprType((Node *) innerTE->expr),
+				exprTypmod((Node *) innerTE->expr),
+				exprCollation((Node *) innerTE->expr),
+				0);
+
+			TargetEntry *outerTE =
+				makeTargetEntry((Expr *) v,
+								list_length(newOuterTL) + 1,
+								innerTE->resname,
+								false);
+			newOuterTL = lappend(newOuterTL, outerTE);
+		}
 	}
 
-	outerQuery->targetList = newTargetList;
+	/*
+	 * 3. Assign target lists and return the wrapper query
+	 */
+	subquery->targetList = newInnerTL;
+	outerQuery->targetList = newOuterTL;
 
 	return outerQuery;
 }

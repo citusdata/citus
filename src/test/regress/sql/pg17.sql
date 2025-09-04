@@ -5,6 +5,10 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
 \gset
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 -- PG17 has the capabilty to pull up a correlated ANY subquery to a join if
 -- the subquery only refers to its immediate parent query. Previously, the
 -- subquery needed to be implemented as a SubPlan node, typically as a
@@ -165,10 +169,159 @@ WHERE d1.user_id = users.user_id
       AND users.dept IN (3,4)
 	AND users.user_id = d2.user_id) dt
 GROUP BY dept;
-RESET client_min_messages;
 
+SET client_min_messages TO DEBUG3;
+CREATE TABLE users_ref(user_id int, dept int);
+SELECT create_reference_table('users_ref');
+INSERT INTO users_ref VALUES (1, 3), (2, 4), (3, 3), (4, 4);
+-- In PG17, the planner can pull up a correlated ANY subquery to a join, resulting
+-- in a different query plan compared to PG16. Specifically, for the following query
+-- the rewritten query has a lateral recurring outer join, which requires recursive
+-- computation of the inner part. However, this join is not analyzed during the recursive
+-- planning step, as it is performed on the original query structure. As a result,
+-- the lateral join is not recursively planned, and a lateral join error is raised
+-- at a later stage.
+SELECT user_id FROM
+users RIGHT JOIN users_ref USING (user_id)
+WHERE users_ref.dept IN
+(
+  SELECT events.event_type FROM events WHERE events.user_id = users.user_id
+) ORDER BY 1 LIMIT 1;
+
+RESET client_min_messages;
 RESET search_path;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
+
+-- Queries with outer joins with pseudoconstant quals work only in PG17
+-- Relevant PG17 commit:
+-- https://github.com/postgres/postgres/commit/9e9931d2b
+
+CREATE SCHEMA pg17_outerjoin;
+SET search_path to pg17_outerjoin, public;
+SET citus.next_shard_id TO 20250321;
+
+-- issue https://github.com/citusdata/citus/issues/7697
+create table t0 (vkey int4 , c3 timestamp);
+create table t3 ( vkey int4 ,c26 timestamp);
+create table t4 ( vkey int4 );
+insert into t0 (vkey, c3) values (13,make_timestamp(2019, 10, 23, 15, 34, 50));
+insert into t3 (vkey,c26) values (1, make_timestamp(2024, 3, 26, 17, 36, 53));
+insert into t4 (vkey) values (1);
+
+select * from
+  (t0 full outer join t3
+    on (t0.c3 = t3.c26 ))
+where (exists (select  * from t4)) order by 1, 2, 3;
+
+SELECT create_distributed_table('t0', 'vkey');
+
+select * from
+  (t0 full outer join t3
+    on (t0.c3 = t3.c26 ))
+where (exists (select  * from t4)) order by 1, 2, 3;
+
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+
+-- wrong result pre-pg17
+select * from
+  (t0 full outer join t3
+    on (t0.c3 = t3.c26 ))
+where (exists (select  * from t4)) order by 1, 2, 3;
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
+
+-- issue https://github.com/citusdata/citus/issues/7696
+create table t1 ( vkey int4 );
+create table t2 ( vkey int4 );
+insert into t2 (vkey) values (5);
+
+select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
+where not((85) in (select 1 from t2));
+
+SELECT create_distributed_table('t1', 'vkey');
+SELECT create_reference_table('t2');
+
+select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
+where not((85) in (select 1 from t2));
+
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+
+-- wrong result pre-pg17
+select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
+where not((85) in (select 1 from t2));
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
+
+-- issue https://github.com/citusdata/citus/issues/7698
+create table t5 ( vkey int4, c10 int4 );
+create table t6 ( vkey int4 );
+insert into t5 (vkey,c10) values (4, -70);
+insert into t6 (vkey) values (1);
+
+select t6.vkey
+from (t5 right outer join t6
+    on (t5.c10 = t6.vkey))
+where exists (select * from t6);
+
+SELECT create_distributed_table('t5', 'vkey');
+
+select t6.vkey
+from (t5 right outer join t6
+    on (t5.c10 = t6.vkey))
+where exists (select * from t6);
+
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+
+-- wrong result pre-pg17
+select t6.vkey
+from (t5 right outer join t6
+    on (t5.c10 = t6.vkey))
+where exists (select * from t6);
+
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
+
+-- issue https://github.com/citusdata/citus/issues/7119
+-- this test was removed in
+-- https://github.com/citusdata/citus/commit/a5ce601c0
+-- Citus doesn't support it in PG15 and PG16, but supports it in PG17
+CREATE TABLE users_table_local AS SELECT * FROM users_table;
+CREATE TABLE events_table_local AS SELECT * FROM events_table;
+
+SET client_min_messages TO DEBUG1;
+-- subquery in FROM -> FROM -> WHERE -> WHERE should be replaced if
+-- it contains onle local tables
+-- Later the upper level query is also recursively planned due to LIMIT
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT
+      u.user_id, e.event_type::text AS event, e.time
+    FROM
+        users_table AS u,
+        events_table AS e
+    WHERE u.user_id = e.user_id AND
+        u.user_id IN
+        (
+          SELECT
+            user_id
+          FROM
+            users_table
+          WHERE value_2 >= 5
+			    AND  EXISTS (SELECT user_id FROM events_table_local WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1)
+				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
+				LIMIT 5
+      )
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1;
+
+RESET search_path;
+SET citus.next_shard_id TO 20240023;
+SET client_min_messages TO ERROR;
+DROP SCHEMA pg17_outerjoin CASCADE;
+RESET client_min_messages;
 
 \if :server_version_ge_17
 \else
@@ -566,8 +719,8 @@ ALTER TABLE distributed_partitioned_table DROP CONSTRAINT dist_exclude_named;
 ALTER TABLE local_partitioned_table DROP CONSTRAINT local_exclude_named;
 
 -- Step 10: Verify the constraints were dropped
-SELECT * FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
-SELECT * FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
+SELECT COUNT(*) FROM pg_constraint WHERE conname = 'dist_exclude_named' AND contype = 'x';
+SELECT COUNT(*) FROM pg_constraint WHERE conname = 'local_exclude_named' AND contype = 'x';
 
 -- Step 11: Clean up - Drop the tables
 DROP TABLE distributed_partitioned_table CASCADE;
@@ -915,12 +1068,14 @@ CREATE TABLE test_partition_2 PARTITION OF test_partitioned_alter
 SELECT create_distributed_table('test_partitioned_alter', 'id');
 
 -- Step 4: Verify that the table and partitions are created and distributed correctly on the coordinator
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partitioned_alter';
 
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
 
@@ -929,13 +1084,15 @@ ORDER BY relname;
 SET search_path TO pg17;
 
 -- Verify the table's access method on the worker node
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partitioned_alter';
 
 -- Verify the partitions' access methods on the worker node
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
 
@@ -952,13 +1109,15 @@ ALTER TABLE test_partitioned_alter SET ACCESS METHOD columnar;
 -- Reference: https://git.postgresql.org/gitweb/?p=postgresql.git;a=commitdiff;h=374c7a2290429eac3217b0c7b0b485db9c2bcc72
 
 -- Verify the parent table's access method
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partitioned_alter';
 
 -- Verify the partitions' access methods
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname IN ('test_partition_1', 'test_partition_2')
 ORDER BY relname;
 
@@ -966,8 +1125,9 @@ ORDER BY relname;
 CREATE TABLE test_partition_3 PARTITION OF test_partitioned_alter
   FOR VALUES FROM (200) TO (300);
 
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partition_3';
 
 -- Step 6 (Repeat on a Worker Node): Verify that the new partition is created correctly
@@ -975,8 +1135,9 @@ WHERE relname = 'test_partition_3';
 SET search_path TO pg17;
 
 -- Verify the new partition's access method on the worker node
-SELECT relname, relam
+SELECT relname, amname
 FROM pg_class
+JOIN pg_am ON (relam = pg_am.oid)
 WHERE relname = 'test_partition_3';
 
 \c - - - :master_port
@@ -1661,3 +1822,6 @@ RESET client_min_messages;
 
 DROP ROLE regress_maintain;
 DROP ROLE regress_no_maintain;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

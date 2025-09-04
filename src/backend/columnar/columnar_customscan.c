@@ -21,6 +21,13 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_statistic.h"
 #include "commands/defrem.h"
+
+#include "columnar/columnar_version_compat.h"
+#if PG_VERSION_NUM >= PG_VERSION_18
+#include "commands/explain_format.h"
+#endif
+#include "executor/executor.h"   /* for ExecInitExprWithParams(), ExecEvalExpr() */
+#include "nodes/execnodes.h"     /* for ExprState, ExprContext, etc. */
 #include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"

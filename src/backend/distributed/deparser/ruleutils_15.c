@@ -1568,7 +1568,6 @@ set_join_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		if (colinfo->is_new_col[col_index])
 			i++;
 	}
-	Assert(i == colinfo->num_cols);
 	Assert(j == nnewcolumns);
 #endif
 
@@ -3509,6 +3508,8 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 	SubLink    *cur_ma_sublink;
 	List	   *ma_sublinks;
 
+	targetList = ExpandMergedSubscriptingRefEntries(targetList);
+
 	/*
 	 * Prepare to deal with MULTIEXPR assignments: collect the source SubLinks
 	 * into a list.  We expect them to appear, in ID order, in resjunk tlist
@@ -3532,6 +3533,8 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 				}
 			}
 		}
+
+		ensure_update_targetlist_in_param_order(targetList);
 	}
 	next_ma_cell = list_head(ma_sublinks);
 	cur_ma_sublink = NULL;

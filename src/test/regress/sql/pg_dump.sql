@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE TEMPORARY TABLE output (line text);
 
 CREATE SCHEMA dumper;
@@ -109,3 +113,6 @@ DROP SCHEMA dumper CASCADE;
 SELECT tablename FROM pg_tables WHERE schemaname = 'dumper' ORDER BY 1;
 
 DROP SCHEMA dumper CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

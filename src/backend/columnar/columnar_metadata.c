@@ -106,7 +106,9 @@ static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
 static StripeMetadata * UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId,
-												bool *update, Datum *newValues);
+												uint64 fileOffset, uint64 dataLength,
+												uint64 rowCount, uint64 chunkCount);
+
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
 static StripeMetadata * BuildStripeMetadata(Relation columnarStripes,
 											HeapTuple heapTuple);
@@ -182,6 +184,8 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_row_count 7
 #define Anum_columnar_stripe_chunk_count 8
 #define Anum_columnar_stripe_first_row_number 9
+
+static int GetFirstRowNumberAttrIndexInColumnarStripe(TupleDesc tupleDesc);
 
 /* constants for columnar.chunk_group */
 #define Natts_columnar_chunkgroup 4
@@ -645,18 +649,19 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 			{
 				values[Anum_columnar_chunk_minimum_value - 1] =
 					PointerGetDatum(DatumToBytea(chunk->minimumValue,
-												 &tupleDescriptor->attrs[columnIndex]));
+												 Attr(tupleDescriptor, columnIndex)));
 				values[Anum_columnar_chunk_maximum_value - 1] =
 					PointerGetDatum(DatumToBytea(chunk->maximumValue,
-												 &tupleDescriptor->attrs[columnIndex]));
+												 Attr(tupleDescriptor, columnIndex)));
 			}
 			else
 			{
 				nulls[Anum_columnar_chunk_minimum_value - 1] = true;
 				nulls[Anum_columnar_chunk_maximum_value - 1] = true;
 			}
-
+			PushActiveSnapshot(GetTransactionSnapshot());
 			InsertTupleAndEnforceConstraints(modifyState, values, nulls);
+			PopActiveSnapshot();
 		}
 	}
 
@@ -803,9 +808,9 @@ ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 				datumArray[Anum_columnar_chunk_maximum_value - 1]);
 
 			chunk->minimumValue =
-				ByteaToDatum(minValue, &tupleDescriptor->attrs[columnIndex]);
+				ByteaToDatum(minValue, Attr(tupleDescriptor, columnIndex));
 			chunk->maximumValue =
-				ByteaToDatum(maxValue, &tupleDescriptor->attrs[columnIndex]);
+				ByteaToDatum(maxValue, Attr(tupleDescriptor, columnIndex));
 
 			chunk->hasMinMax = true;
 		}
@@ -942,10 +947,12 @@ StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snap
 		strategyNumber = BTGreaterStrategyNumber;
 		procedure = F_INT8GT;
 	}
-	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_first_row_number,
-				strategyNumber, procedure, Int64GetDatum(rowNumber));
 
 	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
+	TupleDesc tupleDesc = RelationGetDescr(columnarStripes);
+
+	ScanKeyInit(&scanKey[1], GetFirstRowNumberAttrIndexInColumnarStripe(tupleDesc) + 1,
+				strategyNumber, procedure, Int64GetDatum(rowNumber));
 
 	Oid indexId = ColumnarStripeFirstRowNumberIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
@@ -1210,9 +1217,13 @@ static void
 InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCount,
 							 uint32 chunkGroupRowCount, uint64 firstRowNumber)
 {
-	bool nulls[Natts_columnar_stripe] = { false };
+	Oid columnarStripesOid = ColumnarStripeRelationId();
+	Relation columnarStripes = table_open(columnarStripesOid, RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 
-	Datum values[Natts_columnar_stripe] = { 0 };
+	Datum *values = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *nulls = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+
 	values[Anum_columnar_stripe_storageid - 1] =
 		UInt64GetDatum(storageId);
 	values[Anum_columnar_stripe_stripe - 1] =
@@ -1221,7 +1232,7 @@ InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCou
 		UInt32GetDatum(columnCount);
 	values[Anum_columnar_stripe_chunk_row_count - 1] =
 		UInt32GetDatum(chunkGroupRowCount);
-	values[Anum_columnar_stripe_first_row_number - 1] =
+	values[GetFirstRowNumberAttrIndexInColumnarStripe(tupleDescriptor)] =
 		UInt64GetDatum(firstRowNumber);
 
 	/* stripe has no rows yet, so initialize rest of the columns accordingly */
@@ -1234,9 +1245,6 @@ InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCou
 	values[Anum_columnar_stripe_chunk_count - 1] =
 		UInt32GetDatum(0);
 
-	Oid columnarStripesOid = ColumnarStripeRelationId();
-	Relation columnarStripes = table_open(columnarStripesOid, RowExclusiveLock);
-
 	ModifyState *modifyState = StartModifyRelation(columnarStripes);
 
 	InsertTupleAndEnforceConstraints(modifyState, values, nulls);
@@ -1244,6 +1252,9 @@ InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCou
 	FinishModifyRelation(modifyState);
 
 	table_close(columnarStripes, RowExclusiveLock);
+
+	pfree(values);
+	pfree(nulls);
 }
 
 
@@ -1354,19 +1365,8 @@ CompleteStripeReservation(Relation rel, uint64 stripeId, uint64 sizeBytes,
 	uint64 resLogicalStart = ColumnarStorageReserveData(rel, sizeBytes);
 	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	bool update[Natts_columnar_stripe] = { false };
-	update[Anum_columnar_stripe_file_offset - 1] = true;
-	update[Anum_columnar_stripe_data_length - 1] = true;
-	update[Anum_columnar_stripe_row_count - 1] = true;
-	update[Anum_columnar_stripe_chunk_count - 1] = true;
-
-	Datum newValues[Natts_columnar_stripe] = { 0 };
-	newValues[Anum_columnar_stripe_file_offset - 1] = Int64GetDatum(resLogicalStart);
-	newValues[Anum_columnar_stripe_data_length - 1] = Int64GetDatum(sizeBytes);
-	newValues[Anum_columnar_stripe_row_count - 1] = UInt64GetDatum(rowCount);
-	newValues[Anum_columnar_stripe_chunk_count - 1] = Int32GetDatum(chunkCount);
-
-	return UpdateStripeMetadataRow(storageId, stripeId, update, newValues);
+	return UpdateStripeMetadataRow(storageId, stripeId, resLogicalStart,
+								   sizeBytes, rowCount, chunkCount);
 }
 
 
@@ -1377,8 +1377,8 @@ CompleteStripeReservation(Relation rel, uint64 stripeId, uint64 sizeBytes,
  * of stripe metadata should be updated according to modifications done.
  */
 static StripeMetadata *
-UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
-						Datum *newValues)
+UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
+						uint64 dataLength, uint64 rowCount, uint64 chunkCount)
 {
 	SnapshotData dirtySnapshot;
 	InitDirtySnapshot(dirtySnapshot);
@@ -1391,7 +1391,18 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
-	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
+#if PG_VERSION_NUM >= 180000
+
+	/* CatalogTupleUpdate performs a normal heap UPDATE → RowExclusiveLock */
+	const LOCKMODE openLockMode = RowExclusiveLock;
+#else
+
+	/* In‑place update never changed tuple length → AccessShareLock was enough */
+	const LOCKMODE openLockMode = AccessShareLock;
+#endif
+
+	Relation columnarStripes = table_open(columnarStripesOid, openLockMode);
+	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 
 	Oid indexId = ColumnarStripePKeyIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
@@ -1414,15 +1425,32 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 							   storageId, stripeId)));
 	}
 
+	Datum *newValues = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *newNulls = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *update = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+
+	update[Anum_columnar_stripe_file_offset - 1] = true;
+	update[Anum_columnar_stripe_data_length - 1] = true;
+	update[Anum_columnar_stripe_row_count - 1] = true;
+	update[Anum_columnar_stripe_chunk_count - 1] = true;
+
+	newValues[Anum_columnar_stripe_file_offset - 1] = Int64GetDatum(fileOffset);
+	newValues[Anum_columnar_stripe_data_length - 1] = Int64GetDatum(dataLength);
+	newValues[Anum_columnar_stripe_row_count - 1] = UInt64GetDatum(rowCount);
+	newValues[Anum_columnar_stripe_chunk_count - 1] = Int32GetDatum(chunkCount);
+
+	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple,
+												tupleDescriptor,
+												newValues,
+												newNulls,
+												update);
+
+#if PG_VERSION_NUM < PG_VERSION_18
+
 	/*
 	 * heap_inplace_update already doesn't allow changing size of the original
 	 * tuple, so we don't allow setting any Datum's to NULL values.
 	 */
-	bool newNulls[Natts_columnar_stripe] = { false };
-	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
-	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple, tupleDescriptor,
-												newValues, newNulls, update);
-
 	heap_inplace_update(columnarStripes, modifiedTuple);
 
 	/*
@@ -1430,18 +1458,28 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 	 * heap_inplace_update().
 	 */
 	HeapTuple newTuple = oldTuple;
+#else
+
+	/* Regular catalog UPDATE keeps indexes in sync */
+	CatalogTupleUpdate(columnarStripes, &oldTuple->t_self, modifiedTuple);
+	HeapTuple newTuple = modifiedTuple;
+#endif
+
+	CommandCounterIncrement();
 
 	/*
 	 * Must not pass modifiedTuple, because BuildStripeMetadata expects a real
 	 * heap tuple with MVCC fields.
 	 */
-	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
-																 newTuple);
-
-	CommandCounterIncrement();
+	StripeMetadata *modifiedStripeMetadata =
+		BuildStripeMetadata(columnarStripes, newTuple);
 
 	systable_endscan(scanDescriptor);
-	table_close(columnarStripes, AccessShareLock);
+	table_close(columnarStripes, openLockMode);
+
+	pfree(newValues);
+	pfree(newNulls);
+	pfree(update);
 
 	/* return StripeMetadata object built from modified tuple */
 	return modifiedStripeMetadata;
@@ -1506,10 +1544,12 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
 {
 	Assert(RelationGetRelid(columnarStripes) == ColumnarStripeRelationId());
 
-	Datum datumArray[Natts_columnar_stripe];
-	bool isNullArray[Natts_columnar_stripe];
-	heap_deform_tuple(heapTuple, RelationGetDescr(columnarStripes),
-					  datumArray, isNullArray);
+	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
+
+	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 	StripeMetadata *stripeMetadata = palloc0(sizeof(StripeMetadata));
 	stripeMetadata->id = DatumGetInt64(datumArray[Anum_columnar_stripe_stripe - 1]);
@@ -1526,7 +1566,10 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
 	stripeMetadata->rowCount = DatumGetInt64(
 		datumArray[Anum_columnar_stripe_row_count - 1]);
 	stripeMetadata->firstRowNumber = DatumGetUInt64(
-		datumArray[Anum_columnar_stripe_first_row_number - 1]);
+		datumArray[GetFirstRowNumberAttrIndexInColumnarStripe(tupleDescriptor)]);
+
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	/*
 	 * If there is unflushed data in a parent transaction, then we would
@@ -1727,12 +1770,37 @@ create_estate_for_relation(Relation rel)
 	rte->relkind = rel->rd_rel->relkind;
 	rte->rellockmode = AccessShareLock;
 
+/* Prepare permission info on PG 16+ */
 #if PG_VERSION_NUM >= PG_VERSION_16
 	List *perminfos = NIL;
 	addRTEPermissionInfo(&perminfos, rte);
-	ExecInitRangeTable(estate, list_make1(rte), perminfos);
+#endif
+
+/* Initialize the range table, with the right signature for each PG version */
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* PG 18+ needs four arguments (unpruned_relids) */
+	ExecInitRangeTable(
+		estate,
+		list_make1(rte),
+		perminfos,
+		NULL  /* unpruned_relids: not used by columnar */
+		);
+#elif PG_VERSION_NUM >= PG_VERSION_16
+
+	/* PG 16–17: three-arg signature (permInfos) */
+	ExecInitRangeTable(
+		estate,
+		list_make1(rte),
+		perminfos
+		);
 #else
-	ExecInitRangeTable(estate, list_make1(rte));
+
+	/* PG 15: two-arg signature */
+	ExecInitRangeTable(
+		estate,
+		list_make1(rte)
+		);
 #endif
 
 	estate->es_output_cid = GetCurrentCommandId(true);
@@ -2048,4 +2116,24 @@ GetHighestUsedRowNumber(uint64 storageId)
 	}
 
 	return highestRowNumber;
+}
+
+
+/*
+ * GetFirstRowNumberAttrIndexInColumnarStripe returns attrnum for first_row_number attr.
+ *
+ * first_row_number attr was added to table columnar.stripe using alter operation after
+ * the version where Citus started supporting downgrades, and it's only column that we've
+ * introduced to columnar.stripe since then.
+ *
+ * And in case of a downgrade + upgrade, tupleDesc->natts becomes greater than
+ * Natts_columnar_stripe and when this happens, then we know that attrnum first_row_number is
+ * not Anum_columnar_stripe_first_row_number anymore but tupleDesc->natts - 1.
+ */
+static int
+GetFirstRowNumberAttrIndexInColumnarStripe(TupleDesc tupleDesc)
+{
+	return tupleDesc->natts == Natts_columnar_stripe
+		   ? (Anum_columnar_stripe_first_row_number - 1)
+		   : tupleDesc->natts - 1;
 }

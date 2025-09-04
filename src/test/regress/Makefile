@@ -45,7 +45,7 @@ vanilla_diffs_file = $(citus_abs_srcdir)/pg_vanilla_outputs/$(MAJORVERSION)/regr
 # intermediate, for muscle memory backward compatibility.
 check: check-full check-enterprise-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local check-pytest check-query-generator
+check-full: check-multi check-multi-mx check-multi-1 check-operations check-add-backup-node check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local check-pytest check-query-generator
 # check-enterprise-full triggers all enterprise specific tests
 check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure check-enterprise-isolation-logicalrep-1 check-enterprise-isolation-logicalrep-2 check-enterprise-isolation-logicalrep-3
 
@@ -146,7 +146,6 @@ check-isolation-custom-schedule-vg: all  $(isolation_test_files)
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
-
 check-empty: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
@@ -179,11 +178,6 @@ check-multi-1-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
-
-check-columnar-vg: all
-	$(pg_regress_multi_check) --load-extension=citus --valgrind \
-	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
 check-isolation: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
@@ -223,17 +217,49 @@ check-follower-cluster: all
 	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
+check-add-backup-node: all
+	$(pg_regress_multi_check) --load-extension=citus --follower-cluster --backupnodetest --worker-count=6 \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_add_backup_node_schedule $(EXTRA_TESTS)
+
 check-operations: all
 	$(pg_regress_multi_check) --load-extension=citus  --worker-count=6 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_schedule $(EXTRA_TESTS)
 
+check-columnar-minimal:
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/minimal_columnar_schedule $(EXTRA_TESTS)
+
 check-columnar: all
-	$(pg_regress_multi_check) --load-extension=citus_columnar --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
+
+check-columnar-vg: all
+	$(pg_regress_multi_check) --load-extension=citus_columnar --valgrind \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
 check-columnar-isolation: all  $(isolation_test_files)
-	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	$(pg_regress_multi_check) --load-extension=citus_columnar --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/columnar_isolation_schedule $(EXTRA_TESTS)
+
+check-columnar-custom-schedule: all
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-columnar-custom-schedule-vg: all
+	$(pg_regress_multi_check) --load-extension=citus_columnar \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 \
+	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-columnar-isolation-custom-schedule: all  $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus_columnar --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-columnar-isolation-custom-schedule-vg: all  $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus_columnar --isolationtester \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-split: all
 	$(pg_regress_multi_check) --load-extension=citus \
@@ -252,7 +278,7 @@ check-enterprise-failure: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_failure_schedule $(EXTRA_TESTS)
 
 check-pg-upgrade: all
-	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
+	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir) $(if $(filter true,$(test-with-columnar)),--test-with-columnar)
 
 check-arbitrary-configs: all
 	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed)
@@ -301,4 +327,3 @@ clean distclean maintainer-clean:
 	rm -rf input/ output/
 	rm -rf tmp_check/
 	rm -rf tmp_citus_test/
-

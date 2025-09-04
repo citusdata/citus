@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 -- create the udf is_citus_depended_object that is needed for the tests
 CREATE OR REPLACE FUNCTION
     pg_catalog.is_citus_depended_object(oid,oid)
@@ -149,3 +153,6 @@ FROM (VALUES ('master_add_node'), ('format'),
 
 -- drop the namespace with all its objects
 DROP SCHEMA citus_dependend_object CASCADE;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

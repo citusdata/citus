@@ -84,12 +84,11 @@ int ValuesMaterializationThreshold = 100;
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionOrValuesRTE(Node *node);
-static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
 static RecurringTuplesType FromClauseRecurringTupleType(Query *queryTree);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
-	PlannerRestrictionContext *plannerRestrictionContext);
+	PlannerRestrictionContext *plannerRestrictionContext, bool plannerPhase);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool
 																lateral,
@@ -110,6 +109,7 @@ static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 static char * RecurringTypeDescription(RecurringTuplesType recurType);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
 	PlannerInfo *plannerInfo, Relids recurringRelIds, Relids nonRecurringRelIds);
+static bool ContainsLateralSubquery(PlannerInfo *plannerInfo);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
 static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
 static bool ContainsReferencesToRelidsWalker(Node *node,
@@ -394,7 +394,7 @@ IsNodeSubquery(Node *node)
 /*
  * IsOuterJoinExpr returns whether the given node is an outer join expression.
  */
-static bool
+bool
 IsOuterJoinExpr(Node *node)
 {
 	bool isOuterJoin = false;
@@ -536,9 +536,16 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 		RaiseDeferredError(unsupportedQueryError, ERROR);
 	}
 
+	/*
+	 * We reach here at the third step of the planning, thus we already checked for pushed down
+	 * feasibility of recurring outer joins, at this step the unsupported outer join check should
+	 * only generate an error when there is a lateral subquery.
+	 */
 	DeferredErrorMessage *subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(
 		originalQuery,
-		plannerRestrictionContext);
+		plannerRestrictionContext,
+		false);
+
 	if (subqueryPushdownError != NULL)
 	{
 		RaiseDeferredError(subqueryPushdownError, ERROR);
@@ -561,7 +568,8 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 DeferredErrorMessage *
 DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 										PlannerRestrictionContext *
-										plannerRestrictionContext)
+										plannerRestrictionContext,
+										bool plannerPhase)
 {
 	bool outerMostQueryHasLimit = false;
 	ListCell *subqueryCell = NULL;
@@ -613,7 +621,8 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 		return error;
 	}
 
-	error = DeferredErrorIfUnsupportedRecurringTuplesJoin(plannerRestrictionContext);
+	error = DeferredErrorIfUnsupportedRecurringTuplesJoin(plannerRestrictionContext,
+														  plannerPhase);
 	if (error)
 	{
 		return error;
@@ -771,12 +780,17 @@ FromClauseRecurringTupleType(Query *queryTree)
  * DeferredErrorIfUnsupportedRecurringTuplesJoin returns a DeferredError if
  * there exists a join between a recurring rel (such as reference tables
  * and intermediate_results) and a non-recurring rel (such as distributed tables
- * and subqueries that we can push-down to worker nodes) that can return an
- * incorrect result set due to recurring tuples coming from the recurring rel.
+ * and subqueries that we can push-down to worker nodes) when plannerPhase is
+ * true, so that we try to recursively plan these joins.
+ * During recursive planning phase, we either replace those with recursive plans
+ * or leave them if it is safe to push-down.
+ * During the logical planning phase (plannerPhase is false), we only check if
+ * such queries have lateral subqueries.
  */
 static DeferredErrorMessage *
 DeferredErrorIfUnsupportedRecurringTuplesJoin(
-	PlannerRestrictionContext *plannerRestrictionContext)
+	PlannerRestrictionContext *plannerRestrictionContext,
+	bool plannerPhase)
 {
 	List *joinRestrictionList =
 		plannerRestrictionContext->joinRestrictionContext->joinRestrictionList;
@@ -829,14 +843,29 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 
 			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids))
 			{
+				if (plannerPhase)
+				{
+					/*
+					 * We have not yet tried to recursively plan this join, we should
+					 * defer an error.
+					 */
+					recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
+					break;
+				}
+
 				/*
 				 * Inner side contains distributed rels but the outer side only
-				 * contains recurring rels, must be an unsupported lateral outer
+				 * contains recurring rels, might be an unsupported lateral outer
 				 * join.
+				 * Note that plannerInfo->hasLateralRTEs is not always set to
+				 * true, so here we check rtes, see ContainsLateralSubquery for details.
 				 */
-				recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
 
-				break;
+				if (ContainsLateralSubquery(plannerInfo))
+				{
+					recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
+					break;
+				}
 			}
 		}
 		else if (joinType == JOIN_FULL)
@@ -1715,6 +1744,30 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 	}
 
 	return NULL;
+}
+
+
+/*
+ * ContainsLateralSubquery checks if the given plannerInfo contains any
+ * lateral subqueries in its rtable. If it does, it returns true, otherwise false.
+ */
+static bool
+ContainsLateralSubquery(PlannerInfo *plannerInfo)
+{
+	ListCell *lc;
+
+	foreach(lc, plannerInfo->parse->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+		/* We are only interested in subqueries that are lateral */
+		if (rte->lateral && rte->rtekind == RTE_SUBQUERY)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

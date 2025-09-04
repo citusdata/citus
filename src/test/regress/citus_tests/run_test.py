@@ -113,6 +113,13 @@ DEPS = {
     ),
     "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
     "single_node_enterprise": TestDeps(None),
+    "multi_add_node_from_backup": TestDeps(None, repeatable=False, worker_count=5),
+    "multi_add_node_from_backup_negative": TestDeps(
+        None, ["multi_add_node_from_backup"], worker_count=5, repeatable=False
+    ),
+    "multi_add_node_from_backup_sync_replica": TestDeps(
+        None, repeatable=False, worker_count=5
+    ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
     "multi_explain": TestDeps(
@@ -140,6 +147,12 @@ DEPS = {
     "background_rebalance_parallel": TestDeps(
         None, ["multi_test_helpers", "multi_cluster_management"], worker_count=6
     ),
+    "background_rebalance_parallel_reference_tables": TestDeps(
+        None,
+        ["multi_test_helpers", "multi_cluster_management"],
+        repeatable=False,
+        worker_count=6,
+    ),
     "function_propagation": TestDeps("minimal_schedule"),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
@@ -147,6 +160,7 @@ DEPS = {
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
+    "multi_mx_modifications": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
@@ -208,7 +222,7 @@ DEPS = {
     ),
     "limit_intermediate_size": TestDeps("base_schedule"),
     "columnar_drop": TestDeps(
-        "minimal_schedule",
+        "minimal_columnar_schedule",
         ["columnar_create", "columnar_load"],
         repeatable=False,
     ),
@@ -223,6 +237,33 @@ DEPS = {
             "multi_drop_extension",
         ],
         repeatable=False,
+    ),
+    "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
+    "multi_subquery_misc": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_union": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_in_where_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_limit_clause_approximate": TestDeps(
+        "minimal_schedule",
+        ["multi_create_table", "multi_create_users", "multi_load_data"],
+    ),
+    "multi_single_relation_subquery": TestDeps(
+        "minimal_schedule",
+        ["multi_create_table", "multi_create_users", "multi_load_data"],
+    ),
+    "multi_subquery_complex_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_in_where_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "subquery_in_where": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
 }
 
@@ -324,6 +365,15 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
         "failure"
     ):
         make_recipe = "check-failure-custom-schedule"
+    elif test_name.startswith("columnar"):
+        if dependencies.schedule is None:
+            # Columanar isolation tests don't depend on a base schedule,
+            # so this must be a columnar isolation test.
+            make_recipe = "check-columnar-isolation-custom-schedule"
+        elif dependencies.schedule == "minimal_columnar_schedule":
+            make_recipe = "check-columnar-custom-schedule"
+        else:
+            raise Exception("Columnar test could not be found in any schedule")
     else:
         make_recipe = "check-custom-schedule"
 
@@ -341,6 +391,9 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
 
 def default_base_schedule(test_schedule, args):
     if "isolation" in test_schedule:
+        if "columnar" in test_schedule:
+            # we don't have pre-requisites for columnar isolation tests
+            return None
         return "base_isolation_schedule"
 
     if "failure" in test_schedule:
@@ -362,6 +415,9 @@ def default_base_schedule(test_schedule, args):
 
     if "pg_upgrade" in test_schedule:
         return "minimal_pg_upgrade_schedule"
+
+    if "columnar" in test_schedule:
+        return "minimal_columnar_schedule"
 
     if test_schedule in ARBITRARY_SCHEDULE_NAMES:
         print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")

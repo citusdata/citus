@@ -140,7 +140,7 @@ ROLLBACK;
 -- INSERT..SELECT with re-partitioning in EXPLAIN ANALYZE after local execution
 BEGIN;
 INSERT INTO test VALUES (0,1000);
-EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) INSERT INTO test (x, y) SELECT y, x FROM test;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF) INSERT INTO test (x, y) SELECT y, x FROM test;
 ERROR:  EXPLAIN ANALYZE is currently not supported for INSERT ... SELECT commands with repartitioning
 ROLLBACK;
 -- DDL connects to locahost

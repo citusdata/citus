@@ -42,6 +42,7 @@
 #include "parser/parse_type.h"
 #include "storage/large_object.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/syscache.h"
 
 #include "distributed/citus_depended_object.h"

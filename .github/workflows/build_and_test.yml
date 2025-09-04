@@ -31,19 +31,19 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "17.4"
-      image_suffix: "-veab367a"
-      pg15_version: '{ "major": "15", "full": "15.12" }'
-      pg16_version: '{ "major": "16", "full": "16.8" }'
-      pg17_version: '{ "major": "17", "full": "17.4" }'
-      upgrade_pg_versions: "15.12-16.8-17.4"
+      sql_snapshot_pg_version: "17.6"
+      image_suffix: "-v4df94a0"
+      pg15_version: '{ "major": "15", "full": "15.14" }'
+      pg16_version: '{ "major": "16", "full": "16.10" }'
+      pg17_version: '{ "major": "17", "full": "17.6" }'
+      upgrade_pg_versions: "15.14-16.10-17.6"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
         run: echo 'noop'
   check-sql-snapshots:
     needs: params
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
@@ -55,7 +55,7 @@ jobs:
         ci/check_sql_snapshots.sh
   check-style:
     needs: params
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.style_checker_image_name }}:${{ needs.params.outputs.style_checker_tools_version }}${{ needs.params.outputs.image_suffix }}
     steps:
@@ -113,7 +113,7 @@ jobs:
           - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
@@ -153,6 +153,7 @@ jobs:
           - check-isolation
           - check-operations
           - check-follower-cluster
+          - check-add-backup-node
           - check-columnar
           - check-columnar-isolation
           - check-enterprise
@@ -221,7 +222,7 @@ jobs:
             pg_version: ${{ needs.params.outputs.pg17_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root --dns=8.8.8.8
@@ -297,7 +298,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -331,7 +332,15 @@ jobs:
           make -C src/test/regress \
             check-pg-upgrade \
             old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
-            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin
+            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin \
+            test-with-columnar=false
+
+        gosu circleci \
+          make -C src/test/regress \
+            check-pg-upgrade \
+            old-bindir=/usr/lib/postgresql/${{ env.old_pg_major }}/bin \
+            new-bindir=/usr/lib/postgresql/${{ env.new_pg_major }}/bin \
+            test-with-columnar=true
     - name: Copy pg_upgrade logs for newData dir
       run: |-
         mkdir -p /tmp/pg_upgrade_newData_logs
@@ -350,7 +359,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
     name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -396,10 +405,11 @@ jobs:
         flags: ${{ env.PG_MAJOR }}_citus_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   upload-coverage:
-    if: always()
+    # secret below is not available for forks so disabling upload action for them
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' }}
     env:
       CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg17_version).full }}${{ needs.params.outputs.image_suffix }}
     needs:
@@ -421,7 +431,7 @@ jobs:
   ch_benchmark:
     name: CH Benchmark
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs:
     - build
     steps:
@@ -439,7 +449,7 @@ jobs:
   tpcc_benchmark:
     name: TPCC Benchmark
     if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs:
     - build
     steps:
@@ -458,7 +468,7 @@ jobs:
     name: Prepare parallelization matrix
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     needs: test-flakyness-pre
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
@@ -470,7 +480,7 @@ jobs:
   test-flakyness-pre:
     name: Detect regression tests need to be ran
     if: ${{ !inputs.skip_test_flakyness }}}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs: build
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
@@ -485,10 +495,14 @@ jobs:
         tests=${detected_changes}
 
         # split the tests to be skipped --today we only skip upgrade tests
+        # and snapshot based node addition tests.
+        # snapshot based node addition tests are not flaky, as they promote
+        # the streaming replica (clone) to a PostgreSQL primary node that is one way
+        # operation
         skipped_tests=""
         not_skipped_tests=""
         for test in $tests; do
-            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]]; then
+            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]]; then
                 skipped_tests="$skipped_tests $test"
             else
                 not_skipped_tests="$not_skipped_tests $test"
@@ -511,7 +525,7 @@ jobs:
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg17_version).full }}${{ needs.params.outputs.image_suffix }}
       options: --user root

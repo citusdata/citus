@@ -618,7 +618,7 @@ JOIN LATERAL (
 --
 --    (*):  < SELECT a, b > vs  < SELECT table_name.a, table_name.b >
 SET client_min_messages TO WARNING;
-EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE, BUFFERS OFF)
 INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c1_t2;
 SET client_min_messages TO DEBUG2;
 
@@ -627,7 +627,7 @@ INSERT INTO nullkey_c1_t1 SELECT * FROM nullkey_c2_t1;
 
 --    between a single-shard table and a table of different type
 SET client_min_messages TO WARNING;
-EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE)
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, VERBOSE FALSE, BUFFERS OFF)
 INSERT INTO nullkey_c1_t1 SELECT * FROM reference_table;
 SET client_min_messages TO DEBUG2;
 

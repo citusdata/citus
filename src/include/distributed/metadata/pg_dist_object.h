@@ -61,4 +61,6 @@ typedef FormData_pg_dist_object *Form_pg_dist_object;
 #define Anum_pg_dist_object_colocationid 8
 #define Anum_pg_dist_object_force_delegation 9
 
+extern int GetForceDelegationAttrIndexInPgDistObject(TupleDesc tupleDesc);
+
 #endif /* PG_DIST_OBJECT_H */

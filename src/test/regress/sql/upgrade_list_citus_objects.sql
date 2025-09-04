@@ -5,6 +5,7 @@
 -- Here we create a table with only the basic extension types
 -- in order to avoid printing extra ones for now
 -- This can be removed when we drop PG16 support.
+SET search_path TO citus_schema;
 CREATE TABLE extension_basic_types (description text);
 INSERT INTO extension_basic_types VALUES ('type citus.distribution_type'),
                                          ('type citus.shard_transfer_mode'),

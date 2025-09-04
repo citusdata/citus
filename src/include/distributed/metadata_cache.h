@@ -146,6 +146,7 @@ extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern CitusTableType GetCitusTableType(CitusTableCacheEntry *tableEntry);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
+extern bool IsFirstShard(CitusTableCacheEntry *tableEntry, uint64 shardId);
 bool HasDistributionKey(Oid relationId);
 bool HasDistributionKeyCacheEntry(CitusTableCacheEntry *tableEntry);
 extern char * GetTableTypeName(Oid tableId);
@@ -298,6 +299,7 @@ extern Oid CitusDependentObjectFuncId(void);
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);
 extern Oid SecondaryNodeRoleId(void);
+extern Oid UnavailableNodeRoleId(void);
 extern Oid CitusCopyFormatTypeId(void);
 extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);

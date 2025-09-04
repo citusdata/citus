@@ -325,3 +325,37 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 # supported Postgres version.
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
+
+# PG18 change: strip trailing ".0..." from Actual Rows across formats
+# Text EXPLAIN (simple case: "actual rows=50.00")
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)([0-9]+)\.0+/\1\2/gI
+# Text EXPLAIN (inside "(actual time=... rows=50.00 ...)")
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)([0-9]+)\.0+/\1\2/gI
+# YAML (e.g., "Actual Rows: 1.00")
+s/(Actual[[:space:]]+Rows:[[:space:]]*[0-9]+)\.0+/\1/gI
+# XML (e.g., "<Actual-Rows>1.00</Actual-Rows>")
+s/(<Actual-Rows>[0-9]+)\.0+(<\/Actual-Rows>)/\1\2/g
+# JSON (e.g., '"Actual Rows": 1.00')
+s/("Actual[[:space:]]+Rows":[[:space:]]*[0-9]+)\.0+/\1/gI
+# JSON placeholder cleanup: '"Actual Rows": N.0...' -> N
+s/("Actual[[:space:]]+Rows":[[:space:]]*)N\.N/\1N/gI
+# Collapse placeholder in text EXPLAIN: "rows=N.N" -> "rows=N"
+s/(rows[[:space:]]*=[[:space:]]*)N\.N/\1N/gI
+# YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
+s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
+
+# pg18 “Disabled” change start
+# ignore any “Disabled:” lines in test output
+/^\s*Disabled:/d
+
+# ignore any JSON-style Disabled field
+/^\s*"Disabled":/d
+
+# ignore XML <Disabled>true</Disabled> or <Disabled>false</Disabled>
+/^\s*<Disabled>.*<\/Disabled>/d
+# pg18 “Disabled” change end
+
+# PG18 psql: headings changed from "List of relations" to per-type titles
+s/^([ \t]*)List of tables$/\1List of relations/g
+s/^([ \t]*)List of indexes$/\1List of relations/g
+s/^([ \t]*)List of sequences$/\1List of relations/g

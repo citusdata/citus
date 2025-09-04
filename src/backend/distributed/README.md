@@ -57,6 +57,8 @@ The purpose of this document is to provide comprehensive technical documentation
 - [Query from any node](#query-from-any-node)
   - [Why didn’t we have dedicated Query Nodes and Data Nodes?](#why-didnt-we-have-dedicated-query-nodes-and-data-nodes)
   - [Shard visibility](#shard-visibility)
+- [Statistic tracking](#statistic-tracking)
+  - [Citus stat counters](#citus-stat-counters)
 
 # Citus Concepts
 
@@ -2702,3 +2704,43 @@ Shards can be revealed via two settings:
 
 - `citus.override_shard_visibility = off` disables shard hiding entirely
 - `citus.show_shards_for_app_name_prefixes`= 'pgAdmin,psql'` disables shard hiding only for specific application_name values, by prefix
+
+## Statistic tracking
+
+Statistic views defined by Postgres already work well for one Citus node, like `pg_stat_database`, `pg_stat_activity`, `pg_stat_statements`, etc. And for some of them, we even provide wrapper views in Citus to have a global (i.e., cluster-wide) view of the statistics, like `citus_stat_activity`.
+
+And beside these, Citus itself also provides some additional statistic views to track the Citus-specific activities. Note that the way we collect statastics for each is quite different.
+
+- `citus_stat_tenants` (needs documentation)
+- `citus_stat_statements` (needs documentation)
+- `citus_stat_counters`
+
+### Citus stat counters
+Citus keeps track of several stat counters and exposes them via the `citus_stat_counters` view. The counters are tracked once `citus.enable_stat_counters` is set to true. Also, `citus_stat_counters_reset()` can be used to reset the counters for the given database if a database id different than 0 (default, InvalidOid) is provided, otherwise, it resets the counters for the current database.
+
+Details about the implementation and its caveats can be found in the header comment of [stat_counters.c](/src/backend/distributed/stats/stat_counters.c). However, at the high level;
+1. We allocate a shared memory array of length `MaxBackends` so that each backend has its own counter slot to reduce the contention while incrementing the counters at the runtime.
+2. We also allocate a shared hash, whose entries correspond to individual databases. Then, when a backend exits, it first aggregates its counters to the relevant entry in the shared hash, and then it resets its own counters because the same counter slot might be reused by another backend later.
+
+   Note that today we use the regular shared hash table API (`ShmemInitHash()`) to do this, but we should consider using `dshash_table()` once using many databases with Citus becomes "practically" possible because the performance of the regular shared hash table API is supposed to degrade when the number of entries in the hash table becomes much larger than the `max_size` parameter provided when creating the shared hash table.
+3. So, when `citus_stat_counters` is queried, we first aggregate the counters from the shared memory array and then we add this with the counters aggregated so far in the relevant shared hash entry for the database.
+   This means that if we weren't aggregating the counters in the shared hash when exiting, counters seen in `citus_stat_counters` could drift backwards in time.
+
+   Note that `citus_stat_counters` might observe the counters for a backend twice or perhaps unsee it if the backend was concurrently exiting. However, the next call to `citus_stat_counters` will see the correct values for the counters if the same situation doesn't happen due to another backend that is exiting concurrently, so we can live with that for now. However, if one day we think that this is very undesirable, we can enforce blocking behavior between the whole period of `citus_stat_counters` queries and saving the counters in the shared hash entry. However, that will also mean that exiting backends will have to wait for any active `citus_stat_counters` queries to finish, so this needs to be carefully considered.
+4. Finally, when `citus_stat_counters_reset()` is called, we reset the shared hash entry for the relevant database and also reset the relevant slots in the shared memory array for the provided database.
+
+   Note that there is chance that `citus_stat_counters_reset()` might partially fail to reset the counters for of a backend slot under some rare circumstances, but this should be very rare and we choose to ignore that for the sake of lock-free counter increments.
+5. Also, today neither of `citus_stat_counters` nor `citus_stat_counters_reset()` explicitly exclude the backend slots that belong to exited backends during their operations. Instead, they consider any "not unused" backend slots where the relevant `PGPROC` points to a valid database oid, which doesn't guarantee that the backend slot is actively used. However, in practice, this is not a problem for neither of these operations due to the reasons mentioned in the relevant functions. However, if we ever decide that the way that they operate slow down these operations, we can consider explicitly excluding the exited backend slots by checking (Citus) `BackendData`'s `activeBackend` field for the backend slots.
+6. As of today, we don't persist stat counters on server shutdown. Although it seems quite straightforward to do so, we skipped doing that at v1. Once we decide to persist the counters, one can check the relevant functions that we have for `citus_stat_statements`, namely, `CitusQueryStatsShmemShutdown()` and `CitusQueryStatsShmemStartup()`. And since it has been quite a long time since we wrote these two functions, we should also make sure to check `pgstat_write_statsfile()` and `pgstat_read_statsfile()` in Postgres to double check if we're missing anything -it seems we have a few-.
+7. Note that today we don't evict the entries of the said hash table that point to dropped databases because the wrapper view anyway filters them out (thanks to LEFT JOIN) and we don't expect a performance hit when reading from / writing to the hash table because of that unless users have a lot of databases that are dropped and recreated frequently. If one day we think that this is a problem, then we can let Citus maintenance daemon to do that for us periodically.
+
+The reason why we don't just use a shared hash table for the counters is that it could be more expensive to do hash lookups for each increment. Even more importantly, using a single counter slot for all the backends that are connected to the same database could lead to contention because that definitely requires a lock to be taken or the contended usage of atomic integers etc.. However, incrementing a counter in today's implementation doesn't require acquiring any sort of locks.
+
+Also, as of writing section, it seems quite likely that Postgres will expose their Cumulative Statistics infra starting with Postgres 18, see https://github.com/postgres/postgres/commit/7949d9594582ab49dee221e1db1aa5401ace49d4.
+So, once this happens, we can also consider using the same infra to track Citus stat counters. However, we can only do that once we drop support for Postgres versions older than 18.
+
+### A side note on query stat counters
+
+Initially, we were thinking of tracking query stat counters at the very end of the planner, namely, via `FinalizePlan()` function. However, that would mean not tracking the execution of the prepared statements because a prepared statement is not planned again once its plan is cached. To give a bit more details, query plan for a prepared statement is typically cached when the same prepared statement is executed five times by Postgres (hard-coded value). Even further, a plan may even be cached after the first time it's executed if it's straightforward enough (e.g. when it doesn't have any parameters).
+
+For this reason, we track the query stat counters at appropriate places within the CustomScan implementations provided by Citus for adaptive executor and non-pushable insert-select / merge executors.
