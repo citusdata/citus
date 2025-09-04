@@ -11,7 +11,7 @@ install_citus_and_tar() {
     # do everything in a subdirectory to avoid clutter in current directory
     mkdir -p "${builddir}" && cd "${builddir}"
 
-    "${citus_dir}/configure" --without-libcurl
+    "${citus_dir}/configure"
 
     installdir="${builddir}/install"
     make "-j$(nproc)" && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install

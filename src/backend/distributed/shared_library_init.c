@@ -104,7 +104,6 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
-#include "distributed/statistics_collection.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/stats/stat_counters.h"
 #include "distributed/stats/stat_tenants.h"
@@ -165,6 +164,7 @@ static char *MitmfifoEmptyString = "";
 static bool DeprecatedDeferShardDeleteOnMove = true;
 static bool DeprecatedDeferShardDeleteOnSplit = true;
 static bool DeprecatedReplicateReferenceTablesOnActivate = false;
+static bool DeprecatedEnableStatisticsCollection = false;
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -214,8 +214,6 @@ static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource sour
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
 static const char * LocalPoolSizeGucShowHook(void);
-static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
-											 source);
 static bool WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source);
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
@@ -1587,21 +1585,13 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_statistics_collection",
-		gettext_noop("Enables sending basic usage statistics to Citus."),
-		gettext_noop("Citus uploads daily anonymous usage reports containing "
-					 "rounded node count, shard size, distributed table count, "
-					 "and operating system name. This configuration value controls "
-					 "whether these reports are sent."),
-		&EnableStatisticsCollection,
-#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
-		true,
-#else
+		gettext_noop("Deprecated."),
+		NULL,
+		&DeprecatedEnableStatisticsCollection,
 		false,
-#endif
 		PGC_SIGHUP,
 		GUC_SUPERUSER_ONLY,
-		&StatisticsCollectionGucCheckHook,
-		NULL, NULL);
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_unique_job_ids",
@@ -3209,28 +3199,6 @@ LocalPoolSizeGucShowHook(void)
 	appendStringInfo(newvalue, "%d", GetLocalSharedPoolSize());
 
 	return (const char *) newvalue->data;
-}
-
-
-static bool
-StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
-{
-#ifdef HAVE_LIBCURL
-	return true;
-#else
-
-	/* if libcurl is not installed, only accept false */
-	if (*newval)
-	{
-		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
-		GUC_check_errdetail("Citus was compiled without libcurl support.");
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-#endif
 }
 
 
