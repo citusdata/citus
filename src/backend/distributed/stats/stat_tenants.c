@@ -612,7 +612,7 @@ ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 
 		/* addtional check to avoid undefined behavior */
 		tenantStats->score = (periodCountAfterLastScoreReduction <
-							  TENANTS_STATS_SCORE_FIELD_BIT_LENGTH)
+							  TENANT_STATS_SCORE_FIELD_BIT_LENGTH)
 							 ? tenantStats->score >> periodCountAfterLastScoreReduction
 							 : 0;
 	}
