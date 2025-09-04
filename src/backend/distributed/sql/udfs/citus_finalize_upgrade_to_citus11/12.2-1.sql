@@ -96,7 +96,7 @@ END;
 
         IF all_nodes_can_connect_to_each_other != True THEN
                   RAISE EXCEPTION 'There are unhealth primary nodes, you need to ensure all '
-                                  'nodes are up and running. Also, make sure that all nodes can connect '
+                                  'nodes are up and runnnig. Also, make sure that all nodes can connect '
                                   'to each other. Use SELECT * FROM citus_check_cluster_node_health(); '
                                   'to check the cluster health';
         ELSE
