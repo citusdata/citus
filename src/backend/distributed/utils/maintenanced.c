@@ -460,9 +460,6 @@ void
 CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
-	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY =
-		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), 60 * 1000);
-	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	TimestampTz lastRecoveryTime = 0;
 	TimestampTz lastShardCleanTime = 0;
 	TimestampTz lastStatStatementsPurgeTime = 0;
