@@ -49,6 +49,9 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 #define STAT_TENANTS_COLUMNS 9
 #define ONE_QUERY_SCORE 1000000000
 
+/* this doesn't attempt dereferencing given input and is computed in compile-time, so it's safe */
+#define TENANT_STATS_SCORE_FIELD_BIT_LENGTH (sizeof(((TenantStats *) NULL)->score) * 8)
+
 static char AttributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
 static CmdType AttributeToCommandType = CMD_UNKNOWN;
 static int AttributeToColocationGroupId = INVALID_COLOCATION_ID;
@@ -605,8 +608,13 @@ ReduceScoreIfNecessary(TenantStats *tenantStats, TimestampTz queryTime)
 	 */
 	if (periodCountAfterLastScoreReduction > 0)
 	{
-		tenantStats->score >>= periodCountAfterLastScoreReduction;
 		tenantStats->lastScoreReduction = queryTime;
+
+		/* addtional check to avoid undefined behavior */
+		tenantStats->score = (periodCountAfterLastScoreReduction <
+							  TENANT_STATS_SCORE_FIELD_BIT_LENGTH)
+							 ? tenantStats->score >> periodCountAfterLastScoreReduction
+							 : 0;
 	}
 }
 
