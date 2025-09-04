@@ -50,7 +50,7 @@ ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 #define ONE_QUERY_SCORE 1000000000
 
 /* this doesn't attempt dereferencing given input and is computed in compile-time, so it's safe */
-#define TENANTS_STATS_SCORE_FIELD_BIT_LENGTH (sizeof(((TenantStats *) NULL)->score) * 8)
+#define TENANT_STATS_SCORE_FIELD_BIT_LENGTH (sizeof(((TenantStats *) NULL)->score) * 8)
 
 static char AttributeToTenant[MAX_TENANT_ATTRIBUTE_LENGTH] = "";
 static CmdType AttributeToCommandType = CMD_UNKNOWN;
