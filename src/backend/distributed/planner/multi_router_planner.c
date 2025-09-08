@@ -1623,7 +1623,8 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 	if (IsA(setExpr, Var))
 	{
 		Var *newValue = (Var *) setExpr;
-		if (newValue->varattno == column->varattno)
+		if (newValue->varno == column->varno &&
+			newValue->varattno == column->varattno)
 		{
 			/* target entry of the form SET col = table.col */
 			isColumnValueChanged = false;
