@@ -112,10 +112,11 @@ extern DeferredErrorMessage * TargetlistAndFunctionsSupported(Oid resultRelation
 															  Node *quals,
 															  List *targetList,
 															  CmdType commandType,
-															  List *returningList);
+															  List *returningList,
+															  List *rangeTableList);
 extern bool NodeIsFieldStore(Node *node);
 extern bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
-									FromExpr *joinTree);
+									FromExpr *joinTree, List *rangeTableList);
 extern bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 extern bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);

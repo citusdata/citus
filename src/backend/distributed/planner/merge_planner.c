@@ -592,6 +592,7 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, Query *query,
 {
 	uint32 targetRangeTableIndex = query->resultRelation;
 	FromExpr *joinTree = GetMergeJoinTree(query);
+	List *rangeTableList = query->rtable;
 	Var *distributionColumn = NULL;
 	if (IsCitusTable(resultRelationId) && HasDistributionKey(resultRelationId))
 	{
@@ -629,7 +630,8 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, Query *query,
 		}
 
 		if (targetEntryDistributionColumn &&
-			TargetEntryChangesValue(targetEntry, distributionColumn, joinTree))
+			TargetEntryChangesValue(targetEntry, distributionColumn, joinTree,
+									rangeTableList))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "updating the distribution column is not "

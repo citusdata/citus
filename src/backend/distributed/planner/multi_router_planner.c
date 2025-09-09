@@ -537,8 +537,9 @@ IsTidColumn(Node *node)
  */
 DeferredErrorMessage *
 TargetlistAndFunctionsSupported(Oid resultRelationId, FromExpr *joinTree, Node *quals,
-								List *targetList,
-								CmdType commandType, List *returningList)
+								List *targetList, CmdType commandType,
+								List *returningList,
+								List *rangeTableList)
 {
 	uint32 rangeTableId = 1;
 	Var *partitionColumn = NULL;
@@ -602,7 +603,8 @@ TargetlistAndFunctionsSupported(Oid resultRelationId, FromExpr *joinTree, Node *
 		}
 
 		if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
-			TargetEntryChangesValue(targetEntry, partitionColumn, joinTree))
+			TargetEntryChangesValue(targetEntry, partitionColumn, joinTree,
+									rangeTableList))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "modifying the partition value of rows is not "
@@ -802,7 +804,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 											queryTree->jointree->quals,
 											queryTree->targetList,
 											commandType,
-											queryTree->returningList);
+											queryTree->returningList,
+											queryTree->rtable);
 		if (deferredError)
 		{
 			return deferredError;
@@ -1615,7 +1618,8 @@ MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
  * tree, or the target entry sets a different column.
  */
 bool
-TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
+TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree,
+						List *rangeTableList)
 {
 	bool isColumnValueChanged = true;
 	Expr *setExpr = targetEntry->expr;
@@ -1623,10 +1627,18 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 	if (IsA(setExpr, Var))
 	{
 		Var *newValue = (Var *) setExpr;
-		if (newValue->varno == column->varno &&
+
+		RangeTblEntry *columnRte = rt_fetch(column->varno, rangeTableList);
+		RangeTblEntry *newValueRte = rt_fetch(newValue->varno, rangeTableList);
+
+		if (columnRte->relid == newValueRte->relid &&
 			newValue->varattno == column->varattno)
 		{
-			/* target entry of the form SET col = table.col */
+			/*
+			 * Target entry is of the form SET col = foo.col,
+			 * where foo also points to the relation that
+			 * "column" belongs to.
+			 */
 			isColumnValueChanged = false;
 		}
 	}
