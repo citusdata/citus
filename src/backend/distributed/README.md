@@ -355,6 +355,15 @@ DEBUG:  Total number of commands sent over the session 8: 1 to node localhost:97
 (0 rows)
 ```
 
+### Delaying the Fast Path Plan
+
+As of Citus 13.2, if it can be determined at plan-time that a fast path query is against a local shard then a shortcut can be taken so that deparse and parse/plan of the shard query is avoided. Citus must be in MX mode and the shard must be local to the Citus node processing the query. If so, the OID of the distributed table is replaced by the OID of the shard in the parse tree. The parse tree is then given to the Postgres planner which returns a plan that is stored in the distributed plan's task. That plan can be repeatedly used by the local executor (described in the next section), avoiding the need to deparse and plan the shard query on each execution.
+
+We call this delayed fast path planning because if a query is eligible for fast path planning then `FastPathPlanner()` is delayed if the following properties hold:
+- The query is a SELECT or UPDATE on a distributed table (schema or column sharded) or Citus managed local table
+- The query has no volatile functions
+
+If so, then `FastPathRouterQuery()` sets a flag indicating that making the fast path plan should be delayed until after the worker job has been created. At that point the router planner uses `CheckAndBuildDelayedFastPathPlan()` to see if the task's shard placement is local (and not a dummy placement) and the metadata of the shard table and distributed table are consistent (no DDL in progress on the distributed table). If so the parse tree with OID of the distributed table replaced by the OID of the shard table is fed to `standard_planner()` and the resultant plan is saved in the task. Otherwise, if the worker job has been marked for deferred pruning or the shard is not local or the shard is local but it's not safe to swap OIDs, then `CheckAndBuildDelayedFastPathPlan()` calls `FastPathPlanner()` to ensure a complete plan context. Reference tables are not currently supported, but this may be relaxed for SELECT statements in the future. Delayed fast path planning can be disabled by turning off `citus.enable_local_fast_path_query_optimization` (it is on by default).
 
 ## Router Planner in Citus
 
