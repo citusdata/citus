@@ -31,8 +31,12 @@ SELECT create_distributed_table('limit_orders', 'id', 'hash');
 
 (1 row)
 
-SELECT create_distributed_table('multiple_hash', 'id', 'hash');
-ERROR:  column "id" of relation "multiple_hash" does not exist
+SELECT create_distributed_table('multiple_hash', 'category', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('range_partitioned', 'id', 'range');
  create_distributed_table
 ---------------------------------------------------------------------
