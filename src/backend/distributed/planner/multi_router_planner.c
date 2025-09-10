@@ -1634,6 +1634,25 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 			 */
 			isColumnValueChanged = false;
 		}
+		else
+		{
+			List *restrictClauseList = WhereClauseList(joinTree);
+			OpExpr *equalityExpr = MakeOpExpressionExtended(column, (Expr *) newValue,
+															BTEqualStrategyNumber);
+
+			bool predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
+														   restrictClauseList, false);
+			if (predicateIsImplied)
+			{
+				/*
+				 * Target entry is of the form
+				 * "SET col_a = foo.col_b WHERE col_a = foo.col_b (AND (...))",
+				 * where foo points to a different relation or it points
+				 * to the same relation but col_a is not the same column as col_b.
+				 */
+				isColumnValueChanged = false;
+			}
+		}
 	}
 	else if (IsA(setExpr, Const))
 	{
