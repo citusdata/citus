@@ -36,7 +36,7 @@ CREATE TABLE append_partitioned ( LIKE limit_orders );
 SET citus.shard_count TO 2;
 
 SELECT create_distributed_table('limit_orders', 'id', 'hash');
-SELECT create_distributed_table('multiple_hash', 'id', 'hash');
+SELECT create_distributed_table('multiple_hash', 'category', 'hash');
 SELECT create_distributed_table('range_partitioned', 'id', 'range');
 SELECT create_distributed_table('append_partitioned', 'id', 'append');
 
