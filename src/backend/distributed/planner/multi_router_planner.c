@@ -1623,9 +1623,15 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 	if (IsA(setExpr, Var))
 	{
 		Var *newValue = (Var *) setExpr;
-		if (newValue->varattno == column->varattno)
+		if (column->varno == newValue->varno &&
+			column->varattno == newValue->varattno)
 		{
-			/* target entry of the form SET col = table.col */
+			/*
+			 * Target entry is of the form "SET col_a = foo.col_b",
+			 * where foo also points to the same range table entry
+			 * and col_a and col_b are the same. So, effectively
+			 * they're literally referring to the same column.
+			 */
 			isColumnValueChanged = false;
 		}
 	}
