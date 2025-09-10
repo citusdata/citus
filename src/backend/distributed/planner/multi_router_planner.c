@@ -1609,10 +1609,19 @@ MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
 
 /*
  * TargetEntryChangesValue determines whether the given target entry may
- * change the value in a given column, given a join tree. The result is
- * true unless the expression refers directly to the column, or the
- * expression is a value that is implied by the qualifiers of the join
- * tree, or the target entry sets a different column.
+ * change the value given a column and a join tree.
+ *
+ * The function assumes that the "targetEntry" references given "column"
+ * Var via its "resname" and is used as part of a modify query. This means
+ * that, for example, for an update query, the input "targetEntry" constructs
+ * the following assignment operation as part of the SET clause:
+ *   "col_a = expr_a ", where, "col_a" refers to input "column" Var (via
+ * "resname") as per the assumption written above. And we want to understand
+ * if "expr_a" (which is pointed to by targetEntry->expr) refers directly to
+ * the "column" Var, or "expr_a" is a value that is implied to be equal
+ * to "column" Var by the qualifiers of the join tree. If so, we know that
+ * the value of "col_a" effectively cannot be changed by this assignment
+ * operation.
  */
 bool
 TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
@@ -1673,7 +1682,10 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 													   restrictClauseList, false);
 		if (predicateIsImplied)
 		{
-			/* target entry of the form SET col = <x> WHERE col = <x> AND ... */
+			/*
+			 * Target entry is of the form
+			 * "SET col_a = const_a WHERE col_a = const_a (AND (...))".
+			 */
 			isColumnValueChanged = false;
 		}
 	}
