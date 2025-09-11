@@ -242,11 +242,6 @@ jobs:
       if: always()
       with:
         folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
     name: PG${{ fromJson(matrix.pg_version).major }} - check-arbitrary-configs-${{ matrix.parallel }}
     runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
@@ -291,11 +286,6 @@ jobs:
       if: always()
       with:
         folder: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
     runs-on: ubuntu-latest
@@ -352,11 +342,6 @@ jobs:
       if: always()
       with:
         folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
     name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
     runs-on: ubuntu-latest
@@ -399,35 +384,6 @@ jobs:
       if: always()
       with:
         folder: ${{ env.PG_MAJOR }}_citus_upgrade
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.PG_MAJOR }}_citus_upgrade
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
-  upload-coverage:
-    # secret below is not available for forks so disabling upload action for them
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request' }}
-    env:
-      CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-    runs-on: ubuntu-latest
-    container:
-      image: ${{ needs.params.outputs.test_image_name }}:${{ fromJson(needs.params.outputs.pg17_version).full }}${{ needs.params.outputs.image_suffix }}
-    needs:
-      - params
-      - test-citus
-      - test-arbitrary-configs
-      - test-citus-upgrade
-      - test-pg-upgrade
-    steps:
-      - uses: actions/download-artifact@v4.1.8
-        with:
-          pattern: codeclimate*
-          path: codeclimate
-          merge-multiple: true
-      - name: Upload coverage results to Code Climate
-        run: |-
-          cc-test-reporter sum-coverage codeclimate/*.json -o total.json
-          cc-test-reporter upload-coverage -i total.json
   ch_benchmark:
     name: CH Benchmark
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
