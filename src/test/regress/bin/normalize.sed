@@ -359,3 +359,6 @@ s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
 s/^([ \t]*)List of tables$/\1List of relations/g
 s/^([ \t]*)List of indexes$/\1List of relations/g
 s/^([ \t]*)List of sequences$/\1List of relations/g
+
+/^Not-null constraints:\s*$/d
+/^\s+"[^"]+_not_null"\s+NOT NULL\b/d
