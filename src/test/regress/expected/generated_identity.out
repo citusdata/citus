@@ -473,25 +473,19 @@ SELECT create_distributed_table('color', 'color_id');
 (1 row)
 
 INSERT INTO color(color_name) VALUES ('Blue');
-\d+ color
-                                              Table "generated_identities.color"
-   Column   |       Type        | Collation | Nullable |           Default            | Storage  | Stats target | Description
+SELECT pg_get_serial_sequence('color', 'color_id');
+         pg_get_serial_sequence
 ---------------------------------------------------------------------
- color_id   | bigint            |           | not null | generated always as identity | plain    |              |
- color_name | character varying |           | not null |                              | extended |              |
-Indexes:
-    "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
+ generated_identities.color_color_id_seq
+(1 row)
 
 \c - - - :worker_1_port
 SET search_path TO generated_identities;
-\d+ color
-                                              Table "generated_identities.color"
-   Column   |       Type        | Collation | Nullable |           Default            | Storage  | Stats target | Description
+SELECT pg_get_serial_sequence('color', 'color_id');
+         pg_get_serial_sequence
 ---------------------------------------------------------------------
- color_id   | bigint            |           | not null | generated always as identity | plain    |              |
- color_name | character varying |           | not null |                              | extended |              |
-Indexes:
-    "color_color_id_key" UNIQUE CONSTRAINT, btree (color_id)
+ generated_identities.color_color_id_seq
+(1 row)
 
 INSERT INTO color(color_name) VALUES ('Red');
 -- alter sequence .. restart
