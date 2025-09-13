@@ -147,6 +147,9 @@ SELECT * FROM test_parameterized_sql_function(1);
 
 SELECT (SELECT 1 FROM test_parameterized_sql limit 1) FROM test_parameterized_sql_function(1);
 
+-- this fails pg <18
+-- succeeds in pg18 because of pg18 commit 0dca5d68d
+-- where sql functions behave as PL/pgSQL functions and use the cache
 SELECT test_parameterized_sql_function_in_subquery_where(1);
 
 -- postgres behaves slightly differently for the following
