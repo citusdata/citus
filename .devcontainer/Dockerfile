@@ -97,7 +97,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg18
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 18beta3
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 18rc1
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
