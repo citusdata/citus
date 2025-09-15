@@ -242,6 +242,11 @@ jobs:
       if: always()
       with:
         folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
     name: PG${{ fromJson(matrix.pg_version).major }} - check-arbitrary-configs-${{ matrix.parallel }}
     runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
@@ -286,6 +291,11 @@ jobs:
       if: always()
       with:
         folder: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.PG_MAJOR }}_arbitrary_configs_${{ matrix.parallel }}
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
     runs-on: ubuntu-latest
@@ -342,6 +352,11 @@ jobs:
       if: always()
       with:
         folder: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
     name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
     runs-on: ubuntu-latest
@@ -384,6 +399,11 @@ jobs:
       if: always()
       with:
         folder: ${{ env.PG_MAJOR }}_citus_upgrade
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.PG_MAJOR }}_citus_upgrade
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}
   ch_benchmark:
     name: CH Benchmark
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
