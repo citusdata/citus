@@ -3,6 +3,7 @@ SET citus.next_shard_id TO 750000;
 SET citus.next_placement_id TO 750000;
 
 CREATE SCHEMA multi_modifications;
+SET search_path TO multi_modifications;
 
 -- some failure messages that comes from the worker nodes
 -- might change due to parallel executions, so suppress those
@@ -245,12 +246,14 @@ INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 
 -- First: Connect to the second worker node
 \c - - - :worker_2_port
+SET search_path TO multi_modifications;
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 
 -- Third: Connect back to master node
 \c - - - :master_port
+SET search_path TO multi_modifications;
 
 -- Fourth: Perform an INSERT on the remaining node
 -- the whole transaction should fail
@@ -259,6 +262,7 @@ INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 
 -- set the shard name back
 \c - - - :worker_2_port
+SET search_path TO multi_modifications;
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
@@ -266,12 +270,15 @@ ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 -- Verify the insert failed and both placements are healthy
 -- or the insert succeeded and placement marked unhealthy
 \c - - - :worker_1_port
+SET search_path TO multi_modifications;
 SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
 
 \c - - - :worker_2_port
+SET search_path TO multi_modifications;
 SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
 
 \c - - - :master_port
+SET search_path TO multi_modifications;
 
 SELECT count(*) FROM limit_orders WHERE id = 276;
 
@@ -286,12 +293,14 @@ AND    s.logicalrelid = 'limit_orders'::regclass;
 
 -- First: Connect to the first worker node
 \c - - - :worker_1_port
+SET search_path TO multi_modifications;
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 
 -- Third: Connect back to master node
 \c - - - :master_port
+SET search_path TO multi_modifications;
 
 -- Fourth: Perform an INSERT on the remaining node
 \set VERBOSITY terse
@@ -312,12 +321,14 @@ AND    s.logicalrelid = 'limit_orders'::regclass;
 
 -- First: Connect to the first worker node
 \c - - - :worker_1_port
+SET search_path TO multi_modifications;
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 
 -- Third: Connect back to master node
 \c - - - :master_port
+SET search_path TO multi_modifications;
 
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders SET id = 0 WHERE id = 246;
@@ -914,20 +925,5 @@ DELETE FROM summary_table WHERE id < (
 CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
 
-DROP TABLE insufficient_shards;
-DROP TABLE raw_table;
-DROP TABLE summary_table;
-DROP TABLE reference_raw_table;
-DROP TABLE reference_summary_table;
-DROP TABLE limit_orders;
-DROP TABLE multiple_hash;
-DROP TABLE range_partitioned;
-DROP TABLE append_partitioned;
-DROP TABLE bidders;
-
-DROP FUNCTION stable_append;
-DROP FUNCTION immutable_append;
-DROP FUNCTION temp_strict_func;
-DROP TYPE order_side;
-
+SET client_min_messages TO WARNING;
 DROP SCHEMA multi_modifications CASCADE;
