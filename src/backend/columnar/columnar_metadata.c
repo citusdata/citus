@@ -1510,6 +1510,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 	Oid indexId = ColumnarStripeFirstRowNumberIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
+
+	snapshot = RegisterSnapshot(snapshot);
 	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId,
 													indexOk, snapshot, 1, scanKey);
 
@@ -1529,6 +1531,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 	systable_endscan(scanDescriptor);
 	table_close(columnarStripes, AccessShareLock);
+	UnregisterSnapshot(snapshot);
 
 	return stripeMetadataList;
 }
