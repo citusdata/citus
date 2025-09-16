@@ -1267,7 +1267,13 @@ StripesForRelfilelocator(RelFileLocator relfilelocator)
 {
 	uint64 storageId = LookupStorageId(relfilelocator);
 
-	return ReadDataFileStripeList(storageId, GetTransactionSnapshot());
+	Snapshot snapshot = RegisterSnapshot(GetTransactionSnapshot());
+
+	List *readDataFileStripeList = ReadDataFileStripeList(storageId, snapshot);
+
+	UnregisterSnapshot(snapshot);
+
+	return readDataFileStripeList;
 }
 
 
