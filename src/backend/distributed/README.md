@@ -799,7 +799,7 @@ WHERE l.user_id = o.user_id AND o.primary_key = 55;
 
 ### Outer joins between reference and distributed tables
 
-In general, when the outer side of an outer join is a recurring tuple (e.g., reference table, intermediate results, or set returning functions), it is not safe to push down the join.  
+In general, when the outer side of an outer join is a recurring tuple (e.g., reference table, intermediate results, or set returning functions), it is not safe to push down the join.
 ```sql
 "... ref_table LEFT JOIN distributed_table ..."
 "... distributed_table RIGHT JOIN ref_table ..."
@@ -831,11 +831,11 @@ As of Citus 13.2, under certain conditions, Citus can push down these types of L
 
 #### Example Query
 
-In the example below, Citus pushes down the query by injecting interval constraints on the reference table. The injected constraints are visible in the EXPLAIN output. 
+In the example below, Citus pushes down the query by injecting interval constraints on the reference table. The injected constraints are visible in the EXPLAIN output.
 
 ```sql
-SELECT pc.category_name, count(pt.product_id) 
-FROM product_categories pc 
+SELECT pc.category_name, count(pt.product_id)
+FROM product_categories pc
 LEFT JOIN products_table pt ON pc.category_id = pt.product_id
 GROUP BY pc.category_name;
 ```
