@@ -797,14 +797,13 @@ WHERE l.user_id = o.user_id AND o.primary_key = 55;
 
 
 
-### Ref table LEFT JOIN distributed table JOINs via recursive planning
+### Outer joins between reference and distributed tables
 
-Very much like local-distributed table joins, Citus can't push down queries formatted as:
+In general, when the outer side of an outer join is a recurring tuple (e.g., reference table, intermediate results, or set returning functions), it is not safe to push down the join.  
 ```sql
 "... ref_table LEFT JOIN distributed_table ..."
+"... distributed_table RIGHT JOIN ref_table ..."
 ```
-This is the case when the outer side is a recurring tuple (e.g., reference table, intermediate results, or set returning functions).
-
 In these situations, Citus recursively plans the "distributed" part of the join. Even though it may seem excessive to recursively plan a distributed table, remember that Citus pushes down the filters and projections. Functions involved here include `RequiredAttrNumbersForRelation()` and `ReplaceRTERelationWithRteSubquery()`.
 
 The core function handling this logic is `RecursivelyPlanRecurringTupleOuterJoinWalker()`. There are likely numerous optimizations possible (e.g., first pushing down an inner JOIN then an outer join), but these have not been implemented due to their complexity.
@@ -827,6 +826,45 @@ DEBUG:  recursively planning distributed relation "orders_table" "o" since it is
 DEBUG:  Wrapping relation "orders_table" "o" to a subquery
 DEBUG:  generating subplan 45_1 for subquery SELECT order_id, status FROM public.orders_table o WHERE true
 ```
+
+As of Citus 13.2, under certain conditions, Citus can push down these types of LEFT and RIGHT outer joins by injecting constraints—derived from the shard intervals of distributed tables—into shard queries for the reference table. The eligibility rules for pushdown are defined in `CanPushdownRecurringOuterJoin()`, while the logic for computing and injecting the constraints is implemented in `UpdateWhereClauseToPushdownRecurringOuterJoin()`.
+
+#### Example Query
+
+In the example below, Citus pushes down the query by injecting interval constraints on the reference table. The injected constraints are visible in the EXPLAIN output. 
+
+```sql
+SELECT pc.category_name, count(pt.product_id) 
+FROM product_categories pc 
+LEFT JOIN products_table pt ON pc.category_id = pt.product_id
+GROUP BY pc.category_name;
+```
+
+#### Debug Messages
+```
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  a push down safe left join with recurring left side
+```
+
+#### Explain Output
+```
+HashAggregate
+  Group Key: remote_scan.category_name
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 32
+        Tasks Shown: One of 32
+        ->  Task
+              Node: host=localhost port=9701 dbname=ebru
+              ->  HashAggregate
+                    Group Key: pc.category_name
+                    ->  Hash Right Join
+                          Hash Cond: (pt.product_id = pc.category_id)
+                          ->  Seq Scan on products_table_102072 pt
+                          ->  Hash
+                                ->  Seq Scan on product_categories_102106 pc
+                                      Filter: ((category_id IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint8((category_id)::bigint)) < 0) AND (btint4cmp(hashint8((category_id::bigint), '-2013265921'::integer) <= 0)))
+```
+
 
 ### Recursive Planning When FROM Clause has Reference Table (or Recurring Tuples)
 
