@@ -56,6 +56,14 @@ struct ColumnarWriteState
 	ColumnarOptions options;
 	ChunkData *chunkData;
 
+	/*
+	 * accounting for creating new chunks groups when
+	 * size limit reaches
+	 */
+	Size currentChunkBytes;
+	uint32 earlySerializedRowCount;
+	uint32 earlySerializedChunkCount;
+
 	List *chunkGroupRowCounts;
 
 	/*
@@ -67,6 +75,8 @@ struct ColumnarWriteState
 	StringInfo compressionBuffer;
 };
 
+static StripeSkipList * ExpandStripeSkipListChunks(StripeSkipList *stripeSkipList, uint32 newChunkIndex);
+static StripeBuffers * ExpandStripeBuffersChunks(StripeBuffers *stripeBuffers, uint32 newChunkIndex);
 static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
 												uint32 chunkRowCount,
 												uint32 columnCount);
@@ -165,11 +175,13 @@ uint64
 ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *columnNulls)
 {
 	uint32 columnIndex = 0;
+	Size totalRowSize = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
 	ColumnarOptions *options = &writeState->options;
 	const uint32 chunkRowCount = options->chunkRowCount;
+	const uint32 maxChunkCount = (options->stripeRowCount / chunkRowCount) + 1;
 	ChunkData *chunkData = writeState->chunkData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
 
@@ -201,10 +213,87 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		{
 			chunkData->valueBufferArray[columnIndex] = makeStringInfo();
 		}
+
+		writeState->currentChunkBytes = 0;
+		writeState->earlySerializedRowCount = 0;
+		writeState->earlySerializedChunkCount = 0;
+
+		/* Ensure maxChunkSize is set with a reasonable default */
+		Assert(options->maxChunkSize >= CHUNK_GROUP_SIZE_MINIMUM &&
+			   options->maxChunkSize <= CHUNK_GROUP_SIZE_MAXIMUM);
 	}
 
 	uint32 chunkIndex = stripeBuffers->rowCount / chunkRowCount;
 	uint32 chunkRowIndex = stripeBuffers->rowCount % chunkRowCount;
+
+	/* Adjust the indices if some chunks were serialized early */
+	if (writeState->earlySerializedRowCount)
+	{
+		chunkIndex = chunkIndex + writeState->earlySerializedChunkCount;
+		chunkRowIndex = chunkRowIndex - writeState->earlySerializedRowCount;
+	}
+
+	/*
+	 * Calculate total serialized current row size without actually serializing.
+	 * This uses the same logic as SerializeSingleDatum but only computes sizes.
+	 */
+	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		if (!columnNulls[columnIndex])
+		{
+			Form_pg_attribute attributeForm =
+				TupleDescAttr(writeState->tupleDescriptor, columnIndex);
+			int columnTypeLength = attributeForm->attlen;
+			char columnTypeAlign = attributeForm->attalign;
+
+			uint32 datumLength = att_addlength_datum(0, columnTypeLength, columnValues[columnIndex]);
+			uint32 datumLengthAligned = att_align_nominal(datumLength, columnTypeAlign);
+
+			totalRowSize += (Size) datumLengthAligned;
+		}
+	}
+
+	/*
+	 * Check if we need to serialize a chunk group earliar due to size limits.
+	 * If adding the current row spills out from the defined chunk grupu size limit, we
+	 * will then add the current row in a seperate chunk and will serialize
+	 * all rows data before it.
+	 */
+	if (chunkRowIndex > 0 &&
+		writeState->currentChunkBytes + totalRowSize > CHUNK_GROUP_SIZE_MB_TO_BYTES(options->maxChunkSize))
+	{
+		elog(DEBUG1, "Row size (%zu bytes) exceeds chunk group size limit (%zu bytes), "
+				"storing in a separate chunk group",
+				totalRowSize, CHUNK_GROUP_SIZE_MB_TO_BYTES(options->maxChunkSize));
+
+		/*
+		 * Before putting row in a seperate chunk we have to allocate space
+		 * for the new chunk if maxChunkCount reached.
+		 */
+		if (chunkIndex + 1 >= maxChunkCount)
+		{
+			ExpandStripeBuffersChunks(stripeBuffers, chunkIndex + 1);
+			ExpandStripeSkipListChunks(stripeSkipList, chunkIndex + 1);
+		}
+
+		/*
+		 * Size limit reached, now serialize upto the last row.
+		 * We make sure not to serialize the current row data and only upto
+		 * the last row,  so we use `chunkRowIndex` instead of `chunkRowIndex + 1`
+		 * in order to skip current row.
+		 */
+		SerializeChunkData(writeState, chunkIndex, chunkRowIndex);
+		writeState->earlySerializedChunkCount++;
+		writeState->currentChunkBytes = 0;
+		writeState->earlySerializedRowCount = writeState->earlySerializedRowCount + chunkRowIndex;
+
+		/* Recreate and adjust the indices after deciding to start a new chunk */
+		chunkIndex = stripeBuffers->rowCount / chunkRowCount;
+		chunkRowIndex = stripeBuffers->rowCount % chunkRowCount;
+
+		chunkIndex = chunkIndex + writeState->earlySerializedChunkCount;
+		chunkRowIndex = chunkRowIndex - writeState->earlySerializedRowCount;
+	}
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
@@ -241,12 +330,14 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		chunkSkipNode->rowCount++;
 	}
 
+	writeState->currentChunkBytes += totalRowSize;
 	stripeSkipList->chunkCount = chunkIndex + 1;
 
 	/* last row of the chunk is inserted serialize the chunk */
 	if (chunkRowIndex == chunkRowCount - 1)
 	{
 		SerializeChunkData(writeState, chunkIndex, chunkRowCount);
+		writeState->currentChunkBytes = 0;
 	}
 
 	uint64 writtenRowNumber = writeState->emptyStripeReservation->stripeFirstRowNumber +
@@ -308,6 +399,86 @@ MemoryContext
 ColumnarWritePerTupleContext(ColumnarWriteState *state)
 {
 	return state->perTupleContext;
+}
+
+/*
+ * ExpandStripeBuffersChunks adds one more chunk to all columns in an existing
+ * StripeBuffers structure using repalloc.
+ */
+static StripeBuffers *
+ExpandStripeBuffersChunks(StripeBuffers *stripeBuffers, uint32 newChunkIndex)
+{
+	if (stripeBuffers == NULL || stripeBuffers->columnBuffersArray == NULL)
+	{
+		return NULL;
+	}
+
+	uint32 columnCount = stripeBuffers->columnCount;
+
+	/* Iterate through all columns and expand their chunk arrays */
+	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
+		if (columnBuffers == NULL || columnBuffers->chunkBuffersArray == NULL)
+		{
+			continue;
+		}
+
+		/* Use repalloc to expand the chunkBuffersArray */
+		columnBuffers->chunkBuffersArray = (ColumnChunkBuffers **)
+		repalloc(columnBuffers->chunkBuffersArray,
+				 (newChunkIndex + 1) * sizeof(ColumnChunkBuffers *));
+
+		/* Allocate and initialize the new chunk buffer */
+		columnBuffers->chunkBuffersArray[newChunkIndex] = palloc0(sizeof(ColumnChunkBuffers));
+		columnBuffers->chunkBuffersArray[newChunkIndex]->existsBuffer = NULL;
+		columnBuffers->chunkBuffersArray[newChunkIndex]->valueBuffer = NULL;
+		columnBuffers->chunkBuffersArray[newChunkIndex]->valueCompressionType = COMPRESSION_NONE;
+	}
+
+	return stripeBuffers;
+}
+
+
+/*
+ * ExpandStripeSkipListChunks adds one more chunk to all columns in an existing
+ * StripeSkipList structure using repalloc.
+ */
+static StripeSkipList *
+ExpandStripeSkipListChunks(StripeSkipList *stripeSkipList, uint32 newChunkIndex)
+{
+	if (stripeSkipList == NULL || stripeSkipList->chunkSkipNodeArray == NULL)
+	{
+		return NULL;
+	}
+
+	uint32 columnCount = stripeSkipList->columnCount;
+
+	/* Iterate through all columns and expand their chunk skip node arrays */
+	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		if (stripeSkipList->chunkSkipNodeArray[columnIndex] == NULL)
+		{
+			continue;
+		}
+
+		/* Use repalloc to expand the chunk skip node array for this column */
+		stripeSkipList->chunkSkipNodeArray[columnIndex] = (ColumnChunkSkipNode *)
+		repalloc(stripeSkipList->chunkSkipNodeArray[columnIndex],
+					(newChunkIndex + 1) * sizeof(ColumnChunkSkipNode));
+
+		/* Initialize the new chunk skip node (equivalent to palloc0 behavior) */
+		memset(&stripeSkipList->chunkSkipNodeArray[columnIndex][newChunkIndex],
+				0, sizeof(ColumnChunkSkipNode));
+	}
+
+	/* Update the chunk count if the new chunk index is beyond current count */
+	if (newChunkIndex >= stripeSkipList->chunkCount)
+	{
+		stripeSkipList->chunkCount = newChunkIndex + 1;
+	}
+
+	return stripeSkipList;
 }
 
 
@@ -401,6 +572,16 @@ FlushStripe(ColumnarWriteState *writeState)
 	uint32 lastChunkRowCount = stripeBuffers->rowCount % chunkRowCount;
 	uint64 stripeSize = 0;
 	uint64 stripeRowCount = stripeBuffers->rowCount;
+
+	if (writeState->earlySerializedRowCount)
+	{
+		/*
+		 * Increment indices as a chunk has beed serialized early
+		 * because of reaching its size limit
+		 */
+		lastChunkIndex = lastChunkIndex + writeState->earlySerializedChunkCount;
+		lastChunkRowCount = lastChunkRowCount - writeState->earlySerializedRowCount;
+	}
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 

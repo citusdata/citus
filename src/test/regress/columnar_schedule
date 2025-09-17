@@ -33,3 +33,4 @@ test: columnar_recursive
 test: columnar_transactions
 test: columnar_matview
 test: columnar_memory
+test: columnar_chunk_sizes
