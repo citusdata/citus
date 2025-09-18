@@ -30,13 +30,12 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "17.2"
-      image_suffix: "-v889e4c1"
-      image_suffix_citus_upgrade: "-dev-2ad1f90"
-      pg15_version: '{ "major": "15", "full": "15.10" }'
-      pg16_version: '{ "major": "16", "full": "16.6" }'
-      pg17_version: '{ "major": "17", "full": "17.2" }'
-      upgrade_pg_versions: "14.15-15.10-16.6-17.2"
+      sql_snapshot_pg_version: "17.6"
+      image_suffix: "-v4df94a0"
+      pg15_version: '{ "major": "15", "full": "15.14" }'
+      pg16_version: '{ "major": "16", "full": "16.10" }'
+      pg17_version: '{ "major": "17", "full": "17.6" }'
+      upgrade_pg_versions: "15.14-16.10-17.6"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -352,7 +351,7 @@ jobs:
     name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
     runs-on: ubuntu-latest
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix_citus_upgrade }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
     - params
