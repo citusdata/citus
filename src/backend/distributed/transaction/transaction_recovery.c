@@ -106,7 +106,9 @@ LogTransactionRecord(int32 groupId, char *transactionName, FullTransactionId out
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
+	PushActiveSnapshot(GetTransactionSnapshot());
 	CatalogTupleInsert(pgDistTransaction, heapTuple);
+	PopActiveSnapshot();
 
 	CommandCounterIncrement();
 
