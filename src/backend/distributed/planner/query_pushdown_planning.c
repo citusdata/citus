@@ -2029,7 +2029,9 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
 	pushedDownQuery->querySource = queryTree->querySource;
 	pushedDownQuery->hasSubLinks = queryTree->hasSubLinks;
-
+#if PG_VERSION_NUM >= PG_VERSION_18
+	pushedDownQuery->hasGroupRTE = queryTree->hasGroupRTE;
+#endif
 	MultiTable *subqueryNode = MultiSubqueryPushdownTable(pushedDownQuery);
 
 	SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
