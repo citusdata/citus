@@ -30,14 +30,15 @@ WHERE rc.constraint_schema = kcu.constraint_schema AND
       rc.unique_constraint_name = uc_kcu.constraint_name;
 
 CREATE VIEW table_fkeys AS
-SELECT name AS "Constraint",
+SELECT TRUE AS "Constraint",
        format('FOREIGN KEY (%s) REFERENCES %s(%s)',
               string_agg(DISTINCT quote_ident(column_name), ', '),
               string_agg(DISTINCT refd_relid::regclass::text, ', '),
               string_agg(DISTINCT quote_ident(refd_column_name), ', ')) AS "Definition",
        "relid"
 FROM table_fkey_cols
-GROUP BY (name, relid);
+GROUP BY (name, relid)
+ORDER BY 1, 3;
 
 CREATE VIEW table_attrs AS
 SELECT c.column_name AS "name",
