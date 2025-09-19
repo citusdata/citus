@@ -25,7 +25,7 @@ def randomRteType():
 def randomJoinOp():
     """returns a randomly selected JoinOp given at config"""
     joinTypes = getConfig().targetJoinTypes
-    return " " + random.choice(joinTypes).name + " JOIN"
+    return f" {random.choice(joinTypes).name} JOIN"
 
 
 def randomRestrictOp():
@@ -42,4 +42,4 @@ def randomRestrictOp():
     else:
         raise BaseException("Unknown restrict op")
 
-    return " " + opText + " "
+    return f" {opText} "
