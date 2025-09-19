@@ -5,18 +5,6 @@
 // create distributed tables to test behavior of MERGE in concurrent operations
 setup
 {
-	DO
-	$do$
-	DECLARE ver int;
-	BEGIN
-	  SELECT substring(version(), '\d+')::int into ver;
-	  IF (ver < 15)
-	  THEN
-	    RAISE EXCEPTION 'MERGE is not supported on PG versions below 15';
-	  END IF;
-	  END
-	$do$;
-
 	SET citus.shard_replication_factor TO 1;
 	SELECT 1 FROM master_add_node('localhost', 57637);
 	SELECT 1 FROM master_add_node('localhost', 57638);

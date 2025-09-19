@@ -20,41 +20,46 @@ SELECT create_distributed_table('AT_AddConstNoName.products', 'product_no');
 
 ALTER TABLE AT_AddConstNoName.products ADD PRIMARY KEY(product_no);
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-	      WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'p';
 
 -- Check that the primary key name created on the coordinator is sent to workers and
 -- the constraints created for the shard tables conform to the <conname>_shardid naming scheme.
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-		WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'p';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
 -- Check "ADD PRIMARY KEY USING INDEX ..."
 
-CREATE TABLE  AT_AddConstNoName.tbl(col1 int, col2 int);
+CREATE TABLE AT_AddConstNoName.tbl(col1 int, col2 int);
 SELECT create_distributed_table('AT_AddConstNoName.tbl', 'col1');
 CREATE UNIQUE INDEX my_index ON AT_AddConstNoName.tbl(col1);
 ALTER TABLE AT_AddConstNoName.tbl ADD PRIMARY KEY USING INDEX my_index;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'tbl';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'tbl'
+   AND con.contype = 'p';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-                WHERE rel.relname LIKE 'tbl%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'tbl%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.tbl DROP CONSTRAINT my_index;
@@ -64,17 +69,20 @@ CREATE UNIQUE INDEX my_index ON AT_AddConstNoName.tbl(col1);
 ALTER TABLE AT_AddConstNoName.tbl ADD UNIQUE USING INDEX my_index;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'tbl';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'tbl'
+   AND con.contype = 'u';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-                WHERE rel.relname LIKE 'tbl%'ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'tbl%'
+   AND con.contype = 'u'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.tbl DROP CONSTRAINT my_index;
@@ -102,19 +110,21 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_pkey;
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'u';
 
 -- Check that UNIQUE constraint name created on the coordinator is sent to workers and
 -- the constraints created for the shard tables conform to the <conname>_shardid scheme.
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-                WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'u';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
@@ -122,17 +132,19 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
 -- Check "ADD UNIQUE" with column name list
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no,name);
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'u';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-                WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'u';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_name_key;
@@ -141,17 +153,19 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_name_
 ALTER TABLE AT_AddConstNoName.products ADD UNIQUE(product_no) INCLUDE(price);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'u';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'u';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_key;
@@ -186,17 +200,19 @@ CREATE EXTENSION btree_gist;
 ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (name WITH <> , product_no WITH =);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'x';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'x';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
@@ -223,17 +239,19 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_
 -- Check "ADD CHECK"
 ALTER TABLE AT_AddConstNoName.products ADD CHECK (product_no > 0 AND price > 0);
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'c';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'c';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
@@ -242,17 +260,19 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
 ALTER TABLE AT_AddConstNoName.products ADD CHECK (product_no > 0 AND price > 0) NO INHERIT;
 
 SELECT con.conname, con.connoinherit
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'c';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname, con.connoinherit
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'c';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
@@ -261,17 +281,19 @@ ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
 ALTER TABLE AT_AddConstNoName.products ADD CHECK (product_no > 0 AND price > 0) NOT VALID;
 
 SELECT con.conname, con.convalidated
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products'
+   AND con.contype = 'c';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname, con.convalidated
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_5410000';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_5410000'
+   AND con.contype = 'c';
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_check;
@@ -306,10 +328,11 @@ ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_pkey1 P
 ALTER TABLE AT_AddConstNoName.products_ref ADD PRIMARY KEY(name);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_ref';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_ref'
+   AND con.contype = 'p';
 
 ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_pkey2;
 
@@ -319,10 +342,11 @@ ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_name_ke
 ALTER TABLE AT_AddConstNoName.products_ref ADD UNIQUE(name);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_ref';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_ref'
+   AND con.contype = 'u';
 
 ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_name_key2;
 
@@ -332,10 +356,11 @@ ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_product
 ALTER TABLE AT_AddConstNoName.products_ref ADD EXCLUDE(product_no WITH =);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_ref';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_ref'
+   AND con.contype = 'x';
 
 ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_product_no_excl2;
 
@@ -345,10 +370,11 @@ ALTER TABLE AT_AddConstNoName.products_ref_2 ADD CONSTRAINT products_ref_check1 
 ALTER TABLE AT_AddConstNoName.products_ref ADD CHECK (product_no > 0);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_ref';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'products_ref'
+   AND con.contype = 'c';
 
 ALTER TABLE AT_AddConstNoName.products_ref DROP CONSTRAINT products_ref_check2;
 
@@ -367,18 +393,21 @@ ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglo
 
 -- Constraint should be created on the coordinator with a shortened name
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'p';
 
 -- Constraints for the main table and the shards should be created on the worker with a shortened name
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-		WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 -- Constraint can be deleted via the coordinator
 \c - - :master_host :master_port
@@ -386,10 +415,11 @@ ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglo
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'p';
 
 -- Check "ADD UNIQUE" with max table name (63 chars)
 \c - - :master_host :master_port
@@ -397,18 +427,21 @@ ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglo
 
 -- Constraint should be created on the coordinator with a shortened name
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'u';
 
 -- Constraints for the main table and the shards should be created on the worker with a shortened name
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-                WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'u'
+ ORDER BY con.conname ASC;
 
 -- UNIQUE constraint can be deleted via the coordinator
 \c - - :master_host :master_port
@@ -416,10 +449,11 @@ ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglo
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'u';
 
 -- Check "ADD EXCLUDE" with max table name (63 chars)
 \c - - :master_host :master_port
@@ -427,18 +461,21 @@ ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglo
 
 -- Constraint should be created on the coordinator with a shortened name
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'x';
 
 -- Constraints for the main table and the shards should be created on the worker with a shortened name
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-                WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'x'
+ ORDER BY con.conname ASC;
 
 -- EXCLUDE constraint can be deleted via the coordinator
 \c - - :master_host :master_port
@@ -446,28 +483,32 @@ ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglo
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'x';
 
 -- Check "ADD CHECK" with max table name (63 chars)
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD CHECK (product_no > 0);
 -- Constraint should be created on the coordinator with a shortened name
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'c';
 
 	-- Constraints for the main table and the shards should be created on the worker with a shortened name
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-                WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 -- CHECK constraint can be deleted via the coordinator
 \c - - :master_host :master_port
@@ -475,10 +516,11 @@ ALTER TABLE AT_AddConstNoName.verylonglonglonglonglonglonglonglonglonglonglonglo
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'very%';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'very%'
+   AND con.contype = 'c';
 
 -- Test the scenario where a partitioned distributed table has a child with max allowed name
 -- Verify that we switch to sequential execution mode to avoid deadlock in this scenario
@@ -494,27 +536,32 @@ ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD PRIMARY KEY(partition_c
 RESET client_min_messages;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'dist_partitioned_table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'dist_partitioned_table'
+   AND con.contype = 'p';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT dist_partitioned_table_pkey;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 -- Check "ADD UNIQUE"
 \c - - :master_host :master_port
@@ -523,20 +570,23 @@ ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD UNIQUE(partition_col);
 RESET client_min_messages;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'dist_partitioned_table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'dist_partitioned_table'
+   AND con.contype = 'u';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'u'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
-ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT  dist_partitioned_table_partition_col_key;
+ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT dist_partitioned_table_partition_col_key;
 
 -- Check "ADD CHECK"
 SET client_min_messages TO DEBUG1;
@@ -544,27 +594,32 @@ ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD CHECK(dist_col >= anoth
 RESET client_min_messages;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'dist_partitioned_table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'dist_partitioned_table'
+   AND con.contype = 'c';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT  dist_partitioned_table_check;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-           WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 -- Test we error out when creating a constraint on a partition table with a long name if we cannot
 -- switch to sequential execution
@@ -621,25 +676,31 @@ ALTER TABLE AT_AddConstNoName.citus_local_table ADD PRIMARY KEY(id);
 
 -- Check the primary key is created for the local table and its shard
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 SELECT create_distributed_table('AT_AddConstNoName.citus_local_table','id');
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_pkey;
@@ -650,17 +711,21 @@ ALTER TABLE AT_AddConstNoName.citus_local_table ADD UNIQUE(id);
 
 -- Check the UNIQUE constraint is created for the local table and its shard
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'u'
+ ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'u'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_id_key;
@@ -671,23 +736,29 @@ ALTER TABLE AT_AddConstNoName.citus_local_table ADD EXCLUDE(id WITH =);
 
 -- Check the EXCLUDE constraint is created for the local table and its shard
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'x'
+ ORDER BY con.conname ASC;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'x'
+ ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'x'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_id_excl;
@@ -698,23 +769,29 @@ ALTER TABLE AT_AddConstNoName.citus_local_table ADD CHECK(id > 100);
 
 -- Check the CHECK constraint is created for the local table and its shard
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-	WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'citus_local_table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'citus_local_table%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_table DROP CONSTRAINT citus_local_table_check;
@@ -739,17 +816,20 @@ ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD PRIMARY KEY(part
 RESET client_min_messages;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'citus_local_partitioned_table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'citus_local_partitioned_table'
+   AND con.contype = 'p';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_pkey;
@@ -764,17 +844,20 @@ ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD UNIQUE(partition
 RESET client_min_messages;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'citus_local_partitioned_table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'citus_local_partitioned_table'
+   AND con.contype = 'u';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'u'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_partition_col_key;
@@ -785,27 +868,32 @@ ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD CHECK (dist_col 
 RESET client_min_messages;
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'citus_local_partitioned_table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = 'citus_local_partitioned_table'
+   AND con.contype = 'c';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citus_local_partitioned_table_check;
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 -- Test with unusual table and column names
@@ -813,20 +901,23 @@ CREATE TABLE AT_AddConstNoName."2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER)
 SELECT create_distributed_table('AT_AddConstNoName."2nd table"','2nd id');
 
 -- Check "ADD PRIMARY KEY"
-ALTER TABLE  AT_AddConstNoName."2nd table" ADD PRIMARY KEY ("2nd id", "3rd id");
+ALTER TABLE AT_AddConstNoName."2nd table" ADD PRIMARY KEY ("2nd id", "3rd id");
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = '2nd table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = '2nd table'
+   AND con.contype = 'p';
 
 -- Check if a primary key constraint is created for the shard tables on the workers
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE '2nd table%'
+   AND con.contype = 'p'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_pkey";
@@ -836,17 +927,20 @@ ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_pkey";
 ALTER TABLE  AT_AddConstNoName."2nd table" ADD UNIQUE ("2nd id", "3rd id");
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = '2nd table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = '2nd table'
+   AND con.contype = 'u';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE '2nd table%'
+   AND con.contype = 'u'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_2nd id_3rd id_key";
@@ -856,17 +950,20 @@ ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_2nd id_3rd
 ALTER TABLE  AT_AddConstNoName."2nd table" ADD EXCLUDE ("2nd id" WITH =);
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = '2nd table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = '2nd table'
+   AND con.contype = 'x';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE '2nd table%'
+   AND con.contype = 'x'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_2nd id_excl";
@@ -876,17 +973,20 @@ ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_2nd id_exc
 ALTER TABLE  AT_AddConstNoName."2nd table" ADD CHECK ("2nd id" > 0 );
 
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = '2nd table';
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname = '2nd table'
+   AND con.contype = 'c';
 
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+  FROM pg_catalog.pg_constraint con
+  INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+  INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+ WHERE rel.relname LIKE '2nd table%'
+   AND con.contype = 'c'
+ ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 ALTER TABLE  AT_AddConstNoName."2nd table" DROP CONSTRAINT "2nd table_check";

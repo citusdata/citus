@@ -359,3 +359,9 @@ s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
 s/^([ \t]*)List of tables$/\1List of relations/g
 s/^([ \t]*)List of indexes$/\1List of relations/g
 s/^([ \t]*)List of sequences$/\1List of relations/g
+
+# --- PG18 FK wording -> legacy generic form ---
+# e.g., "violates RESTRICT setting of foreign key constraint" -> "violates foreign key constraint"
+s/violates RESTRICT setting of foreign key constraint/violates foreign key constraint/g
+# DETAIL line changed "is referenced" -> old "is still referenced"
+s/\<is referenced from table\>/is still referenced from table/g
