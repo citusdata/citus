@@ -29,6 +29,7 @@
 /* Default values for option parameters */
 #define DEFAULT_STRIPE_ROW_COUNT 150000
 #define DEFAULT_CHUNK_ROW_COUNT 10000
+#define DEFAULT_CHUNK_GROUP_SIZE 256	/* 256 MB */
 
 #if HAVE_LIBZSTD
 #define DEFAULT_COMPRESSION_TYPE COMPRESSION_ZSTD
@@ -41,6 +42,7 @@
 int columnar_compression = DEFAULT_COMPRESSION_TYPE;
 int columnar_stripe_row_limit = DEFAULT_STRIPE_ROW_COUNT;
 int columnar_chunk_group_row_limit = DEFAULT_CHUNK_ROW_COUNT;
+int columnar_chunk_group_size_limit = DEFAULT_CHUNK_GROUP_SIZE;
 int columnar_compression_level = 3;
 
 static const struct config_enum_entry columnar_compression_options[] =
@@ -112,6 +114,19 @@ columnar_init_gucs()
 							DEFAULT_CHUNK_ROW_COUNT,
 							CHUNK_ROW_COUNT_MINIMUM,
 							CHUNK_ROW_COUNT_MAXIMUM,
+							PGC_USERSET,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomIntVariable("columnar.chunk_group_size_limit",
+							"Maximum size per chunk group.",
+							NULL,
+							&columnar_chunk_group_size_limit,
+							DEFAULT_CHUNK_GROUP_SIZE,
+							CHUNK_GROUP_SIZE_MINIMUM,
+							CHUNK_GROUP_SIZE_MAXIMUM,
 							PGC_USERSET,
 							0,
 							NULL,

@@ -147,13 +147,21 @@ static void CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
-/* constants for columnar.options */
-#define Natts_columnar_options 5
+/*
+ * constants for columnar.options
+ *
+ * The attnum for chunk_group_size_limit will be 6 becuase
+ * we don't define this columns at the table definition,
+ * we add this new column at the time of update in citus_columnar--12.2-1--13.2-1.sql.
+ * so it ALTER TABLE automatically get the atnum 6.
+ */
+#define Natts_columnar_options 6
 #define Anum_columnar_options_regclass 1
 #define Anum_columnar_options_chunk_group_row_limit 2
 #define Anum_columnar_options_stripe_row_limit 3
 #define Anum_columnar_options_compression_level 4
 #define Anum_columnar_options_compression 5
+#define Anum_columnar_options_chunk_group_size_limit 6
 
 /* ----------------
  *		columnar.options definition.
@@ -166,6 +174,7 @@ typedef struct FormData_columnar_options
 	int32 stripe_row_limit;
 	int32 compressionLevel;
 	NameData compression;
+	int32 chunk_group_size_limit;
 
 #ifdef CATALOG_VARLEN           /* variable-length fields start here */
 #endif
@@ -231,6 +240,7 @@ InitColumnarOptions(Oid regclass)
 	ColumnarOptions defaultOptions = {
 		.chunkRowCount = columnar_chunk_group_row_limit,
 		.stripeRowCount = columnar_stripe_row_limit,
+		.maxChunkSize = columnar_chunk_group_size_limit,
 		.compressionType = columnar_compression,
 		.compressionLevel = columnar_compression_level
 	};
@@ -271,6 +281,21 @@ ParseColumnarRelOptions(List *reloptions, ColumnarOptions *options)
 										UINT64_FORMAT " and " UINT64_FORMAT,
 										(uint64) CHUNK_ROW_COUNT_MINIMUM,
 										(uint64) CHUNK_ROW_COUNT_MAXIMUM)));
+			}
+		}
+		else if (strcmp(elem->defname, "chunk_group_size_limit") == 0)
+		{
+			options->maxChunkSize = (elem->arg == NULL) ?
+									  columnar_chunk_group_size_limit : defGetInt64(elem);
+
+			if (options->maxChunkSize < CHUNK_GROUP_SIZE_MINIMUM ||
+				options->maxChunkSize > CHUNK_GROUP_SIZE_MAXIMUM)
+			{
+				ereport(ERROR, (errmsg("chunk group size limit out of range"),
+								errhint("chunk group size limit must be between "
+										UINT64_FORMAT " and " UINT64_FORMAT,
+										(uint64) CHUNK_GROUP_SIZE_MINIMUM,
+										(uint64) CHUNK_GROUP_SIZE_MAXIMUM)));
 			}
 		}
 		else if (strcmp(elem->defname, "stripe_row_limit") == 0)
@@ -425,6 +450,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 		Int32GetDatum(options->stripeRowCount),
 		Int32GetDatum(options->compressionLevel),
 		0, /* to be filled below */
+		Int32GetDatum(options->maxChunkSize),
 	};
 
 	NameData compressionName = { 0 };
@@ -458,6 +484,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 			update[Anum_columnar_options_stripe_row_limit - 1] = true;
 			update[Anum_columnar_options_compression_level - 1] = true;
 			update[Anum_columnar_options_compression - 1] = true;
+			update[Anum_columnar_options_chunk_group_size_limit - 1] = true;
 
 			HeapTuple tuple = heap_modify_tuple(heapTuple, tupleDescriptor,
 												values, nulls, update);
@@ -581,6 +608,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 
 		options->chunkRowCount = tupOptions->chunk_group_row_limit;
 		options->stripeRowCount = tupOptions->stripe_row_limit;
+		options->maxChunkSize = tupOptions->chunk_group_size_limit;
 		options->compressionLevel = tupOptions->compressionLevel;
 		options->compressionType = ParseCompressionType(NameStr(tupOptions->compression));
 	}
@@ -590,6 +618,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 		options->compressionType = columnar_compression;
 		options->stripeRowCount = columnar_stripe_row_limit;
 		options->chunkRowCount = columnar_chunk_group_row_limit;
+		options->maxChunkSize = columnar_chunk_group_size_limit;
 		options->compressionLevel = columnar_compression_level;
 	}
 
