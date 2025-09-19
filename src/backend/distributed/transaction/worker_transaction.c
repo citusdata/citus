@@ -16,12 +16,14 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
 #include "access/xact.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
+#include "utils/uuid.h"
 
 #include "distributed/connection_management.h"
 #include "distributed/jsonbutils.h"
@@ -35,6 +37,10 @@
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+
+
+PG_FUNCTION_INFO_V1(citus_server_id);
+
 
 static void SendBareCommandListToMetadataNodesInternal(List *commandList,
 													   TargetWorkerSet targetWorkerSet);
@@ -835,4 +841,37 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	char *currentServerId = text_to_cstring(currentServerIdTextP);
 
 	return strcmp(workerServerId, currentServerId) == 0;
+}
+
+
+/*
+ * citus_server_id returns a random UUID value as server identifier. This is
+ * modeled after PostgreSQL's pg_random_uuid().
+ */
+Datum
+citus_server_id(PG_FUNCTION_ARGS)
+{
+	uint8 *buf = (uint8 *) palloc(UUID_LEN);
+
+	/*
+	 * If pg_strong_random() fails, fall-back to using random(). In previous
+	 * versions of postgres we don't have pg_strong_random(), so use it by
+	 * default in that case.
+	 */
+	if (!pg_strong_random((char *) buf, UUID_LEN))
+	{
+		for (int bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
+		{
+			buf[bufIdx] = (uint8) (random() & 0xFF);
+		}
+	}
+
+	/*
+	 * Set magic numbers for a "version 4" (pseudorandom) UUID, see
+	 * http://tools.ietf.org/html/rfc4122#section-4.4
+	 */
+	buf[6] = (buf[6] & 0x0f) | 0x40;    /* "version" field */
+	buf[8] = (buf[8] & 0x3f) | 0x80;    /* "variant" field */
+
+	PG_RETURN_UUID_P((pg_uuid_t *) buf);
 }
