@@ -184,6 +184,7 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 	const uint32 maxChunkCount = (options->stripeRowCount / chunkRowCount) + 1;
 	ChunkData *chunkData = writeState->chunkData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
+	bool shouldSerializeEarly = false;
 
 	if (stripeBuffers == NULL)
 	{
@@ -255,16 +256,28 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 
 	/*
 	 * Check if we need to serialize a chunk group earliar due to size limits.
+	 * We also need to account to worst case copressed data size that can
+	 * also exceed the limits.
+	 */
+	if (chunkRowIndex > 0)
+	{
+		int64 chunkGroupLimit = CHUNK_GROUP_SIZE_MB_TO_BYTES(options->maxChunkSize);
+		int64 maxCompressedSize = GetMaxCompressedLength(writeState->currentChunkBytes,
+														 writeState->options.compressionType);
+
+		shouldSerializeEarly = (maxCompressedSize + totalRowSize > chunkGroupLimit);
+	}
+
+	/*
 	 * If adding the current row spills out from the defined chunk grupu size limit, we
 	 * will then add the current row in a seperate chunk and will serialize
 	 * all rows data before it.
 	 */
-	if (chunkRowIndex > 0 &&
-		writeState->currentChunkBytes + totalRowSize > CHUNK_GROUP_SIZE_MB_TO_BYTES(options->maxChunkSize))
+	if (shouldSerializeEarly)
 	{
 		elog(DEBUG1, "Row size (%zu bytes) exceeds chunk group size limit (%zu bytes), "
-				"storing in a separate chunk group",
-				totalRowSize, CHUNK_GROUP_SIZE_MB_TO_BYTES(options->maxChunkSize));
+			 "storing in a separate chunk group",
+			 totalRowSize, CHUNK_GROUP_SIZE_MB_TO_BYTES(options->maxChunkSize));
 
 		/*
 		 * Before putting row in a seperate chunk we have to allocate space

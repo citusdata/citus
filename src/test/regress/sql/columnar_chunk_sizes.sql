@@ -33,11 +33,24 @@ INSERT INTO test_oversized_row
 SELECT gs, repeat('Y', 2*1024*1024)  -- 2 MB text
 FROM generate_series(1, 600) AS gs;
 
+-- test VACUUM FULL
+VACUUM FULL test_oversized_row;
+
+SET client_min_messages TO warning;
+
+-- try verifying the data integrity
 SELECT * FROM columnar.chunk_group WHERE relation = 'test_oversized_row'::regclass;
 SELECT * FROM columnar.stripe WHERE relation = 'test_oversized_row'::regclass;
+SELECT COUNT(*) FROM test_oversized_row;
+SELECT ID, LENGTH(huge_text) FROM test_oversized_row ORDER BY id LIMIT 10;
+SELECT SUM(LENGTH(huge_text)) = 1258291200 AS is_equal FROM test_oversized_row;
+\dt+ test_oversized_row
+
 
 -- test edge case setting chunk_group_size_limit = 1024
 DROP TABLE test_oversized_row;
+SET client_min_messages TO debug1;
+SET columnar.compression TO default;
 
 CREATE TABLE test_oversized_row (
     id INTEGER,
@@ -52,21 +65,14 @@ INSERT INTO test_oversized_row
 SELECT gs, repeat('Y', 2*1024*1024)  -- 2 MB text
 FROM generate_series(1, 600) AS gs;
 
-SELECT * FROM columnar.chunk_group WHERE relation = 'test_oversized_row'::regclass;
-SELECT * FROM columnar.stripe WHERE relation = 'test_oversized_row'::regclass;
-
--- test VACUUM FULL
-VACUUM FULL test_oversized_row;
-
 SET client_min_messages TO warning;
 
 -- try verifying the data integrity
+SELECT * FROM columnar.chunk_group WHERE relation = 'test_oversized_row'::regclass;
+SELECT * FROM columnar.stripe WHERE relation = 'test_oversized_row'::regclass;
 SELECT COUNT(*) FROM test_oversized_row;
 SELECT ID, LENGTH(huge_text) FROM test_oversized_row ORDER BY id LIMIT 10;
-
--- total size should be greater 1GB (1258291200 bytes)
-SELECT SUM(LENGTH(huge_text)) AS total_size FROM test_oversized_row;
-
+SELECT SUM(LENGTH(huge_text)) = 1258291200 AS is_equal FROM test_oversized_row;
 \dt+ test_oversized_row
 
 DROP TABLE test_oversized_row;
