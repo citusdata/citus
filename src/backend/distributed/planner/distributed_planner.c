@@ -54,7 +54,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardinterval_utils.h"
-#include "distributed/utils/citus_stat_tenants.h"
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #if PG_VERSION_NUM >= PG_VERSION_16
