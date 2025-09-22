@@ -70,6 +70,12 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 	CreateStatsStmt *stmt = castNode(CreateStatsStmt, node);
 
 	RangeVar *relation = (RangeVar *) linitial(stmt->relations);
+
+	if (!IsA(relation, RangeVar))
+	{
+		return NIL;
+	}
+
 	Oid relationId = RangeVarGetRelid(relation, ShareUpdateExclusiveLock, false);
 
 	if (!IsCitusTable(relationId) || !ShouldPropagate())
