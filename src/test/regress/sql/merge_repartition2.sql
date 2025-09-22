@@ -151,6 +151,22 @@ USING dist_1
 ON (dist_different_order_1.a = dist_1.b)
 WHEN MATCHED THEN UPDATE SET b = dist_1.b;
 
+CREATE TABLE dist_1_cast (a int, b int);
+CREATE TABLE dist_2_cast (a int, b numeric);
+
+SELECT create_distributed_table('dist_1_cast', 'a');
+SELECT create_distributed_table('dist_2_cast', 'a');
+
+MERGE INTO dist_1_cast
+USING dist_2_cast
+ON (dist_1_cast.a = dist_2_cast.b)
+WHEN MATCHED THEN UPDATE SET b = dist_2_cast.b;
+
+MERGE INTO dist_1_cast
+USING (SELECT a, b::int as b FROM dist_2_cast) dist_2_cast
+ON (dist_1_cast.a = dist_2_cast.b)
+WHEN MATCHED THEN UPDATE SET b = dist_2_cast.b;
+
 -- a more sophisticated example
 CREATE TABLE dist_source (tstamp_col timestamp, int_col int, text_arr_col text[], text_col text, json_col jsonb);
 CREATE TABLE dist_target (text_col text, tstamp_col timestamp, json_col jsonb, text_arr_col text[], int_col int);
