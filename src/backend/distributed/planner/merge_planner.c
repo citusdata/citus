@@ -423,10 +423,13 @@ ErrorIfMergeHasUnsupportedTables(Oid targetRelationId, List *rangeTableList)
 			case RTE_VALUES:
 			case RTE_JOIN:
 			case RTE_CTE:
-			{
-				/* Skip them as base table(s) will be checked */
-				continue;
-			}
+#if PG_VERSION_NUM >= PG_VERSION_18
+			case RTE_GROUP:
+#endif
+				{
+					/* Skip them as base table(s) will be checked */
+					continue;
+				}
 
 			/*
 			 * RTE_NAMEDTUPLESTORE is typically used in ephmeral named relations,
