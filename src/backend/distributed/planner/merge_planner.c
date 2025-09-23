@@ -41,6 +41,7 @@
 static int SourceResultPartitionColumnIndex(Query *mergeQuery,
 											List *sourceTargetList,
 											CitusTableCacheEntry *targetRelation);
+static int FindTargetListEntryWithVarExprAttno(List *targetList, AttrNumber varattno);
 static Var * ValidateAndReturnVarIfSupported(Node *entryExpr);
 static DeferredErrorMessage * DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
 															   PlannerRestrictionContext *
@@ -1414,7 +1415,8 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 	Assert(sourceRepartitionVar);
 
 	int sourceResultRepartitionColumnIndex =
-		DistributionColumnIndex(sourceTargetList, sourceRepartitionVar);
+		FindTargetListEntryWithVarExprAttno(sourceTargetList,
+											sourceRepartitionVar->varattno);
 
 	if (sourceResultRepartitionColumnIndex == -1)
 	{
@@ -1562,6 +1564,33 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * FindTargetListEntryWithVarExprAttno finds the index of the target
+ * entry whose expr is a Var that points to input varattno.
+ *
+ * If no such target entry is found, it returns -1.
+ */
+static int
+FindTargetListEntryWithVarExprAttno(List *targetList, AttrNumber varattno)
+{
+	int targetEntryIndex = 0;
+
+	TargetEntry *targetEntry = NULL;
+	foreach_declared_ptr(targetEntry, targetList)
+	{
+		if (IsA(targetEntry->expr, Var) &&
+			((Var *) targetEntry->expr)->varattno == varattno)
+		{
+			return targetEntryIndex;
+		}
+
+		targetEntryIndex++;
+	}
+
+	return -1;
 }
 
 
