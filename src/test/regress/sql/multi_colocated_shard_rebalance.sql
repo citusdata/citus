@@ -263,8 +263,11 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_group1_13000028'::regclass;
 
 -- make sure that we've created the foreign keys
-SELECT  "Constraint", "Definition" FROM table_fkeys
-  WHERE "Constraint" LIKE 'table2_group%' OR "Constraint" LIKE 'table1_group%';
+SELECT  "Constraint", "Definition"
+FROM    table_fkeys
+WHERE   relid::regclass::text LIKE 'table2_group%'           -- child tables
+  AND   "Definition" LIKE 'FOREIGN KEY (table1_id) REFERENCES table1_group1%'  -- referenced parent (and its shards)
+ORDER BY 2;
 
 \c - - - :master_port
 
