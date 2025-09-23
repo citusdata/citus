@@ -372,6 +372,25 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery)
 	/* we should have found target partition column */
 	Assert(targetPartitionColumnVar != NULL);
 
+#if PG_VERSION_NUM >= PG_VERSION_18
+	if (subqery->hasGroupRTE)
+	{
+		/* if the partition column is a grouped column, we need to flatten it
+		 * to ensure query deparsing works correctly. We choose to do this here
+		 * instead of in ruletils.c because we want to keep the flattening logic
+		 * close to the NOT NULL filter injection.
+		 */
+		RangeTblEntry *partitionRTE = rt_fetch(targetPartitionColumnVar->varno,
+											   subqery->rtable);
+		if (partitionRTE->rtekind == RTE_GROUP)
+		{
+			targetPartitionColumnVar = (Var *) flatten_group_exprs(NULL, subqery,
+																   (Node *)
+																   targetPartitionColumnVar);
+		}
+	}
+#endif
+
 	/* create expression for partition_column IS NOT NULL */
 	NullTest *nullTest = makeNode(NullTest);
 	nullTest->nulltesttype = IS_NOT_NULL;
