@@ -55,14 +55,14 @@ struct ColumnarWriteState
 	EmptyStripeReservation *emptyStripeReservation;
 	ColumnarOptions options;
 	ChunkData *chunkData;
+	uint32 currentChunkRowIndex;
+	uint32 currentChunkIndex;
 
 	/*
 	 * accounting for creating new chunks groups when
 	 * size limit reaches
 	 */
 	Size currentChunkBytes;
-	uint32 earlySerializedRowCount;
-	uint32 earlySerializedChunkCount;
 
 	List *chunkGroupRowCounts;
 
@@ -216,23 +216,16 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		}
 
 		writeState->currentChunkBytes = 0;
-		writeState->earlySerializedRowCount = 0;
-		writeState->earlySerializedChunkCount = 0;
+		writeState->currentChunkIndex = 0;
+		writeState->currentChunkRowIndex = 0;
 
 		/* Ensure maxChunkSize is set with a reasonable default */
 		Assert(options->maxChunkSize >= CHUNK_GROUP_SIZE_MINIMUM &&
 			   options->maxChunkSize <= CHUNK_GROUP_SIZE_MAXIMUM);
 	}
 
-	uint32 chunkIndex = stripeBuffers->rowCount / chunkRowCount;
-	uint32 chunkRowIndex = stripeBuffers->rowCount % chunkRowCount;
-
-	/* Adjust the indices if some chunks were serialized early */
-	if (writeState->earlySerializedRowCount)
-	{
-		chunkIndex = chunkIndex + writeState->earlySerializedChunkCount;
-		chunkRowIndex = chunkRowIndex - writeState->earlySerializedRowCount;
-	}
+	uint32 chunkIndex = writeState->currentChunkIndex;
+	uint32 chunkRowIndex = writeState->currentChunkRowIndex;
 
 	/*
 	 * Calculate total serialized current row size without actually serializing.
@@ -293,19 +286,14 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		 * Size limit reached, now serialize upto the last row.
 		 * We make sure not to serialize the current row data and only upto
 		 * the last row,  so we use `chunkRowIndex` instead of `chunkRowIndex + 1`
-		 * in order to skip current row.
+		 * in order to skip current row. Current row will go in the next chunk.
 		 */
 		SerializeChunkData(writeState, chunkIndex, chunkRowIndex);
-		writeState->earlySerializedChunkCount++;
 		writeState->currentChunkBytes = 0;
-		writeState->earlySerializedRowCount = writeState->earlySerializedRowCount + chunkRowIndex;
 
-		/* Recreate and adjust the indices after deciding to start a new chunk */
-		chunkIndex = stripeBuffers->rowCount / chunkRowCount;
-		chunkRowIndex = stripeBuffers->rowCount % chunkRowCount;
-
-		chunkIndex = chunkIndex + writeState->earlySerializedChunkCount;
-		chunkRowIndex = chunkRowIndex - writeState->earlySerializedRowCount;
+		/* Adjust the indices after deciding to start a new chunk */
+		chunkIndex = ++writeState->currentChunkIndex;
+		chunkRowIndex = writeState->currentChunkRowIndex = 0;
 	}
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
@@ -351,11 +339,21 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 	{
 		SerializeChunkData(writeState, chunkIndex, chunkRowCount);
 		writeState->currentChunkBytes = 0;
+		writeState->currentChunkIndex++;
+		writeState->currentChunkRowIndex = 0;
 	}
 
 	uint64 writtenRowNumber = writeState->emptyStripeReservation->stripeFirstRowNumber +
 							  stripeBuffers->rowCount;
 	stripeBuffers->rowCount++;
+
+	/*
+	 * don't increment when chunk row limit was reached and new chunk was
+	 * created, writeState->currentChunkRowIndex should suppose to be remain `0`
+	 * in this case.
+	 */
+	if (chunkRowIndex != chunkRowCount - 1) writeState->currentChunkRowIndex++;
+
 	if (stripeBuffers->rowCount >= options->stripeRowCount)
 	{
 		ColumnarFlushPendingWrites(writeState);
@@ -580,21 +578,10 @@ FlushStripe(ColumnarWriteState *writeState)
 	TupleDesc tupleDescriptor = writeState->tupleDescriptor;
 	uint32 columnCount = tupleDescriptor->natts;
 	uint32 chunkCount = stripeSkipList->chunkCount;
-	uint32 chunkRowCount = writeState->options.chunkRowCount;
-	uint32 lastChunkIndex = stripeBuffers->rowCount / chunkRowCount;
-	uint32 lastChunkRowCount = stripeBuffers->rowCount % chunkRowCount;
+	uint32 lastChunkIndex = writeState->currentChunkIndex;
+	uint32 lastChunkRowCount = writeState->currentChunkRowIndex;
 	uint64 stripeSize = 0;
 	uint64 stripeRowCount = stripeBuffers->rowCount;
-
-	if (writeState->earlySerializedRowCount)
-	{
-		/*
-		 * Increment indices as a chunk has beed serialized early
-		 * because of reaching its size limit
-		 */
-		lastChunkIndex = lastChunkIndex + writeState->earlySerializedChunkCount;
-		lastChunkRowCount = lastChunkRowCount - writeState->earlySerializedRowCount;
-	}
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
