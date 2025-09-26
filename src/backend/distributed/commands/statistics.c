@@ -69,12 +69,14 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 {
 	CreateStatsStmt *stmt = castNode(CreateStatsStmt, node);
 
-	RangeVar *relation = (RangeVar *) linitial(stmt->relations);
+	Node *relationNode = (Node *) linitial(stmt->relations);
 
-	if (!IsA(relation, RangeVar))
+	if (!IsA(relationNode, RangeVar))
 	{
 		return NIL;
 	}
+
+	RangeVar *relation = (RangeVar *) relationNode;
 
 	Oid relationId = RangeVarGetRelid(relation, ShareUpdateExclusiveLock, false);
 
