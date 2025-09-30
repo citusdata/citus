@@ -1,3 +1,48 @@
+### citus v13.1.1 (Oct 1st, 2025) ###
+
+* Adds support for latest PG minors: 14.19, 15.14, 16.10 (#8142)
+
+* Fixes an assertion failure when an expression in the query references
+  a CTE (#8106)
+
+* Fixes a bug that causes an unexpected error when executing
+  repartitioned MERGE (#8201)
+
+* Fixes a bug that causes allowing UPDATE / MERGE queries that may
+  change the distribution column value (#8214)
+
+* Updates dynamic_library_path automatically when CDC is enabled (#8025)
+
+### citus v13.0.5 (Oct 1st, 2025) ###
+
+* Adds support for latest PG minors: 14.19, 15.14, 16.10 (#7986, #8142)
+
+* Fixes a bug that causes an unexpected error when executing
+  repartitioned MERGE (#8201)
+
+* Fixes a bug that causes allowing UPDATE / MERGE queries that may
+  change the distribution column value (#8214)
+
+* Fixes a bug in redundant WHERE clause detection (#8162)
+
+* Updates dynamic_library_path automatically when CDC is enabled (#8025)
+
+### citus v12.1.10 (Oct 1, 2025) ###
+
+* Adds support for latest PG minors: 14.19, 15.14, 16.10 (#7986, #8142)
+
+* Fixes a bug that causes allowing UPDATE / MERGE queries that may
+  change the distribution column value (#8214)
+
+* Fixes an assertion failure that happens when querying a view that is
+  defined on distributed tables (#8136)
+
+### citus v12.1.9 (Sep 3, 2025) ###
+
+* Adds a GUC for queries with outer joins and pseudoconstant quals (#8163)
+
+* Updates dynamic_library_path automatically when CDC is enabled (#7715)
+
 ### citus v13.2.0 (August 18, 2025) ###
 
 * Adds `citus_add_clone_node()`, `citus_add_clone_node_with_nodeid()`,
