@@ -71,15 +71,19 @@ SELECT "name" AS "Column",
 	   "relid"
 FROM table_attrs;
 
-CREATE VIEW table_checks AS
-SELECT cc.constraint_name AS "Constraint",
-       ('CHECK ' || regexp_replace(check_clause, '^\((.*)\)$', '\1')) AS "Definition",
-       format('%I.%I', ccu.table_schema, ccu.table_name)::regclass::oid AS relid
-FROM information_schema.check_constraints cc,
-     information_schema.constraint_column_usage ccu
-WHERE cc.constraint_schema = ccu.constraint_schema AND
-      cc.constraint_name = ccu.constraint_name
-ORDER BY cc.constraint_name ASC;
+CREATE OR REPLACE VIEW table_checks AS
+SELECT
+  c.conname AS "Constraint",
+  'CHECK ' ||
+  -- drop a single pair of outer parens if the deparser adds them
+  regexp_replace(pg_get_expr(c.conbin, c.conrelid, true), '^\((.*)\)$', '\1')
+    AS "Definition",
+  c.conrelid AS relid
+FROM pg_catalog.pg_constraint AS c
+WHERE c.contype <> 'n'         -- drop NOT NULL
+  AND c.conbin IS NOT NULL     -- only things with an expression (i.e., CHECKs)
+  AND c.conrelid <> 0          -- table-level (exclude domain checks)
+ORDER BY "Constraint", "Definition";
 
 CREATE VIEW index_attrs AS
 WITH indexoid AS (
