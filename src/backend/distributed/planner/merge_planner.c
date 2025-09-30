@@ -599,6 +599,22 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, Query *query,
 			}
 		}
 
+		/*
+		 * joinTree->quals, retrieved by GetMergeJoinTree() - either from
+		 * mergeJoinCondition (PG >= 17) or jointree->quals (PG < 17),
+		 * only contains the quals that present in "ON (..)" clause. Action
+		 * quals that can be specified for each specific action, as in
+		 * "WHEN <match condition> AND <action quals> THEN <action>"", are
+		 * saved into "qual" field of the corresponding action's entry in
+		 * mergeActionList, see
+		 * https://github.com/postgres/postgres/blob/e6da68a6e1d60a037b63a9c9ed36e5ef0a996769/src/backend/parser/parse_merge.c#L285-L293.
+		 *
+		 * For this reason, even if TargetEntryChangesValue() could prove that
+		 * an action's quals ensure that the action cannot change the distribution
+		 * key, this is not the case as we don't provide action quals to
+		 * TargetEntryChangesValue(), but just joinTree, which only contains
+		 * the "ON (..)" clause quals.
+		 */
 		if (targetEntryDistributionColumn &&
 			TargetEntryChangesValue(targetEntry, distributionColumn, joinTree))
 		{
