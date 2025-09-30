@@ -154,6 +154,11 @@ typedef struct CitusCopyDestReceiver
 	 * when merging into the target tables.
 	 */
 	bool skipCoercions;
+
+	/*
+	 * Determines whether the COPY command should track query stat counters.
+	 */
+	bool trackQueryCounters;
 } CitusCopyDestReceiver;
 
 
@@ -170,7 +175,8 @@ extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   int partitionColumnIndex,
 														   EState *executorState,
 														   char *intermediateResultPrefix,
-														   bool isPublishable);
+														   bool isPublishable,
+														   bool trackQueryCounters);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
 extern bool CanUseBinaryCopyFormatForTargetList(List *targetEntryList);
