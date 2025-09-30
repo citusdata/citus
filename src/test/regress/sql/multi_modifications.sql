@@ -384,7 +384,7 @@ where d1.a=d2.a)
 update dist_1  set a = cte.x from cte where y != 0 and dist_1.a = cte.x;
 
 with cte as (
-select * from (select a as x, b as y from dist_2 limit 100)
+select * from (select a as x, b as y from dist_2 limit 100) q
 )
 update dist_1 set a = cte.x from cte where b = cte.y and cte.y = a and a = cte.x;
 
@@ -424,7 +424,7 @@ UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a = dist_2.b AND dist_2.
 
 -- and same here
 with cte as (
-select * from (select a as x, b as y from dist_different_order_1 limit 100)
+select * from (select a as x, b as y from dist_different_order_1 limit 100) q
 )
 update dist_1 set a = cte.x from cte where a = cte.y and cte.y = b and b = cte.x;
 
