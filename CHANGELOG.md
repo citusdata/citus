@@ -1,3 +1,13 @@
+### citus v12.1.10 (Oct 1, 2025) ###
+
+* Adds support for latest PG minors: 14.19, 15.14, 16.10 (#7986, #8142)
+
+* Fixes a bug that causes allowing UPDATE / MERGE queries that may
+  change the distribution column value (#8214)
+
+* Fixes an assertion failure that happens when querying a view that is
+  defined on distributed tables (#8136)
+
 ### citus v12.1.9 (Sep 3, 2025) ###
 
 * Adds a GUC for queries with outer joins and pseudoconstant quals (#8163)
