@@ -3077,16 +3077,25 @@ BuildBaseConstraint(Var *column)
 
 
 /*
- * MakeOpExpression builds an operator expression node. This operator expression
- * implements the operator clause as defined by the variable and the strategy
- * number.
+ * MakeOpExpressionExtended builds an operator expression node that's of
+ * the form "Var <op> Expr", where, Expr must either be a Const or a Var
+ * (*1).
+ *
+ * This operator expression implements the operator clause as defined by
+ * the variable and the strategy number.
  */
 OpExpr *
-MakeOpExpression(Var *variable, int16 strategyNumber)
+MakeOpExpressionExtended(Var *leftVar, Expr *rightArg, int16 strategyNumber)
 {
-	Oid typeId = variable->vartype;
-	Oid typeModId = variable->vartypmod;
-	Oid collationId = variable->varcollid;
+	/*
+	 * Other types of expressions are probably also fine to be used, but
+	 * none of the callers need support for them for now, so we haven't
+	 * tested them (*1).
+	 */
+	Assert(IsA(rightArg, Const) || IsA(rightArg, Var));
+
+	Oid typeId = leftVar->vartype;
+	Oid collationId = leftVar->varcollid;
 
 	Oid accessMethodId = BTREE_AM_OID;
 
@@ -3104,18 +3113,16 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	 */
 	if (operatorClassInputType != typeId && typeType != TYPTYPE_PSEUDO)
 	{
-		variable = (Var *) makeRelabelType((Expr *) variable, operatorClassInputType,
-										   -1, collationId, COERCE_IMPLICIT_CAST);
+		leftVar = (Var *) makeRelabelType((Expr *) leftVar, operatorClassInputType,
+										  -1, collationId, COERCE_IMPLICIT_CAST);
 	}
-
-	Const *constantValue = makeNullConst(operatorClassInputType, typeModId, collationId);
 
 	/* Now make the expression with the given variable and a null constant */
 	OpExpr *expression = (OpExpr *) make_opclause(operatorId,
 												  InvalidOid, /* no result type yet */
 												  false, /* no return set */
-												  (Expr *) variable,
-												  (Expr *) constantValue,
+												  (Expr *) leftVar,
+												  rightArg,
 												  InvalidOid, collationId);
 
 	/* Set implementing function id and result type */
@@ -3123,6 +3130,31 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	expression->opresulttype = get_func_rettype(expression->opfuncid);
 
 	return expression;
+}
+
+
+/*
+ * MakeOpExpression is a wrapper around MakeOpExpressionExtended
+ * that creates a null constant of the appropriate type for right
+ * hand side operator class input type. As a result, it builds an
+ * operator expression node that's of the form "Var <op> NULL".
+ */
+OpExpr *
+MakeOpExpression(Var *leftVar, int16 strategyNumber)
+{
+	Oid typeId = leftVar->vartype;
+	Oid typeModId = leftVar->vartypmod;
+	Oid collationId = leftVar->varcollid;
+
+	Oid accessMethodId = BTREE_AM_OID;
+
+	OperatorCacheEntry *operatorCacheEntry = LookupOperatorByType(typeId, accessMethodId,
+																  strategyNumber);
+	Oid operatorClassInputType = operatorCacheEntry->operatorClassInputType;
+
+	Const *constantValue = makeNullConst(operatorClassInputType, typeModId, collationId);
+
+	return MakeOpExpressionExtended(leftVar, (Expr *) constantValue, strategyNumber);
 }
 
 

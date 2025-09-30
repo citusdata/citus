@@ -549,7 +549,8 @@ extern DistributedPlan * CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 													   plannerRestrictionContext);
 extern Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
 							  char *queryString);
-
+extern OpExpr * MakeOpExpressionExtended(Var *leftVar, Expr *rightArg,
+										 int16 strategyNumber);
 extern OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 extern Node *  WrapUngroupedVarsInAnyValueAggregate(Node *expression,
 													List *groupClauseList,
