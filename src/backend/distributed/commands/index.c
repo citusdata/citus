@@ -854,8 +854,11 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	table_close(relation, NoLock);
 	index_close(indexRelation, NoLock);
 
+	PushActiveSnapshot(GetTransactionSnapshot());
+
 	/* mark index as invalid, in-place (cannot be rolled back) */
 	index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
+	PopActiveSnapshot();
 
 	/* re-open a transaction command from here on out */
 	CommitTransactionCommand();
@@ -1370,8 +1373,11 @@ MarkIndexValid(IndexStmt *indexStmt)
 											schemaId);
 	Relation indexRelation = index_open(indexRelationId, RowExclusiveLock);
 
+	PushActiveSnapshot(GetTransactionSnapshot());
+
 	/* mark index as valid, in-place (cannot be rolled back) */
 	index_set_state_flags(indexRelationId, INDEX_CREATE_SET_VALID);
+	PopActiveSnapshot();
 
 	table_close(relation, NoLock);
 	index_close(indexRelation, NoLock);

@@ -2431,7 +2431,7 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 
 /*
  * RangeTableArrayContainsAnyRTEIdentities returns true if any of the range table entries
- * int rangeTableEntries array is an range table relation specified in queryRteIdentities.
+ * in rangeTableEntries array is a range table relation specified in queryRteIdentities.
  */
 static bool
 RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
@@ -2443,6 +2443,18 @@ RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 		RangeTblEntry *rangeTableEntry = rangeTableEntries[rteIndex];
 		List *rangeTableRelationList = NULL;
 		ListCell *rteRelationCell = NULL;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+		/*
+		 * In PG18+, planner array simple_rte_array may contain NULL entries
+		 * for "dead relations". See PG commits 5f6f951 and e9a20e4 for details.
+		 */
+		if (rangeTableEntry == NULL)
+		{
+			continue;
+		}
+#endif
 
 		/*
 		 * Get list of all RTE_RELATIONs in the given range table entry
