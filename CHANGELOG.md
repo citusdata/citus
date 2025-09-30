@@ -1,3 +1,17 @@
+### citus v13.0.5 (Oct 1st, 2025) ###
+
+* Adds support for latest PG minors: 14.19, 15.14, 16.10 (#7986, #8142)
+
+* Fixes a bug that causes an unexpected error when executing
+  repartitioned MERGE (#8201)
+
+* Fixes a bug that causes allowing UPDATE / MERGE queries that may
+  change the distribution column value (#8214)
+
+* Fixes a bug in redundant WHERE clause detection (#8162)
+
+* Updates dynamic_library_path automatically when CDC is enabled (#8025)
+
 ### citus v13.0.4 (May 29th, 2025) ###
 
 * Fixes an issue detected using address sanitizer (#7966)
