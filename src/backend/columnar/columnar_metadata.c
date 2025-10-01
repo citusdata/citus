@@ -1267,7 +1267,21 @@ StripesForRelfilelocator(RelFileLocator relfilelocator)
 {
 	uint64 storageId = LookupStorageId(relfilelocator);
 
-	return ReadDataFileStripeList(storageId, GetTransactionSnapshot());
+	/*
+	 * PG18 requires snapshot to be active or registered before it's used
+	 * Without this, we hit
+	 * Assert(snapshot->regd_count > 0 || snapshot->active_count > 0);
+	 * when reading columnar stripes.
+	 * Relevant PG18 commit:
+	 * 8076c00592e40e8dbd1fce7a98b20d4bf075e4ba
+	 */
+	Snapshot snapshot = RegisterSnapshot(GetTransactionSnapshot());
+
+	List *readDataFileStripeList = ReadDataFileStripeList(storageId, snapshot);
+
+	UnregisterSnapshot(snapshot);
+
+	return readDataFileStripeList;
 }
 
 
