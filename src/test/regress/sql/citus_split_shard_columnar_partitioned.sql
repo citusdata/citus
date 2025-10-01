@@ -134,7 +134,13 @@ SELECT pg_reload_conf();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to_parent%_1'
             ORDER BY 1, 2;
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to_parent%_1');
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -151,7 +157,13 @@ SELECT pg_reload_conf();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to_parent%_1'
             ORDER BY 1, 2;
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to_parent%_1');
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -205,7 +217,13 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to_parent%_1'
             ORDER BY 1, 2;
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to_parent%_1');
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -222,7 +240,13 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to_parent%_1'
             ORDER BY 1, 2;
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to_parent%_1');
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -276,7 +300,13 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to_parent%_1'
             ORDER BY 1, 2;
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to_parent%_1');
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -293,7 +323,13 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to_parent%_1'
             ORDER BY 1, 2;
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to_parent%_1');
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
