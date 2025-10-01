@@ -516,15 +516,18 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 (2 rows)
 
 -- make sure that we've created the foreign keys
-SELECT  "Constraint", "Definition" FROM table_fkeys
-  WHERE "Constraint" LIKE 'table2_group%' OR "Constraint" LIKE 'table1_group%';
-              Constraint               |                          Definition
+SELECT  "Constraint", "Definition"
+FROM    table_fkeys
+WHERE   relid::regclass::text LIKE 'table2_group%'           -- child tables
+  AND   "Definition" LIKE 'FOREIGN KEY (table1_id) REFERENCES table1_group1%'  -- referenced parent (and its shards)
+ORDER BY 2;
+ Constraint |                          Definition
 ---------------------------------------------------------------------
- table2_group1_table1_id_fkey          | FOREIGN KEY (table1_id) REFERENCES table1_group1(id)
- table2_group1_table1_id_fkey_13000028 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000022(id)
- table2_group1_table1_id_fkey_13000029 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000023(id)
- table2_group1_table1_id_fkey_13000031 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000025(id)
- table2_group1_table1_id_fkey_13000033 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000027(id)
+ t          | FOREIGN KEY (table1_id) REFERENCES table1_group1(id)
+ t          | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000022(id)
+ t          | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000023(id)
+ t          | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000025(id)
+ t          | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000027(id)
 (5 rows)
 
 \c - - - :master_port
