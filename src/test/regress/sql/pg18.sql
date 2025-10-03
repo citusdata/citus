@@ -7,8 +7,9 @@ SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18
 
 -- test invalid statistics
 -- behavior is same among PG versions, error message differs
--- relevant PG18 commit: 3eea4dc2c7
+-- relevant PG18 commit: 3eea4dc2c7, 38883916e
 CREATE STATISTICS tst ON a FROM (VALUES (x)) AS foo;
+CREATE STATISTICS alt_stat2 ON a FROM tftest(1);
 
 \if :server_version_ge_18
 \else
