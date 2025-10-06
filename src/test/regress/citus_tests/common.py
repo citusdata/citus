@@ -137,7 +137,7 @@ def initialize_db_for_cluster(pg_path, rel_data_path, settings, node_names):
             # --allow-group-access is used to ensure we set permissions on
             # private keys correctly
             "--allow-group-access",
-            "--no-data-checksums",
+            "--data-checksums",
             "--encoding",
             "UTF8",
             "--locale",
@@ -792,7 +792,7 @@ class Postgres(QueryRunner):
 
     def initdb(self):
         run(
-            f"initdb -A trust --nosync --username postgres --pgdata {self.pgdata} --allow-group-access --no-data-checksums --encoding UTF8 --locale POSIX",
+            f"initdb -A trust --nosync --username postgres --pgdata {self.pgdata} --allow-group-access --encoding UTF8 --locale POSIX",
             stdout=subprocess.DEVNULL,
         )
 
