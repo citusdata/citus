@@ -2083,7 +2083,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
    Memory: used=NkB  allocated=NkB
 (9 rows)
 
-select public.explain_filter('explain (memory, analyze) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, analyze, buffers false) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
@@ -2149,7 +2149,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
    Planning Time: N.N
 (1 row)
 
-select public.explain_filter('explain (memory, analyze, format json) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, analyze, buffers false, format json) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "JSON"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
@@ -2366,7 +2366,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
    Execution Time: N.N
 (1 row)
 
-select public.explain_filter('explain (analyze,serialize) select * from int8_tbl i8');
+select public.explain_filter('explain (analyze, buffers false, serialize) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
@@ -2433,7 +2433,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 (14 rows)
 
 -- this tests an edge case where we have no data to return
-select public.explain_filter('explain (analyze,serialize) create temp table explain_temp as select * from int8_tbl i8');
+select public.explain_filter('explain (analyze, buffers false, serialize) create temp table explain_temp as select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
