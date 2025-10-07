@@ -27,6 +27,9 @@ SELECT * FROM test_table ORDER BY 1, 2;
 
 -- commit/rollback is not allowed in procedures in SQL
 -- following calls should fail
+
+\set VERBOSITY terse
+
 CREATE PROCEDURE test_procedure_commit(tt_id int, tt_org_id int) LANGUAGE SQL AS $$
 	DELETE FROM test_table;
 	COMMIT;
@@ -51,6 +54,8 @@ SELECT * FROM test_table ORDER BY 1, 2;
 DROP PROCEDURE test_procedure_delete_insert(int, int);
 DROP PROCEDURE test_procedure_commit(int, int);
 DROP PROCEDURE test_procedure_rollback(int, int);
+
+\set VERBOSITY default
 
 -- same tests with plpgsql
 
