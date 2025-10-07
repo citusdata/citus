@@ -1245,10 +1245,14 @@ LogRelationStats(Relation rel, int elevel)
 	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
+
+		Snapshot snapshot = RegisterSnapshot(GetTransactionSnapshot());
 		StripeSkipList *skiplist = ReadStripeSkipList(relfilelocator, stripe->id,
 													  RelationGetDescr(rel),
 													  stripe->chunkCount,
-													  GetTransactionSnapshot());
+													  snapshot);
+		UnregisterSnapshot(snapshot);
+
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
 			bool attrDropped = Attr(tupdesc, column)->attisdropped;
