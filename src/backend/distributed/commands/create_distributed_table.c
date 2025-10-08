@@ -2735,11 +2735,15 @@ CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId)
 	ExprContext *econtext = GetPerTupleExprContext(estate);
 	econtext->ecxt_scantuple = slot;
 	const bool nonPublishableData = false;
+
+	/* we don't track query counters when distributing a table */
+	const bool trackQueryCounters = false;
 	DestReceiver *copyDest =
 		(DestReceiver *) CreateCitusCopyDestReceiver(distributedTableId,
 													 columnNameList,
 													 partitionColumnIndex,
-													 estate, NULL, nonPublishableData);
+													 estate, NULL, nonPublishableData,
+													 trackQueryCounters);
 
 	/* initialise state for writing to shards, we'll open connections on demand */
 	copyDest->rStartup(copyDest, 0, sourceTupleDescriptor);
