@@ -11,7 +11,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-	      WHERE rel.relname = 'products';
+	      WHERE rel.relname = 'products' AND con.contype <> 'n';
 
 ALTER TABLE products DROP CONSTRAINT products_pkey;
 
@@ -28,7 +28,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname = 'products_ref';
+              WHERE rel.relname = 'products_ref' AND con.contype <> 'n';
 
 ALTER TABLE products_ref DROP CONSTRAINT products_ref_pkey2;
 
@@ -40,7 +40,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-              WHERE rel.relname LIKE 'very%';
+              WHERE rel.relname LIKE 'very%' AND con.contype <> 'n';
 
 ALTER TABLE verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey;
 
@@ -52,7 +52,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'dist_partitioned_table';
+          WHERE rel.relname = 'dist_partitioned_table' AND con.contype <> 'n';
 
 ALTER TABLE dist_partitioned_table DROP CONSTRAINT dist_partitioned_table_pkey;
 
@@ -63,4 +63,4 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-          WHERE rel.relname = 'citus_local_table';
+          WHERE rel.relname = 'citus_local_table' AND con.contype <> 'n';
