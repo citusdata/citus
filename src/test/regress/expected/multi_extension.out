@@ -1120,10 +1120,11 @@ DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 -- Use a synthetic pg_dist_shard record to show that upgrade fails
 -- when there are cstore_fdw tables
 INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage) VALUES ('pg_dist_shard', 1, 'c');
+-- reduce verbosity since there is more context in PG18 (774171c4f)
+\set VERBOSITY terse
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 ERROR:  cstore_fdw tables are deprecated as of Citus 11.0
-HINT:  Install Citus 10.2 and convert your cstore_fdw tables to the columnar access method before upgrading further
-CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+\set VERBOSITY default
 DELETE FROM pg_dist_shard WHERE shardid = 1;
 -- partitioned table count is tracked on Citus 11 upgrade
 CREATE TABLE e_transactions(order_id varchar(255) NULL, transaction_id int) PARTITION BY LIST(transaction_id);
@@ -1510,11 +1511,11 @@ SELECT create_distributed_table('null_shard_key', null);
 
 -- Show that we cannot downgrade to 11.3-2 becuase the cluster has a
 -- distributed table with single-shard.
+-- reduce verbosity since there is more context in PG18 (774171c4f)
+\set VERBOSITY terse
 ALTER EXTENSION citus UPDATE TO '11.3-2';
 ERROR:  cannot downgrade Citus because there are distributed tables without a shard key.
-DETAIL:  To downgrade Citus to an older version, you should first convert those tables to Postgres tables by executing SELECT undistribute_table("%s").
-HINT:  You can find the distributed tables without a shard key in the cluster by using the following query: "SELECT * FROM citus_tables WHERE distribution_column = '<none>' AND colocation_id > 0".
-CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+\set VERBOSITY default
 DROP TABLE null_shard_key;
 ALTER EXTENSION citus UPDATE TO '11.3-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
