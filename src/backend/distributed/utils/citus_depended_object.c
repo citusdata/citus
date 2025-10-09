@@ -374,6 +374,17 @@ DistOpsValidityState(Node *node, const DistributeObjectOps *ops)
 		 * We should not validate CREATE statements because no address exists
 		 * here yet.
 		 */
+
+		if (nodeTag(node) == T_CreateDomainStmt)
+		{
+			/*
+			 * Create Domain statements should be qualified after local creation
+			 * because in case of an error in creation, we don't want to modify
+			 * the statement at all.
+			 */
+			return ShouldQualifyAfterLocalCreation;
+		}
+
 		return NoAddressResolutionRequired;
 	}
 	else if (AlterRoleSetStatementContainsAll(node))
