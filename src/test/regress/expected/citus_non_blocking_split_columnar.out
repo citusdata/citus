@@ -186,6 +186,7 @@ SELECT pg_reload_conf();
  sensors_old_8970001        | fkey_from_parent_to_ref_8970000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
 (20 rows)
 
+-- separating generated child FK constraints since PG18 changed their naming (3db61db4)
     SELECT count(*) AS generated_child_fk_constraints
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
