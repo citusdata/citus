@@ -122,17 +122,17 @@ SET search_path TO "blocking shard Move Fkeys Indexes", public, pg_catalog;
 
 -- show the current state of the constraints
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'::regclass
-AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to_parent%_1'
+AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to\_parent%\_1'
 ORDER BY 1, 2;
 -- separating generated child FK constraints since PG18 changed their naming (3db61db4)
 SELECT count(*) AS generated_child_fk_constraints FROM table_fkeys WHERE relid='sensors_8970000'::regclass
-AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to_parent%_1');
+AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to\_parent%\_1');
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass
-AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to_parent%_1'
+AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to\_parent%\_1'
 ORDER BY 1,2;
 SELECT count(*) AS generated_child_fk_constraints FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass
-AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to_parent%_1');
+AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to\_parent%\_1');
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' ORDER BY 1,2;
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_2020_01_01_8970008' ORDER BY 1,2;
@@ -162,16 +162,16 @@ SELECT public.wait_for_resource_cleanup();
 SET search_path TO "blocking shard Move Fkeys Indexes", public, pg_catalog;
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'::regclass
-AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to_parent%_1'
+AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to\_parent%\_1'
 ORDER BY 1, 2;
 SELECT count(*) AS generated_child_fk_constraints FROM table_fkeys WHERE relid='sensors_8970000'::regclass
-AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to_parent%_1');
+AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to\_parent%\_1');
 
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass
-AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to_parent%_1'
+AND "Constraint" NOT LIKE 'sensors%' AND "Constraint" NOT LIKE '%to\_parent%\_1'
 ORDER BY 1,2;
 SELECT count(*) AS generated_child_fk_constraints FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass
-AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to_parent%_1');
+AND ("Constraint" LIKE 'sensors%' OR "Constraint" LIKE '%to\_parent%\_1');
 
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' ORDER BY 1,2;
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_2020_01_01_8970008' ORDER BY 1,2;
