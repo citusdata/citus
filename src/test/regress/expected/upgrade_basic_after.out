@@ -307,6 +307,7 @@ SELECT * FROM t_range ORDER BY id;
 
 ROLLBACK;
 -- There is a difference in partkey Var representation between PG16 and older versions
+-- There is also a difference between PG18 and older versions
 -- Sanity check here that we can properly do column_to_column_name
 SELECT column_to_column_name(logicalrelid, partkey)
 FROM pg_dist_partition WHERE partkey IS NOT NULL ORDER BY 1 LIMIT 1;

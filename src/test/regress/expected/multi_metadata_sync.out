@@ -525,7 +525,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
           logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
- mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |            2 | s        | f
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varreturningtype 0 :varnosyn 1 :varattnosyn 1 :location -1} |            2 | s        | f
 (1 row)
 
 SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
@@ -664,7 +664,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid::text;
           logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
- mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |            2 | s        | f
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varreturningtype 0 :varnosyn 1 :varattnosyn 1 :location -1} |            2 | s        | f
 (1 row)
 
 SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
