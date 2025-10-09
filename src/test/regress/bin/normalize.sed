@@ -365,3 +365,7 @@ s/^([ \t]*)List of sequences$/\1List of relations/g
 s/violates RESTRICT setting of foreign key constraint/violates foreign key constraint/g
 # DETAIL line changed "is referenced" -> old "is still referenced"
 s/\<is referenced from table\>/is still referenced from table/g
+
+# pg18 extension_control_path GUC debugs
+# ignore any "find_in_path:" lines in test output
+/DEBUG:  find_in_path: trying .*/d
