@@ -798,11 +798,17 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	-- with an ugly trick, update the vartype of table from int to bigint
 	-- so that making two tables colocated fails
 
-    -- include varnullingrels for PG16
+    -- include varnullingrels for PG16+
     SHOW server_version \gset
     SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
     \gset
-    \if :server_version_ge_16
+	-- include varreturningtype for PG18+
+	SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18
+    \gset
+	\if :server_version_ge_18
+	UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 1 :varreturningtype 0 :varnoold 1 :varoattno 1 :location -1}'
+	WHERE logicalrelid = 'test_2'::regclass;
+    \elif :server_version_ge_16
     UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 1 :varnoold 1 :varoattno 1 :location -1}'
 	WHERE logicalrelid = 'test_2'::regclass;
     \else
