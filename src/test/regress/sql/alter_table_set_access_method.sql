@@ -143,6 +143,7 @@ ORDER BY indexname;
 
 SELECT conname FROM pg_constraint
 WHERE conrelid = 'heap_\''tbl'::regclass
+  AND contype <> 'n'
 ORDER BY conname;
 
 SELECT alter_table_set_access_method('heap_\''tbl', 'columnar');
@@ -154,6 +155,7 @@ ORDER BY indexname;
 
 SELECT conname FROM pg_constraint
 WHERE conrelid = 'heap_\''tbl'::regclass
+  AND contype <> 'n'
 ORDER BY conname;
 
 -- test different table types

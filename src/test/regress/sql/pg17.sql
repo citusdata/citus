@@ -1290,19 +1290,19 @@ SET citus.log_remote_commands TO true;
 SET citus.grep_remote_commands TO '%12242024%';
 
 select public.explain_filter('explain (memory) select * from int8_tbl i8');
-select public.explain_filter('explain (memory, analyze) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, analyze, buffers false) select * from int8_tbl i8');
 select public.explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
-select public.explain_filter('explain (memory, analyze, format json) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, analyze, buffers false, format json) select * from int8_tbl i8');
 prepare int8_query as select * from int8_tbl i8;
 select public.explain_filter('explain (memory) execute int8_query');
 
 -- serialize tests, same as postgres tests, we just distributed the table
 select public.explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');
-select public.explain_filter('explain (analyze,serialize) select * from int8_tbl i8');
+select public.explain_filter('explain (analyze, buffers false, serialize) select * from int8_tbl i8');
 select public.explain_filter('explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8');
 select public.explain_filter('explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8');
 -- this tests an edge case where we have no data to return
-select public.explain_filter('explain (analyze,serialize) create temp table explain_temp as select * from int8_tbl i8');
+select public.explain_filter('explain (analyze, buffers false, serialize) create temp table explain_temp as select * from int8_tbl i8');
 
 RESET citus.log_remote_commands;
 -- End of EXPLAIN MEMORY SERIALIZE tests

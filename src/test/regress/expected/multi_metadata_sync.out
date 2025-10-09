@@ -55,7 +55,9 @@ SELECT pg_sleep(0.1);
 
 (1 row)
 
+SET client_min_messages TO ERROR;
 ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
+RESET client_min_messages;
 -- Show that, with no MX tables, activate node snapshot contains only the delete commands,
 -- pg_dist_node entries, pg_dist_object entries and roles.
 SELECT unnest(activate_node_snapshot()) order by 1;

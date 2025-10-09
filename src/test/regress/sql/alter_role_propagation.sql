@@ -112,7 +112,9 @@ SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_passwor
 ALTER ROLE new_role PASSWORD '';
 SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_password FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'new_role'$$) workers, pg_authid WHERE pg_authid.rolname = 'new_role';
 
+SET client_min_messages TO ERROR;
 ALTER ROLE new_role PASSWORD 'new_password';
+RESET client_min_messages;
 SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_password, workers.result = pg_authid.rolpassword AS password_is_same FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'new_role'$$) workers, pg_authid WHERE pg_authid.rolname = 'new_role';
 
 ALTER ROLE new_role PASSWORD NULL;
