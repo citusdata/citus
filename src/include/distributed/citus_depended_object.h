@@ -25,7 +25,8 @@ typedef enum DistOpsValidationState
 	HasAtLeastOneValidObject,
 	HasNoneValidObject,
 	HasObjectWithInvalidOwnership,
-	NoAddressResolutionRequired
+	NoAddressResolutionRequired,
+	ShouldQualifyAfterLocalCreation
 } DistOpsValidationState;
 
 extern void SetLocalClientMinMessagesIfRunningPGTests(int

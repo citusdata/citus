@@ -19,6 +19,7 @@
 #include "nodes/parsenodes.h"
 #include "tcop/utility.h"
 
+#include "distributed/citus_depended_object.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
@@ -61,6 +62,13 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 	{
 		/* not propagating when a configured feature flag is turned off by the user */
 		return NIL;
+	}
+
+	if (ops->qualify && DistOpsValidityState(stmt, ops) ==
+		ShouldQualifyAfterLocalCreation)
+	{
+		/* qualify the statement after local creation */
+		ops->qualify(stmt);
 	}
 
 	List *addresses = GetObjectAddressListFromParseTree(stmt, false, true);
