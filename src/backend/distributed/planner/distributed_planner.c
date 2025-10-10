@@ -13,6 +13,7 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "miscadmin.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -155,6 +156,9 @@ distributed_planner(Query *parse,
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
 	FastPathRestrictionContext fastPathContext = { 0 };
+#if PG_VERSION_NUM >= PG_VERSION_18
+	bool saved_sje = false;
+#endif
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
@@ -218,6 +222,13 @@ distributed_planner(Query *parse,
 			bool setPartitionedTablesInherited = false;
 			AdjustPartitioningForDistributedPlanning(rangeTableList,
 													 setPartitionedTablesInherited);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+			saved_sje = enable_self_join_elimination;
+			set_config_option("enable_self_join_elimination", "off",
+							  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+							  GUC_ACTION_LOCAL, true, 0, false);
+#endif
 		}
 	}
 
@@ -271,6 +282,15 @@ distributed_planner(Query *parse,
 			if (needsDistributedPlanning)
 			{
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
+				#if PG_VERSION_NUM >= PG_VERSION_18
+				if (saved_sje)
+				{
+					set_config_option("enable_self_join_elimination", "on",
+									  (superuser() ? PGC_SUSET : PGC_USERSET),
+									  PGC_S_SESSION,
+									  GUC_ACTION_LOCAL, true, 0, false);
+				}
+				#endif
 			}
 			else if ((result = TryToDelegateFunctionCall(&planContext)) == NULL)
 			{
