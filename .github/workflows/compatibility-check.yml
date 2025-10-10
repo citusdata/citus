@@ -1,0 +1,89 @@
+name: Backward Compatibility Check
+run-name: Backward Compatibility Check - ${{ github.event.pull_request.title || github.ref_name }}
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - "release-*"
+      - "main"
+
+jobs:
+  compatibility-check:
+    name: Check Backward Compatibility
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        pip install PyYAML requests
+    
+    - name: Run compatibility check
+      id: compat-check
+      run: |
+        python ci/check-backward-compatibility.py
+      env:
+        PR_NUMBER: ${{ github.event.number }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    
+    - name: Add compatibility labels
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read results from the compatibility check
+          let results = {};
+          try {
+            results = JSON.parse(fs.readFileSync('/tmp/compat-results.json', 'utf8'));
+          } catch (error) {
+            console.log('No compatibility results found');
+            return;
+          }
+          
+          const { context } = github;
+          const labels = [];
+          
+          if (results.length > 0) {
+            labels.push('breaking-change');
+          }
+          
+          
+          // Add labels to PR
+          if (labels.length > 0) {
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: labels
+            });
+          }
+          
+          // Add comment with detailed findings
+          if (results.length > 0) {
+            const comment = `## Potential Backward Compatibility Issues Detected
+          
+          This PR contains changes that may break backward compatibility:
+
+          ${results.map(change => `- **${change.type}**: ${change.description}\n  - File: \`${change.file}\`\n  - ${change.details || ''}`).join('\n')}
+          
+          Please review these changes carefully before merging.`;
+          
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: comment
+            });
+          }
