@@ -1012,7 +1012,7 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
-		if (Attr(tupdesc, i)->attisdropped)
+		if (TupleDescAttr(tupdesc, i)->attisdropped)
 		{
 			continue;
 		}
@@ -1255,7 +1255,7 @@ LogRelationStats(Relation rel, int elevel)
 
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
-			bool attrDropped = Attr(tupdesc, column)->attisdropped;
+			bool attrDropped = TupleDescAttr(tupdesc, column)->attisdropped;
 			for (uint32 chunk = 0; chunk < skiplist->chunkCount; chunk++)
 			{
 				ColumnChunkSkipNode *skipnode =
@@ -2638,7 +2638,7 @@ detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
 
 	for (int i = 0; i < tupleDesc->natts; i++)
 	{
-		if (!isnull[i] && Attr(tupleDesc, i)->attlen == -1 &&
+		if (!isnull[i] && TupleDescAttr(tupleDesc, i)->attlen == -1 &&
 			VARATT_IS_EXTENDED(values[i]))
 		{
 			/* make a copy */
