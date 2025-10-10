@@ -371,20 +371,23 @@ DistOpsValidityState(Node *node, const DistributeObjectOps *ops)
 	if (ops && ops->operationType == DIST_OPS_CREATE)
 	{
 		/*
-		 * We should not validate CREATE statements because no address exists
-		 * here yet.
+		 * We should beware of qualifying the CREATE statement too early.
 		 */
-
 		if (nodeTag(node) == T_CreateDomainStmt)
 		{
 			/*
 			 * Create Domain statements should be qualified after local creation
-			 * because in case of an error in creation, we don't want to modify
-			 * the statement at all.
+			 * because in case of an error in creation, we don't want to print
+			 * the error with the qualified name, as that would differ with
+			 * vanilla Postgres error output.
 			 */
 			return ShouldQualifyAfterLocalCreation;
 		}
 
+		/*
+		 * We should not validate CREATE statements because no address exists
+		 * here yet.
+		 */
 		return NoAddressResolutionRequired;
 	}
 	else if (AlterRoleSetStatementContainsAll(node))
