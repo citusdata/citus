@@ -31,7 +31,6 @@ typedef enum
 	 * adaptive_executor.c.
 	 */
 	STAT_CONNECTION_ESTABLISHMENT_SUCCEEDED,
-	STAT_CONNECTION_ESTABLISHMENT_FAILED,
 	STAT_CONNECTION_REUSED,
 
 	/*
@@ -48,8 +47,8 @@ typedef enum
 	STAT_QUERY_EXECUTION_MULTI_SHARD,
 
 	/* do not use this and ensure it is the last entry */
-	N_CITUS_STAT_COUNTERS
-} StatType;
+	N_SIMPLE_CITUS_STAT_COUNTERS
+} SimpleStatType;
 
 
 /* GUC variable */
@@ -60,8 +59,9 @@ extern bool EnableStatCounters;
 extern void InitializeStatCountersShmem(void);
 extern Size StatCountersShmemSize(void);
 
-/* main entry point for the callers who want to increment the stat counters */
-extern void IncrementStatCounterForMyDb(int statId);
+/* main entry point for the callers who want to increment the simple stat counters */
+extern void IncrementSimpleStatCounterForMyDb(int statId);
+extern void IncrementConnEstabFailedStatCounterForMyDb(void);
 
 /*
  * Exported to define a before_shmem_exit() callback that saves

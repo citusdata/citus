@@ -7,7 +7,7 @@
  *
  * We create an array of "BackendStatsSlot"s in shared memory, one for
  * each backend. Each backend increments its own stat counters in its
- * own slot via IncrementStatCounterForMyDb(). And when a backend exits,
+ * own slot via IncrementSimpleStatCounterForMyDb(). And when a backend exits,
  * it saves its stat counters from its slot via
  * SaveBackendStatsIntoSavedBackendStatsHash() into a hash table in
  * shared memory, whose entries are "SavedBackendStatsHashEntry"s and
@@ -48,7 +48,7 @@
  * There is chance that citus_stat_counters_reset() might race with a
  * backend that is trying to increment one of the counters in its slot
  * and as a result it can effectively fail to reset that counter due to
- * the reasons documented in IncrementStatCounterForMyDb() function.
+ * the reasons documented in IncrementSimpleStatCounterForMyDb() function.
  * However, this should be a very rare case and we can live with that
  * for now.
  *
@@ -97,8 +97,17 @@
 
 
 /* fixed size array types to store the stat counters */
-typedef pg_atomic_uint64 AtomicStatCounters[N_CITUS_STAT_COUNTERS];
-typedef uint64 StatCounters[N_CITUS_STAT_COUNTERS];
+typedef struct AtomicStatCounters
+{
+	pg_atomic_uint64 simpleCounters[N_SIMPLE_CITUS_STAT_COUNTERS];
+	pg_atomic_uint64 connEstabFailedCounter;
+} AtomicStatCounters;
+
+typedef struct StatCounters
+{
+	uint64 simpleCounters[N_SIMPLE_CITUS_STAT_COUNTERS];
+	uint64 connEstabFailedCounter;
+} StatCounters;
 
 /*
  * saved backend stats - hash entry definition
@@ -153,7 +162,7 @@ typedef struct BackendStatsSlot
  * GUC variable
  *
  * This only controls whether we track the stat counters or not, via
- * IncrementStatCounterForMyDb() and
+ * IncrementSimpleStatCounterForMyDb() and
  * SaveBackendStatsIntoSavedBackendStatsHash(). In other words, even
  * when the GUC is disabled, we still allocate the shared memory
  * structures etc. and citus_stat_counters() / citus_stat_counters_reset()
@@ -394,11 +403,11 @@ StatCountersShmemSize(void)
 
 
 /*
- * IncrementStatCounterForMyDb increments the stat counter for the given statId
+ * IncrementSimpleStatCounterForMyDb increments the stat counter for the given statId
  * for this backend.
  */
 void
-IncrementStatCounterForMyDb(int statId)
+IncrementSimpleStatCounterForMyDb(int statId)
 {
 	if (!EnableStatCounters)
 	{
@@ -430,7 +439,45 @@ IncrementStatCounterForMyDb(int statId)
 	 * But this should be a rare case and we can live with that, for the
 	 * sake of lock-free implementation of this function.
 	 */
-	pg_atomic_uint64 *statPtr = &myBackendStatsSlot->counters[statId];
+	pg_atomic_uint64 *statPtr = &myBackendStatsSlot->counters.simpleCounters[statId];
+	pg_atomic_write_u64(statPtr, pg_atomic_read_u64(statPtr) + 1);
+}
+
+
+void
+IncrementConnEstabFailedStatCounterForMyDb(void)
+{
+	if (!EnableStatCounters)
+	{
+		return;
+	}
+
+	/* just to be on the safe side */
+	if (!EnsureStatCountersShmemInitDone())
+	{
+		return;
+	}
+
+	int myBackendSlotIdx = getProcNo_compat(MyProc);
+	BackendStatsSlot *myBackendStatsSlot =
+		&SharedBackendStatsSlotArray[myBackendSlotIdx];
+
+	/*
+	 * When there cannot be any other writers, incrementing an atomic
+	 * counter via pg_atomic_read_u64() and pg_atomic_write_u64() is
+	 * same as incrementing it via pg_atomic_fetch_add_u64(). Plus, the
+	 * former is cheaper than the latter because the latter has to do
+	 * extra work to deal with concurrent writers.
+	 *
+	 * In our case, the only concurrent writer could be the backend that
+	 * is executing citus_stat_counters_reset(). So, there is chance that
+	 * we read the counter value, then it gets reset by a concurrent call
+	 * made to citus_stat_counters_reset() and then we write the
+	 * incremented value back, by effectively overriding the reset value.
+	 * But this should be a rare case and we can live with that, for the
+	 * sake of lock-free implementation of this function.
+	 */
+	pg_atomic_uint64 *statPtr = &myBackendStatsSlot->counters.connEstabFailedCounter;
 	pg_atomic_write_u64(statPtr, pg_atomic_read_u64(statPtr) + 1);
 }
 
@@ -504,18 +551,23 @@ SaveBackendStatsIntoSavedBackendStatsHash(void)
 
 	SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
-	for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+	for (int statIdx = 0; statIdx < N_SIMPLE_CITUS_STAT_COUNTERS; statIdx++)
 	{
-		dbSavedBackendStatsEntry->counters[statIdx] +=
-			pg_atomic_read_u64(&myBackendStatsSlot->counters[statIdx]);
+		dbSavedBackendStatsEntry->counters.simpleCounters[statIdx] +=
+			pg_atomic_read_u64(&myBackendStatsSlot->counters.simpleCounters[statIdx]);
 
 		/*
 		 * Given that this function is only called when a backend exits, later on
 		 * another backend might be assigned to the same slot. So, we reset each
 		 * stat counter of this slot to 0 after saving it.
 		 */
-		pg_atomic_write_u64(&myBackendStatsSlot->counters[statIdx], 0);
+		pg_atomic_write_u64(&myBackendStatsSlot->counters.simpleCounters[statIdx], 0);
 	}
+
+	dbSavedBackendStatsEntry->counters.connEstabFailedCounter +=
+		pg_atomic_read_u64(&myBackendStatsSlot->counters.connEstabFailedCounter);
+
+	pg_atomic_write_u64(&myBackendStatsSlot->counters.connEstabFailedCounter, 0);
 
 	SpinLockRelease(&dbSavedBackendStatsEntry->mutex);
 
@@ -570,10 +622,13 @@ StatCountersShmemInit(void)
 			BackendStatsSlot *backendStatsSlot =
 				&SharedBackendStatsSlotArray[backendSlotIdx];
 
-			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+			for (int statIdx = 0; statIdx < N_SIMPLE_CITUS_STAT_COUNTERS; statIdx++)
 			{
-				pg_atomic_init_u64(&backendStatsSlot->counters[statIdx], 0);
+				pg_atomic_init_u64(&backendStatsSlot->counters.simpleCounters[statIdx],
+								   0);
 			}
+
+			pg_atomic_init_u64(&backendStatsSlot->counters.connEstabFailedCounter, 0);
 		}
 
 		*SharedSavedBackendStatsHashLock = &(
@@ -657,11 +712,14 @@ CollectActiveBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 		BackendStatsSlot *backendStatsSlot =
 			&SharedBackendStatsSlotArray[backendSlotIdx];
 
-		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		for (int statIdx = 0; statIdx < N_SIMPLE_CITUS_STAT_COUNTERS; statIdx++)
 		{
-			dbStatsEntry->counters[statIdx] +=
-				pg_atomic_read_u64(&backendStatsSlot->counters[statIdx]);
+			dbStatsEntry->counters.simpleCounters[statIdx] +=
+				pg_atomic_read_u64(&backendStatsSlot->counters.simpleCounters[statIdx]);
 		}
+
+		dbStatsEntry->counters.connEstabFailedCounter +=
+			pg_atomic_read_u64(&backendStatsSlot->counters.connEstabFailedCounter);
 	}
 }
 
@@ -699,11 +757,14 @@ CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 
 			SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
-			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+			for (int statIdx = 0; statIdx < N_SIMPLE_CITUS_STAT_COUNTERS; statIdx++)
 			{
-				dbStatsEntry->counters[statIdx] +=
-					dbSavedBackendStatsEntry->counters[statIdx];
+				dbStatsEntry->counters.simpleCounters[statIdx] +=
+					dbSavedBackendStatsEntry->counters.simpleCounters[statIdx];
 			}
+
+			dbStatsEntry->counters.connEstabFailedCounter +=
+				dbSavedBackendStatsEntry->counters.connEstabFailedCounter;
 
 			dbStatsEntry->resetTimestamp =
 				dbSavedBackendStatsEntry->resetTimestamp;
@@ -725,11 +786,14 @@ CollectSavedBackendStatsIntoHTAB(Oid databaseId, HTAB *databaseStats)
 
 			SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
-			for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+			for (int statIdx = 0; statIdx < N_SIMPLE_CITUS_STAT_COUNTERS; statIdx++)
 			{
-				dbStatsEntry->counters[statIdx] +=
-					dbSavedBackendStatsEntry->counters[statIdx];
+				dbStatsEntry->counters.simpleCounters[statIdx] +=
+					dbSavedBackendStatsEntry->counters.simpleCounters[statIdx];
 			}
+
+			dbStatsEntry->counters.connEstabFailedCounter +=
+				dbSavedBackendStatsEntry->counters.connEstabFailedCounter;
 
 			dbStatsEntry->resetTimestamp =
 				dbSavedBackendStatsEntry->resetTimestamp;
@@ -757,7 +821,8 @@ DatabaseStatsHashEntryFindOrCreate(Oid databaseId, HTAB *databaseStats)
 
 	if (!found)
 	{
-		MemSet(dbStatsEntry->counters, 0, sizeof(StatCounters));
+		MemSet(dbStatsEntry->counters.simpleCounters, 0, sizeof(dbStatsEntry->counters.simpleCounters));
+		dbStatsEntry->counters.connEstabFailedCounter = 0;
 		dbStatsEntry->resetTimestamp = 0;
 	}
 
@@ -779,28 +844,38 @@ StoreDatabaseStatsIntoTupStore(HTAB *databaseStats, Tuplestorestate *tupleStore,
 	DatabaseStatsHashEntry *dbStatsEntry = NULL;
 	while ((dbStatsEntry = hash_seq_search(&hashSeqStatus)) != NULL)
 	{
-		/* +2 for database_id (first) and the stats_reset (last) column */
-		Datum values[N_CITUS_STAT_COUNTERS + 2] = { 0 };
-		bool isNulls[N_CITUS_STAT_COUNTERS + 2] = { 0 };
+		/*
+		 * +3 for:
+		 *   database_id (first)
+		 *   conn_estab_failed_count (after the simple counters)
+		 *   the stats_reset (last)
+		 */
+		Datum values[N_SIMPLE_CITUS_STAT_COUNTERS + 3] = { 0 };
+		bool isNulls[N_SIMPLE_CITUS_STAT_COUNTERS + 3] = { 0 };
 
-		values[0] = ObjectIdGetDatum(dbStatsEntry->databaseId);
+		int writeIdx = 0;
+		values[writeIdx++] = ObjectIdGetDatum(dbStatsEntry->databaseId);
 
-		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		for (int statIdx = 0; statIdx < N_SIMPLE_CITUS_STAT_COUNTERS; statIdx++)
 		{
-			uint64 statCounter = dbStatsEntry->counters[statIdx];
-			values[statIdx + 1] = UInt64GetDatum(statCounter);
+			uint64 statCounter = dbStatsEntry->counters.simpleCounters[statIdx];
+			values[writeIdx++] = UInt64GetDatum(statCounter);
 		}
+
+		values[writeIdx++] = UInt64GetDatum(
+			dbStatsEntry->counters.connEstabFailedCounter);
 
 		/* set stats_reset column to NULL if it was never reset */
 		if (dbStatsEntry->resetTimestamp == 0)
 		{
-			isNulls[N_CITUS_STAT_COUNTERS + 1] = true;
+			isNulls[writeIdx++] = true;
 		}
 		else
 		{
-			values[N_CITUS_STAT_COUNTERS + 1] =
-				TimestampTzGetDatum(dbStatsEntry->resetTimestamp);
+			values[writeIdx++] = TimestampTzGetDatum(dbStatsEntry->resetTimestamp);
 		}
+
+		Assert(writeIdx == lengthof(values));
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
@@ -855,10 +930,12 @@ ResetActiveBackendStats(Oid databaseId)
 		BackendStatsSlot *backendStatsSlot =
 			&SharedBackendStatsSlotArray[backendSlotIdx];
 
-		for (int statIdx = 0; statIdx < N_CITUS_STAT_COUNTERS; statIdx++)
+		for (int statIdx = 0; statIdx < N_SIMPLE_CITUS_STAT_COUNTERS; statIdx++)
 		{
-			pg_atomic_write_u64(&backendStatsSlot->counters[statIdx], 0);
+			pg_atomic_write_u64(&backendStatsSlot->counters.simpleCounters[statIdx], 0);
 		}
+
+		pg_atomic_write_u64(&backendStatsSlot->counters.connEstabFailedCounter, 0);
 	}
 
 	return foundAny;
@@ -920,7 +997,9 @@ ResetSavedBackendStats(Oid databaseId, bool force)
 	{
 		SpinLockAcquire(&dbSavedBackendStatsEntry->mutex);
 
-		memset(dbSavedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+		memset(dbSavedBackendStatsEntry->counters.simpleCounters, 0,
+			   sizeof(dbSavedBackendStatsEntry->counters.simpleCounters));
+		dbSavedBackendStatsEntry->counters.connEstabFailedCounter = 0;
 		dbSavedBackendStatsEntry->resetTimestamp = GetCurrentTimestamp();
 
 		SpinLockRelease(&dbSavedBackendStatsEntry->mutex);
@@ -962,7 +1041,10 @@ SavedBackendStatsHashEntryCreateIfNotExists(Oid databaseId)
 
 	if (!found)
 	{
-		memset(dbSavedBackendStatsEntry->counters, 0, sizeof(StatCounters));
+		memset(dbSavedBackendStatsEntry->counters.simpleCounters, 0,
+			   sizeof(dbSavedBackendStatsEntry->counters.simpleCounters));
+
+		dbSavedBackendStatsEntry->counters.connEstabFailedCounter = 0;
 
 		dbSavedBackendStatsEntry->resetTimestamp = 0;
 

@@ -176,11 +176,11 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 		 * most probably choose to use ExecuteSourceAtCoordAndRedistribution(),
 		 * but we still keep this here.
 		 */
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 	}
 	else
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 	}
 
 	ereport(DEBUG1, (errmsg("Executing final MERGE on workers using "
@@ -213,11 +213,11 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 
 	if (list_length(taskList) <= 1)
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 	}
 	else
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 	}
 
 	executorState->es_processed = rowsMerged;
@@ -318,7 +318,7 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 		 * No task to execute, but we still increment STAT_QUERY_EXECUTION_SINGLE_SHARD
 		 * as per our convention.
 		 */
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 		return;
 	}
 
@@ -341,11 +341,11 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 
 	if (list_length(prunedTaskList) == 1)
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 	}
 	else
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 	}
 
 	executorState->es_processed = rowsMerged;

@@ -189,11 +189,11 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
 				 * here.
 				 */
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+				IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 			}
 			else
 			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 			}
 
 			/*
@@ -218,11 +218,11 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 
 			if (list_length(taskList) <= 1)
 			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+				IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 			}
 			else
 			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 			}
 
 			executorState->es_processed = rowsInserted;
@@ -302,11 +302,11 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 
 			if (list_length(prunedTaskList) <= 1)
 			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+				IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 			}
 			else
 			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 			}
 		}
 		else

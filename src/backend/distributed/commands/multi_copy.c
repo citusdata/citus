@@ -2622,11 +2622,11 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 			0;
 		if (copiedShardCount <= 1)
 		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 		}
 		else
 		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 		}
 	}
 
@@ -3174,11 +3174,11 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag)
 
 	if (list_length(shardIntervalList) <= 1)
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 	}
 	else
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		IncrementSimpleStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
 	}
 
 	table_close(distributedRelation, AccessShareLock);

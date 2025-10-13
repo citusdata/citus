@@ -2036,7 +2036,7 @@ ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *execution)
 			else
 			{
 				connection->connectionState = MULTI_CONNECTION_FAILED;
-				IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+				IncrementConnEstabFailedStatCounterForMyDb();
 			}
 
 
@@ -2854,7 +2854,7 @@ MarkEstablishingSessionsTimedOut(WorkerPool *workerPool)
 			connection->connectionState == MULTI_CONNECTION_INITIAL)
 		{
 			connection->connectionState = MULTI_CONNECTION_TIMED_OUT;
-			IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+			IncrementConnEstabFailedStatCounterForMyDb();
 		}
 	}
 }
@@ -3039,7 +3039,7 @@ ConnectionStateMachine(WorkerSession *session)
 				else if (status == CONNECTION_BAD)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
-					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+					IncrementConnEstabFailedStatCounterForMyDb();
 					break;
 				}
 
@@ -3055,7 +3055,7 @@ ConnectionStateMachine(WorkerSession *session)
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
-					IncrementStatCounterForMyDb(STAT_CONNECTION_ESTABLISHMENT_FAILED);
+					IncrementConnEstabFailedStatCounterForMyDb();
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{

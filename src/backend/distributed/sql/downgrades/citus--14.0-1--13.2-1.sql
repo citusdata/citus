@@ -3,3 +3,7 @@
 
 #include "../udfs/citus_prepare_pg_upgrade/13.0-1.sql"
 #include "../udfs/citus_finish_pg_upgrade/13.2-1.sql"
+
+DROP VIEW pg_catalog.citus_stat_counters;
+DROP FUNCTION pg_catalog.citus_stat_counters(oid);
+#include "../udfs/citus_stat_counters/13.1-1.sql"
