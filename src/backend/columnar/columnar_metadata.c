@@ -1405,17 +1405,7 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
-#if PG_VERSION_NUM >= 180000
-
-	/* CatalogTupleUpdate performs a normal heap UPDATE → RowExclusiveLock */
-	const LOCKMODE openLockMode = RowExclusiveLock;
-#else
-
-	/* In‑place update never changed tuple length → AccessShareLock was enough */
-	const LOCKMODE openLockMode = AccessShareLock;
-#endif
-
-	Relation columnarStripes = table_open(columnarStripesOid, openLockMode);
+	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 
 	Oid indexId = ColumnarStripePKeyIndexRelationId();
@@ -1439,6 +1429,17 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 							   storageId, stripeId)));
 	}
 
+
+/*
+ * heap_modify_tuple + heap_inplace_update only exist on PG < 18;
+ * on PG18 the in-place helper was removed upstream, so we skip the whole block.
+ */
+#if PG_VERSION_NUM < PG_VERSION_18
+
+	/*
+	 * heap_inplace_update already doesn't allow changing size of the original
+	 * tuple, so we don't allow setting any Datum's to NULL values.
+	 */
 	Datum *newValues = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
 	bool *newNulls = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
 	bool *update = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
@@ -1459,37 +1460,27 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 												newNulls,
 												update);
 
-#if PG_VERSION_NUM < PG_VERSION_18
-
-	/*
-	 * heap_inplace_update already doesn't allow changing size of the original
-	 * tuple, so we don't allow setting any Datum's to NULL values.
-	 */
 	heap_inplace_update(columnarStripes, modifiedTuple);
+#endif
+
 
 	/*
 	 * Existing tuple now contains modifications, because we used
 	 * heap_inplace_update().
 	 */
 	HeapTuple newTuple = oldTuple;
-#else
-
-	/* Regular catalog UPDATE keeps indexes in sync */
-	CatalogTupleUpdate(columnarStripes, &oldTuple->t_self, modifiedTuple);
-	HeapTuple newTuple = modifiedTuple;
-#endif
-
-	CommandCounterIncrement();
 
 	/*
 	 * Must not pass modifiedTuple, because BuildStripeMetadata expects a real
 	 * heap tuple with MVCC fields.
 	 */
-	StripeMetadata *modifiedStripeMetadata =
-		BuildStripeMetadata(columnarStripes, newTuple);
+	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
+																 newTuple);
+
+	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
-	table_close(columnarStripes, openLockMode);
+	table_close(columnarStripes, AccessShareLock);
 
 	pfree(newValues);
 	pfree(newNulls);
