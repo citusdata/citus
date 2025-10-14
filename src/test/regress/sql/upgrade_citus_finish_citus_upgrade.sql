@@ -1,12 +1,5 @@
 -- Citus upgrades are finished by calling a procedure
 
--- Note that pg_catalog.citus_finish_citus_upgrade() behaves differently
--- when last upgrade citus version is less than 11
--- so we have two alternative outputs for this test
-\set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
-SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 11
-AS upgrade_test_old_citus_version_lt_11_0;
-
 -- this is a transactional procedure, so rollback should be fine
 BEGIN;
 	CALL citus_finish_citus_upgrade();

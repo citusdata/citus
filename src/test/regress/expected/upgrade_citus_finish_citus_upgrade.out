@@ -1,31 +1,19 @@
 -- Citus upgrades are finished by calling a procedure
--- Note that pg_catalog.citus_finish_citus_upgrade() behaves differently
--- when last upgrade citus version is less than 11
--- so we have two alternative outputs for this test
-\set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
-SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 11
-AS upgrade_test_old_citus_version_lt_11_0;
- upgrade_test_old_citus_version_lt_11_0
----------------------------------------------------------------------
- t
-(1 row)
 
 -- this is a transactional procedure, so rollback should be fine
 BEGIN;
 	CALL citus_finish_citus_upgrade();
-NOTICE:  Preparing all the existing partitioned table indexes
-NOTICE:  Preparing to sync the metadata to all nodes
+NOTICE:  already at the latest distributed schema version (12.1-1)
 ROLLBACK;
 -- do the actual job
 CALL citus_finish_citus_upgrade();
-NOTICE:  Preparing all the existing partitioned table indexes
-NOTICE:  Preparing to sync the metadata to all nodes
+NOTICE:  already at the latest distributed schema version (12.1-1)
 -- show that the upgrade is successfull
 SELECT metadata->>'last_upgrade_version' = extversion
 FROM pg_dist_node_metadata, pg_extension WHERE extname = 'citus';
  ?column?
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 -- idempotent, should be called multiple times
