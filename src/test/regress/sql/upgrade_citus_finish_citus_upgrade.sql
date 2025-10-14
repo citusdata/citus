@@ -1,5 +1,4 @@
 -- Citus upgrades are finished by calling a procedure
-
 -- this is a transactional procedure, so rollback should be fine
 BEGIN;
 	CALL citus_finish_citus_upgrade();
