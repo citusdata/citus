@@ -1394,9 +1394,6 @@ static StripeMetadata *
 UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 						uint64 dataLength, uint64 rowCount, uint64 chunkCount)
 {
-	SnapshotData dirtySnapshot;
-	InitDirtySnapshot(dirtySnapshot);
-
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(storageId));
@@ -1410,8 +1407,11 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 
 	Oid indexId = ColumnarStripePKeyIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
-	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId, indexOk,
-													&dirtySnapshot, 2, scanKey);
+
+	void *state;
+	HeapTuple tuple;
+	systable_inplace_update_begin(columnarStripes, indexId, indexOk, NULL,
+								  2, scanKey, &tuple, &state);
 
 	static bool loggedSlowMetadataAccessWarning = false;
 	if (!indexOk && !loggedSlowMetadataAccessWarning)
@@ -1420,8 +1420,7 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 		loggedSlowMetadataAccessWarning = true;
 	}
 
-	HeapTuple oldTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(oldTuple))
+	if (!HeapTupleIsValid(tuple))
 	{
 		ereport(ERROR, (errmsg("attempted to modify an unexpected stripe, "
 							   "columnar storage with id=" UINT64_FORMAT
@@ -1429,17 +1428,11 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 							   storageId, stripeId)));
 	}
 
-
-/*
- * heap_modify_tuple + heap_inplace_update only exist on PG < 18;
- * on PG18 the in-place helper was removed upstream, so we skip the whole block.
- */
-#if PG_VERSION_NUM < PG_VERSION_18
-
 	/*
-	 * heap_inplace_update already doesn't allow changing size of the original
+	 * systable_inplace_update_finish already doesn't allow changing size of the original
 	 * tuple, so we don't allow setting any Datum's to NULL values.
 	 */
+
 	Datum *newValues = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
 	bool *newNulls = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
 	bool *update = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
@@ -1454,32 +1447,20 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 	newValues[Anum_columnar_stripe_row_count - 1] = UInt64GetDatum(rowCount);
 	newValues[Anum_columnar_stripe_chunk_count - 1] = Int32GetDatum(chunkCount);
 
-	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple,
-												tupleDescriptor,
-												newValues,
-												newNulls,
-												update);
+	tuple = heap_modify_tuple(tuple,
+							  tupleDescriptor,
+							  newValues,
+							  newNulls,
+							  update);
 
-	heap_inplace_update(columnarStripes, modifiedTuple);
-#endif
+	systable_inplace_update_finish(state, tuple);
 
-
-	/*
-	 * Existing tuple now contains modifications, because we used
-	 * heap_inplace_update().
-	 */
-	HeapTuple newTuple = oldTuple;
-
-	/*
-	 * Must not pass modifiedTuple, because BuildStripeMetadata expects a real
-	 * heap tuple with MVCC fields.
-	 */
 	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
-																 newTuple);
+																 tuple);
 
 	CommandCounterIncrement();
 
-	systable_endscan(scanDescriptor);
+	heap_freetuple(tuple);
 	table_close(columnarStripes, AccessShareLock);
 
 	pfree(newValues);
