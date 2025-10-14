@@ -534,14 +534,17 @@ DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 -- Use a synthetic pg_dist_shard record to show that upgrade fails
 -- when there are cstore_fdw tables
 INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage) VALUES ('pg_dist_shard', 1, 'c');
+-- reduce verbosity since there is more context in PG18 (774171c4f)
+\set VERBOSITY terse
 ALTER EXTENSION citus UPDATE TO '11.0-1';
+\set VERBOSITY default
 DELETE FROM pg_dist_shard WHERE shardid = 1;
 
 -- partitioned table count is tracked on Citus 11 upgrade
 CREATE TABLE e_transactions(order_id varchar(255) NULL, transaction_id int) PARTITION BY LIST(transaction_id);
 CREATE TABLE orders_2020_07_01
 PARTITION OF e_transactions FOR VALUES IN (1,2,3);
-INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', '{VAR :varno 1 :varattno 1 :vartype 1043 :vartypmod 259 :varcollid 100 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}', 7, 's');
+INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', '{VAR :varno 1 :varattno 1 :vartype 1043 :vartypmod 259 :varcollid 100 :varnullingrels (b) :varlevelsup 0 :varreturningtype 0 :varnosyn 1 :varattnosyn 1 :location -1}', 7, 's');
 
 SELECT
 	(metadata->>'partitioned_citus_table_exists_pre_11')::boolean as partitioned_citus_table_exists_pre_11,
@@ -699,7 +702,10 @@ SELECT create_distributed_table('null_shard_key', null);
 
 -- Show that we cannot downgrade to 11.3-2 becuase the cluster has a
 -- distributed table with single-shard.
+-- reduce verbosity since there is more context in PG18 (774171c4f)
+\set VERBOSITY terse
 ALTER EXTENSION citus UPDATE TO '11.3-2';
+\set VERBOSITY default
 
 DROP TABLE null_shard_key;
 

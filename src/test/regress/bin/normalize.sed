@@ -297,7 +297,13 @@ s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  p
 
 s/, password_required=false//g
 s/provide the file or change sslmode/provide the file, use the system's trusted roots with sslrootcert=system, or change sslmode/g
-s/(:varcollid [0-9]+) :varlevelsup 0/\1 :varnullingrels (b) :varlevelsup 0/g
+
+#pg18 varreturningtype - change needed for PG16, PG17 tests
+s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2/g
+
+#pg16 varnullingrels and pg18 varreturningtype - change needed for PG15 tests
+s/(:varcollid [0-9]+) :varlevelsup 0/\1 :varnullingrels (b) :varlevelsup 0 :varreturningtype 0/g
+
 s/table_name_for_view\.([_a-z0-9]+)(,| |$)/\1\2/g
 s/permission denied to terminate process/must be a superuser to terminate superuser process/g
 s/permission denied to cancel query/must be a superuser to cancel superuser query/g
@@ -365,3 +371,7 @@ s/^([ \t]*)List of sequences$/\1List of relations/g
 s/violates RESTRICT setting of foreign key constraint/violates foreign key constraint/g
 # DETAIL line changed "is referenced" -> old "is still referenced"
 s/\<is referenced from table\>/is still referenced from table/g
+
+# pg18 extension_control_path GUC debugs
+# ignore any "find_in_path:" lines in test output
+/DEBUG:  find_in_path: trying .*/d
