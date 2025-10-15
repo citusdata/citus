@@ -358,14 +358,20 @@ jobs:
         flags: ${{ env.old_pg_major }}_${{ env.new_pg_major }}_upgrade
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
-    name: PG${{ fromJson(needs.params.outputs.pg15_version).major }} - check-citus-upgrade
+    name: PG${{ fromJson(matrix.pg_version).major }} - check-citus-upgrade
     runs-on: ubuntu-latest
     container:
-      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(needs.params.outputs.pg15_version).full }}${{ needs.params.outputs.image_suffix }}"
+      image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
     needs:
     - params
     - build
+    strategy:
+      fail-fast: false
+      matrix:
+        pg_version:
+          - ${{ needs.params.outputs.pg15_version }}
+          - ${{ needs.params.outputs.pg16_version }}
     steps:
     - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
@@ -374,7 +380,7 @@ jobs:
     - name: Install and test citus upgrade
       run: |-
         # run make check-citus-upgrade for all citus versions
-        # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+        # the image has ${CITUS_VERSIONS} set with all versions it contains the binaries of
         for citus_version in ${CITUS_VERSIONS}; do \
           gosu circleci \
             make -C src/test/regress \
@@ -385,7 +391,7 @@ jobs:
               citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar; \
         done;
         # run make check-citus-upgrade-mixed for all citus versions
-        # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+        # the image has ${CITUS_VERSIONS} set with all versions it contains the binaries of
         for citus_version in ${CITUS_VERSIONS}; do \
           gosu circleci \
             make -C src/test/regress \
