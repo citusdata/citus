@@ -531,8 +531,6 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
 																 NoLock);
-	Oid distributionColumnType = distributionColumn->vartype;
-	Oid distributionColumnCollation = distributionColumn->varcollid;
 
 	/* get an advisory lock to serialize concurrent default group creations */
 	if (IsColocateWithDefault(colocateWithTableName))
@@ -547,8 +545,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	 */
 	uint32 colocationId = FindColocateWithColocationId(relationId,
 													   replicationModel,
-													   distributionColumnType,
-													   distributionColumnCollation,
+													   distributionColumn,
 													   shardCount,
 													   shardCountIsStrict,
 													   colocateWithTableName);
@@ -697,19 +694,14 @@ EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
 	char replicationModel = DecideDistTableReplicationModel(distributionMethod,
 															colocateWithTableName);
 
-	/*
-	 * we fail transaction before local table conversion if the table could not be colocated with
-	 * given table. We should make those checks after local table conversion by acquiring locks to
-	 * the relation because the distribution column can be modified in that period.
-	 */
-	Oid distributionColumnType = ColumnTypeIdForRelationColumnName(
-		relationId,
-		distributionColumnName);
-
 	text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
 	Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
+
+	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
+																 distributionColumnName,
+																 NoLock);
 	EnsureTableCanBeColocatedWith(relationId, replicationModel,
-								  distributionColumnType, colocateWithTableId);
+								  distributionColumn, colocateWithTableId);
 }
 
 
@@ -1993,10 +1985,11 @@ ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 		 * until this transaction is committed.
 		 */
 
+		/* distributionColumn can only be null for single-shard tables */
 		Oid distributionColumnType =
 			distributionColumn ? distributionColumn->vartype : InvalidOid;
 		Oid distributionColumnCollation =
-			distributionColumn ? get_typcollation(distributionColumnType) : InvalidOid;
+			distributionColumn ? distributionColumn->varcollid : InvalidOid;
 
 		Assert(distributedTableParams->colocationParam.colocationParamType ==
 			   COLOCATE_WITH_TABLE_LIKE_OPT);
@@ -2011,8 +2004,7 @@ ColocationIdForNewTable(Oid relationId, CitusTableType tableType,
 
 		colocationId = FindColocateWithColocationId(relationId,
 													citusTableParams.replicationModel,
-													distributionColumnType,
-													distributionColumnCollation,
+													distributionColumn,
 													distributedTableParams->shardCount,
 													distributedTableParams->
 													shardCountIsStrict,

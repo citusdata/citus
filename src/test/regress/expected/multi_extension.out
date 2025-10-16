@@ -1670,9 +1670,10 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function coord_binary_combine_agg(oid,bytea,anyelement) anyelement
                  | function coord_binary_combine_agg_ffunc(internal,oid,bytea,anyelement) anyelement
                  | function coord_binary_combine_agg_sfunc(internal,oid,bytea,anyelement) internal
+                 | function fix_pre_citus14_colocation_group_collation_mismatches() void
                  | function worker_binary_partial_agg(oid,anyelement) bytea
                  | function worker_binary_partial_agg_ffunc(internal) bytea
-(5 rows)
+(6 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

@@ -242,6 +242,7 @@ ORDER BY 1;
  function fix_partition_shard_index_names(regclass)
  function fix_pre_citus10_partitioned_table_constraint_names()
  function fix_pre_citus10_partitioned_table_constraint_names(regclass)
+ function fix_pre_citus14_colocation_group_collation_mismatches()
  function get_all_active_transactions()
  function get_colocated_shard_array(bigint)
  function get_colocated_table_array(regclass)
@@ -407,6 +408,6 @@ ORDER BY 1;
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(375 rows)
+(376 rows)
 
 DROP TABLE extension_basic_types;
