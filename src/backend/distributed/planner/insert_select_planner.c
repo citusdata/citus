@@ -428,11 +428,10 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 									 ParamListInfo boundParams, bool hasUnresolvedParams,
 									 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-
 	PrepareInsertSelectForCitusPlanner(insertSelectQuery);
 
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 	Query *selectQuery = selectRte->subquery;
 
 	bool allowRecursivePlanning = true;
@@ -512,6 +511,24 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 	Oid targetRelationId = insertRte->relid;
 
 	bool isWrapped = false;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+/*
+ * PG18 is stricter about GroupRTE/GroupVar. For INSERT … SELECT with a GROUP BY,
+ * flatten the SELECT’s targetList and havingQual so Vars point to base RTEs and
+ * avoid Unrecognized range table id.
+ */
+	if (selectRte->subquery->hasGroupRTE)
+	{
+		Query *selectQuery = selectRte->subquery;
+		selectQuery->targetList = (List *)
+								  flatten_group_exprs(NULL, selectQuery,
+													  (Node *) selectQuery->targetList);
+		selectQuery->havingQual =
+			flatten_group_exprs(NULL, selectQuery, selectQuery->havingQual);
+	}
+#endif
 
 	if (selectRte->subquery->setOperations != NULL)
 	{
@@ -1431,11 +1448,6 @@ static DistributedPlan *
 CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo boundParams)
 {
 	Query *insertSelectQuery = copyObject(parse);
-
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
-	Oid targetRelationId = insertRte->relid;
-
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->modLevel = RowModifyLevelForQuery(insertSelectQuery);
 
@@ -1450,6 +1462,7 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	PrepareInsertSelectForCitusPlanner(insertSelectQuery);
 
 	/* get the SELECT query (may have changed after PrepareInsertSelectForCitusPlanner) */
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 	Query *selectQuery = selectRte->subquery;
 
 	/*
@@ -1472,6 +1485,9 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	PlannedStmt *selectPlan = pg_plan_query(selectQueryCopy, NULL, cursorOptions,
 											boundParams);
 
+	/* decide whether we can repartition the results */
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
+	Oid targetRelationId = insertRte->relid;
 	bool repartitioned = IsRedistributablePlan(selectPlan->planTree) &&
 						 IsSupportedRedistributionTarget(targetRelationId);
 
