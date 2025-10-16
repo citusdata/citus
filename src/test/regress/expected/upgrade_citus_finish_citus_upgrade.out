@@ -1,21 +1,16 @@
--- Note on alternative output files:
---   src/test/regress/expected/upgrade_citus_finish_citus_upgrade.out is for testing upgrades from Citus v12.1 to the latest version on PG16.
---   src/test/regress/expected/upgrade_citus_finish_citus_upgrade_0.out is for testing upgrades from Citus v13.2 to the latest version on PG17.
 -- Citus upgrades are finished by calling a procedure
 -- this is a transactional procedure, so rollback should be fine
 BEGIN;
 	CALL citus_finish_citus_upgrade();
-NOTICE:  already at the latest distributed schema version (12.1-1)
 ROLLBACK;
 -- do the actual job
 CALL citus_finish_citus_upgrade();
-NOTICE:  already at the latest distributed schema version (12.1-1)
 -- show that the upgrade is successfull
 SELECT metadata->>'last_upgrade_version' = extversion
 FROM pg_dist_node_metadata, pg_extension WHERE extname = 'citus';
  ?column?
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 -- idempotent, should be called multiple times
