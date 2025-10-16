@@ -225,10 +225,16 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
-      options: --user root --dns=8.8.8.8
+      options: >-
+        --user root
+        --dns=8.8.8.8
+        --cap-add=SYS_NICE
+        --security-opt seccomp=unconfined
       # Due to Github creates a default network for each job, we need to use
       # --dns= to have similar DNS settings as our other CI systems or local
       # machines. Otherwise, we may see different results.
+      # and grant caps so PG18's NUMA introspection (pg_shmem_allocations_numa -> move_pages)
+      # doesn't fail with EPERM in CI.
     needs:
     - params
     - build
