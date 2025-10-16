@@ -174,8 +174,8 @@ INSERT INTO columnar_temp SELECT i FROM generate_series(1,5) i;
 -- test basic select
 SELECT COUNT(*) FROM columnar_temp WHERE i < 5;
 
-SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
-FROM pg_class WHERE relname='columnar_temp' \gset
+SELECT COALESCE(columnar_test_helpers.get_storage_id_if_visible('columnar_temp'::regclass), 0)
+       AS columnar_temp_storage_id \gset
 
 BEGIN;
   DROP TABLE columnar_temp;
