@@ -52,24 +52,6 @@ jobs:
             return;
           }
           
-          const { context } = github;
-          const labels = [];
-          
-          if (results.length > 0) {
-            labels.push('breaking-change');
-          }
-          
-          
-          // Add labels to PR
-          if (labels.length > 0) {
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              labels: labels
-            });
-          }
-          
           // Add comment with detailed findings
           if (results.length > 0) {
             const comment = `## Potential Backward Compatibility Issues Detected
