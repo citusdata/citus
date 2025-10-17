@@ -1394,9 +1394,6 @@ static StripeMetadata *
 UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 						uint64 dataLength, uint64 rowCount, uint64 chunkCount)
 {
-	SnapshotData dirtySnapshot;
-	InitDirtySnapshot(dirtySnapshot);
-
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(storageId));
@@ -1405,23 +1402,16 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
-#if PG_VERSION_NUM >= 180000
-
-	/* CatalogTupleUpdate performs a normal heap UPDATE → RowExclusiveLock */
-	const LOCKMODE openLockMode = RowExclusiveLock;
-#else
-
-	/* In‑place update never changed tuple length → AccessShareLock was enough */
-	const LOCKMODE openLockMode = AccessShareLock;
-#endif
-
-	Relation columnarStripes = table_open(columnarStripesOid, openLockMode);
+	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 
 	Oid indexId = ColumnarStripePKeyIndexRelationId();
 	bool indexOk = OidIsValid(indexId);
-	SysScanDesc scanDescriptor = systable_beginscan(columnarStripes, indexId, indexOk,
-													&dirtySnapshot, 2, scanKey);
+
+	void *state;
+	HeapTuple tuple;
+	systable_inplace_update_begin(columnarStripes, indexId, indexOk, NULL,
+								  2, scanKey, &tuple, &state);
 
 	static bool loggedSlowMetadataAccessWarning = false;
 	if (!indexOk && !loggedSlowMetadataAccessWarning)
@@ -1430,14 +1420,18 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 		loggedSlowMetadataAccessWarning = true;
 	}
 
-	HeapTuple oldTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(oldTuple))
+	if (!HeapTupleIsValid(tuple))
 	{
 		ereport(ERROR, (errmsg("attempted to modify an unexpected stripe, "
 							   "columnar storage with id=" UINT64_FORMAT
 							   " does not have stripe with id=" UINT64_FORMAT,
 							   storageId, stripeId)));
 	}
+
+	/*
+	 * systable_inplace_update_finish already doesn't allow changing size of the original
+	 * tuple, so we don't allow setting any Datum's to NULL values.
+	 */
 
 	Datum *newValues = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
 	bool *newNulls = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
@@ -1453,43 +1447,21 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 	newValues[Anum_columnar_stripe_row_count - 1] = UInt64GetDatum(rowCount);
 	newValues[Anum_columnar_stripe_chunk_count - 1] = Int32GetDatum(chunkCount);
 
-	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple,
-												tupleDescriptor,
-												newValues,
-												newNulls,
-												update);
+	tuple = heap_modify_tuple(tuple,
+							  tupleDescriptor,
+							  newValues,
+							  newNulls,
+							  update);
 
-#if PG_VERSION_NUM < PG_VERSION_18
+	systable_inplace_update_finish(state, tuple);
 
-	/*
-	 * heap_inplace_update already doesn't allow changing size of the original
-	 * tuple, so we don't allow setting any Datum's to NULL values.
-	 */
-	heap_inplace_update(columnarStripes, modifiedTuple);
-
-	/*
-	 * Existing tuple now contains modifications, because we used
-	 * heap_inplace_update().
-	 */
-	HeapTuple newTuple = oldTuple;
-#else
-
-	/* Regular catalog UPDATE keeps indexes in sync */
-	CatalogTupleUpdate(columnarStripes, &oldTuple->t_self, modifiedTuple);
-	HeapTuple newTuple = modifiedTuple;
-#endif
+	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
+																 tuple);
 
 	CommandCounterIncrement();
 
-	/*
-	 * Must not pass modifiedTuple, because BuildStripeMetadata expects a real
-	 * heap tuple with MVCC fields.
-	 */
-	StripeMetadata *modifiedStripeMetadata =
-		BuildStripeMetadata(columnarStripes, newTuple);
-
-	systable_endscan(scanDescriptor);
-	table_close(columnarStripes, openLockMode);
+	heap_freetuple(tuple);
+	table_close(columnarStripes, AccessShareLock);
 
 	pfree(newValues);
 	pfree(newNulls);

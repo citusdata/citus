@@ -13,6 +13,7 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "miscadmin.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -144,6 +145,9 @@ static void ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan,
 static bool CheckPostPlanDistribution(DistributedPlanningContext *planContext,
 									  bool isDistributedQuery,
 									  List *rangeTableList);
+#if PG_VERSION_NUM >= PG_VERSION_18
+static int DisableSelfJoinElimination(void);
+#endif
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -155,6 +159,9 @@ distributed_planner(Query *parse,
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
 	FastPathRestrictionContext fastPathContext = { 0 };
+#if PG_VERSION_NUM >= PG_VERSION_18
+	int saveNestLevel = -1;
+#endif
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
@@ -218,6 +225,10 @@ distributed_planner(Query *parse,
 			bool setPartitionedTablesInherited = false;
 			AdjustPartitioningForDistributedPlanning(rangeTableList,
 													 setPartitionedTablesInherited);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+			saveNestLevel = DisableSelfJoinElimination();
+#endif
 		}
 	}
 
@@ -264,6 +275,13 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
+#if PG_VERSION_NUM >= PG_VERSION_18
+			if (needsDistributedPlanning)
+			{
+				Assert(saveNestLevel > 0);
+				AtEOXact_GUC(true, saveNestLevel);
+			}
+#endif
 			needsDistributedPlanning = CheckPostPlanDistribution(&planContext,
 																 needsDistributedPlanning,
 																 rangeTableList);
@@ -2791,3 +2809,27 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 
 	return isDistributedQuery;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+/*
+ * DisableSelfJoinElimination is used to prevent self join elimination
+ * during distributed query planning to ensure shard queries are correctly
+ * generated. PG18's self join elimination (fc069a3a6) changes the Query
+ * in a way that can cause problems for queries with a mix of Citus and
+ * Postgres tables. Self join elimination is allowed on Postgres tables
+ * only so queries involving shards get the benefit of it.
+ */
+static int
+DisableSelfJoinElimination(void)
+{
+	int NestLevel = NewGUCNestLevel();
+	set_config_option("enable_self_join_elimination", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+	return NestLevel;
+}
+
+
+#endif
