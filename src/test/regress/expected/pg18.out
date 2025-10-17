@@ -170,6 +170,7 @@ ORDER BY contype;
 CREATE TABLE sje_d1 (id bigserial PRIMARY KEY, name text, created_at timestamptz DEFAULT now());
 CREATE TABLE sje_d2 (id bigserial PRIMARY KEY, name text, created_at timestamptz DEFAULT now());
 CREATE TABLE sje_local (id bigserial PRIMARY KEY, title text);
+SET citus.next_shard_id TO 4754000;
 SELECT create_distributed_table('sje_d1', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -206,9 +207,9 @@ JOIN sje_d2 u6 USING (id);
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (sje_d1.id = u6.id)
-                           ->  Seq Scan on sje_d1_102012 sje_d1
+                           ->  Seq Scan on sje_d1_4754000 sje_d1
                            ->  Hash
-                                 ->  Seq Scan on sje_d2_102016 u6
+                                 ->  Seq Scan on sje_d2_4754004 u6
 (12 rows)
 
 select count(1) from sje_d1 INNER
@@ -238,9 +239,9 @@ WHERE d1.id = u1.id and u1.id = u2.id and u3.id = d1.id;
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (d1.id = u3.id)
-                           ->  Seq Scan on sje_d1_102012 d1
+                           ->  Seq Scan on sje_d1_4754000 d1
                            ->  Hash
-                                 ->  Seq Scan on sje_d2_102016 u3
+                                 ->  Seq Scan on sje_d2_4754004 u3
 (12 rows)
 
 SELECT count(1) from sje_d1 d1, sje_d2 u1, sje_d2 u2, sje_d2 u3
@@ -305,7 +306,7 @@ JOIN sje_local u6 USING (id);
                                                                                        Hash Cond: (intermediate_result.id = sje_d1.id)
                                                                                        ->  Function Scan on read_intermediate_result intermediate_result
                                                                                        ->  Hash
-                                                                                             ->  Seq Scan on sje_d1_102012 sje_d1
+                                                                                             ->  Seq Scan on sje_d1_4754000 sje_d1
 (44 rows)
 
 select count(1) from sje_d1 INNER
@@ -337,9 +338,9 @@ JOIN sje_d2 u2 ON (u1.id = u2.id);
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (d.id = u2.id)
-                           ->  Seq Scan on sje_d1_102012 d
+                           ->  Seq Scan on sje_d1_4754000 d
                            ->  Hash
-                                 ->  Seq Scan on sje_d2_102016 u2
+                                 ->  Seq Scan on sje_d2_4754004 u2
 (12 rows)
 
 SELECT count(1)
@@ -366,7 +367,7 @@ LEFT JOIN sje_d2 u2 USING (id);
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
-                     ->  Seq Scan on sje_d1_102012 d
+                     ->  Seq Scan on sje_d1_4754000 d
 (8 rows)
 
 SELECT count(*)
@@ -398,11 +399,11 @@ EXECUTE sje_p(10,20);
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (u2.id = d.id)
-                           ->  Seq Scan on sje_d2_102016 u2
+                           ->  Seq Scan on sje_d2_4754004 u2
                            ->  Hash
-                                 ->  Bitmap Heap Scan on sje_d1_102012 d
+                                 ->  Bitmap Heap Scan on sje_d1_4754000 d
                                        Recheck Cond: ((id >= 10) AND (id <= 20))
-                                       ->  Bitmap Index Scan on sje_d1_pkey_102012
+                                       ->  Bitmap Index Scan on sje_d1_pkey_4754000
                                              Index Cond: ((id >= 10) AND (id <= 20))
 (15 rows)
 
@@ -430,9 +431,9 @@ JOIN sje_d2 u2 USING (id);
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (d.id = u2.id)
-                           ->  Seq Scan on sje_d1_102012 d
+                           ->  Seq Scan on sje_d1_4754000 d
                            ->  Hash
-                                 ->  Seq Scan on sje_d2_102016 u2
+                                 ->  Seq Scan on sje_d2_4754004 u2
                                        Filter: ((id % '2'::bigint) = 0)
 (13 rows)
 
