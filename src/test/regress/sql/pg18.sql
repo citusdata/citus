@@ -134,7 +134,119 @@ WHERE conrelid = 'pg18_nn.nn_dist'::regclass
 GROUP BY contype
 ORDER BY contype;
 
--- cleanup
-RESET client_min_messages;
+-- Purpose: test self join elimination for distributed, citus local and local tables.
+--
+CREATE TABLE sje_d1 (id bigserial PRIMARY KEY, name text, created_at timestamptz DEFAULT now());
+CREATE TABLE sje_d2 (id bigserial PRIMARY KEY, name text, created_at timestamptz DEFAULT now());
+CREATE TABLE sje_local (id bigserial PRIMARY KEY, title text);
+
+SELECT create_distributed_table('sje_d1', 'id');
+SELECT create_distributed_table('sje_d2', 'id');
+
+INSERT INTO sje_d1 SELECT i,  i::text, now() FROM generate_series(0,100)i;
+INSERT INTO sje_d2 SELECT i,  i::text, now() FROM generate_series(0,100)i;
+INSERT INTO sje_local SELECT i,  i::text FROM generate_series(0,100)i;
+
+-- Self-join elimination is applied when distributed tables are involved
+-- The query plan has only one join
+EXPLAIN (costs off)
+select count(1) from sje_d1 INNER
+JOIN sje_d2 u1 USING (id) INNER
+JOIN sje_d2 u2 USING (id) INNER
+JOIN sje_d2 u3 USING (id) INNER
+JOIN sje_d2 u4 USING (id) INNER
+JOIN sje_d2 u5 USING (id) INNER
+JOIN sje_d2 u6 USING (id);
+
+select count(1) from sje_d1 INNER
+JOIN sje_d2 u1 USING (id) INNER
+JOIN sje_d2 u2 USING (id) INNER
+JOIN sje_d2 u3 USING (id) INNER
+JOIN sje_d2 u4 USING (id) INNER
+JOIN sje_d2 u5 USING (id) INNER
+JOIN sje_d2 u6 USING (id);
+
+-- Self-join elimination applied to from list join
+EXPLAIN (costs off)
+SELECT count(1) from sje_d1 d1, sje_d2 u1, sje_d2 u2, sje_d2 u3
+WHERE d1.id = u1.id and u1.id = u2.id and u3.id = d1.id;
+
+SELECT count(1) from sje_d1 d1, sje_d2 u1, sje_d2 u2, sje_d2 u3
+WHERE d1.id = u1.id and u1.id = u2.id and u3.id = d1.id;
+
+-- Self-join elimination is not applied when a local table is involved
+-- This is a limitation that will be resolved in citus 14
+EXPLAIN (costs off)
+select count(1) from sje_d1 INNER
+JOIN sje_local u1 USING (id) INNER
+JOIN sje_local u2 USING (id) INNER
+JOIN sje_local u3 USING (id) INNER
+JOIN sje_local u4 USING (id) INNER
+JOIN sje_local u5 USING (id) INNER
+JOIN sje_local u6 USING (id);
+
+select count(1) from sje_d1 INNER
+JOIN sje_local u1 USING (id) INNER
+JOIN sje_local u2 USING (id) INNER
+JOIN sje_local u3 USING (id) INNER
+JOIN sje_local u4 USING (id) INNER
+JOIN sje_local u5 USING (id) INNER
+JOIN sje_local u6 USING (id);
+
+
+-- to test USING vs ON equivalence
+EXPLAIN (costs off)
+SELECT count(1)
+FROM sje_d1 d
+JOIN sje_d2 u1 ON (d.id = u1.id)
+JOIN sje_d2 u2 ON (u1.id = u2.id);
+
+SELECT count(1)
+FROM sje_d1 d
+JOIN sje_d2 u1 ON (d.id = u1.id)
+JOIN sje_d2 u2 ON (u1.id = u2.id);
+
+-- Null-introducing join can have SJE
+EXPLAIN (costs off)
+SELECT count(*)
+FROM sje_d1 d
+LEFT JOIN sje_d2 u1 USING (id)
+LEFT JOIN sje_d2 u2 USING (id);
+
+SELECT count(*)
+FROM sje_d1 d
+LEFT JOIN sje_d2 u1 USING (id)
+LEFT JOIN sje_d2 u2 USING (id);
+
+-- prepared statement
+PREPARE sje_p(int,int) AS
+SELECT count(1)
+FROM sje_d1 d
+JOIN sje_d2 u1 USING (id)
+JOIN sje_d2 u2 USING (id)
+WHERE d.id BETWEEN $1 AND $2;
+
+EXPLAIN (costs off)
+EXECUTE sje_p(10,20);
+
+EXECUTE sje_p(10,20);
+
+-- cte
+EXPLAIN (costs off)
+WITH z AS (SELECT id FROM sje_d2 WHERE id % 2 = 0)
+SELECT count(1)
+FROM sje_d1 d
+JOIN z USING (id)
+JOIN sje_d2 u2 USING (id);
+
+WITH z AS (SELECT id FROM sje_d2 WHERE id % 2 = 0)
+SELECT count(1)
+FROM sje_d1 d
+JOIN z USING (id)
+JOIN sje_d2 u2 USING (id);
+
+-- cleanup with minimum verbosity
+SET client_min_messages TO ERROR;
 RESET search_path;
 DROP SCHEMA pg18_nn CASCADE;
+RESET client_min_messages;
