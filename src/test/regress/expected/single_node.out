@@ -281,15 +281,15 @@ SELECT
 create table test_a_tbl_1(text_col text collate "C" unique);
 create table test_a_tbl_2(text_col text collate "en-x-icu" unique);
 select create_distributed_table('test_a_tbl_1', 'text_col');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 select create_distributed_table('test_a_tbl_2', 'text_col');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- make sure we assing them to different colocation groups
@@ -302,8 +302,8 @@ select count(*) = 2 as colocationids_different from (
 	where pg_namespace.nspname = 'single_node'
 		and pg_class.relname in ('test_a_tbl_1', 'test_a_tbl_2')
 ) q;
- colocationids_different 
--------------------------
+ colocationids_different
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -311,15 +311,15 @@ DROP TABLE test_a_tbl_1, test_a_tbl_2;
 create table test_d_tbl_1(text_col text collate "C" unique);
 create table test_d_tbl_2(text_col text collate "en-x-icu" unique);
 select create_distributed_table('test_d_tbl_1', 'text_col', shard_count=>4);
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 select create_distributed_table('test_d_tbl_2', 'text_col', shard_count=>6);
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 select alter_distributed_table('test_d_tbl_2', shard_count=>4);
@@ -327,9 +327,9 @@ NOTICE:  creating a new table for single_node.test_d_tbl_2
 NOTICE:  moving the data of single_node.test_d_tbl_2
 NOTICE:  dropping the old single_node.test_d_tbl_2
 NOTICE:  renaming the new table to single_node.test_d_tbl_2
- alter_distributed_table 
--------------------------
- 
+ alter_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- make sure we assing them to different colocation groups
@@ -342,8 +342,8 @@ select count(*) = 2 as colocationids_different from (
 	where pg_namespace.nspname = 'single_node'
 		and pg_class.relname in ('test_d_tbl_1', 'test_d_tbl_2')
 ) q;
- colocationids_different 
--------------------------
+ colocationids_different
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -351,9 +351,9 @@ DROP TABLE test_d_tbl_1, test_d_tbl_2;
 create table test_b_tbl_1(text_col text collate "C" unique);
 create table test_b_tbl_2(text_col text collate "en-x-icu" unique);
 select create_distributed_table('test_b_tbl_1', 'text_col');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- errors
@@ -364,15 +364,15 @@ DROP TABLE test_b_tbl_1, test_b_tbl_2;
 create table test_c_tbl_1(text_col text collate "C" unique);
 create table test_c_tbl_2(text_col text collate "en-x-icu" unique);
 select create_distributed_table('test_c_tbl_1', 'text_col');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 select create_distributed_table('test_c_tbl_2', 'text_col', colocate_with => 'none');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- errors
