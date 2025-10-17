@@ -140,6 +140,7 @@ CREATE TABLE sje_d1 (id bigserial PRIMARY KEY, name text, created_at timestamptz
 CREATE TABLE sje_d2 (id bigserial PRIMARY KEY, name text, created_at timestamptz DEFAULT now());
 CREATE TABLE sje_local (id bigserial PRIMARY KEY, title text);
 
+SET citus.next_shard_id TO 4754000;
 SELECT create_distributed_table('sje_d1', 'id');
 SELECT create_distributed_table('sje_d2', 'id');
 
