@@ -158,3 +158,16 @@ BEGIN
     RETURN NEXT;
   END LOOP;
 END; $$ language plpgsql;
+
+CREATE OR REPLACE FUNCTION get_storage_id_if_visible(rel regclass)
+RETURNS bigint
+LANGUAGE sql STABLE AS $$
+  SELECT CASE
+           WHEN c.relpersistence = 't'
+                AND c.relnamespace <> pg_catalog.pg_my_temp_schema()
+             THEN NULL  -- other session’s temp → don’t touch
+           ELSE columnar.get_storage_id(c.oid)
+         END
+  FROM pg_catalog.pg_class c
+  WHERE c.oid = $1::oid
+$$;
