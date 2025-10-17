@@ -755,7 +755,7 @@ END; $$ language plpgsql;
 -- functions replace changeable output details with fixed strings.
 -- Copied from PG explain.sql
 
-create function explain_filter(text) returns setof text
+create or replace function explain_filter(text) returns setof text
 language plpgsql as
 $$
 declare
