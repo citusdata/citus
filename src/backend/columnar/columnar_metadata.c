@@ -618,7 +618,13 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
+	bool pushed_snapshot = false;
 
+	if(!ActiveSnapshotSet())
+	{
+		PushActiveSnapshot(GetTransactionSnapshot());
+		pushed_snapshot = true;
+	}
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		for (chunkIndex = 0; chunkIndex < chunkList->chunkCount; chunkIndex++)
@@ -659,11 +665,11 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 				nulls[Anum_columnar_chunk_minimum_value - 1] = true;
 				nulls[Anum_columnar_chunk_maximum_value - 1] = true;
 			}
-			PushActiveSnapshot(GetTransactionSnapshot());
 			InsertTupleAndEnforceConstraints(modifyState, values, nulls);
-			PopActiveSnapshot();
 		}
 	}
+	if(pushed_snapshot)
+		PopActiveSnapshot();
 
 	FinishModifyRelation(modifyState);
 	table_close(columnarChunk, RowExclusiveLock);
