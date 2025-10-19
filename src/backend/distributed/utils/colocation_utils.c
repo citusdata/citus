@@ -73,34 +73,8 @@ PG_FUNCTION_INFO_V1(update_distributed_table_colocation);
 Datum
 mark_tables_colocated(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-
-	Oid sourceRelationId = PG_GETARG_OID(0);
-	ArrayType *relationIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-
-	int relationCount = ArrayObjectCount(relationIdArrayObject);
-	if (relationCount < 1)
-	{
-		ereport(ERROR, (errmsg("at least one target table is required for this "
-							   "operation")));
-	}
-
-	EnsureTableOwner(sourceRelationId);
-
-	Datum *relationIdDatumArray = DeconstructArrayObject(relationIdArrayObject);
-
-	for (int relationIndex = 0; relationIndex < relationCount; relationIndex++)
-	{
-		Oid nextRelationOid = DatumGetObjectId(relationIdDatumArray[relationIndex]);
-
-		/* we require that the user either owns all tables or is superuser */
-		EnsureTableOwner(nextRelationOid);
-
-		MarkTablesColocated(sourceRelationId, nextRelationOid);
-	}
-
-	PG_RETURN_VOID();
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("this function is deprecated and no longer is used")));
 }
 
 
@@ -1306,7 +1280,7 @@ ColocatedShardIdInRelation(Oid relationId, int shardIndex)
 /*
  * DeleteColocationGroupIfNoTablesBelong function deletes given co-location group if there
  * is no relation in that co-location group. A co-location group may become empty after
- * mark_tables_colocated or upgrade_reference_table UDF calls. In that case we need to
+ * update_distributed_table_colocation UDF calls. In that case we need to
  * remove empty co-location group to prevent orphaned co-location groups.
  */
 void
