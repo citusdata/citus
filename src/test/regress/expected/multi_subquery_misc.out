@@ -270,12 +270,15 @@ CREATE FUNCTION sql_subquery_test(int, int) RETURNS bigint AS $$
 	  WHERE
 	    users_table.value_1 < $2;
 $$ LANGUAGE SQL;
--- should error out
+-- this fails pg <18
+-- succeeds in pg18 because of pg18 commit 0dca5d68d
+-- -> Change SQL-language functions to use the plan cache
 SELECT sql_subquery_test(1,1);
-ERROR:  could not create distributed plan
-DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
-HINT:  Consider using PL/pgSQL functions instead.
-CONTEXT:  SQL function "sql_subquery_test" statement 1
+ sql_subquery_test
+---------------------------------------------------------------------
+               307
+(1 row)
+
 -- the joins are actually removed since they are
 -- not needed by PostgreSQL planner (e.g., target list
 -- doesn't contain anything from there)
