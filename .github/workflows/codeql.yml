@@ -60,8 +60,7 @@ jobs:
           libzstd-dev \
           libzstd1 \
           lintian \
-          postgresql-server-dev-15 \
-          postgresql-server-dev-all \
+          postgresql-server-dev-17 \
           python3-pip \
           python3-setuptools \
           wget \
