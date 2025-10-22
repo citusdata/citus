@@ -375,3 +375,6 @@ s/\<is referenced from table\>/is still referenced from table/g
 # pg18 extension_control_path GUC debugs
 # ignore any "find_in_path:" lines in test output
 /DEBUG:  find_in_path: trying .*/d
+
+# PG18: EXPLAIN ANALYZE prints "Index Searches: N" for index scans — remove it
+/^\s*Index Searches:\s*\d+\s*$/d
