@@ -512,23 +512,12 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 
 	bool isWrapped = false;
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-
-/*
- * PG18 is stricter about GroupRTE/GroupVar. For INSERT … SELECT with a GROUP BY,
- * flatten the SELECT’s targetList and havingQual so Vars point to base RTEs and
- * avoid Unrecognized range table id.
- */
-	if (selectRte->subquery->hasGroupRTE)
-	{
-		Query *selectQuery = selectRte->subquery;
-		selectQuery->targetList = (List *)
-								  flatten_group_exprs(NULL, selectQuery,
-													  (Node *) selectQuery->targetList);
-		selectQuery->havingQual =
-			flatten_group_exprs(NULL, selectQuery, selectQuery->havingQual);
-	}
-#endif
+	/*
+	 * PG18 is stricter about GroupRTE/GroupVar. For INSERT … SELECT with a GROUP BY,
+	 * flatten the SELECT’s targetList and havingQual so Vars point to base RTEs and
+	 * avoid Unrecognized range table id.
+	 */
+	FlattenGroupExprs(selectRte->subquery);
 
 	if (selectRte->subquery->setOperations != NULL)
 	{

@@ -49,6 +49,6 @@ extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subquery
 extern DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree);
 extern bool IsJsonTableRTE(RangeTblEntry *rte);
 extern bool IsOuterJoinExpr(Node *node);
-
+extern void FlattenGroupExprs(Query *query);
 
 #endif /* QUERY_PUSHDOWN_PLANNING_H */

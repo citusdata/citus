@@ -265,6 +265,9 @@ DEPS = {
     "subquery_in_where": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
+    "subquery_in_targetlist": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
 }
 
 

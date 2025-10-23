@@ -971,6 +971,36 @@ GetVarFromAssignedParam(List *outerPlanParamsList, Param *plannerParam,
 		}
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/*
+	 * In PG18+, the dereferenced PARAM node could be a GroupVar if the
+	 * query has a GROUP BY. In that case, we need to make an extra
+	 * hop to get the underlying Var from the grouping expressions.
+	 */
+	if (assignedVar != NULL)
+	{
+		Query *parse = (*rootContainingVar)->parse;
+		if (parse->hasGroupRTE)
+		{
+			RangeTblEntry *rte = rt_fetch(assignedVar->varno, parse->rtable);
+			if (rte->rtekind == RTE_GROUP)
+			{
+				Node *groupVar = list_nth(rte->groupexprs, assignedVar->varattno - 1);
+				if (IsA(groupVar, Var))
+				{
+					assignedVar = (Var *) groupVar;
+				}
+				else
+				{
+					/* todo: handle PlaceHolderVar case if needed */
+					assignedVar = NULL;
+				}
+			}
+		}
+	}
+#endif
+
 	return assignedVar;
 }
 

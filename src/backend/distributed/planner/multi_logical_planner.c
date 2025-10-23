@@ -297,8 +297,19 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 bool
 FindNodeMatchingCheckFunctionInRangeTableList(List *rtable, CheckNodeFunc checker)
 {
+	int rtWalkFlags = QTW_EXAMINE_RTES_BEFORE;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/*
+	 * PG18+: Do not descend into GROUP BY expressions subqueries, they
+	 * have already been visited as recursive planning is depth-first.
+	 */
+	rtWalkFlags |= QTW_IGNORE_GROUPEXPRS;
+#endif
+
 	return range_table_walker(rtable, FindNodeMatchingCheckFunction, checker,
-							  QTW_EXAMINE_RTES_BEFORE);
+							  rtWalkFlags);
 }
 
 

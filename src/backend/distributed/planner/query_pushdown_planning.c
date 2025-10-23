@@ -333,7 +333,9 @@ WhereOrHavingClauseContainsSubquery(Query *query)
 bool
 TargetListContainsSubquery(List *targetList)
 {
-	return FindNodeMatchingCheckFunction((Node *) targetList, IsNodeSubquery);
+	bool hasSubquery = FindNodeMatchingCheckFunction((Node *) targetList, IsNodeSubquery);
+
+	return hasSubquery;
 }
 
 
@@ -1090,6 +1092,28 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	}
 
 	return NULL;
+}
+
+
+/*
+ * FlattenGroupExprs flattens the GROUP BY expressions in the query tree
+ * by replacing VAR nodes referencing the GROUP range table with the actual
+ * GROUP BY expression. This is used by Citus planning to ensure correctness
+ * when analysing and building the distributed plan.
+ */
+void
+FlattenGroupExprs(Query *queryTree)
+{
+#if PG_VERSION_NUM >= PG_VERSION_18
+	if (queryTree->hasGroupRTE)
+	{
+		queryTree->targetList = (List *)
+								flatten_group_exprs(NULL, queryTree,
+													(Node *) queryTree->targetList);
+		queryTree->havingQual =
+			flatten_group_exprs(NULL, queryTree, queryTree->havingQual);
+	}
+#endif
 }
 
 
@@ -1953,6 +1977,13 @@ static MultiNode *
 SubqueryPushdownMultiNodeTree(Query *originalQuery)
 {
 	Query *queryTree = copyObject(originalQuery);
+
+	/*
+	 * PG18+ need to flatten GROUP BY expressions to ensure correct processing
+	 * later on, such as identification of partition columns in GROUP BY.
+	 */
+	FlattenGroupExprs(queryTree);
+
 	List *targetEntryList = queryTree->targetList;
 	MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
 
