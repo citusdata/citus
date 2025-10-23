@@ -261,7 +261,6 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	 */
 	context.allDistributionKeysInQueryAreEqual =
 		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
-
 	DeferredErrorMessage *error = RecursivelyPlanSubqueriesAndCTEs(originalQuery,
 																   &context);
 	if (error != NULL)
@@ -1123,14 +1122,10 @@ ExtractSublinkWalker(Node *node, List **sublinkList)
 static bool
 ShouldRecursivelyPlanSublinks(Query *query)
 {
-	if (FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
-													  IsDistributedTableRTE))
-	{
-		/* there is a distributed table in the FROM clause */
-		return false;
-	}
-
-	return true;
+	bool hasDistributedTable = (FindNodeMatchingCheckFunctionInRangeTableList(
+									query->rtable,
+									IsDistributedTableRTE));
+	return !hasDistributedTable;
 }
 
 
