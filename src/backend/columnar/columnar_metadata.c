@@ -2024,6 +2024,26 @@ Datum
 columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+    /*
+     * PG18+: avoid relation_open() on other sessions' temp tables.
+     * Return NULL so callers/views just skip them (function is STRICT).
+     */
+    HeapTuple   classtup = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
+    if (!HeapTupleIsValid(classtup))
+        PG_RETURN_NULL();
+
+    Form_pg_class cls = (Form_pg_class) GETSTRUCT(classtup);
+    if (cls->relpersistence == RELPERSISTENCE_TEMP &&
+        isOtherTempNamespace(cls->relnamespace))
+    {
+        ReleaseSysCache(classtup);
+        PG_RETURN_NULL();
+    }
+    ReleaseSysCache(classtup);
+#endif
+
 	Relation relation = relation_open(relationId, AccessShareLock);
 
 	if (!object_ownercheck(RelationRelationId, relationId, GetUserId()))
