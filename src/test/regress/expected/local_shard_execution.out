@@ -312,8 +312,8 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                Filter: (age = 20)
 (8 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
-                                                             QUERY PLAN
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+                                                              QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
    Task Count: 1
@@ -368,8 +368,8 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                      Filter: (age = 20)
 (9 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
-                                                                QUERY PLAN
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
+                                                                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
