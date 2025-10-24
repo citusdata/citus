@@ -104,8 +104,8 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 
 
 /*
- * PreprocessAlterDistributedObjectStmt handles any updates to distributed objects by
- * creating the fully qualified sql to apply to all workers after checking all
+ * PreprocessAlterDistributedObjectStmtFromCoordinator handles any updates to distributed
+ * objects by creating the fully qualified sql to apply to all workers after checking all
  * predconditions that apply to propagating changes.
  *
  * Preconditions are (in order):
@@ -123,8 +123,9 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
  * recursion of propagation with Citus' MX functionality.
  */
 List *
-PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
-									 ProcessUtilityContext processUtilityContext)
+PreprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt, const char *queryString,
+													ProcessUtilityContext
+													processUtilityContext)
 {
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
@@ -160,9 +161,9 @@ PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 
 
 /*
- * PostprocessAlterDistributedObjectStmt is the counter part of
- * PreprocessAlterDistributedObjectStmt that should be executed after the object has been
- * changed locally.
+ * PostprocessAlterDistributedObjectStmtFromCoordinator is the counter part of
+ * PreprocessAlterDistributedObjectStmtFromCoordinator that should be executed after the
+ * object has been changed locally.
  *
  * We perform the same precondition checks as before to skip this operation if any of the
  * failed during preprocessing. Since we already raised an error on other checks we don't
@@ -173,7 +174,7 @@ PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
  * they get created on the workers before we send the command list to the workers.
  */
 List *
-PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
+PostprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt, const char *queryString)
 {
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
