@@ -321,6 +321,8 @@ SELECT table_schema AS "Shards' Schema"
     GROUP BY table_schema;
 
 -- Show that altering distributed schema is not allowed on worker nodes
+-- when the coordinator is not in the metadata.
+SELECT COUNT(*)=0 FROM pg_dist_node WHERE groupid = 0; -- verify that the coordinator is not in the metadata
 ALTER SCHEMA mx_old_schema RENAME TO temp_mx_old_schema;
 \c - - - :master_port
 

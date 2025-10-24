@@ -31,6 +31,13 @@
 #include "distributed/worker_transaction.h"
 
 
+static List * PreprocessAlterDistributedObjectStmtInternal(Node *stmt,
+														   const char *queryString,
+														   ProcessUtilityContext
+														   processUtilityContext,
+														   bool allowFromWorkers);
+
+
 /*
  * PostprocessCreateDistributedObjectFromCatalogStmt is a common function that can be used
  * for most objects during their creation phase. After the creation has happened locally
@@ -104,9 +111,40 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 
 
 /*
- * PreprocessAlterDistributedObjectStmtFromCoordinator handles any updates to distributed
- * objects by creating the fully qualified sql to apply to all workers after checking all
- * predconditions that apply to propagating changes.
+ * PreprocessAlterDistributedObjectStmtFromCoordinator is a wrapper around
+ * PreprocessAlterDistributedObjectStmtInternal to be used when altering distributed
+ * objects that we allow altering only from the coordinator.
+ */
+List *
+PreprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt, const char *queryString,
+													ProcessUtilityContext
+													processUtilityContext)
+{
+	return PreprocessAlterDistributedObjectStmtInternal(stmt, queryString,
+														processUtilityContext, false);
+}
+
+
+/*
+ * PreprocessAlterDistributedObjectStmtFromAnyNode is a wrapper around
+ * PreprocessAlterDistributedObjectStmtInternal to be used when altering distributed
+ * objects that we allow altering from any node.
+ */
+List *
+PreprocessAlterDistributedObjectStmtFromAnyNode(Node *stmt,
+												const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext)
+{
+	return PreprocessAlterDistributedObjectStmtInternal(stmt, queryString,
+														processUtilityContext, true);
+}
+
+
+/*
+ * PreprocessAlterDistributedObjectStmtInternal handles any updates to distributed
+ * objects by creating the fully qualified sql to apply to all other nodes after checking
+ * all predconditions that apply to propagating changes.
  *
  * Preconditions are (in order):
  *  - not in a CREATE/ALTER EXTENSION code block
@@ -114,18 +152,18 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
  *  - object being altered is distributed
  *  - any object specific feature flag is turned on when a feature flag is available
  *
- * Once we conclude to propagate the changes to the workers we make sure that the command
- * has been executed on the coordinator and force any ongoing transaction to run in
+ * Once we conclude to propagate the changes to other nodes we make sure that the command
+ * has been executed on the local node and force any ongoing transaction to run in
  * sequential mode. If any of these steps fail we raise an error to inform the user.
  *
  * Lastly we recreate a fully qualified version of the original sql and prepare the tasks
- * to send these sql commands to the workers. These tasks include instructions to prevent
+ * to send these sql commands to other nodes. These tasks include instructions to prevent
  * recursion of propagation with Citus' MX functionality.
  */
-List *
-PreprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt, const char *queryString,
-													ProcessUtilityContext
-													processUtilityContext)
+static List *
+PreprocessAlterDistributedObjectStmtInternal(Node *stmt, const char *queryString,
+											 ProcessUtilityContext processUtilityContext,
+											 bool allowFromWorkers)
 {
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
@@ -146,7 +184,15 @@ PreprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt, const char *quer
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	if (allowFromWorkers)
+	{
+		EnsurePropagationToCoordinator();
+	}
+	else
+	{
+		EnsureCoordinator();
+	}
+
 	EnsureSequentialMode(ops->objectType);
 
 	QualifyTreeNode(stmt);
@@ -156,7 +202,7 @@ PreprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt, const char *quer
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
