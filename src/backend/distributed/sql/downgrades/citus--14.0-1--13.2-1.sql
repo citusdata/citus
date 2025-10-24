@@ -3,3 +3,5 @@
 
 #include "../udfs/citus_prepare_pg_upgrade/13.0-1.sql"
 #include "../udfs/citus_finish_pg_upgrade/13.2-1.sql"
+
+DROP FUNCTION IF EXISTS citus_internal.get_next_colocation_id();
