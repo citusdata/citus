@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 --
 -- MULTI_TENANT_ISOLATION
 --
@@ -610,3 +614,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placem
 
 -- make sure we don't have any replication objects leftover on the nodes
 SELECT public.wait_for_resource_cleanup();
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

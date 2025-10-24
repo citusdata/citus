@@ -37,16 +37,18 @@ extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
-																	  originalQuery,
-																	  PlannerRestrictionContext
-																	  *
-																	  plannerRestrictionContext);
+extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(
+	Query *originalQuery,
+	PlannerRestrictionContext
+	*
+	plannerRestrictionContext,
+	bool plannerPhase);
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
 																 outerMostQueryHasLimit);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree);
 extern bool IsJsonTableRTE(RangeTblEntry *rte);
+extern bool IsOuterJoinExpr(Node *node);
 
 
 #endif /* QUERY_PUSHDOWN_PLANNING_H */

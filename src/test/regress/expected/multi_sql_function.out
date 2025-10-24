@@ -323,11 +323,15 @@ HINT:  Consider using PL/pgSQL functions instead.
 SELECT (SELECT 1 FROM test_parameterized_sql limit 1) FROM test_parameterized_sql_function(1);
 ERROR:  cannot perform distributed planning on this query because parameterized queries for SQL functions referencing distributed tables are not supported
 HINT:  Consider using PL/pgSQL functions instead.
+-- this fails pg <18
+-- succeeds in pg18 because of pg18 commit 0dca5d68d
+-- where sql functions behave as PL/pgSQL functions and use the cache
 SELECT test_parameterized_sql_function_in_subquery_where(1);
-ERROR:  could not create distributed plan
-DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
-HINT:  Consider using PL/pgSQL functions instead.
-CONTEXT:  SQL function "test_parameterized_sql_function_in_subquery_where" statement 1
+ test_parameterized_sql_function_in_subquery_where
+---------------------------------------------------------------------
+                                                 1
+(1 row)
+
 -- postgres behaves slightly differently for the following
 -- query where the target list is empty
 SELECT test_parameterized_sql_function(1);

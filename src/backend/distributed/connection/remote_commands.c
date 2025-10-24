@@ -14,6 +14,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 
+#include "catalog/pg_collation.h"
 #include "lib/stringinfo.h"
 #include "storage/latch.h"
 #include "utils/builtins.h"
@@ -371,8 +372,9 @@ CommandMatchesLogGrepPattern(const char *command)
 	if (GrepRemoteCommands && strnlen(GrepRemoteCommands, NAMEDATALEN) > 0)
 	{
 		Datum boolDatum =
-			DirectFunctionCall2(textlike, CStringGetTextDatum(command),
-								CStringGetTextDatum(GrepRemoteCommands));
+			DirectFunctionCall2Coll(textlike, DEFAULT_COLLATION_OID,
+									CStringGetTextDatum(command),
+									CStringGetTextDatum(GrepRemoteCommands));
 
 		return DatumGetBool(boolDatum);
 	}

@@ -167,13 +167,16 @@ static uint32 HashPartitionCount(void);
 /* Local functions forward declarations for task list creation and helper functions */
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
-static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction);
+static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
+									Bitmapset *distributedTables,
+									bool *outerPartHasDistributedTable);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
 									  uint32 taskId,
 									  TaskType taskType,
 									  bool modifyRequiresCoordinatorEvaluation,
+									  bool updateQualsForOuterJoin,
 									  DeferredErrorMessage **planningError);
 static List * SqlTaskList(Job *job);
 static bool DependsOnHashPartitionJob(Job *job);
@@ -1418,8 +1421,24 @@ ExtractColumns(RangeTblEntry *callingRTE, int rangeTableId,
 	int subLevelsUp = 0;
 	int location = -1;
 	bool includeDroppedColumns = false;
-	expandRTE(callingRTE, rangeTableId, subLevelsUp, location, includeDroppedColumns,
-			  columnNames, columnVars);
+#if PG_VERSION_NUM >= PG_VERSION_18
+	expandRTE(callingRTE,
+			  rangeTableId,
+			  subLevelsUp,
+			  VAR_RETURNING_DEFAULT,    /* new argument on PG 18+ */
+			  location,
+			  includeDroppedColumns,
+			  columnNames,
+			  columnVars);
+#else
+	expandRTE(callingRTE,
+			  rangeTableId,
+			  subLevelsUp,
+			  location,
+			  includeDroppedColumns,
+			  columnNames,
+			  columnVars);
+#endif
 }
 
 
@@ -2183,6 +2202,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	int minShardOffset = INT_MAX;
 	int prevShardCount = 0;
 	Bitmapset *taskRequiredForShardIndex = NULL;
+	Bitmapset *distributedTableIndex = NULL;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
@@ -2199,8 +2219,12 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	RelationRestriction *relationRestriction = NULL;
 	List *prunedShardList = NULL;
 
-	forboth_ptr(prunedShardList, prunedRelationShardList,
-				relationRestriction, relationRestrictionContext->relationRestrictionList)
+	/* First loop, gather the indexes of distributed tables
+	 *  this is required to decide whether we can skip shards
+	 *  from inner tables of outer joins
+	 */
+	foreach_declared_ptr(relationRestriction,
+						 relationRestrictionContext->relationRestrictionList)
 	{
 		Oid relationId = relationRestriction->relationId;
 
@@ -2221,6 +2245,24 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 		prevShardCount = cacheEntry->shardIntervalArrayLength;
 
+		distributedTableIndex = bms_add_member(distributedTableIndex,
+											   relationRestriction->index);
+	}
+
+	/* In the second loop, populate taskRequiredForShardIndex */
+	bool updateQualsForOuterJoin = false;
+	bool outerPartHasDistributedTable = false;
+	forboth_ptr(prunedShardList, prunedRelationShardList,
+				relationRestriction, relationRestrictionContext->relationRestrictionList)
+	{
+		Oid relationId = relationRestriction->relationId;
+
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		if (!HasDistributionKeyCacheEntry(cacheEntry))
+		{
+			continue;
+		}
+
 		/*
 		 * For left joins we don't care about the shards pruned for the right hand side.
 		 * If the right hand side would prune to a smaller set we should still send it to
@@ -2228,12 +2270,25 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		 * the left hand side we don't have to send the query to any shard that is not
 		 * matching anything on the left hand side.
 		 *
-		 * Instead we will simply skip any RelationRestriction if it is an OUTER join and
-		 * the table is part of the non-outer side of the join.
+		 * Instead we will simply skip any RelationRestriction if it is an OUTER join,
+		 * the table is part of the non-outer side of the join and the outer side has a
+		 * distributed table.
 		 */
-		if (IsInnerTableOfOuterJoin(relationRestriction))
+		if (IsInnerTableOfOuterJoin(relationRestriction, distributedTableIndex,
+									&outerPartHasDistributedTable))
 		{
-			continue;
+			if (outerPartHasDistributedTable)
+			{
+				/* we can skip the shards from this relation restriction */
+				continue;
+			}
+			else
+			{
+				/* The outer part does not include distributed tables, we can not skip shards.
+				 * Also, we will possibly update the quals of the outer relation for recurring join push down, mark here.
+				 */
+				updateQualsForOuterJoin = true;
+			}
 		}
 
 		ShardInterval *shardInterval = NULL;
@@ -2245,6 +2300,22 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 				bms_add_member(taskRequiredForShardIndex, shardIndex);
 			minShardOffset = Min(minShardOffset, shardIndex);
 		}
+	}
+
+	/*
+	 * We might fail to find outer joins from the relationRestrictionContext
+	 * when the original query has CTEs. In order to ensure that we always mark
+	 * the outer joins correctly and compute additional quals when necessary,
+	 * check the task query as well.
+	 */
+	if (!updateQualsForOuterJoin && FindNodeMatchingCheckFunction((Node *) query,
+																  IsOuterJoinExpr))
+	{
+		/*
+		 * We have an outer join, so assume "might" need to update quals.
+		 * See the usage of this flag in QueryPushdownTaskCreate().
+		 */
+		updateQualsForOuterJoin = true;
 	}
 
 	/*
@@ -2266,6 +2337,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 													 taskIdIndex,
 													 taskType,
 													 modifyRequiresCoordinatorEvaluation,
+													 updateQualsForOuterJoin,
 													 planningError);
 		if (*planningError != NULL)
 		{
@@ -2299,10 +2371,13 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
  *   a) in an outer join
  *   b) on the inner part of said join
  *
- * The function returns true only if both conditions above hold true
+ *  The function also sets outerPartHasDistributedTable if the outer part
+ *  of the corresponding join has a distributed table.
  */
 static bool
-IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction)
+IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
+						Bitmapset *distributedTables,
+						bool *outerPartHasDistributedTable)
 {
 	RestrictInfo *joinInfo = NULL;
 	foreach_declared_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
@@ -2323,6 +2398,11 @@ IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction)
 		if (!isInOuter)
 		{
 			/* this table is joined in the inner part of an outer join */
+			/* set if the outer part has a distributed relation */
+			*outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids,
+														distributedTables);
+
+			/* this is an inner table of an outer join  */
 			return true;
 		}
 	}
@@ -2439,6 +2519,7 @@ static Task *
 QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 						RelationRestrictionContext *restrictionContext, uint32 taskId,
 						TaskType taskType, bool modifyRequiresCoordinatorEvaluation,
+						bool updateQualsForOuterJoin,
 						DeferredErrorMessage **planningError)
 {
 	Query *taskQuery = copyObject(originalQuery);
@@ -2542,6 +2623,21 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		taskQuery->jointree->quals = (Node *) make_ands_explicit(
 			(List *) taskQuery->jointree->quals);
 	}
+
+	if (updateQualsForOuterJoin)
+	{
+		/*
+		 * QueryPushdownSqlTaskList() might set this when it detects an outer join,
+		 * even if the outer join is not surely known to be happening between a
+		 * recurring and a distributed rel. However, it's still safe to call
+		 * UpdateWhereClauseToPushdownRecurringOuterJoinWalker() here as it only
+		 * acts on the where clause if the join is happening between a
+		 * recurring and a distributed rel.
+		 */
+		UpdateWhereClauseToPushdownRecurringOuterJoinWalker((Node *) taskQuery,
+															relationShardList);
+	}
+
 
 	Task *subqueryTask = CreateBasicTask(jobId, taskId, taskType, NULL);
 
@@ -3077,16 +3173,25 @@ BuildBaseConstraint(Var *column)
 
 
 /*
- * MakeOpExpression builds an operator expression node. This operator expression
- * implements the operator clause as defined by the variable and the strategy
- * number.
+ * MakeOpExpressionExtended builds an operator expression node that's of
+ * the form "Var <op> Expr", where, Expr must either be a Const or a Var
+ * (*1).
+ *
+ * This operator expression implements the operator clause as defined by
+ * the variable and the strategy number.
  */
 OpExpr *
-MakeOpExpression(Var *variable, int16 strategyNumber)
+MakeOpExpressionExtended(Var *leftVar, Expr *rightArg, int16 strategyNumber)
 {
-	Oid typeId = variable->vartype;
-	Oid typeModId = variable->vartypmod;
-	Oid collationId = variable->varcollid;
+	/*
+	 * Other types of expressions are probably also fine to be used, but
+	 * none of the callers need support for them for now, so we haven't
+	 * tested them (*1).
+	 */
+	Assert(IsA(rightArg, Const) || IsA(rightArg, Var));
+
+	Oid typeId = leftVar->vartype;
+	Oid collationId = leftVar->varcollid;
 
 	Oid accessMethodId = BTREE_AM_OID;
 
@@ -3104,18 +3209,16 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	 */
 	if (operatorClassInputType != typeId && typeType != TYPTYPE_PSEUDO)
 	{
-		variable = (Var *) makeRelabelType((Expr *) variable, operatorClassInputType,
-										   -1, collationId, COERCE_IMPLICIT_CAST);
+		leftVar = (Var *) makeRelabelType((Expr *) leftVar, operatorClassInputType,
+										  -1, collationId, COERCE_IMPLICIT_CAST);
 	}
-
-	Const *constantValue = makeNullConst(operatorClassInputType, typeModId, collationId);
 
 	/* Now make the expression with the given variable and a null constant */
 	OpExpr *expression = (OpExpr *) make_opclause(operatorId,
 												  InvalidOid, /* no result type yet */
 												  false, /* no return set */
-												  (Expr *) variable,
-												  (Expr *) constantValue,
+												  (Expr *) leftVar,
+												  rightArg,
 												  InvalidOid, collationId);
 
 	/* Set implementing function id and result type */
@@ -3123,6 +3226,31 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	expression->opresulttype = get_func_rettype(expression->opfuncid);
 
 	return expression;
+}
+
+
+/*
+ * MakeOpExpression is a wrapper around MakeOpExpressionExtended
+ * that creates a null constant of the appropriate type for right
+ * hand side operator class input type. As a result, it builds an
+ * operator expression node that's of the form "Var <op> NULL".
+ */
+OpExpr *
+MakeOpExpression(Var *leftVar, int16 strategyNumber)
+{
+	Oid typeId = leftVar->vartype;
+	Oid typeModId = leftVar->vartypmod;
+	Oid collationId = leftVar->varcollid;
+
+	Oid accessMethodId = BTREE_AM_OID;
+
+	OperatorCacheEntry *operatorCacheEntry = LookupOperatorByType(typeId, accessMethodId,
+																  strategyNumber);
+	Oid operatorClassInputType = operatorCacheEntry->operatorClassInputType;
+
+	Const *constantValue = makeNullConst(operatorClassInputType, typeModId, collationId);
+
+	return MakeOpExpressionExtended(leftVar, (Expr *) constantValue, strategyNumber);
 }
 
 

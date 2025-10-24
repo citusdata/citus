@@ -1,0 +1,382 @@
+--
+-- MULTI_SQL_FUNCTION
+--
+SET citus.next_shard_id TO 1230000;
+CREATE FUNCTION sql_test_no_1() RETURNS bigint AS '
+	SELECT
+		count(*)
+	FROM
+		orders;
+' LANGUAGE SQL;
+CREATE FUNCTION sql_test_no_2() RETURNS bigint AS '
+	SELECT
+		count(*)
+	FROM
+		orders, lineitem
+	WHERE
+		o_orderkey = l_orderkey;
+' LANGUAGE SQL;
+CREATE FUNCTION sql_test_no_3() RETURNS bigint AS '
+	SELECT
+		count(*)
+	FROM
+		orders, customer
+	WHERE
+		o_custkey = c_custkey;
+' LANGUAGE SQL;
+CREATE FUNCTION sql_test_no_4() RETURNS bigint AS '
+	SELECT
+		count(*)
+	FROM
+		orders, customer, lineitem
+	WHERE
+		o_custkey = c_custkey AND
+		o_orderkey = l_orderkey;
+' LANGUAGE SQL;
+SET client_min_messages TO INFO;
+-- now, run plain SQL functions
+SELECT sql_test_no_1();
+ sql_test_no_1
+---------------------------------------------------------------------
+          2985
+(1 row)
+
+SELECT sql_test_no_2();
+ sql_test_no_2
+---------------------------------------------------------------------
+         12000
+(1 row)
+
+SELECT sql_test_no_3();
+ sql_test_no_3
+---------------------------------------------------------------------
+          1956
+(1 row)
+
+SELECT sql_test_no_4();
+ sql_test_no_4
+---------------------------------------------------------------------
+          7806
+(1 row)
+
+-- run the tests which do not require re-partition
+-- with real-time executor
+-- now, run plain SQL functions
+SELECT sql_test_no_1();
+ sql_test_no_1
+---------------------------------------------------------------------
+          2985
+(1 row)
+
+SELECT sql_test_no_2();
+ sql_test_no_2
+---------------------------------------------------------------------
+         12000
+(1 row)
+
+-- test router executor parameterized sql functions
+CREATE TABLE temp_table (
+	key int,
+	value int
+);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('temp_table','key','hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION no_parameter_insert_sql() RETURNS void AS $$
+	INSERT INTO temp_table (key) VALUES (0);
+$$ LANGUAGE SQL;
+-- execute 6 times
+SELECT no_parameter_insert_sql();
+ no_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT no_parameter_insert_sql();
+ no_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT no_parameter_insert_sql();
+ no_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT no_parameter_insert_sql();
+ no_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT no_parameter_insert_sql();
+ no_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT no_parameter_insert_sql();
+ no_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION non_partition_parameter_insert_sql(int) RETURNS void AS $$
+	INSERT INTO temp_table (key, value) VALUES (0, $1);
+$$ LANGUAGE SQL;
+-- execute 6 times
+SELECT non_partition_parameter_insert_sql(10);
+ non_partition_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_insert_sql(20);
+ non_partition_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_insert_sql(30);
+ non_partition_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_insert_sql(40);
+ non_partition_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_insert_sql(50);
+ non_partition_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_insert_sql(60);
+ non_partition_parameter_insert_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check inserted values
+SELECT * FROM temp_table ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+   0 |    10
+   0 |    20
+   0 |    30
+   0 |    40
+   0 |    50
+   0 |    60
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+(12 rows)
+
+-- check updates
+CREATE FUNCTION non_partition_parameter_update_sql(int, int) RETURNS void AS $$
+	UPDATE temp_table SET value = $2 WHERE key = 0 AND value = $1;
+$$ LANGUAGE SQL;
+-- execute 6 times
+SELECT non_partition_parameter_update_sql(10, 12);
+ non_partition_parameter_update_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_update_sql(20, 22);
+ non_partition_parameter_update_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_update_sql(30, 32);
+ non_partition_parameter_update_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_update_sql(40, 42);
+ non_partition_parameter_update_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_update_sql(50, 52);
+ non_partition_parameter_update_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_update_sql(60, 62);
+ non_partition_parameter_update_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check after updates
+SELECT * FROM temp_table ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+   0 |    12
+   0 |    22
+   0 |    32
+   0 |    42
+   0 |    52
+   0 |    62
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+(12 rows)
+
+-- check deletes
+CREATE FUNCTION non_partition_parameter_delete_sql(int) RETURNS void AS $$
+	DELETE FROM temp_table WHERE key = 0 AND value = $1;
+$$ LANGUAGE SQL;
+-- execute 6 times to trigger prepared statement usage
+SELECT non_partition_parameter_delete_sql(12);
+ non_partition_parameter_delete_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_delete_sql(22);
+ non_partition_parameter_delete_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_delete_sql(32);
+ non_partition_parameter_delete_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_delete_sql(42);
+ non_partition_parameter_delete_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_delete_sql(52);
+ non_partition_parameter_delete_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT non_partition_parameter_delete_sql(62);
+ non_partition_parameter_delete_sql
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check after deletes
+SELECT * FROM temp_table ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+(6 rows)
+
+-- test running parameterized SQL function
+CREATE TABLE test_parameterized_sql(id integer, org_id integer);
+select create_distributed_table('test_parameterized_sql','org_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION test_parameterized_sql_function(org_id_val integer)
+RETURNS TABLE (a bigint)
+AS $$
+    SELECT count(*) AS count_val from test_parameterized_sql where org_id = org_id_val;
+$$ LANGUAGE SQL STABLE;
+CREATE OR REPLACE FUNCTION test_parameterized_sql_function_in_subquery_where(org_id_val integer)
+RETURNS TABLE (a bigint)
+AS $$
+    SELECT count(*) AS count_val from test_parameterized_sql as t1 where
+    org_id IN (SELECT org_id FROM test_parameterized_sql as t2 WHERE t2.org_id = t1.org_id AND org_id = org_id_val);
+$$ LANGUAGE SQL STABLE;
+INSERT INTO test_parameterized_sql VALUES(1, 1);
+-- all of them should fail
+SELECT * FROM test_parameterized_sql_function(1);
+ERROR:  cannot perform distributed planning on this query because parameterized queries for SQL functions referencing distributed tables are not supported
+HINT:  Consider using PL/pgSQL functions instead.
+SELECT (SELECT 1 FROM test_parameterized_sql limit 1) FROM test_parameterized_sql_function(1);
+ERROR:  cannot perform distributed planning on this query because parameterized queries for SQL functions referencing distributed tables are not supported
+HINT:  Consider using PL/pgSQL functions instead.
+-- this fails pg <18
+-- succeeds in pg18 because of pg18 commit 0dca5d68d
+-- where sql functions behave as PL/pgSQL functions and use the cache
+SELECT test_parameterized_sql_function_in_subquery_where(1);
+ERROR:  could not create distributed plan
+DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
+HINT:  Consider using PL/pgSQL functions instead.
+CONTEXT:  SQL function "test_parameterized_sql_function_in_subquery_where" statement 1
+-- postgres behaves slightly differently for the following
+-- query where the target list is empty
+SELECT test_parameterized_sql_function(1);
+ test_parameterized_sql_function
+---------------------------------------------------------------------
+                               1
+(1 row)
+
+-- test that sql function calls are treated as multi-statement transactions
+-- and are rolled back properly. Single-row inserts for not-replicated tables
+-- don't go over 2PC if they are not part of a bigger transaction.
+CREATE TABLE table_with_unique_constraint (a int UNIQUE);
+SELECT create_distributed_table('table_with_unique_constraint', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table_with_unique_constraint VALUES (1), (2), (3);
+CREATE OR REPLACE FUNCTION insert_twice() RETURNS VOID
+AS $$
+  INSERT INTO table_with_unique_constraint VALUES (4);
+  INSERT INTO table_with_unique_constraint VALUES (4);
+$$ LANGUAGE SQL;
+SELECT insert_twice();
+ERROR:  duplicate key value violates unique constraint "table_with_unique_constraint_a_key_1230009"
+DETAIL:  Key (a)=(4) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+SQL function "insert_twice" statement 2
+SELECT * FROM table_with_unique_constraint ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+(3 rows)
+
+DROP TABLE temp_table, test_parameterized_sql, table_with_unique_constraint;
+-- clean-up functions
+DROP FUNCTION sql_test_no_1();
+DROP FUNCTION sql_test_no_2();
+DROP FUNCTION sql_test_no_3();
+DROP FUNCTION sql_test_no_4();
+DROP FUNCTION no_parameter_insert_sql();
+DROP FUNCTION non_partition_parameter_insert_sql(int);
+DROP FUNCTION non_partition_parameter_update_sql(int, int);
+DROP FUNCTION non_partition_parameter_delete_sql(int);
+DROP FUNCTION test_parameterized_sql_function(int);
+DROP FUNCTION test_parameterized_sql_function_in_subquery_where(int);

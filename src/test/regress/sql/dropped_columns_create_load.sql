@@ -59,4 +59,3 @@ col_to_drop_4 date, measureid integer NOT NULL, eventdatetime date NOT NULL, mea
 
 ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
 ALTER TABLE sensors DROP COLUMN col_to_drop_4;
-SELECT alter_table_set_access_method('sensors_2004', 'columnar');

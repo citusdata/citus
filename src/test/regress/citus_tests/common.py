@@ -137,6 +137,7 @@ def initialize_db_for_cluster(pg_path, rel_data_path, settings, node_names):
             # --allow-group-access is used to ensure we set permissions on
             # private keys correctly
             "--allow-group-access",
+            "--data-checksums",
             "--encoding",
             "UTF8",
             "--locale",

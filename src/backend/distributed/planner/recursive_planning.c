@@ -49,6 +49,7 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "miscadmin.h"
 
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
@@ -73,8 +74,10 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/distribution_column.h"
 #include "distributed/errormessage.h"
 #include "distributed/listutils.h"
 #include "distributed/local_distributed_join_planner.h"
@@ -87,10 +90,14 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
+
+bool EnableRecurringOuterJoinPushdown = true;
+bool EnableOuterJoinsWithPseudoconstantQualsPrePG17 = false;
 
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
@@ -104,6 +111,8 @@ struct RecursivePlanningContextInternal
 	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
+	bool restrictionEquivalenceCheck;
+	bool forceRecursivelyPlanRecurringOuterJoins;
 };
 
 /* track depth of current recursive planner query */
@@ -137,7 +146,8 @@ static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 														RecursivePlanningContext *
 														context);
 static bool ContainsSubquery(Query *query);
-static bool ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context);
+static bool ShouldRecursivelyPlanOuterJoins(Query *query,
+											RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
 												  RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
@@ -151,7 +161,8 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 RecursivePlanningContext *
 														 recursivePlanningContext);
 static bool RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
-														 RecursivePlanningContext *context);
+														 RecursivePlanningContext *context,
+														 bool chainedJoin);
 static void RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 											   RecursivePlanningContext *context);
 static bool IsRTERefRecurring(RangeTblRef *rangeTableRef, Query *query);
@@ -192,6 +203,13 @@ static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
 static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
+static bool CanPushdownRecurringOuterJoinOnOuterRTE(RangeTblEntry *rte);
+static bool CanPushdownRecurringOuterJoinOnInnerVar(Var *innervar, RangeTblEntry *rte);
+static bool CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query);
+#if PG_VERSION_NUM < PG_VERSION_17
+static bool hasPseudoconstantQuals(
+	RelationRestrictionContext *relationRestrictionContext);
+#endif
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -202,7 +220,8 @@ static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
  */
 List *
 GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
-									 PlannerRestrictionContext *plannerRestrictionContext)
+									 PlannerRestrictionContext *plannerRestrictionContext,
+									 RouterPlanType routerPlan)
 {
 	RecursivePlanningContext context;
 
@@ -216,6 +235,17 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	context.planId = planId;
 	context.subPlanList = NIL;
 	context.plannerRestrictionContext = plannerRestrictionContext;
+	context.forceRecursivelyPlanRecurringOuterJoins = false;
+
+	/*
+	 * Force recursive planning of recurring outer joins for these queries
+	 * since the planning error from the previous step is generated prior to
+	 * the actual planning attempt.
+	 */
+	if (routerPlan == DML_QUERY)
+	{
+		context.forceRecursivelyPlanRecurringOuterJoins = true;
+	}
 
 	/*
 	 * Calculating the distribution key equality upfront is a trade-off for us.
@@ -355,10 +385,10 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	 * result and logical planner can handle the new query since it's of the from
 	 * "<recurring> LEFT JOIN <recurring>".
 	 */
-	if (ShouldRecursivelyPlanOuterJoins(context))
+	if (ShouldRecursivelyPlanOuterJoins(query, context))
 	{
 		RecursivelyPlanRecurringTupleOuterJoinWalker((Node *) query->jointree,
-													 query, context);
+													 query, context, false);
 	}
 
 	/*
@@ -468,7 +498,7 @@ ContainsSubquery(Query *query)
  * join(s) that might need to be recursively planned.
  */
 static bool
-ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context)
+ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 {
 	if (!context || !context->plannerRestrictionContext ||
 		!context->plannerRestrictionContext->joinRestrictionContext)
@@ -477,7 +507,37 @@ ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context)
 							   "planning context")));
 	}
 
-	return context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
+	bool hasOuterJoin =
+		context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
+#if PG_VERSION_NUM < PG_VERSION_17
+	if (!EnableOuterJoinsWithPseudoconstantQualsPrePG17 && !hasOuterJoin)
+	{
+		/*
+		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1
+		 * PG16 commit 695f5deb7902865901eb2d50a70523af655c3a00
+		 * disallows replacing joins with scans in queries with pseudoconstant quals.
+		 * This commit prevents the set_join_pathlist_hook from being called
+		 * if any of the join restrictions is a pseudo-constant.
+		 * So in these cases, citus has no info on the join, never sees that the query
+		 * has an outer join, and ends up producing an incorrect plan.
+		 * PG17 fixes this by commit 9e9931d2bf40e2fea447d779c2e133c2c1256ef3
+		 * Therefore, we take this extra measure here for PG versions less than 17.
+		 * hasOuterJoin can never be true when set_join_pathlist_hook is absent.
+		 */
+		if (hasPseudoconstantQuals(
+				context->plannerRestrictionContext->relationRestrictionContext) &&
+			FindNodeMatchingCheckFunction((Node *) query->jointree, IsOuterJoinExpr))
+		{
+			ereport(ERROR, (errmsg("Distributed queries with outer joins and "
+								   "pseudoconstant quals are not supported in PG15 and PG16."),
+							errdetail(
+								"PG15 and PG16 disallow replacing joins with scans when the"
+								" query has pseudoconstant quals"),
+							errhint("Consider upgrading your PG version to PG17+")));
+		}
+	}
+#endif
+	return hasOuterJoin;
 }
 
 
@@ -656,7 +716,8 @@ RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 static bool
 RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 											 RecursivePlanningContext *
-											 recursivePlanningContext)
+											 recursivePlanningContext,
+											 bool chainedJoin)
 {
 	if (node == NULL)
 	{
@@ -673,7 +734,8 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 			Node *fromElement = (Node *) lfirst(fromExprCell);
 
 			RecursivelyPlanRecurringTupleOuterJoinWalker(fromElement, query,
-														 recursivePlanningContext);
+														 recursivePlanningContext,
+														 false);
 		}
 
 		/*
@@ -699,10 +761,12 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 		 */
 		bool leftNodeRecurs =
 			RecursivelyPlanRecurringTupleOuterJoinWalker(leftNode, query,
-														 recursivePlanningContext);
+														 recursivePlanningContext,
+														 true);
 		bool rightNodeRecurs =
 			RecursivelyPlanRecurringTupleOuterJoinWalker(rightNode, query,
-														 recursivePlanningContext);
+														 recursivePlanningContext,
+														 true);
 		switch (joinExpr->jointype)
 		{
 			case JOIN_LEFT:
@@ -710,11 +774,23 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 				/* <recurring> left join <distributed> */
 				if (leftNodeRecurs && !rightNodeRecurs)
 				{
-					ereport(DEBUG1, (errmsg("recursively planning right side of "
-											"the left join since the outer side "
-											"is a recurring rel")));
-					RecursivelyPlanDistributedJoinNode(rightNode, query,
-													   recursivePlanningContext);
+					if (recursivePlanningContext->forceRecursivelyPlanRecurringOuterJoins
+						||
+						chainedJoin || !CanPushdownRecurringOuterJoin(joinExpr,
+																	  query))
+					{
+						ereport(DEBUG1, (errmsg("recursively planning right side of "
+												"the left join since the outer side "
+												"is a recurring rel")));
+						RecursivelyPlanDistributedJoinNode(rightNode, query,
+														   recursivePlanningContext);
+					}
+					else
+					{
+						ereport(DEBUG3, (errmsg(
+											 "a push down safe left join with recurring left side")));
+						leftNodeRecurs = false; /* left node will be pushed down */
+					}
 				}
 
 				/*
@@ -731,11 +807,23 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 				/* <distributed> right join <recurring> */
 				if (!leftNodeRecurs && rightNodeRecurs)
 				{
-					ereport(DEBUG1, (errmsg("recursively planning left side of "
-											"the right join since the outer side "
-											"is a recurring rel")));
-					RecursivelyPlanDistributedJoinNode(leftNode, query,
-													   recursivePlanningContext);
+					if (recursivePlanningContext->forceRecursivelyPlanRecurringOuterJoins
+						||
+						chainedJoin || !CanPushdownRecurringOuterJoin(joinExpr,
+																	  query))
+					{
+						ereport(DEBUG1, (errmsg("recursively planning left side of "
+												"the right join since the outer side "
+												"is a recurring rel")));
+						RecursivelyPlanDistributedJoinNode(leftNode, query,
+														   recursivePlanningContext);
+					}
+					else
+					{
+						ereport(DEBUG3, (errmsg(
+											 "a push down safe right join with recurring left side")));
+						rightNodeRecurs = false; /* right node will be pushed down */
+					}
 				}
 
 				/*
@@ -2109,7 +2197,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -2159,7 +2246,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{
@@ -2582,4 +2668,362 @@ bool
 GeneratingSubplans(void)
 {
 	return recursivePlanningDepth > 0;
+}
+
+
+#if PG_VERSION_NUM < PG_VERSION_17
+
+/*
+ * hasPseudoconstantQuals returns true if any of the planner infos in the
+ * relation restriction list of the input relation restriction context
+ * has a pseudoconstant qual
+ */
+static bool
+hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
+{
+	ListCell *objectCell = NULL;
+	foreach(objectCell, relationRestrictionContext->relationRestrictionList)
+	{
+		if (((RelationRestriction *) lfirst(
+				 objectCell))->plannerInfo->hasPseudoConstantQuals)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+#endif
+
+
+/*
+ * CanPushdownRecurringOuterJoinOnOuterRTE returns true if the given range table entry
+ * is safe for pushdown when it is the outer relation of a outer join when the
+ * inner relation is not recurring.
+ * Currently, we only allow reference tables.
+ */
+static bool
+CanPushdownRecurringOuterJoinOnOuterRTE(RangeTblEntry *rte)
+{
+	if (IsCitusTable(rte->relid) && IsCitusTableType(rte->relid, REFERENCE_TABLE))
+	{
+		return true;
+	}
+	else
+	{
+		ereport(DEBUG5, (errmsg("RTE type %d is not safe for pushdown",
+								rte->rtekind)));
+		return false;
+	}
+}
+
+
+/*
+ * ResolveBaseVarFromSubquery recursively resolves a Var from a subquery target list to
+ * the base Var and RTE
+ */
+bool
+ResolveBaseVarFromSubquery(Var *var, Query *query,
+						   Var **baseVar, RangeTblEntry **baseRte)
+{
+	TargetEntry *tle = get_tle_by_resno(query->targetList, var->varattno);
+	if (!tle || !IsA(tle->expr, Var))
+	{
+		return false;
+	}
+
+	Var *tleVar = (Var *) tle->expr;
+	RangeTblEntry *rte = rt_fetch(tleVar->varno, query->rtable);
+
+	if (rte == NULL)
+	{
+		return false;
+	}
+
+	if (rte->rtekind == RTE_RELATION || rte->rtekind == RTE_FUNCTION)
+	{
+		*baseVar = tleVar;
+		*baseRte = rte;
+		return true;
+	}
+	else if (rte->rtekind == RTE_SUBQUERY)
+	{
+		/* Prevent overflow, and allow query cancellation */
+		check_stack_depth();
+		CHECK_FOR_INTERRUPTS();
+		return ResolveBaseVarFromSubquery(tleVar, rte->subquery, baseVar, baseRte);
+	}
+
+	return false;
+}
+
+
+/*
+ * CanPushdownRecurringOuterJoinOnInnerVar checks if the inner variable
+ * from a join qual for a join pushdown. It returns true if it is valid,
+ * it is the partition column and hash distributed, otherwise it returns false.
+ */
+static bool
+CanPushdownRecurringOuterJoinOnInnerVar(Var *innerVar, RangeTblEntry *rte)
+{
+	if (!innerVar || !rte)
+	{
+		return false;
+	}
+
+	if (innerVar->varattno == InvalidAttrNumber)
+	{
+		return false;
+	}
+
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(rte->relid);
+
+	if (!cacheEntry || GetCitusTableType(cacheEntry) != HASH_DISTRIBUTED)
+	{
+		return false;
+	}
+
+	/* Check if the inner variable is part of the distribution column */
+	if (cacheEntry->partitionColumn && innerVar->varattno ==
+		cacheEntry->partitionColumn->varattno)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * JoinTreeContainsLateral checks if the given node contains a lateral
+ * join. It returns true if it does, otherwise false.
+ *
+ * It recursively traverses the join tree and checks each RangeTblRef and JoinExpr
+ * for lateral joins.
+ */
+static bool
+JoinTreeContainsLateral(Node *node, List *rtable)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	/* Prevent overflow, and allow query cancellation */
+	check_stack_depth();
+	CHECK_FOR_INTERRUPTS();
+
+	if (IsA(node, RangeTblRef))
+	{
+		RangeTblEntry *rte = rt_fetch(((RangeTblRef *) node)->rtindex, rtable);
+		if (rte == NULL)
+		{
+			return false;
+		}
+
+		if (rte->lateral)
+		{
+			return true;
+		}
+
+		if (rte->rtekind == RTE_SUBQUERY)
+		{
+			if (rte->subquery)
+			{
+				return JoinTreeContainsLateral((Node *) rte->subquery->jointree,
+											   rte->subquery->rtable);
+			}
+		}
+		return false;
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *join = (JoinExpr *) node;
+		return JoinTreeContainsLateral(join->larg, rtable) ||
+			   JoinTreeContainsLateral(join->rarg, rtable);
+	}
+	else if (IsA(node, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) node;
+		ListCell *lc = NULL;
+		foreach(lc, fromExpr->fromlist)
+		{
+			if (JoinTreeContainsLateral((Node *) lfirst(lc), rtable))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+
+/*
+ * CanPushdownRecurringOuterJoinExtended checks if the given join expression
+ * is an outer join between recurring rel -on outer part- and a distributed
+ * rel -on the inner side- and if it is feasible to push down the join. If feasible,
+ * it computes the outer relation's range table index, the outer relation's
+ * range table entry, the inner (distributed) relation's range table entry, and the
+ * attribute number of the partition column in the outer relation.
+ */
+bool
+CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
+									  int *outerRtIndex, RangeTblEntry **outerRte,
+									  RangeTblEntry **distRte, int *attnum)
+{
+	if (!EnableRecurringOuterJoinPushdown)
+	{
+		return false;
+	}
+
+	if (!IS_OUTER_JOIN(joinExpr->jointype))
+	{
+		return false;
+	}
+
+	if (joinExpr->jointype != JOIN_LEFT && joinExpr->jointype != JOIN_RIGHT)
+	{
+		return false;
+	}
+
+	/* Push down for chained joins is not supported in this path. */
+	if (IsA(joinExpr->rarg, JoinExpr) || IsA(joinExpr->larg, JoinExpr))
+	{
+		ereport(DEBUG5, (errmsg(
+							 "One side is a join expression, pushdown is not supported in this path.")));
+		return false;
+	}
+
+	/* Push down for joins with fromExpr on one side is not supported in this path. */
+	if (!IsA(joinExpr->larg, RangeTblRef) || !IsA(joinExpr->rarg, RangeTblRef))
+	{
+		ereport(DEBUG5, (errmsg(
+							 "One side is not a RangeTblRef, pushdown is not supported in this path.")));
+		return false;
+	}
+
+	if (joinExpr->jointype == JOIN_LEFT)
+	{
+		*outerRtIndex = (((RangeTblRef *) joinExpr->larg)->rtindex);
+	}
+	else /* JOIN_RIGHT */
+	{
+		*outerRtIndex = (((RangeTblRef *) joinExpr->rarg)->rtindex);
+	}
+
+	*outerRte = rt_fetch(*outerRtIndex, query->rtable);
+
+	if (!CanPushdownRecurringOuterJoinOnOuterRTE(*outerRte))
+	{
+		return false;
+	}
+
+	/* For now if we see any lateral join in the join tree, we return false.
+	 * This check can be improved to support the cases where the lateral reference
+	 * does not cause an error in the final planner checks.
+	 */
+	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) || JoinTreeContainsLateral(
+			joinExpr->larg, query->rtable))
+	{
+		ereport(DEBUG5, (errmsg(
+							 "Lateral join is not supported for pushdown in this path.")));
+		return false;
+	}
+
+	/* Check if the join is performed on the distribution column */
+	List *joinClauseList = make_ands_implicit((Expr *) joinExpr->quals);
+	if (joinClauseList == NIL)
+	{
+		return false;
+	}
+
+	Node *joinClause = NULL;
+	foreach_declared_ptr(joinClause, joinClauseList)
+	{
+		if (!NodeIsEqualsOpExpr(joinClause))
+		{
+			continue;
+		}
+		OpExpr *joinClauseExpr = castNode(OpExpr, joinClause);
+
+		Var *leftColumn = LeftColumnOrNULL(joinClauseExpr);
+		Var *rightColumn = RightColumnOrNULL(joinClauseExpr);
+		if (leftColumn == NULL || rightColumn == NULL)
+		{
+			continue;
+		}
+
+		RangeTblEntry *rte;
+		Var *innerVar;
+		if (leftColumn->varno == *outerRtIndex)
+		{
+			/* left column is the outer table of the comparison, get right */
+			rte = rt_fetch(rightColumn->varno, query->rtable);
+			innerVar = rightColumn;
+
+			/* additional constraints will be introduced on outer relation variable */
+			*attnum = leftColumn->varattno;
+		}
+		else if (rightColumn->varno == *outerRtIndex)
+		{
+			/* right column is the outer table of the comparison, get left*/
+			rte = rt_fetch(leftColumn->varno, query->rtable);
+			innerVar = leftColumn;
+
+			/* additional constraints will be introduced on outer relation variable */
+			*attnum = rightColumn->varattno;
+		}
+		else
+		{
+			continue;
+		}
+
+		/* the simple case, the inner table itself a Citus table */
+		if (rte && IsCitusTable(rte->relid))
+		{
+			if (CanPushdownRecurringOuterJoinOnInnerVar(innerVar, rte))
+			{
+				*distRte = rte;
+				return true;
+			}
+		}
+		/* the inner table is a subquery, extract the base relation referred in the qual */
+		else if (rte && rte->rtekind == RTE_SUBQUERY)
+		{
+			Var *baseVar = NULL;
+			RangeTblEntry *baseRte = NULL;
+
+			if (ResolveBaseVarFromSubquery(innerVar, rte->subquery, &baseVar, &baseRte))
+			{
+				if (baseRte && IsCitusTable(baseRte->relid))
+				{
+					if (CanPushdownRecurringOuterJoinOnInnerVar(baseVar, baseRte))
+					{
+						*distRte = baseRte;
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * CanPushdownRecurringOuterJoin initializes input variables to call
+ * CanPushdownRecurringOuterJoinExtended.
+ * See CanPushdownRecurringOuterJoinExtended for more details.
+ */
+bool
+CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query)
+{
+	int outerRtIndex;
+	RangeTblEntry *outerRte = NULL;
+	RangeTblEntry *innerRte = NULL;
+	int attnum;
+	return CanPushdownRecurringOuterJoinExtended(joinExpr, query, &outerRtIndex,
+												 &outerRte, &innerRte, &attnum);
 }

@@ -82,6 +82,7 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static const char * convert_aclright_to_string(int aclright);
 static void simple_quote_literal(StringInfo buf, const char *val);
+static SubscriptingRef * TargetEntryExprFindSubsRef(Expr *expr);
 static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
 static void process_acl_items(Acl *acl, const char *relationName,
 							  const char *attributeName, List **defs);
@@ -1714,4 +1715,318 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 			elog(ERROR, "unexpected role type %d", spec->roletype);
 		}
 	}
+}
+
+
+/*
+ * Recursively search an expression for a Param and return its paramid
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ * Does not cover all options but those supported by Citus.
+ */
+static int
+GetParamId(Node *expr)
+{
+	int paramid = 0;
+
+	if (expr == NULL)
+	{
+		return paramid;
+	}
+
+	/* If it's a Param, return its attnum */
+	if (IsA(expr, Param))
+	{
+		Param *param = (Param *) expr;
+		paramid = param->paramid;
+	}
+	/* If it's a FuncExpr, search in arguments */
+	else if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *func = (FuncExpr *) expr;
+		ListCell *lc;
+
+		foreach(lc, func->args)
+		{
+			paramid = GetParamId((Node *) lfirst(lc));
+			if (paramid != 0)
+			{
+				break; /* Stop at the first valid paramid */
+			}
+		}
+	}
+
+	return paramid;
+}
+
+
+/*
+ * list_sort comparator to sort target list by paramid (in MULTIEXPR)
+ * Intended for indirection management: UPDATE SET () = (SELECT )
+ */
+static int
+target_list_cmp(const ListCell *a, const ListCell *b)
+{
+	TargetEntry *tleA = lfirst(a);
+	TargetEntry *tleB = lfirst(b);
+
+	/*
+	 * Deal with resjunk entries; sublinks are marked resjunk and
+	 * are placed at the end of the target list so this logic
+	 * ensures they stay grouped at the end of the target list:
+	 */
+	if (tleA->resjunk || tleB->resjunk)
+	{
+		return tleA->resjunk - tleB->resjunk;
+	}
+
+	int la = GetParamId((Node *) tleA->expr);
+	int lb = GetParamId((Node *) tleB->expr);
+
+	/*
+	 * Should be looking at legitimate param ids
+	 */
+	Assert(la > 0);
+	Assert(lb > 0);
+
+	/*
+	 * Return -1, 0 or 1 depending on if la is less than,
+	 * equal to or greater than lb
+	 */
+	return (la > lb) - (la < lb);
+}
+
+
+/*
+ * Used by get_update_query_targetlist_def() (in ruleutils) to reorder the target
+ * list on the left side of the update:
+ * SET () = (SELECT )
+ * Reordering the SELECT side only does not work, consider a case like:
+ * SET (col_1, col3) = (SELECT 1, 3), (col_2) = (SELECT 2)
+ * Without ensure_update_targetlist_in_param_order(), this will lead to an incorrect
+ * deparsed query:
+ * SET (col_1, col2) = (SELECT 1, 3), (col_3) = (SELECT 2)
+ */
+void
+ensure_update_targetlist_in_param_order(List *targetList)
+{
+	bool need_to_sort_target_list = false;
+	int previous_paramid = 0;
+	ListCell *l;
+
+	foreach(l, targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(l);
+
+		if (!tle->resjunk)
+		{
+			int paramid = GetParamId((Node *) tle->expr);
+			if (paramid < previous_paramid)
+			{
+				need_to_sort_target_list = true;
+				break;
+			}
+
+			previous_paramid = paramid;
+		}
+	}
+
+	if (need_to_sort_target_list)
+	{
+		list_sort(targetList, target_list_cmp);
+	}
+}
+
+
+/*
+ * isSubsRef checks if a given node is a SubscriptingRef or can be
+ * reached through an implicit coercion.
+ */
+static
+bool
+isSubsRef(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, CoerceToDomain))
+	{
+		CoerceToDomain *coerceToDomain = (CoerceToDomain *) node;
+		if (coerceToDomain->coercionformat != COERCE_IMPLICIT_CAST)
+		{
+			/* not an implicit coercion, cannot reach to a SubscriptingRef */
+			return false;
+		}
+
+		node = (Node *) coerceToDomain->arg;
+	}
+
+	return (IsA(node, SubscriptingRef));
+}
+
+
+/*
+ * checkTlistForSubsRef - checks if any target entry in the list contains a
+ * SubscriptingRef or can be reached through an implicit coercion. Used by
+ * ExpandMergedSubscriptingRefEntries() to identify if any target entries
+ * need to be expanded - if not the original target list is preserved.
+ */
+static
+bool
+checkTlistForSubsRef(List *targetEntryList)
+{
+	ListCell *tgtCell = NULL;
+
+	foreach(tgtCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(tgtCell);
+		Expr *expr = targetEntry->expr;
+
+		if (isSubsRef((Node *) expr))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ExpandMergedSubscriptingRefEntries takes a list of target entries and expands
+ * each one that references a SubscriptingRef node that indicates multiple (field)
+ * updates on the same attribute, which is applicable for array/json types atm.
+ */
+List *
+ExpandMergedSubscriptingRefEntries(List *targetEntryList)
+{
+	List *newTargetEntryList = NIL;
+	ListCell *tgtCell = NULL;
+
+	if (!checkTlistForSubsRef(targetEntryList))
+	{
+		/* No subscripting refs found, return original list */
+		return targetEntryList;
+	}
+
+	foreach(tgtCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(tgtCell);
+		List *expandedTargetEntries = NIL;
+
+		Expr *expr = targetEntry->expr;
+		while (expr)
+		{
+			SubscriptingRef *subsRef = TargetEntryExprFindSubsRef(expr);
+			if (!subsRef)
+			{
+				break;
+			}
+
+			/*
+			 * Remove refexpr from the SubscriptingRef that we are about to
+			 * wrap in a new TargetEntry and save it for the next one.
+			 */
+			Expr *refexpr = subsRef->refexpr;
+			subsRef->refexpr = NULL;
+
+			/*
+			 * Wrap the Expr that holds SubscriptingRef (directly or indirectly)
+			 * in a new TargetEntry; note that it doesn't have a refexpr anymore.
+			 */
+			TargetEntry *newTargetEntry = copyObject(targetEntry);
+			newTargetEntry->expr = expr;
+			expandedTargetEntries = lappend(expandedTargetEntries, newTargetEntry);
+
+			/* now inspect the refexpr that SubscriptingRef at hand were holding */
+			expr = refexpr;
+		}
+
+		if (expandedTargetEntries == NIL)
+		{
+			/* return original entry since it doesn't hold a SubscriptingRef node */
+			newTargetEntryList = lappend(newTargetEntryList, targetEntry);
+		}
+		else
+		{
+			/*
+			 * Need to concat expanded target list entries in reverse order
+			 * to preserve ordering of the original target entry list.
+			 */
+			List *reversedTgtEntries = NIL;
+			ListCell *revCell = NULL;
+			foreach(revCell, expandedTargetEntries)
+			{
+				TargetEntry *tgtEntry = (TargetEntry *) lfirst(revCell);
+				reversedTgtEntries = lcons(tgtEntry, reversedTgtEntries);
+			}
+			newTargetEntryList = list_concat(newTargetEntryList, reversedTgtEntries);
+		}
+	}
+
+	return newTargetEntryList;
+}
+
+
+/*
+ * TargetEntryExprFindSubsRef searches given Expr --assuming that it is part
+ * of a target list entry-- to see if it directly (i.e.: itself) or indirectly
+ * (e.g.: behind some level of coercions) holds a SubscriptingRef node.
+ *
+ * Returns the original SubscriptingRef node on success or NULL otherwise.
+ *
+ * Note that it wouldn't add much value to use expression_tree_walker here
+ * since we are only interested in a subset of the fields of a few certain
+ * node types.
+ */
+static SubscriptingRef *
+TargetEntryExprFindSubsRef(Expr *expr)
+{
+	Node *node = (Node *) expr;
+	while (node)
+	{
+		if (IsA(node, FieldStore))
+		{
+			/*
+			 * ModifyPartialQuerySupported doesn't allow INSERT/UPDATE via
+			 * FieldStore. If we decide supporting such commands, then we
+			 * should take the first element of "newvals" list into account
+			 * here. This is because, to support such commands, we will need
+			 * to expand merged FieldStore into separate target entries too.
+			 *
+			 * For this reason, this block is not reachable atm and need to
+			 * uncomment the following if we decide supporting such commands.
+			 *
+			 * """
+			 *   FieldStore *fieldStore = (FieldStore *) node;
+			 *   node = (Node *) linitial(fieldStore->newvals);
+			 * """
+			 */
+			ereport(ERROR, (errmsg("unexpectedly got FieldStore object when "
+								   "generating shard query")));
+		}
+		else if (IsA(node, CoerceToDomain))
+		{
+			CoerceToDomain *coerceToDomain = (CoerceToDomain *) node;
+			if (coerceToDomain->coercionformat != COERCE_IMPLICIT_CAST)
+			{
+				/* not an implicit coercion, cannot reach to a SubscriptingRef */
+				break;
+			}
+
+			node = (Node *) coerceToDomain->arg;
+		}
+		else if (IsA(node, SubscriptingRef))
+		{
+			return (SubscriptingRef *) node;
+		}
+		else
+		{
+			/* got a node that we are not interested in */
+			break;
+		}
+	}
+
+	return NULL;
 }

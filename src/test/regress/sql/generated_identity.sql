@@ -1,3 +1,7 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 CREATE SCHEMA generated_identities;
 SET search_path TO generated_identities;
 SET client_min_messages to ERROR;
@@ -238,11 +242,11 @@ CREATE TABLE color (
 ) USING columnar;
 SELECT create_distributed_table('color', 'color_id');
 INSERT INTO color(color_name) VALUES ('Blue');
-\d+ color
+SELECT pg_get_serial_sequence('color', 'color_id');
 
 \c - - - :worker_1_port
 SET search_path TO generated_identities;
-\d+ color
+SELECT pg_get_serial_sequence('color', 'color_id');
 INSERT INTO color(color_name) VALUES ('Red');
 -- alter sequence .. restart
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;
@@ -375,3 +379,6 @@ ORDER BY table_name, id;
 SET client_min_messages TO WARNING;
 DROP SCHEMA generated_identities CASCADE;
 DROP USER identity_test_user;
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

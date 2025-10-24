@@ -56,6 +56,7 @@
 #include "utils/timeout.h"
 
 #include "distributed/background_jobs.h"
+#include "distributed/background_worker_utils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
@@ -417,37 +418,26 @@ citus_task_wait_internal(int64 taskid, BackgroundTaskStatus *desiredStatus)
 BackgroundWorkerHandle *
 StartCitusBackgroundTaskQueueMonitor(Oid database, Oid extensionOwner)
 {
-	BackgroundWorker worker = { 0 };
-	BackgroundWorkerHandle *handle = NULL;
+	char workerName[BGW_MAXLEN];
 
-	/* Configure a worker. */
-	memset(&worker, 0, sizeof(worker));
-	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
+	SafeSnprintf(workerName, BGW_MAXLEN,
 				 "Citus Background Task Queue Monitor: %u/%u",
 				 database, extensionOwner);
-	worker.bgw_flags =
-		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 
-	/* don't restart, we manage restarts from maintenance daemon */
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
-	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "CitusBackgroundTaskQueueMonitorMain");
-	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
-	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
-			 sizeof(Oid));
-	worker.bgw_notify_pid = MyProcPid;
-
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-	{
-		return NULL;
-	}
-
-	pid_t pid;
-	WaitForBackgroundWorkerStartup(handle, &pid);
-
-	return handle;
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "CitusBackgroundTaskQueueMonitorMain",
+		.mainArg = ObjectIdGetDatum(MyDatabaseId),
+		.extensionOwner = extensionOwner,
+		.needsNotification = true,
+		.waitForStartup = true,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
+	return RegisterCitusBackgroundWorker(&config);
 }
 
 
@@ -1661,32 +1651,30 @@ StartCitusBackgroundTaskExecutor(char *database, char *user, char *command,
 {
 	dsm_segment *seg = StoreArgumentsInDSM(database, user, command, taskId, jobId);
 
-	/* Configure a worker. */
-	BackgroundWorker worker = { 0 };
-	memset(&worker, 0, sizeof(worker));
-	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
+	char workerName[BGW_MAXLEN];
+	SafeSnprintf(workerName, BGW_MAXLEN,
 				 "Citus Background Task Queue Executor: %s/%s for (%ld/%ld)",
 				 database, user, jobId, taskId);
-	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 
-	/* don't restart, we manage restarts from maintenance daemon */
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
-	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "CitusBackgroundTaskExecutor");
-	worker.bgw_main_arg = UInt32GetDatum(dsm_segment_handle(seg));
-	worker.bgw_notify_pid = MyProcPid;
-
-	BackgroundWorkerHandle *handle = NULL;
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "CitusBackgroundTaskExecutor",
+		.mainArg = UInt32GetDatum(dsm_segment_handle(seg)),
+		.extensionOwner = InvalidOid,
+		.needsNotification = true,
+		.waitForStartup = true,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
+	BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
+	if (!handle)
 	{
 		dsm_detach(seg);
 		return NULL;
 	}
-
-	pid_t pid = { 0 };
-	WaitForBackgroundWorkerStartup(handle, &pid);
 
 	if (pSegment)
 	{
@@ -1906,7 +1894,17 @@ ExecuteSqlString(const char *sql)
 
 		/* Don't display the portal in pg_cursors */
 		portal->visible = false;
-		PortalDefineQuery(portal, NULL, sql, commandTag, plantree_list, NULL);
+
+		/* PG17-: six‐arg signature */
+		PortalDefineQuery(
+			portal,
+			NULL,             /* no prepared‐stmt name */
+			sql,              /* the query text */
+			commandTag,       /* the CommandTag */
+			plantree_list,    /* List of PlannedStmt* */
+			NULL              /* no CachedPlan */
+			);
+
 		PortalStart(portal, NULL, 0, InvalidSnapshot);
 		int16 format[] = { 1 };
 		PortalSetResultFormat(portal, lengthof(format), format);        /* binary format */
@@ -1923,7 +1921,28 @@ ExecuteSqlString(const char *sql)
 
 		/* Here's where we actually execute the command. */
 		QueryCompletion qc = { 0 };
-		(void) PortalRun(portal, FETCH_ALL, isTopLevel, true, receiver, receiver, &qc);
+
+/* Execute the portal, dropping the `run_once` arg on PG18+ */
+#if PG_VERSION_NUM >= PG_VERSION_18
+		(void) PortalRun(
+			portal,
+			FETCH_ALL,  /* count */
+			isTopLevel, /* isTopLevel */
+			receiver,   /* DestReceiver *dest */
+			receiver,   /* DestReceiver *altdest */
+			&qc         /* QueryCompletion *qc */
+			);
+#else
+		(void) PortalRun(
+			portal,
+			FETCH_ALL,  /* count */
+			isTopLevel, /* isTopLevel */
+			true,       /* run_once */
+			receiver,   /* DestReceiver *dest */
+			receiver,   /* DestReceiver *altdest */
+			&qc         /* QueryCompletion *qc */
+			);
+#endif
 
 		/* Clean up the receiver. */
 		(*receiver->rDestroy)(receiver);

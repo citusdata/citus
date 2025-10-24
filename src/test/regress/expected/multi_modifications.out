@@ -2,6 +2,7 @@ SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 750000;
 SET citus.next_placement_id TO 750000;
 CREATE SCHEMA multi_modifications;
+SET search_path TO multi_modifications;
 -- some failure messages that comes from the worker nodes
 -- might change due to parallel executions, so suppress those
 -- using \set VERBOSITY terse
@@ -31,8 +32,12 @@ SELECT create_distributed_table('limit_orders', 'id', 'hash');
 
 (1 row)
 
-SELECT create_distributed_table('multiple_hash', 'id', 'hash');
-ERROR:  column "id" of relation "multiple_hash" does not exist
+SELECT create_distributed_table('multiple_hash', 'category', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('range_partitioned', 'id', 'range');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -330,6 +335,12 @@ UPDATE limit_orders SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURN
  246 | GM     |        30 | Mon Jul 02 16:32:15 2007 | buy  |         999
 (1 row)
 
+UPDATE limit_orders SET (kind, limit_price) = (SELECT 'buy'::order_side, 999) WHERE id = 246 RETURNING *;
+ id  | symbol | bidder_id |        placed_at         | kind | limit_price
+---------------------------------------------------------------------
+ 246 | GM     |        30 | Mon Jul 02 16:32:15 2007 | buy  |         999
+(1 row)
+
 -- Test that on unique contraint violations, we fail fast
 \set VERBOSITY terse
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
@@ -338,22 +349,26 @@ ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001
 -- Test that shards which miss a modification are marked unhealthy
 -- First: Connect to the second worker node
 \c - - - :worker_2_port
+SET search_path TO multi_modifications;
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 -- Third: Connect back to master node
 \c - - - :master_port
+SET search_path TO multi_modifications;
 -- Fourth: Perform an INSERT on the remaining node
 -- the whole transaction should fail
 \set VERBOSITY terse
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
-ERROR:  relation "public.limit_orders_750000" does not exist
+ERROR:  relation "multi_modifications.limit_orders_750000" does not exist
 -- set the shard name back
 \c - - - :worker_2_port
+SET search_path TO multi_modifications;
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 -- Verify the insert failed and both placements are healthy
 -- or the insert succeeded and placement marked unhealthy
 \c - - - :worker_1_port
+SET search_path TO multi_modifications;
 SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
  count
 ---------------------------------------------------------------------
@@ -361,6 +376,7 @@ SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
 (1 row)
 
 \c - - - :worker_2_port
+SET search_path TO multi_modifications;
 SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
  count
 ---------------------------------------------------------------------
@@ -368,6 +384,7 @@ SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
 (1 row)
 
 \c - - - :master_port
+SET search_path TO multi_modifications;
 SELECT count(*) FROM limit_orders WHERE id = 276;
  count
 ---------------------------------------------------------------------
@@ -388,14 +405,16 @@ AND    s.logicalrelid = 'limit_orders'::regclass;
 -- Test that if all shards miss a modification, no state change occurs
 -- First: Connect to the first worker node
 \c - - - :worker_1_port
+SET search_path TO multi_modifications;
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 -- Third: Connect back to master node
 \c - - - :master_port
+SET search_path TO multi_modifications;
 -- Fourth: Perform an INSERT on the remaining node
 \set VERBOSITY terse
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
-ERROR:  relation "public.limit_orders_750000" does not exist
+ERROR:  relation "multi_modifications.limit_orders_750000" does not exist
 \set VERBOSITY DEFAULT
 -- Last: Verify worker is still healthy
 SELECT count(*)
@@ -414,10 +433,12 @@ AND    s.logicalrelid = 'limit_orders'::regclass;
 -- Undo our change...
 -- First: Connect to the first worker node
 \c - - - :worker_1_port
+SET search_path TO multi_modifications;
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 -- Third: Connect back to master node
 \c - - - :master_port
+SET search_path TO multi_modifications;
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders SET id = 0 WHERE id = 246;
 ERROR:  modifying the partition value of rows is not allowed
@@ -427,6 +448,368 @@ ERROR:  modifying the partition value of rows is not allowed
 UPDATE limit_orders SET id = 246 WHERE id = 246;
 UPDATE limit_orders SET id = 246 WHERE id = 246 AND symbol = 'GM';
 UPDATE limit_orders SET id = limit_orders.id WHERE id = 246;
+CREATE TABLE dist_1 (a int, b int, c int);
+CREATE TABLE dist_2 (a int, b int, c int);
+CREATE TABLE dist_non_colocated (a int, b int, c int);
+CREATE TABLE dist_different_order_1 (b int, a int, c int);
+SELECT create_distributed_table('dist_1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist_2', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist_non_colocated', 'a', colocate_with=>'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist_different_order_1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- https://github.com/citusdata/citus/issues/8087
+--
+---- update: should work ----
+-- setting shard key to itself --
+UPDATE dist_1 SET a = dist_1.a;
+UPDATE dist_1 SET a = dist_1.a WHERE dist_1.a > dist_1.b AND dist_1.b > 10;
+UPDATE dist_1 SET a = dist_1.a FROM dist_2 WHERE dist_1.a = dist_2.a;
+-- setting shard key to another var that's implied to be equal to shard key --
+UPDATE dist_1 SET a = b WHERE a = b;
+UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a = dist_2.a;
+UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a = dist_2.a AND dist_1.b = dist_2.c AND (dist_2.c > 5 OR dist_2.c < 0);
+with cte as (
+select a, b from dist_1
+)
+update dist_1 set a = cte.a from cte where dist_1.a = cte.a;
+with cte as (
+select a as x, b as y from (select a, b from dist_1 limit 100) dt where b > 100
+)
+update dist_1 set a = cte.x from cte where dist_1.a = cte.x;
+with cte as (
+select d2.a as x, d1.b as y
+from dist_1 d1, dist_different_order_1 d2
+where d1.a=d2.a)
+update dist_1  set a = cte.x from cte where y != 0 and dist_1.a = cte.x;
+with cte as (
+select * from (select a as x, b as y from dist_2 limit 100) q
+)
+update dist_1 set a = cte.x from cte where b = cte.y and cte.y = a and a = cte.x;
+-- supported although the where clause will certainly eval to false
+UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a = dist_2.a AND dist_1.a = 5 AND dist_2.a = 7;
+-- setting shard key to another var that's implied to be equal to shard key, repeat with dist_different_order_1 --
+UPDATE dist_1 SET a = dist_different_order_1.a FROM dist_different_order_1 WHERE dist_1.a = dist_different_order_1.a;
+-- test with extra quals
+UPDATE dist_1 SET a = dist_different_order_1.a FROM dist_different_order_1 WHERE dist_1.a = dist_different_order_1.a AND dist_1.b = dist_different_order_1.c AND (dist_different_order_1.c > 5 OR dist_different_order_1.c < 0);
+---- update: errors in router planner ----
+-- different column of the same relation, which is not implied to be equal to shard key --
+UPDATE dist_1 SET a = dist_1.b;
+ERROR:  modifying the partition value of rows is not allowed
+-- another range table entry's column with the same attno, which is not implied to be equal to shard key --
+UPDATE dist_1 SET a = dist_2.a FROM dist_2;
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a != dist_2.a;
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a >= dist_2.a;
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a = dist_2.a OR dist_1.a > dist_2.a;
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE dist_1 SET a = dist_different_order_1.b FROM dist_different_order_1 WHERE dist_1.a = dist_different_order_1.a;
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE dist_1 SET a = foo.a FROM dist_1 foo;
+ERROR:  modifying the partition value of rows is not allowed
+UPDATE dist_1 SET a = foo.a FROM dist_1 foo WHERE dist_1.a != foo.a;
+ERROR:  modifying the partition value of rows is not allowed
+-- (*1) Would normally expect this to not throw an error because
+-- dist_1.a = dist_2.b AND dist_2.b = dist_2.a,
+-- so dist_1.a = dist_2.a, so we should be able to deduce
+-- that (dist_1.)a = dist_2.a, but seems predicate_implied_by()
+-- is not that smart.
+UPDATE dist_1 SET a = dist_2.a FROM dist_2 WHERE dist_1.a = dist_2.b AND dist_2.b = dist_2.a;
+ERROR:  modifying the partition value of rows is not allowed
+-- and same here
+with cte as (
+select * from (select a as x, b as y from dist_different_order_1 limit 100) q
+)
+update dist_1 set a = cte.x from cte where a = cte.y and cte.y = b and b = cte.x;
+ERROR:  modifying the partition value of rows is not allowed
+---- update: errors later (in logical or physical planner) ----
+-- setting shard key to itself --
+UPDATE dist_1 SET a = dist_1.a FROM dist_1 foo;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+UPDATE dist_1 SET a = dist_1.a FROM dist_2 foo;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- setting shard key to another var that's implied to be equal to shard key --
+UPDATE dist_1 SET a = dist_non_colocated.a FROM dist_non_colocated WHERE dist_1.a = dist_non_colocated.a;
+ERROR:  cannot push down this subquery
+DETAIL:  dist_1 and dist_non_colocated are not colocated
+UPDATE dist_1 SET a = dist_2.b FROM dist_2 WHERE dist_1.a = dist_2.b;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+---- update: a more sophisticated example ----
+CREATE TABLE dist_source (tstamp_col timestamp, int_col int, text_arr_col text[], text_col text, json_col jsonb);
+CREATE TABLE dist_target (text_col text, tstamp_col timestamp, json_col jsonb, text_arr_col text[], int_col int);
+CREATE TABLE local_source (tstamp_col timestamp, int_col int, text_arr_col text[], text_col text, json_col jsonb);
+CREATE TABLE local_target (text_col text, tstamp_col timestamp, json_col jsonb, text_arr_col text[], int_col int);
+SELECT create_distributed_table('dist_source', 'int_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist_target', 'int_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_source (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[i::text, (i+1)::text, (i+2)::text],
+       'source_' || i,
+       ('{"a": ' || i || ', "b": ' || i+1 || '}')::jsonb
+FROM generate_series(1001, 2000) i;
+INSERT INTO dist_source (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[i::text, (i+1)::text, (i+2)::text],
+       'source_' || i,
+       ('{"a": ' || i || ', "b": ' || i+1 || '}')::jsonb
+FROM generate_series(901, 1000) i;
+INSERT INTO dist_target (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[(i-1)::text, (i)::text, (i+1)::text],
+       'source_' || i,
+       ('{"a": ' || i*5 || ', "b": ' || i+20 || '}')::jsonb
+FROM generate_series(1501, 2000) i;
+INSERT INTO dist_target (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[(i-1)::text, (i)::text, (i+1)::text],
+       'source_' || i-1,
+       ('{"a": ' || i*5 || ', "b": ' || i+20 || '}')::jsonb
+FROM generate_series(1401, 1500) i;
+INSERT INTO local_source SELECT * FROM dist_source;
+INSERT INTO local_target SELECT * FROM dist_target;
+-- execute the query on distributed tables
+UPDATE dist_target target_alias
+SET int_col = source_alias.int_col,
+    tstamp_col = source_alias.tstamp_col + interval '3 day',
+    text_arr_col = array_append(source_alias.text_arr_col, 'updated_' || source_alias.text_col),
+    json_col = ('{"a": "' || replace(source_alias.text_col, '"', '\"') || '"}')::jsonb,
+    text_col = source_alias.json_col->>'a'
+FROM dist_source source_alias
+WHERE target_alias.text_col = source_alias.text_col AND target_alias.int_col = source_alias.int_col;
+-- execute the same query on local tables, everything is the same except table names behind the aliases
+UPDATE local_target target_alias
+SET int_col = source_alias.int_col,
+    tstamp_col = source_alias.tstamp_col + interval '3 day',
+    text_arr_col = array_append(source_alias.text_arr_col, 'updated_' || source_alias.text_col),
+    json_col = ('{"a": "' || replace(source_alias.text_col, '"', '\"') || '"}')::jsonb,
+    text_col = source_alias.json_col->>'a'
+FROM local_source source_alias
+WHERE target_alias.text_col = source_alias.text_col AND target_alias.int_col = source_alias.int_col;
+-- compare both targets
+SELECT COUNT(*) = 0 AS targets_match
+FROM (
+    SELECT * FROM dist_target
+    EXCEPT
+    SELECT * FROM local_target
+    UNION ALL
+    SELECT * FROM local_target
+    EXCEPT
+    SELECT * FROM dist_target
+) q;
+ targets_match
+---------------------------------------------------------------------
+ t
+(1 row)
+
+---- merge: should work ----
+-- setting shard key to itself --
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.a)
+WHEN MATCHED THEN UPDATE SET a = dist_1.a;
+-- We don't care about action quals when deciding if the update
+-- could change the shard key, but still add some action quals for
+-- testing. See the comments written on top of the line we call
+-- TargetEntryChangesValue() in MergeQualAndTargetListFunctionsSupported().
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.a)
+WHEN MATCHED AND dist_1.a > dist_1.b AND dist_1.b > 10 THEN UPDATE SET a = dist_1.a;
+MERGE INTO dist_1
+USING dist_2 src
+ON (dist_1.a = src.a)
+WHEN MATCHED THEN UPDATE SET a = dist_1.a;
+MERGE INTO dist_1
+USING dist_2 src
+ON (dist_1.a = src.a)
+WHEN MATCHED THEN UPDATE SET a = src.a;
+-- setting shard key to another var that's implied to be equal to shard key --
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.a AND dist_1.a = dist_1.b)
+WHEN MATCHED THEN UPDATE SET a = dist_1.b;
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.b)
+WHEN MATCHED THEN UPDATE SET a = src.b;
+MERGE INTO dist_1
+USING dist_2 src
+ON (dist_1.a = src.b)
+WHEN MATCHED THEN UPDATE SET a = src.b;
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.a AND dist_1.a = src.b)
+WHEN MATCHED THEN UPDATE SET a = src.b;
+MERGE INTO dist_1
+USING dist_2 src
+ON (dist_1.a = src.a AND dist_1.a = src.b)
+WHEN MATCHED THEN UPDATE SET a = src.b;
+-- test with extra quals
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.a AND dist_1.a = src.b AND (dist_1.b > 1000 OR (dist_1.b < 500)))
+WHEN MATCHED THEN UPDATE SET a = src.b;
+-- setting shard key to another var that's implied to be equal to shard key, repeat with dist_different_order_1 --
+MERGE INTO dist_1
+USING dist_different_order_1 src
+ON (dist_1.a = src.a AND dist_1.a = src.b)
+WHEN MATCHED THEN UPDATE SET a = src.b;
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.a)
+WHEN MATCHED THEN UPDATE SET a = src.a;
+---- merge: errors in router planner ----
+-- different column of the same relation, which is not implied to be equal to shard key --
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.a)
+WHEN MATCHED THEN UPDATE SET a = dist_1.b;
+ERROR:  updating the distribution column is not allowed in MERGE actions
+-- another range table entry's column with the same attno, which is not implied to be equal to shard key --
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.b)
+WHEN MATCHED THEN UPDATE SET a = src.a;
+ERROR:  updating the distribution column is not allowed in MERGE actions
+-- as in (*1), this is not supported
+MERGE INTO dist_1
+USING dist_1 src
+ON (dist_1.a = src.b AND src.b = src.a)
+WHEN MATCHED THEN UPDATE SET a = src.a;
+ERROR:  updating the distribution column is not allowed in MERGE actions
+MERGE INTO dist_1
+USING dist_2 src
+ON (true)
+WHEN MATCHED THEN UPDATE SET a = src.a;
+ERROR:  updating the distribution column is not allowed in MERGE actions
+MERGE INTO dist_1
+USING dist_2 src
+ON (dist_1.a <= src.a)
+WHEN MATCHED THEN UPDATE SET a = src.a;
+ERROR:  updating the distribution column is not allowed in MERGE actions
+---- merge: a more sophisticated example ----
+DROP TABLE dist_source, dist_target, local_source, local_target;
+CREATE TABLE dist_source (tstamp_col timestamp, int_col int, text_arr_col text[], text_col text, json_col jsonb);
+CREATE TABLE dist_target (text_col text, tstamp_col timestamp, json_col jsonb, text_arr_col text[], int_col int);
+CREATE TABLE local_source (tstamp_col timestamp, int_col int, text_arr_col text[], text_col text, json_col jsonb);
+CREATE TABLE local_target (text_col text, tstamp_col timestamp, json_col jsonb, text_arr_col text[], int_col int);
+SELECT create_distributed_table('dist_source', 'tstamp_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist_target', 'int_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_source (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[i::text, (i+1)::text, (i+2)::text],
+       'source_' || i,
+       ('{"a": ' || i || ', "b": ' || i+1 || '}')::jsonb
+FROM generate_series(1001, 2000) i;
+INSERT INTO dist_source (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[i::text, (i+1)::text, (i+2)::text],
+       'source_' || i,
+       ('{"a": ' || i || ', "b": ' || i+1 || '}')::jsonb
+FROM generate_series(901, 1000) i;
+INSERT INTO dist_target (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[(i-1)::text, (i)::text, (i+1)::text],
+       'source_' || i,
+       ('{"a": ' || i*5 || ', "b": ' || i+20 || '}')::jsonb
+FROM generate_series(1501, 2000) i;
+INSERT INTO dist_target (tstamp_col, int_col, text_arr_col, text_col, json_col)
+SELECT TIMESTAMP '2025-01-01 00:00:00' + (i || ' days')::interval,
+       i,
+       ARRAY[(i-1)::text, (i)::text, (i+1)::text],
+       'source_' || i-1,
+       ('{"a": ' || i*5 || ', "b": ' || i+20 || '}')::jsonb
+FROM generate_series(1401, 1500) i;
+INSERT INTO local_source SELECT * FROM dist_source;
+INSERT INTO local_target SELECT * FROM dist_target;
+-- execute the query on distributed tables
+MERGE INTO dist_target target_alias
+USING dist_source source_alias
+ON (target_alias.text_col = source_alias.text_col AND target_alias.int_col = source_alias.int_col)
+WHEN MATCHED THEN UPDATE SET
+    int_col = source_alias.int_col,
+    tstamp_col = source_alias.tstamp_col + interval '3 day',
+    text_arr_col = array_append(source_alias.text_arr_col, 'updated_' || source_alias.text_col),
+    json_col = ('{"a": "' || replace(source_alias.text_col, '"', '\"') || '"}')::jsonb,
+    text_col = source_alias.json_col->>'a'
+WHEN NOT MATCHED THEN
+  INSERT VALUES (source_alias.text_col, source_alias.tstamp_col, source_alias.json_col, source_alias.text_arr_col, source_alias.int_col );
+-- execute the same query on local tables, everything is the same except table names behind the aliases
+MERGE INTO local_target target_alias
+USING local_source source_alias
+ON (target_alias.text_col = source_alias.text_col AND target_alias.int_col = source_alias.int_col)
+WHEN MATCHED THEN UPDATE SET
+    int_col = source_alias.int_col,
+    tstamp_col = source_alias.tstamp_col + interval '3 day',
+    text_arr_col = array_append(source_alias.text_arr_col, 'updated_' || source_alias.text_col),
+    json_col = ('{"a": "' || replace(source_alias.text_col, '"', '\"') || '"}')::jsonb,
+    text_col = source_alias.json_col->>'a'
+WHEN NOT MATCHED THEN
+  INSERT VALUES (source_alias.text_col, source_alias.tstamp_col, source_alias.json_col, source_alias.text_arr_col, source_alias.int_col );
+-- compare both targets
+SELECT COUNT(*) = 0 AS targets_match
+FROM (
+    SELECT * FROM dist_target
+    EXCEPT
+    SELECT * FROM local_target
+    UNION ALL
+    SELECT * FROM local_target
+    EXCEPT
+    SELECT * FROM dist_target
+) q;
+ targets_match
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- UPDATEs with a FROM clause are supported even with local tables
 UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 					WHERE limit_orders.id = 246 AND
@@ -434,6 +817,8 @@ UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 						  bidders.name = 'Bernie Madoff';
 -- should succeed with a CTE
 WITH deleted_orders AS (INSERT INTO limit_orders VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
+UPDATE limit_orders SET symbol = 'GM';
+WITH deleted_orders AS (INSERT INTO limit_orders SELECT 400, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43)
 UPDATE limit_orders SET symbol = 'GM';
 SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
  symbol | bidder_id
@@ -927,6 +1312,17 @@ SELECT * FROM summary_table ORDER BY id;
   2 |       400 | 450.0000000000000000 |       |
 (2 rows)
 
+-- try different order of update targets
+UPDATE summary_table SET (average_value, min_value) =
+ 	(SELECT avg(value), min(value) FROM raw_table WHERE id = 2)
+WHERE id = 2;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques
+---------------------------------------------------------------------
+  1 |           | 200.0000000000000000 |       |
+  2 |       400 | 450.0000000000000000 |       |
+(2 rows)
+
 UPDATE summary_table SET min_value = 100
 	WHERE id IN (SELECT id FROM raw_table WHERE id = 1 and value > 100) AND id = 1;
 SELECT * FROM summary_table ORDER BY id;
@@ -1095,6 +1491,16 @@ WHERE id = 1;
 ERROR:  cannot perform select on a distributed table and modify a reference table
 UPDATE reference_summary_table SET (min_value, average_value) =
 	(SELECT min(value), avg(value) FROM reference_raw_table WHERE id = 2)
+WHERE id = 2;
+SELECT * FROM reference_summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques
+---------------------------------------------------------------------
+  1 |           | 200.0000000000000000 |       |
+  2 |       400 | 450.0000000000000000 |       |
+(2 rows)
+
+UPDATE reference_summary_table SET (average_value, min_value) =
+	(SELECT avg(value), min(value) FROM reference_raw_table WHERE id = 2)
 WHERE id = 2;
 SELECT * FROM reference_summary_table ORDER BY id;
  id | min_value |    average_value     | count | uniques
@@ -1324,10 +1730,5 @@ CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
 ERROR:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
-DROP TABLE insufficient_shards;
-DROP TABLE raw_table;
-DROP TABLE summary_table;
-DROP TABLE reference_raw_table;
-DROP TABLE reference_summary_table;
+SET client_min_messages TO WARNING;
 DROP SCHEMA multi_modifications CASCADE;
-NOTICE:  drop cascades to table multi_modifications.local

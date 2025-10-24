@@ -2,6 +2,10 @@ SET citus.shard_replication_factor to 1;
 SET citus.next_shard_id TO 60000;
 SET citus.next_placement_id TO 60000;
 
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
+
 create schema test_pg12;
 set search_path to test_pg12;
 
@@ -394,3 +398,5 @@ drop schema test_pg12 cascade;
 
 SET citus.shard_replication_factor to 2;
 
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

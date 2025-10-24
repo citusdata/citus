@@ -62,6 +62,7 @@ my $MASTER_FOLLOWERDIR = 'master-follower';
 my $isolationtester = 0;
 my $vanillatest = 0;
 my $followercluster = 0;
+my $backupnodetest = 0;
 my $bindir = "";
 my $libdir = undef;
 my $pgxsdir = "";
@@ -100,6 +101,7 @@ GetOptions(
     'isolationtester' => \$isolationtester,
     'vanillatest' => \$vanillatest,
     'follower-cluster' => \$followercluster,
+    'backupnodetest' => \$backupnodetest,
     'bindir=s' => \$bindir,
     'libdir=s' => \$libdir,
     'pgxsdir=s' => \$pgxsdir,
@@ -257,7 +259,7 @@ exec $valgrindPath \\
     --leak-check=no \\
     --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \\
     --max-stackframe=16000000 \\
-    --log-file=$valgrindLogFile \\
+    --log-file=$valgrindLogFile.%p \\
     --fullpath-after=/ \\
     $bindir/postgres.orig \\
     "\$@"
@@ -483,13 +485,20 @@ push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");
 push(@pgOptions, "citus.defer_shard_delete_interval=-1");
 push(@pgOptions, "citus.repartition_join_bucket_count_per_node=2");
 push(@pgOptions, "citus.sort_returning='on'");
-push(@pgOptions, "citus.shard_replication_factor=2");
+if ($backupnodetest)
+{
+    push(@pgOptions, "citus.shard_replication_factor=1");
+}
+else
+{
+    push(@pgOptions, "citus.shard_replication_factor=2");
+}
 push(@pgOptions, "citus.node_connection_timeout=${connectionTimeout}");
 push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 push(@pgOptions, "citus.allow_unsafe_locks_from_workers=on");
 push(@pgOptions, "citus.stat_statements_track = 'all'");
-push(@pgOptions, "citus.enable_change_data_capture=on");
+push(@pgOptions, "citus.enable_change_data_capture=off");
 push(@pgOptions, "citus.stat_tenants_limit = 2");
 push(@pgOptions, "citus.stat_tenants_track = 'ALL'");
 push(@pgOptions, "citus.enable_stat_counters=on");
@@ -885,7 +894,7 @@ if ($valgrind)
 $serversAreShutdown = "FALSE";
 
 # enable synchronous replication if needed
-if ($followercluster)
+if ($followercluster && $backupnodetest == 0)
 {
     $synchronousReplication = "-c synchronous_standby_names='FIRST 1 (*)' -c synchronous_commit=remote_apply";
 }

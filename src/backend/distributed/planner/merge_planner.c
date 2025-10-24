@@ -41,6 +41,7 @@
 static int SourceResultPartitionColumnIndex(Query *mergeQuery,
 											List *sourceTargetList,
 											CitusTableCacheEntry *targetRelation);
+static int FindTargetListEntryWithVarExprAttno(List *targetList, AttrNumber varattno);
 static Var * ValidateAndReturnVarIfSupported(Node *entryExpr);
 static DeferredErrorMessage * DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
 															   PlannerRestrictionContext *
@@ -422,10 +423,13 @@ ErrorIfMergeHasUnsupportedTables(Oid targetRelationId, List *rangeTableList)
 			case RTE_VALUES:
 			case RTE_JOIN:
 			case RTE_CTE:
-			{
-				/* Skip them as base table(s) will be checked */
-				continue;
-			}
+#if PG_VERSION_NUM >= PG_VERSION_18
+			case RTE_GROUP:
+#endif
+				{
+					/* Skip them as base table(s) will be checked */
+					continue;
+				}
 
 			/*
 			 * RTE_NAMEDTUPLESTORE is typically used in ephmeral named relations,
@@ -628,6 +632,22 @@ MergeQualAndTargetListFunctionsSupported(Oid resultRelationId, Query *query,
 			}
 		}
 
+		/*
+		 * joinTree->quals, retrieved by GetMergeJoinTree() - either from
+		 * mergeJoinCondition (PG >= 17) or jointree->quals (PG < 17),
+		 * only contains the quals that present in "ON (..)" clause. Action
+		 * quals that can be specified for each specific action, as in
+		 * "WHEN <match condition> AND <action quals> THEN <action>"", are
+		 * saved into "qual" field of the corresponding action's entry in
+		 * mergeActionList, see
+		 * https://github.com/postgres/postgres/blob/e6da68a6e1d60a037b63a9c9ed36e5ef0a996769/src/backend/parser/parse_merge.c#L285-L293.
+		 *
+		 * For this reason, even if TargetEntryChangesValue() could prove that
+		 * an action's quals ensure that the action cannot change the distribution
+		 * key, this is not the case as we don't provide action quals to
+		 * TargetEntryChangesValue(), but just joinTree, which only contains
+		 * the "ON (..)" clause quals.
+		 */
 		if (targetEntryDistributionColumn &&
 			TargetEntryChangesValue(targetEntry, distributionColumn, joinTree))
 		{
@@ -1149,7 +1169,8 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 	{
 		deferredError =
 			DeferErrorIfUnsupportedSubqueryPushdown(query,
-													plannerRestrictionContext);
+													plannerRestrictionContext,
+													true);
 		if (deferredError)
 		{
 			ereport(DEBUG1, (errmsg("Sub-query is not pushable, try repartitioning")));
@@ -1410,7 +1431,8 @@ SourceResultPartitionColumnIndex(Query *mergeQuery, List *sourceTargetList,
 	Assert(sourceRepartitionVar);
 
 	int sourceResultRepartitionColumnIndex =
-		DistributionColumnIndex(sourceTargetList, sourceRepartitionVar);
+		FindTargetListEntryWithVarExprAttno(sourceTargetList,
+											sourceRepartitionVar->varattno);
 
 	if (sourceResultRepartitionColumnIndex == -1)
 	{
@@ -1558,6 +1580,33 @@ FetchAndValidateInsertVarIfExists(Oid targetRelationId, Query *query)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * FindTargetListEntryWithVarExprAttno finds the index of the target
+ * entry whose expr is a Var that points to input varattno.
+ *
+ * If no such target entry is found, it returns -1.
+ */
+static int
+FindTargetListEntryWithVarExprAttno(List *targetList, AttrNumber varattno)
+{
+	int targetEntryIndex = 0;
+
+	TargetEntry *targetEntry = NULL;
+	foreach_declared_ptr(targetEntry, targetList)
+	{
+		if (IsA(targetEntry->expr, Var) &&
+			((Var *) targetEntry->expr)->varattno == varattno)
+		{
+			return targetEntryIndex;
+		}
+
+		targetEntryIndex++;
+	}
+
+	return -1;
 }
 
 

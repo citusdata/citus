@@ -13,6 +13,7 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "miscadmin.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -75,17 +76,6 @@
 #endif
 
 
-/* RouterPlanType is used to determine the router plan to invoke */
-typedef enum RouterPlanType
-{
-	INSERT_SELECT_INTO_CITUS_TABLE,
-	INSERT_SELECT_INTO_LOCAL_TABLE,
-	DML_QUERY,
-	SELECT_QUERY,
-	MERGE_QUERY,
-	REPLAN_WITH_BOUND_PARAMETERS
-} RouterPlanType;
-
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = CITUS_LOG_LEVEL_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
@@ -135,13 +125,13 @@ static void AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo,
 													  Const *resultFormatConst);
 static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
-static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
+static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(
+	FastPathRestrictionContext *fastPathContext);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
-static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-												 Node *distributionKeyValue);
+static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
@@ -152,10 +142,12 @@ static RouterPlanType GetRouterPlanType(Query *query,
 										bool hasUnresolvedParams);
 static void ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan,
 										   PlannedStmt *concatPlan);
-static bool CheckPostPlanDistribution(bool isDistributedQuery,
-									  Query *origQuery,
-									  List *rangeTableList,
-									  Query *plannedQuery);
+static bool CheckPostPlanDistribution(DistributedPlanningContext *planContext,
+									  bool isDistributedQuery,
+									  List *rangeTableList);
+#if PG_VERSION_NUM >= PG_VERSION_18
+static int DisableSelfJoinElimination(void);
+#endif
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -166,7 +158,10 @@ distributed_planner(Query *parse,
 {
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
-	Node *distributionKeyValue = NULL;
+	FastPathRestrictionContext fastPathContext = { 0 };
+#if PG_VERSION_NUM >= PG_VERSION_18
+	int saveNestLevel = -1;
+#endif
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
@@ -191,8 +186,7 @@ distributed_planner(Query *parse,
 											&maybeHasForeignDistributedTable);
 		if (needsDistributedPlanning)
 		{
-			fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
-
+			fastPathRouterQuery = FastPathRouterQuery(parse, &fastPathContext);
 			if (maybeHasForeignDistributedTable)
 			{
 				WarnIfListHasForeignDistributedTable(rangeTableList);
@@ -231,6 +225,10 @@ distributed_planner(Query *parse,
 			bool setPartitionedTablesInherited = false;
 			AdjustPartitioningForDistributedPlanning(rangeTableList,
 													 setPartitionedTablesInherited);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+			saveNestLevel = DisableSelfJoinElimination();
+#endif
 		}
 	}
 
@@ -247,8 +245,9 @@ distributed_planner(Query *parse,
 	 */
 	HideCitusDependentObjectsOnQueriesOfPgMetaTables((Node *) parse, NULL);
 
-	/* create a restriction context and put it at the end if context list */
-	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
+	/* create a restriction context and put it at the end of context list */
+	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext(
+		&fastPathContext);
 
 	/*
 	 * We keep track of how many times we've recursed into the planner, primarily
@@ -264,7 +263,7 @@ distributed_planner(Query *parse,
 	{
 		if (fastPathRouterQuery)
 		{
-			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue);
+			result = PlanFastPathDistributedStmt(&planContext);
 		}
 		else
 		{
@@ -276,10 +275,16 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
-			needsDistributedPlanning = CheckPostPlanDistribution(needsDistributedPlanning,
-																 planContext.originalQuery,
-																 rangeTableList,
-																 planContext.query);
+#if PG_VERSION_NUM >= PG_VERSION_18
+			if (needsDistributedPlanning)
+			{
+				Assert(saveNestLevel > 0);
+				AtEOXact_GUC(true, saveNestLevel);
+			}
+#endif
+			needsDistributedPlanning = CheckPostPlanDistribution(&planContext,
+																 needsDistributedPlanning,
+																 rangeTableList);
 
 			if (needsDistributedPlanning)
 			{
@@ -649,30 +654,21 @@ IsMultiTaskPlan(DistributedPlan *distributedPlan)
  * the FastPathPlanner.
  */
 static PlannedStmt *
-PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-							Node *distributionKeyValue)
+PlanFastPathDistributedStmt(DistributedPlanningContext *planContext)
 {
 	FastPathRestrictionContext *fastPathContext =
 		planContext->plannerRestrictionContext->fastPathRestrictionContext;
+	Assert(fastPathContext != NULL);
+	Assert(fastPathContext->fastPathRouterQuery);
 
-	planContext->plannerRestrictionContext->fastPathRestrictionContext->
-	fastPathRouterQuery = true;
+	FastPathPreprocessParseTree(planContext->query);
 
-	if (distributionKeyValue == NULL)
+	if (!fastPathContext->delayFastPathPlanning)
 	{
-		/* nothing to record */
+		planContext->plan = FastPathPlanner(planContext->originalQuery,
+											planContext->query,
+											planContext->boundParams);
 	}
-	else if (IsA(distributionKeyValue, Const))
-	{
-		fastPathContext->distributionKeyValue = (Const *) distributionKeyValue;
-	}
-	else if (IsA(distributionKeyValue, Param))
-	{
-		fastPathContext->distributionKeyHasParam = true;
-	}
-
-	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
-										planContext->boundParams);
 
 	return CreateDistributedPlannedStmt(planContext);
 }
@@ -802,6 +798,8 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	{
 		RaiseDeferredError(distributedPlan->planningError, ERROR);
 	}
+
+	CheckAndBuildDelayedFastPathPlan(planContext, distributedPlan);
 
 	/* remember the plan's identifier for identifying subplans */
 	distributedPlan->planId = planId;
@@ -1104,7 +1102,8 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	 * set_plan_references>add_rtes_to_flat_rtable>add_rte_to_flat_rtable.
 	 */
 	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
-															 plannerRestrictionContext);
+															 plannerRestrictionContext,
+															 routerPlan);
 
 	/*
 	 * If subqueries were recursively planned then we need to replan the query
@@ -2407,13 +2406,15 @@ CopyPlanParamList(List *originalPlanParamList)
 
 
 /*
- * CreateAndPushPlannerRestrictionContext creates a new relation restriction context
- * and a new join context, inserts it to the beginning of the
- * plannerRestrictionContextList. Finally, the planner restriction context is
- * inserted to the beginning of the plannerRestrictionContextList and it is returned.
+ * CreateAndPushPlannerRestrictionContext creates a new planner restriction
+ * context with an empty relation restriction context and an empty join and
+ * a copy of the given fast path restriction context (if present). Finally,
+ * the planner restriction context is inserted to the beginning of the
+ * global plannerRestrictionContextList and it is returned.
  */
 static PlannerRestrictionContext *
-CreateAndPushPlannerRestrictionContext(void)
+CreateAndPushPlannerRestrictionContext(
+	FastPathRestrictionContext *fastPathRestrictionContext)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
 		palloc0(sizeof(PlannerRestrictionContext));
@@ -2426,6 +2427,21 @@ CreateAndPushPlannerRestrictionContext(void)
 
 	plannerRestrictionContext->fastPathRestrictionContext =
 		palloc0(sizeof(FastPathRestrictionContext));
+
+	if (fastPathRestrictionContext != NULL)
+	{
+		/* copy the given fast path restriction context */
+		FastPathRestrictionContext *plannersFastPathCtx =
+			plannerRestrictionContext->fastPathRestrictionContext;
+		plannersFastPathCtx->fastPathRouterQuery =
+			fastPathRestrictionContext->fastPathRouterQuery;
+		plannersFastPathCtx->distributionKeyValue =
+			fastPathRestrictionContext->distributionKeyValue;
+		plannersFastPathCtx->distributionKeyHasParam =
+			fastPathRestrictionContext->distributionKeyHasParam;
+		plannersFastPathCtx->delayFastPathPlanning =
+			fastPathRestrictionContext->delayFastPathPlanning;
+	}
 
 	plannerRestrictionContext->memoryContext = CurrentMemoryContext;
 
@@ -2740,12 +2756,13 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 
 
 static bool
-CheckPostPlanDistribution(bool isDistributedQuery,
-						  Query *origQuery, List *rangeTableList,
-						  Query *plannedQuery)
+CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
+						  isDistributedQuery, List *rangeTableList)
 {
 	if (isDistributedQuery)
 	{
+		Query *origQuery = planContext->originalQuery;
+		Query *plannedQuery = planContext->query;
 		Node *origQuals = origQuery->jointree->quals;
 		Node *plannedQuals = plannedQuery->jointree->quals;
 
@@ -2764,6 +2781,23 @@ CheckPostPlanDistribution(bool isDistributedQuery,
 		 */
 		if (origQuals != NULL && plannedQuals == NULL)
 		{
+			bool planHasDistTable = ListContainsDistributedTableRTE(
+				planContext->plan->rtable, NULL);
+
+			/*
+			 * If the Postgres plan has a distributed table, we know for sure that
+			 * the query requires distributed planning.
+			 */
+			if (planHasDistTable)
+			{
+				return true;
+			}
+
+			/*
+			 * Otherwise, if the query has less range table entries after Postgres,
+			 * planning, we should re-evaluate the distribution of the query. Postgres
+			 * may have optimized away all citus tables, per issues 7782, 7783.
+			 */
 			List *rtesPostPlan = ExtractRangeTableEntryList(plannedQuery);
 			if (list_length(rtesPostPlan) < list_length(rangeTableList))
 			{
@@ -2775,3 +2809,27 @@ CheckPostPlanDistribution(bool isDistributedQuery,
 
 	return isDistributedQuery;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+/*
+ * DisableSelfJoinElimination is used to prevent self join elimination
+ * during distributed query planning to ensure shard queries are correctly
+ * generated. PG18's self join elimination (fc069a3a6) changes the Query
+ * in a way that can cause problems for queries with a mix of Citus and
+ * Postgres tables. Self join elimination is allowed on Postgres tables
+ * only so queries involving shards get the benefit of it.
+ */
+static int
+DisableSelfJoinElimination(void)
+{
+	int NestLevel = NewGUCNestLevel();
+	set_config_option("enable_self_join_elimination", "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+	return NestLevel;
+}
+
+
+#endif

@@ -1,9 +1,20 @@
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+RESET client_min_messages;
 CREATE SCHEMA "citus_split_non_blocking_schema_columnar_partitioned";
 SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
 SET citus.next_shard_id TO 8970000;
 SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
+-- remove coordinator if it is added to pg_dist_node
+SELECT COUNT(master_remove_node(nodename, nodeport)) >= 0
+FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:master_port;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Disable Deferred drop auto cleanup to avoid flaky tests.
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
@@ -149,32 +160,42 @@ SELECT pg_reload_conf();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to\_parent%\_1'
             ORDER BY 1, 2;
-          relname           |                       Constraint                        |                                                         Definition
+          relname           |             Constraint             |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01_8970002 | fkey_from_child_to_child_8970002                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_2020_01_01_8970002 | fkey_from_child_to_dist_8970002                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
- sensors_2020_01_01_8970002 | fkey_from_child_to_parent_8970002                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
- sensors_2020_01_01_8970002 | fkey_from_child_to_ref_8970002                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8970002 | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_2020_01_01_8970002 | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
- sensors_2020_01_01_8970002 | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
- sensors_2020_01_01_8970002 | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8970002 | sensors_2020_01_01_8970002_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_8970000            | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_8970000            | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
- sensors_8970000            | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
- sensors_8970000            | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8970000            | sensors_8970000_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_news_8970003       | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_news_8970003       | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
- sensors_news_8970003       | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
- sensors_news_8970003       | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old_8970001        | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_old_8970001        | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
- sensors_old_8970001        | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
- sensors_old_8970001        | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(22 rows)
+ sensors_2020_01_01_8970002 | fkey_from_child_to_child_8970002   | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
+ sensors_2020_01_01_8970002 | fkey_from_child_to_dist_8970002    | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
+ sensors_2020_01_01_8970002 | fkey_from_child_to_parent_8970002  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
+ sensors_2020_01_01_8970002 | fkey_from_child_to_ref_8970002     | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8970002 | fkey_from_parent_to_child_8970000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
+ sensors_2020_01_01_8970002 | fkey_from_parent_to_dist_8970000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
+ sensors_2020_01_01_8970002 | fkey_from_parent_to_parent_8970000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
+ sensors_2020_01_01_8970002 | fkey_from_parent_to_ref_8970000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8970000            | fkey_from_parent_to_child_8970000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
+ sensors_8970000            | fkey_from_parent_to_dist_8970000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
+ sensors_8970000            | fkey_from_parent_to_parent_8970000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
+ sensors_8970000            | fkey_from_parent_to_ref_8970000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_news_8970003       | fkey_from_parent_to_child_8970000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
+ sensors_news_8970003       | fkey_from_parent_to_dist_8970000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
+ sensors_news_8970003       | fkey_from_parent_to_parent_8970000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
+ sensors_news_8970003       | fkey_from_parent_to_ref_8970000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_old_8970001        | fkey_from_parent_to_child_8970000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
+ sensors_old_8970001        | fkey_from_parent_to_dist_8970000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
+ sensors_old_8970001        | fkey_from_parent_to_parent_8970000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
+ sensors_old_8970001        | fkey_from_parent_to_ref_8970000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+(20 rows)
+
+-- separating generated child FK constraints since PG18 changed their naming (3db61db4)
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to\_parent%\_1');
+ generated_child_fk_constraints
+---------------------------------------------------------------------
+                              2
+(1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
                    tablename                    |                                                                                                       indexdef
@@ -229,10 +250,21 @@ SELECT pg_reload_conf();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to\_parent%\_1'
             ORDER BY 1, 2;
  relname | Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
+
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to\_parent%\_1');
+ generated_child_fk_constraints
+---------------------------------------------------------------------
+                              0
+(1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
         tablename        |                                                                         indexdef
@@ -357,32 +389,41 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to\_parent%\_1'
             ORDER BY 1, 2;
-          relname           |                       Constraint                        |                                                         Definition
+          relname           |             Constraint             |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01_8999004 | fkey_from_child_to_child_8999004                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_2020_01_01_8999004 | fkey_from_child_to_dist_8999004                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
- sensors_2020_01_01_8999004 | fkey_from_child_to_parent_8999004                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
- sensors_2020_01_01_8999004 | fkey_from_child_to_ref_8999004                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999004 | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_2020_01_01_8999004 | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
- sensors_2020_01_01_8999004 | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
- sensors_2020_01_01_8999004 | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999004 | sensors_2020_01_01_8999004_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_8999000            | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_8999000            | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
- sensors_8999000            | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
- sensors_8999000            | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8999000            | sensors_8999000_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_news_8999006       | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_news_8999006       | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
- sensors_news_8999006       | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
- sensors_news_8999006       | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old_8999002        | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_old_8999002        | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
- sensors_old_8999002        | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
- sensors_old_8999002        | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(22 rows)
+ sensors_2020_01_01_8999004 | fkey_from_child_to_child_8999004   | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
+ sensors_2020_01_01_8999004 | fkey_from_child_to_dist_8999004    | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
+ sensors_2020_01_01_8999004 | fkey_from_child_to_parent_8999004  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
+ sensors_2020_01_01_8999004 | fkey_from_child_to_ref_8999004     | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999004 | fkey_from_parent_to_child_8999000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
+ sensors_2020_01_01_8999004 | fkey_from_parent_to_dist_8999000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
+ sensors_2020_01_01_8999004 | fkey_from_parent_to_parent_8999000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
+ sensors_2020_01_01_8999004 | fkey_from_parent_to_ref_8999000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8999000            | fkey_from_parent_to_child_8999000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
+ sensors_8999000            | fkey_from_parent_to_dist_8999000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
+ sensors_8999000            | fkey_from_parent_to_parent_8999000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
+ sensors_8999000            | fkey_from_parent_to_ref_8999000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_news_8999006       | fkey_from_parent_to_child_8999000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
+ sensors_news_8999006       | fkey_from_parent_to_dist_8999000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
+ sensors_news_8999006       | fkey_from_parent_to_parent_8999000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
+ sensors_news_8999006       | fkey_from_parent_to_ref_8999000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_old_8999002        | fkey_from_parent_to_child_8999000  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
+ sensors_old_8999002        | fkey_from_parent_to_dist_8999000   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
+ sensors_old_8999002        | fkey_from_parent_to_parent_8999000 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
+ sensors_old_8999002        | fkey_from_parent_to_ref_8999000    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+(20 rows)
+
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to\_parent%\_1');
+ generated_child_fk_constraints
+---------------------------------------------------------------------
+                              2
+(1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
                    tablename                    |                                                                                                       indexdef
@@ -437,32 +478,41 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to\_parent%\_1'
             ORDER BY 1, 2;
-          relname           |                       Constraint                        |                                                         Definition
+          relname           |             Constraint             |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01_8999005 | fkey_from_child_to_child_8999005                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_dist_8999005                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_parent_8999005                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_ref_8999005                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999005 | sensors_2020_01_01_8999005_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_8999001            | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8999001            | sensors_8999001_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_news_8999007       | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old_8999003        | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_old_8999003        | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_old_8999003        | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_old_8999003        | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(22 rows)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_child_8999005   | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_dist_8999005    | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_parent_8999005  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_ref_8999005     | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8999001            | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_8999001            | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_8999001            | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_8999001            | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_news_8999007       | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_news_8999007       | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_news_8999007       | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_news_8999007       | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_old_8999003        | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_old_8999003        | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_old_8999003        | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_old_8999003        | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+(20 rows)
+
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to\_parent%\_1');
+ generated_child_fk_constraints
+---------------------------------------------------------------------
+                              2
+(1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
                    tablename                    |                                                                                                       indexdef
@@ -623,32 +673,41 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to\_parent%\_1'
             ORDER BY 1, 2;
-          relname           |                       Constraint                        |                                                         Definition
+          relname           |             Constraint             |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01_8999104 | fkey_from_child_to_child_8999104                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
- sensors_2020_01_01_8999104 | fkey_from_child_to_dist_8999104                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
- sensors_2020_01_01_8999104 | fkey_from_child_to_parent_8999104                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
- sensors_2020_01_01_8999104 | fkey_from_child_to_ref_8999104                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999104 | fkey_from_parent_to_child_8999100                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
- sensors_2020_01_01_8999104 | fkey_from_parent_to_dist_8999100                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
- sensors_2020_01_01_8999104 | fkey_from_parent_to_parent_8999100                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
- sensors_2020_01_01_8999104 | fkey_from_parent_to_ref_8999100                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999104 | sensors_2020_01_01_8999104_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
- sensors_8999100            | fkey_from_parent_to_child_8999100                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
- sensors_8999100            | fkey_from_parent_to_dist_8999100                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
- sensors_8999100            | fkey_from_parent_to_parent_8999100                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
- sensors_8999100            | fkey_from_parent_to_ref_8999100                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8999100            | sensors_8999100_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
- sensors_news_8999106       | fkey_from_parent_to_child_8999100                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
- sensors_news_8999106       | fkey_from_parent_to_dist_8999100                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
- sensors_news_8999106       | fkey_from_parent_to_parent_8999100                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
- sensors_news_8999106       | fkey_from_parent_to_ref_8999100                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old_8999102        | fkey_from_parent_to_child_8999100                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
- sensors_old_8999102        | fkey_from_parent_to_dist_8999100                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
- sensors_old_8999102        | fkey_from_parent_to_parent_8999100                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
- sensors_old_8999102        | fkey_from_parent_to_ref_8999100                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(22 rows)
+ sensors_2020_01_01_8999104 | fkey_from_child_to_child_8999104   | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
+ sensors_2020_01_01_8999104 | fkey_from_child_to_dist_8999104    | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
+ sensors_2020_01_01_8999104 | fkey_from_child_to_parent_8999104  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
+ sensors_2020_01_01_8999104 | fkey_from_child_to_ref_8999104     | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999104 | fkey_from_parent_to_child_8999100  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
+ sensors_2020_01_01_8999104 | fkey_from_parent_to_dist_8999100   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
+ sensors_2020_01_01_8999104 | fkey_from_parent_to_parent_8999100 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
+ sensors_2020_01_01_8999104 | fkey_from_parent_to_ref_8999100    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8999100            | fkey_from_parent_to_child_8999100  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
+ sensors_8999100            | fkey_from_parent_to_dist_8999100   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
+ sensors_8999100            | fkey_from_parent_to_parent_8999100 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
+ sensors_8999100            | fkey_from_parent_to_ref_8999100    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_news_8999106       | fkey_from_parent_to_child_8999100  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
+ sensors_news_8999106       | fkey_from_parent_to_dist_8999100   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
+ sensors_news_8999106       | fkey_from_parent_to_parent_8999100 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
+ sensors_news_8999106       | fkey_from_parent_to_ref_8999100    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_old_8999102        | fkey_from_parent_to_child_8999100  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999120(eventdatetime, measureid)
+ sensors_old_8999102        | fkey_from_parent_to_dist_8999100   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999116(measureid)
+ sensors_old_8999102        | fkey_from_parent_to_parent_8999100 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999118(eventdatetime, measureid)
+ sensors_old_8999102        | fkey_from_parent_to_ref_8999100    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+(20 rows)
+
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to\_parent%\_1');
+ generated_child_fk_constraints
+---------------------------------------------------------------------
+                              2
+(1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
                    tablename                    |                                                                                                       indexdef
@@ -703,54 +762,61 @@ SELECT public.wait_for_resource_cleanup();
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
             WHERE tbl.relname like '%_89%'
+            AND fk."Constraint" NOT LIKE 'sensors%' AND fk."Constraint" NOT LIKE '%to\_parent%\_1'
             ORDER BY 1, 2;
-          relname           |                       Constraint                        |                                                         Definition
+          relname           |             Constraint             |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01_8999005 | fkey_from_child_to_child_8999005                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_dist_8999005                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_parent_8999005                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_ref_8999005                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999005 | sensors_2020_01_01_8999005_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_2020_01_01_8999105 | fkey_from_child_to_child_8999105                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
- sensors_2020_01_01_8999105 | fkey_from_child_to_dist_8999105                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
- sensors_2020_01_01_8999105 | fkey_from_child_to_parent_8999105                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
- sensors_2020_01_01_8999105 | fkey_from_child_to_ref_8999105                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999105 | fkey_from_parent_to_child_8999101                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
- sensors_2020_01_01_8999105 | fkey_from_parent_to_dist_8999101                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
- sensors_2020_01_01_8999105 | fkey_from_parent_to_parent_8999101                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
- sensors_2020_01_01_8999105 | fkey_from_parent_to_ref_8999101                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999105 | sensors_2020_01_01_8999105_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_8999001            | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8999001            | sensors_8999001_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_8999101            | fkey_from_parent_to_child_8999101                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
- sensors_8999101            | fkey_from_parent_to_dist_8999101                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
- sensors_8999101            | fkey_from_parent_to_parent_8999101                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
- sensors_8999101            | fkey_from_parent_to_ref_8999101                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8999101            | sensors_8999101_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_news_8999007       | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_news_8999107       | fkey_from_parent_to_child_8999101                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
- sensors_news_8999107       | fkey_from_parent_to_dist_8999101                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
- sensors_news_8999107       | fkey_from_parent_to_parent_8999101                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
- sensors_news_8999107       | fkey_from_parent_to_ref_8999101                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old_8999003        | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_old_8999003        | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_old_8999003        | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_old_8999003        | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old_8999103        | fkey_from_parent_to_child_8999101                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
- sensors_old_8999103        | fkey_from_parent_to_dist_8999101                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
- sensors_old_8999103        | fkey_from_parent_to_parent_8999101                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
- sensors_old_8999103        | fkey_from_parent_to_ref_8999101                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(44 rows)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_child_8999005   | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_dist_8999005    | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_parent_8999005  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_ref_8999005     | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999105 | fkey_from_child_to_child_8999105   | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
+ sensors_2020_01_01_8999105 | fkey_from_child_to_dist_8999105    | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
+ sensors_2020_01_01_8999105 | fkey_from_child_to_parent_8999105  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
+ sensors_2020_01_01_8999105 | fkey_from_child_to_ref_8999105     | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999105 | fkey_from_parent_to_child_8999101  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
+ sensors_2020_01_01_8999105 | fkey_from_parent_to_dist_8999101   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
+ sensors_2020_01_01_8999105 | fkey_from_parent_to_parent_8999101 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
+ sensors_2020_01_01_8999105 | fkey_from_parent_to_ref_8999101    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8999001            | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_8999001            | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_8999001            | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_8999001            | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8999101            | fkey_from_parent_to_child_8999101  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
+ sensors_8999101            | fkey_from_parent_to_dist_8999101   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
+ sensors_8999101            | fkey_from_parent_to_parent_8999101 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
+ sensors_8999101            | fkey_from_parent_to_ref_8999101    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_news_8999007       | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_news_8999007       | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_news_8999007       | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_news_8999007       | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_news_8999107       | fkey_from_parent_to_child_8999101  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
+ sensors_news_8999107       | fkey_from_parent_to_dist_8999101   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
+ sensors_news_8999107       | fkey_from_parent_to_parent_8999101 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
+ sensors_news_8999107       | fkey_from_parent_to_ref_8999101    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_old_8999003        | fkey_from_parent_to_child_8999001  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_old_8999003        | fkey_from_parent_to_dist_8999001   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_old_8999003        | fkey_from_parent_to_parent_8999001 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_old_8999003        | fkey_from_parent_to_ref_8999001    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_old_8999103        | fkey_from_parent_to_child_8999101  | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999121(eventdatetime, measureid)
+ sensors_old_8999103        | fkey_from_parent_to_dist_8999101   | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999117(measureid)
+ sensors_old_8999103        | fkey_from_parent_to_parent_8999101 | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999119(eventdatetime, measureid)
+ sensors_old_8999103        | fkey_from_parent_to_ref_8999101    | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+(40 rows)
+
+    SELECT count(*) AS generated_child_fk_constraints
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            AND (fk."Constraint" LIKE 'sensors%' OR fk."Constraint" LIKE '%to\_parent%\_1');
+ generated_child_fk_constraints
+---------------------------------------------------------------------
+                              4
+(1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
                    tablename                    |                                                                                                       indexdef
@@ -841,3 +907,5 @@ drop cascades to table citus_split_non_blocking_schema_columnar_partitioned.colo
 drop cascades to table citus_split_non_blocking_schema_columnar_partitioned.colocated_partitioned_table
 drop cascades to table citus_split_non_blocking_schema_columnar_partitioned.reference_table
 --END : Cleanup
+SET client_min_messages TO WARNING;
+DROP EXTENSION citus_columnar CASCADE;

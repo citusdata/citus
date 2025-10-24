@@ -42,6 +42,7 @@
 #include "parser/parse_type.h"
 #include "storage/large_object.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/syscache.h"
 
 #include "distributed/citus_depended_object.h"
@@ -369,6 +370,20 @@ DistOpsValidityState(Node *node, const DistributeObjectOps *ops)
 {
 	if (ops && ops->operationType == DIST_OPS_CREATE)
 	{
+		/*
+		 * We should beware of qualifying the CREATE statement too early.
+		 */
+		if (nodeTag(node) == T_CreateDomainStmt)
+		{
+			/*
+			 * Create Domain statements should be qualified after local creation
+			 * because in case of an error in creation, we don't want to print
+			 * the error with the qualified name, as that would differ with
+			 * vanilla Postgres error output.
+			 */
+			return ShouldQualifyAfterLocalCreation;
+		}
+
 		/*
 		 * We should not validate CREATE statements because no address exists
 		 * here yet.

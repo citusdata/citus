@@ -58,6 +58,7 @@
 
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
+#include "distributed/background_worker_utils.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -573,12 +574,16 @@ FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple, TupleDesc tupleDesc
 {
 	Assert(heapTuple->t_tableOid == DistPartitionRelationId());
 
-	bool isNullArray[Natts_pg_dist_partition];
-	Datum datumArray[Natts_pg_dist_partition];
+	Datum *datumArray = (Datum *) palloc(tupleDesc->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDesc->natts * sizeof(bool));
+
 	heap_deform_tuple(heapTuple, tupleDesc, datumArray, isNullArray);
 
 	Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 	Oid relationId = DatumGetObjectId(relationIdDatum);
+
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	return relationId;
 }
@@ -814,7 +819,7 @@ NodeListInsertCommand(List *workerNodeList)
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
 					 "noderack, hasmetadata, metadatasynced, isactive, noderole, "
-					 "nodecluster, shouldhaveshards) VALUES ");
+					 "nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
@@ -824,13 +829,14 @@ NodeListInsertCommand(List *workerNodeList)
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
 		char *shouldHaveShards = workerNode->shouldHaveShards ? "TRUE" : "FALSE";
+		char *nodeiscloneString = workerNode->nodeisclone ? "TRUE" : "FALSE";
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s)",
+						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s, %s, %d)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
@@ -841,7 +847,9 @@ NodeListInsertCommand(List *workerNodeList)
 						 isActiveString,
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster),
-						 shouldHaveShards);
+						 shouldHaveShards,
+						 nodeiscloneString,
+						 workerNode->nodeprimarynodeid);
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
@@ -875,9 +883,11 @@ NodeListIdempotentInsertCommand(List *workerNodeList)
 						  "hasmetadata = EXCLUDED.hasmetadata, "
 						  "isactive = EXCLUDED.isactive, "
 						  "noderole = EXCLUDED.noderole, "
-						  "nodecluster = EXCLUDED.nodecluster ,"
+						  "nodecluster = EXCLUDED.nodecluster, "
 						  "metadatasynced = EXCLUDED.metadatasynced, "
-						  "shouldhaveshards = EXCLUDED.shouldhaveshards";
+						  "shouldhaveshards = EXCLUDED.shouldhaveshards, "
+						  "nodeisclone = EXCLUDED.nodeisclone, "
+						  "nodeprimarynodeid = EXCLUDED.nodeprimarynodeid";
 	appendStringInfoString(nodeInsertIdempotentCommand, onConflictStr);
 	return nodeInsertIdempotentCommand->data;
 }
@@ -3152,37 +3162,26 @@ MetadataSyncSigAlrmHandler(SIGNAL_ARGS)
 BackgroundWorkerHandle *
 SpawnSyncNodeMetadataToNodes(Oid database, Oid extensionOwner)
 {
-	BackgroundWorker worker;
-	BackgroundWorkerHandle *handle = NULL;
+	char workerName[BGW_MAXLEN];
 
-	/* Configure a worker. */
-	memset(&worker, 0, sizeof(worker));
-	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
+	SafeSnprintf(workerName, BGW_MAXLEN,
 				 "Citus Metadata Sync: %u/%u",
 				 database, extensionOwner);
-	worker.bgw_flags =
-		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 
-	/* don't restart, we manage restarts from maintenance daemon */
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
-	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "SyncNodeMetadataToNodesMain");
-	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
-	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
-			 sizeof(Oid));
-	worker.bgw_notify_pid = MyProcPid;
-
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-	{
-		return NULL;
-	}
-
-	pid_t pid;
-	WaitForBackgroundWorkerStartup(handle, &pid);
-
-	return handle;
+	CitusBackgroundWorkerConfig config = {
+		.workerName = workerName,
+		.functionName = "SyncNodeMetadataToNodesMain",
+		.mainArg = ObjectIdGetDatum(MyDatabaseId),
+		.extensionOwner = extensionOwner,
+		.needsNotification = true,
+		.waitForStartup = false,
+		.restartTime = CITUS_BGW_NEVER_RESTART,
+		.startTime = CITUS_BGW_DEFAULT_START_TIME,
+		.workerType = NULL, /* use default */
+		.extraData = NULL,
+		.extraDataSize = 0
+	};
+	return RegisterCitusBackgroundWorker(&config);
 }
 
 
@@ -5241,7 +5240,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 		bool forceDelegationIsNull = false;
 		Datum forceDelegationDatum =
 			heap_getattr(nextTuple,
-						 Anum_pg_dist_object_force_delegation,
+						 GetForceDelegationAttrIndexInPgDistObject(tupleDesc) + 1,
 						 tupleDesc,
 						 &forceDelegationIsNull);
 		bool forceDelegation = DatumGetBool(forceDelegationDatum);

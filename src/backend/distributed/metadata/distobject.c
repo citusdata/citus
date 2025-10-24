@@ -109,12 +109,19 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	Oid classid = PG_GETARG_OID(0);
 	Oid objid = PG_GETARG_OID(1);
 	int32 objsubid = PG_GETARG_INT32(2);
+
+	/*
+	 * SQL function master_unmark_object_distributed doesn't expect the
+	 * 4th argument but SQL function citus_unmark_object_distributed does
+	 * so as checkobjectexistence argument. For this reason, we try to
+	 * get the 4th argument only if this C function is called with 4
+	 * arguments.
+	 */
 	bool checkObjectExistence = true;
-	if (!PG_ARGISNULL(3))
+	if (PG_NARGS() == 4)
 	{
 		checkObjectExistence = PG_GETARG_BOOL(3);
 	}
-
 
 	ObjectAddress address = { 0 };
 	ObjectAddressSubSet(address, classid, objid, objsubid);
@@ -567,6 +574,38 @@ IsAnyObjectDistributed(const List *addresses)
 
 
 /*
+ * IsAnyParentObjectDistributed - true if at least one of the
+ * given addresses is distributed. If an address has a non-zero
+ * objectSubId, it checks the parent object (the object with
+ * the same classId and objid, but with objectSubId = 0). For
+ * example, a column address will check the table address.
+ * If the address has a zero objectSubId, it checks the address
+ * itself.
+ */
+bool
+IsAnyParentObjectDistributed(const List *addresses)
+{
+	bool isDistributed = false;
+	ListCell *lc = NULL;
+	foreach(lc, addresses)
+	{
+		ObjectAddress *address = (ObjectAddress *) lfirst(lc);
+		int32 savedObjectSubId = address->objectSubId;
+		address->objectSubId = 0;
+		isDistributed = IsObjectDistributed(address);
+		address->objectSubId = savedObjectSubId;
+
+		if (isDistributed)
+		{
+			break;
+		}
+	}
+
+	return isDistributed;
+}
+
+
+/*
  * GetDistributedObjectAddressList returns a list of ObjectAddresses that contains all
  * distributed objects as marked in pg_dist_object
  */
@@ -641,11 +680,9 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 	HeapTuple heapTuple;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum values[Natts_pg_dist_object];
-		bool isnull[Natts_pg_dist_object];
-		bool replace[Natts_pg_dist_object];
-
-		memset(replace, 0, sizeof(replace));
+		Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+		bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
+		bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
 
 		replace[Anum_pg_dist_object_colocationid - 1] = true;
 
@@ -659,6 +696,10 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 
 		CatalogTupleUpdate(pgDistObjectRel, &heapTuple->t_self, heapTuple);
 		CitusInvalidateRelcacheByRelid(DistObjectRelationId());
+
+		pfree(values);
+		pfree(isnull);
+		pfree(replace);
 	}
 
 	systable_endscan(scanDescriptor);
@@ -743,4 +784,24 @@ DistributedSequenceList(void)
 	systable_endscan(pgDistObjectScan);
 	relation_close(pgDistObjectRel, AccessShareLock);
 	return distributedSequenceList;
+}
+
+
+/*
+ * GetForceDelegationAttrIndexInPgDistObject returns attrnum for force_delegation attr.
+ *
+ * force_delegation attr was added to table pg_dist_object using alter operation after
+ * the version where Citus started supporting downgrades, and it's only column that we've
+ * introduced to pg_dist_object since then.
+ *
+ * And in case of a downgrade + upgrade, tupleDesc->natts becomes greater than
+ * Natts_pg_dist_object and when this happens, then we know that attrnum force_delegation is
+ * not Anum_pg_dist_object_force_delegation anymore but tupleDesc->natts - 1.
+ */
+int
+GetForceDelegationAttrIndexInPgDistObject(TupleDesc tupleDesc)
+{
+	return tupleDesc->natts == Natts_pg_dist_object
+		   ? (Anum_pg_dist_object_force_delegation - 1)
+		   : tupleDesc->natts - 1;
 }

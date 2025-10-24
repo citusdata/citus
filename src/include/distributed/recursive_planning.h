@@ -16,10 +16,13 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 
+extern bool EnableRecurringOuterJoinPushdown;
+extern bool EnableOuterJoinsWithPseudoconstantQualsPrePG17;
 typedef struct RecursivePlanningContextInternal RecursivePlanningContext;
 
 typedef struct RangeTblEntryIndex
@@ -32,7 +35,8 @@ extern PlannerRestrictionContext * GetPlannerRestrictionContext(
 	RecursivePlanningContext *recursivePlanningContext);
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
-												   plannerRestrictionContext);
+												   plannerRestrictionContext,
+												   RouterPlanType routerPlan);
 extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
 extern Query * BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList,
 									   char *resultId);
@@ -51,6 +55,11 @@ extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
 extern bool IsRelationLocalTableOrMatView(Oid relationId);
 extern bool ContainsReferencesToOuterQuery(Query *query);
 extern void UpdateVarNosInNode(Node *node, Index newVarNo);
-
-
+extern bool CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
+												  int *outerRtIndex,
+												  RangeTblEntry **outerRte,
+												  RangeTblEntry **distRte,
+												  int *attnum);
+bool ResolveBaseVarFromSubquery(Var *var, Query *query, Var **baseVar,
+								RangeTblEntry **baseRte);
 #endif /* RECURSIVE_PLANNING_H */

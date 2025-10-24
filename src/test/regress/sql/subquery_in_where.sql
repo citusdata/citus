@@ -34,7 +34,8 @@ SELECT *
 FROM   (SELECT 1 AS id, 2 AS value_1, 3 AS value_3
 		UNION ALL SELECT 2 as id, 3 as value_1, 4 as value_3) AS tt1
 WHERE  id IN (SELECT user_id
-              FROM   events_table);
+              FROM   events_table)
+ORDER BY 1;
 
 -- Recurring tuples in from clause as CTE and SET operation in WHERE clause
 SELECT Count(*)
@@ -929,10 +930,42 @@ where TRUE or (((t3.vkey) >= (select
 -- Distributed table t3 is now empty
 SELECT vkey, pkey FROM t3;
 
+-- Redundant WHERE clause with distributed parititioned table
+CREATE TABLE a (a int);
+INSERT INTO a VALUES (1);
+
+-- populated distributed partitioned table
+create table partitioned_table (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE par_1 PARTITION OF partitioned_table FOR VALUES FROM (1) TO (41);
+CREATE TABLE par_2 PARTITION OF partitioned_table FOR VALUES FROM (41) TO (81);
+CREATE TABLE par_3 PARTITION OF partitioned_table FOR VALUES FROM (81) TO (121);
+CREATE TABLE par_4 PARTITION OF partitioned_table FOR VALUES FROM (121) TO (161);
+SELECT create_distributed_table('partitioned_table', 'a');
+insert into partitioned_table(a) select  i from generate_series(1,160) i;
+
+-- test citus table in init plan
+-- with redundant WHERE clause
+SELECT CASE WHEN EXISTS (
+       SELECT * FROM partitioned_table
+   ) THEN 1 ELSE 0 END AS table_non_empty
+FROM   a
+WHERE true;
+
+-- test citus table in init plan
+-- with redundant WHERE clause involving
+-- a citus table
+SELECT CASE WHEN EXISTS (
+       SELECT * FROM partitioned_table
+   ) THEN 1 ELSE 0 END AS table_non_empty
+FROM   a
+WHERE true OR NOT EXISTS (SELECT 1 FROM t1);
+
 DROP TABLE local_table;
 DROP TABLE t0;
 DROP TABLE t1;
 DROP TABLE t3;
 DROP TABLE t7;
+DROP TABLE a;
+DROP TABLE partitioned_table CASCADE;
 DROP SCHEMA subquery_in_where CASCADE;
 SET search_path TO public;

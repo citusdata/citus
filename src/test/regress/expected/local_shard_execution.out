@@ -312,8 +312,8 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                Filter: (age = 20)
 (8 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
-                                                             QUERY PLAN
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+                                                              QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
    Task Count: 1
@@ -327,7 +327,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distribute
                Filter: (age = 20)
 (10 rows)
 
-EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 WITH r AS ( SELECT GREATEST(random(), 2) z,* FROM distributed_table)
 SELECT 1 FROM r WHERE z < 3;
                                                QUERY PLAN
@@ -368,8 +368,8 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                      Filter: (age = 20)
 (9 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
-                                                                QUERY PLAN
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
+                                                                 QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
@@ -2410,8 +2410,10 @@ NOTICE:  executing the command locally: UPDATE local_shard_execution.event_respo
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
      1
@@ -2420,8 +2422,10 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
+DEBUG:  Local executor: Using task's cached local plan for task 0
  count
 ---------------------------------------------------------------------
      1
@@ -2430,8 +2434,10 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 UPDATE event_responses SET response = 'no' WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: UPDATE local_shard_execution.event_responses_1480001 event_responses SET response = 'no'::local_shard_execution.invite_resp WHERE (event_id OPERATOR(pg_catalog.=) 16)
+DEBUG:  Local executor: Using task's cached local plan for task 0
 INSERT INTO event_responses VALUES (16, 666, 'maybe')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
@@ -2529,8 +2535,10 @@ SET citus.log_remote_commands TO ON;
 SELECT * FROM event_responses_no_pkey WHERE event_id = 2;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
+DEBUG:  Fast-path router query: created local execution plan to avoid deparse and compile of shard query
 DEBUG:  query has a single distribution column value: 2
 NOTICE:  executing the command locally: SELECT event_id, user_id, response FROM local_shard_execution.event_responses_no_pkey_1480007 event_responses_no_pkey WHERE (event_id OPERATOR(pg_catalog.=) 2)
+DEBUG:  Local executor: Using task's cached local plan for task 0
  event_id | user_id | response
 ---------------------------------------------------------------------
 (0 rows)

@@ -25,8 +25,14 @@ ARBITRARY_SCHEDULE_NAMES = [
     "single_shard_table_prep_schedule",
 ]
 
-BEFORE_PG_UPGRADE_SCHEDULE = "./before_pg_upgrade_schedule"
-AFTER_PG_UPGRADE_SCHEDULE = "./after_pg_upgrade_schedule"
+BEFORE_PG_UPGRADE_WITH_COLUMNAR_SCHEDULE = "./before_pg_upgrade_with_columnar_schedule"
+BEFORE_PG_UPGRADE_WITHOUT_COLUMNAR_SCHEDULE = (
+    "./before_pg_upgrade_without_columnar_schedule"
+)
+AFTER_PG_UPGRADE_WITH_COLUMNAR_SCHEDULE = "./after_pg_upgrade_with_columnar_schedule"
+AFTER_PG_UPGRADE_WITHOUT_COLUMNAR_SCHEDULE = (
+    "./after_pg_upgrade_without_columnar_schedule"
+)
 
 CREATE_SCHEDULE = "./create_schedule"
 POSTGRES_SCHEDULE = "./postgres_schedule"
@@ -43,7 +49,7 @@ CITUS_ARBITRARY_TEST_DIR = "./tmp_citus_test"
 
 MASTER = "master"
 # This should be updated when citus version changes
-MASTER_VERSION = "13.1"
+MASTER_VERSION = "14.0"
 
 HOME = expanduser("~")
 
@@ -104,6 +110,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.is_mx = True
         self.is_citus = True
         self.all_null_dist_key = False
+        self.test_with_columnar = False
         self.name = type(self).__name__
         self.settings = {
             "shared_preload_libraries": "citus",
@@ -402,3 +409,4 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
+        self.test_with_columnar = arguments["--test-with-columnar"]

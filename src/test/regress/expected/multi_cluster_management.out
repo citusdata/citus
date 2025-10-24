@@ -72,6 +72,45 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (2 rows)
 
+-- get all nodes
+SELECT * from citus_nodes;
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57637 | worker      | t
+ localhost |    57638 | worker      | t
+ localhost |    57636 | coordinator | t
+(3 rows)
+
+-- get get active nodes
+SELECT * from citus_nodes where active = 't';
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57637 | worker      | t
+ localhost |    57638 | worker      | t
+ localhost |    57636 | coordinator | t
+(3 rows)
+
+-- get coordinator nodes
+SELECT * from citus_nodes where role = 'coordinator';
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57636 | coordinator | t
+(1 row)
+
+-- get worker nodes
+SELECT * from citus_nodes where role = 'worker';
+ nodename  | nodeport |  role  | active
+---------------------------------------------------------------------
+ localhost |    57637 | worker | t
+ localhost |    57638 | worker | t
+(2 rows)
+
+-- get nodes with unknown role
+SELECT * from citus_nodes where role = 'foo';
+ nodename | nodeport | role | active
+---------------------------------------------------------------------
+(0 rows)
+
 -- try to add a node that is already in the cluster
 SELECT * FROM master_add_node('localhost', :worker_1_port);
  master_add_node
@@ -126,6 +165,34 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (1 row)
 
+-- get get active nodes
+SELECT * from citus_nodes where active = 't';
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57636 | coordinator | t
+ localhost |    57637 | worker      | t
+(2 rows)
+
+-- get get inactive nodes
+SELECT * from citus_nodes where active = 'f';
+ nodename  | nodeport |  role  | active
+---------------------------------------------------------------------
+ localhost |    57638 | worker | f
+(1 row)
+
+-- make sure non-superusers can access the view
+CREATE ROLE normaluser;
+SET ROLE normaluser;
+SELECT * FROM citus_nodes;
+ nodename  | nodeport |    role     | active
+---------------------------------------------------------------------
+ localhost |    57636 | coordinator | t
+ localhost |    57638 | worker      | f
+ localhost |    57637 | worker      | t
+(3 rows)
+
+SET ROLE postgres;
+DROP ROLE normaluser;
 -- add some shard placements to the cluster
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
@@ -624,11 +691,11 @@ SELECT
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f
-     11 |       9 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
-     12 |      10 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t
+      3 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | f                | f           |                 0
+     11 |       9 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+     12 |      10 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (3 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
@@ -861,11 +928,11 @@ CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line XX a
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (25, 1000, localhost, 5000, default, f, t, primary, olap, f, t).
+DETAIL:  Failing row contains (25, 1000, localhost, 5000, default, f, t, primary, olap, f, t, f, 0).
 UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (17, 14, localhost, 57637, default, f, t, primary, olap, f, t).
+DETAIL:  Failing row contains (17, 14, localhost, 57637, default, f, t, primary, olap, f, t, f, 0).
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
@@ -888,9 +955,9 @@ SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole =
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeport=8887;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-     27 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f              | t
+     27 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f              | t                | f           |                 0
 (1 row)
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
@@ -969,9 +1036,9 @@ SELECT master_update_node(:worker_1_node, 'somehost', 9000);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-     17 |      14 | somehost |     9000 | default  | f           | t        | primary  | default     | f              | t
+     17 |      14 | somehost |     9000 | default  | f           | t        | primary  | default     | f              | t                | f           |                 0
 (1 row)
 
 -- cleanup
@@ -982,9 +1049,9 @@ SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-     17 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t
+     17 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t                | f           |                 0
 (1 row)
 
 SET client_min_messages TO ERROR;

@@ -171,6 +171,14 @@ static bool FindQueryContainingRTEIdentityInternal(Node *node,
 
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
 
+static bool PartitionColumnSelectedForOuterJoin(Query *query,
+												RelationRestrictionContext *
+												restrictionContext,
+												JoinRestrictionContext *
+												joinRestrictionContext);
+
+static bool PartitionColumnIsInTargetList(Query *query, JoinRestriction *joinRestriction,
+										  RelationRestrictionContext *restrictionContext);
 
 /*
  * AllDistributionKeysInQueryAreEqual returns true if either
@@ -389,6 +397,80 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 	{
 		/* distribution columns are equal, but tables are not co-located */
 		return false;
+	}
+
+	if (!PartitionColumnSelectedForOuterJoin(originalQuery,
+											 restrictionContext,
+											 joinRestrictionContext))
+	{
+		/* outer join does not select partition column of outer relation */
+		return false;
+	}
+	return true;
+}
+
+
+/*
+ * PartitionColumnSelectedForOuterJoin checks whether the partition column of
+ * the outer relation is selected in the target list of the query.
+ *
+ * If there is no outer join, it returns true.
+ */
+static bool
+PartitionColumnSelectedForOuterJoin(Query *query,
+									RelationRestrictionContext *restrictionContext,
+									JoinRestrictionContext *joinRestrictionContext)
+{
+	ListCell *joinRestrictionCell;
+	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
+	{
+		JoinRestriction *joinRestriction = (JoinRestriction *) lfirst(
+			joinRestrictionCell);
+
+		/* Restriction context includes alternative plans, sufficient to check for left joins.*/
+		if (joinRestriction->joinType != JOIN_LEFT)
+		{
+			continue;
+		}
+
+		if (!PartitionColumnIsInTargetList(query, joinRestriction, restrictionContext))
+		{
+			/* outer join does not select partition column of outer relation */
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * PartitionColumnIsInTargetList checks whether the partition column of
+ * the given relation is included in the target list of the query.
+ */
+static bool
+PartitionColumnIsInTargetList(Query *query, JoinRestriction *joinRestriction,
+							  RelationRestrictionContext *restrictionContext)
+{
+	Relids relids = joinRestriction->outerrelRelids;
+	int relationId = -1;
+	Index partitionKeyIndex = InvalidAttrNumber;
+	while ((relationId = bms_next_member(relids, relationId)) >= 0)
+	{
+		RangeTblEntry *rte = joinRestriction->plannerInfo->simple_rte_array[relationId];
+		if (rte->rtekind != RTE_RELATION)
+		{
+			/* skip if it is not a relation */
+			continue;
+		}
+		int targetRTEIndex = GetRTEIdentity(rte);
+		PartitionKeyForRTEIdentityInQuery(query, targetRTEIndex,
+										  &partitionKeyIndex);
+		if (partitionKeyIndex == 0)
+		{
+			/* partition key is not in the target list */
+			return false;
+		}
 	}
 
 	return true;
@@ -2349,7 +2431,7 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 
 /*
  * RangeTableArrayContainsAnyRTEIdentities returns true if any of the range table entries
- * int rangeTableEntries array is an range table relation specified in queryRteIdentities.
+ * in rangeTableEntries array is a range table relation specified in queryRteIdentities.
  */
 static bool
 RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
@@ -2361,6 +2443,18 @@ RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 		RangeTblEntry *rangeTableEntry = rangeTableEntries[rteIndex];
 		List *rangeTableRelationList = NULL;
 		ListCell *rteRelationCell = NULL;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+		/*
+		 * In PG18+, planner array simple_rte_array may contain NULL entries
+		 * for "dead relations". See PG commits 5f6f951 and e9a20e4 for details.
+		 */
+		if (rangeTableEntry == NULL)
+		{
+			continue;
+		}
+#endif
 
 		/*
 		 * Get list of all RTE_RELATIONs in the given range table entry
