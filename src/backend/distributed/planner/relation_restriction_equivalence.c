@@ -986,6 +986,8 @@ GetVarFromAssignedParam(List *outerPlanParamsList, Param *plannerParam,
 			RangeTblEntry *rte = rt_fetch(assignedVar->varno, parse->rtable);
 			if (rte->rtekind == RTE_GROUP)
 			{
+				Assert(assignedVar->varattno >= 1 &&
+					   assignedVar->varattno <= list_length(rte->groupexprs));
 				Node *groupVar = list_nth(rte->groupexprs, assignedVar->varattno - 1);
 				if (IsA(groupVar, Var))
 				{
@@ -994,6 +996,8 @@ GetVarFromAssignedParam(List *outerPlanParamsList, Param *plannerParam,
 				else
 				{
 					/* todo: handle PlaceHolderVar case if needed */
+					ereport(DEBUG2, (errmsg(
+										 "GroupVar maps to non-Var group expr; bailing out")));
 					assignedVar = NULL;
 				}
 			}
