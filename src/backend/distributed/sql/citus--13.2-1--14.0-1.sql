@@ -3,3 +3,4 @@
 
 #include "udfs/citus_prepare_pg_upgrade/14.0-1.sql"
 #include "udfs/citus_finish_pg_upgrade/14.0-1.sql"
+#include "udfs/citus_internal_get_next_colocation_id/14.0-1.sql"
