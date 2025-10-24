@@ -15,20 +15,10 @@ INSERT INTO t2 SELECT i, f(i) FROM generate_series(1, 5) i;
 
 -- there are no subtransactions, so above statement should batch
 -- INSERTs inside the UDF and create on stripe per table.
-WITH rels(rel) AS (
-  VALUES ('t1'::regclass), ('t2'::regclass)
-),
-sids AS (
-  SELECT rel, columnar.get_storage_id(rel) AS sid
-  FROM rels
-)
-SELECT c.relname, COUNT(*) AS count
-FROM columnar_internal.stripe st
-JOIN sids s ON st.storage_id = s.sid
-JOIN pg_catalog.pg_class c ON c.oid = s.rel
-GROUP BY c.relname
-ORDER BY c.relname;
-
+SELECT relname, count(*) FROM columnar.stripe a, pg_class b
+WHERE columnar.get_storage_id(b.oid)=a.storage_id AND relname IN ('t1', 't2')
+GROUP BY relname
+ORDER BY relname;
 
 SELECT * FROM t1 ORDER BY a;
 SELECT * FROM t2 ORDER BY a;
