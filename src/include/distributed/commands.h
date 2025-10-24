@@ -191,6 +191,10 @@ extern List * PreprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt,
 																  const char *queryString,
 																  ProcessUtilityContext
 																  processUtilityContext);
+extern List * PreprocessAlterDistributedObjectStmtAnyNodes(Node *stmt,
+														   const char *queryString,
+														   ProcessUtilityContext
+														   processUtilityContext);
 extern List * PostprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt,
 																   const char *queryString);
 extern List * PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
