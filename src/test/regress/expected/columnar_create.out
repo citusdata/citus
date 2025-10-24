@@ -214,8 +214,8 @@ SELECT COUNT(*) FROM columnar_temp WHERE i < 5;
      4
 (1 row)
 
-SELECT COALESCE(columnar_test_helpers.get_storage_id_if_visible('columnar_temp'::regclass), 0)
-       AS columnar_temp_storage_id \gset
+SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
+FROM pg_class WHERE relname='columnar_temp' \gset
 BEGIN;
   DROP TABLE columnar_temp;
   -- show that we drop stripes properly
