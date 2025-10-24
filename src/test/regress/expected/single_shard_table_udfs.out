@@ -121,7 +121,7 @@ FROM pg_dist_partition WHERE logicalrelid = 'null_dist_key_table'::regclass;
 SELECT column_name_to_column('null_dist_key_table', 'a');
                                                   column_name_to_column
 ---------------------------------------------------------------------
- {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
+ {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varnullingrels (b) :varlevelsup 0 :varreturningtype 0 :varnosyn 1 :varattnosyn 1 :location -1}
 (1 row)
 
 SELECT master_update_shard_statistics(shardid)

@@ -66,6 +66,7 @@ UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '7' WHERE shardid 
 \copy t_range FROM STDIN with (DELIMITER ',')
 \copy t_range FROM STDIN with (DELIMITER ',')
 -- There is a difference in partkey Var representation between PG16 and older versions
+-- There is also a difference between PG18 and older versions
 -- Sanity check here that we can properly do column_to_column_name
 SELECT column_to_column_name(logicalrelid, partkey)
 FROM pg_dist_partition WHERE partkey IS NOT NULL ORDER BY 1 LIMIT 1;

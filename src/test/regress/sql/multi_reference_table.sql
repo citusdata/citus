@@ -768,7 +768,7 @@ WHERE
 
 RESET client_min_messages;
 
--- some tests for mark_tables_colocated
+-- some tests for update_distributed_table_colocation
 -- should error out
 SELECT update_distributed_table_colocation('colocated_table_test_2', colocate_with => 'reference_table_test');
 

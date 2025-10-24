@@ -1200,7 +1200,7 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
--- some tests for mark_tables_colocated
+-- some tests for update_distributed_table_colocation
 -- should error out
 SELECT update_distributed_table_colocation('colocated_table_test_2', colocate_with => 'reference_table_test');
 ERROR:  relation reference_table_test should be a hash or single shard distributed table

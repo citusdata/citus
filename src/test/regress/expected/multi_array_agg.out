@@ -4,7 +4,7 @@
 SET citus.next_shard_id TO 520000;
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 SELECT run_command_on_master_and_workers($r$
-CREATE OR REPLACE FUNCTION array_sort (ANYARRAY)
+CREATE OR REPLACE FUNCTION array_sort_citus (ANYARRAY)
 RETURNS ANYARRAY LANGUAGE SQL
 AS $$
 SELECT ARRAY(SELECT unnest($1) ORDER BY 1)
@@ -30,9 +30,9 @@ ERROR:  array_agg with order by is unsupported
 SELECT array_agg(distinct l_orderkey ORDER BY l_orderkey) FROM lineitem;
 ERROR:  array_agg with order by is unsupported
 -- Check array_agg() for different data types and LIMIT clauses
-SELECT array_sort(array_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort_citus(array_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                    array_sort
+                 array_sort_citus
 ---------------------------------------------------------------------
  {2132,15635,24027,63700,67310,155190}
  {106170}
@@ -46,9 +46,9 @@ SELECT array_sort(array_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
  {88362,89414,169544}
 (10 rows)
 
-SELECT array_sort(array_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort_citus(array_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                           array_sort
+                        array_sort_citus
 ---------------------------------------------------------------------
  {13309.60,21168.23,22824.48,28955.64,45983.16,49620.16}
  {44694.46}
@@ -62,9 +62,9 @@ SELECT array_sort(array_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
  {9681.24,17554.68,30875.02}
 (10 rows)
 
-SELECT array_sort(array_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort_citus(array_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                   array_sort
+                                array_sort_citus
 ---------------------------------------------------------------------
  {01-29-1996,01-30-1996,03-13-1996,03-30-1996,04-12-1996,04-21-1996}
  {01-28-1997}
@@ -78,9 +78,9 @@ SELECT array_sort(array_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
  {10-09-1998,10-23-1998,10-30-1998}
 (10 rows)
 
-SELECT array_sort(array_agg(l_shipmode)) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort_citus(array_agg(l_shipmode)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                          array_sort
+                                       array_sort_citus
 ---------------------------------------------------------------------
  {"AIR       ","FOB       ","MAIL      ","MAIL      ","REG AIR   ","TRUCK     "}
  {"RAIL      "}
@@ -105,10 +105,10 @@ SELECT array_length(array_agg(l_orderkey), 1) FROM lineitem;
 -- shards and contain different aggregates, filter clauses and other complex
 -- expressions. Note that the l_orderkey ranges are such that the matching rows
 -- lie in different shards.
-SELECT l_quantity, count(*), avg(l_extendedprice), array_sort(array_agg(l_orderkey)) FROM lineitem
+SELECT l_quantity, count(*), avg(l_extendedprice), array_sort_citus(array_agg(l_orderkey)) FROM lineitem
 	WHERE l_quantity < 5 AND l_orderkey > 5500 AND l_orderkey < 9500
 	GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity | count |          avg          |                                            array_sort
+ l_quantity | count |          avg          |                                         array_sort_citus
 ---------------------------------------------------------------------
        1.00 |    17 | 1477.1258823529411765 | {5543,5633,5634,5698,5766,5856,5857,5986,8997,9026,9158,9184,9220,9222,9348,9383,9476}
        2.00 |    19 | 3078.4242105263157895 | {5506,5540,5573,5669,5703,5730,5798,5831,5893,5920,5923,9030,9058,9123,9124,9188,9344,9441,9476}
@@ -116,7 +116,7 @@ SELECT l_quantity, count(*), avg(l_extendedprice), array_sort(array_agg(l_orderk
        4.00 |    19 | 5929.7136842105263158 | {5504,5507,5508,5511,5538,5764,5766,5826,5829,5862,5959,5985,9091,9120,9281,9347,9382,9440,9473}
 (4 rows)
 
-SELECT l_quantity, array_sort(array_agg(extract (month FROM o_orderdate))) AS my_month
+SELECT l_quantity, array_sort_citus(array_agg(extract (month FROM o_orderdate))) AS my_month
 	FROM lineitem, orders WHERE l_orderkey = o_orderkey AND l_quantity < 5
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
  l_quantity |                    my_month
@@ -127,10 +127,10 @@ SELECT l_quantity, array_sort(array_agg(extract (month FROM o_orderdate))) AS my
        4.00 | {1,1,1,2,2,2,5,5,6,6,6,6,8,9,10,10,11,11,12}
 (4 rows)
 
-SELECT l_quantity, array_sort(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE l_quantity < 5
+SELECT l_quantity, array_sort_citus(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE l_quantity < 5
 	AND octet_length(l_comment) + octet_length('randomtext'::text) > 40
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity |                 array_sort
+ l_quantity |              array_sort_citus
 ---------------------------------------------------------------------
        1.00 | {11269,11397,11713,11715,11973,18317,18445}
        2.00 | {11847,18061,18247,18953}
@@ -139,17 +139,17 @@ SELECT l_quantity, array_sort(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE
 (4 rows)
 
 -- Check that we can execute array_agg() with an expression containing NULL values
-SELECT array_sort(array_agg(case when l_quantity > 20 then l_quantity else NULL end))
+SELECT array_sort_citus(array_agg(case when l_quantity > 20 then l_quantity else NULL end))
     FROM lineitem WHERE l_orderkey  < 10;
-                                                                    array_sort
+                                                                 array_sort_citus
 ---------------------------------------------------------------------
  {24.00,26.00,26.00,27.00,28.00,28.00,28.00,30.00,32.00,35.00,36.00,37.00,38.00,38.00,45.00,46.00,49.00,50.00,NULL,NULL,NULL,NULL,NULL,NULL,NULL}
 (1 row)
 
 -- Check that we return NULL in case there are no input rows to array_agg()
-SELECT array_sort(array_agg(l_orderkey))
+SELECT array_sort_citus(array_agg(l_orderkey))
     FROM lineitem WHERE l_orderkey < 0;
- array_sort
+ array_sort_citus
 ---------------------------------------------------------------------
  {}
 (1 row)

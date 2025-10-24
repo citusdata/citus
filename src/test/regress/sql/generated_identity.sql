@@ -242,11 +242,11 @@ CREATE TABLE color (
 ) USING columnar;
 SELECT create_distributed_table('color', 'color_id');
 INSERT INTO color(color_name) VALUES ('Blue');
-\d+ color
+SELECT pg_get_serial_sequence('color', 'color_id');
 
 \c - - - :worker_1_port
 SET search_path TO generated_identities;
-\d+ color
+SELECT pg_get_serial_sequence('color', 'color_id');
 INSERT INTO color(color_name) VALUES ('Red');
 -- alter sequence .. restart
 ALTER SEQUENCE color_color_id_seq RESTART WITH 1000;

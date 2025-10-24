@@ -149,13 +149,6 @@ typedef struct ExplainAnalyzeDestination
 
 #if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
 
-/*
- * Various places within need to convert bytes to kilobytes.  Round these up
- * to the next whole kilobyte.
- * copied from explain.c
- */
-#define BYTES_TO_KILOBYTES(b) (((b) + 1023) / 1024)
-
 /* copied from explain.c */
 /* Instrumentation data for SERIALIZE option */
 typedef struct SerializeMetrics
@@ -166,13 +159,7 @@ typedef struct SerializeMetrics
 } SerializeMetrics;
 
 /* copied from explain.c */
-static bool peek_buffer_usage(ExplainState *es, const BufferUsage *usage);
-static void show_buffer_usage(ExplainState *es, const BufferUsage *usage);
-static void show_memory_counters(ExplainState *es,
-								 const MemoryContextCounters *mem_counters);
 static void ExplainIndentText(ExplainState *es);
-static void ExplainPrintSerialize(ExplainState *es,
-								  SerializeMetrics *metrics);
 static SerializeMetrics GetSerializationMetrics(DestReceiver *dest);
 
 /*
@@ -200,6 +187,23 @@ typedef struct SerializeDestReceiver
 } SerializeDestReceiver;
 #endif
 
+#if PG_VERSION_NUM >= PG_VERSION_17
+
+/*
+ * Various places within need to convert bytes to kilobytes.  Round these up
+ * to the next whole kilobyte.
+ * copied from explain.c
+ */
+#define BYTES_TO_KILOBYTES(b) (((b) + 1023) / 1024)
+
+/* copied from explain.c */
+static bool peek_buffer_usage(ExplainState *es, const BufferUsage *usage);
+static void show_buffer_usage(ExplainState *es, const BufferUsage *usage);
+static void show_memory_counters(ExplainState *es,
+								 const MemoryContextCounters *mem_counters);
+static void ExplainPrintSerialize(ExplainState *es,
+								  SerializeMetrics *metrics);
+#endif
 
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
@@ -2409,7 +2413,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 	/* Create textual dump of plan tree */
 	ExplainPrintPlan(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
+#if PG_VERSION_NUM >= PG_VERSION_17
 	/* Show buffer and/or memory usage in planning */
 	if (peek_buffer_usage(es, bufusage) || mem_counters)
 	{
@@ -2455,7 +2459,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 	if (es->costs)
 		ExplainPrintJITSummary(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
+#if PG_VERSION_NUM >= PG_VERSION_17
 	if (es->serialize != EXPLAIN_SERIALIZE_NONE)
 	{
 		/* the SERIALIZE option requires its own tuple receiver */
@@ -2530,6 +2534,50 @@ elapsed_time(instr_time *starttime)
 
 
 #if PG_VERSION_NUM >= PG_VERSION_17 && PG_VERSION_NUM < PG_VERSION_18
+/*
+ * Indent a text-format line.
+ *
+ * We indent by two spaces per indentation level.  However, when emitting
+ * data for a parallel worker there might already be data on the current line
+ * (cf. ExplainOpenWorker); in that case, don't indent any more.
+ *
+ * Copied from explain.c.
+ */
+static void
+ExplainIndentText(ExplainState *es)
+{
+	Assert(es->format == EXPLAIN_FORMAT_TEXT);
+	if (es->str->len == 0 || es->str->data[es->str->len - 1] == '\n')
+		appendStringInfoSpaces(es->str, es->indent * 2);
+}
+
+
+/*
+ * GetSerializationMetrics - collect metrics
+ *
+ * We have to be careful here since the receiver could be an IntoRel
+ * receiver if the subject statement is CREATE TABLE AS.  In that
+ * case, return all-zeroes stats.
+ *
+ * Copied from explain.c.
+ */
+static SerializeMetrics
+GetSerializationMetrics(DestReceiver *dest)
+{
+	SerializeMetrics empty;
+
+	if (dest->mydest == DestExplainSerialize)
+		return ((SerializeDestReceiver *) dest)->metrics;
+
+	memset(&empty, 0, sizeof(SerializeMetrics));
+	INSTR_TIME_SET_ZERO(empty.timeSpent);
+
+	return empty;
+}
+#endif
+
+
+#if PG_VERSION_NUM >= PG_VERSION_17
 /*
  * Return whether show_buffer_usage would have anything to print, if given
  * the same 'usage' data.  Note that when the format is anything other than
@@ -2748,24 +2796,6 @@ show_buffer_usage(ExplainState *es, const BufferUsage *usage)
 
 
 /*
- * Indent a text-format line.
- *
- * We indent by two spaces per indentation level.  However, when emitting
- * data for a parallel worker there might already be data on the current line
- * (cf. ExplainOpenWorker); in that case, don't indent any more.
- *
- * Copied from explain.c.
- */
-static void
-ExplainIndentText(ExplainState *es)
-{
-	Assert(es->format == EXPLAIN_FORMAT_TEXT);
-	if (es->str->len == 0 || es->str->data[es->str->len - 1] == '\n')
-		appendStringInfoSpaces(es->str, es->indent * 2);
-}
-
-
-/*
  * Show memory usage details.
  *
  * Copied from explain.c.
@@ -2849,29 +2879,5 @@ ExplainPrintSerialize(ExplainState *es, SerializeMetrics *metrics)
 	}
 
 	ExplainCloseGroup("Serialization", "Serialization", true, es);
-}
-
-
-/*
- * GetSerializationMetrics - collect metrics
- *
- * We have to be careful here since the receiver could be an IntoRel
- * receiver if the subject statement is CREATE TABLE AS.  In that
- * case, return all-zeroes stats.
- *
- * Copied from explain.c.
- */
-static SerializeMetrics
-GetSerializationMetrics(DestReceiver *dest)
-{
-	SerializeMetrics empty;
-
-	if (dest->mydest == DestExplainSerialize)
-		return ((SerializeDestReceiver *) dest)->metrics;
-
-	memset(&empty, 0, sizeof(SerializeMetrics));
-	INSTR_TIME_SET_ZERO(empty.timeSpent);
-
-	return empty;
 }
 #endif

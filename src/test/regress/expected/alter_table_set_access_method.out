@@ -379,6 +379,7 @@ ORDER BY indexname;
 
 SELECT conname FROM pg_constraint
 WHERE conrelid = 'heap_\''tbl'::regclass
+  AND contype <> 'n'
 ORDER BY conname;
         conname
 ---------------------------------------------------------------------
@@ -416,6 +417,7 @@ ORDER BY indexname;
 
 SELECT conname FROM pg_constraint
 WHERE conrelid = 'heap_\''tbl'::regclass
+  AND contype <> 'n'
 ORDER BY conname;
        conname
 ---------------------------------------------------------------------

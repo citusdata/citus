@@ -39,6 +39,7 @@ CREATE TABLE part_table_p202009 PARTITION OF part_table FOR VALUES FROM ('2020-0
 SELECT relname, conname, pg_catalog.pg_get_constraintdef(con.oid, true)
 FROM pg_constraint con JOIN pg_class rel ON (rel.oid=con.conrelid)
 WHERE relname LIKE 'part_table%'
+    AND contype <> 'n'
 ORDER BY 1,2,3;
 
 -- check the constraint names on the worker node
@@ -47,6 +48,7 @@ ORDER BY 1,2,3;
 SELECT relname, conname, pg_catalog.pg_get_constraintdef(con.oid, true)
 FROM pg_constraint con JOIN pg_class rel ON (rel.oid=con.conrelid)
 WHERE relname SIMILAR TO 'part_table%\_\d%'
+    AND contype <> 'n'
 ORDER BY 1,2,3;
 
 \c - - - :master_port

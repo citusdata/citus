@@ -38,7 +38,9 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 ALTER SYSTEM SET password_encryption TO md5;
 SELECT pg_reload_conf();
 SELECT pg_sleep(0.1);
+SET client_min_messages TO ERROR;
 ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
+RESET client_min_messages;
 
 -- Show that, with no MX tables, activate node snapshot contains only the delete commands,
 -- pg_dist_node entries, pg_dist_object entries and roles.
