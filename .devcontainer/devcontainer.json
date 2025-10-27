@@ -2,6 +2,8 @@
     "image": "ghcr.io/citusdata/citus-devcontainer:main",
     "runArgs": [
         "--cap-add=SYS_PTRACE",
+        "--cap-add=SYS_NICE",                 // allow NUMA page inquiry
+        "--security-opt=seccomp=unconfined",  // unblocks move_pages() in the container
         "--ulimit=core=-1",
     ],
     "forwardPorts": [
