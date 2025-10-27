@@ -30,12 +30,14 @@
 #include "distributed/commands.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
+#include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_colocation.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/tenant_schema_metadata.h"
@@ -55,6 +57,7 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
+static uint32 GetNextColocationIdFromNode(WorkerNode *node);
 static uint32 SingleShardTableGetNodeId(Oid relationId);
 
 
@@ -62,6 +65,7 @@ static uint32 SingleShardTableGetNodeId(Oid relationId);
 PG_FUNCTION_INFO_V1(mark_tables_colocated);
 PG_FUNCTION_INFO_V1(get_colocated_shard_array);
 PG_FUNCTION_INFO_V1(update_distributed_table_colocation);
+PG_FUNCTION_INFO_V1(citus_internal_get_next_colocation_id);
 
 
 /*
@@ -592,7 +596,25 @@ uint32
 CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionColumnType,
 					  Oid distributionColumnCollation)
 {
-	uint32 colocationId = GetNextColocationId();
+	uint32 colocationId = INVALID_COLOCATION_ID;
+	if (IsCoordinator())
+	{
+		colocationId = GetNextColocationId();
+	}
+	else
+	{
+		/*
+		 * If we're not on the coordinator, retrieve the next colocation id from
+		 * the coordinator node. Although all nodes have pg_dist_colocationid_seq,
+		 * we don't synchronize the sequences across nodes, so we need to get the
+		 * next value from the coordinator.
+		 *
+		 * Note that before this point, we should have already verified that
+		 * coordinator is added into the metadata.
+		 */
+		WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
+		colocationId = GetNextColocationIdFromNode(coordinator);
+	}
 
 	InsertColocationGroupLocally(colocationId, shardCount, replicationFactor,
 								 distributionColumnType, distributionColumnCollation);
@@ -601,6 +623,67 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 								  distributionColumnType, distributionColumnCollation);
 
 	return colocationId;
+}
+
+
+/*
+ * GetNextColocationIdFromNode gets the next colocation id from given
+ * node by calling citus_internal.get_next_colocation_id() function.
+ */
+static uint32
+GetNextColocationIdFromNode(WorkerNode *node)
+{
+	const char *nodeName = node->workerName;
+	int nodePort = node->workerPort;
+	uint32 connectionFlags = 0;
+	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+
+	int querySent = SendRemoteCommand(connection,
+									  "SELECT citus_internal.get_next_colocation_id();");
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	int64 rowCount = PQntuples(result);
+	int64 colCount = PQnfields(result);
+	if (rowCount != 1 || colCount != 1)
+	{
+		ereport(ERROR, (errmsg("unexpected result from the node when getting "
+							   "next colocation id")));
+	}
+
+	uint32 colocationId = ParseIntField(result, 0, 0);
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	return colocationId;
+}
+
+
+/*
+ * citus_internal_get_next_colocation_id is a wrapper around
+ * GetNextColocationId().
+ */
+Datum
+citus_internal_get_next_colocation_id(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	/* TODOTASK: */
+	/* ensure user can create schemas, it won't be super ideal to have such a check here */
+	/* but it's needed to avoid unprivileged users to be able to consume colocation ids. */
+
+	uint32 colocationId = GetNextColocationId();
+	PG_RETURN_UINT32(colocationId);
 }
 
 
