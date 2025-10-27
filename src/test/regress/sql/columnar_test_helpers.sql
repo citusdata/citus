@@ -158,3 +158,12 @@ BEGIN
     RETURN NEXT;
   END LOOP;
 END; $$ language plpgsql;
+
+CREATE OR REPLACE FUNCTION _plan_json(q text)
+RETURNS jsonb
+LANGUAGE plpgsql AS $$
+DECLARE j jsonb;
+BEGIN
+  EXECUTE 'EXPLAIN (FORMAT JSON, COSTS OFF, ANALYZE OFF) ' || q INTO j;
+  RETURN j;
+END $$;
