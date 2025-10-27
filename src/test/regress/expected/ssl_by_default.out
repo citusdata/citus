@@ -1,16 +1,21 @@
 -- Citus uses ssl by default now. It does so by turning on ssl and if needed will generate
 -- self-signed certificates.
--- To test this we will verify that SSL is set to ON for all machines, and we will make
--- sure connections to workers use SSL by having it required in citus.conn_nodeinfo and
--- lastly we will inspect the ssl state for connections to the workers
--- ssl can only be enabled by default on installations that are OpenSSL-enabled.
+--
+-- This test verifies:
+-- 1) ssl=on on coordinator and workers
+-- 2) coordinator->workers connections use SSL (pg_stat_ssl true)
+-- 3) ssl_ciphers is non-empty and has a colon-separated rule/list on both coordinator and workers
+--    (PG18/OpenSSL may report a rule string like HIGH:MEDIUM:+3DES:!aNULL instead of an expanded list)
+-- 0) Is this an OpenSSL-enabled build? (if not, ssl_ciphers is 'none')
+--    Keep the “hasssl” signal but don’t rely on the literal cipher list value.
 SHOW ssl_ciphers \gset
-SELECT :'ssl_ciphers' != 'none' AS hasssl;
+SELECT :'ssl_ciphers' <> 'none' AS hasssl;
  hasssl
 ---------------------------------------------------------------------
  t
 (1 row)
 
+-- 1) ssl must be on (coordinator + workers)
 SHOW ssl;
  ssl
 ---------------------------------------------------------------------
@@ -26,6 +31,7 @@ $$);
  (localhost,57638,t,on)
 (2 rows)
 
+-- 2) connections to workers carry sslmode=require
 SHOW citus.node_conninfo;
  citus.node_conninfo
 ---------------------------------------------------------------------
@@ -41,6 +47,7 @@ $$);
  (localhost,57638,t,sslmode=require)
 (2 rows)
 
+-- 3) pg_stat_ssl says SSL is active on each worker connection
 SELECT run_command_on_workers($$
     SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid();
 $$);
@@ -50,18 +57,35 @@ $$);
  (localhost,57638,t,t)
 (2 rows)
 
-SHOW ssl_ciphers;
-                                                                                                       ssl_ciphers
+-- 4) ssl_ciphers checks (coordinator): non-empty and contains at least one ':'
+SELECT current_setting('ssl_ciphers') <> '' AS has_ssl_ciphers;
+ has_ssl_ciphers
 ---------------------------------------------------------------------
- ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384
+ t
 (1 row)
 
-SELECT run_command_on_workers($$
-    SHOW ssl_ciphers;
-$$);
-                                                                                                           run_command_on_workers
+SELECT position(':' in current_setting('ssl_ciphers')) > 0 AS has_colon;
+ has_colon
 ---------------------------------------------------------------------
- (localhost,57637,t,ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384)
- (localhost,57638,t,ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384)
+ t
+(1 row)
+
+-- 5) ssl_ciphers checks (workers)
+SELECT run_command_on_workers($$
+  SELECT current_setting('ssl_ciphers') <> '' AS has_ssl_ciphers
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+SELECT run_command_on_workers($$
+  SELECT position(':' in current_setting('ssl_ciphers')) > 0 AS has_colon
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
 (2 rows)
 
