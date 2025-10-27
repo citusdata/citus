@@ -375,3 +375,6 @@ s/\<is referenced from table\>/is still referenced from table/g
 # pg18 extension_control_path GUC debugs
 # ignore any "find_in_path:" lines in test output
 /DEBUG:  find_in_path: trying .*/d
+
+# EXPLAIN (PG18+): hide Materialize storage instrumentation
+/^[ \t]*Storage:[ \t].*$/d
