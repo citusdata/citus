@@ -332,23 +332,38 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
 
-# PG18 change: strip trailing ".0..." from Actual Rows across formats
-# Text EXPLAIN (simple case: "actual rows=50.00")
-s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)([0-9]+)\.0+/\1\2/gI
-# Text EXPLAIN (inside "(actual time=... rows=50.00 ...)")
-s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)([0-9]+)\.0+/\1\2/gI
-# YAML (e.g., "Actual Rows: 1.00")
-s/(Actual[[:space:]]+Rows:[[:space:]]*[0-9]+)\.0+/\1/gI
-# XML (e.g., "<Actual-Rows>1.00</Actual-Rows>")
-s/(<Actual-Rows>[0-9]+)\.0+(<\/Actual-Rows>)/\1\2/g
-# JSON (e.g., '"Actual Rows": 1.00')
-s/("Actual[[:space:]]+Rows":[[:space:]]*[0-9]+)\.0+/\1/gI
-# JSON placeholder cleanup: '"Actual Rows": N.0...' -> N
+# --- PG18 Actual Rows normalization ---
+# 0) Seq Scan special-case: sub-1 averages → 0
+#    e.g., '->  Seq Scan ... (actual rows=0.50 ...)' → '... actual rows=0 ...'
+s!(->[[:space:]]+Seq[[:space:]]+Scan[^()]*\([^)]*actual[[:space:]]*rows[[:space:]]*=[[:space:]]*\))0\.[0-9]+!\10!gI
+
+# 1) Strip trivial trailing ".0..." in text EXPLAIN first (fast path)
+#    handles: actual rows=111111.00 → 111111
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*[0-9]+)\.0+/\1/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*[0-9]+)\.0+/\1/gI
+
+# 2) General text EXPLAIN: sub-1 averages → 1 (pre-PG18 look)
+#    handles: actual rows=0.60 → 1, actual rows=0.67 → 1
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.[0-9]+/\11/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.[0-9]+/\11/gI
+
+# 3) Any remaining decimals → placeholder N.N (all formats)
+#    text (both forms)
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
+#    YAML
+s/(Actual[[:space:]]+Rows:[[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
+#    XML
+s!(<Actual-Rows>)[0-9]+\.[0-9]+(</Actual-Rows>)!\1N.N\2!gI
+#    JSON
+s/("Actual[[:space:]]+Rows":[[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
+
+# 4) Collapse placeholder → integers
 s/("Actual[[:space:]]+Rows":[[:space:]]*)N\.N/\1N/gI
-# Collapse placeholder in text EXPLAIN: "rows=N.N" -> "rows=N"
 s/(rows[[:space:]]*=[[:space:]]*)N\.N/\1N/gI
-# YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
 s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
+# --- PG18 Actual Rows normalization ---
+
 
 # pg18 “Disabled” change start
 # ignore any “Disabled:” lines in test output
