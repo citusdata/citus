@@ -183,10 +183,10 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
 
-		Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(
-												  writeState->relfilelocator),
-											  RelationPhysicalIdentifierNumber_compat(
-												  writeState->relfilelocator));
+		Oid relationId = RelidByRelfilenumberWithTempTables(RelationTablespace_compat(
+																writeState->relfilelocator),
+															RelationPhysicalIdentifierNumber_compat(
+																writeState->relfilelocator));
 		Relation relation = relation_open(relationId, NoLock);
 		writeState->emptyStripeReservation =
 			ReserveEmptyStripe(relation, columnCount, chunkRowCount,
@@ -404,10 +404,10 @@ FlushStripe(ColumnarWriteState *writeState)
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
-	Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(
-											  writeState->relfilelocator),
-										  RelationPhysicalIdentifierNumber_compat(
-											  writeState->relfilelocator));
+	Oid relationId = RelidByRelfilenumberWithTempTables(RelationTablespace_compat(
+															writeState->relfilelocator),
+														RelationPhysicalIdentifierNumber_compat(
+															writeState->relfilelocator));
 	Relation relation = relation_open(relationId, NoLock);
 
 	/*

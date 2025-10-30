@@ -521,7 +521,6 @@ get_guc_variables_compat(int *gucCount)
 #define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rnode.node)
 typedef RelFileNode RelFileLocator;
 typedef Oid RelFileNumber;
-#define RelidByRelfilenumber(a, b) RelidByRelfilenode(a, b)
 
 #define float_abs(a) Abs(a)
 

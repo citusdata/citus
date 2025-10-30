@@ -65,5 +65,7 @@ extern List * StripesForRelfilelocator(RelFileLocator relfilelocator);
 extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
 extern List * ExtractColumnarRelOptions(List *inOptions, List **outColumnarOptions);
 extern void SetColumnarRelOptions(RangeVar *rv, List *reloptions);
+extern Oid RelidByRelfilenumberWithTempTables(Oid reltablespace, RelFileNumber
+											  relfilenumber);
 
 #endif /* COLUMNAR_METADATA_H */

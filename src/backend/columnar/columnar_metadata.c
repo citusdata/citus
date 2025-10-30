@@ -1993,9 +1993,10 @@ ColumnarNamespaceId(void)
 static uint64
 LookupStorageId(RelFileLocator relfilelocator)
 {
-	Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(relfilelocator),
-										  RelationPhysicalIdentifierNumber_compat(
-											  relfilelocator));
+	Oid relationId = RelidByRelfilenumberWithTempTables(RelationTablespace_compat(
+															relfilelocator),
+														RelationPhysicalIdentifierNumber_compat(
+															relfilelocator));
 
 	Relation relation = relation_open(relationId, AccessShareLock);
 	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
@@ -2122,4 +2123,86 @@ GetFirstRowNumberAttrIndexInColumnarStripe(TupleDesc tupleDesc)
 	return tupleDesc->natts == Natts_columnar_stripe
 		   ? (Anum_columnar_stripe_first_row_number - 1)
 		   : tupleDesc->natts - 1;
+}
+
+
+/*
+ * Map a relation's (tablespace, relfilenumber) to a relation's oid and cache
+ * the result.
+ * PG18 and latest PG minors have excluded temporary tables from RelidByRelfilenumber,
+ * so we need to handle them here.
+ * Relevant PG commit: https://github.com/postgres/postgres/commit/dcdc95cb4
+ * This function does an extra search if relid is InvalidOid, for temp tables only.
+ * Code is mostly copy-paste from PG's RelidByRelfilenumber.
+ * Returns InvalidOid if no relation matching the criteria could be found.
+ */
+Oid
+RelidByRelfilenumberWithTempTables(Oid reltablespace, RelFileNumber relfilenumber)
+{
+	Oid relid;
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+	relid = RelidByRelfilenumber(reltablespace, relfilenumber);
+#else
+	relid = RelidByRelfilenode(reltablespace, relfilenumber);
+#endif
+
+	if (relid == InvalidOid)
+	{
+		ScanKeyData skey[2];
+		HeapTuple ntp;
+
+		/* pg_class will show 0 when the value is actually MyDatabaseTableSpace */
+		if (reltablespace == MyDatabaseTableSpace)
+		{
+			reltablespace = 0;
+		}
+
+		/* check for plain relations by looking in pg_class */
+		Relation relation = table_open(RelationRelationId, AccessShareLock);
+
+		ScanKeyInit(&skey[0],
+					Anum_pg_class_reltablespace,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(reltablespace));
+		ScanKeyInit(&skey[1],
+					Anum_pg_class_relfilenode,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(relfilenumber));
+
+		SysScanDesc scandesc = systable_beginscan(relation,
+												  ClassTblspcRelfilenodeIndexId,
+												  true,
+												  NULL,
+												  2,
+												  skey);
+
+		bool found = false;
+
+		while (HeapTupleIsValid(ntp = systable_getnext(scandesc)))
+		{
+			Form_pg_class classform = (Form_pg_class) GETSTRUCT(ntp);
+
+			if (found)
+			{
+				elog(ERROR,
+					 "unexpected duplicate for tablespace %u, relfilenumber %u",
+					 reltablespace, relfilenumber);
+			}
+			found = true;
+
+			Assert(classform->reltablespace == reltablespace);
+			Assert(classform->relfilenode == relfilenumber);
+
+			if (classform->relpersistence == RELPERSISTENCE_TEMP)
+			{
+				relid = classform->oid;
+			}
+		}
+
+		systable_endscan(scandesc);
+		table_close(relation, AccessShareLock);
+	}
+
+	return relid;
 }
