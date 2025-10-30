@@ -371,11 +371,11 @@ CREATE TABLE cas_1 (a INT UNIQUE);
 CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
 CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
-ALTER TABLE cas_par_1 ADD CONSTRAINT fkey_cas_test_1 FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par_1 ADD CONSTRAINT fkey_cas_test_first FOREIGN KEY (a) REFERENCES cas_1(a);
 CREATE TABLE cas_par2 (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE cas_par2_1 PARTITION OF cas_par2 FOR VALUES FROM (1) TO (4);
 CREATE TABLE cas_par2_2 PARTITION OF cas_par2 FOR VALUES FROM (5) TO (8);
-ALTER TABLE cas_par2_1 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par2_1 ADD CONSTRAINT fkey_cas_test_second FOREIGN KEY (a) REFERENCES cas_1(a);
 CREATE TABLE cas_par3 (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE cas_par3_1 PARTITION OF cas_par3 FOR VALUES FROM (1) TO (4);
 CREATE TABLE cas_par3_2 PARTITION OF cas_par3 FOR VALUES FROM (5) TO (8);
@@ -390,11 +390,11 @@ ERROR:  cannot cascade operation via foreign keys as partition table citus_local
 SELECT citus_add_local_table_to_metadata('cas_par2', cascade_via_foreign_keys=>true);
 ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from its parent table
 -- drop the foreign keys and establish them again using the parent table
-ALTER TABLE cas_par_1 DROP CONSTRAINT fkey_cas_test_1;
-ALTER TABLE cas_par2_1 DROP CONSTRAINT fkey_cas_test_2;
-ALTER TABLE cas_par ADD CONSTRAINT fkey_cas_test_1 FOREIGN KEY (a) REFERENCES cas_1(a);
-ALTER TABLE cas_par2 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES cas_1(a);
-ALTER TABLE cas_par3 ADD CONSTRAINT fkey_cas_test_3 FOREIGN KEY (a) REFERENCES cas_par(a);
+ALTER TABLE cas_par_1 DROP CONSTRAINT fkey_cas_test_first;
+ALTER TABLE cas_par2_1 DROP CONSTRAINT fkey_cas_test_second;
+ALTER TABLE cas_par ADD CONSTRAINT fkey_cas_test_first FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par2 ADD CONSTRAINT fkey_cas_test_second FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par3 ADD CONSTRAINT fkey_cas_test_third FOREIGN KEY (a) REFERENCES cas_par(a);
 -- this should error out as cascade_via_foreign_keys is not set to true
 SELECT citus_add_local_table_to_metadata('cas_par2');
 ERROR:  relation citus_local_tables_mx.cas_par2 is involved in a foreign key relationship with another table
@@ -414,27 +414,29 @@ select inhrelid::regclass from pg_inherits where inhparent='cas_par'::regclass o
 (2 rows)
 
 -- verify the fkeys + fkeys with shard ids are created
-select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
-         conname
+select conname from pg_constraint
+where conname like 'fkey_cas_test%' and conname not like '%_1' and conname not like '%_2'
+order by conname;
+           conname
 ---------------------------------------------------------------------
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1_1330008
- fkey_cas_test_1_1330008
- fkey_cas_test_1_1330008
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2_1330006
- fkey_cas_test_2_1330006
- fkey_cas_test_2_1330006
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3_1330013
- fkey_cas_test_3_1330013
- fkey_cas_test_3_1330013
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_first_1330008
+ fkey_cas_test_first_1330008
+ fkey_cas_test_first_1330008
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second_1330006
+ fkey_cas_test_second_1330006
+ fkey_cas_test_second_1330006
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third_1330013
+ fkey_cas_test_third_1330013
+ fkey_cas_test_third_1330013
 (18 rows)
 
 -- when all partitions are converted, there should be 40 tables and indexes
@@ -457,18 +459,20 @@ SELECT count(*) FROM pg_class WHERE relname LIKE 'cas\_%' AND relnamespace IN
 (1 row)
 
 -- verify that the shell foreign keys are created on the worker as well
-select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
-     conname
+select conname from pg_constraint
+where conname like 'fkey_cas_test%' and conname not like '%_1' and conname not like '%_2'
+order by conname;
+       conname
 ---------------------------------------------------------------------
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third
 (9 rows)
 
 \c - - - :master_port
@@ -494,18 +498,20 @@ select inhrelid::regclass from pg_inherits where inhparent='cas_par'::regclass o
 (2 rows)
 
 -- verify that the foreign keys with shard ids are gone, due to undistribution
-select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
-     conname
+select conname from pg_constraint
+where conname like 'fkey_cas_test%' and conname not like '%_1' and conname not like '%_2'
+order by conname;
+       conname
 ---------------------------------------------------------------------
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third
 (9 rows)
 
 -- add a non-inherited fkey and verify it fails when trying to convert
