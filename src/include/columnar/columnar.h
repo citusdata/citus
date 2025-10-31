@@ -232,7 +232,7 @@ extern void columnar_init_gucs(void);
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a columnar table */
-extern ColumnarWriteState * ColumnarBeginWrite(RelFileLocator relfilelocator,
+extern ColumnarWriteState * ColumnarBeginWrite(Relation rel,
 											   ColumnarOptions options,
 											   TupleDesc tupleDescriptor);
 extern uint64 ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
@@ -287,21 +287,21 @@ extern PGDLLEXPORT bool ReadColumnarOptions(Oid regclass, ColumnarOptions *optio
 extern PGDLLEXPORT bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
-extern void DeleteMetadataRows(RelFileLocator relfilelocator);
+extern void DeleteMetadataRows(Relation rel);
 extern uint64 ColumnarMetadataNewStorageId(void);
-extern uint64 GetHighestUsedAddress(RelFileLocator relfilelocator);
+extern uint64 GetHighestUsedAddress(Relation rel);
 extern EmptyStripeReservation * ReserveEmptyStripe(Relation rel, uint64 columnCount,
 												   uint64 chunkGroupRowCount,
 												   uint64 stripeRowCount);
 extern StripeMetadata * CompleteStripeReservation(Relation rel, uint64 stripeId,
 												  uint64 sizeBytes, uint64 rowCount,
 												  uint64 chunkCount);
-extern void SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+extern void SaveStripeSkipList(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern void SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
+extern void SaveChunkGroups(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 							List *chunkGroupRowCounts);
-extern StripeSkipList * ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(Relation rel, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount,
 										   Snapshot snapshot);
@@ -317,6 +317,7 @@ extern uint64 StripeGetHighestRowNumber(StripeMetadata *stripeMetadata);
 extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
 													   Snapshot snapshot);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
+extern Oid ColumnarRelationId(Oid relid, RelFileLocator relfilelocator);
 
 
 /* write_state_management.c */

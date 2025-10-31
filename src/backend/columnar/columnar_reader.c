@@ -986,8 +986,7 @@ ColumnarTableRowCount(Relation relation)
 {
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
-	List *stripeList = StripesForRelfilelocator(RelationPhysicalIdentifier_compat(
-													relation));
+	List *stripeList = StripesForRelfilelocator(relation);
 
 	foreach(stripeMetadataCell, stripeList)
 	{
@@ -1015,8 +1014,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	bool *projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 
-	StripeSkipList *stripeSkipList = ReadStripeSkipList(RelationPhysicalIdentifier_compat(
-															relation),
+	StripeSkipList *stripeSkipList = ReadStripeSkipList(relation,
 														stripeMetadata->id,
 														tupleDescriptor,
 														stripeMetadata->chunkCount,
