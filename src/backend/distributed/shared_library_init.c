@@ -2493,8 +2493,8 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&SkipAdvisoryLockPermissionChecks,
 		false,
-		GUC_SUPERUSER_ONLY,
-		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
