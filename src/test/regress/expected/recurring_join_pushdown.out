@@ -120,11 +120,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 -- Test that the join is not pushed down when we have non-colocated tables in the RHS
 SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated FULL JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
 ERROR:  cannot push down this subquery
-DETAIL:  d3_not_colocated and d1 are not colocated
+DETAIL:  d1 and d3_not_colocated are not colocated
 -- The same error with its RIGHT JOIN variant
 SELECT count(*) FROM r1 LEFT JOIN (SELECT d1.a, d3_not_colocated.b FROM d3_not_colocated JOIN d1 ON d3_not_colocated.a = d1.a) AS t1 USING (a);
 ERROR:  cannot push down this subquery
-DETAIL:  d3_not_colocated and d1 are not colocated
+DETAIL:  d1 and d3_not_colocated are not colocated
 -- Basic test cases with ON syntax
 -- Test that the join is pushed down to the worker nodes, using "on" syntax
 SET client_min_messages TO DEBUG3;
