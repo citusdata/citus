@@ -2501,11 +2501,16 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 													   currentRelationId);
 		if (!coPartitionedTables)
 		{
+			char *firstRelName = get_rel_name(firstTableRelationId);
+			char *currentRelName = get_rel_name(currentRelationId);
+			int compareResult = strcmp(firstRelName, currentRelName);
+
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot push down this subquery"),
 							errdetail("%s and %s are not colocated",
-									  get_rel_name(firstTableRelationId),
-									  get_rel_name(currentRelationId))));
+									  (compareResult > 0 ? currentRelName : firstRelName),
+									  (compareResult > 0 ? firstRelName :
+									   currentRelName))));
 		}
 	}
 }

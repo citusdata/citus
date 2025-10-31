@@ -725,7 +725,7 @@ SET    value_2 = 5
 FROM   events_test_table_2
 WHERE  users_test_table.user_id = events_test_table_2.user_id;
 ERROR:  cannot push down this subquery
-DETAIL:  users_test_table and events_test_table_2 are not colocated
+DETAIL:  events_test_table_2 and users_test_table are not colocated
 -- Should error out due to multiple row return from subquery, but we can not get this information within
 -- subquery pushdown planner. This query will be sent to worker with recursive planner.
 \set VERBOSITY terse
