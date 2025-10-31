@@ -620,7 +620,7 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
 	bool pushed_snapshot = false;
 
-	if(!ActiveSnapshotSet())
+	if (!ActiveSnapshotSet())
 	{
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pushed_snapshot = true;
@@ -668,8 +668,10 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 			InsertTupleAndEnforceConstraints(modifyState, values, nulls);
 		}
 	}
-	if(pushed_snapshot)
+	if (pushed_snapshot)
+	{
 		PopActiveSnapshot();
+	}
 
 	FinishModifyRelation(modifyState);
 	table_close(columnarChunk, RowExclusiveLock);
