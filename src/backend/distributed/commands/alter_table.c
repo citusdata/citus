@@ -2125,6 +2125,23 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 								   "distribution column is different than %s",
 								   con->colocateWith, con->relationName)));
 		}
+		else if (con->distributionColumn &&
+				 colocateWithPartKey->varcollid != con->distributionKey->varcollid)
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s and change distribution "
+								   "column to %s because collation of column %s is "
+								   "different then the distribution column of the %s",
+								   con->colocateWith, con->distributionColumn,
+								   con->distributionColumn, con->colocateWith)));
+		}
+		else if (!con->distributionColumn &&
+				 colocateWithPartKey->varcollid !=
+				 con->originalDistributionKey->varcollid)
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s because collation of its "
+								   "distribution column is different than %s",
+								   con->colocateWith, con->relationName)));
+		}
 	}
 
 	if (!con->suppressNoticeMessages)
