@@ -50,6 +50,8 @@
 #define CHUNK_ROW_COUNT_MAXIMUM 100000
 #define COMPRESSION_LEVEL_MIN 1
 #define COMPRESSION_LEVEL_MAX 19
+#define CHUNK_GROUP_SIZE_MINIMUM 1
+#define CHUNK_GROUP_SIZE_MAXIMUM 1024	/* going beyond 1024 cause enlargeStringInfo() go out of memory */
 
 /* Columnar file signature */
 #define COLUMNAR_VERSION_MAJOR 2
@@ -60,6 +62,7 @@
 #define COLUMNAR_POSTSCRIPT_SIZE_LENGTH 1
 #define COLUMNAR_POSTSCRIPT_SIZE_MAX 256
 #define COLUMNAR_BYTES_PER_PAGE (BLCKSZ - SizeOfPageHeaderData)
+#define CHUNK_GROUP_SIZE_MB_TO_BYTES(mb) ((Size)((mb) * 1024UL * 1024UL))
 
 /*global variables for citus_columnar fake version Y */
 #define CITUS_COLUMNAR_INTERNAL_VERSION "11.1-0"
@@ -73,6 +76,7 @@ typedef struct ColumnarOptions
 {
 	uint64 stripeRowCount;
 	uint32 chunkRowCount;
+	uint32 maxChunkSize;
 	CompressionType compressionType;
 	int compressionLevel;
 } ColumnarOptions;
@@ -221,6 +225,7 @@ typedef struct ColumnarWriteState ColumnarWriteState;
 extern int columnar_compression;
 extern int columnar_stripe_row_limit;
 extern int columnar_chunk_group_row_limit;
+extern int columnar_chunk_group_size_limit;
 extern int columnar_compression_level;
 
 /* called when the user changes options on the given relation */
