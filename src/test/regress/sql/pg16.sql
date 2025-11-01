@@ -521,14 +521,11 @@ SET search_path TO pg16;
 -- We already don't propagate these commands automatically
 -- Testing here with run_command_on_workers
 -- Relevant PG commit: https://github.com/postgres/postgres/commit/2cbc3c1
+-- Testing only DATABASE here as SYSTEM produces aio output in PG18
 
 REINDEX DATABASE;
 SELECT result FROM run_command_on_workers
 ($$REINDEX DATABASE$$);
-
-REINDEX SYSTEM;
-SELECT result FROM run_command_on_workers
-($$REINDEX SYSTEM$$);
 
 --
 -- random_normal() to provide normally-distributed random numbers
