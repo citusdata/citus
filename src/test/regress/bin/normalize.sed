@@ -378,3 +378,7 @@ s/\<is referenced from table\>/is still referenced from table/g
 
 # PG18: EXPLAIN ANALYZE prints "Index Searches: N" for index scans — remove it
 /^\s*Index Searches:\s*\d+\s*$/d
+
+# EXPLAIN (PG18+): hide Materialize storage instrumentation
+# this rule can be removed when PG18 is the minimum supported version
+/^[ \t]*Storage:[ \t].*$/d
