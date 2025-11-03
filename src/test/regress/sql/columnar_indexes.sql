@@ -114,7 +114,11 @@ SELECT pg_total_relation_size('columnar_table_b_idx') * 5 <
        pg_total_relation_size('columnar_table_a_idx');
 
 -- can't use index scan due to partial index boundaries
-EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30000;
+SELECT NOT jsonb_path_exists(
+         columnar_test_helpers._plan_json('SELECT b FROM columnar_table WHERE b = 30000'),
+         -- Regex matches any index-based scan: "Index Scan", "Index Only Scan", "Bitmap Index Scan".
+         '$[*].Plan.** ? (@."Node Type" like_regex "^(Index|Bitmap Index).*Scan$")'
+       ) AS uses_no_index_scan; -- expect: t
 -- can use index scan
 EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30001;
 
