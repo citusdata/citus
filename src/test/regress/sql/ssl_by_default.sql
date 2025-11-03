@@ -39,5 +39,5 @@ SELECT run_command_on_workers($$
 $$);
 
 SELECT run_command_on_workers($$
-  SELECT position(':' in current_setting('ssl_ciphers')) > 0 AS has_colon
+  SELECT position(':' in current_setting('ssl_ciphers')) > 0 AS has_at_least_two_ciphers
 $$);
