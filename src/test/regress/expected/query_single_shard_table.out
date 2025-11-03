@@ -549,21 +549,21 @@ WHERE EXISTS (
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down this subquery
-DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b IN (
     SELECT b+1 FROM nullkey_c2_t2 t2 WHERE t2.b = t1.a
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down this subquery
-DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 SELECT COUNT(*) FROM nullkey_c1_t1 t1
 WHERE t1.b NOT IN (
     SELECT a FROM nullkey_c2_t2 t2 WHERE t2.b > t1.a
 );
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 ERROR:  cannot push down this subquery
-DETAIL:  nullkey_c2_t2 and nullkey_c1_t1 are not colocated
+DETAIL:  nullkey_c1_t1 and nullkey_c2_t2 are not colocated
 -- join with a reference table
 SELECT COUNT(*) FROM nullkey_c1_t1, reference_table WHERE nullkey_c1_t1.a = reference_table.a;
 DEBUG:  Creating router plan
@@ -3009,14 +3009,14 @@ ORDER BY 1,2 LIMIT 1;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 1
 ERROR:  cannot push down this subquery
-DETAIL:  users_table and non_colocated_events_table are not colocated
+DETAIL:  non_colocated_events_table and users_table are not colocated
 SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.value_2)
 FROM non_colocated_events_table e
 ORDER BY 1,2 LIMIT 1;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 1
 ERROR:  cannot push down this subquery
-DETAIL:  users_table and non_colocated_events_table are not colocated
+DETAIL:  non_colocated_events_table and users_table are not colocated
 SELECT event_type, (SELECT max(time) FROM users_table)
 FROM non_colocated_events_table e
 ORDER BY 1,2 LIMIT 1;
@@ -3118,7 +3118,7 @@ ORDER BY 1 LIMIT 3;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 3
 ERROR:  cannot push down this subquery
-DETAIL:  users_table and non_colocated_events_table are not colocated
+DETAIL:  non_colocated_events_table and users_table are not colocated
 SELECT (SELECT (SELECT e.user_id + user_id) FROM users_reference_table WHERE user_id = e.user_id GROUP BY user_id)
 FROM non_colocated_events_table e
 GROUP BY 1
@@ -3169,7 +3169,7 @@ ORDER BY 1 LIMIT 3;
 DEBUG:  router planner does not support queries that reference non-colocated distributed tables
 DEBUG:  push down of limit count: 3
 ERROR:  cannot push down this subquery
-DETAIL:  users_table and non_colocated_events_table are not colocated
+DETAIL:  non_colocated_events_table and users_table are not colocated
 SELECT
 	user_id, count(*)
 FROM
