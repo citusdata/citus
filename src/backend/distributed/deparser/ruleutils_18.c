@@ -510,13 +510,12 @@ static void get_json_table_nested_columns(TableFunc *tf, JsonTablePlan *plan,
 										  deparse_context *context,
 										  bool showimplicit,
 										  bool needcomma);
-static bool map_var_through_join_alias(deparse_namespace *dpns,
-                           const Var *orig,
-                           int *p_varno,
-                           AttrNumber *p_attno);
+static void
+map_var_through_join_alias(deparse_namespace *dpns, Var *v);
 static Var *unwrap_simple_var(Node *expr);
 static bool dpns_has_named_join(const deparse_namespace *dpns);
-static inline bool var_matches_base(const Var *v, int want_varno, AttrNumber want_attno);
+static inline bool
+var_matches_base(const Var *v, Index want_varno, AttrNumber want_attno);
 
 #define only_marker(rte)  ((rte)->inh ? "" : "ONLY ")
 
@@ -4322,22 +4321,6 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	varno = var->varno;
 	varattno = var->varattno;
 
-	/*
-	* PG18: whole-row join refs may be expanded to base Vars inside RowExpr.
-	* If a named JOIN in scope exposes this Var via joinaliasvars, print the
-	* JOIN alias column instead of the hidden base alias.
-	*
-	* Guarded to avoid touching system/whole-row cols and non-join queries.
-	*/
-	if (dpns->plan == NULL &&
-		var->varlevelsup == 0 &&
-		varattno > 0 &&
-		dpns_has_named_join(dpns))
-	{
-		(void) map_var_through_join_alias(dpns, var, &varno, &varattno);
-	}
-
-
 
 	if (var->varnosyn > 0 && var->varnosyn <= list_length(dpns->rtable) && dpns->plan == NULL) {
 		rte = rt_fetch(var->varnosyn, dpns->rtable);
@@ -4604,15 +4587,18 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 static inline bool
 dpns_has_named_join(const deparse_namespace *dpns)
 {
-	if (!dpns || dpns->rtable == NIL)
-		return false;
+    if (!dpns || dpns->rtable == NIL)
+        return false;
 
-	foreach_node(RangeTblEntry, rte, dpns->rtable)
-	{
-		if (rte->rtekind == RTE_JOIN && rte->alias != NULL && rte->joinaliasvars != NIL)
-			return true;
-	}
-	return false;
+    ListCell *lc;
+    foreach (lc, dpns->rtable)
+    {
+        RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+        if (rte && rte->rtekind == RTE_JOIN &&
+            rte->alias != NULL && rte->joinaliasvars != NIL)
+            return true;
+    }
+    return false;
 }
 
 
@@ -4640,60 +4626,37 @@ unwrap_simple_var(Node *expr)
 
 /* Base identity (canonical/synonym) match against a wanted (varno,attno) pair. */
 static inline bool
-var_matches_base(const Var *v, int want_varno, AttrNumber want_attno)
+var_matches_base(const Var *v, Index want_varno, AttrNumber want_attno)
 {
     if (v->varlevelsup != 0)
         return false;
-
-    /* canonical */
-    if (v->varno == (Index) want_varno && v->varattno == want_attno)
+    if (v->varno == want_varno && v->varattno == want_attno)
         return true;
-
-    /* synonym (PG17+/18 carry these) */
     if (v->varnosyn > 0 && v->varattnosyn > 0 &&
-        v->varnosyn == (Index) want_varno && v->varattnosyn == want_attno)
+        v->varnosyn == want_varno && v->varattnosyn == want_attno)
         return true;
-
     return false;
 }
 
 
-/*
- * Try to re-express (*p_varno,*p_attno) as a column of a *named* JOIN
- * (alias present) by looking up the matching entry in jrte->joinaliasvars.
- *
- * Only affects Query deparsing (dpns->plan == NULL), same-level Vars,
- * and only for 1:1 aliasing (simple Var, possibly wrapped).
- *
- */
-static bool
-map_var_through_join_alias(deparse_namespace *dpns,
-                           const Var *orig,
-                           int *p_varno,
-                           AttrNumber *p_attno)
+
+/* Mutate v in place: if v maps to a named JOIN's column, set varnosyn/varattnosyn.
+ * Returns true iff SYN fields were set. Query deparse only (dpns->plan == NULL). */
+static void
+map_var_through_join_alias(deparse_namespace *dpns, Var *v)
 {
-    if (!dpns || dpns->plan != NULL || !orig || orig->varlevelsup != 0)
-        return false;
-
-    /* We never remap whole-row/system columns. */
-    if (*p_attno <= 0)
-        return false;
-
-    const int       want_varno  = *p_varno;
-    const AttrNumber want_attno = *p_attno;
+    if (!dpns ||  dpns->plan != NULL || !v ||
+		v->varlevelsup != 0 || v->varattno <= 0)
+        return;
 
     int rti = 0;
     ListCell *lc;
-
     foreach (lc, dpns->rtable)
     {
         rti++;
         RangeTblEntry *jrte = (RangeTblEntry *) lfirst(lc);
-        if (!jrte || jrte->rtekind != RTE_JOIN)
-            continue;
-
-        /* Named joins (with/without explicit column list) hide inner aliases. */
-        if (jrte->alias == NULL || jrte->joinaliasvars == NIL)
+        if (!jrte || jrte->rtekind != RTE_JOIN ||
+            jrte->alias == NULL || jrte->joinaliasvars == NIL)
             continue;
 
         AttrNumber jattno = 0;
@@ -4701,21 +4664,18 @@ map_var_through_join_alias(deparse_namespace *dpns,
         foreach (vlc, jrte->joinaliasvars)
         {
             jattno++;
-
             Var *aliasVar = unwrap_simple_var((Node *) lfirst(vlc));
             if (!aliasVar)
-                continue; /* not a 1:1 alias; skip */
+                continue;
 
-            if (var_matches_base(aliasVar, want_varno, want_attno))
+            if (var_matches_base(aliasVar, v->varno, v->varattno))
             {
-                *p_varno = rti;
-                *p_attno = jattno;
-                return true;
+                v->varnosyn    = (Index) rti;
+                v->varattnosyn = jattno;
+                return;
             }
         }
     }
-
-    return false;
 }
 
 
@@ -6733,6 +6693,11 @@ get_rule_expr(Node *node, deparse_context *context,
 					Assert(list_length(rowexpr->args) <= tupdesc->natts);
 				}
 
+				/* Precompute deparse ns and whether we even need to try mapping */
+				deparse_namespace *dpns = (context->namespaces != NIL)
+					? (deparse_namespace *) linitial(context->namespaces) : NULL;
+				bool try_map = (dpns && dpns->plan == NULL && dpns_has_named_join(dpns));
+
 				/*
 				 * SQL99 allows "ROW" to be omitted when there is more than
 				 * one column, but for simplicity we always print it.
@@ -6748,6 +6713,17 @@ get_rule_expr(Node *node, deparse_context *context,
 						!TupleDescAttr(tupdesc, i)->attisdropped)
 					{
 						appendStringInfoString(buf, sep);
+
+						/* PG18: if element is a simple base Var, set its SYN to the JOIN alias */
+						if (try_map)
+						{
+							Var *v = unwrap_simple_var(e);
+							if (v)
+							{
+								map_var_through_join_alias(dpns, v);
+							}
+						}
+
 						/* Whole-row Vars need special treatment here */
 						get_rule_expr_toplevel(e, context, true);
 						sep = ", ";
