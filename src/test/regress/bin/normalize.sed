@@ -333,37 +333,32 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
 
 # --- PG18 Actual Rows normalization ---
-# 0) Seq Scan special-case: sub-1 averages → 0
-#    e.g., '->  Seq Scan ... (actual rows=0.50 ...)' → '... actual rows=0 ...'
-s!(->[[:space:]]+Seq[[:space:]]+Scan[^()]*\([^)]*actual[[:space:]]*rows[[:space:]]*=[[:space:]]*\))0\.[0-9]+!\10!gI
+# New in PG18: Actual Rows in EXPLAIN output are now rounded to
+# 1) 0.50 (and 0.5, 0.5000...) -> 0
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.50*/\10/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.50*/\10/gI
 
-# 1) Strip trivial trailing ".0..." in text EXPLAIN first (fast path)
-#    handles: actual rows=111111.00 → 111111
-s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*[0-9]+)\.0+/\1/gI
-s/(actual[^)]*rows[[:space:]]*=[[:space:]]*[0-9]+)\.0+/\1/gI
+# 2) 0.51+ -> 1
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.(5[1-9][0-9]*|[6-9][0-9]*)/\11/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.(5[1-9][0-9]*|[6-9][0-9]*)/\11/gI
 
-# 2) General text EXPLAIN: sub-1 averages → 1 (pre-PG18 look)
-#    handles: actual rows=0.60 → 1, actual rows=0.67 → 1
-s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.[0-9]+/\11/gI
-s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.[0-9]+/\11/gI
+# 3) Strip trivial trailing ".0..." (6.00 -> 6)  [keep your existing cross-format rules]
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)([0-9]+)\.0+/\1\2/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)([0-9]+)\.0+/\1\2/gI
 
-# 3) Any remaining decimals → placeholder N.N (all formats)
-#    text (both forms)
-s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
-s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
-#    YAML
-s/(Actual[[:space:]]+Rows:[[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
-#    XML
-s!(<Actual-Rows>)[0-9]+\.[0-9]+(</Actual-Rows>)!\1N.N\2!gI
-#    JSON
-s/("Actual[[:space:]]+Rows":[[:space:]]*)[0-9]+\.[0-9]+/\1N.N/gI
+# 4) YAML/XML/JSON: strip trailing ".0..."
+s/(Actual[[:space:]]+Rows:[[:space:]]*[0-9]+)\.0+/\1/gI
+s/(<Actual-Rows>[0-9]+)\.0+(<\/Actual-Rows>)/\1\2/g
+s/("Actual[[:space:]]+Rows":[[:space:]]*[0-9]+)\.0+/\1/gI
 
-# 4) Collapse placeholder → integers
+# 5) Placeholder cleanups (kept from existing rules; harmless if unused)
+#    JSON placeholder cleanup: '"Actual Rows": N.N' -> N
 s/("Actual[[:space:]]+Rows":[[:space:]]*)N\.N/\1N/gI
+#    Text EXPLAIN collapse: "rows=N.N" -> "rows=N"
 s/(rows[[:space:]]*=[[:space:]]*)N\.N/\1N/gI
+#    YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
 s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
 # --- PG18 Actual Rows normalization ---
-
 
 # pg18 “Disabled” change start
 # ignore any “Disabled:” lines in test output
