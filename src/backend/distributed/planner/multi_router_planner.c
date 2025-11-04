@@ -2192,7 +2192,11 @@ CheckAndBuildDelayedFastPathPlan(DistributedPlanningContext *planContext,
 static bool
 ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 {
-	Assert(list_length(query->rtable) == 1);
+	Assert(list_length(query->rtable) == 1
+	#if PG_VERSION_NUM >= PG_VERSION_18
+		   || (list_length(query->rtable) == 2 && query->hasGroupRTE)
+	#endif
+		   );
 	RangeTblEntry *citusTableRte = (RangeTblEntry *) linitial(query->rtable);
 	Assert(citusTableRte->relid == citusTableOid);
 

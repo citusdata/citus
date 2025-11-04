@@ -273,8 +273,16 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 		return true;
 	}
 
-	/* make sure that the only range table in FROM clause */
-	if (list_length(query->rtable) != 1)
+	int numFromRels = list_length(query->rtable);
+
+	/* make sure that there is only one range table in FROM clause */
+	if ((numFromRels != 1)
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	    /* with a PG18+ twist for GROUP rte - if present make sure there's two range tables */
+		&& (!query->hasGroupRTE || numFromRels != 2)
+#endif
+		)
 	{
 		return false;
 	}
