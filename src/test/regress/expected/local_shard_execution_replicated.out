@@ -250,20 +250,18 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                Filter: (age = 20)
 (8 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
-                                                              QUERY PLAN
+EXPLAIN (ANALYZE OFF, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+                                                 QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+ Custom Scan (Citus Adaptive)
    Task Count: 1
-   Tuple data received from nodes: 14 bytes
    Tasks Shown: All
    ->  Task
-         Tuple data received from node: 14 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Index Scan using distributed_table_pkey_1500001 on distributed_table_1500001 distributed_table (actual rows=1 loops=1)
+         ->  Index Scan using distributed_table_pkey_1500001 on distributed_table_1500001 distributed_table
                Index Cond: (key = 1)
                Filter: (age = 20)
-(10 rows)
+(8 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 WITH r AS ( SELECT GREATEST(random(), 2) z,* FROM distributed_table)
@@ -306,16 +304,16 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                      Filter: (age = 20)
 (9 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
-                                                                 QUERY PLAN
+EXPLAIN (ANALYZE OFF, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
+                                                    QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+ Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Delete on distributed_table_1500001 distributed_table (actual rows=0 loops=1)
-               ->  Index Scan using distributed_table_pkey_1500001 on distributed_table_1500001 distributed_table (actual rows=1 loops=1)
+         ->  Delete on distributed_table_1500001 distributed_table
+               ->  Index Scan using distributed_table_pkey_1500001 on distributed_table_1500001 distributed_table
                      Index Cond: (key = 1)
                      Filter: (age = 20)
 (9 rows)
