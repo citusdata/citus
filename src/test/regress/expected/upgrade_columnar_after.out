@@ -1,4 +1,5 @@
 SET search_path TO upgrade_columnar, public;
+\pset footer off
 -- test we retained data
 SELECT * FROM test_retains_data ORDER BY a;
  a |   b   |    c    |      d
@@ -6,13 +7,11 @@ SELECT * FROM test_retains_data ORDER BY a;
  1 | abc   | (1,4)   | {1,2,3,4}
  2 | pi    | (3,192) | {3,1,4,1,5}
  3 | earth | (4,22)  | {1,2,7,5,6}
-(3 rows)
 
 SELECT count(*) FROM test_retains_data;
  count
 ---------------------------------------------------------------------
      3
-(1 row)
 
 SELECT a,c FROM test_retains_data ORDER BY a;
  a |    c
@@ -20,7 +19,6 @@ SELECT a,c FROM test_retains_data ORDER BY a;
  1 | (1,4)
  2 | (3,192)
  3 | (4,22)
-(3 rows)
 
 SELECT b,d FROM test_retains_data ORDER BY a;
    b   |      d
@@ -28,7 +26,6 @@ SELECT b,d FROM test_retains_data ORDER BY a;
  abc   | {1,2,3,4}
  pi    | {3,1,4,1,5}
  earth | {1,2,7,5,6}
-(3 rows)
 
 SELECT * FROM test_retains_data ORDER BY a;
  a |   b   |    c    |      d
@@ -36,7 +33,6 @@ SELECT * FROM test_retains_data ORDER BY a;
  1 | abc   | (1,4)   | {1,2,3,4}
  2 | pi    | (3,192) | {3,1,4,1,5}
  3 | earth | (4,22)  | {1,2,7,5,6}
-(3 rows)
 
 -- test we retained data with a once truncated table
 SELECT * FROM test_truncated ORDER BY a;
@@ -45,7 +41,6 @@ SELECT * FROM test_truncated ORDER BY a;
  11
  12
  13
-(3 rows)
 
 -- test we retained data with a once vacuum fulled table
 SELECT * FROM test_vacuum_full ORDER BY a;
@@ -64,7 +59,6 @@ SELECT * FROM test_vacuum_full ORDER BY a;
  11
  12
  13
-(13 rows)
 
 -- test we retained data with a once alter typed table
 SELECT * FROM test_alter_type ORDER BY a;
@@ -83,7 +77,6 @@ SELECT * FROM test_alter_type ORDER BY a;
  7
  8
  9
-(13 rows)
 
 -- test we retained data with a once refreshed materialized view
 SELECT * FROM matview ORDER BY a;
@@ -91,14 +84,12 @@ SELECT * FROM matview ORDER BY a;
 ---------------------------------------------------------------------
  0 | {abc,pi}
  1 | {earth}
-(2 rows)
 
 -- test we retained options
 SELECT * FROM columnar.options WHERE relation = 'test_options_1'::regclass;
     relation    | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
  test_options_1 |                  1000 |             5000 | pglz        |                 3
-(1 row)
 
 VACUUM VERBOSE test_options_1;
 INFO:  statistics for "test_options_1":
@@ -112,13 +103,11 @@ SELECT count(*), sum(a), sum(b) FROM test_options_1;
  count |   sum    |  sum
 ---------------------------------------------------------------------
  10000 | 50005000 | 45010
-(1 row)
 
 SELECT * FROM columnar.options WHERE relation = 'test_options_2'::regclass;
     relation    | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
  test_options_2 |                  2000 |             6000 | none        |                13
-(1 row)
 
 VACUUM VERBOSE test_options_2;
 INFO:  statistics for "test_options_2":
@@ -132,7 +121,6 @@ SELECT count(*), sum(a), sum(b) FROM test_options_2;
  count |    sum    |  sum
 ---------------------------------------------------------------------
  20000 | 100010000 | 65015
-(1 row)
 
 BEGIN;
 	INSERT INTO less_common_data_types_table (dist_key,col1, col2, col3, col4, col5, col6, col70, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, col22, col23, col24, col25, col26, col27, col28, col29, col30, col32, col33, col34, col35, col36, col37, col38)
@@ -147,7 +135,6 @@ BEGIN;
 ---------------------------------------------------------------------
         7 | {1}     | {{0,0,0}}         | {{{0,0,0}}}                               | {1}     | {{0,0,0}}         | {{{0,0,0}}}                               | 1     | {1}     | {{0,0,0}}         | {{{0,0,0}}}                               | 11101 | {1}        | {{01,01,01}}                       | {{{011,110,0000}}}                                                             | \xb4a8e04c0b | {"\\xb4a8e04c0b"}                                 | {{"\\xb4a8e04c0b","\\xb4a8e04c0b","\\xb4a8e04c0b"}}                                                   | {{{"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"}}}                                                                                                                                                             | t     | {t}     | {{t,t,f}}         | {{{t,t,f}}}                               | 192.168.1.0/24 | {192.168.1.1}                                       | {{0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24}} | {{{0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24}}}                                                                                                                                                                   | 08:00:2b:01:02:03 | {08:00:2b:01:02:03}                                     | {{08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03}} | {{{08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03}}}                                                                                                                                                                               |   690 | {1.1}           | {{0,0.111,0.15}}                         | {{{0,0,0}}}                                         | {"test_json": "test"} | {"{\"test_json\": \"test\"}"}                                                                                     | {{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"}}                                                                                                                   | {{{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"}}}
         8 | {1,2,3} | {{1,2,3},{5,6,7}} | {{{1,2,3}},{{5,6,7}},{{1,2,3}},{{5,6,7}}} | {1,2,3} | {{1,2,3},{5,6,7}} | {{{1,2,3}},{{5,6,7}},{{1,2,3}},{{5,6,7}}} | 0     | {1,0,0} | {{1,1,0},{0,0,1}} | {{{1,1,1}},{{1,0,0}},{{1,1,1}},{{0,0,0}}} | 00010 | {11,10,01} | {{11,010,101},{101,01111,1000001}} | {{{10000,111111,1101010101}},{{1101010,0,1}},{{1,1,11111111}},{{0000000,0,0}}} | \xb4a8e04c0b | {"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"} | {{"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"},{"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"}} | {{{"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"}},{{"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"}},{{"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"}},{{"\\xb4a8e04c0b","\\x18a232a678","\\x38b2697632"}}} | t     | {t,t,f} | {{t,t,f},{t,t,f}} | {{{t,t,f}},{{t,t,f}},{{t,t,f}},{{t,t,f}}} | 0.0.0.0        | {0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24} | {{0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24}} | {{{0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24}},{{0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24}},{{0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24}},{{0.0.0.0,0.0.0.0,::ffff:255.240.0.1,192.168.1.0/24}}} | 08:00:2b:01:02:03 | {08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03} | {{08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03}} | {{{08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03}},{{08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03}},{{08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03}},{{08:00:2b:01:02:03,08:00:2b:01:02:03,08:00:2b:01:02:03}}} |  0.99 | {1.1,2.22,3.33} | {{1.55,2.66,3.88},{11.5,10101.6,7111.1}} | {{{1,2,3}},{{5,6,7}},{{1.1,2.1,3}},{{5.0,6.0,7.0}}} | {"test_json": "test"} | {"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"} | {{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"},{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"}} | {{{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"}},{{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"}},{{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"}},{{"{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}","{\"test_json\": \"test\"}"}}}
-(2 rows)
 
 ROLLBACK;
 -- count DISTINCT w/wout dist key
@@ -158,7 +145,6 @@ ORDER BY 1 DESC;
  count
 ---------------------------------------------------------------------
      2
-(1 row)
 
 SELECT count(DISTINCT(dist_key, col1, col2, col3, col4, col5, col6, col70, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, col22, col23, col24, col25, col26, col27, col28, col29, col32, col33, col34, col35, col36, col37, col38))
 FROM
@@ -167,7 +153,6 @@ ORDER BY 1 DESC;
  count
 ---------------------------------------------------------------------
      4
-(1 row)
 
 -- some batch loads via INSERT .. SELECT
 INSERT INTO less_common_data_types_table SELECT * FROM less_common_data_types_table;
@@ -178,20 +163,18 @@ SELECT count(*) FROM less_common_data_types_table WHERE dist_key = 1 AND col1 = 
  count
 ---------------------------------------------------------------------
      1
-(1 row)
 
 -- make sure that we test index scan
 set columnar.enable_custom_scan to 'off';
 set enable_seqscan to off;
 set seq_page_cost TO 10000000;
-EXPLAIN (costs off, timing off, summary off, analyze on, BUFFERS OFF)
+EXPLAIN (costs off, timing off, summary off, analyze off, BUFFERS OFF)
 	SELECT count(*) FROM less_common_data_types_table WHERE dist_key = 1 AND col1 = ARRAY[1];
-                                                 QUERY PLAN
+                                     QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate (actual rows=1 loops=1)
-   ->  Index Scan using non_unique_index_on_columnar on less_common_data_types_table (actual rows=1 loops=1)
+ Aggregate
+   ->  Index Scan using non_unique_index_on_columnar on less_common_data_types_table
          Index Cond: ((dist_key = 1) AND (col1 = '{1}'::integer[]))
-(3 rows)
 
 -- make sure that we re-enable columnar scan
 RESET columnar.enable_custom_scan;
@@ -226,7 +209,6 @@ BEGIN;
  count
 ---------------------------------------------------------------------
     22
-(1 row)
 
 	-- Make sure that serial is preserved.
     --
@@ -237,7 +219,6 @@ BEGIN;
  ?column?
 ---------------------------------------------------------------------
  t
-(1 row)
 
 	-- since we run "after schedule" twice, rollback the transaction
 	-- to avoid getting "table already exists" errors
@@ -287,7 +268,6 @@ UNION
 (TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
  oid
 ---------------------------------------------------------------------
-(0 rows)
 
 -- ... , and both columnar_schema_members_pg_depend & columnar_schema_members
 -- should have 5 entries.
@@ -295,7 +275,6 @@ SELECT COUNT(*)=5 FROM columnar_schema_members_pg_depend;
  ?column?
 ---------------------------------------------------------------------
  t
-(1 row)
 
 DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 -- Check the same for workers too.
@@ -324,7 +303,6 @@ $$
 ---------------------------------------------------------------------
  t       | SELECT 5
  t       | SELECT 5
-(2 rows)
 
 SELECT success, result FROM run_command_on_workers(
 $$
@@ -337,7 +315,6 @@ $$
 ---------------------------------------------------------------------
  t       |
  t       |
-(2 rows)
 
 SELECT success, result FROM run_command_on_workers(
 $$
@@ -348,7 +325,6 @@ $$
 ---------------------------------------------------------------------
  t       | t
  t       | t
-(2 rows)
 
 SELECT success, result FROM run_command_on_workers(
 $$
@@ -359,5 +335,4 @@ $$
 ---------------------------------------------------------------------
  t       | DROP TABLE
  t       | DROP TABLE
-(2 rows)
 
