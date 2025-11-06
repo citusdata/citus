@@ -312,21 +312,22 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                Filter: (age = 20)
 (8 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
-                                                              QUERY PLAN
+\pset footer off
+select public.explain_filter('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20');
+                                                            explain_filter
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
-   Task Count: 1
-   Tuple data received from nodes: 14 bytes
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Task Count: N
+   Tuple data received from nodes: N bytes
    Tasks Shown: All
    ->  Task
-         Tuple data received from node: 14 bytes
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
-               Index Cond: (key = 1)
-               Filter: (age = 20)
-(10 rows)
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=N loops=N)
+               Index Cond: (key = N)
+               Filter: (age = N)
 
+\pset footer on
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 WITH r AS ( SELECT GREATEST(random(), 2) z,* FROM distributed_table)
 SELECT 1 FROM r WHERE z < 3;
@@ -368,21 +369,22 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                      Filter: (age = 20)
 (9 rows)
 
-EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
-                                                                 QUERY PLAN
+\pset footer off
+select public.explain_filter('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20');
+                                                               explain_filter
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
-   Task Count: 1
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Task Count: N
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Delete on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
-               ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
-                     Index Cond: (key = 1)
-                     Filter: (age = 20)
-             Trigger for constraint second_distributed_table_key_fkey_1470005: calls=1
-(10 rows)
+         Node: host=localhost port=N dbname=regression
+         ->  Delete on distributed_table_1470001 distributed_table (actual rows=N loops=N)
+               ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=N loops=N)
+                     Index Cond: (key = N)
+                     Filter: (age = N)
+             Trigger for constraint second_distributed_table_key_fkey_1470005: calls=N
 
+\pset footer on
 -- show that EXPLAIN ANALYZE deleted the row and cascades deletes
 SELECT * FROM distributed_table WHERE key = 1 AND age = 20 ORDER BY 1,2,3;
 NOTICE:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE ((key OPERATOR(pg_catalog.=) 1) AND (age OPERATOR(pg_catalog.=) 20)) ORDER BY key, value, age

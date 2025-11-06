@@ -763,6 +763,11 @@ declare
 begin
     for ln in execute $1
     loop
+        -- PG18 extra line "Index Searches: N" — remove entirely
+        IF ln ~ '^[[:space:]]*Index[[:space:]]+Searches:[[:space:]]*[0-9]+[[:space:]]*$' THEN
+          CONTINUE;
+        END IF;
+
         -- Replace any numeric word with just 'N'
         ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
         -- In sort output, the above won't match units-suffixed numbers
