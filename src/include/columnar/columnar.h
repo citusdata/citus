@@ -65,7 +65,7 @@
 #define CITUS_COLUMNAR_INTERNAL_VERSION "11.1-0"
 
 /*
- * We can't rely on RelidByRelfilenumber for temp tables since PGXX, so we can use
+ * We can't rely on RelidByRelfilenumber for temp tables since PG13, so we can use
  * this macro to define relid within relation in case of temp relations. Otherwise
  * RelidByRelfilenumber should be used.
  */
