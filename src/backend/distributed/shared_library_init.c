@@ -89,7 +89,6 @@
 #include "distributed/placement_connection.h"
 #include "distributed/priority.h"
 #include "distributed/query_pushdown_planning.h"
-#include "distributed/query_stats.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
@@ -105,11 +104,13 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
+#include "distributed/stats/query_stats.h"
+#include "distributed/stats/stat_counters.h"
+#include "distributed/stats/stat_tenants.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/time_constants.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
-#include "distributed/utils/citus_stat_tenants.h"
 #include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
@@ -190,8 +191,10 @@ static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static bool IsSequenceOverflowError(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
+static void RegisterSaveBackendStatsIntoSavedBackendStatsHash(void);
 static void RegisterExternalClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
+static void SaveBackendStatsIntoSavedBackendStatsHashAtExit(int code, Datum arg);
 static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
@@ -509,6 +512,8 @@ _PG_init(void)
 	InitializeShardSplitSMHandleManagement();
 
 	InitializeMultiTenantMonitorSMHandleManagement();
+	InitializeStatCountersShmem();
+
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -622,6 +627,8 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
+	RequestAddinShmemSpace(StatCountersShmemSize());
+	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
 }
 
 
@@ -797,6 +804,8 @@ StartupCitusBackend(void)
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
+	RegisterSaveBackendStatsIntoSavedBackendStatsHash();
+
 	FinishedStartupCitusBackend = true;
 }
 
@@ -830,6 +839,24 @@ RegisterConnectionCleanup(void)
 		before_shmem_exit(CitusCleanupConnectionsAtExit, 0);
 
 		registeredCleanup = true;
+	}
+}
+
+
+/*
+ * RegisterSaveBackendStatsIntoSavedBackendStatsHash registers the function
+ * that saves the backend stats for the exited backends into the saved backend
+ * stats hash.
+ */
+static void
+RegisterSaveBackendStatsIntoSavedBackendStatsHash(void)
+{
+	static bool registeredSaveBackendStats = false;
+	if (registeredSaveBackendStats == false)
+	{
+		before_shmem_exit(SaveBackendStatsIntoSavedBackendStatsHashAtExit, 0);
+
+		registeredSaveBackendStats = true;
 	}
 }
 
@@ -871,6 +898,24 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	/* we don't want any monitoring view/udf to show already exited backends */
 	SetActiveMyBackend(false);
 	UnSetGlobalPID();
+}
+
+
+/*
+ * SaveBackendStatsIntoSavedBackendStatsHashAtExit is called before_shmem_exit()
+ * of the backend for the purposes of saving the backend stats for the exited
+ * backends into the saved backend stats hash.
+ */
+static void
+SaveBackendStatsIntoSavedBackendStatsHashAtExit(int code, Datum arg)
+{
+	if (code)
+	{
+		/* don't try to save the stats during a crash */
+		return;
+	}
+
+	SaveBackendStatsIntoSavedBackendStatsHash();
 }
 
 
@@ -1474,6 +1519,20 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_stat_counters",
+		gettext_noop("Enables the collection of statistic counters for Citus."),
+		gettext_noop("When enabled, Citus maintains a set of statistic "
+					 "counters for the Citus extension. These statistics are "
+					 "available in the citus_stat_counters view and are "
+					 "lost on server shutdown and can be reset by executing "
+					 "the function citus_stat_counters_reset() on demand."),
+		&EnableStatCounters,
+		ENABLE_STAT_COUNTERS_DEFAULT,
+		PGC_SUSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

@@ -54,10 +54,10 @@
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/query_stats.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/statistics_collection.h"
+#include "distributed/stats/query_stats.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 
