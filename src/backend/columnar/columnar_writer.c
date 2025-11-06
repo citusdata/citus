@@ -47,7 +47,12 @@ struct ColumnarWriteState
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
 	RelFileLocator relfilelocator;
-	Oid temp_relid;          /* We can't rely on RelidByRelfilenumber for temp tables since PG18.*/
+
+	/*
+	 * We can't rely on RelidByRelfilenumber for temp tables since
+	 * PG18(it was backpatched through PG13).
+	 */
+	Oid temp_relid;
 
 	MemoryContext stripeWriteContext;
 	MemoryContext perTupleContext;

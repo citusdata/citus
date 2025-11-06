@@ -1323,9 +1323,9 @@ GetHighestUsedAddress(Relation rel)
  * In case if relid hasn't been defined yet, we should use RelidByRelfilenumber
  * to get correct relid value.
  *
- * Now it is basically used for temp rels, because since PG13 RelidByRelfilenumber
- * skip temp relations and we should use alternative ways to get relid value in case
- * of temp objects.
+ * Now it is basically used for temp rels, because since PG18(it was backpatched
+ * through PG13) RelidByRelfilenumber skip temp relations and we should use
+ * alternative ways to get relid value in case of temp objects.
  */
 Oid
 ColumnarRelationId(Oid relid, RelFileLocator relfilelocator)

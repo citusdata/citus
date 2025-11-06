@@ -65,9 +65,9 @@
 #define CITUS_COLUMNAR_INTERNAL_VERSION "11.1-0"
 
 /*
- * We can't rely on RelidByRelfilenumber for temp tables since PG13, so we can use
- * this macro to define relid within relation in case of temp relations. Otherwise
- * RelidByRelfilenumber should be used.
+ * We can't rely on RelidByRelfilenumber for temp tables since PG18(it was backpatched
+ * through PG13), so we can use this macro to define relid within relation in case of
+ * temp relations. Otherwise RelidByRelfilenumber should be used.
  */
 #define RelationPrecomputeOid(a) (RelationUsesLocalBuffers(a) ? RelationGetRelid(a) : \
 								  InvalidOid)
