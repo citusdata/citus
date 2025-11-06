@@ -203,6 +203,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_UINT_FIELD(numberOfTimesExecuted);
 
 	WRITE_NODE_FIELD(planningError);
+	WRITE_INT_FIELD(sourceResultRepartitionColumnIndex);
 }
 
 
