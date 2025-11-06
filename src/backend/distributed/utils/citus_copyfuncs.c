@@ -137,6 +137,8 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(fastPathRouterPlan);
 	COPY_SCALAR_FIELD(numberOfTimesExecuted);
 	COPY_NODE_FIELD(planningError);
+
+	COPY_SCALAR_FIELD(sourceResultRepartitionColumnIndex);
 }
 
 
