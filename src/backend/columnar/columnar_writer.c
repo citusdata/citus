@@ -137,7 +137,7 @@ ColumnarBeginWrite(Relation rel,
 
 	ColumnarWriteState *writeState = palloc0(sizeof(ColumnarWriteState));
 	writeState->relfilelocator = relfilelocator;
-	writeState->temp_relid = RelationPrecomputeOid_compat(rel);
+	writeState->temp_relid = RelationPrecomputeOid(rel);
 	writeState->options = options;
 	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
 	writeState->comparisonFunctionArray = comparisonFunctionArray;

@@ -729,7 +729,7 @@ ReadStripeSkipList(Relation rel, uint64 stripe,
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
-	uint64 storageId = LookupStorageId(RelationPrecomputeOid_compat(rel),
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
 									   RelationPhysicalIdentifier_compat(rel));
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
@@ -1276,7 +1276,7 @@ InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCou
 List *
 StripesForRelfilelocator(Relation rel)
 {
-	uint64 storageId = LookupStorageId(RelationPrecomputeOid_compat(rel),
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
 									   RelationPhysicalIdentifier_compat(rel));
 
 	/*
@@ -1308,7 +1308,7 @@ StripesForRelfilelocator(Relation rel)
 uint64
 GetHighestUsedAddress(Relation rel)
 {
-	uint64 storageId = LookupStorageId(RelationPrecomputeOid_compat(rel),
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
 									   RelationPhysicalIdentifier_compat(rel));
 
 	uint64 highestUsedAddress = 0;
@@ -1319,6 +1319,14 @@ GetHighestUsedAddress(Relation rel)
 }
 
 
+/*
+ * In case if relid hasn't been defined yet, we should use RelidByRelfilenumber
+ * to get correct relid value.
+ *
+ * Now it is basically used for temp rels, because since PGXX RelidByRelfilenumber
+ * skip temp relations and we should use alternative ways to get relid value in case
+ * of temp objects.
+ */
 Oid
 ColumnarRelationId(Oid relid, RelFileLocator relfilelocator)
 {
@@ -1615,7 +1623,7 @@ DeleteMetadataRows(Relation rel)
 		return;
 	}
 
-	uint64 storageId = LookupStorageId(RelationPrecomputeOid_compat(rel),
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
 									   RelationPhysicalIdentifier_compat(rel));
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),

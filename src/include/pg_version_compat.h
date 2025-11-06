@@ -469,8 +469,6 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define RelationPhysicalIdentifier_compat(a) ((a)->rd_locator)
 #define RelationTablespace_compat(a) (a.spcOid)
-#define RelationPrecomputeOid_compat(a) (RelationUsesLocalBuffers(a) ? RelationGetRelid( \
-											 a) : InvalidOid)
 #define RelationPhysicalIdentifierNumber_compat(a) (a.relNumber)
 #define RelationPhysicalIdentifierNumberPtr_compat(a) (a->relNumber)
 #define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rlocator.locator)
@@ -523,6 +521,7 @@ get_guc_variables_compat(int *gucCount)
 #define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rnode.node)
 typedef RelFileNode RelFileLocator;
 typedef Oid RelFileNumber;
+#define RelidByRelfilenumber(a, b) RelidByRelfilenode(a, b)
 
 #define float_abs(a) Abs(a)
 

@@ -65,6 +65,14 @@
 #define CITUS_COLUMNAR_INTERNAL_VERSION "11.1-0"
 
 /*
+ * We can't rely on RelidByRelfilenumber for temp tables since PGXX, so we can use
+ * this macro to define relid within relation in case of temp relations. Otherwise
+ * RelidByRelfilenumber should be used.
+ */
+#define RelationPrecomputeOid(a) (RelationUsesLocalBuffers(a) ? RelationGetRelid(a) : \
+								  InvalidOid)
+
+/*
  * ColumnarOptions holds the option values to be used when reading or writing
  * a columnar table. To resolve these values, we first check foreign table's options,
  * and if not present, we then fall back to the default values specified above.
