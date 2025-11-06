@@ -125,7 +125,7 @@ static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
-static uint64 LookupStorageId(RelFileLocator relfilelocator);
+static uint64 LookupStorageId(Oid relationId, RelFileLocator relfilelocator);
 static uint64 GetHighestUsedRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
@@ -606,7 +606,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
  * of columnar.chunk.
  */
 void
-SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+SaveStripeSkipList(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 				   StripeSkipList *chunkList,
 				   TupleDesc tupleDescriptor)
 {
@@ -614,7 +614,7 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 	uint32 chunkIndex = 0;
 	uint32 columnCount = chunkList->columnCount;
 
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(relid, relfilelocator);
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
@@ -684,10 +684,10 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
  * SaveChunkGroups saves the metadata for given chunk groups in columnar.chunk_group.
  */
 void
-SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
+SaveChunkGroups(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 				List *chunkGroupRowCounts)
 {
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(relid, relfilelocator);
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunkGroup);
@@ -720,7 +720,7 @@ SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
  * ReadStripeSkipList fetches chunk metadata for a given stripe.
  */
 StripeSkipList *
-ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+ReadStripeSkipList(Relation rel, uint64 stripe,
 				   TupleDesc tupleDescriptor,
 				   uint32 chunkCount, Snapshot snapshot)
 {
@@ -729,7 +729,8 @@ ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   RelationPhysicalIdentifier_compat(rel));
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
@@ -1273,9 +1274,10 @@ InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCou
  * of the given relfilenode.
  */
 List *
-StripesForRelfilelocator(RelFileLocator relfilelocator)
+StripesForRelfilelocator(Relation rel)
 {
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   RelationPhysicalIdentifier_compat(rel));
 
 	/*
 	 * PG18 requires snapshot to be active or registered before it's used
@@ -1304,15 +1306,34 @@ StripesForRelfilelocator(RelFileLocator relfilelocator)
  * returns 0.
  */
 uint64
-GetHighestUsedAddress(RelFileLocator relfilelocator)
+GetHighestUsedAddress(Relation rel)
 {
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   RelationPhysicalIdentifier_compat(rel));
 
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
 	GetHighestUsedAddressAndId(storageId, &highestUsedAddress, &highestUsedId);
 
 	return highestUsedAddress;
+}
+
+
+/*
+ * In case if relid hasn't been defined yet, we should use RelidByRelfilenumber
+ * to get correct relid value.
+ *
+ * Now it is basically used for temp rels, because since PG18(it was backpatched
+ * through PG13) RelidByRelfilenumber skip temp relations and we should use
+ * alternative ways to get relid value in case of temp objects.
+ */
+Oid
+ColumnarRelationId(Oid relid, RelFileLocator relfilelocator)
+{
+	return OidIsValid(relid) ? relid : RelidByRelfilenumber(RelationTablespace_compat(
+																relfilelocator),
+															RelationPhysicalIdentifierNumber_compat(
+																relfilelocator));
 }
 
 
@@ -1591,7 +1612,7 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
  * metadata tables.
  */
 void
-DeleteMetadataRows(RelFileLocator relfilelocator)
+DeleteMetadataRows(Relation rel)
 {
 	/*
 	 * During a restore for binary upgrade, metadata tables and indexes may or
@@ -1602,7 +1623,8 @@ DeleteMetadataRows(RelFileLocator relfilelocator)
 		return;
 	}
 
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   RelationPhysicalIdentifier_compat(rel));
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
 										   Anum_columnar_stripe_storageid,
@@ -2001,13 +2023,11 @@ ColumnarNamespaceId(void)
  * false if the relation doesn't have a meta page yet.
  */
 static uint64
-LookupStorageId(RelFileLocator relfilelocator)
+LookupStorageId(Oid relid, RelFileLocator relfilelocator)
 {
-	Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(relfilelocator),
-										  RelationPhysicalIdentifierNumber_compat(
-											  relfilelocator));
+	relid = ColumnarRelationId(relid, relfilelocator);
 
-	Relation relation = relation_open(relationId, AccessShareLock);
+	Relation relation = relation_open(relid, AccessShareLock);
 	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 	table_close(relation, AccessShareLock);
 
