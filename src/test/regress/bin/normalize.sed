@@ -379,3 +379,9 @@ s/\<is referenced from table\>/is still referenced from table/g
 # EXPLAIN (PG18+): hide Materialize storage instrumentation
 # this rule can be removed when PG18 is the minimum supported version
 /^[ \t]*Storage:[ \t].*$/d
+
+# PG18: drop 'subscription "<name>"' prefix
+# this rule can be removed when PG18 is the minimum supported version
+s/^[[:space:]]*ERROR:[[:space:]]+subscription "[^"]+" could not connect to the publisher:[[:space:]]*/ERROR:  could not connect to the publisher: /I
+# PG18: drop verbose 'connection to server … failed:' preamble
+s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*connection to server .* failed:[[:space:]]*/ERROR:  could not connect to the publisher: /I
