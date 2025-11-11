@@ -364,9 +364,6 @@ s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
 # ignore any “Disabled:” lines in test output
 /^\s*Disabled:/d
 
-# ignore any JSON-style Disabled field
-/^\s*"Disabled":/d
-
 # ignore XML <Disabled>true</Disabled> or <Disabled>false</Disabled>
 /^\s*<Disabled>.*<\/Disabled>/d
 # pg18 “Disabled” change end
