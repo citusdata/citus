@@ -1003,14 +1003,14 @@ DROP ROLE test_non_super_user;
 
 \c - - - :worker_1_port
 
--- test creating a tenant table from workers
-CREATE TABLE tenant_3.tbl_1(a int, b text);
-
 -- test creating a tenant schema from workers
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA worker_tenant_schema;
-DROP SCHEMA worker_tenant_schema;
-SET citus.enable_schema_based_sharding TO OFF;
+
+-- test creating a tenant table from workers
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE worker_tenant_schema.tbl_1(a int, b text);
+RESET citus.shard_replication_factor;
 
 -- Enable the GUC on workers to make sure that the CREATE SCHEMA/ TABLE
 -- commands that we send to workers don't recursively try creating a
@@ -1029,6 +1029,9 @@ SELECT pg_reload_conf();
 SELECT citus_internal.unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
 
 \c - - - :master_port
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA worker_tenant_schema CASCADE;
 
 SET search_path TO regular_schema;
 SET citus.next_shard_id TO 1950000;

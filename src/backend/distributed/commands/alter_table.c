@@ -1524,7 +1524,9 @@ CreateCitusTableLike(TableConversionState *con)
 				.colocateWithTableName = quote_qualified_identifier(con->schemaName,
 																	con->relationName)
 			};
-			CreateSingleShardTable(con->newRelationId, colocationParam);
+			bool allowFromWorkersIfPostgresTable = false;
+			CreateSingleShardTable(con->newRelationId, colocationParam,
+								   allowFromWorkersIfPostgresTable);
 		}
 		else
 		{
