@@ -305,7 +305,7 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		return;
 	}
 
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	Oid viewOid = InvalidOid;
 	foreach_declared_oid(viewOid, views)
@@ -322,13 +322,13 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		char *createViewCommand = CreateViewDDLCommand(viewOid);
 		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
 
-		SendCommandToWorkersWithMetadata(createViewCommand);
-		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
+		SendCommandToRemoteNodesWithMetadata(createViewCommand);
+		SendCommandToRemoteNodesWithMetadata(alterViewOwnerCommand);
 
 		MarkObjectDistributed(viewAddress);
 	}
 
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 
@@ -346,7 +346,7 @@ AddTableToPublications(Oid relationId)
 
 	Oid publicationId = InvalidOid;
 
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	foreach_declared_oid(publicationId, publicationIds)
 	{
@@ -368,10 +368,10 @@ AddTableToPublications(Oid relationId)
 			GetAlterPublicationTableDDLCommand(publicationId, relationId, isAdd);
 
 		/* send ALTER PUBLICATION .. ADD to workers with metadata */
-		SendCommandToWorkersWithMetadata(alterPublicationCommand);
+		SendCommandToRemoteNodesWithMetadata(alterPublicationCommand);
 	}
 
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 
@@ -2769,12 +2769,12 @@ CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
 		InterTableRelationshipOfRelationCommandList(relationId);
 
 	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
@@ -2834,7 +2834,7 @@ CreateShellTableOnWorkers(Oid relationId)
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
@@ -2852,13 +2852,13 @@ CreateTableMetadataOnWorkers(Oid relationId)
 	List *commandList = CitusTableMetadataCreateCommandList(relationId);
 
 	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 

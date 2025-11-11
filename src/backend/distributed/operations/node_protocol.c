@@ -60,10 +60,12 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
@@ -74,6 +76,10 @@ int ShardReplicationFactor = 1; /* desired replication factor for shards */
 int NextShardId = 0;
 int NextPlacementId = 0;
 
+static int64 GetNextShardIdFromNode(WorkerNode *node);
+static uint64 GetNextShardIdInternal(void);
+static int64 GetNextPlacementIdFromNode(WorkerNode *node);
+static uint64 GetNextPlacementIdInternal(void);
 static void GatherIndexAndConstraintDefinitionListExcludingReplicaIdentity(Form_pg_index
 																		   indexForm,
 																		   List **
@@ -187,6 +193,73 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 }
 
 
+uint64
+GetNextShardId(void)
+{
+	uint64 shardId = INVALID_SHARD_ID;
+	if (IsCoordinator())
+	{
+		shardId = GetNextShardIdInternal();
+	}
+	else
+	{
+		/*
+		 * If we're not on the coordinator, retrieve the next id from the
+		 * coordinator node. Although all nodes have the sequence, we don't
+		 * synchronize the sequences that are part of the Citus metadata
+		 * across nodes, so we need to get the next value from the
+		 * coordinator.
+		 *
+		 * Note that before this point, we should have already verified
+		 * that coordinator is added into the metadata.
+		 */
+		WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
+		shardId = GetNextShardIdFromNode(coordinator);
+	}
+
+	return shardId;
+}
+
+
+static int64
+GetNextShardIdFromNode(WorkerNode *node)
+{
+	const char *nodeName = node->workerName;
+	int nodePort = node->workerPort;
+	uint32 connectionFlags = 0;
+	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+
+	int querySent = SendRemoteCommand(connection,
+									  "SELECT pg_catalog.master_get_new_shardid();");
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	int64 rowCount = PQntuples(result);
+	int64 colCount = PQnfields(result);
+	if (rowCount != 1 || colCount != 1)
+	{
+		ereport(ERROR, (errmsg("unexpected result from the node when getting "
+							   "next colocation id")));
+	}
+
+	int64 shardId = ParseIntField(result, 0, 0);
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	return shardId;
+}
+
+
 /*
  * master_get_new_shardid is a user facing wrapper function around GetNextShardId()
  * which allocates and returns a unique shardId for the shard to be created.
@@ -201,7 +274,7 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
-	uint64 shardId = GetNextShardId();
+	uint64 shardId = GetNextShardIdInternal();
 	Datum shardIdDatum = Int64GetDatum(shardId);
 
 	PG_RETURN_DATUM(shardIdDatum);
@@ -216,8 +289,8 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
  * Please note that the caller is still responsible for finalizing shard data
  * and the shardId with the master node.
  */
-uint64
-GetNextShardId()
+static uint64
+GetNextShardIdInternal(void)
 {
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
@@ -256,6 +329,73 @@ GetNextShardId()
 }
 
 
+uint64
+GetNextPlacementId(void)
+{
+	uint64 placementId = INVALID_PLACEMENT_ID;
+	if (IsCoordinator())
+	{
+		placementId = GetNextPlacementIdInternal();
+	}
+	else
+	{
+		/*
+		 * If we're not on the coordinator, retrieve the next id from the
+		 * coordinator node. Although all nodes have the sequence, we don't
+		 * synchronize the sequences that are part of the Citus metadata
+		 * across nodes, so we need to get the next value from the
+		 * coordinator.
+		 *
+		 * Note that before this point, we should have already verified
+		 * that coordinator is added into the metadata.
+		 */
+		WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
+		placementId = GetNextPlacementIdFromNode(coordinator);
+	}
+
+	return placementId;
+}
+
+
+static int64
+GetNextPlacementIdFromNode(WorkerNode *node)
+{
+	const char *nodeName = node->workerName;
+	int nodePort = node->workerPort;
+	uint32 connectionFlags = 0;
+	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+
+	int querySent = SendRemoteCommand(connection,
+									  "SELECT pg_catalog.master_get_new_placementid();");
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	int64 rowCount = PQntuples(result);
+	int64 colCount = PQnfields(result);
+	if (rowCount != 1 || colCount != 1)
+	{
+		ereport(ERROR, (errmsg("unexpected result from the node when getting "
+							   "next colocation id")));
+	}
+
+	int64 placementId = ParseIntField(result, 0, 0);
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	return placementId;
+}
+
+
 /*
  * master_get_new_placementid is a user facing wrapper function around
  * GetNextPlacementId() which allocates and returns a unique placement id for the
@@ -271,7 +411,7 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
-	uint64 placementId = GetNextPlacementId();
+	uint64 placementId = GetNextPlacementIdInternal();
 	Datum placementIdDatum = Int64GetDatum(placementId);
 
 	PG_RETURN_DATUM(placementIdDatum);
@@ -288,8 +428,8 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
  * ok. We might want to restrict this to users part of a specific role or such
  * at some later point.
  */
-uint64
-GetNextPlacementId(void)
+static uint64
+GetNextPlacementIdInternal(void)
 {
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;

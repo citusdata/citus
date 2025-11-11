@@ -376,7 +376,8 @@ extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRowGlobally(uint64 placementId);
 extern void DeleteShardPlacementRow(uint64 placementId);
-extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam);
+extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
+								   bool allowFromWorkersIfPostgresTable);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName);
