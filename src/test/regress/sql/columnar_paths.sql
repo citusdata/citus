@@ -366,7 +366,7 @@ SELECT * FROM correlated WHERE x = 78910;
 SELECT * FROM correlated WHERE x = 78910;
 
 -- should choose index scan; selective but uncorrelated
-EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
+EXPLAIN (analyze off, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM uncorrelated WHERE x = 78910;
 SELECT * FROM uncorrelated WHERE x = 78910;
 

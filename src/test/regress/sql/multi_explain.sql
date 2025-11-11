@@ -184,10 +184,12 @@ EXPLAIN (COSTS FALSE)
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 BEGIN;
+select public.explain_filter('
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
-	WHERE l_orderkey = 1 AND l_partkey = 0;
+	WHERE l_orderkey = 1 AND l_partkey = 0
+	');
 ROLLBACk;
 
 -- Test delete
@@ -597,7 +599,7 @@ EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5);
+select public.explain_filter('EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5)');
 
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
