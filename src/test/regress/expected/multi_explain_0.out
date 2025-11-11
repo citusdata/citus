@@ -2168,108 +2168,69 @@ SELECT * FROM explain_pk ORDER BY 1;
 ROLLBACK;
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 2,
-          "Tasks Shown": "One of 2",
-          "Tasks": [
-            {
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "ModifyTable",
-                      "Operation": "Insert",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "citus_table_alias",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1,
-                      "Plans": [
-                        {
-                          "Node Type": "Result",
-                          "Parent Relationship": "Outer",
-                          "Parallel Aware": false,
-                          "Async Capable": false,
-                          "Actual Rows": 1,
-                          "Actual Loops": 1
-                        }
-                      ]
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 2
+        Tasks Shown: "One of 2"
+        Tasks:
+          - Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "ModifyTable"
+                  Operation: "Insert"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "citus_table_alias"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                  Plans:
+                    - Node Type: "Result"
+                      Parent Relationship: "Outer"
+                      Parallel Aware: false
+                      Async Capable: false
+                      Actual Rows: 1
+                      Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 4,
-          "Tuple data received from nodes": "0 bytes",
-          "Tasks Shown": "One of 4",
-          "Tasks": [
-            {
-              "Tuple data received from node": "0 bytes",
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "Seq Scan",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "explain_pk",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) SELECT * FROM explain_pk;
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 4
+        Tuple data received from nodes: "0 bytes"
+        Tasks Shown: "One of 4"
+        Tasks:
+          - Tuple data received from node: "0 bytes"
+            Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "Seq Scan"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "explain_pk"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 <explain xmlns="http://www.postgresql.org/2009/explain">
