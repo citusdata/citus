@@ -142,7 +142,8 @@ static CitusTableParams DecideCitusTableParams(CitusTableType tableType,
 											   DistributedTableParams *
 											   distributedTableParams);
 static void CreateCitusTable(Oid relationId, CitusTableType tableType,
-							 DistributedTableParams *distributedTableParams);
+							 DistributedTableParams *distributedTableParams,
+							 bool allowFromWorkers);
 static void ConvertCitusLocalTableToTableType(Oid relationId,
 											  CitusTableType tableType,
 											  DistributedTableParams *
@@ -163,7 +164,7 @@ static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod);
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod);
-static void EnsureCitusTableCanBeCreated(Oid relationOid);
+static void EnsureCitusTableCanBeCreated(Oid relationOid, bool allowFromWorkers);
 static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
@@ -303,7 +304,9 @@ create_distributed_table(PG_FUNCTION_ARGS)
 			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
 			.colocateWithTableName = colocateWithTableName,
 		};
-		CreateSingleShardTable(relationId, colocationParam);
+		bool allowFromWorkersIfPostgresTable = false;
+		CreateSingleShardTable(relationId, colocationParam,
+							   allowFromWorkersIfPostgresTable);
 	}
 
 	PG_RETURN_VOID();
@@ -417,7 +420,8 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 
 	DropOrphanedResourcesInSeparateTransaction();
 
-	EnsureCitusTableCanBeCreated(relationId);
+	bool allowFromWorkers = false;
+	EnsureCitusTableCanBeCreated(relationId, allowFromWorkers);
 
 	EnsureValidDistributionColumn(relationId, distributionColumnName);
 
@@ -932,15 +936,23 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 /*
  * EnsureCitusTableCanBeCreated checks if
- * - we are on the coordinator
+ * - we are on the coordinator if allowFromWorkers = false or else if we can ensure propagation to coordinator
  * - the current user is the owner of the table
  * - relation kind is supported
  * - relation is not a shard
  */
 static void
-EnsureCitusTableCanBeCreated(Oid relationOid)
+EnsureCitusTableCanBeCreated(Oid relationOid, bool allowFromWorkers)
 {
-	EnsureCoordinator();
+	if (allowFromWorkers)
+	{
+		EnsurePropagationToCoordinator();
+	}
+	else
+	{
+		EnsureCoordinator();
+	}
+
 	EnsureRelationExists(relationOid);
 	EnsureTableOwner(relationOid);
 	ErrorIfTemporaryTable(relationOid);
@@ -1025,9 +1037,11 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 		},
 		.shardCount = shardCount,
 		.shardCountIsStrict = shardCountIsStrict,
-		.distributionColumnName = distributionColumnName
+		.distributionColumnName = distributionColumnName,
 	};
-	CreateCitusTable(relationId, tableType, &distributedTableParams);
+
+	bool allowFromWorkers = false;
+	CreateCitusTable(relationId, tableType, &distributedTableParams, allowFromWorkers);
 }
 
 
@@ -1047,7 +1061,8 @@ CreateReferenceTable(Oid relationId)
 	}
 	else
 	{
-		CreateCitusTable(relationId, REFERENCE_TABLE, NULL);
+		bool allowFromWorkers = false;
+		CreateCitusTable(relationId, REFERENCE_TABLE, NULL, allowFromWorkers);
 	}
 }
 
@@ -1057,13 +1072,14 @@ CreateReferenceTable(Oid relationId)
  * doesn't have a shard key.
  */
 void
-CreateSingleShardTable(Oid relationId, ColocationParam colocationParam)
+CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
+					   bool allowFromWorkersIfPostgresTable)
 {
 	DistributedTableParams distributedTableParams = {
 		.colocationParam = colocationParam,
 		.shardCount = 1,
 		.shardCountIsStrict = true,
-		.distributionColumnName = NULL
+		.distributionColumnName = NULL,
 	};
 
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
@@ -1078,7 +1094,8 @@ CreateSingleShardTable(Oid relationId, ColocationParam colocationParam)
 	}
 	else
 	{
-		CreateCitusTable(relationId, SINGLE_SHARD_DISTRIBUTED, &distributedTableParams);
+		CreateCitusTable(relationId, SINGLE_SHARD_DISTRIBUTED, &distributedTableParams,
+						 allowFromWorkersIfPostgresTable);
 	}
 }
 
@@ -1098,7 +1115,8 @@ CreateSingleShardTable(Oid relationId, ColocationParam colocationParam)
  */
 static void
 CreateCitusTable(Oid relationId, CitusTableType tableType,
-				 DistributedTableParams *distributedTableParams)
+				 DistributedTableParams *distributedTableParams,
+				 bool allowFromWorkers)
 {
 	if ((tableType == HASH_DISTRIBUTED || tableType == APPEND_DISTRIBUTED ||
 		 tableType == SINGLE_SHARD_DISTRIBUTED ||
@@ -1109,7 +1127,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 							   "not be otherwise")));
 	}
 
-	EnsureCitusTableCanBeCreated(relationId);
+	EnsureCitusTableCanBeCreated(relationId, allowFromWorkers);
 
 	/* allow creating a Citus table on an empty cluster */
 	InsertCoordinatorIfClusterEmpty();
@@ -1336,7 +1354,8 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 				.distributionColumnName = distributedTableParams->distributionColumnName,
 			};
 			CreateCitusTable(partitionRelationId, tableType,
-							 &childDistributedTableParams);
+							 &childDistributedTableParams,
+							 allowFromWorkers);
 		}
 
 		MemoryContextSwitchTo(oldContext);
@@ -1394,7 +1413,8 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 							   "not be otherwise")));
 	}
 
-	EnsureCitusTableCanBeCreated(relationId);
+	bool allowFromWorkers = false;
+	EnsureCitusTableCanBeCreated(relationId, allowFromWorkers);
 
 	Relation relation = try_relation_open(relationId, ExclusiveLock);
 	if (relation == NULL)
