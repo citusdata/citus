@@ -1882,7 +1882,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 
 	if (placementId == INVALID_PLACEMENT_ID)
 	{
-		placementId = master_get_new_placementid(NULL);
+		placementId = GetNextPlacementId();
 	}
 	values[Anum_pg_dist_placement_placementid - 1] = Int64GetDatum(placementId);
 	values[Anum_pg_dist_placement_shardid - 1] = Int64GetDatum(shardId);

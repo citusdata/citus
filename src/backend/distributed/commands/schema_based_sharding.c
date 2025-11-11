@@ -265,23 +265,7 @@ EnsureFKeysForTenantTable(Oid relationId)
 void
 CreateTenantSchemaTable(Oid relationId)
 {
-	if (!IsCoordinator())
-	{
-		/*
-		 * We don't support creating tenant tables from workers. We could
-		 * let ShouldCreateTenantSchemaTable() to return false to allow users
-		 * to create a local table as usual but that would be confusing because
-		 * it might sound like we allow creating tenant tables from workers.
-		 * For this reason, we prefer to throw an error instead.
-		 *
-		 * Indeed, CreateSingleShardTable() would already do so but we
-		 * prefer to throw an error with a more meaningful message, rather
-		 * than saying "operation is not allowed on this node".
-		 */
-		ereport(ERROR, (errmsg("cannot create tables in a distributed schema from "
-							   "a worker node"),
-						errhint("Connect to the coordinator node and try again.")));
-	}
+	EnsurePropagationToCoordinator();
 
 	EnsureTableKindSupportedForTenantSchema(relationId);
 
@@ -301,7 +285,8 @@ CreateTenantSchemaTable(Oid relationId)
 		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
 		.colocationId = colocationId,
 	};
-	CreateSingleShardTable(relationId, colocationParam);
+	bool allowFromWorkersIfPostgresTable = true;
+	CreateSingleShardTable(relationId, colocationParam, allowFromWorkersIfPostgresTable);
 }
 
 
@@ -696,7 +681,9 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 			originalForeignKeyRecreationCommands, fkeyCommandsForRelation);
 
 		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
-		CreateSingleShardTable(relationId, colocationParam);
+		bool allowFromWorkersIfPostgresTable = false;
+		CreateSingleShardTable(relationId, colocationParam,
+							   allowFromWorkersIfPostgresTable);
 	}
 
 	/* We can skip foreign key validations as we are sure about them at start */

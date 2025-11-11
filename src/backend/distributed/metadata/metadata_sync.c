@@ -105,9 +105,9 @@ static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 static List * GetFunctionDependenciesForObjects(ObjectAddress *objectAddress);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
-static void CreateShellTableOnWorkers(Oid relationId);
-static void CreateTableMetadataOnWorkers(Oid relationId);
-static void CreateDependingViewsOnWorkers(Oid relationId);
+static void CreateShellTableOnRemoteNodes(Oid relationId);
+static void CreateTableMetadataOnRemoteNodes(Oid relationId);
+static void CreateDependingViewsOnRemoteNodes(Oid relationId);
 static void AddTableToPublications(Oid relationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
@@ -265,19 +265,19 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 
 
 /*
- * SyncCitusTableMetadata syncs citus table metadata to worker nodes with metadata.
+ * SyncCitusTableMetadata syncs citus table metadata to remote nodes with metadata.
  * Our definition of metadata includes the shell table and its inter relations with
  * other shell tables, corresponding pg_dist_object, pg_dist_partiton, pg_dist_shard
  * and pg_dist_shard placement entries. This function also propagates the views that
- * depend on the given relation, to the metadata workers, and adds the relation to
+ * depend on the given relation, to the remote metadata nodes, and adds the relation to
  * the appropriate publications.
  */
 void
 SyncCitusTableMetadata(Oid relationId)
 {
-	CreateShellTableOnWorkers(relationId);
-	CreateTableMetadataOnWorkers(relationId);
-	CreateInterTableRelationshipOfRelationOnWorkers(relationId);
+	CreateShellTableOnRemoteNodes(relationId);
+	CreateTableMetadataOnRemoteNodes(relationId);
+	CreateInterTableRelationshipOfRelationOnRemoteNodes(relationId);
 
 	if (!IsTableOwnedByExtension(relationId))
 	{
@@ -286,17 +286,17 @@ SyncCitusTableMetadata(Oid relationId)
 		MarkObjectDistributed(&relationAddress);
 	}
 
-	CreateDependingViewsOnWorkers(relationId);
+	CreateDependingViewsOnRemoteNodes(relationId);
 	AddTableToPublications(relationId);
 }
 
 
 /*
- * CreateDependingViewsOnWorkers takes a relationId and creates the views that depend on
- * that relation on workers with metadata. Propagated views are marked as distributed.
+ * CreateDependingViewsOnRemoteNodes takes a relationId and creates the views that depend on
+ * that relation on remote nodes with metadata. Propagated views are marked as distributed.
  */
 static void
-CreateDependingViewsOnWorkers(Oid relationId)
+CreateDependingViewsOnRemoteNodes(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
 
@@ -306,7 +306,7 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		return;
 	}
 
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	Oid viewOid = InvalidOid;
 	foreach_declared_oid(viewOid, views)
@@ -323,18 +323,18 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		char *createViewCommand = CreateViewDDLCommand(viewOid);
 		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
 
-		SendCommandToWorkersWithMetadata(createViewCommand);
-		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
+		SendCommandToRemoteNodesWithMetadata(createViewCommand);
+		SendCommandToRemoteNodesWithMetadata(alterViewOwnerCommand);
 
 		MarkObjectDistributed(viewAddress);
 	}
 
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 
 /*
- * AddTableToPublications adds the table to a publication on workers with metadata.
+ * AddTableToPublications adds the table to a publication on remote nodes with metadata.
  */
 static void
 AddTableToPublications(Oid relationId)
@@ -347,7 +347,7 @@ AddTableToPublications(Oid relationId)
 
 	Oid publicationId = InvalidOid;
 
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	foreach_declared_oid(publicationId, publicationIds)
 	{
@@ -369,10 +369,10 @@ AddTableToPublications(Oid relationId)
 			GetAlterPublicationTableDDLCommand(publicationId, relationId, isAdd);
 
 		/* send ALTER PUBLICATION .. ADD to workers with metadata */
-		SendCommandToWorkersWithMetadata(alterPublicationCommand);
+		SendCommandToRemoteNodesWithMetadata(alterPublicationCommand);
 	}
 
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 
@@ -2753,11 +2753,11 @@ HasMetadataWorkers(void)
 
 
 /*
- * CreateInterTableRelationshipOfRelationOnWorkers create inter table relationship
- * for the the given relation id on each worker node with metadata.
+ * CreateInterTableRelationshipOfRelationOnRemoteNodes create inter table relationship
+ * for the the given relation id on each remote node with metadata.
  */
 void
-CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
+CreateInterTableRelationshipOfRelationOnRemoteNodes(Oid relationId)
 {
 	/* if the table is owned by an extension we don't create */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
@@ -2770,12 +2770,12 @@ CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
 		InterTableRelationshipOfRelationCommandList(relationId);
 
 	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
@@ -2803,11 +2803,11 @@ InterTableRelationshipOfRelationCommandList(Oid relationId)
 
 
 /*
- * CreateShellTableOnWorkers creates the shell table on each worker node with metadata
+ * CreateShellTableOnRemoteNodes creates the shell table on each remote node with metadata
  * including sequence dependency and truncate triggers.
  */
 static void
-CreateShellTableOnWorkers(Oid relationId)
+CreateShellTableOnRemoteNodes(Oid relationId)
 {
 	if (IsTableOwnedByExtension(relationId))
 	{
@@ -2835,31 +2835,31 @@ CreateShellTableOnWorkers(Oid relationId)
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
 
 /*
- * CreateTableMetadataOnWorkers creates the list of commands needed to create the
- * metadata of the given distributed table and sends these commands to all metadata
- * workers i.e. workers with hasmetadata=true. Before sending the commands, in order
+ * CreateTableMetadataOnRemoteNodes creates the list of commands needed to
+ * create the metadata of the given distributed table and sends these commands to all
+ * remote metadata nodes i.e. hasmetadata=true. Before sending the commands, in order
  * to prevent recursive propagation, DDL propagation on workers are disabled with a
  * `SET citus.enable_ddl_propagation TO off;` command.
  */
 static void
-CreateTableMetadataOnWorkers(Oid relationId)
+CreateTableMetadataOnRemoteNodes(Oid relationId)
 {
 	List *commandList = CitusTableMetadataCreateCommandList(relationId);
 
 	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
