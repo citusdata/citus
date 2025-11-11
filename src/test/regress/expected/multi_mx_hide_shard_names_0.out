@@ -123,10 +123,11 @@ ORDER BY 2, 3;
    Sort Key: n.nspname, c.relname
    ->  Nested Loop Left Join
          Join Filter: (n.oid = c.relnamespace)
-         ->  Seq Scan on pg_class c
+         ->  Index Scan using pg_class_relname_nsp_index on pg_class c
+               Index Cond: (relname = 'test_table'::text)
                Filter: ((relname ~ '^(test_table)$'::text) AND (relation_is_a_known_shard(oid) IS NOT TRUE) AND pg_table_is_visible(oid))
          ->  Seq Scan on pg_namespace n
-(7 rows)
+(8 rows)
 
 commit prepared 'take-aggressive-lock';
 -- now create an index
