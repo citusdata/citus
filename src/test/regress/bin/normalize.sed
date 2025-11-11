@@ -332,23 +332,33 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
 
-# PG18 change: strip trailing ".0..." from Actual Rows across formats
-# Text EXPLAIN (simple case: "actual rows=50.00")
+# --- PG18 Actual Rows normalization ---
+# New in PG18: Actual Rows in EXPLAIN output are now rounded to
+# 1) 0.50 (and 0.5, 0.5000...) -> 0
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.50*/\10/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.50*/\10/gI
+
+# 2) 0.51+ -> 1
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.(5[1-9][0-9]*|[6-9][0-9]*)/\11/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.(5[1-9][0-9]*|[6-9][0-9]*)/\11/gI
+
+# 3) Strip trivial trailing ".0..." (6.00 -> 6)  [keep your existing cross-format rules]
 s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)([0-9]+)\.0+/\1\2/gI
-# Text EXPLAIN (inside "(actual time=... rows=50.00 ...)")
 s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)([0-9]+)\.0+/\1\2/gI
-# YAML (e.g., "Actual Rows: 1.00")
+
+# 4) YAML/XML/JSON: strip trailing ".0..."
 s/(Actual[[:space:]]+Rows:[[:space:]]*[0-9]+)\.0+/\1/gI
-# XML (e.g., "<Actual-Rows>1.00</Actual-Rows>")
 s/(<Actual-Rows>[0-9]+)\.0+(<\/Actual-Rows>)/\1\2/g
-# JSON (e.g., '"Actual Rows": 1.00')
 s/("Actual[[:space:]]+Rows":[[:space:]]*[0-9]+)\.0+/\1/gI
-# JSON placeholder cleanup: '"Actual Rows": N.0...' -> N
+
+# 5) Placeholder cleanups (kept from existing rules; harmless if unused)
+#    JSON placeholder cleanup: '"Actual Rows": N.N' -> N
 s/("Actual[[:space:]]+Rows":[[:space:]]*)N\.N/\1N/gI
-# Collapse placeholder in text EXPLAIN: "rows=N.N" -> "rows=N"
+#    Text EXPLAIN collapse: "rows=N.N" -> "rows=N"
 s/(rows[[:space:]]*=[[:space:]]*)N\.N/\1N/gI
-# YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
+#    YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
 s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
+# --- PG18 Actual Rows normalization ---
 
 # pg18 “Disabled” change start
 # ignore any “Disabled:” lines in test output
