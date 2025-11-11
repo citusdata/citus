@@ -37,6 +37,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -175,11 +176,19 @@ Datum
 truncate_local_data_after_distributing_table(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 
 	Oid relationId = PG_GETARG_OID(0);
 
 	EnsureLocalTableCanBeTruncated(relationId);
+
+	if (IsTenantSchema(get_rel_namespace(relationId)))
+	{
+		EnsurePropagationToCoordinator();
+	}
+	else
+	{
+		EnsureCoordinator();
+	}
 
 	TruncateStmt *truncateStmt = makeNode(TruncateStmt);
 
