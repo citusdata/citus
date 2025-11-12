@@ -147,7 +147,8 @@ static void CreateCitusTable(Oid relationId, CitusTableType tableType,
 static void ConvertCitusLocalTableToTableType(Oid relationId,
 											  CitusTableType tableType,
 											  DistributedTableParams *
-											  distributedTableParams);
+											  distributedTableParams,
+											  bool allowFromWorkers);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static void CreateSingleShardTableShard(Oid relationId, Oid colocatedTableId,
@@ -169,6 +170,7 @@ static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
 static void CopyLocalDataIntoShards(Oid distributedTableId);
+static uint64 CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId);
 static bool DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 															 Var *distributionColumn);
 static int numeric_typmod_scale(int32 typmod);
@@ -302,9 +304,9 @@ create_distributed_table(PG_FUNCTION_ARGS)
 			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
 			.colocateWithTableName = colocateWithTableName,
 		};
-		bool allowFromWorkersIfPostgresTable = false;
+		bool allowFromWorkers = false;
 		CreateSingleShardTable(relationId, colocationParam,
-							   allowFromWorkersIfPostgresTable);
+							   allowFromWorkers);
 	}
 
 	PG_RETURN_VOID();
@@ -1049,17 +1051,18 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 void
 CreateReferenceTable(Oid relationId)
 {
+	bool allowFromWorkers = false;
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		/*
 		 * Create the shard of given Citus local table on workers to convert
 		 * it into a reference table.
 		 */
-		ConvertCitusLocalTableToTableType(relationId, REFERENCE_TABLE, NULL);
+		ConvertCitusLocalTableToTableType(relationId, REFERENCE_TABLE, NULL,
+										  allowFromWorkers);
 	}
 	else
 	{
-		bool allowFromWorkers = false;
 		CreateCitusTable(relationId, REFERENCE_TABLE, NULL, allowFromWorkers);
 	}
 }
@@ -1071,7 +1074,7 @@ CreateReferenceTable(Oid relationId)
  */
 void
 CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
-					   bool allowFromWorkersIfPostgresTable)
+					   bool allowFromWorkers)
 {
 	DistributedTableParams distributedTableParams = {
 		.colocationParam = colocationParam,
@@ -1084,16 +1087,17 @@ CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
 	{
 		/*
 		 * Create the shard of given Citus local table on appropriate node
-		 * and drop the local one to convert it into a single-shard distributed
-		 * table.
+		 * and drop the one on the coordinator to convert it into a
+		 * single-shard distributed table.
 		 */
 		ConvertCitusLocalTableToTableType(relationId, SINGLE_SHARD_DISTRIBUTED,
-										  &distributedTableParams);
+										  &distributedTableParams,
+										  allowFromWorkers);
 	}
 	else
 	{
 		CreateCitusTable(relationId, SINGLE_SHARD_DISTRIBUTED, &distributedTableParams,
-						 allowFromWorkersIfPostgresTable);
+						 allowFromWorkers);
 	}
 }
 
@@ -1386,13 +1390,14 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
  * given table type.
  *
  * This only supports converting Citus local tables to reference tables
- * (by replicating the shard to workers) and single-shard distributed
- * tables (by replicating the shard to the appropriate worker and dropping
- * the local one).
+ * (by replicating the coordinator placement to workers) and single-shard
+ * distributed tables (by replicating the coordinator placement to the
+ * appropriate worker and dropping the one on the coordinator).
  */
 static void
 ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
-								  DistributedTableParams *distributedTableParams)
+								  DistributedTableParams *distributedTableParams,
+								  bool allowFromWorkers)
 {
 	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
@@ -1411,7 +1416,6 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 							   "not be otherwise")));
 	}
 
-	bool allowFromWorkers = false;
 	EnsureCitusTableCanBeCreated(relationId, allowFromWorkers);
 
 	Relation relation = try_relation_open(relationId, ExclusiveLock);
@@ -1482,11 +1486,11 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 	/*
 	 * When converting to a single shard table, we want to drop the placement
 	 * on the coordinator, but only if transferring to a different node. In that
-	 * case, shouldDropLocalPlacement is true. When converting to a reference
+	 * case, shouldDropCoordPlacement is true. When converting to a reference
 	 * table, we always keep the placement on the coordinator, so for reference
-	 * tables shouldDropLocalPlacement is always false.
+	 * tables shouldDropCoordPlacement is always false.
 	 */
-	bool shouldDropLocalPlacement = false;
+	bool shouldDropCoordPlacement = false;
 
 	List *targetNodeList = NIL;
 	if (tableType == SINGLE_SHARD_DISTRIBUTED)
@@ -1498,7 +1502,7 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 			WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
 			targetNodeList = list_make1(targetNode);
 
-			shouldDropLocalPlacement = true;
+			shouldDropCoordPlacement = true;
 		}
 	}
 	else if (tableType == REFERENCE_TABLE)
@@ -1518,12 +1522,12 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 		NoneDistTableReplicateCoordinatorPlacement(relationId, targetNodeList);
 	}
 
-	if (shouldDropLocalPlacement)
+	if (shouldDropCoordPlacement)
 	{
 		/*
-		 * We don't yet drop the local placement before handling partitions.
-		 * Otherewise, local shard placements of the partitions will be gone
-		 * before we create them on workers.
+		 * We don't yet drop the coordinator placement before handling partitions.
+		 * Otherewise, coordinator shard placements of the partitions will be gone
+		 * before we create them on remote nodes.
 		 *
 		 * However, we need to delete the related entry from pg_dist_placement
 		 * before distributing partitions (if any) because we need a sane metadata
@@ -1568,14 +1572,15 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 				.distributionColumnName = distributedTableParams->distributionColumnName,
 			};
 			ConvertCitusLocalTableToTableType(partitionRelationId, tableType,
-											  &childDistributedTableParams);
+											  &childDistributedTableParams,
+											  allowFromWorkers);
 		}
 
 		MemoryContextSwitchTo(oldContext);
 		MemoryContextDelete(citusPartitionContext);
 	}
 
-	if (shouldDropLocalPlacement)
+	if (shouldDropCoordPlacement)
 	{
 		NoneDistTableDropCoordinatorPlacementTable(relationId);
 	}
@@ -2675,7 +2680,7 @@ CopyLocalDataIntoShards(Oid distributedTableId)
  * opens a connection and starts a COPY for each shard placement that will have
  * data.
  */
-uint64
+static uint64
 CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId)
 {
 	/* take an ExclusiveLock to block all operations except SELECT */
