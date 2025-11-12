@@ -59,7 +59,7 @@ def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_sched
 
     # Store the pre-upgrade GUCs and UDFs for minor version upgrades
     pre_upgrade = None
-    if (config.minor_upgrade):
+    if config.minor_upgrade:
         pre_upgrade = get_citus_gucs_and_udfs(config)
 
     run_test_on_coordinator(config, before_upgrade_schedule)
@@ -76,12 +76,12 @@ def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_sched
 
     # For minor version upgrades, verify GUCs and UDFs does not have breaking changes
     breaking_changes = []
-    if (config.minor_upgrade):
+    if config.minor_upgrade:
         breaking_changes = compare_citus_gucs_and_udfs(config, pre_upgrade)
 
     run_test_on_coordinator(config, after_upgrade_schedule)
     remove_citus(config.post_tar_path)
-    
+
     # Fail the test if there are any breaking changes
     if breaking_changes:
         common.eprint("\n=== BREAKING CHANGES DETECTED ===")
@@ -102,10 +102,10 @@ def get_citus_gucs_and_udfs(config):
     )
 
     guc_lines = guc_results.decode("utf-8").strip().split("\n")
-    results['gucs'] = {}
+    results["gucs"] = {}
     for line in guc_lines[2:]:  # Skip header lines
         name, boot_val = line.split("|")
-        results['gucs'][name.strip()] = boot_val.strip()
+        results["gucs"][name.strip()] = boot_val.strip()
 
     # Store UDFs
     udf_results = utils.psql_capture(
@@ -127,43 +127,53 @@ def get_citus_gucs_and_udfs(config):
         """,
     )
     udf_lines = udf_results.decode("utf-8").strip().split("\n")
-    results['udfs'] = {}
+    results["udfs"] = {}
     for line in udf_lines[2:]:  # Skip header lines
         schema_name, function_name, full_args, return_type = line.split("|")
         key = (schema_name.strip(), function_name.strip())
         signature = (full_args.strip(), return_type.strip())
 
-        if key not in results['udfs']:
-            results['udfs'][key] = set()
-        results['udfs'][key].add(signature)
+        if key not in results["udfs"]:
+            results["udfs"][key] = set()
+        results["udfs"][key].add(signature)
 
     return results
+
 
 def compare_citus_gucs_and_udfs(config, pre_upgrade):
     post_upgrade = get_citus_gucs_and_udfs(config)
     breaking_changes = []
-    
+
     # Compare GUCs
-    for name, boot_val in pre_upgrade['gucs'].items():
-        if name not in post_upgrade['gucs']:
+    for name, boot_val in pre_upgrade["gucs"].items():
+        if name not in post_upgrade["gucs"]:
             breaking_changes.append(f"GUC {name} was removed")
-        elif post_upgrade['gucs'][name] != boot_val and name != 'citus.version':
-            breaking_changes.append(f"The default value of GUC {name} was changed from {boot_val} to {post_upgrade['gucs'][name]}")
+        elif post_upgrade["gucs"][name] != boot_val and name != "citus.version":
+            breaking_changes.append(
+                f"The default value of GUC {name} was changed from {boot_val} to {post_upgrade['gucs'][name]}"
+            )
 
     # Compare UDFs - check if any pre-upgrade signatures were removed
-    for (schema_name, function_name), pre_signatures in pre_upgrade['udfs'].items():
-        if (schema_name, function_name) not in post_upgrade['udfs']:
-            breaking_changes.append(f"UDF {schema_name}.{function_name} was completely removed")
+    for (schema_name, function_name), pre_signatures in pre_upgrade["udfs"].items():
+        if (schema_name, function_name) not in post_upgrade["udfs"]:
+            breaking_changes.append(
+                f"UDF {schema_name}.{function_name} was completely removed"
+            )
         else:
-            post_signatures = post_upgrade['udfs'][(schema_name, function_name)]
+            post_signatures = post_upgrade["udfs"][(schema_name, function_name)]
             removed_signatures = pre_signatures - post_signatures
-            
+
             if removed_signatures:
                 for full_args, return_type in removed_signatures:
-                    if not find_compatible_udf_signature(full_args, return_type, post_signatures):
-                        breaking_changes.append(f"UDF signature removed: {schema_name}.{function_name}({full_args}) RETURNS {return_type}")
-    
+                    if not find_compatible_udf_signature(
+                        full_args, return_type, post_signatures
+                    ):
+                        breaking_changes.append(
+                            f"UDF signature removed: {schema_name}.{function_name}({full_args}) RETURNS {return_type}"
+                        )
+
     return breaking_changes
+
 
 def find_compatible_udf_signature(full_args, return_type, post_signatures):
 
@@ -171,7 +181,9 @@ def find_compatible_udf_signature(full_args, return_type, post_signatures):
 
     for post_full_args, post_return_type in post_signatures:
         if post_return_type == return_type:
-            post_args_list = [arg.strip() for arg in post_full_args.split(",") if arg.strip()]
+            post_args_list = [
+                arg.strip() for arg in post_full_args.split(",") if arg.strip()
+            ]
             """ Here check if the function signatures are compatible, they are compatible if: post_args_list has all the arguments of pre_args_list in the same order, but can have additional arguments with default values """
             pre_index = 0
             post_index = 0
