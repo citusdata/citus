@@ -1450,13 +1450,13 @@ IsActiveShardPlacement(ShardPlacement *shardPlacement)
 
 
 /*
- * IsRemoteShardPlacement returns true if the shard placement is on a remote
- * node.
+ * IsNonCoordShardPlacement returns true if the shard placement is on a node
+ * other than coordinator.
  */
 bool
-IsRemoteShardPlacement(ShardPlacement *shardPlacement)
+IsNonCoordShardPlacement(ShardPlacement *shardPlacement)
 {
-	return shardPlacement->groupId != GetLocalGroupId();
+	return shardPlacement->groupId != COORDINATOR_GROUP_ID;
 }
 
 
@@ -1857,7 +1857,7 @@ InsertShardPlacementRowGlobally(uint64 shardId, uint64 placementId,
 
 	char *insertPlacementCommand =
 		AddPlacementMetadataCommand(shardId, placementId, shardLength, groupId);
-	SendCommandToWorkersWithMetadata(insertPlacementCommand);
+	SendCommandToRemoteNodesWithMetadata(insertPlacementCommand);
 
 	return LoadShardPlacement(shardId, placementId);
 }
@@ -2092,7 +2092,7 @@ DeleteShardPlacementRowGlobally(uint64 placementId)
 
 	char *deletePlacementCommand =
 		DeletePlacementMetadataCommand(placementId);
-	SendCommandToWorkersWithMetadata(deletePlacementCommand);
+	SendCommandToRemoteNodesWithMetadata(deletePlacementCommand);
 }
 
 
@@ -2368,7 +2368,7 @@ UpdateNoneDistTableMetadataGlobally(Oid relationId, char replicationModel,
 											   replicationModel,
 											   colocationId,
 											   autoConverted);
-		SendCommandToWorkersWithMetadata(metadataCommand);
+		SendCommandToRemoteNodesWithMetadata(metadataCommand);
 	}
 }
 
