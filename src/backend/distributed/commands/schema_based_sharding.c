@@ -285,8 +285,8 @@ CreateTenantSchemaTable(Oid relationId)
 		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
 		.colocationId = colocationId,
 	};
-	bool allowFromWorkersIfPostgresTable = true;
-	CreateSingleShardTable(relationId, colocationParam, allowFromWorkersIfPostgresTable);
+	bool allowFromWorkers = true;
+	CreateSingleShardTable(relationId, colocationParam, allowFromWorkers);
 }
 
 
@@ -681,9 +681,9 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 			originalForeignKeyRecreationCommands, fkeyCommandsForRelation);
 
 		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
-		bool allowFromWorkersIfPostgresTable = false;
+		bool allowFromWorkers = false;
 		CreateSingleShardTable(relationId, colocationParam,
-							   allowFromWorkersIfPostgresTable);
+							   allowFromWorkers);
 	}
 
 	/* We can skip foreign key validations as we are sure about them at start */
