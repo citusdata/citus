@@ -60,7 +60,7 @@ def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_sched
     # Store the pre-upgrade GUCs and UDFs for minor version upgrades
     pre_upgrade = None
     if config.minor_upgrade:
-        pre_upgrade = get_citus_gucs_and_udfs(config)
+        pre_upgrade = get_citus_catalog_info(config)
 
     run_test_on_coordinator(config, before_upgrade_schedule)
 
@@ -77,7 +77,7 @@ def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_sched
     # For minor version upgrades, verify GUCs and UDFs does not have breaking changes
     breaking_changes = []
     if config.minor_upgrade:
-        breaking_changes = compare_citus_gucs_and_udfs(config, pre_upgrade)
+        breaking_changes = compare_citus_catalog_info(config, pre_upgrade)
 
     run_test_on_coordinator(config, after_upgrade_schedule)
     remove_citus(config.post_tar_path)
@@ -91,7 +91,7 @@ def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_sched
         sys.exit(1)
 
 
-def get_citus_gucs_and_udfs(config):
+def get_citus_catalog_info(config):
 
     results = {}
     # Store GUCs
@@ -126,6 +126,7 @@ def get_citus_gucs_and_udfs(config):
         ORDER BY schema_name, function_name, full_args;
         """,
     )
+
     udf_lines = udf_results.decode("utf-8").strip().split("\n")
     results["udfs"] = {}
     for line in udf_lines[2:]:  # Skip header lines
@@ -137,11 +138,66 @@ def get_citus_gucs_and_udfs(config):
             results["udfs"][key] = set()
         results["udfs"][key].add(signature)
 
+    # Store types, exclude composite types (t.typrelid = 0) and
+    # exclude auto-created array types
+    # (t.typname LIKE '\_%' AND t.typelem <> 0)
+    type_results = utils.psql_capture(
+        config.bindir,
+        config.coordinator_port(),
+        """
+        SELECT n.nspname, t.typname, t.typtype
+        FROM pg_type t
+        JOIN pg_depend d ON d.objid = t.oid
+        JOIN pg_extension e ON e.oid = d.refobjid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE e.extname = 'citus'
+        AND t.typrelid = 0
+        AND NOT (t.typname LIKE '\_%' AND t.typelem <> 0)
+        ORDER BY n.nspname, t.typname;
+        """,
+    )
+    type_lines = type_results.decode("utf-8").strip().split("\n")
+    results["types"] = {}
+
+    for line in type_lines[2:]:  # Skip header lines
+        nspname, typname, typtype = line.split("|")
+        key = (nspname.strip(), typname.strip())
+        results["types"][key] = typtype.strip()
+
+    # Store tables and views
+    table_results = utils.psql_capture(
+        config.bindir,
+        config.coordinator_port(),
+        """
+        SELECT n.nspname, c.relname, a.attname, t.typname
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_attribute a ON a.attrelid = c.oid
+        JOIN pg_type t ON t.oid = a.atttypid
+        JOIN pg_depend d ON d.objid = c.oid
+        JOIN pg_extension e ON e.oid = d.refobjid
+        WHERE e.extname = 'citus'
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+        ORDER BY n.nspname, c.relname, a.attname;
+        """,
+    )
+
+    table_lines = table_results.decode("utf-8").strip().split("\n")
+    results["tables"] = {}
+    for line in table_lines[2:]:  # Skip header lines
+        nspname, relname, attname, typname = line.split("|")
+        key = (nspname.strip(), relname.strip())
+
+        if key not in results["tables"]:
+            results["tables"][key] = {}
+        results["tables"][key][attname.strip()] = typname.strip()
+
     return results
 
 
-def compare_citus_gucs_and_udfs(config, pre_upgrade):
-    post_upgrade = get_citus_gucs_and_udfs(config)
+def compare_citus_catalog_info(config, pre_upgrade):
+    post_upgrade = get_citus_catalog_info(config)
     breaking_changes = []
 
     # Compare GUCs
@@ -171,6 +227,32 @@ def compare_citus_gucs_and_udfs(config, pre_upgrade):
                         breaking_changes.append(
                             f"UDF signature removed: {schema_name}.{function_name}({full_args}) RETURNS {return_type}"
                         )
+
+    # Compare Types - check if any pre-upgrade types were removed or changed
+    for (nspname, typname), typtype in pre_upgrade["types"].items():
+        if (nspname, typname) not in post_upgrade["types"]:
+            breaking_changes.append(f"Type {nspname}.{typname} was removed")
+        elif post_upgrade["types"][(nspname, typname)] != typtype:
+            breaking_changes.append(
+                f"Type {nspname}.{typname} changed type from {typtype} to {post_upgrade['types'][(nspname, typname)]}"
+            )
+
+    # Compare tables / views - check if any pre-upgrade tables or columns were removed or changed
+    for (nspname, relname), columns in pre_upgrade["tables"].items():
+        if (nspname, relname) not in post_upgrade["tables"]:
+            breaking_changes.append(f"Table/view {nspname}.{relname} was removed")
+        else:
+            post_columns = post_upgrade["tables"][(nspname, relname)]
+
+            for col_name, col_type in columns.items():
+                if col_name not in post_columns:
+                    breaking_changes.append(
+                        f"Column {col_name} in table/view {nspname}.{relname} was removed"
+                    )
+                elif post_columns[col_name] != col_type:
+                    breaking_changes.append(
+                        f"Column {col_name} in table/view {nspname}.{relname} changed type from {col_type} to {post_columns[col_name]}"
+                    )
 
     return breaking_changes
 
