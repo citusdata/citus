@@ -666,9 +666,9 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
 			.colocateWithTableName = parentRelationName,
 		};
-		bool allowFromWorkersIfPostgresTable = false;
+		bool allowFromWorkers = false;
 		CreateSingleShardTable(partitionRelationId, colocationParam,
-							   allowFromWorkersIfPostgresTable);
+							   allowFromWorkers);
 		return;
 	}
 
@@ -2403,10 +2403,16 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	}
 
 	/* Undistribute table if its old schema is a tenant schema */
-	if (IsTenantSchema(oldSchemaId) && IsCoordinator())
+	if (IsTenantSchema(oldSchemaId))
 	{
 		EnsureUndistributeTenantTableSafe(relationId,
 										  TenantOperationNames[TENANT_SET_SCHEMA]);
+
+		if (!IsCoordinator())
+		{
+			ereport(ERROR, (errmsg("moving distributed schema tables to another "
+								   "schema from workers is not supported yet")));
+		}
 
 		char *oldSchemaName = get_namespace_name(oldSchemaId);
 		char *tableName = stmt->relation->relname;
@@ -4336,11 +4342,6 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 {
 	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
-	if (!IsCoordinator())
-	{
-		return;
-	}
-
 	/*
 	 * We will let Postgres deal with missing_ok
 	 */
@@ -4351,16 +4352,24 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 
 	/* We have already asserted that we have exactly 1 address in the addresses. */
 	ObjectAddress *tableAddress = linitial(tableAddresses);
-	char relKind = get_rel_relkind(tableAddress->objectId);
+
+	Oid relationId = tableAddress->objectId;
+	if (!OidIsValid(relationId))
+	{
+		Assert(stmt->missing_ok);
+		return;
+	}
+
+	char relKind = get_rel_relkind(relationId);
 	if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_VIEW)
 	{
 		return;
 	}
 
-	Oid relationId = tableAddress->objectId;
 	Oid schemaId = get_namespace_oid(stmt->newschema, stmt->missing_ok);
 	if (!OidIsValid(schemaId))
 	{
+		Assert(stmt->missing_ok);
 		return;
 	}
 
@@ -4370,16 +4379,22 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 	 * that by seeing the table is still a single shard table. (i.e. not undistributed
 	 * at `preprocess` step)
 	 */
-	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
-		IsTenantSchema(schemaId))
+	if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
-
-		char *schemaName = get_namespace_name(schemaId);
-		char *tableName = stmt->relation->relname;
-		ereport(NOTICE, (errmsg("Moving %s into distributed schema %s",
-								tableName, schemaName)));
-
-		CreateTenantSchemaTable(relationId);
+		return;
 	}
+
+	if (!ShouldCreateTenantSchemaTable(relationId))
+	{
+		return;
+	}
+
+	EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+
+	char *schemaName = get_namespace_name(schemaId);
+	char *tableName = stmt->relation->relname;
+	ereport(NOTICE, (errmsg("Moving %s into distributed schema %s",
+							tableName, schemaName)));
+
+	CreateTenantSchemaTable(relationId);
 }
