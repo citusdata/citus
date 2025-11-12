@@ -184,7 +184,9 @@ def find_compatible_udf_signature(full_args, return_type, post_signatures):
             post_args_list = [
                 arg.strip() for arg in post_full_args.split(",") if arg.strip()
             ]
-            """ Here check if the function signatures are compatible, they are compatible if: post_args_list has all the arguments of pre_args_list in the same order, but can have additional arguments with default values """
+            """ Here check if the function signatures are compatible, they are compatible if:
+            post_args_list has all the arguments of pre_args_list in the same order, but can have
+            additional arguments with default values """
             pre_index = 0
             post_index = 0
             compatible = True
