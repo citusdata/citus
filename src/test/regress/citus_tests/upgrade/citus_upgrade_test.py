@@ -152,7 +152,7 @@ def get_citus_catalog_info(config):
         JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE e.extname = 'citus'
         AND t.typrelid = 0
-        AND NOT (t.typname LIKE '\_%' AND t.typelem <> 0)
+        AND NOT (t.typname LIKE '\\_%%' AND t.typelem <> 0)
         ORDER BY n.nspname, t.typname;
         """,
     )
