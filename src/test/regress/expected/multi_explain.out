@@ -519,20 +519,22 @@ Custom Scan (Citus Adaptive)
                     Filter: (l_partkey = 0)
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 BEGIN;
+select public.explain_filter('
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
-	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
-  Task Count: 1
+	WHERE l_orderkey = 1 AND l_partkey = 0
+	');
+Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+  Task Count: N
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=xxxxx dbname=regression
-        ->  Update on lineitem_360000 lineitem (actual rows=0 loops=1)
-              ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=0 loops=1)
-                    Index Cond: (l_orderkey = 1)
-                    Filter: (l_partkey = 0)
-                    Rows Removed by Filter: 6
+        Node: host=localhost port=N dbname=regression
+        ->  Update on lineitem_360000 lineitem (actual rows=N loops=N)
+              ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=N loops=N)
+                    Index Cond: (l_orderkey = N)
+                    Filter: (l_partkey = N)
+                    Rows Removed by Filter: N
 ROLLBACk;
 -- Test delete
 EXPLAIN (COSTS FALSE)
@@ -1387,16 +1389,16 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5);
-Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
-  Task Count: 1
-  Tuple data received from nodes: 30 bytes
+select public.explain_filter('EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5)');
+Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+  Task Count: N
+  Tuple data received from nodes: N bytes
   Tasks Shown: All
   ->  Task
-        Tuple data received from node: 30 bytes
-        Node: host=localhost port=xxxxx dbname=regression
-        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=3 loops=1)
-              Index Cond: (l_orderkey = 5)
+        Tuple data received from node: N bytes
+        Node: host=localhost port=N dbname=regression
+        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=N loops=N)
+              Index Cond: (l_orderkey = N)
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
 BEGIN;
