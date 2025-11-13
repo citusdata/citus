@@ -141,14 +141,21 @@ SELECT a FROM full_correlated WHERE a>200;
 $$
 );
 
-SELECT columnar_test_helpers.uses_custom_scan (
-$$
-SELECT a FROM full_correlated WHERE a=0 OR a=5;
-$$
-);
+
+BEGIN;
+  SET LOCAL enable_indexscan  TO 'OFF';
+  SET LOCAL enable_bitmapscan TO 'OFF';
+  SELECT columnar_test_helpers.uses_custom_scan (
+  $$
+  SELECT a FROM full_correlated WHERE a=0 OR a=5;
+  $$
+  );
+ROLLBACK;
 
 BEGIN;
   SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SET LOCAL enable_indexscan  TO 'OFF';
+  SET LOCAL enable_bitmapscan TO 'OFF';
   SELECT columnar_test_helpers.uses_seq_scan (
   $$
   SELECT a FROM full_correlated WHERE a=0 OR a=5;
