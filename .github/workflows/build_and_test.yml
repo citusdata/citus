@@ -431,6 +431,7 @@ jobs:
         gosu circleci \
           make -C src/test/regress \
             check-citus-minor-upgrade \
+            citus-old-version=${citus_version} \
             bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
             citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
             citus-post-tar=${GITHUB_WORKSPACE}/install-$PG_MAJOR.tar;
