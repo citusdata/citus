@@ -792,7 +792,17 @@ ShutdownConnection(MultiConnection *connection)
 	if (PQstatus(connection->pgConn) == CONNECTION_OK &&
 		PQtransactionStatus(connection->pgConn) == PQTRANS_ACTIVE)
 	{
-		SendCancelationRequest(connection);
+		bool sentCancel = SendCancelationRequest(connection);
+		if (sentCancel)
+		{
+			/*
+			 * If we have sent a cancelation we need to wait and consume the response to
+			 * make sure the cancelation is processed. In case of network delay
+			 * cancelation might hit other backend/query. Poolers might introduce out of
+			 * order delivery.
+			 */
+			ClearResultsDiscardWarnings(connection, false);
+		}
 	}
 	CitusPQFinish(connection);
 }
