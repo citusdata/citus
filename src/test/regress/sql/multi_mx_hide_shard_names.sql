@@ -60,6 +60,7 @@ EXPLAIN (COSTS OFF) INSERT INTO pg_class SELECT * FROM pg_class;
 
 -- Check that query that psql "\d test_table" does gets optimized to an index
 -- scan
+-- PG18+: the psql \d-style regex on pg_class can flip the plan to a Seq Scan
 EXPLAIN (COSTS OFF) SELECT c.oid,
   n.nspname,
   c.relname
