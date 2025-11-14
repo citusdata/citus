@@ -420,7 +420,7 @@ jobs:
     - params
     - build
     env:
-      citus_version: 13.2.0
+      citus_version: v13.2.0
     steps:
     - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
