@@ -979,6 +979,7 @@ DETAIL:  unparameterized; 1 clauses pushed down
 (1 row)
 
 SET hash_mem_multiplier = 1.0;
+\pset footer off
 SELECT columnar_test_helpers.explain_with_pg16_subplan_format($Q$
 EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
 SELECT sum(a) FROM pushdown_test where
@@ -1017,8 +1018,8 @@ CONTEXT:  PL/pgSQL function columnar_test_helpers.explain_with_pg16_subplan_form
            ->  Materialize (actual rows=100 loops=199)
                  ->  Custom Scan (ColumnarScan) on pushdown_test pushdown_test_1 (actual rows=199 loops=1)
                        Columnar Projected Columns: a
-(11 rows)
 
+\pset footer on
 RESET hash_mem_multiplier;
 SELECT sum(a) FROM pushdown_test where
 (

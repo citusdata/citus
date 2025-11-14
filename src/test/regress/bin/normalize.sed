@@ -376,9 +376,12 @@ s/\<is referenced from table\>/is still referenced from table/g
 # ignore any "find_in_path:" lines in test output
 /DEBUG:  find_in_path: trying .*/d
 
-# PG18: EXPLAIN ANALYZE prints "Index Searches: N" for index scans — remove it
-/^\s*Index Searches:\s*\d+\s*$/d
-
 # EXPLAIN (PG18+): hide Materialize storage instrumentation
 # this rule can be removed when PG18 is the minimum supported version
 /^[ \t]*Storage:[ \t].*$/d
+
+# PG18: drop 'subscription "<name>"' prefix
+# this rule can be removed when PG18 is the minimum supported version
+s/^[[:space:]]*ERROR:[[:space:]]+subscription "[^"]+" could not connect to the publisher:[[:space:]]*/ERROR:  could not connect to the publisher: /I
+# PG18: drop verbose 'connection to server … failed:' preamble
+s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*connection to server .* failed:[[:space:]]*/ERROR:  could not connect to the publisher: /I

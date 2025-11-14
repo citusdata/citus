@@ -204,18 +204,24 @@ $$
  t
 (1 row)
 
-SELECT columnar_test_helpers.uses_custom_scan (
-$$
-SELECT a FROM full_correlated WHERE a=0 OR a=5;
-$$
-);
+BEGIN;
+  SET LOCAL enable_indexscan  TO 'OFF';
+  SET LOCAL enable_bitmapscan TO 'OFF';
+  SELECT columnar_test_helpers.uses_custom_scan (
+  $$
+  SELECT a FROM full_correlated WHERE a=0 OR a=5;
+  $$
+  );
  uses_custom_scan
 ---------------------------------------------------------------------
  t
 (1 row)
 
+ROLLBACK;
 BEGIN;
   SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SET LOCAL enable_indexscan  TO 'OFF';
+  SET LOCAL enable_bitmapscan TO 'OFF';
   SELECT columnar_test_helpers.uses_seq_scan (
   $$
   SELECT a FROM full_correlated WHERE a=0 OR a=5;
@@ -598,11 +604,11 @@ SELECT * FROM correlated WHERE x = 78910;
 (1 row)
 
 -- should choose index scan; selective but uncorrelated
-EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF)
+EXPLAIN (analyze off, costs off, timing off, summary off, BUFFERS OFF)
 SELECT * FROM uncorrelated WHERE x = 78910;
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Index Scan using uncorrelated_idx on uncorrelated (actual rows=1 loops=1)
+ Index Scan using uncorrelated_idx on uncorrelated
    Index Cond: (x = 78910)
 (2 rows)
 
