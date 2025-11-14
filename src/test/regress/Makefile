@@ -320,6 +320,21 @@ check-citus-upgrade-mixed-local: all clean-upgrade-artifacts
 		--citus-old-version=$(citus-old-version) \
 		--mixed
 
+check-citus-minor-upgrade: all
+	$(citus_upgrade_check) \
+		--bindir=$(bindir) \
+		--pgxsdir=$(pgxsdir) \
+		--citus-pre-tar=$(citus-pre-tar) \
+		--citus-post-tar=$(citus-post-tar) \
+		--minor-upgrade
+
+check-citus-minor-upgrade-local: all clean-upgrade-artifacts
+	$(citus_upgrade_check) \
+		--bindir=$(bindir) \
+		--pgxsdir=$(pgxsdir) \
+		--citus-old-version=$(citus-old-version) \
+		--minor-upgrade
+
 clean-upgrade-artifacts:
 	rm -rf $(citus_abs_srcdir)/tmp_citus_upgrade/ /tmp/citus_copy/
 
