@@ -246,8 +246,396 @@ FROM sje_d1 d
 JOIN z USING (id)
 JOIN sje_d2 u2 USING (id);
 
+-- PG18 Feature: JSON functionality - JSON_TABLE has COLUMNS clause for
+-- extracting multiple fields from JSON documents.
+-- PG18 commit: https://github.com/postgres/postgres/commit/bb766cd
+
+CREATE TABLE pg18_json_test (id serial PRIMARY KEY, data JSON);
+INSERT INTO pg18_json_test (data) VALUES
+('{ "user": {"name": "Alice", "age": 30, "city": "San Diego"} }'),
+('{ "user": {"name": "Bob", "age": 25, "city": "Los Angeles"} }'),
+('{ "user": {"name": "Charlie", "age": 35, "city": "Los Angeles"} }'),
+('{ "user": {"name": "Diana", "age": 28, "city": "Seattle"} } '),
+('{ "user": {"name": "Evan", "age": 40, "city": "Portland"} } '),
+('{ "user": {"name": "Ethan", "age": 32, "city": "Seattle"} } '),
+('{ "user": {"name": "Fiona", "age": 27, "city": "Seattle"} } '),
+('{ "user": {"name": "George", "age": 29, "city": "San Francisco"} } '),
+('{ "user": {"name": "Hannah", "age": 33, "city": "Seattle"} } '),
+('{ "user": {"name": "Ian", "age": 26, "city": "Portland"} } '),
+('{ "user": {"name": "Jane", "age": 38, "city": "San Francisco"} } ');
+
+SELECT jt.name, jt.age  FROM pg18_json_test, JSON_TABLE(
+  data,
+  '$.user'
+  COLUMNS (
+    age INT PATH '$.age',
+    name TEXT PATH '$.name'
+  )
+) AS jt
+WHERE jt.age between 25 and 35
+ORDER BY jt.age, jt.name;
+
+SELECT jt.city, count(1)  FROM pg18_json_test, JSON_TABLE(
+  data,
+  '$.user'
+  COLUMNS (
+    city TEXT PATH '$.city'
+  )
+) AS jt
+GROUP BY jt.city
+ORDER BY count(1) DESC;
+
+-- Make it distributed and repeat the queries
+SELECT create_distributed_table('pg18_json_test', 'id');
+
+SELECT jt.name, jt.age  FROM pg18_json_test, JSON_TABLE(
+  data,
+  '$.user'
+  COLUMNS (
+    age INT PATH '$.age',
+    name TEXT PATH '$.name'
+  )
+) AS jt
+WHERE jt.age between 25 and 35
+ORDER BY jt.age, jt.name;
+
+SELECT jt.city, count(1)  FROM pg18_json_test, JSON_TABLE(
+  data,
+  '$.user'
+  COLUMNS (
+    city TEXT PATH '$.city'
+  )
+) AS jt
+GROUP BY jt.city
+ORDER BY count(1) DESC;
+
+
+-- PG18 Feature: WITHOUT OVERLAPS can appear in PRIMARY KEY and UNIQUE constraints.
+-- PG18 commit: https://github.com/postgres/postgres/commit/fc0438b4e
+
+CREATE TABLE temporal_rng (
+  -- Since we can't depend on having btree_gist here,
+  -- use an int4range instead of an int.
+  -- (The rangetypes regression test uses the same trick.)
+  id int4range,
+  valid_at daterange,
+  CONSTRAINT temporal_rng_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)
+);
+SELECT create_distributed_table('temporal_rng', 'id');
+
+-- okay:
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-03-03', '2018-04-04'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[2,3)', daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
+-- should fail:
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+-- NULLs are not allowed in the shard key:
+INSERT INTO temporal_rng (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', NULL);
+-- rejects empty:
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', 'empty');
+SELECT * FROM temporal_rng ORDER BY id, valid_at;
+
+-- Repeat with UNIQUE constraint
+CREATE TABLE temporal_rng_uq (
+  -- Since we can't depend on having btree_gist here,
+  -- use an int4range instead of an int.
+  id int4range,
+  valid_at daterange,
+  CONSTRAINT temporal_rng_uq_uk UNIQUE (id, valid_at WITHOUT OVERLAPS)
+);
+SELECT create_distributed_table('temporal_rng_uq', 'id');
+
+-- okay:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-03-03', '2018-04-04'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[2,3)', daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
+-- should fail:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+-- NULLs are not allowed in the shard key:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', NULL);
+-- rejects empty:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', 'empty');
+SELECT * FROM temporal_rng_uq ORDER BY id, valid_at;
+
+DROP TABLE temporal_rng CASCADE;
+DROP TABLE temporal_rng_uq CASCADE;
+
+-- Repeat the tests with the PRIMARY KEY and UNIQUE constraints added
+-- after the table is created and distributed. INSERTs produce the
+-- same results as before.
+
+CREATE TABLE temporal_rng (
+  -- Since we can't depend on having btree_gist here,
+  -- use an int4range instead of an int.
+  -- (The rangetypes regression test uses the same trick.)
+  id int4range,
+  valid_at daterange
+);
+SELECT create_distributed_table('temporal_rng', 'id');
+
+-- okay:
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-03-03', '2018-04-04'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[2,3)', daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
+
+ALTER TABLE temporal_rng
+  ADD CONSTRAINT temporal_rng_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS);
+
+-- should fail:
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+-- NULLs are not allowed in the shard key:
+INSERT INTO temporal_rng (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', NULL);
+-- rejects empty:
+INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', 'empty');
+SELECT * FROM temporal_rng ORDER BY id, valid_at;
+
+-- Repeat with UNIQUE constraint
+CREATE TABLE temporal_rng_uq (
+  -- Since we can't depend on having btree_gist here,
+  -- use an int4range instead of an int.
+  id int4range,
+  valid_at daterange
+);
+SELECT create_distributed_table('temporal_rng_uq', 'id');
+
+-- okay:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-03-03', '2018-04-04'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[2,3)', daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
+
+ALTER TABLE temporal_rng_uq
+  ADD CONSTRAINT temporal_rng_uq_uk UNIQUE (id, valid_at WITHOUT OVERLAPS);
+
+-- should fail:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+-- NULLs are not allowed in the shard key:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', NULL);
+-- rejects empty:
+INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', 'empty');
+SELECT * FROM temporal_rng_uq ORDER BY id, valid_at;
+
+-- PG18 Feature: RETURNING old and new values in DML statements
+-- PG18 commit: https://github.com/postgres/postgres/commit/80feb727c
+
+CREATE TABLE users (id SERIAL PRIMARY KEY, email text, category int);
+INSERT INTO users (email, category) SELECT 'xxx@foo.com', i % 10 from generate_series (1,100) t(i);
+
+SELECT create_distributed_table('users','id');
+
+UPDATE users SET email = 'colm@planet.com' WHERE id = 1
+	RETURNING OLD.email AS previous_email,
+		  NEW.email AS current_email;
+
+SELECT * FROM users WHERE id = 1
+ORDER BY id;
+
+UPDATE users SET email = 'tim@arctic.net' WHERE id = 22
+  RETURNING OLD.email AS previous_email,
+      NEW.email AS current_email;
+
+UPDATE users SET email = 'john@farm.ie' WHERE id = 33
+  RETURNING OLD.email AS previous_email,
+      NEW.email AS current_email;
+
+SELECT * FROM users WHERE id = 22
+ORDER BY id;
+
+SELECT * FROM users
+WHERE email not like 'xxx@%'
+ORDER BY id;
+
+-- NULL values creep into the email column..
+INSERT INTO users (email, category) VALUES (null, 5)
+  RETURNING OLD.email AS previous_email,
+      NEW.email AS current_email;
+
+UPDATE users SET email = NULL WHERE id = 79
+  RETURNING OLD.email AS previous_email,
+      NEW.email AS current_email;
+
+-- Now add a NOT NULL constraint on email, but do
+-- not apply it to existing rows yet.
+ALTER TABLE users
+ADD CONSTRAINT users_email_not_null
+CHECK (email IS NOT NULL) NOT VALID;
+
+UPDATE users SET email = NULL WHERE id = 50
+  RETURNING OLD.email AS previous_email,
+      NEW.email AS current_email;
+
+-- Validation should fail due to existing NULLs
+ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null;
+
+-- Fix NULL emails to a default value
+UPDATE users SET email = 'xxx@foo.com' WHERE email IS NULL
+  RETURNING OLD.email AS previous_email,
+      NEW.email AS current_email;
+
+-- Validation should now succeed
+ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null;
+
+-- And prevent future NULLs
+INSERT INTO users (email, category) VALUES (null, 10)
+  RETURNING OLD.email AS previous_email,
+      NEW.email AS current_email;
+
+-- PG18 Feature: support for LIKE in CREATE FOREIGN TABLE
+-- PG18 commit: https://github.com/postgres/postgres/commit/302cf1575
+SET citus.use_citus_managed_tables TO ON;
+CREATE EXTENSION postgres_fdw;
+
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+
+CREATE TABLE ctl_table(a int PRIMARY KEY,
+  b varchar COMPRESSION pglz,
+  c int GENERATED ALWAYS AS (a * 2) STORED,
+  d bigint GENERATED ALWAYS AS IDENTITY,
+  e int DEFAULT 1);
+
+CREATE INDEX ctl_table_ab_key ON ctl_table(a, b);
+COMMENT ON COLUMN ctl_table.b IS 'Column b';
+CREATE STATISTICS ctl_table_stat ON a,b FROM ctl_table;
+
+INSERT INTO ctl_table VALUES (1, 'first'), (2, 'second'), (3, 'third'), (4, 'fourth');
+
+-- Test EXCLUDING ALL
+CREATE FOREIGN TABLE ctl_ft1(LIKE ctl_table EXCLUDING ALL)
+  SERVER foreign_server
+        OPTIONS (schema_name 'pg18_nn', table_name 'ctl_table');
+-- Test INCLUDING ALL
+CREATE FOREIGN TABLE ctl_ft2(LIKE ctl_table INCLUDING ALL)
+  SERVER foreign_server
+        OPTIONS (schema_name 'pg18_nn', table_name 'ctl_table');
+
+-- check that the foreign tables are citus local table
+SELECT partmethod, repmodel FROM pg_dist_partition
+WHERE logicalrelid IN ('ctl_ft1'::regclass, 'ctl_ft2'::regclass) ORDER BY logicalrelid;
+
+-- we can query the foreign tables
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT * FROM ctl_ft1 ORDER BY a;
+SELECT * FROM ctl_ft1 ORDER BY a;
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT * FROM ctl_ft2 ORDER BY a;
+SELECT * FROM ctl_ft2 ORDER BY a;
+
+-- Clean up foreign table test
+RESET citus.use_citus_managed_tables;
+SELECT undistribute_table('ctl_ft1');
+SELECT undistribute_table('ctl_ft2');
+
+DROP SERVER foreign_server CASCADE;
+
+-- PG18 Feature: PERIOD clause in foreign key constraint definitions.
+-- PG18 commit: https://github.com/postgres/postgres/commit/89f908a6d
+
+-- This test verifies that the PG18 tests apply to Citus tables
+
+CREATE EXTENSION btree_gist; -- needed for range type indexing
+CREATE TABLE temporal_test (
+  id integer,
+  valid_at daterange,
+  CONSTRAINT temporal_test_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)
+);
+
+SET citus.shard_count TO 4;
+
+SELECT create_reference_table( 'temporal_test');
+
+INSERT INTO temporal_test VALUES
+  (1, '[2000-01-01,2001-01-01)');
+-- same key, doesn't overlap:
+INSERT INTO temporal_test VALUES
+  (1, '[2001-01-01,2002-01-01)');
+-- overlaps but different key:
+INSERT INTO temporal_test VALUES
+  (2, '[2000-01-01,2001-01-01)');
+-- should fail:
+INSERT INTO temporal_test VALUES
+  (1, '[2000-06-01,2001-01-01)');
+
+-- Required for foreign key constraint on distributed table
+SET citus.shard_replication_factor TO 1;
+
+-- Create and distribute a table with temporal foreign key constraints
+CREATE TABLE temporal_fk_rng2rng (
+  id integer,
+  valid_at daterange,
+  parent_id integer,
+  CONSTRAINT temporal_fk_rng2rng_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)
+);
+
+SELECT create_distributed_table( 'temporal_fk_rng2rng', 'id');
+
+--
+-- Add foreign key constraint with PERIOD clause
+-- This is propagated to worker shards
+ALTER TABLE temporal_fk_rng2rng
+  ADD CONSTRAINT temporal_fk_rng2rng_fk FOREIGN KEY (parent_id, PERIOD valid_at)
+    REFERENCES temporal_test (id, PERIOD valid_at);
+
+INSERT INTO temporal_fk_rng2rng VALUES
+  (1, '[2000-01-01,2001-01-01)', 1);
+-- okay spanning two parent records:
+INSERT INTO temporal_fk_rng2rng VALUES
+  (2, '[2000-01-01,2002-01-01)', 1);
+-- key is missing
+INSERT INTO temporal_fk_rng2rng VALUES
+  (3, '[2000-01-01,2001-01-01)', 3);
+-- key exist but is outside range
+INSERT INTO temporal_fk_rng2rng VALUES
+  (4, '[2001-01-01,2002-01-01)', 2);
+-- key exist but is partly outside range
+INSERT INTO temporal_fk_rng2rng VALUES
+  (5, '[2000-01-01,2002-01-01)', 2);
+
+-- PG18 Feature: REJECT_LIMIT option for COPY errors
+-- PG18 commit: https://github.com/postgres/postgres/commit/4ac2a9bec
+
+-- Citus does not support COPY with ON_ERROR so just need to
+-- ensure the appropriate error is returned.
+
+CREATE TABLE check_ign_err (n int, m int[], k int);
+SELECT create_distributed_table('check_ign_err', 'n');
+
+COPY check_ign_err FROM STDIN WITH (on_error stop, reject_limit 5);
+COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore, REJECT_LIMIT 100);
+COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose, reject_limit 50);
+COPY check_ign_err FROM STDIN WITH (reject_limt 77, log_verbosity verbose, on_error ignore);
+-- PG requires on_error when reject_limit is specified
+COPY check_ign_err FROM STDIN WITH (reject_limit 100);
+
+-- PG18 Feature: COPY TABLE TO on a materialized view
+-- PG18 commit: https://github.com/postgres/postgres/commit/534874fac
+
+-- This does not work in Citus as a materialized view cannot be distributed.
+-- So just verify that the appropriate error is raised.
+CREATE MATERIALIZED VIEW copytest_mv AS
+  SELECT i as id, md5(i::text) as hashval
+  FROM generate_series(1,100) i;
+-- Attempting to make it distributed should fail with appropriate error as
+-- Citus does not yet support materialized views.
+SELECT create_distributed_table('copytest_mv', 'id');
+-- After that, any command on the materialized view is outside Citus support.
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
+RESET citus.shard_count;
+RESET citus.shard_replication_factor;
 DROP SCHEMA pg18_nn CASCADE;
 RESET client_min_messages;
