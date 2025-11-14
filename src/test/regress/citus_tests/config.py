@@ -194,6 +194,7 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.new_settings = {"citus.enable_version_checks": "false"}
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
+        self.minor_upgrade = arguments.get("--minor-upgrade", False)
         self.fixed_port = 57635
 
 
