@@ -177,8 +177,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 
-		if (attributeForm->attisdropped ||
-			attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		if (IsDroppedOrGenerated(attributeForm))
 		{
 			/* skip dropped columns and columns with GENERATED AS ALWAYS expressions */
 			continue;

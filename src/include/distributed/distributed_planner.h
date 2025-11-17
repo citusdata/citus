@@ -119,6 +119,7 @@ typedef struct FastPathRestrictionContext
 	bool delayFastPathPlanning;
 } FastPathRestrictionContext;
 
+struct DistributedPlanningContext;
 typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
@@ -132,6 +133,18 @@ typedef struct PlannerRestrictionContext
 	 */
 	FastPathRestrictionContext *fastPathRestrictionContext;
 	MemoryContext memoryContext;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/*
+	 * Enable access to the distributed planning context from
+	 * planner hooks called by Postgres. Enables Citus to track
+	 * changes made by Postgres to the query tree (such as
+	 * expansion of virtual columns) and ensure they are reflected
+	 * back to subsequent distributed planning.
+	 */
+	struct DistributedPlanningContext *planContext;
+#endif
 } PlannerRestrictionContext;
 
 typedef struct RelationShard

@@ -649,13 +649,18 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd,
 		}
 		else if (constraint->contype == CONSTR_GENERATED)
 		{
-			char attgenerated = 's';
-			appendStringInfo(buf, " GENERATED %s AS (%s) STORED",
+			char attgenerated = ATTRIBUTE_GENERATED_STORED;
+#if PG_VERSION_NUM >= PG_VERSION_18
+			attgenerated = constraint->generated_kind;
+#endif
+			appendStringInfo(buf, " GENERATED %s AS (%s) %s",
 							 GeneratedWhenStr(constraint->generated_when),
 							 DeparseRawExprForColumnDefault(relationId, typeOid, typmod,
 															columnDefinition->colname,
 															attgenerated,
-															constraint->raw_expr));
+															constraint->raw_expr),
+							 (attgenerated == ATTRIBUTE_GENERATED_STORED ? "STORED" :
+							  "VIRTUAL"));
 		}
 		else if (constraint->contype == CONSTR_CHECK ||
 				 constraint->contype == CONSTR_PRIMARY ||

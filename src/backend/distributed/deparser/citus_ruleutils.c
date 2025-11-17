@@ -471,6 +471,13 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 						appendStringInfo(&buffer, " GENERATED ALWAYS AS (%s) STORED",
 										 defaultString);
 					}
+#if PG_VERSION_NUM >= PG_VERSION_18
+					else if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_VIRTUAL)
+					{
+						appendStringInfo(&buffer, " GENERATED ALWAYS AS (%s) VIRTUAL",
+										 defaultString);
+					}
+#endif
 					else
 					{
 						Oid seqOid = GetSequenceOid(tableRelationId, defaultValue->adnum);

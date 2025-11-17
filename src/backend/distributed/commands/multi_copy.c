@@ -350,7 +350,6 @@ static void LogLocalCopyToRelationExecution(uint64 shardId);
 static void LogLocalCopyToFileExecution(uint64 shardId);
 static void ErrorIfMergeInCopy(CopyStmt *copyStatement);
 
-
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
 
@@ -484,9 +483,7 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -804,9 +801,7 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -1316,9 +1311,7 @@ TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor)
 	for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, columnIndex);
-		if (attr->attisdropped ||
-			attr->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(attr))
 		{
 			typeArray[columnIndex] = InvalidOid;
 		}
@@ -1486,9 +1479,7 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 			value = CoerceColumnValue(value, &columnCoercionPaths[columnIndex]);
 		}
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -1607,9 +1598,7 @@ AvailableColumnCount(TupleDesc tupleDescriptor)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
-		if (!currentColumn->attisdropped &&
-			currentColumn->attgenerated != ATTRIBUTE_GENERATED_STORED
-			)
+		if (!IsDroppedOrGenerated(currentColumn))
 		{
 			columnCount++;
 		}
@@ -3998,4 +3987,21 @@ UnclaimCopyConnections(List *connectionStateList)
 		CopyConnectionState *connectionState = lfirst(connectionStateCell);
 		UnclaimConnection(connectionState->connection);
 	}
+}
+
+
+/*
+ * IsDroppedOrGenerated - helper function for determining if an attribute is
+ * dropped or generated. Used by COPY and Citus DDL to skip such columns.
+ */
+inline bool
+IsDroppedOrGenerated(Form_pg_attribute attr)
+{
+	/*
+	 * If the "is dropped" flag is true or the generated column flag
+	 * is not the default nul character (in which case its value is 's'
+	 * for ATTRIBUTE_GENERATED_STORED or possibly 'v' with PG18+ for
+	 * ATTRIBUTE_GENERATED_VIRTUAL) then return true.
+	 */
+	return attr->attisdropped || (attr->attgenerated != '\0');
 }

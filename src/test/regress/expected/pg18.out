@@ -1413,6 +1413,393 @@ INSERT INTO NE_CHECK_TBL (x) VALUES (5), (15), (8), (12);
 ERROR:  new row for relation "ne_check_tbl_4754044" violates check constraint "check_x2_4754044"
 DETAIL:  Failing row contains (15, null).
 CONTEXT:  while executing command on localhost:xxxxx
+-- PG18 Feature: Generated Virtual Columns
+-- PG18 commit: https://github.com/postgres/postgres/commit/83ea6c540
+-- Verify that generated virtual columns are supported on distributed tables.
+CREATE TABLE v_reading (
+    celsius DECIMAL(5,2),
+    farenheit DECIMAL(6, 2) GENERATED ALWAYS AS (celsius * 9/5 + 32) VIRTUAL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    device_id INT
+);
+-- Cannot distribute on a generated column (#4616) applies
+-- to VIRTUAL columns.
+SELECT create_distributed_table('v_reading', 'farenheit');
+ERROR:  cannot distribute relation: v_reading
+DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) VIRTUAL.
+SELECT create_distributed_table('v_reading', 'device_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO v_reading (celsius, device_id) VALUES (0, 1), (100, 1), (37.5, 2), (25, 2), (-40, 3);
+SELECT device_id, celsius, farenheit FROM v_reading ORDER BY device_id;
+ device_id | celsius | farenheit
+---------------------------------------------------------------------
+         1 |    0.00 |     32.00
+         1 |  100.00 |    212.00
+         2 |   37.50 |     99.50
+         2 |   25.00 |     77.00
+         3 |  -40.00 |    -40.00
+(5 rows)
+
+ALTER TABLE v_reading ADD COLUMN kelvin DECIMAL(6, 2) GENERATED ALWAYS AS (celsius +  273.15) VIRTUAL;
+SELECT device_id, celsius, kelvin FROM v_reading ORDER BY device_id, celsius;
+ device_id | celsius | kelvin
+---------------------------------------------------------------------
+         1 |    0.00 | 273.15
+         1 |  100.00 | 373.15
+         2 |   25.00 | 298.15
+         2 |   37.50 | 310.65
+         3 |  -40.00 | 233.15
+(5 rows)
+
+-- Show all columns that are generated
+  SELECT s.relname, a.attname, a.attgenerated
+  FROM pg_class s
+  JOIN pg_attribute a ON a.attrelid=s.oid
+  WHERE s.relname LIKE 'v_reading%' and attgenerated::int != 0
+  ORDER BY 1,2;
+  relname  |  attname  | attgenerated
+---------------------------------------------------------------------
+ v_reading | farenheit | v
+ v_reading | kelvin    | v
+(2 rows)
+
+-- Generated columns are virtual by default - repeat the test without VIRTUAL keyword
+CREATE TABLE d_reading (
+    celsius DECIMAL(5,2),
+    farenheit DECIMAL(6, 2) GENERATED ALWAYS AS (celsius * 9/5 + 32),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    device_id INT
+);
+SELECT create_distributed_table('d_reading', 'farenheit');
+ERROR:  cannot distribute relation: d_reading
+DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) VIRTUAL.
+SELECT create_distributed_table('d_reading', 'device_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO d_reading (celsius, device_id) VALUES (0, 1), (100, 1), (37.5, 2), (25, 2), (-40, 3);
+SELECT device_id, celsius, farenheit FROM d_reading ORDER BY device_id;
+ device_id | celsius | farenheit
+---------------------------------------------------------------------
+         1 |    0.00 |     32.00
+         1 |  100.00 |    212.00
+         2 |   37.50 |     99.50
+         2 |   25.00 |     77.00
+         3 |  -40.00 |    -40.00
+(5 rows)
+
+ALTER TABLE d_reading ADD COLUMN kelvin DECIMAL(6, 2) GENERATED ALWAYS AS (celsius +  273.15) VIRTUAL;
+SELECT device_id, celsius, kelvin FROM d_reading ORDER BY device_id, celsius;
+ device_id | celsius | kelvin
+---------------------------------------------------------------------
+         1 |    0.00 | 273.15
+         1 |  100.00 | 373.15
+         2 |   25.00 | 298.15
+         2 |   37.50 | 310.65
+         3 |  -40.00 | 233.15
+(5 rows)
+
+-- Show all columns that are generated
+  SELECT s.relname, a.attname, a.attgenerated
+  FROM pg_class s
+  JOIN pg_attribute a ON a.attrelid=s.oid
+  WHERE s.relname LIKE 'd_reading%' and attgenerated::int != 0
+  ORDER BY 1,2;
+  relname  |  attname  | attgenerated
+---------------------------------------------------------------------
+ d_reading | farenheit | v
+ d_reading | kelvin    | v
+(2 rows)
+
+-- COPY implementation needs to handle GENERATED ALWAYS AS (...) VIRTUAL columns.
+\COPY d_reading FROM STDIN WITH DELIMITER ','
+SELECT device_id, count(device_id) as count, round(avg(celsius), 2) as avg, min(farenheit), max(farenheit)
+FROM d_reading
+GROUP BY device_id
+ORDER BY count DESC;
+ device_id | count |  avg   |  min   |  max
+---------------------------------------------------------------------
+         1 |    12 |  20.00 |  32.00 | 212.00
+         5 |    10 |  13.20 |  33.80 |  73.40
+         2 |     2 |  31.25 |  77.00 |  99.50
+         3 |     1 | -40.00 | -40.00 | -40.00
+(4 rows)
+
+-- Test GROUP BY on tables with generated virtual columns - this requires
+-- special case handling in distributed planning. Test it out on some
+-- some queries involving joins and set operations.
+SELECT device_id, max(kelvin) as Kel
+FROM v_reading
+WHERE (device_id, celsius) NOT IN (SELECT device_id, max(celsius) FROM v_reading GROUP BY device_id)
+GROUP BY device_id
+ORDER BY device_id ASC;
+ device_id |  kel
+---------------------------------------------------------------------
+         1 | 273.15
+         2 | 298.15
+(2 rows)
+
+SELECT device_id, round(AVG( (d_farenheit + v_farenheit) / 2), 2) as Avg_Far
+FROM (SELECT *
+      FROM (SELECT device_id, round(AVG(farenheit),2) as d_farenheit
+            FROM d_reading
+            GROUP BY device_id) AS subq
+            RIGHT JOIN (SELECT device_id, MAX(farenheit) AS v_farenheit
+                  FROM d_reading
+                  GROUP BY device_id) AS subq2
+            USING (device_id)
+    ) AS finalq
+GROUP BY device_id
+ORDER BY device_id ASC;
+ device_id | avg_far
+---------------------------------------------------------------------
+         1 |  140.00
+         2 |   93.88
+         3 |  -40.00
+         5 |   64.58
+(4 rows)
+
+SELECT device_id, MAX(farenheit) as farenheit
+FROM
+((SELECT device_id, round(AVG(farenheit),2) as farenheit
+ FROM d_reading
+ GROUP BY device_id)
+UNION ALL (SELECT device_id, MAX(farenheit) AS farenheit
+        FROM d_reading
+        GROUP BY device_id) ) AS unioned
+GROUP BY device_id
+ORDER BY device_id ASC;
+ device_id | farenheit
+---------------------------------------------------------------------
+         1 |    212.00
+         2 |     99.50
+         3 |    -40.00
+         5 |     73.40
+(4 rows)
+
+SELECT device_id, MAX(farenheit) as farenheit
+FROM
+((SELECT device_id, round(AVG(farenheit),2) as farenheit
+ FROM d_reading
+ GROUP BY device_id)
+INTERSECT (SELECT device_id, MAX(farenheit) AS farenheit
+        FROM d_reading
+        GROUP BY device_id) ) AS intersected
+GROUP BY device_id
+ORDER BY device_id ASC;
+ device_id | farenheit
+---------------------------------------------------------------------
+         3 |    -40.00
+(1 row)
+
+SELECT device_id, MAX(farenheit) as farenheit
+FROM
+((SELECT device_id, round(AVG(farenheit),2) as farenheit
+ FROM d_reading
+ GROUP BY device_id)
+EXCEPT (SELECT device_id, MAX(farenheit) AS farenheit
+        FROM d_reading
+        GROUP BY device_id) ) AS excepted
+GROUP BY device_id
+ORDER BY device_id ASC;
+ device_id | farenheit
+---------------------------------------------------------------------
+         1 |     68.00
+         2 |     88.25
+         5 |     55.76
+(3 rows)
+
+-- Ensure that UDFs such as alter_distributed_table, undistribute_table
+-- and add_local_table_to_metadata work fine with VIRTUAL columns. For
+-- this, PR #4616 changes are modified to handle VIRTUAL columns in
+-- addition to STORED columns.
+CREATE TABLE generated_stored_dist (
+  col_1 int,
+  "col\'_2" text,
+  col_3 text generated always as (UPPER("col\'_2")) virtual
+);
+SELECT create_distributed_table ('generated_stored_dist', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+(2 rows)
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
+NOTICE:  creating a new table for pg18_nn.generated_stored_dist
+NOTICE:  moving the data of pg18_nn.generated_stored_dist
+NOTICE:  dropping the old pg18_nn.generated_stored_dist
+NOTICE:  renaming the new table to pg18_nn.generated_stored_dist
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+     2 | text_2  | TEXT_2
+(4 rows)
+
+CREATE TABLE generated_stored_local (
+  col_1 int,
+  "col\'_2" text,
+  col_3 text generated always as (UPPER("col\'_2")) stored
+);
+SELECT citus_add_local_table_to_metadata('generated_stored_local');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+(2 rows)
+
+SELECT create_distributed_table ('generated_stored_local', 'col_1');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.generated_stored_local$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+     2 | text_2  | TEXT_2
+(4 rows)
+
+CREATE TABLE generated_stored_ref (
+  col_1 int,
+  col_2 int,
+  col_3 int generated always as (col_1+col_2) virtual,
+  col_4 int,
+  col_5 int generated always as (col_4*2-col_1) virtual
+);
+SELECT create_reference_table ('generated_stored_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO generated_stored_ref (col_1, col_4) VALUES (1,2), (11,12);
+INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
+SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+(4 rows)
+
+BEGIN;
+  SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg18_nn.generated_stored_ref
+NOTICE:  moving the data of pg18_nn.generated_stored_ref
+NOTICE:  dropping the old pg18_nn.generated_stored_ref
+NOTICE:  renaming the new table to pg18_nn.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  INSERT INTO generated_stored_ref (col_1, col_4) VALUES (11,12), (21,22);
+  INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
+  SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+    11 |       |       |    12 |    13
+    21 |       |       |    22 |    23
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+   200 |   201 |   401 |   202 |   204
+   300 |   301 |   601 |   302 |   304
+(8 rows)
+
+ROLLBACK;
+BEGIN;
+  -- drop some of the columns not having "generated always as virtual" expressions
+  SET client_min_messages TO WARNING;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1 CASCADE;
+  RESET client_min_messages;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg18_nn.generated_stored_ref
+NOTICE:  moving the data of pg18_nn.generated_stored_ref
+NOTICE:  dropping the old pg18_nn.generated_stored_ref
+NOTICE:  renaming the new table to pg18_nn.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  INSERT INTO generated_stored_ref VALUES (5);
+  SELECT * FROM generated_stored_REF ORDER BY 1;
+ col_2
+---------------------------------------------------------------------
+     5
+   101
+   201
+
+
+(5 rows)
+
+ROLLBACK;
+BEGIN;
+  -- now drop all columns
+  ALTER TABLE generated_stored_ref DROP COLUMN col_3;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_5;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_2;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg18_nn.generated_stored_ref
+NOTICE:  moving the data of pg18_nn.generated_stored_ref
+NOTICE:  dropping the old pg18_nn.generated_stored_ref
+NOTICE:  renaming the new table to pg18_nn.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  SELECT * FROM generated_stored_ref;
+--
+(4 rows)
+
+ROLLBACK;
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
