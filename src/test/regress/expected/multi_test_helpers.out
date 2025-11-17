@@ -736,6 +736,9 @@ begin
         IF ln ~ '^[[:space:]]*Index[[:space:]]+Searches:[[:space:]]*[0-9]+[[:space:]]*$' THEN
           CONTINUE;
         END IF;
+        IF ln ~ '^[[:space:]]*Window:[[:space:]].*$' THEN  -- e.g., "Window: w1 AS (...)"
+            CONTINUE;
+        END IF;
 
         -- Replace any numeric word with just 'N'
         ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
