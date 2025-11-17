@@ -675,6 +675,7 @@ LIMIT
        2 |     1
 (5 rows)
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
     SELECT *
     FROM (
@@ -708,17 +709,18 @@ EXPLAIN (COSTS FALSE)
              GROUP BY
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
-    LIMIT 5;
-                                                           QUERY PLAN
+    LIMIT 5
+');
+                                                         explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.sum DESC, remote_scan.user_id DESC
          ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
+               Task Count: N
+               Tasks Shown: One of N
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=localhost port=N dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: (sum((sum(users_table.value_2) OVER (?)))) DESC, users_table.user_id DESC

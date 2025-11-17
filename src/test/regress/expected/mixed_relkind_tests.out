@@ -633,11 +633,13 @@ $Q$);
 (4 rows)
 
 -- pull to coordinator WINDOW
+select public.explain_filter('
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a+1) FROM partitioned_distributed_table ORDER BY 1,2;
-$Q$);
-                  coordinator_plan
+$Q$)
+');
+                   explain_filter
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.a, (count(*) OVER (?))
@@ -645,7 +647,7 @@ $Q$);
          ->  Sort
                Sort Key: remote_scan.worker_column_2
                ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
+                     Task Count: N
 (7 rows)
 
 -- FOR UPDATE

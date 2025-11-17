@@ -441,6 +441,7 @@ ORDER BY
 LIMIT
   5;
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
     SELECT *
     FROM (
@@ -474,7 +475,8 @@ EXPLAIN (COSTS FALSE)
              GROUP BY
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
-    LIMIT 5;
+    LIMIT 5
+');
 
 -- test with window functions which aren't pushed down
 SELECT

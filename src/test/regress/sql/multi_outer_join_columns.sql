@@ -32,21 +32,27 @@ SELECT create_distributed_table('t2', 'account_id');
 -- produces a non-empty varnullingrels set in PG 16 (and higher)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
+select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
-FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
+');
 
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id;
+select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
-FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id;
+FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id
+');
 
 SELECT  DISTINCT t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
+select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT DISTINCT t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
-FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
+FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
+');
 
 CREATE SEQUENCE test_seq START 101;
 CREATE OR REPLACE FUNCTION TEST_F(int) returns INT language sql stable as $$ select $1 + 42; $$ ;
@@ -86,10 +92,12 @@ FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
 SELECT 1
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 HAVING COUNT(DISTINCT a2) > 1;
+select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT 1
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 HAVING COUNT(DISTINCT a2) > 1;
+');
 
 -- Check right outer join
 SELECT COUNT(DISTINCT a2)

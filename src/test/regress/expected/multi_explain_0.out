@@ -3107,46 +3107,50 @@ CREATE TABLE distributed_table_1(a int, b int);
 SELECT create_distributed_table('distributed_table_1','a');
 
 INSERT INTO distributed_table_1 values (1,1);
-EXPLAIN :default_analyze_flags SELECT row_number() OVER() AS r FROM distributed_table_1;
-WindowAgg (actual rows=1 loops=1)
-  ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
-        Task Count: 2
-        Tasks Shown: One of 2
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off) SELECT row_number() OVER() AS r FROM distributed_table_1
+');
+WindowAgg (actual rows=N loops=N)
+  ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+        Task Count: N
+        Tasks Shown: One of N
         ->  Task
-              Node: host=localhost port=xxxxx dbname=regression
-              ->  Seq Scan on distributed_table_1_570032 distributed_table_1 (actual rows=1 loops=1)
+              Node: host=localhost port=N dbname=regression
+              ->  Seq Scan on distributed_table_1_570032 distributed_table_1 (actual rows=N loops=N)
 CREATE TABLE distributed_table_2(a int, b int);
 SELECT create_distributed_table('distributed_table_2','a');
 
 INSERT INTO distributed_table_2 VALUES (1,1);
-EXPLAIN :default_analyze_flags
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)
 WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
 SELECT * FROM distributed_table_2
 JOIN r ON (r = distributed_table_2.b)
-LIMIT 3;
-Limit (actual rows=1 loops=1)
-  ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+LIMIT 3
+');
+Limit (actual rows=N loops=N)
+  ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
         ->  Distributed Subplan XXX_1
-              Intermediate Data Size: 14 bytes
-              Result destination: Send to 2 nodes
-              ->  WindowAgg (actual rows=1 loops=1)
-                    ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
-                          Task Count: 2
-                          Tasks Shown: One of 2
+              Intermediate Data Size: N bytes
+              Result destination: Send to N nodes
+              ->  WindowAgg (actual rows=N loops=N)
+                    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+                          Task Count: N
+                          Tasks Shown: One of N
                           ->  Task
-                                Node: host=localhost port=xxxxx dbname=regression
-                                ->  Seq Scan on distributed_table_1_570032 distributed_table_1 (actual rows=1 loops=1)
-        Task Count: 2
-        Tuple data received from nodes: 16 bytes
-        Tasks Shown: One of 2
+                                Node: host=localhost port=N dbname=regression
+                                ->  Seq Scan on distributed_table_1_570032 distributed_table_1 (actual rows=N loops=N)
+        Task Count: N
+        Tuple data received from nodes: N bytes
+        Tasks Shown: One of N
         ->  Task
-              Tuple data received from node: 16 bytes
-              Node: host=localhost port=xxxxx dbname=regression
-              ->  Limit (actual rows=1 loops=1)
-                    ->  Nested Loop (actual rows=1 loops=1)
+              Tuple data received from node: N bytes
+              Node: host=localhost port=N dbname=regression
+              ->  Limit (actual rows=N loops=N)
+                    ->  Nested Loop (actual rows=N loops=N)
                           Join Filter: (distributed_table_2.b = intermediate_result.r)
-                          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
-                          ->  Seq Scan on distributed_table_2_570034 distributed_table_2 (actual rows=1 loops=1)
+                          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=N loops=N)
+                          ->  Seq Scan on distributed_table_2_570034 distributed_table_2 (actual rows=N loops=N)
 EXPLAIN :default_analyze_flags SELECT FROM (SELECT * FROM reference_table) subquery;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1

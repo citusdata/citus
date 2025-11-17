@@ -508,6 +508,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -516,7 +517,8 @@ SELECT
 FROM
 	users_table
 GROUP BY user_id, value_2
-ORDER BY user_id, avg(value_1) DESC;
+ORDER BY user_id, avg(value_1) DESC
+');
 
 -- order by in the window function is same as avg(value_1) DESC
 SELECT
@@ -529,6 +531,7 @@ GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
 
 -- limit is not pushed down to worker !!
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -538,8 +541,10 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
+LIMIT 5
+');
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -549,8 +554,10 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
+LIMIT 5
+');
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -560,8 +567,10 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
+LIMIT 5
+');
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -571,12 +580,15 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
+LIMIT 5
+');
 
 -- Grouping can be pushed down with aggregates even when window function can't
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
-FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1;
+FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1
+');
 
 -- Window function with inlined CTE
 WITH cte as (
@@ -594,6 +606,7 @@ ORDER BY 1;
 CREATE TABLE daily_uniques (value_2 float, user_id bigint);
 SELECT create_distributed_table('daily_uniques', 'user_id');
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE) SELECT
   user_id,
   sum(value_2) AS commits,
@@ -607,7 +620,8 @@ GROUP BY user_id
 HAVING
   sum(value_2) > 0
 ORDER BY commits DESC
-LIMIT 10;
+LIMIT 10
+');
 
 DROP TABLE daily_uniques;
 
