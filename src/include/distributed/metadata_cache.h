@@ -216,6 +216,7 @@ extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
 extern bool InstalledAndAvailableVersionsSame(void);
 extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
+extern bool MinorVersionsCompatibleRelaxed(char *leftVersion, char *rightVersion);
 extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
 extern void EnsureModificationsCanRunOnRelation(Oid relationId);
