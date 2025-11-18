@@ -783,6 +783,77 @@ DROP SCHEMA pg18_publication CASCADE;
 SET search_path TO pg18_nn;
 -- END: PG18: verify publish_generated_columns is preserved for distributed tables
 
+-- PG18 Feature: FOREIGN KEY constraints can be specified as NOT ENFORCED
+-- PG18 commit: https://github.com/postgres/postgres/commit/eec0040c4
+CREATE TABLE customers(
+   customer_id INT GENERATED ALWAYS AS IDENTITY,
+   customer_name VARCHAR(255) NOT NULL,
+   PRIMARY KEY(customer_id)
+);
+
+SELECT create_distributed_table('customers', 'customer_id');
+
+CREATE TABLE contacts(
+   contact_id INT GENERATED ALWAYS AS IDENTITY,
+   customer_id INT,
+   contact_name VARCHAR(255) NOT NULL,
+   phone VARCHAR(15),
+   email VARCHAR(100),
+   CONSTRAINT fk_customer
+      FOREIGN KEY(customer_id)
+	  REFERENCES customers(customer_id)
+	  ON DELETE CASCADE NOT ENFORCED
+);
+
+-- The foreign key constraint is propagated to worker nodes.
+SELECT create_distributed_table('contacts', 'customer_id');
+
+SELECT pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+
+INSERT INTO customers(customer_name)
+VALUES('BlueBird Inc'),
+      ('Dolphin LLC');
+
+INSERT INTO contacts(customer_id, contact_name, phone, email)
+VALUES(1,'John Doe','(408)-111-1234','john.doe@example.com'),
+      (1,'Jane Doe','(408)-111-1235','jane.doe@example.com'),
+      (2,'David Wright','(408)-222-1234','david.wright@example.com');
+
+DELETE FROM customers WHERE customer_name = 'Dolphin LLC';
+
+-- After deleting 'Dolphin LLC' from customers, the corresponding contact
+-- 'David Wright' is not deleted from contacts due to the NOT ENFORCED.
+SELECT * FROM contacts ORDER BY contact_id;
+
+-- Test that ALTER TABLE .. ADD CONSTRAINT .. FOREIGN KEY .. NOT ENFORCED
+-- is propagated to worker nodes. First drop the foreign key:
+ALTER TABLE contacts DROP CONSTRAINT fk_customer;
+
+SELECT pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+
+-- Now add the foreign key constraint back with NOT ENFORCED.
+ALTER TABLE contacts ADD CONSTRAINT fk_customer
+     FOREIGN KEY(customer_id)
+     REFERENCES customers(customer_id)
+     ON DELETE CASCADE NOT ENFORCED;
+
+-- The foreign key is propagated to worker nodes.
+SELECT pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+
+DELETE FROM customers WHERE customer_name = 'BlueBird Inc';
+
+-- The customers table is now empty but the contacts table still has
+-- the contacts due to the NOT ENFORCED foreign key.
+SELECT * FROM customers ORDER BY customer_id;
+SELECT * FROM contacts ORDER BY contact_id;
+
+-- ALTER TABLE .. ALTER CONSTRAINT is not supported in Citus,
+-- so the following command should fail
+ALTER TABLE contacts ALTER CONSTRAINT fk_customer ENFORCED;
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
