@@ -166,7 +166,6 @@ static List * PostLoadShardCreationCommandList(ShardInterval *shardInterval,
 											   int32 sourceNodePort);
 static ShardCommandList * CreateShardCommandList(ShardInterval *shardInterval,
 												 List *ddlCommandList);
-static char * CreateShardCopyCommand(ShardInterval *shard, WorkerNode *targetNode);
 static void AcquireShardPlacementLock(uint64_t shardId, int lockMode, Oid relationId,
 									  const char *operationName);
 
@@ -2074,7 +2073,7 @@ CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode, List *shardInte
  * worker node. This command needs to be run on the node wher you want to copy
  * the shard from.
  */
-static char *
+char *
 CreateShardCopyCommand(ShardInterval *shard,
 					   WorkerNode *targetNode)
 {

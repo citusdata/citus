@@ -14,6 +14,7 @@
 #include "miscadmin.h"
 
 #include "nodes/pg_list.h"
+#include "utils/builtins.h"
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
@@ -22,6 +23,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/replicate_none_dist_table_shard.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/shard_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -30,32 +32,31 @@
 static void CreateForeignKeysFromReferenceTablesOnShards(Oid noneDistTableId);
 static Oid ForeignConstraintGetReferencingTableId(const char *queryString);
 static void EnsureNoneDistTableWithCoordinatorPlacement(Oid noneDistTableId);
-static void SetLocalEnableManualChangesToShard(bool state);
 
 
 /*
- * NoneDistTableReplicateCoordinatorPlacement replicates local (presumably
- * coordinator) shard placement of given none-distributed table to given
+ * NoneDistTableReplicateCoordinatorPlacement replicates the coordinator
+ * shard placement of given none-distributed table to given
  * target nodes and inserts records for new placements into pg_dist_placement.
  */
 void
 NoneDistTableReplicateCoordinatorPlacement(Oid noneDistTableId,
 										   List *targetNodeList)
 {
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 	EnsureNoneDistTableWithCoordinatorPlacement(noneDistTableId);
 
 	/*
-	 * We don't expect callers try to replicate the shard to remote nodes
-	 * if some of the remote nodes have a placement for the shard already.
+	 * We don't expect callers try to replicate the shard to worker nodes
+	 * if some of the worker nodes have a placement for the shard already.
 	 */
 	int64 shardId = GetFirstShardId(noneDistTableId);
-	List *remoteShardPlacementList =
+	List *nonCoordShardPlacementList =
 		FilterShardPlacementList(ActiveShardPlacementList(shardId),
-								 IsRemoteShardPlacement);
-	if (list_length(remoteShardPlacementList) > 0)
+								 IsNonCoordShardPlacement);
+	if (list_length(nonCoordShardPlacementList) > 0)
 	{
-		ereport(ERROR, (errmsg("table already has a remote shard placement")));
+		ereport(ERROR, (errmsg("table already has a shard placement on a worker")));
 	}
 
 	uint64 shardLength = ShardLength(shardId);
@@ -78,22 +79,63 @@ NoneDistTableReplicateCoordinatorPlacement(Oid noneDistTableId,
 	CreateShardsOnWorkers(noneDistTableId, insertedPlacementList,
 						  useExclusiveConnection);
 
-	/* fetch coordinator placement before deleting it */
-	Oid localPlacementTableId = GetTableLocalShardOid(noneDistTableId, shardId);
 	ShardPlacement *coordinatorPlacement =
 		linitial(ActiveShardPlacementListOnGroup(shardId, COORDINATOR_GROUP_ID));
 
 	/*
-	 * CreateForeignKeysFromReferenceTablesOnShards and CopyFromLocalTableIntoDistTable
-	 * need to ignore the local placement, hence we temporarily delete it before
-	 * calling them.
+	 * The work done below to replicate the shard and
+	 * CreateForeignKeysFromReferenceTablesOnShards() itself need to ignore the
+	 * coordinator shard placement, hence we temporarily delete it using
+	 * DeleteShardPlacementRowGlobally() before moving forward.
 	 */
-	DeleteShardPlacementRowGlobally(coordinatorPlacement->placementId);
+	if (IsCoordinator())
+	{
+		/* TODOTASK: maybe remove this codepath? "else" can possibly handle coordinator-placement too */
 
-	/* and copy data from local placement to new placements */
-	CopyFromLocalTableIntoDistTable(
-		localPlacementTableId, noneDistTableId
-		);
+		/* fetch coordinator placement before deleting it */
+		Oid localPlacementTableId = GetTableLocalShardOid(noneDistTableId, shardId);
+
+		DeleteShardPlacementRowGlobally(coordinatorPlacement->placementId);
+
+		/* and copy data from local placement to new placements */
+		CopyFromLocalTableIntoDistTable(
+			localPlacementTableId, noneDistTableId
+			);
+	}
+	else
+	{
+		DeleteShardPlacementRowGlobally(coordinatorPlacement->placementId);
+
+		List *taskList = NIL;
+		uint64 jobId = INVALID_JOB_ID;
+		uint32 taskId = 0;
+		foreach_declared_ptr(targetNode, targetNodeList)
+		{
+			Task *task = CitusMakeNode(Task);
+			task->jobId = jobId;
+			task->taskId = taskId++;
+			task->taskType = READ_TASK;
+			task->replicationModel = REPLICATION_MODEL_INVALID;
+			char *shardCopyCommand = CreateShardCopyCommand(LoadShardInterval(shardId),
+															targetNode);
+			SetTaskQueryStringList(task, list_make1(shardCopyCommand));
+
+			/* we already verified that coordinator is in the metadata */
+			WorkerNode *coordinatorNode = CoordinatorNodeIfAddedAsWorkerOrError();
+
+			/*
+			 * Need execute the task at the source node as we'll copy the shard
+			 * from there, i.e., the coordinator.
+			 */
+			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+			SetPlacementNodeMetadata(taskPlacement, coordinatorNode);
+
+			task->taskPlacementList = list_make1(taskPlacement);
+			taskList = lappend(taskList, task);
+		}
+
+		ExecuteTaskList(ROW_MODIFY_READONLY, taskList);
+	}
 
 	/*
 	 * CreateShardsOnWorkers only creates the foreign keys where given relation
@@ -116,12 +158,12 @@ NoneDistTableReplicateCoordinatorPlacement(Oid noneDistTableId,
 
 /*
  * NoneDistTableDeleteCoordinatorPlacement deletes pg_dist_placement record for
- * local (presumably coordinator) shard placement of given none-distributed table.
+ * the coordinator shard placement of given none-distributed table.
  */
 void
 NoneDistTableDeleteCoordinatorPlacement(Oid noneDistTableId)
 {
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 	EnsureNoneDistTableWithCoordinatorPlacement(noneDistTableId);
 
 	int64 shardId = GetFirstShardId(noneDistTableId);
@@ -130,40 +172,24 @@ NoneDistTableDeleteCoordinatorPlacement(Oid noneDistTableId)
 	ShardPlacement *coordinatorPlacement =
 		linitial(ActiveShardPlacementListOnGroup(shardId, COORDINATOR_GROUP_ID));
 
-	/* remove the old placement from metadata of local node, i.e., coordinator */
+	/* remove the old placement from metadata */
 	DeleteShardPlacementRowGlobally(coordinatorPlacement->placementId);
 }
 
 
 /*
- * NoneDistTableDropCoordinatorPlacementTable drops local (presumably coordinator)
+ * NoneDistTableDropCoordinatorPlacementTable drops the coordinator
  * shard placement table of given none-distributed table.
  */
 void
 NoneDistTableDropCoordinatorPlacementTable(Oid noneDistTableId)
 {
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	if (HasDistributionKey(noneDistTableId))
 	{
 		ereport(ERROR, (errmsg("table is not a none-distributed table")));
 	}
-
-	/*
-	 * We undistribute Citus local tables that are not chained with any reference
-	 * tables via foreign keys at the end of the utility hook.
-	 * Here we temporarily set the related GUC to off to disable the logic for
-	 * internally executed DDL's that might invoke this mechanism unnecessarily.
-	 *
-	 * We also temporarily disable citus.enable_manual_changes_to_shards GUC to
-	 * allow given command to modify shard. Note that we disable it only for
-	 * local session because changes made to shards are allowed for Citus internal
-	 * backends anyway.
-	 */
-	int saveNestLevel = NewGUCNestLevel();
-
-	SetLocalEnableLocalReferenceForeignKeys(false);
-	SetLocalEnableManualChangesToShard(true);
 
 	StringInfo dropShardCommand = makeStringInfo();
 	int64 shardId = GetFirstShardId(noneDistTableId);
@@ -176,7 +202,22 @@ NoneDistTableDropCoordinatorPlacementTable(Oid noneDistTableId)
 	task->taskId = INVALID_TASK_ID;
 	task->taskType = DDL_TASK;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
-	SetTaskQueryString(task, dropShardCommand->data);
+
+	/*
+	 * We undistribute Citus local tables that are not chained with any reference
+	 * tables via foreign keys at the end of the utility hook.
+	 * So we need to temporarily set the related GUC to off to disable the logic for
+	 * internally executed DDL's that might invoke this mechanism unnecessarily.
+	 *
+	 * We also temporarily disable citus.enable_manual_changes_to_shards GUC to
+	 * allow given command to modify shard.
+	 */
+	List *taskQueryStringList = list_make3(
+		"SET LOCAL citus.enable_local_reference_table_foreign_keys TO OFF;",
+		"SET LOCAL citus.enable_manual_changes_to_shards TO ON;",
+		dropShardCommand->data
+		);
+	SetTaskQueryStringList(task, taskQueryStringList);
 
 	ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
 	SetPlacementNodeMetadata(targetPlacement, CoordinatorNodeIfAddedAsWorkerOrError());
@@ -185,8 +226,6 @@ NoneDistTableDropCoordinatorPlacementTable(Oid noneDistTableId)
 
 	bool localExecutionSupported = true;
 	ExecuteUtilityTaskList(list_make1(task), localExecutionSupported);
-
-	AtEOXact_GUC(true, saveNestLevel);
 }
 
 
@@ -198,7 +237,7 @@ NoneDistTableDropCoordinatorPlacementTable(Oid noneDistTableId)
 static void
 CreateForeignKeysFromReferenceTablesOnShards(Oid noneDistTableId)
 {
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	if (HasDistributionKey(noneDistTableId))
 	{
@@ -286,18 +325,4 @@ EnsureNoneDistTableWithCoordinatorPlacement(Oid noneDistTableId)
 	{
 		ereport(ERROR, (errmsg("table does not have a coordinator placement")));
 	}
-}
-
-
-/*
- * SetLocalEnableManualChangesToShard locally enables
- * citus.enable_manual_changes_to_shards GUC.
- */
-static void
-SetLocalEnableManualChangesToShard(bool state)
-{
-	set_config_option("citus.enable_manual_changes_to_shards",
-					  state ? "on" : "off",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
 }

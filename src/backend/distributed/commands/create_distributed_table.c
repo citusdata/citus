@@ -147,7 +147,8 @@ static void CreateCitusTable(Oid relationId, CitusTableType tableType,
 static void ConvertCitusLocalTableToTableType(Oid relationId,
 											  CitusTableType tableType,
 											  DistributedTableParams *
-											  distributedTableParams);
+											  distributedTableParams,
+											  bool allowFromWorkers);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static void CreateSingleShardTableShard(Oid relationId, Oid colocatedTableId,
@@ -303,9 +304,9 @@ create_distributed_table(PG_FUNCTION_ARGS)
 			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
 			.colocateWithTableName = colocateWithTableName,
 		};
-		bool allowFromWorkersIfPostgresTable = false;
+		bool allowFromWorkers = false;
 		CreateSingleShardTable(relationId, colocationParam,
-							   allowFromWorkersIfPostgresTable);
+							   allowFromWorkers);
 	}
 
 	PG_RETURN_VOID();
@@ -1057,17 +1058,18 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 void
 CreateReferenceTable(Oid relationId)
 {
+	bool allowFromWorkers = false;
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		/*
 		 * Create the shard of given Citus local table on workers to convert
 		 * it into a reference table.
 		 */
-		ConvertCitusLocalTableToTableType(relationId, REFERENCE_TABLE, NULL);
+		ConvertCitusLocalTableToTableType(relationId, REFERENCE_TABLE, NULL,
+										  allowFromWorkers);
 	}
 	else
 	{
-		bool allowFromWorkers = false;
 		CreateCitusTable(relationId, REFERENCE_TABLE, NULL, allowFromWorkers);
 	}
 }
@@ -1079,7 +1081,7 @@ CreateReferenceTable(Oid relationId)
  */
 void
 CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
-					   bool allowFromWorkersIfPostgresTable)
+					   bool allowFromWorkers)
 {
 	DistributedTableParams distributedTableParams = {
 		.colocationParam = colocationParam,
@@ -1096,12 +1098,13 @@ CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
 		 * table.
 		 */
 		ConvertCitusLocalTableToTableType(relationId, SINGLE_SHARD_DISTRIBUTED,
-										  &distributedTableParams);
+										  &distributedTableParams,
+										  allowFromWorkers);
 	}
 	else
 	{
 		CreateCitusTable(relationId, SINGLE_SHARD_DISTRIBUTED, &distributedTableParams,
-						 allowFromWorkersIfPostgresTable);
+						 allowFromWorkers);
 	}
 }
 
@@ -1407,7 +1410,8 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
  */
 static void
 ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
-								  DistributedTableParams *distributedTableParams)
+								  DistributedTableParams *distributedTableParams,
+								  bool allowFromWorkers)
 {
 	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
@@ -1426,7 +1430,6 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 							   "not be otherwise")));
 	}
 
-	bool allowFromWorkers = false;
 	EnsureCitusTableCanBeCreated(relationId, allowFromWorkers);
 
 	Relation relation = try_relation_open(relationId, ExclusiveLock);
@@ -1497,11 +1500,11 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 	/*
 	 * When converting to a single shard table, we want to drop the placement
 	 * on the coordinator, but only if transferring to a different node. In that
-	 * case, shouldDropLocalPlacement is true. When converting to a reference
+	 * case, shouldDropCoordPlacement is true. When converting to a reference
 	 * table, we always keep the placement on the coordinator, so for reference
-	 * tables shouldDropLocalPlacement is always false.
+	 * tables shouldDropCoordPlacement is always false.
 	 */
-	bool shouldDropLocalPlacement = false;
+	bool shouldDropCoordPlacement = false;
 
 	List *targetNodeList = NIL;
 	if (tableType == SINGLE_SHARD_DISTRIBUTED)
@@ -1513,7 +1516,7 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 			WorkerNode *targetNode = FindNodeWithNodeId(targetNodeId, missingOk);
 			targetNodeList = list_make1(targetNode);
 
-			shouldDropLocalPlacement = true;
+			shouldDropCoordPlacement = true;
 		}
 	}
 	else if (tableType == REFERENCE_TABLE)
@@ -1533,7 +1536,7 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 		NoneDistTableReplicateCoordinatorPlacement(relationId, targetNodeList);
 	}
 
-	if (shouldDropLocalPlacement)
+	if (shouldDropCoordPlacement)
 	{
 		/*
 		 * We don't yet drop the local placement before handling partitions.
@@ -1583,14 +1586,15 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 				.distributionColumnName = distributedTableParams->distributionColumnName,
 			};
 			ConvertCitusLocalTableToTableType(partitionRelationId, tableType,
-											  &childDistributedTableParams);
+											  &childDistributedTableParams,
+											  allowFromWorkers);
 		}
 
 		MemoryContextSwitchTo(oldContext);
 		MemoryContextDelete(citusPartitionContext);
 	}
 
-	if (shouldDropLocalPlacement)
+	if (shouldDropCoordPlacement)
 	{
 		NoneDistTableDropCoordinatorPlacementTable(relationId);
 	}

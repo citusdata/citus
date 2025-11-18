@@ -325,7 +325,7 @@ extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
-extern bool IsRemoteShardPlacement(ShardPlacement *shardPlacement);
+extern bool IsNonCoordShardPlacement(ShardPlacement *shardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
 										   ShardPlacement *));
