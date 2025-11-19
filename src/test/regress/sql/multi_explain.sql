@@ -189,7 +189,7 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0
-	');
+	', true);
 ROLLBACk;
 
 -- Test delete
@@ -599,7 +599,7 @@ EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-select public.explain_filter('EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5)');
+select public.explain_filter('EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5)', true);
 
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
@@ -1139,7 +1139,7 @@ INSERT INTO distributed_table_1 values (1,1);
 
 select public.explain_filter('
 EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off) SELECT row_number() OVER() AS r FROM distributed_table_1
-');
+', true);
 
 CREATE TABLE distributed_table_2(a int, b int);
 SELECT create_distributed_table('distributed_table_2','a');
@@ -1151,7 +1151,7 @@ WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
 SELECT * FROM distributed_table_2
 JOIN r ON (r = distributed_table_2.b)
 LIMIT 3
-');
+', true);
 
 EXPLAIN :default_analyze_flags SELECT FROM (SELECT * FROM reference_table) subquery;
 

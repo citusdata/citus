@@ -59,7 +59,7 @@ select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
-');
+', true);
                                                                                                                                                                            explain_filter
 ---------------------------------------------------------------------
  WindowAgg
@@ -69,11 +69,11 @@ FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
          Sort Key: remote_scan.worker_column_3
          ->  Custom Scan (Citus Adaptive)
                Output: remote_scan.worker_column_3, remote_scan.id, remote_scan.max
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
                      Query: SELECT worker_column_1 AS id, worker_column_2 AS max, worker_column_3 FROM (SELECT t1.id AS worker_column_1, t2.a2 AS worker_column_2, t2.id AS worker_column_3 FROM (outer_join_columns_testing.t1_30070000 t1 LEFT JOIN outer_join_columns_testing.t2_30070004 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.account_id)))) worker_subquery
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Hash Right Join
                            Output: t1.id, t2.a2, t2.id
                            Inner Unique: true
@@ -99,7 +99,7 @@ select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id
-');
+', true);
                                                                                                                                                                            explain_filter
 ---------------------------------------------------------------------
  WindowAgg
@@ -109,11 +109,11 @@ FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id
          Sort Key: remote_scan.worker_column_3
          ->  Custom Scan (Citus Adaptive)
                Output: remote_scan.worker_column_3, remote_scan.id, remote_scan.max
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
                      Query: SELECT worker_column_1 AS id, worker_column_2 AS max, worker_column_3 FROM (SELECT t1.id AS worker_column_1, t2.a2 AS worker_column_2, t2.id AS worker_column_3 FROM (outer_join_columns_testing.t2_30070004 t2 RIGHT JOIN outer_join_columns_testing.t1_30070000 t1 ON ((t1.id OPERATOR(pg_catalog.=) t2.account_id)))) worker_subquery
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Hash Right Join
                            Output: t1.id, t2.a2, t2.id
                            Inner Unique: true
@@ -139,7 +139,7 @@ select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT DISTINCT t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
-');
+', true);
                                                                                                                                                                               explain_filter
 ---------------------------------------------------------------------
  HashAggregate
@@ -152,11 +152,11 @@ FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
                Sort Key: remote_scan.worker_column_3
                ->  Custom Scan (Citus Adaptive)
                      Output: remote_scan.worker_column_3, remote_scan.id, remote_scan.max
-                     Task Count: N
-                     Tasks Shown: One of N
+                     Task Count: 4
+                     Tasks Shown: One of 4
                      ->  Task
                            Query: SELECT worker_column_1 AS id, worker_column_2 AS max, worker_column_3 FROM (SELECT t1.id AS worker_column_1, t2.a2 AS worker_column_2, t2.id AS worker_column_3 FROM (outer_join_columns_testing.t1_30070000 t1 LEFT JOIN outer_join_columns_testing.t2_30070004 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.account_id)))) worker_subquery
-                           Node: host=localhost port=N dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  Hash Right Join
                                  Output: t1.id, t2.a2, t2.id
                                  Inner Unique: true
@@ -310,21 +310,21 @@ EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT 1
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 HAVING COUNT(DISTINCT a2) > 1;
-');
-                                                                                                                                                     explain_filter
+', true);
+                                                                                                                                                        explain_filter
 ---------------------------------------------------------------------
  Aggregate
    Output: remote_scan."?column?"
-   Filter: (count(DISTINCT remote_scan.worker_column_2) > N)
+   Filter: (count(DISTINCT remote_scan.worker_column_2) > 1)
    ->  Custom Scan (Citus Adaptive)
          Output: remote_scan."?column?", remote_scan.worker_column_2
-         Task Count: N
-         Tasks Shown: One of N
+         Task Count: 4
+         Tasks Shown: One of 4
          ->  Task
-               Query: SELECT N, worker_column_1 AS worker_column_2 FROM (SELECT t2.a2 AS worker_column_1 FROM (outer_join_columns_testing.t1_30070000 t1 LEFT JOIN outer_join_columns_testing.t2_30070004 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.account_id)))) worker_subquery GROUP BY worker_column_1
-               Node: host=localhost port=N dbname=regression
+               Query: SELECT 1, worker_column_1 AS worker_column_2 FROM (SELECT t2.a2 AS worker_column_1 FROM (outer_join_columns_testing.t1_30070000 t1 LEFT JOIN outer_join_columns_testing.t2_30070004 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.account_id)))) worker_subquery GROUP BY worker_column_1
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
-                     Output: N, t2.a2
+                     Output: 1, t2.a2
                      Group Key: t2.a2
                      ->  Hash Right Join
                            Output: t2.a2

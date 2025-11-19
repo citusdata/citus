@@ -518,7 +518,7 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-');
+', true);
 
 -- order by in the window function is same as avg(value_1) DESC
 SELECT
@@ -542,7 +542,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
 
 select public.explain_filter('
 EXPLAIN (COSTS FALSE)
@@ -555,7 +555,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
 
 select public.explain_filter('
 EXPLAIN (COSTS FALSE)
@@ -568,7 +568,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
 
 select public.explain_filter('
 EXPLAIN (COSTS FALSE)
@@ -581,14 +581,14 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
 
 -- Grouping can be pushed down with aggregates even when window function can't
 select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
 FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1
-');
+', true);
 
 -- Window function with inlined CTE
 WITH cte as (
@@ -621,7 +621,7 @@ HAVING
   sum(value_2) > 0
 ORDER BY commits DESC
 LIMIT 10
-');
+', true);
 
 DROP TABLE daily_uniques;
 

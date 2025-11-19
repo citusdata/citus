@@ -1302,19 +1302,19 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-');
+', true);
                                                     explain_filter
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.user_id, remote_scan.avg DESC
    ->  Custom Scan (Citus Adaptive)
-         Task Count: N
-         Tasks Shown: One of N
+         Task Count: 4
+         Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=N dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  WindowAgg
                      ->  Sort
-                           Sort Key: users_table.user_id, (('N'::numeric / ('N'::numeric + avg(users_table.value_1))))
+                           Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
                            ->  HashAggregate
                                  Group Key: users_table.user_id, users_table.value_2
                                  ->  Seq Scan on users_table_1400256 users_table
@@ -1377,23 +1377,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
                                                              explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.user_id, remote_scan.avg DESC
          ->  Custom Scan (Citus Adaptive)
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  ->  WindowAgg
                                        ->  Sort
-                                             Sort Key: users_table.user_id, (('N'::numeric / ('N'::numeric + avg(users_table.value_1))))
+                                             Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
                                              ->  HashAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
                                                    ->  Seq Scan on users_table_1400256 users_table
@@ -1410,23 +1410,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
                                                              explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.user_id, remote_scan.avg DESC
          ->  Custom Scan (Citus Adaptive)
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  ->  WindowAgg
                                        ->  Sort
-                                             Sort Key: users_table.user_id, (('N'::numeric / ('N'::numeric + avg(users_table.value_1))))
+                                             Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
                                              ->  HashAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
                                                    ->  Seq Scan on users_table_1400256 users_table
@@ -1443,23 +1443,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
                                                   explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.user_id, remote_scan.avg DESC
          ->  Custom Scan (Citus Adaptive)
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  ->  WindowAgg
                                        ->  Sort
-                                             Sort Key: users_table.user_id, ((N / (N + sum(users_table.value_2))))
+                                             Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
                                              ->  HashAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
                                                    ->  Seq Scan on users_table_1400256 users_table
@@ -1476,17 +1476,17 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5
-');
+', true);
                                             explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.user_id, remote_scan.avg DESC
          ->  Custom Scan (Citus Adaptive)
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
@@ -1503,7 +1503,7 @@ select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
 FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1
-');
+', true);
                                  explain_filter
 ---------------------------------------------------------------------
  Limit
@@ -1511,13 +1511,13 @@ FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1
          ->  Sort
                Sort Key: remote_scan.worker_column_5
                ->  Custom Scan (Citus Adaptive)
-                     Task Count: N
-                     Tasks Shown: One of N
+                     Task Count: 4
+                     Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=N dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  HashAggregate
                                  Group Key: user_id
-                                 Filter: (avg(value_1) > 'N'::numeric)
+                                 Filter: (avg(value_1) > '2'::numeric)
                                  ->  Seq Scan on users_table_1400256 users_table
 (13 rows)
 
@@ -1561,17 +1561,17 @@ HAVING
   sum(value_2) > 0
 ORDER BY commits DESC
 LIMIT 10
-');
+', true);
                                                  explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.commits DESC
          ->  Custom Scan (Citus Adaptive)
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: (sum(daily_uniques.value_2)) DESC
@@ -1580,7 +1580,7 @@ LIMIT 10
                                              Sort Key: daily_uniques.user_id, (sum(daily_uniques.value_2)) DESC
                                              ->  HashAggregate
                                                    Group Key: daily_uniques.user_id
-                                                   Filter: (sum(daily_uniques.value_2) > 'N'::double precision)
+                                                   Filter: (sum(daily_uniques.value_2) > '0'::double precision)
                                                    ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
 (18 rows)
 

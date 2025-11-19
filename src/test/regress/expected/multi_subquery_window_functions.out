@@ -710,17 +710,17 @@ EXPLAIN (COSTS FALSE)
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
     LIMIT 5
-');
+', true);
                                                          explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.sum DESC, remote_scan.user_id DESC
          ->  Custom Scan (Citus Adaptive)
-               Task Count: N
-               Tasks Shown: One of N
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=N dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: (sum((sum(users_table.value_2) OVER (?)))) DESC, users_table.user_id DESC

@@ -476,7 +476,7 @@ EXPLAIN (COSTS FALSE)
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
     LIMIT 5
-');
+', true);
 
 -- test with window functions which aren't pushed down
 SELECT

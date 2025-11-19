@@ -36,7 +36,7 @@ select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
-');
+', true);
 
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id;
@@ -44,7 +44,7 @@ select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT  t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t2 RIGHT OUTER JOIN t1 ON t1.id = t2.account_id
-');
+', true);
 
 SELECT  DISTINCT t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id;
@@ -52,7 +52,7 @@ select public.explain_filter('
 EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT DISTINCT t1.id, MAX(t2.a2) OVER (PARTITION BY t2.id)
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
-');
+', true);
 
 CREATE SEQUENCE test_seq START 101;
 CREATE OR REPLACE FUNCTION TEST_F(int) returns INT language sql stable as $$ select $1 + 42; $$ ;
@@ -97,7 +97,7 @@ EXPLAIN (VERBOSE, COSTS OFF, TIMING OFF)
 SELECT 1
 FROM t1 LEFT OUTER JOIN t2 ON t1.id = t2.account_id
 HAVING COUNT(DISTINCT a2) > 1;
-');
+', true);
 
 -- Check right outer join
 SELECT COUNT(DISTINCT a2)
