@@ -92,7 +92,6 @@ def run_citus_upgrade_tests(config, before_upgrade_schedule, after_upgrade_sched
 
 
 def get_citus_catalog_info(config):
-
     results = {}
     # Store GUCs
     guc_results = utils.psql_capture(
@@ -258,7 +257,6 @@ def compare_citus_catalog_info(config, pre_upgrade):
 
 
 def find_compatible_udf_signature(full_args, return_type, post_signatures):
-
     pre_args_list = [arg.strip() for arg in full_args.split(",") if arg.strip()]
 
     for post_full_args, post_return_type in post_signatures:
