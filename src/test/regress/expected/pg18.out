@@ -1352,6 +1352,67 @@ SELECT * FROM contacts ORDER BY contact_id;
 ALTER TABLE contacts ALTER CONSTRAINT fk_customer ENFORCED;
 ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+-- PG18 Feature: ENFORCED / NOT ENFORCED check constraints
+-- PG18 commit: https://github.com/postgres/postgres/commit/ca87c415e
+-- In Citus, CHECK constraints are propagated on promoting a postgres table
+-- to a citus table, on adding a new CHECK constraint to a citus table, and
+-- on adding a node to a citus cluster. Postgres does not support altering a
+-- check constraint's enforcement status, so Citus does not either.
+CREATE TABLE NE_CHECK_TBL (x int, y int,
+	CONSTRAINT CHECK_X CHECK (x > 3) NOT ENFORCED,
+  CONSTRAINT CHECK_Y CHECK (y < 20) ENFORCED
+);
+SELECT create_distributed_table('ne_check_tbl', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- CHECK_X is NOT ENFORCED, so these inserts should succeed
+INSERT INTO NE_CHECK_TBL (x) VALUES (5), (4), (3), (2), (6), (1);
+SELECT x FROM NE_CHECK_TBL ORDER BY x;
+ x
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+(6 rows)
+
+-- CHECK_Y is ENFORCED, so this insert should fail
+INSERT INTO NE_CHECK_TBL (x, y) VALUES (1, 15), (2, 25), (3, 10), (4, 30);
+ERROR:  new row for relation "ne_check_tbl_4754045" violates check constraint "check_y"
+DETAIL:  Failing row contains (4, 30).
+CONTEXT:  while executing command on localhost:xxxxx
+-- Test adding new constraints with enforcement status
+ALTER TABLE NE_CHECK_TBL
+  ADD CONSTRAINT CHECK_Y2 CHECK (y > 10) NOT ENFORCED;
+-- CHECK_Y2 is NOT ENFORCED, so these inserts should succeed
+INSERT INTO NE_CHECK_TBL (x, y) VALUES (1, 8), (2, 9), (3, 10), (4, 11);
+SELECT x, y FROM NE_CHECK_TBL ORDER BY x, y;
+ x | y
+---------------------------------------------------------------------
+ 1 |  8
+ 1 |
+ 2 |  9
+ 2 |
+ 3 | 10
+ 3 |
+ 4 | 11
+ 4 |
+ 5 |
+ 6 |
+(10 rows)
+
+ALTER TABLE NE_CHECK_TBL
+  ADD CONSTRAINT CHECK_X2 CHECK (x < 10) ENFORCED;
+-- CHECK_X2 is ENFORCED, so these inserts should fail
+INSERT INTO NE_CHECK_TBL (x) VALUES (5), (15), (8), (12);
+ERROR:  new row for relation "ne_check_tbl_4754044" violates check constraint "check_x2_4754044"
+DETAIL:  Failing row contains (15, null).
+CONTEXT:  while executing command on localhost:xxxxx
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
