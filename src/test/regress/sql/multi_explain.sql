@@ -1137,17 +1137,21 @@ CREATE TABLE distributed_table_1(a int, b int);
 SELECT create_distributed_table('distributed_table_1','a');
 INSERT INTO distributed_table_1 values (1,1);
 
-EXPLAIN :default_analyze_flags SELECT row_number() OVER() AS r FROM distributed_table_1;
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off) SELECT row_number() OVER() AS r FROM distributed_table_1
+', true);
 
 CREATE TABLE distributed_table_2(a int, b int);
 SELECT create_distributed_table('distributed_table_2','a');
 INSERT INTO distributed_table_2 VALUES (1,1);
 
-EXPLAIN :default_analyze_flags
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)
 WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
 SELECT * FROM distributed_table_2
 JOIN r ON (r = distributed_table_2.b)
-LIMIT 3;
+LIMIT 3
+', true);
 
 EXPLAIN :default_analyze_flags SELECT FROM (SELECT * FROM reference_table) subquery;
 

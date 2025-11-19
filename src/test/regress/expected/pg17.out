@@ -2069,7 +2069,7 @@ SET citus.grep_remote_commands TO '%12242024%';
 select public.explain_filter('explain (memory) select * from int8_tbl i8');
 NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY FALSE, MEMORY TRUE, SERIALIZE none, FORMAT TEXT) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
                                 explain_filter
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N)
@@ -2086,8 +2086,8 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (memory, analyze, buffers false) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
-                                                   explain_filter
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
+                                                    explain_filter
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N
@@ -2109,7 +2109,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
 NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY TRUE, MEMORY TRUE, SERIALIZE none, FORMAT YAML) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
                        explain_filter
 ---------------------------------------------------------------------
  - Plan:                                                    +
@@ -2152,7 +2152,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (memory, analyze, buffers false, format json) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "JSON"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
                           explain_filter
 ---------------------------------------------------------------------
  [                                                               +
@@ -2230,7 +2230,7 @@ prepare int8_query as select * from int8_tbl i8;
 select public.explain_filter('explain (memory) execute int8_query');
 NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY FALSE, MEMORY TRUE, SERIALIZE none, FORMAT TEXT) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
                                 explain_filter
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N)
@@ -2248,7 +2248,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "YAML"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
                        explain_filter
 ---------------------------------------------------------------------
  - Plan:                                                    +
@@ -2369,8 +2369,8 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (analyze, buffers false, serialize) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
-                                                   explain_filter
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
+                                                    explain_filter
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N
@@ -2391,8 +2391,8 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "text", "timing": false, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
-                                            explain_filter
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
+                                             explain_filter
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual rows=N loops=N)
    Task Count: N
@@ -2413,8 +2413,8 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": true, "wal": false, "memory": false, "serialize": "binary", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
-                                                   explain_filter
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
+                                                    explain_filter
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N
@@ -2436,8 +2436,8 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXEC
 select public.explain_filter('explain (analyze, buffers false, serialize) create temp table explain_temp as select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": false, "serialize": "text", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function public.explain_filter(text) line XX at FOR over EXECUTE statement
-                                                   explain_filter
+CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
+                                                    explain_filter
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    Task Count: N

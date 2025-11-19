@@ -395,3 +395,14 @@ s/\<is referenced from table\>/is still referenced from table/g
 s/^[[:space:]]*ERROR:[[:space:]]+subscription "[^"]+" could not connect to the publisher:[[:space:]]*/ERROR:  could not connect to the publisher: /I
 # PG18: drop verbose 'connection to server … failed:' preamble
 s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*connection to server .* failed:[[:space:]]*/ERROR:  could not connect to the publisher: /I
+
+# PG18: replace named window refs like "OVER w1" with neutral "OVER (?)"
+# this rule can be removed when PG18 is the minimum supported version
+# only on Sort Key / Group Key / Output lines
+# Sort Key
+/^[[:space:]]*Sort Key:/ s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
+# Group Key
+/^[[:space:]]*Group Key:/ s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
+# Output
+/^[[:space:]]*Output:/   s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
+# end PG18 window ref normalization
