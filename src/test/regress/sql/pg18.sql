@@ -1280,6 +1280,180 @@ SET search_path TO pg18_nn;
 
 -- END PG18 Feature: VACUUM/ANALYZE ONLY on partitioned distributed table
 
+-- PG18 Feature: text search with nondeterministic collations
+-- PG18 commit: https://github.com/postgres/postgres/commit/329304c90
+
+-- This test verifies that the PG18 tests apply to Citus tables; Citus
+-- just passes through the collation info and text search queries to
+-- worker shards.
+
+CREATE COLLATION ignore_accents (provider = icu, locale = '@colStrength=primary;colCaseLevel=yes', deterministic = false);
+-- nondeterministic collations
+CREATE COLLATION ctest_det (provider = icu, locale = '', deterministic = true);
+CREATE COLLATION ctest_nondet (provider = icu, locale = '', deterministic = false);
+
+CREATE TABLE strtest1 (a int, b text);
+SELECT create_distributed_table('strtest1', 'a');
+
+INSERT INTO strtest1 VALUES (1, U&'zy\00E4bc');
+INSERT INTO strtest1 VALUES (2, U&'zy\0061\0308bc');
+INSERT INTO strtest1 VALUES (3, U&'ab\00E4cd');
+INSERT INTO strtest1 VALUES (4, U&'ab\0061\0308cd');
+INSERT INTO strtest1 VALUES (5, U&'ab\00E4cd');
+INSERT INTO strtest1 VALUES (6, U&'ab\0061\0308cd');
+INSERT INTO strtest1 VALUES (7, U&'ab\00E4cd');
+
+SELECT * FROM strtest1 WHERE b = 'zyäbc' COLLATE ctest_det ORDER BY a;
+SELECT * FROM strtest1 WHERE b = 'zyäbc' COLLATE ctest_nondet ORDER BY a;
+
+SELECT strpos(b COLLATE ctest_det, 'bc') FROM strtest1 ORDER BY a;
+SELECT strpos(b COLLATE ctest_nondet, 'bc') FROM strtest1 ORDER BY a;
+
+SELECT replace(b COLLATE ctest_det, U&'\00E4b', 'X') FROM strtest1 ORDER BY a;
+SELECT replace(b COLLATE ctest_nondet, U&'\00E4b', 'X') FROM strtest1 ORDER BY a;
+
+SELECT a, split_part(b COLLATE ctest_det, U&'\00E4b', 2) FROM strtest1 ORDER BY a;
+SELECT a, split_part(b COLLATE ctest_nondet, U&'\00E4b', 2) FROM strtest1 ORDER BY a;
+SELECT a, split_part(b COLLATE ctest_det, U&'\00E4b', -1) FROM strtest1 ORDER BY a;
+SELECT a, split_part(b COLLATE ctest_nondet, U&'\00E4b', -1) FROM strtest1 ORDER BY a;
+
+SELECT a, string_to_array(b COLLATE ctest_det, U&'\00E4b') FROM strtest1 ORDER BY a;
+SELECT a, string_to_array(b COLLATE ctest_nondet, U&'\00E4b') FROM strtest1 ORDER BY a;
+
+SELECT * FROM strtest1 WHERE b LIKE 'zyäbc' COLLATE ctest_det ORDER BY a;
+SELECT * FROM strtest1 WHERE b LIKE 'zyäbc' COLLATE ctest_nondet ORDER BY a;
+
+CREATE TABLE strtest2 (a int, b text);
+SELECT create_distributed_table('strtest2', 'a');
+INSERT INTO strtest2 VALUES (1, 'cote'), (2, 'côte'), (3, 'coté'), (4, 'côté');
+
+CREATE TABLE strtest2nfd (a int, b text);
+SELECT create_distributed_table('strtest2nfd', 'a');
+INSERT INTO strtest2nfd VALUES (1, 'cote'), (2, 'côte'), (3, 'coté'), (4, 'côté');
+
+UPDATE strtest2nfd SET b = normalize(b, nfd);
+
+-- This shows why replace should be greedy.  Otherwise, in the NFD
+-- case, the match would stop before the decomposed accents, which
+-- would leave the accents in the results.
+SELECT a, b, replace(b COLLATE ignore_accents, 'co', 'ma') FROM strtest2 ORDER BY a, b;
+SELECT a, b, replace(b COLLATE ignore_accents, 'co', 'ma') FROM strtest2nfd ORDER BY a, b;
+
+-- PG18 Feature: LIKE support for non-deterministic collations
+-- PG18 commit: https://github.com/postgres/postgres/commit/85b7efa1c
+
+-- As with non-deterministic collation text search, we verify that
+-- LIKE with non-deterministic collation is passed through by Citus
+-- and expected results are returned by the queries.
+
+INSERT INTO strtest1 VALUES (8, U&'abc');
+INSERT INTO strtest1 VALUES (9, 'abc');
+
+SELECT a, b FROM strtest1
+WHERE b LIKE 'abc' COLLATE ctest_det
+ORDER BY a;
+
+SELECT a, b FROM strtest1
+WHERE b LIKE 'a\bc' COLLATE ctest_det
+ORDER BY a;
+
+SELECT a, b FROM strtest1
+WHERE b LIKE 'abc' COLLATE ctest_nondet
+ORDER BY a;
+
+SELECT a, b FROM strtest1
+WHERE b LIKE 'a\bc' COLLATE ctest_nondet
+ORDER BY a;
+
+CREATE COLLATION case_insensitive (provider = icu, locale = '@colStrength=secondary', deterministic = false);
+
+SELECT a, b FROM strtest1
+WHERE b LIKE 'ABC' COLLATE case_insensitive
+ORDER BY a;
+
+SELECT a, b FROM strtest1
+WHERE b LIKE 'ABC%' COLLATE case_insensitive
+ORDER BY a;
+
+INSERT INTO strtest1 VALUES (10, U&'\00E4bc');
+INSERT INTO strtest1 VALUES (12, U&'\0061\0308bc');
+
+SELECT * FROM strtest1
+WHERE b LIKE 'äbc' COLLATE ctest_det
+ORDER BY a;
+
+SELECT * FROM strtest1
+WHERE b LIKE 'äbc' COLLATE ctest_nondet
+ORDER BY a;
+
+-- Tests with ignore_accents collation. Taken from
+-- PG18 regress tests and applied to a Citus table.
+
+INSERT INTO strtest1 VALUES (10, U&'\0061\0308bc');
+INSERT INTO strtest1 VALUES (11, U&'\00E4bc');
+INSERT INTO strtest1 VALUES (12, U&'cb\0061\0308');
+INSERT INTO strtest1 VALUES (13, U&'\0308bc');
+INSERT INTO strtest1 VALUES (14, 'foox');
+
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'\00E4_c' COLLATE ignore_accents ORDER BY a, b;
+-- and in reverse:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'\0061\0308_c' COLLATE ignore_accents ORDER BY a, b;
+-- inner % matches b:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'\00E4%c' COLLATE ignore_accents ORDER BY a, b;
+-- inner %% matches b then zero:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'\00E4%%c' COLLATE ignore_accents ORDER BY a, b;
+-- inner %% matches b then zero:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'c%%\00E4' COLLATE ignore_accents ORDER BY a, b;
+-- trailing _ matches two codepoints that form one grapheme:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'cb_' COLLATE ignore_accents ORDER BY a, b;
+-- trailing __ matches two codepoints that form one grapheme:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'cb__' COLLATE ignore_accents ORDER BY a, b;
+-- leading % matches zero:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'%\00E4bc' COLLATE ignore_accents
+ORDER BY a;
+
+-- leading % matches zero (with later %):
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'%\00E4%c' COLLATE ignore_accents ORDER BY a, b;
+-- trailing % matches zero:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'\00E4bc%' COLLATE ignore_accents ORDER BY a, b;
+-- trailing % matches zero (with previous %):
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'\00E4%c%' COLLATE ignore_accents ORDER BY a, b;
+-- _ versus two codepoints that form one grapheme:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'_bc' COLLATE ignore_accents ORDER BY a, b;
+-- (actually this matches because)
+SELECT a, b FROM strtest1
+WHERE b = 'bc' COLLATE ignore_accents ORDER BY a, b;
+-- __ matches two codepoints that form one grapheme:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'__bc' COLLATE ignore_accents ORDER BY a, b;
+-- _ matches one codepoint that forms half a grapheme:
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'_\0308bc' COLLATE ignore_accents ORDER BY a, b;
+-- doesn't match because \00e4 doesn't match only \0308
+SELECT a, b FROM strtest1
+WHERE b LIKE U&'_\00e4bc' COLLATE ignore_accents ORDER BY a, b;
+-- escape character at end of pattern
+SELECT a, b FROM strtest1
+WHERE b LIKE 'foo\' COLLATE ignore_accents ORDER BY a, b;
+
+DROP TABLE strtest1;
+DROP COLLATION ignore_accents;
+DROP COLLATION ctest_det;
+DROP COLLATION ctest_nondet;
+DROP COLLATION case_insensitive;
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
