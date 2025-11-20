@@ -248,6 +248,7 @@ s/Error on node with node id [0-9]+/Error on node with node id xxxxx/g
 # will be replaced with
 #   WARNING:  "function pg_temp_xxx.f(bigint)" has dependency on unsupported object "<foo>"
 s/^(WARNING|ERROR)(:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" has dependency on unsupported object ".*")$/\1\2pg_temp_xxx\3/g
+s/^(WARNING|ERROR)(:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" has dependency on unsupported object "schema .*")$/\1\2pg_temp_xxx\3/g
 
 # 2) Schema of the depending object in the error detail:
 s/^(DETAIL:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" will be created only locally)$/\1pg_temp_xxx\2/g
