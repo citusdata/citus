@@ -132,7 +132,7 @@ jobs:
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   test-citus:
-    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }}
+    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }} - ${{ matrix.citus_version}}
     strategy:
       fail-fast: false
       matrix:
@@ -161,6 +161,9 @@ jobs:
           - check-enterprise-isolation-logicalrep-1
           - check-enterprise-isolation-logicalrep-2
           - check-enterprise-isolation-logicalrep-3
+        citus_version:
+          -
+          - 13.2-1
         include:
           - make: check-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
@@ -242,12 +245,12 @@ jobs:
     - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
     - name: Run Test
-      run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
+      run: CITUSVERSION=${{ matrix.citus_version }} gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
       timeout-minutes: 20
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
       with:
-        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
+        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}_${{ matrix.citus_version }}
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
