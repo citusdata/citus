@@ -2179,7 +2179,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OF
       "Parallel Aware": false,
       "Async Capable": false,
       "Actual Rows": 0,
-      "Actual Loops": 1,
+      "Actual Loops": 1
       "Distributed Query": {
         "Job": {
           "Task Count": 2,
@@ -2196,9 +2196,9 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OF
                       "Parallel Aware": false,
                       "Async Capable": false,
                       "Relation Name": "explain_pk_570013",
-                      "Alias": "citus_table_alias",
+                      "Alias": "citus_table_alias"
                       "Actual Rows": 0,
-                      "Actual Loops": 1,
+                      "Actual Loops": 1
                       "Plans": [
                         {
                           "Node Type": "Result",
@@ -2235,7 +2235,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OF
       "Parallel Aware": false,
       "Async Capable": false,
       "Actual Rows": 0,
-      "Actual Loops": 1,
+      "Actual Loops": 1
       "Distributed Query": {
         "Job": {
           "Task Count": 4,
@@ -2253,7 +2253,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OF
                       "Parallel Aware": false,
                       "Async Capable": false,
                       "Relation Name": "explain_pk_570013",
-                      "Alias": "explain_pk",
+                      "Alias": "explain_pk"
                       "Actual Rows": 0,
                       "Actual Loops": 1
                     },
@@ -3285,7 +3285,7 @@ SELECT * FROM a;
       "Parallel Aware": false,
       "Async Capable": false,
       "Actual Rows": 1,
-      "Actual Loops": 1,
+      "Actual Loops": 1
       "Distributed Query": {
         "Subplans": [
           {
@@ -3299,7 +3299,7 @@ SELECT * FROM a;
                   "Parallel Aware": false,
                   "Async Capable": false,
                   "Actual Rows": 1,
-                  "Actual Loops": 1,
+                  "Actual Loops": 1
                   "Distributed Query": {
                     "Job": {
                       "Task Count": 1,
@@ -3318,9 +3318,9 @@ SELECT * FROM a;
                                   "Parallel Aware": false,
                                   "Async Capable": false,
                                   "Relation Name": "test_subplans_570038",
-                                  "Alias": "test_subplans_570038",
+                                  "Alias": "test_subplans_570038"
                                   "Actual Rows": 1,
-                                  "Actual Loops": 1,
+                                  "Actual Loops": 1
                                   "Plans": [
                                     {
                                       "Node Type": "Result",
@@ -3365,7 +3365,7 @@ SELECT * FROM a;
                       "Parallel Aware": false,
                       "Async Capable": false,
                       "Function Name": "read_intermediate_result",
-                      "Alias": "intermediate_result",
+                      "Alias": "intermediate_result"
                       "Actual Rows": 1,
                       "Actual Loops": 1
                     },

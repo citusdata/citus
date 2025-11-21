@@ -406,3 +406,6 @@ s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*
 # Output
 /^[[:space:]]*Output:/   s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
 # end PG18 window ref normalization
+
+# PG18 Actual Loops, Alias has extra comma, normalize the values
+s/("Actual Loops":|"Alias":)(.*)\,(.*)/\1\2\3/g

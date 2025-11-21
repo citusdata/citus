@@ -2169,7 +2169,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
        "Actual Startup Time": N.N,                               +
        "Actual Total Time": N.N,                                 +
        "Actual Rows": N,                                         +
-       "Actual Loops": N,                                        +
+       "Actual Loops": N                                        +
        "Distributed Query": {                                    +
          "Job": {                                                +
            "Task Count": N,                                      +
@@ -2187,7 +2187,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
                        "Parallel Aware": false,                  +
                        "Async Capable": false,                   +
                        "Relation Name": "int8_tbl_12242024",     +
-                       "Alias": "i8",                            +
+                       "Alias": "i8"                            +
                        "Startup Cost": N.N,                      +
                        "Total Cost": N.N,                        +
                        "Plan Rows": N,                           +
