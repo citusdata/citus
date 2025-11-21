@@ -50,6 +50,7 @@ sub Usage()
     print "  --connection-timeout	Timeout for connecting to worker nodes\n";
     print "  --mitmproxy        	Start a mitmproxy for one of the workers\n";
     print "  --worker-count         Number of workers in Citus cluster (default: 2)\n";
+    print "  --citus-version        Citus version being tested (used for during extension create)\n";
     exit 1;
 }
 
@@ -87,6 +88,7 @@ my $conninfo = "";
 my $publicWorker1Host = "localhost";
 my $publicWorker2Host = "localhost";
 my $workerCount = 2;
+my $citusversion = "";
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -121,6 +123,7 @@ GetOptions(
     'worker-1-public-hostname=s' => \$publicWorker1Host,
     'worker-2-public-hostname=s' => \$publicWorker2Host,
     'worker-count=i' => \$workerCount,
+    'citus-version=s' => \$citusversion,
     'help' => sub { Usage() });
 
 my $fixopen = "$bindir/postgres.fixopen";
@@ -590,6 +593,12 @@ if($isolationtester)
    push(@pgOptions, "citus.background_task_queue_interval=-1");
 }
 
+if($citusversion)
+{
+    push(@pgOptions, "citus.enable_version_checks=off");
+    push(@pgOptions, "columnar.enable_version_checks=off");
+}
+
 # Add externally added options last, so they overwrite the default ones above
 for my $option (@userPgOptions)
 {
@@ -990,10 +999,20 @@ if (!$conninfo)
 
         for my $extension (@extensions)
         {
-            system(catfile($bindir, "psql"),
-                ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
-                    '-c', "CREATE EXTENSION IF NOT EXISTS $extension;")) == 0
-                or die "Could not create extension $extension on worker port $port.";
+            if ($extension eq "citus" && $citusversion ne "")
+            {
+                system(catfile($bindir, "psql"),
+                    ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
+                        '-c', "CREATE EXTENSION IF NOT EXISTS $extension VERSION '$citusversion';")) == 0
+                    or die "Could not create extension $extension on worker port $port.";
+            }
+            else
+            {
+                system(catfile($bindir, "psql"),
+                    ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
+                        '-c', "CREATE EXTENSION IF NOT EXISTS $extension;")) == 0
+                    or die "Could not create extension $extension on worker port $port.";
+            }
         }
 
         foreach my $function (keys %functions)
