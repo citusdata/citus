@@ -4200,6 +4200,7 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 	ListCell *relationRestrictionCell = NULL;
 
 	newContext->allReferenceTables = oldContext->allReferenceTables;
+	newContext->hasRowSecurity = oldContext->hasRowSecurity;
 	newContext->relationRestrictionList = NIL;
 
 	foreach(relationRestrictionCell, oldContext->relationRestrictionList)

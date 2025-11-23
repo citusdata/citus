@@ -250,6 +250,13 @@ distributed_planner(Query *parse,
 		&fastPathContext);
 
 	/*
+	 * Set RLS flag from the query. This is used to optimize equivalence class
+	 * processing by skipping expensive RLS-specific merging for non-RLS queries.
+	 */
+	planContext.plannerRestrictionContext->relationRestrictionContext->hasRowSecurity =
+		parse->hasRowSecurity;
+
+	/*
 	 * We keep track of how many times we've recursed into the planner, primarily
 	 * to detect whether we are in a function call. We need to make sure that the
 	 * PlannerLevel is decremented exactly once at the end of the next PG_TRY
@@ -2448,6 +2455,9 @@ CreateAndPushPlannerRestrictionContext(
 	/* we'll apply logical AND as we add tables */
 	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;
 
+	/* hasRowSecurity will be set later once we have the Query object */
+	plannerRestrictionContext->relationRestrictionContext->hasRowSecurity = false;
+
 	plannerRestrictionContextList = lcons(plannerRestrictionContext,
 										  plannerRestrictionContextList);
 
@@ -2535,6 +2545,9 @@ ResetPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionCont
 
 	/* we'll apply logical AND as we add tables */
 	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;
+
+	/* hasRowSecurity defaults to false, will be set by caller if needed */
+	plannerRestrictionContext->relationRestrictionContext->hasRowSecurity = false;
 }
 
 
