@@ -196,6 +196,27 @@ BuildCreatePublicationStmt(Oid publicationId)
 											-1);
 	createPubStmt->options = lappend(createPubStmt->options, pubViaRootOption);
 
+/* WITH (publish_generated_columns = ...) option (PG18+) */
+#if PG_VERSION_NUM >= PG_VERSION_18
+    if (publicationForm->pubgencols == 's')    /* stored */
+    {
+        DefElem *pubGenColsOption =
+            makeDefElem("publish_generated_columns",
+                        (Node *) makeString("stored"),
+                        -1);
+
+        createPubStmt->options =
+            lappend(createPubStmt->options, pubGenColsOption);
+    }
+    else if (publicationForm->pubgencols != 'n') /* 'n' = none (default) */
+    {
+        ereport(ERROR,
+                (errmsg("unexpected pubgencols value '%c' for publication %u",
+                        publicationForm->pubgencols, publicationId)));
+    }
+#endif
+
+
 	/* WITH (publish = 'insert, update, delete, truncate') option */
 	List *publishList = NIL;
 

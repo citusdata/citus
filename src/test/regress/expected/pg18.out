@@ -1070,6 +1070,78 @@ CREATE MATERIALIZED VIEW copytest_mv AS
 SELECT create_distributed_table('copytest_mv', 'id');
 ERROR:  copytest_mv is not a regular, foreign or partitioned table
 -- After that, any command on the materialized view is outside Citus support.
+-- PG18: verify publish_generated_columns is preserved for distributed tables
+-- https://github.com/postgres/postgres/commit/7054186c4
+\c - - - :master_port
+CREATE SCHEMA pg18_publication;
+SET search_path TO pg18_publication;
+-- table with a stored generated column
+CREATE TABLE gen_pub_tab (
+    id int primary key,
+    a  int,
+    b  int GENERATED ALWAYS AS (a * 10) STORED
+);
+-- make it distributed so CREATE PUBLICATION goes through Citus metadata/DDL path
+SELECT create_distributed_table('gen_pub_tab', 'id', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- publication using the new PG18 option: stored
+CREATE PUBLICATION pub_gen_cols_stored
+    FOR TABLE gen_pub_tab
+    WITH (publish = 'insert, update', publish_generated_columns = stored);
+-- second publication explicitly using "none" for completeness
+CREATE PUBLICATION pub_gen_cols_none
+    FOR TABLE gen_pub_tab
+    WITH (publish = 'insert, update', publish_generated_columns = none);
+-- On coordinator: pubgencols must be 's' and 'n' respectively
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | s
+(2 rows)
+
+-- On worker 1: both publications must exist and keep pubgencols in sync
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | s
+(2 rows)
+
+-- On worker 2: same check
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | s
+(2 rows)
+
+-- back to coordinator for subsequent tests / cleanup
+\c - - - :master_port
+SET search_path TO pg18_publication;
+DROP PUBLICATION pub_gen_cols_stored;
+DROP PUBLICATION pub_gen_cols_none;
+DROP SCHEMA pg18_publication CASCADE;
+NOTICE:  drop cascades to table gen_pub_tab
+SET search_path TO pg18_nn;
+-- PG18: verify publish_generated_columns is preserved for distributed tables
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
