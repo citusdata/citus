@@ -28,7 +28,7 @@ on:
 
 jobs:
   test:
-    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }}${{ inputs.citus_version && format(' - {0}', inputs.citus_version) || '' }}
+    name: PG${{ matrix.pg_version.major }} - ${{ matrix.make }}${{ inputs.citus_version && format(' - {0}', inputs.citus_version) || '' }} - New
     strategy:
       fail-fast: false
       matrix:
@@ -36,7 +36,7 @@ jobs:
         make: ${{ fromJson(inputs.make_targets) }}
     runs-on: ubuntu-latest
     container:
-      image: "${{ inputs.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ inputs.image_suffix }}"
+      image: "${{ inputs.image_name }}:${{ matrix.pg_version.full }}${{ inputs.image_suffix }}"
       options: >-
         --user root
         --dns=8.8.8.8
@@ -51,7 +51,7 @@ jobs:
       - uses: "./.github/actions/save_logs_and_results"
         if: always()
         with:
-          folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}${{ inputs.citus_version && format('_{0}', inputs.citus_version) || '' }}
+          folder: ${{ matrix.pg_version.major }}_${{ matrix.make }}${{ inputs.citus_version && format('_{0}', inputs.citus_version) || '' }}
       - uses: "./.github/actions/upload_coverage"
         if: always()
         with:
