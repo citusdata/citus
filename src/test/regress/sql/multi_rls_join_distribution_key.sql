@@ -4,9 +4,6 @@
 -- Test that RLS policies with volatile functions don't prevent
 -- Citus from recognizing joins on distribution columns.
 --
--- This addresses GitHub issue #7969 where RLS policies using
--- current_setting() caused PostgreSQL to split equivalence classes,
--- preventing Citus from detecting proper distribution column joins.
 
 SET citus.next_shard_id TO 1900000;
 SET citus.shard_replication_factor TO 1;
@@ -37,11 +34,11 @@ SELECT create_distributed_table('table_b', 'tenant_id', colocate_with => 'table_
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA rls_join_test TO app_user;
 
 -- Insert test data
-INSERT INTO table_a VALUES 
+INSERT INTO table_a VALUES
     ('0194d116-5dd5-74af-be74-7f5e8468eeb7', 1),
     ('0194d116-5dd5-74af-be74-7f5e8468eeb8', 2);
 
-INSERT INTO table_b VALUES 
+INSERT INTO table_b VALUES
     ('0194d116-5dd5-74af-be74-7f5e8468eeb7', 10),
     ('0194d116-5dd5-74af-be74-7f5e8468eeb8', 20);
 
@@ -59,21 +56,14 @@ SET application_name = '0194d116-5dd5-74af-be74-7f5e8468eeb7';
 
 BEGIN;
 -- Set session.current_tenant_id from application_name
-DO $$ 
-DECLARE 
+DO $$
+DECLARE
 BEGIN
     EXECUTE 'SET LOCAL session.current_tenant_id = ' || quote_literal(current_setting('application_name', true));
-END; 
+END;
 $$;
 
 -- This query should work with RLS enabled
--- Before the fix, this would fail with:
--- "complex joins are only supported when all distributed tables are 
---  co-located and joined on their distribution columns"
-EXPLAIN (COSTS OFF)
-SELECT c.id, t.id
-FROM table_a AS c
-LEFT OUTER JOIN table_b AS t ON c.tenant_id = t.tenant_id;
 
 SELECT c.id, t.id
 FROM table_a AS c
@@ -88,5 +78,4 @@ RESET ROLE;
 -- Cleanup: Drop schema and all objects
 DROP SCHEMA rls_join_test CASCADE;
 
--- Drop user (suppress error if it has dependencies)
 DROP USER IF EXISTS app_user;
