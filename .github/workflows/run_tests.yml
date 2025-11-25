@@ -28,7 +28,7 @@ on:
 
 jobs:
   test:
-    name: PG${{ matrix.pg_version.major }} - ${{ matrix.make }}${{ inputs.citus_version && format(' - {0}', inputs.citus_version) || '' }} - New
+    name: PG${{ matrix.pg_version.major }} - ${{ matrix.make }}${{ inputs.citus_version && format(' - {0}', inputs.citus_version) || '' }}
     strategy:
       fail-fast: false
       matrix:
