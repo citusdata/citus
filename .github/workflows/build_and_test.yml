@@ -131,6 +131,19 @@ jobs:
         path: |-
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
+  test-citus-new:
+    uses: ./.github/workflows/run_tests.yml
+    needs:
+      - params
+      - build
+    with:
+      pg_versions: '[${{ needs.params.outputs.pg16_version }}, ${{ needs.params.outputs.pg17_version }}]'
+      make_targets: '["check-split", "check-multi"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.test_image_name }}
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+
   test-citus:
     name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }} - ${{ matrix.citus_version}}
     strategy:
@@ -163,7 +176,6 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         citus_version:
           -
-          - 13.2-1
         include:
           - make: check-failure
             pg_version: ${{ needs.params.outputs.pg15_version }}
