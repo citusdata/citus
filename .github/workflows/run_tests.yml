@@ -1,0 +1,59 @@
+name: Run Tests
+on:
+  workflow_call:
+    inputs:
+      pg_versions:
+        required: true
+        type: string
+      make_targets:
+        required: true
+        type: string
+      image_suffix:
+        required: true
+        type: string
+      image_name:
+        required: true
+        type: string
+      suite:
+        required: false
+        type: string
+        default: "regress"
+      citus_version:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      codecov_token:
+        required: false
+
+jobs:
+  test:
+    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }}${{ inputs.citus_version && format(' - {0}', inputs.citus_version) || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pg_version: ${{ fromJson(inputs.pg_versions) }}
+        make: ${{ fromJson(inputs.make_targets) }}
+    runs-on: ubuntu-latest
+    container:
+      image: "${{ inputs.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ inputs.image_suffix }}"
+      options: >-
+        --user root
+        --dns=8.8.8.8
+        --cap-add=SYS_NICE
+        --security-opt seccomp=unconfined
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "./.github/actions/setup_extension"
+      - name: Run Test
+        run: CITUSVERSION=${{ inputs.citus_version }} gosu circleci make -C src/test/${{ inputs.suite }} ${{ matrix.make }}
+        timeout-minutes: 20
+      - uses: "./.github/actions/save_logs_and_results"
+        if: always()
+        with:
+          folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}${{ inputs.citus_version && format('_{0}', inputs.citus_version) || '' }}
+      - uses: "./.github/actions/upload_coverage"
+        if: always()
+        with:
+          flags: ${{ env.PG_MAJOR }}_${{ inputs.suite }}_${{ matrix.make }}
+          codecov_token: ${{ secrets.codecov_token }}
