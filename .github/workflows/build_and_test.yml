@@ -137,7 +137,11 @@ jobs:
       - params
       - build
     with:
-      pg_versions: '[${{ needs.params.outputs.pg16_version }}, ${{ needs.params.outputs.pg17_version }}]'
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg16_version }},
+          ${{ needs.params.outputs.pg17_version }}
+        ]
       make_targets: '["check-split", "check-multi"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
