@@ -595,8 +595,8 @@ if($isolationtester)
 
 if($citusversion)
 {
-    push(@pgOptions, "citus.enable_version_checks=off");
-    push(@pgOptions, "columnar.enable_version_checks=off");
+    #push(@pgOptions, "citus.enable_version_checks=off");
+    #push(@pgOptions, "columnar.enable_version_checks=off");
 }
 
 # Add externally added options last, so they overwrite the default ones above
