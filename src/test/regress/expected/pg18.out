@@ -1802,6 +1802,67 @@ NOTICE:  renaming the new table to pg18_nn.generated_stored_ref
 (4 rows)
 
 ROLLBACK;
+-- PG18 Feature: VACUUM/ANALYZE support ONLY to limit processing to the parent.
+-- For Citus, ensure ONLY does not trigger shard propagation.
+-- PG18 commit: https://github.com/postgres/postgres/commit/62ddf7ee9
+CREATE SCHEMA pg18_vacuum_part;
+SET search_path TO pg18_vacuum_part;
+CREATE TABLE vac_analyze_only (a int);
+SELECT create_distributed_table('vac_analyze_only', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO vac_analyze_only VALUES (1), (2), (3);
+ANALYZE vac_analyze_only;
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+SELECT max(last_analyze) AS analyze_before_only
+FROM pg_stat_all_tables
+WHERE relname LIKE 'vac_analyze_only_%'
+\gset
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+ANALYZE ONLY vac_analyze_only;
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+SELECT max(last_analyze) = :'analyze_before_only' AS analyze_only_skipped
+FROM pg_stat_all_tables
+WHERE relname LIKE 'vac_analyze_only_%';
+ analyze_only_skipped
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+VACUUM vac_analyze_only;
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+SELECT max(last_vacuum) AS vacuum_before_only
+FROM pg_stat_all_tables
+WHERE relname LIKE 'vac_analyze_only_%'
+\gset
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+VACUUM ONLY vac_analyze_only;
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+SELECT max(last_vacuum) = :'vacuum_before_only' AS vacuum_only_skipped
+FROM pg_stat_all_tables
+WHERE relname LIKE 'vac_analyze_only_%';
+ vacuum_only_skipped
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+DROP SCHEMA pg18_vacuum_part CASCADE;
+NOTICE:  drop cascades to table vac_analyze_only
+SET search_path TO pg18_nn;
+-- END PG18 Feature: VACUUM/ANALYZE recurse into inheritance children by default
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
