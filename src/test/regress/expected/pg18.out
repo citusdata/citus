@@ -1133,6 +1133,115 @@ ORDER BY pubname;
  pub_gen_cols_stored | s
 (2 rows)
 
+-- Now verify ALTER PUBLICATION .. SET (publish_generated_columns = none)
+-- propagates to workers as well.
+\c - - - :master_port
+SET search_path TO pg18_publication;
+ALTER PUBLICATION pub_gen_cols_stored
+    SET (publish_generated_columns = none);
+-- coordinator: both publications should now have pubgencols = 'n'
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | n
+(2 rows)
+
+-- worker 1: pubgencols must match coordinator
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | n
+(2 rows)
+
+-- worker 2: same check
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | n
+(2 rows)
+
+-- Column list precedence test: Citus must preserve both prattrs and pubgencols
+\c - - - :master_port
+SET search_path TO pg18_publication;
+-- Case 1: column list explicitly includes the generated column, flag = none
+CREATE PUBLICATION pub_gen_cols_list_includes_b
+    FOR TABLE gen_pub_tab (id, a, b)
+    WITH (publish_generated_columns = none);
+-- Case 2: column list excludes the generated column, flag = stored
+CREATE PUBLICATION pub_gen_cols_list_excludes_b
+    FOR TABLE gen_pub_tab (id, a)
+    WITH (publish_generated_columns = stored);
+-- Helper: show pubname, pubgencols, and column list (prattrs) for gen_pub_tab
+SELECT p.pubname,
+       p.pubgencols,
+       r.prattrs
+FROM pg_publication p
+JOIN pg_publication_rel r ON p.oid = r.prpubid
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
+                    'pub_gen_cols_list_excludes_b')
+  AND c.relname = 'gen_pub_tab'
+ORDER BY p.pubname;
+           pubname            | pubgencols | prattrs
+---------------------------------------------------------------------
+ pub_gen_cols_list_excludes_b | s          | 1 2
+ pub_gen_cols_list_includes_b | n          | 1 2 3
+(2 rows)
+
+-- worker 1: must see the same pubgencols + prattrs
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+SELECT p.pubname,
+       p.pubgencols,
+       r.prattrs
+FROM pg_publication p
+JOIN pg_publication_rel r ON p.oid = r.prpubid
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
+                    'pub_gen_cols_list_excludes_b')
+  AND c.relname = 'gen_pub_tab'
+ORDER BY p.pubname;
+           pubname            | pubgencols | prattrs
+---------------------------------------------------------------------
+ pub_gen_cols_list_excludes_b | s          | 1 2
+ pub_gen_cols_list_includes_b | n          | 1 2 3
+(2 rows)
+
+-- worker 2: same check
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+SELECT p.pubname,
+       p.pubgencols,
+       r.prattrs
+FROM pg_publication p
+JOIN pg_publication_rel r ON p.oid = r.prpubid
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
+                    'pub_gen_cols_list_excludes_b')
+  AND c.relname = 'gen_pub_tab'
+ORDER BY p.pubname;
+           pubname            | pubgencols | prattrs
+---------------------------------------------------------------------
+ pub_gen_cols_list_excludes_b | s          | 1 2
+ pub_gen_cols_list_includes_b | n          | 1 2 3
+(2 rows)
+
 -- back to coordinator for subsequent tests / cleanup
 \c - - - :master_port
 SET search_path TO pg18_publication;

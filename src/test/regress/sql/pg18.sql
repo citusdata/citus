@@ -682,14 +682,106 @@ FROM pg_publication
 WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
 ORDER BY pubname;
 
+-- Now verify ALTER PUBLICATION .. SET (publish_generated_columns = none)
+-- propagates to workers as well.
+
+\c - - - :master_port
+SET search_path TO pg18_publication;
+
+ALTER PUBLICATION pub_gen_cols_stored
+    SET (publish_generated_columns = none);
+
+-- coordinator: both publications should now have pubgencols = 'n'
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+
+-- worker 1: pubgencols must match coordinator
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+
+-- worker 2: same check
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+
+SELECT pubname, pubgencols
+FROM pg_publication
+WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
+ORDER BY pubname;
+
+-- Column list precedence test: Citus must preserve both prattrs and pubgencols
+
+\c - - - :master_port
+SET search_path TO pg18_publication;
+
+-- Case 1: column list explicitly includes the generated column, flag = none
+CREATE PUBLICATION pub_gen_cols_list_includes_b
+    FOR TABLE gen_pub_tab (id, a, b)
+    WITH (publish_generated_columns = none);
+
+-- Case 2: column list excludes the generated column, flag = stored
+CREATE PUBLICATION pub_gen_cols_list_excludes_b
+    FOR TABLE gen_pub_tab (id, a)
+    WITH (publish_generated_columns = stored);
+
+-- Helper: show pubname, pubgencols, and column list (prattrs) for gen_pub_tab
+SELECT p.pubname,
+       p.pubgencols,
+       r.prattrs
+FROM pg_publication p
+JOIN pg_publication_rel r ON p.oid = r.prpubid
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
+                    'pub_gen_cols_list_excludes_b')
+  AND c.relname = 'gen_pub_tab'
+ORDER BY p.pubname;
+
+-- worker 1: must see the same pubgencols + prattrs
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+
+SELECT p.pubname,
+       p.pubgencols,
+       r.prattrs
+FROM pg_publication p
+JOIN pg_publication_rel r ON p.oid = r.prpubid
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
+                    'pub_gen_cols_list_excludes_b')
+  AND c.relname = 'gen_pub_tab'
+ORDER BY p.pubname;
+
+-- worker 2: same check
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+
+SELECT p.pubname,
+       p.pubgencols,
+       r.prattrs
+FROM pg_publication p
+JOIN pg_publication_rel r ON p.oid = r.prpubid
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
+                    'pub_gen_cols_list_excludes_b')
+  AND c.relname = 'gen_pub_tab'
+ORDER BY p.pubname;
+
 -- back to coordinator for subsequent tests / cleanup
 \c - - - :master_port
 SET search_path TO pg18_publication;
 DROP PUBLICATION pub_gen_cols_stored;
 DROP PUBLICATION pub_gen_cols_none;
+DROP PUBLICATION pub_gen_cols_list_includes_b;
+DROP PUBLICATION pub_gen_cols_list_excludes_b;
 DROP SCHEMA pg18_publication CASCADE;
 SET search_path TO pg18_nn;
--- PG18: verify publish_generated_columns is preserved for distributed tables
+-- END: PG18: verify publish_generated_columns is preserved for distributed tables
 
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
