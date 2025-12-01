@@ -894,7 +894,7 @@ GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
 						hasVar = true;
 					}
 					else if (member->em_is_const &&
-						!IsA(expr, Param) && !IsA(expr, Const))
+							 !IsA(expr, Param) && !IsA(expr, Const))
 					{
 						/*
 						 * Found a pseudoconstant expression (no Vars) that's not a
@@ -1158,7 +1158,7 @@ MergeEquivalenceClassesWithSameFunctions(RelationRestrictionContext *restriction
 					 * This handles subqueries, UNION ALL, LATERAL joins, etc.
 					 */
 					AddToAttributeEquivalenceClass(mergedClass,
-													   relRestriction->plannerInfo, var);
+												   relRestriction->plannerInfo, var);
 					foundMatch = true;
 					break;
 				}
@@ -1172,7 +1172,7 @@ MergeEquivalenceClassesWithSameFunctions(RelationRestrictionContext *restriction
 			if (!foundMatch)
 			{
 				elog(DEBUG2, "Skipping Var with varno=%d in RLS merge - "
-					 "no matching RelationRestriction found", var->varno);
+							 "no matching RelationRestriction found", var->varno);
 			}
 		}
 
