@@ -48,13 +48,6 @@ typedef enum RouterPlanType
 typedef struct RelationRestrictionContext
 {
 	bool allReferenceTables;
-
-	/*
-	 * Set to true when any table in the query
-	 * has Row Level Security policies active.
-	 */
-	bool hasRowSecurity;
-
 	List *relationRestrictionList;
 } RelationRestrictionContext;
 

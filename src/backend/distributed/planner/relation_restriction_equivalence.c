@@ -850,19 +850,22 @@ GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
 	 * This builds the standard attribute equivalence list.
 	 *
 	 * Skip RLS pattern detection entirely if the query doesn't
-	 * use Row Level Security. The hasRowSecurity flag is set during query planning
-	 * when any table has RLS policies active. This allows us to skip both the pattern
-	 * detection loop AND the expensive merge pass for non-RLS queries (common case).
+	 * use Row Level Security. The hasRowSecurity flag is checked from the query's
+	 * parse tree when any table has RLS policies active. This allows us to skip
+	 * both the pattern detection loop AND the expensive merge pass for non-RLS
+	 * queries (common case).
 	 *
 	 * For RLS queries, detect patterns efficiently. We only need
 	 * to find one EC with both Var + non-Var members to justify the merge pass.
 	 * Once found, skip further pattern checks and focus on building equivalences.
 	 */
-	bool skipRLSProcessing = !restrictionContext->hasRowSecurity;
+	bool skipRLSProcessing = true;
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
+
+		skipRLSProcessing = !relationRestriction->plannerInfo->parse->hasRowSecurity;
 		List *equivalenceClasses = relationRestriction->plannerInfo->eq_classes;
 		ListCell *equivalenceClassCell = NULL;
 
@@ -890,8 +893,13 @@ GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
 					{
 						hasVar = true;
 					}
-					else if (!IsA(expr, Param) && !IsA(expr, Const))
+					else if (member->em_is_const &&
+						!IsA(expr, Param) && !IsA(expr, Const))
 					{
+						/*
+						 * Found a pseudoconstant expression (no Vars) that's not a
+						 * Param or Const - this is the RLS function pattern.
+						 */
 						hasNonVar = true;
 					}
 
@@ -1007,10 +1015,10 @@ MergeEquivalenceClassesWithSameFunctions(RelationRestrictionContext *restriction
 				{
 					hasVar = true;
 				}
-				else if (!IsA(expr, Param) && !IsA(expr, Const))
+				else if (member->em_is_const && !IsA(expr, Param) && !IsA(expr, Const))
 				{
 					/*
-					 * Found a non-Var expression (potential RLS function).
+					 * Found a pseudoconstant expression (no Vars) - potential RLS function.
 					 * After stripping, this is typically a FUNCEXPR like
 					 * current_setting('session.current_tenant_id').
 					 */
@@ -1123,36 +1131,48 @@ MergeEquivalenceClassesWithSameFunctions(RelationRestrictionContext *restriction
 		mergedClass->equivalentAttributes = NIL;
 
 		/*
-		 * Build a PlannerInfo lookup map for quick access.
-		 * Map varno → RelationRestriction for fast lookups.
+		 * Match each Var to its RelationRestriction by comparing varno to
+		 * the restriction's index field (which is the RTE index).
 		 */
 		ListCell *varCell = NULL;
 		foreach(varCell, group->varsInTheseECs)
 		{
 			Var *var = (Var *) lfirst(varCell);
 			ListCell *relResCell = NULL;
+			bool foundMatch = false;
 
 			/*
-			 * Find the appropriate RelationRestriction for this Var.
-			 * We need the correct PlannerInfo context to process the Var.
+			 * Find the RelationRestriction that corresponds to this Var.
+			 * The index field contains the RTE index (varno) of the relation.
 			 */
 			foreach(relResCell, restrictionContext->relationRestrictionList)
 			{
 				RelationRestriction *relRestriction =
 					(RelationRestriction *) lfirst(relResCell);
-				PlannerInfo *root = relRestriction->plannerInfo;
 
-				/* Check if this Var belongs to this planner's range table */
-				if (var->varno < root->simple_rel_array_size &&
-					root->simple_rte_array[var->varno] != NULL)
+				/* Direct match: varno equals the restriction's index */
+				if (var->varno == relRestriction->index)
 				{
 					/*
 					 * Process this Var through AddToAttributeEquivalenceClass.
 					 * This handles subqueries, UNION ALL, LATERAL joins, etc.
 					 */
-					AddToAttributeEquivalenceClass(mergedClass, root, var);
-					break;  /* Found the right planner, move to next Var */
+					AddToAttributeEquivalenceClass(mergedClass,
+													   relRestriction->plannerInfo, var);
+					foundMatch = true;
+					break;
 				}
+			}
+
+			/*
+			 * If we didn't find a matching restriction, this Var might be from
+			 * a context not tracked in our restriction list (e.g., subquery).
+			 * We skip it as we only care about Vars from distributed tables.
+			 */
+			if (!foundMatch)
+			{
+				elog(DEBUG2, "Skipping Var with varno=%d in RLS merge - "
+					 "no matching RelationRestriction found", var->varno);
 			}
 		}
 
@@ -2703,10 +2723,6 @@ FilterRelationRestrictionContext(RelationRestrictionContext *relationRestriction
 {
 	RelationRestrictionContext *filteredRestrictionContext =
 		palloc0(sizeof(RelationRestrictionContext));
-
-	/* Preserve RLS flag from the original context */
-	filteredRestrictionContext->hasRowSecurity =
-		relationRestrictionContext->hasRowSecurity;
 
 	ListCell *relationRestrictionCell = NULL;
 
