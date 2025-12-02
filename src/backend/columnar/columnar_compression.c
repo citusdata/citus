@@ -270,3 +270,45 @@ DecompressBuffer(StringInfo buffer,
 		}
 	}
 }
+
+
+/*
+ * Return worst-case compressed size for the given input size and
+ * compression type. For unsupported types, return the input size.
+ */
+int
+GetMaxCompressedLength(int size, CompressionType compressionType)
+{
+	Assert(compressionType >= 0 && compressionType < COMPRESSION_COUNT);
+
+	switch (compressionType)
+	{
+		case COMPRESSION_NONE:
+		{
+			return size;
+		}
+#if HAVE_CITUS_LIBLZ4
+		case COMPRESSION_LZ4:
+		{
+			return LZ4_compressBound(size);
+		}
+#endif
+
+#if HAVE_LIBZSTD
+		case COMPRESSION_ZSTD:
+		{
+			return (int) ZSTD_compressBound(size);
+		}
+#endif
+
+		case COMPRESSION_PG_LZ:
+		{
+			return (int) (PGLZ_MAX_OUTPUT(size) + COLUMNAR_COMPRESS_HDRSZ);
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unexpected compression type: %d", compressionType)));
+		}
+	}
+}
