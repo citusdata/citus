@@ -1247,10 +1247,12 @@ ORDER BY p.pubname;
 SET search_path TO pg18_publication;
 DROP PUBLICATION pub_gen_cols_stored;
 DROP PUBLICATION pub_gen_cols_none;
+DROP PUBLICATION pub_gen_cols_list_includes_b;
+DROP PUBLICATION pub_gen_cols_list_excludes_b;
 DROP SCHEMA pg18_publication CASCADE;
 NOTICE:  drop cascades to table gen_pub_tab
 SET search_path TO pg18_nn;
--- PG18: verify publish_generated_columns is preserved for distributed tables
+-- END: PG18: verify publish_generated_columns is preserved for distributed tables
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
