@@ -547,6 +547,13 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 		appendStringInfoString(&buffer, "(");
 		appendStringInfoString(&buffer, checkString);
 		appendStringInfoString(&buffer, ")");
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+		if (!checkConstraint->ccenforced)
+		{
+			appendStringInfoString(&buffer, " NOT ENFORCED");
+		}
+#endif
 	}
 
 	/* close create table's outer parentheses */

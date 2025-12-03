@@ -854,6 +854,42 @@ SELECT * FROM contacts ORDER BY contact_id;
 -- so the following command should fail
 ALTER TABLE contacts ALTER CONSTRAINT fk_customer ENFORCED;
 
+-- PG18 Feature: ENFORCED / NOT ENFORCED check constraints
+-- PG18 commit: https://github.com/postgres/postgres/commit/ca87c415e
+
+-- In Citus, CHECK constraints are propagated on promoting a postgres table
+-- to a citus table, on adding a new CHECK constraint to a citus table, and
+-- on adding a node to a citus cluster. Postgres does not support altering a
+-- check constraint's enforcement status, so Citus does not either.
+
+CREATE TABLE NE_CHECK_TBL (x int, y int,
+	CONSTRAINT CHECK_X CHECK (x > 3) NOT ENFORCED,
+  CONSTRAINT CHECK_Y CHECK (y < 20) ENFORCED
+);
+
+SELECT create_distributed_table('ne_check_tbl', 'x');
+
+-- CHECK_X is NOT ENFORCED, so these inserts should succeed
+INSERT INTO NE_CHECK_TBL (x) VALUES (5), (4), (3), (2), (6), (1);
+SELECT x FROM NE_CHECK_TBL ORDER BY x;
+
+-- CHECK_Y is ENFORCED, so this insert should fail
+INSERT INTO NE_CHECK_TBL (x, y) VALUES (1, 15), (2, 25), (3, 10), (4, 30);
+
+-- Test adding new constraints with enforcement status
+ALTER TABLE NE_CHECK_TBL
+  ADD CONSTRAINT CHECK_Y2 CHECK (y > 10) NOT ENFORCED;
+
+-- CHECK_Y2 is NOT ENFORCED, so these inserts should succeed
+INSERT INTO NE_CHECK_TBL (x, y) VALUES (1, 8), (2, 9), (3, 10), (4, 11);
+SELECT x, y FROM NE_CHECK_TBL ORDER BY x, y;
+
+ALTER TABLE NE_CHECK_TBL
+  ADD CONSTRAINT CHECK_X2 CHECK (x < 10) ENFORCED;
+
+-- CHECK_X2 is ENFORCED, so these inserts should fail
+INSERT INTO NE_CHECK_TBL (x) VALUES (5), (15), (8), (12);
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
