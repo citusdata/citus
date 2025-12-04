@@ -1927,14 +1927,10 @@ GetNonGeneratedStoredColumnNameList(Oid relationId)
 	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
-		if (currentColumn->attisdropped)
-		{
-			/* skip dropped columns */
-			continue;
-		}
 
-		if (currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
+			/* skip dropped or generated columns */
 			continue;
 		}
 

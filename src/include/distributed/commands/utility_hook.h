@@ -112,5 +112,6 @@ extern void UndistributeDisconnectedCitusLocalTables(void);
 extern void NotifyUtilityHookConstraintDropped(void);
 extern void ResetConstraintDropped(void);
 extern void ExecuteDistributedDDLJob(DDLJob *ddlJob);
+extern bool IsDroppedOrGenerated(Form_pg_attribute attr);
 
 #endif /* MULTI_UTILITY_H */
