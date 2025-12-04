@@ -175,8 +175,9 @@ static bool DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationD
 static int numeric_typmod_scale(int32 typmod);
 static bool is_valid_numeric_typmod(int32 typmod);
 
-static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
-														Var *distributionColumn);
+static void DistributionColumnIsGeneratedCheck(TupleDesc relationDesc,
+											   Var *distributionColumn,
+											   const char *relationName);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
 static uint64 DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 											 DestReceiver *copyDest,
@@ -2103,13 +2104,10 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	/* verify target relation is not distributed by a generated stored column
 	 */
-	if (distributionMethod != DISTRIBUTE_BY_NONE &&
-		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
+	if (distributionMethod != DISTRIBUTE_BY_NONE)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute relation: %s", relationName),
-						errdetail("Distribution column must not use GENERATED ALWAYS "
-								  "AS (...) STORED.")));
+		DistributionColumnIsGeneratedCheck(relationDesc, distributionColumn,
+										   relationName);
 	}
 
 	/* verify target relation is not distributed by a column of type numeric with negative scale */
@@ -2829,9 +2827,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -2893,22 +2889,43 @@ DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 
 
 /*
- * DistributionColumnUsesGeneratedStoredColumn returns whether a given relation uses
- * GENERATED ALWAYS AS (...) STORED on distribution column
+ * DistributionColumnIsGeneratedCheck throws an error if a given relation uses
+ * GENERATED ALWAYS AS (...) STORED | VIRTUAL on distribution column
  */
-static bool
-DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
-											Var *distributionColumn)
+static void
+DistributionColumnIsGeneratedCheck(TupleDesc relationDesc,
+								   Var *distributionColumn,
+								   const char *relationName)
 {
 	Form_pg_attribute attributeForm = TupleDescAttr(relationDesc,
 													distributionColumn->varattno - 1);
-
-	if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+	switch (attributeForm->attgenerated)
 	{
-		return true;
-	}
+		case ATTRIBUTE_GENERATED_STORED:
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot distribute relation: %s", relationName),
+							errdetail("Distribution column must not use GENERATED ALWAYS "
+									  "AS (...) STORED.")));
+			break;
+		}
 
-	return false;
+#if PG_VERSION_NUM >= PG_VERSION_18
+		case ATTRIBUTE_GENERATED_VIRTUAL:
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot distribute relation: %s", relationName),
+							errdetail("Distribution column must not use GENERATED ALWAYS "
+									  "AS (...) VIRTUAL.")));
+			break;
+		}
+
+#endif
+		default:
+		{
+			break;
+		}
+	}
 }
 
 

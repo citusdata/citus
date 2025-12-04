@@ -890,6 +890,233 @@ ALTER TABLE NE_CHECK_TBL
 -- CHECK_X2 is ENFORCED, so these inserts should fail
 INSERT INTO NE_CHECK_TBL (x) VALUES (5), (15), (8), (12);
 
+-- PG18 Feature: Generated Virtual Columns
+-- PG18 commit: https://github.com/postgres/postgres/commit/83ea6c540
+
+-- Verify that generated virtual columns are supported on distributed tables.
+CREATE TABLE v_reading (
+    celsius DECIMAL(5,2),
+    farenheit DECIMAL(6, 2) GENERATED ALWAYS AS (celsius * 9/5 + 32) VIRTUAL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    device_id INT
+);
+
+-- Cannot distribute on a generated column (#4616) applies
+-- to VIRTUAL columns.
+SELECT create_distributed_table('v_reading', 'farenheit');
+
+SELECT create_distributed_table('v_reading', 'device_id');
+
+INSERT INTO v_reading (celsius, device_id) VALUES (0, 1), (100, 1), (37.5, 2), (25, 2), (-40, 3);
+
+SELECT device_id, celsius, farenheit FROM v_reading ORDER BY device_id;
+
+ALTER TABLE v_reading ADD COLUMN kelvin DECIMAL(6, 2) GENERATED ALWAYS AS (celsius +  273.15) VIRTUAL;
+SELECT device_id, celsius, kelvin FROM v_reading ORDER BY device_id, celsius;
+
+-- Show all columns that are generated
+  SELECT s.relname, a.attname, a.attgenerated
+  FROM pg_class s
+  JOIN pg_attribute a ON a.attrelid=s.oid
+  WHERE s.relname LIKE 'v_reading%' and attgenerated::int != 0
+  ORDER BY 1,2;
+
+-- Generated columns are virtual by default - repeat the test without VIRTUAL keyword
+CREATE TABLE d_reading (
+    celsius DECIMAL(5,2),
+    farenheit DECIMAL(6, 2) GENERATED ALWAYS AS (celsius * 9/5 + 32),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    device_id INT
+);
+
+SELECT create_distributed_table('d_reading', 'farenheit');
+
+SELECT create_distributed_table('d_reading', 'device_id');
+
+INSERT INTO d_reading (celsius, device_id) VALUES (0, 1), (100, 1), (37.5, 2), (25, 2), (-40, 3);
+
+SELECT device_id, celsius, farenheit FROM d_reading ORDER BY device_id;
+
+ALTER TABLE d_reading ADD COLUMN kelvin DECIMAL(6, 2) GENERATED ALWAYS AS (celsius +  273.15) VIRTUAL;
+SELECT device_id, celsius, kelvin FROM d_reading ORDER BY device_id, celsius;
+
+-- Show all columns that are generated
+  SELECT s.relname, a.attname, a.attgenerated
+  FROM pg_class s
+  JOIN pg_attribute a ON a.attrelid=s.oid
+  WHERE s.relname LIKE 'd_reading%' and attgenerated::int != 0
+  ORDER BY 1,2;
+
+-- COPY implementation needs to handle GENERATED ALWAYS AS (...) VIRTUAL columns.
+\COPY d_reading FROM STDIN WITH DELIMITER ','
+3.00,2025-11-24 09:46:17.390872+00,1
+6.00,2025-11-24 09:46:17.390872+00,5
+2.00,2025-11-24 09:46:17.390872+00,1
+22.00,2025-11-24 09:46:17.390872+00,5
+15.00,2025-11-24 09:46:17.390872+00,1
+13.00,2025-11-24 09:46:17.390872+00,5
+27.00,2025-11-24 09:46:17.390872+00,1
+14.00,2025-11-24 09:46:17.390872+00,5
+2.00,2025-11-24 09:46:17.390872+00,1
+23.00,2025-11-24 09:46:17.390872+00,5
+22.00,2025-11-24 09:46:17.390872+00,1
+3.00,2025-11-24 09:46:17.390872+00,5
+2.00,2025-11-24 09:46:17.390872+00,1
+7.00,2025-11-24 09:46:17.390872+00,5
+6.00,2025-11-24 09:46:17.390872+00,1
+21.00,2025-11-24 09:46:17.390872+00,5
+30.00,2025-11-24 09:46:17.390872+00,1
+1.00,2025-11-24 09:46:17.390872+00,5
+31.00,2025-11-24 09:46:17.390872+00,1
+22.00,2025-11-24 09:46:17.390872+00,5
+\.
+
+SELECT device_id, count(device_id) as count, round(avg(celsius), 2) as avg, min(farenheit), max(farenheit)
+FROM d_reading
+GROUP BY device_id
+ORDER BY count DESC;
+
+-- Test GROUP BY on tables with generated virtual columns - this requires
+-- special case handling in distributed planning. Test it out on some
+-- some queries involving joins and set operations.
+
+SELECT device_id, max(kelvin) as Kel
+FROM v_reading
+WHERE (device_id, celsius) NOT IN (SELECT device_id, max(celsius) FROM v_reading GROUP BY device_id)
+GROUP BY device_id
+ORDER BY device_id ASC;
+
+SELECT device_id, round(AVG( (d_farenheit + v_farenheit) / 2), 2) as Avg_Far
+FROM (SELECT *
+      FROM (SELECT device_id, round(AVG(farenheit),2) as d_farenheit
+            FROM d_reading
+            GROUP BY device_id) AS subq
+            RIGHT JOIN (SELECT device_id, MAX(farenheit) AS v_farenheit
+                  FROM d_reading
+                  GROUP BY device_id) AS subq2
+            USING (device_id)
+    ) AS finalq
+GROUP BY device_id
+ORDER BY device_id ASC;
+
+SELECT device_id, MAX(farenheit) as farenheit
+FROM
+((SELECT device_id, round(AVG(farenheit),2) as farenheit
+ FROM d_reading
+ GROUP BY device_id)
+UNION ALL (SELECT device_id, MAX(farenheit) AS farenheit
+        FROM d_reading
+        GROUP BY device_id) ) AS unioned
+GROUP BY device_id
+ORDER BY device_id ASC;
+
+SELECT device_id, MAX(farenheit) as farenheit
+FROM
+((SELECT device_id, round(AVG(farenheit),2) as farenheit
+ FROM d_reading
+ GROUP BY device_id)
+INTERSECT (SELECT device_id, MAX(farenheit) AS farenheit
+        FROM d_reading
+        GROUP BY device_id) ) AS intersected
+GROUP BY device_id
+ORDER BY device_id ASC;
+
+SELECT device_id, MAX(farenheit) as farenheit
+FROM
+((SELECT device_id, round(AVG(farenheit),2) as farenheit
+ FROM d_reading
+ GROUP BY device_id)
+EXCEPT (SELECT device_id, MAX(farenheit) AS farenheit
+        FROM d_reading
+        GROUP BY device_id) ) AS excepted
+GROUP BY device_id
+ORDER BY device_id ASC;
+
+-- Ensure that UDFs such as alter_distributed_table, undistribute_table
+-- and add_local_table_to_metadata work fine with VIRTUAL columns. For
+-- this, PR #4616 changes are modified to handle VIRTUAL columns in
+-- addition to STORED columns.
+
+CREATE TABLE generated_stored_dist (
+  col_1 int,
+  "col\'_2" text,
+  col_3 text generated always as (UPPER("col\'_2")) virtual
+);
+
+SELECT create_distributed_table ('generated_stored_dist', 'col_1');
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+
+CREATE TABLE generated_stored_local (
+  col_1 int,
+  "col\'_2" text,
+  col_3 text generated always as (UPPER("col\'_2")) stored
+);
+
+SELECT citus_add_local_table_to_metadata('generated_stored_local');
+
+INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+
+SELECT create_distributed_table ('generated_stored_local', 'col_1');
+
+INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+
+CREATE TABLE generated_stored_ref (
+  col_1 int,
+  col_2 int,
+  col_3 int generated always as (col_1+col_2) virtual,
+  col_4 int,
+  col_5 int generated always as (col_4*2-col_1) virtual
+);
+
+SELECT create_reference_table ('generated_stored_ref');
+
+INSERT INTO generated_stored_ref (col_1, col_4) VALUES (1,2), (11,12);
+INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
+
+SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+
+BEGIN;
+  SELECT undistribute_table('generated_stored_ref');
+  INSERT INTO generated_stored_ref (col_1, col_4) VALUES (11,12), (21,22);
+  INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
+  SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ROLLBACK;
+
+BEGIN;
+  -- drop some of the columns not having "generated always as virtual" expressions
+  SET client_min_messages TO WARNING;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1 CASCADE;
+  RESET client_min_messages;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+  INSERT INTO generated_stored_ref VALUES (5);
+  SELECT * FROM generated_stored_REF ORDER BY 1;
+ROLLBACK;
+
+BEGIN;
+  -- now drop all columns
+  ALTER TABLE generated_stored_ref DROP COLUMN col_3;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_5;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_2;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+
+  SELECT * FROM generated_stored_ref;
+ROLLBACK;
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
