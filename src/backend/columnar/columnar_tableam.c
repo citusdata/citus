@@ -162,6 +162,8 @@ static bool CitusColumnarHasBeenLoadedInternal(void);
 static bool CitusColumnarHasBeenLoaded(void);
 static bool CheckCitusColumnarVersion(int elevel);
 static bool MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion);
+static bool MinorVersionsCompatibleRelaxedColumnar(char *leftVersion, char *rightVersion);
+static int ParseVersionComponent(const char *version, char **endPtr);
 
 /* global variables for CheckCitusColumnarVersion */
 static bool extensionLoadedColumnar = false;
@@ -2939,7 +2941,7 @@ CheckInstalledVersionColumnar(int elevel)
 
 	char *installedVersion = InstalledExtensionVersionColumnar();
 
-	if (!MajorVersionsCompatibleColumnar(installedVersion, CITUS_EXTENSIONVERSION))
+	if (!MinorVersionsCompatibleRelaxedColumnar(installedVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(elevel, (errmsg("loaded Citus library version differs from installed "
 								"extension version"),
@@ -2995,6 +2997,55 @@ MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion)
 	}
 
 	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
+}
+
+
+/*
+ * ParseVersionComponent parses the integer at the current position and
+ * advances endPtr past the parsed digits to the next character.
+ */
+static int
+ParseVersionComponent(const char *version, char **endPtr)
+{
+	errno = 0;
+	long int val = strtol(version, endPtr, 10);
+
+	if (errno == ERANGE || val > INT_MAX || val < INT_MIN)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						errmsg("Invalid integer in version string")));
+	}
+	return (int) val;
+}
+
+
+/*
+ * MinorVersionsCompatibleRelaxedColumnar checks if two versions have the same major
+ * version and their minor versions differ by at most 1. The schema version
+ * (after '-') is ignored. Returns true if compatible, false otherwise.
+ *
+ * Version format expected: "major.minor-schema" (e.g., "13.1-2")
+ */
+bool
+MinorVersionsCompatibleRelaxedColumnar(char *leftVersion, char *rightVersion)
+{
+	char *leftSep;
+	char *rightSep;
+
+	int leftMajor = ParseVersionComponent(leftVersion, &leftSep);
+	int rightMajor = ParseVersionComponent(rightVersion, &rightSep);
+
+	if (leftMajor != rightMajor)
+	{
+		return false;
+	}
+
+	int leftMinor = (*leftSep == '.') ? ParseVersionComponent(leftSep + 1, &leftSep) : 0;
+	int rightMinor = (*rightSep == '.') ? ParseVersionComponent(rightSep + 1, &rightSep) :
+					 0;
+
+	int diff = leftMinor - rightMinor;
+	return diff >= -1 && diff <= 1;
 }
 
 
