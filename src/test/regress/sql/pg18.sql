@@ -1120,6 +1120,166 @@ BEGIN;
   SELECT * FROM generated_stored_ref;
 ROLLBACK;
 
+-- PG18 Feature: VACUUM/ANALYZE support ONLY to limit processing to the parent.
+-- For Citus, ensure ONLY does not trigger shard propagation.
+-- PG18 commit: https://github.com/postgres/postgres/commit/62ddf7ee9
+CREATE SCHEMA pg18_vacuum_part;
+SET search_path TO pg18_vacuum_part;
+
+CREATE TABLE vac_analyze_only (a int);
+SELECT create_distributed_table('vac_analyze_only', 'a');
+INSERT INTO vac_analyze_only VALUES (1), (2), (3);
+
+-- ANALYZE (no ONLY) should recurse into shard placements
+ANALYZE vac_analyze_only;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+
+SELECT coalesce(max(last_analyze), 'epoch'::timestamptz) AS analyze_before_only
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part'
+  AND relname LIKE 'vac_analyze_only_%'
+\gset
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+
+-- ANALYZE ONLY should not recurse into shard placements
+ANALYZE ONLY vac_analyze_only;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+
+SELECT max(last_analyze) = :'analyze_before_only'::timestamptz
+       AS analyze_only_skipped
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part'
+  AND relname LIKE 'vac_analyze_only_%';
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+
+-- VACUUM (no ONLY) should recurse into shard placements
+VACUUM vac_analyze_only;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+
+SELECT coalesce(max(last_vacuum), 'epoch'::timestamptz) AS vacuum_before_only
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part'
+  AND relname LIKE 'vac_analyze_only_%'
+\gset
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+
+-- VACUUM ONLY should not recurse into shard placements
+VACUUM ONLY vac_analyze_only;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part;
+
+SELECT max(last_vacuum) = :'vacuum_before_only'::timestamptz
+       AS vacuum_only_skipped
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part'
+  AND relname LIKE 'vac_analyze_only_%';
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part;
+
+DROP SCHEMA pg18_vacuum_part CASCADE;
+SET search_path TO pg18_nn;
+
+-- END PG18 Feature: VACUUM/ANALYZE support ONLY to limit processing to the parent
+
+-- PG18 Feature: VACUUM/ANALYZE ONLY on a partitioned distributed table
+-- Ensure Citus does not recurse into shard placements when ONLY is used
+-- on the partitioned parent.
+-- PG18 commit: https://github.com/postgres/postgres/commit/62ddf7ee9
+CREATE SCHEMA pg18_vacuum_part_dist;
+SET search_path TO pg18_vacuum_part_dist;
+
+SET citus.shard_count = 2;
+SET citus.shard_replication_factor = 1;
+
+CREATE TABLE part_dist (id int, v int) PARTITION BY RANGE (id);
+CREATE TABLE part_dist_1 PARTITION OF part_dist FOR VALUES FROM (1) TO (100);
+CREATE TABLE part_dist_2 PARTITION OF part_dist FOR VALUES FROM (100) TO (200);
+
+SELECT create_distributed_table('part_dist', 'id');
+
+INSERT INTO part_dist
+SELECT g, g FROM generate_series(1, 199) g;
+
+-- ANALYZE (no ONLY) should recurse into partitions and shard placements
+ANALYZE part_dist;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part_dist;
+
+SELECT coalesce(max(last_analyze), 'epoch'::timestamptz) AS analyze_before_only
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part_dist'
+  AND relname LIKE 'part_dist_%'
+\gset
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part_dist;
+
+-- ANALYZE ONLY should not recurse into shard placements
+ANALYZE ONLY part_dist;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part_dist;
+
+SELECT max(last_analyze) = :'analyze_before_only'::timestamptz
+       AS analyze_only_partitioned_skipped
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part_dist'
+  AND relname LIKE 'part_dist_%';
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part_dist;
+
+-- VACUUM (no ONLY) should recurse into partitions and shard placements
+VACUUM part_dist;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part_dist;
+
+SELECT coalesce(max(last_vacuum), 'epoch'::timestamptz) AS vacuum_before_only
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part_dist'
+  AND relname LIKE 'part_dist_%'
+\gset
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part_dist;
+
+-- VACUUM ONLY parent: core warns and does no work; Citus must not
+-- propagate to shard placements.
+VACUUM ONLY part_dist;
+
+\c - - - :worker_1_port
+SET search_path TO pg18_vacuum_part_dist;
+
+SELECT max(last_vacuum) = :'vacuum_before_only'::timestamptz
+       AS vacuum_only_partitioned_skipped
+FROM pg_stat_user_tables
+WHERE schemaname = 'pg18_vacuum_part_dist'
+  AND relname LIKE 'part_dist_%';
+
+\c - - - :master_port
+SET search_path TO pg18_vacuum_part_dist;
+
+DROP SCHEMA pg18_vacuum_part_dist CASCADE;
+SET search_path TO pg18_nn;
+
+-- END PG18 Feature: VACUUM/ANALYZE ONLY on partitioned distributed table
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
