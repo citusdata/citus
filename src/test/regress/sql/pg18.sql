@@ -1120,6 +1120,136 @@ BEGIN;
   SELECT * FROM generated_stored_ref;
 ROLLBACK;
 
+-- PG18 Feature: dropping of constraints ONLY on partitioned tables
+-- PG18 commit: https://github.com/postgres/postgres/commit/4dea33ce7
+
+-- Here we verify that dropping constraints ONLY on partitioned tables
+-- works correctly in Citus. This is done by repeating the tests of the
+-- PG commit (see above) on a table that is a distributed table in Citus,
+-- in addition to a Postgres partitioned table.
+
+CREATE TABLE partitioned_table (
+	a int,
+	b char(3)
+) PARTITION BY LIST (a);
+
+SELECT create_distributed_table('partitioned_table', 'a');
+
+-- check that violating rows are correctly reported
+CREATE TABLE part_2 (LIKE partitioned_table);
+INSERT INTO part_2 VALUES (3, 'aaa');
+ALTER TABLE partitioned_table ATTACH PARTITION part_2 FOR VALUES IN (2);
+
+-- should be ok after deleting the bad row
+DELETE FROM part_2;
+ALTER TABLE partitioned_table ATTACH PARTITION part_2 FOR VALUES IN (2);
+
+-- PG18's "cannot add NOT NULL or check constraints to *only* the parent, when
+-- partitions exist" extends to Citus distributed tables as well.
+
+ALTER TABLE ONLY partitioned_table ALTER b SET NOT NULL;
+ALTER TABLE ONLY partitioned_table ADD CONSTRAINT check_b CHECK (b <> 'zzz');
+
+-- Dropping constraints from parent should be ok
+ALTER TABLE partitioned_table ALTER b SET NOT NULL;
+ALTER TABLE ONLY partitioned_table ALTER b DROP NOT NULL;
+ALTER TABLE partitioned_table ADD CONSTRAINT check_b CHECK (b <> 'zzz');
+ALTER TABLE ONLY partitioned_table DROP CONSTRAINT check_b;
+
+-- ... and the partitions still has the NOT NULL constraint:
+select relname, attname, attnotnull
+from pg_class inner join pg_attribute on (oid=attrelid)
+where relname = 'part_2' and attname = 'b' ;
+-- ... and the check_b constraint:
+select relname, conname, pg_get_expr(conbin, conrelid, true)
+from pg_class inner join pg_constraint on (pg_class.oid=conrelid)
+where relname = 'part_2' and conname = 'check_b' ;
+
+-- PG18 Feature: partitioned tables can have NOT VALID foreign keys
+-- PG18 commit: https://github.com/postgres/postgres/commit/b663b9436
+
+CREATE TABLE fk_notpartitioned_pk (a int, b int, PRIMARY KEY (a, b), c int);
+CREATE TABLE fk_partitioned_fk (b int, a int) PARTITION BY RANGE (a, b);
+
+SELECT create_reference_table('fk_notpartitioned_pk');
+SELECT create_distributed_table('fk_partitioned_fk', 'a');
+
+ALTER TABLE fk_partitioned_fk ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
+
+-- Attaching a child table with the same valid foreign key constraint.
+CREATE TABLE fk_partitioned_fk_1 (a int, b int);
+ALTER TABLE fk_partitioned_fk_1 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk;
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_1 FOR VALUES FROM (0,0) TO (1000,1000);
+
+-- Child constraint will remain valid.
+SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
+WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+
+-- Validate the constraint
+ALTER TABLE fk_partitioned_fk VALIDATE CONSTRAINT fk_partitioned_fk_a_b_fkey;
+
+-- All constraints are now valid.
+SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
+WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+
+-- Attaching a child with a NOT VALID constraint.
+CREATE TABLE fk_partitioned_fk_2 (a int, b int);
+INSERT INTO fk_partitioned_fk_2 VALUES(1000, 1000); -- doesn't exist in referenced table
+ALTER TABLE fk_partitioned_fk_2 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
+
+-- It will fail because the attach operation implicitly validates the data.
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_2 FOR VALUES FROM (1000,1000) TO (2000,2000);
+
+-- Remove the invalid data and try again.
+TRUNCATE fk_partitioned_fk_2;
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_2 FOR VALUES FROM (1000,1000) TO (2000,2000);
+
+-- The child constraint will also be valid.
+SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_partitioned_fk_2'::regclass;
+
+-- Test case where the child constraint is invalid, the grandchild constraint
+-- is valid, and the validation for the grandchild should be skipped when a
+-- valid constraint is applied to the top parent.
+CREATE TABLE fk_partitioned_fk_3 (a int, b int) PARTITION BY RANGE (a, b);
+ALTER TABLE fk_partitioned_fk_3 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
+SELECT create_distributed_table('fk_partitioned_fk_3', 'a');
+
+CREATE TABLE fk_partitioned_fk_3_1 (a int, b int);
+ALTER TABLE fk_partitioned_fk_3_1 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk;
+SELECT create_distributed_table('fk_partitioned_fk_3_1', 'a');
+
+ALTER TABLE fk_partitioned_fk_3 ATTACH PARTITION fk_partitioned_fk_3_1 FOR VALUES FROM (2000,2000) TO (3000,3000);
+
+-- Fails because Citus does not support multi-level (grandchild) partitions
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_3 FOR VALUES FROM (2000,2000) TO (3000,3000);
+
+-- All constraints are now valid, except for fk_partitioned_fk_3
+-- because the attach failed because of Citus not yet supporting
+-- multi-level partitions.
+SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
+WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+
+DROP TABLE fk_partitioned_fk, fk_notpartitioned_pk CASCADE;
+
+-- NOT VALID foreign key on a non-partitioned table referencing a partitioned table
+CREATE TABLE fk_partitioned_pk (a int, b int, PRIMARY KEY (a, b)) PARTITION BY RANGE (a, b);
+SELECT create_distributed_table('fk_partitioned_pk', 'a');
+CREATE TABLE fk_partitioned_pk_1 PARTITION OF fk_partitioned_pk FOR VALUES FROM (0,0) TO (1000,1000);
+
+CREATE TABLE fk_notpartitioned_fk (b int, a int);
+SELECT create_distributed_table('fk_notpartitioned_fk', 'a');
+ALTER TABLE fk_notpartitioned_fk ADD FOREIGN KEY (a, b) REFERENCES fk_partitioned_pk NOT VALID;
+
+-- Constraint will be invalid.
+SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_notpartitioned_fk'::regclass;
+
+ALTER TABLE fk_notpartitioned_fk VALIDATE CONSTRAINT fk_notpartitioned_fk_a_b_fkey;
+
+-- All constraints are now valid.
+SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_notpartitioned_fk'::regclass;
+
+DROP TABLE fk_notpartitioned_fk, fk_partitioned_pk;
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
