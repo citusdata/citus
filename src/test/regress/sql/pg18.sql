@@ -791,6 +791,8 @@ CREATE TABLE customers(
    PRIMARY KEY(customer_id)
 );
 
+SET citus.shard_replication_factor TO 1;
+
 SELECT create_distributed_table('customers', 'customer_id');
 
 CREATE TABLE contacts(
@@ -867,6 +869,7 @@ CREATE TABLE NE_CHECK_TBL (x int, y int,
   CONSTRAINT CHECK_Y CHECK (y < 20) ENFORCED
 );
 
+SET citus.next_shard_id TO 4754044;
 SELECT create_distributed_table('ne_check_tbl', 'x');
 
 -- CHECK_X is NOT ENFORCED, so these inserts should succeed
