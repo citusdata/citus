@@ -51,6 +51,7 @@ sub Usage()
     print "  --mitmproxy        	Start a mitmproxy for one of the workers\n";
     print "  --worker-count         Number of workers in Citus cluster (default: 2)\n";
     print "  --citus-version        Citus version being tested (used for during extension create)\n";
+    print "  --citus-libdir         Absolute path to alternative Citus library directory\n";
     exit 1;
 }
 
@@ -89,6 +90,7 @@ my $publicWorker1Host = "localhost";
 my $publicWorker2Host = "localhost";
 my $workerCount = 2;
 my $citusversion = "";
+my $citusLibdir = "";
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -124,6 +126,7 @@ GetOptions(
     'worker-2-public-hostname=s' => \$publicWorker2Host,
     'worker-count=i' => \$workerCount,
     'citus-version=s' => \$citusversion,
+    'citus-libdir=s' => \$citusLibdir,
     'help' => sub { Usage() });
 
 my $fixopen = "$bindir/postgres.fixopen";
@@ -308,6 +311,40 @@ sub generate_hba
     print $fh "host replication postgres  127.0.0.1/32 trust\n";
     print $fh "host replication postgres  ::1/128      trust\n";
     close $fh;
+}
+
+sub setup_symlink
+{
+    my ($originalfile, $targetfile) = @_;
+
+    # Only proceed if not on Windows and both files are defined and non-empty
+    return if $usingWindows;
+    return unless (defined $originalfile && $originalfile ne "");
+    return unless (defined $targetfile && $targetfile ne "");
+
+    -e $targetfile or die "Target is not found at $targetfile";
+
+    my $backup = $originalfile . ".bak";
+    rename($originalfile, $backup) or die "Failed to copy $originalfile to $backup: $!";
+
+    symlink($targetfile, $originalfile) or die "Failed to create symlink $originalfile -> $targetfile: $!";
+}
+
+sub restore_original
+{
+    my ($originalfile) = @_;
+
+    # Only proceed if not on Windows and file is defined and non-empty
+    return if $usingWindows;
+    return unless (defined $originalfile && $originalfile ne "");
+
+    my $backup = $originalfile . ".bak";
+
+    # Return silently if backup doesn't exist
+    return unless -e $backup;
+
+    unlink($originalfile) or die "Failed to remove symlink at $originalfile: $!";
+    rename($backup, $originalfile) or die "Failed to restore original file from $backup to $originalfile: $!";
 }
 
 # always want to call initdb under normal postgres, so revert from a
@@ -593,7 +630,7 @@ if($isolationtester)
    push(@pgOptions, "citus.background_task_queue_interval=-1");
 }
 
-if($citusversion)
+if($citusversion || $citusLibdir)
 {
     push(@pgOptions, "citus.enable_version_checks=off");
     push(@pgOptions, "columnar.enable_version_checks=off");
@@ -783,6 +820,9 @@ if (!$conninfo)
 # Routine to shutdown servers at failure/exit
 sub ShutdownServers()
 {
+    restore_original(catfile($libdir, "citus.so"));
+    restore_original(catfile($libdir, "citus_columnar.so"));
+
     if (!$conninfo && $serversAreShutdown eq "FALSE")
     {
         system(catfile("$bindir", "pg_ctl"),
@@ -908,6 +948,13 @@ if ($followercluster && $backupnodetest == 0)
     $synchronousReplication = "-c synchronous_standby_names='FIRST 1 (*)' -c synchronous_commit=remote_apply";
 }
 
+# Ensure citus.so points to alternative library if provided
+if ($citusLibdir)
+{
+    setup_symlink(catfile($libdir, "citus.so"), catfile($citusLibdir, "citus.so"));
+    setup_symlink(catfile($libdir, "citus_columnar.so"), catfile($citusLibdir, "citus_columnar.so"));
+}
+
 # Start servers
 if (!$conninfo)
 {
@@ -977,6 +1024,13 @@ if ($followercluster)
           die "Could not start follower server";
         }
     }
+}
+
+# Restore original citus.so if we modified it
+if ($citusLibdir)
+{
+    restore_original(catfile($libdir, "citus.so"));
+    restore_original(catfile($libdir, "citus_columnar.so"));
 }
 
 ###
