@@ -1260,6 +1260,7 @@ CREATE TABLE customers(
    customer_name VARCHAR(255) NOT NULL,
    PRIMARY KEY(customer_id)
 );
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('customers', 'customer_id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -1362,6 +1363,7 @@ CREATE TABLE NE_CHECK_TBL (x int, y int,
 	CONSTRAINT CHECK_X CHECK (x > 3) NOT ENFORCED,
   CONSTRAINT CHECK_Y CHECK (y < 20) ENFORCED
 );
+SET citus.next_shard_id TO 4754044;
 SELECT create_distributed_table('ne_check_tbl', 'x');
  create_distributed_table
 ---------------------------------------------------------------------
