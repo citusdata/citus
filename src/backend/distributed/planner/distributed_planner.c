@@ -2018,18 +2018,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	{
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
-#if PG_VERSION_NUM == PG_VERSION_15
-
-		/*
-		 * Postgres 15.0 had a bug regarding inherited statistics expressions,
-		 * which is fixed in 15.1 via Postgres commit
-		 * 1f1865e9083625239769c26f68b9c2861b8d4b1c.
-		 *
-		 * Hence, we only set this value on exactly PG15.0
-		 */
-		relOptInfo->statlist = NIL;
-#endif
-
 		relationRestrictionContext->allReferenceTables &=
 			IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);
 	}

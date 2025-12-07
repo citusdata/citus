@@ -1146,18 +1146,6 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	MultiXactId multiXactCutoff;
 
 	/* initialize xids */
-#if (PG_VERSION_NUM >= PG_VERSION_15) && (PG_VERSION_NUM < PG_VERSION_16)
-	MultiXactId oldestMxact;
-	vacuum_set_xid_limits(rel,
-						  params->freeze_min_age,
-						  params->freeze_table_age,
-						  params->multixact_freeze_min_age,
-						  params->multixact_freeze_table_age,
-						  &oldestXmin, &oldestMxact,
-						  &freezeLimit, &multiXactCutoff);
-
-	Assert(MultiXactIdPrecedesOrEquals(multiXactCutoff, oldestMxact));
-#else
 	TransactionId xidFullScanLimit;
 	MultiXactId mxactFullScanLimit;
 	vacuum_set_xid_limits(rel,
@@ -1167,7 +1155,6 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 						  params->multixact_freeze_table_age,
 						  &oldestXmin, &freezeLimit, &xidFullScanLimit,
 						  &multiXactCutoff, &mxactFullScanLimit);
-#endif
 
 	Assert(TransactionIdPrecedesOrEquals(freezeLimit, oldestXmin));
 
@@ -1176,30 +1163,16 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	 * just advance to the most aggressive value.
 	 */
 	TransactionId newRelFrozenXid = oldestXmin;
-#if (PG_VERSION_NUM >= PG_VERSION_15) && (PG_VERSION_NUM < PG_VERSION_16)
-	MultiXactId newRelminMxid = oldestMxact;
-#else
 	MultiXactId newRelminMxid = multiXactCutoff;
-#endif
 
 	double new_live_tuples = ColumnarTableTupleCount(rel);
 
 	/* all visible pages are always 0 */
 	BlockNumber new_rel_allvisible = 0;
 
-#if (PG_VERSION_NUM >= PG_VERSION_15) && (PG_VERSION_NUM < PG_VERSION_16)
-	bool frozenxid_updated;
-	bool minmulti_updated;
-
-	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
-						new_rel_allvisible, nindexes > 0,
-						newRelFrozenXid, newRelminMxid,
-						&frozenxid_updated, &minmulti_updated, false);
-#else
 	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
 						new_rel_allvisible, nindexes > 0,
 						newRelFrozenXid, newRelminMxid, false);
-#endif
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_18
