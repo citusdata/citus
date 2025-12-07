@@ -1,6 +1,12 @@
 --
 -- Hide shard names on MX worker nodes
 --
+-- PostgreSQL 18 planner changes (probably AIO and updated cost model) make
+-- sequential scans cheaper, so the psql `\d table`-style query that uses a
+-- regex on `pg_class.relname` no longer chooses an index scan. This causes
+-- a plan difference.
+-- Alternative test output can be removed when we drop PG17 support
+--
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1130000;
 
