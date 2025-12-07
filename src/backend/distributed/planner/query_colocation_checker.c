@@ -81,16 +81,12 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
-#if PG_VERSION_NUM >= PG_VERSION_16
 		RTEPermissionInfo *perminfo = NULL;
 		if (anchorRangeTblEntry->perminfoindex)
 		{
 			perminfo = getRTEPermissionInfo(subquery->rteperminfos, anchorRangeTblEntry);
 		}
 		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, perminfo);
-#else
-		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL, NULL);
-#endif
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -286,13 +282,11 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
 	RangeTblEntry *newRangeTableEntry = copyObject(rteRelation);
 	subquery->rtable = list_make1(newRangeTableEntry);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (perminfo)
 	{
 		newRangeTableEntry->perminfoindex = 1;
 		subquery->rteperminfos = list_make1(perminfo);
 	}
-#endif
 
 	/* set the FROM expression to the subquery */
 	newRangeTableRef = makeNode(RangeTblRef);

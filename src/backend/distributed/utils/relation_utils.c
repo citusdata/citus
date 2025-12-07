@@ -14,9 +14,7 @@
 
 #include "distributed/relation_utils.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 #include "miscadmin.h"
-#endif
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
@@ -32,8 +30,6 @@ RelationGetNamespaceName(Relation relation)
 	return namespaceName;
 }
 
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 
 /*
  * GetFilledPermissionInfo creates RTEPermissionInfo for a given RTE
@@ -56,6 +52,3 @@ GetFilledPermissionInfo(Oid relid, bool inh, AclMode requiredPerms)
 	perminfo->checkAsUser = GetUserId();
 	return perminfo;
 }
-
-
-#endif

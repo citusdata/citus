@@ -169,11 +169,7 @@ ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
 	}
 
 	/* create two pages */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	PGIOAlignedBlock block;
-#else
-	PGAlignedBlock block;
-#endif
 	Page page = block.data;
 
 	/* write metapage */

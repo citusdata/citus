@@ -1510,7 +1510,6 @@ GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToB
 bool
 IsRelOptOuterJoin(PlannerInfo *root, int varNo)
 {
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (root->simple_rel_array_size <= varNo)
 	{
 		return true;
@@ -1522,7 +1521,6 @@ IsRelOptOuterJoin(PlannerInfo *root, int varNo)
 		/* must be an outer join */
 		return true;
 	}
-#endif
 	return false;
 }
 

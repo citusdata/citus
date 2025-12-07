@@ -52,10 +52,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 #include "catalog/pg_namespace.h"
-#endif
 
 
 /* Local functions forward declarations for helper functions */

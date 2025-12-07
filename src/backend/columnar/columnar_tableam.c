@@ -1098,7 +1098,6 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	List *indexList = RelationGetIndexList(rel);
 	int nindexes = list_length(indexList);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	struct VacuumCutoffs cutoffs;
 	vacuum_get_cutoffs(rel, params, &cutoffs);
 
@@ -1138,41 +1137,6 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 						newRelFrozenXid, newRelminMxid,
 						&frozenxid_updated, &minmulti_updated,
 						false);
-#endif
-
-#else
-	TransactionId oldestXmin;
-	TransactionId freezeLimit;
-	MultiXactId multiXactCutoff;
-
-	/* initialize xids */
-	TransactionId xidFullScanLimit;
-	MultiXactId mxactFullScanLimit;
-	vacuum_set_xid_limits(rel,
-						  params->freeze_min_age,
-						  params->freeze_table_age,
-						  params->multixact_freeze_min_age,
-						  params->multixact_freeze_table_age,
-						  &oldestXmin, &freezeLimit, &xidFullScanLimit,
-						  &multiXactCutoff, &mxactFullScanLimit);
-
-	Assert(TransactionIdPrecedesOrEquals(freezeLimit, oldestXmin));
-
-	/*
-	 * Columnar storage doesn't hold any transaction IDs, so we can always
-	 * just advance to the most aggressive value.
-	 */
-	TransactionId newRelFrozenXid = oldestXmin;
-	MultiXactId newRelminMxid = multiXactCutoff;
-
-	double new_live_tuples = ColumnarTableTupleCount(rel);
-
-	/* all visible pages are always 0 */
-	BlockNumber new_rel_allvisible = 0;
-
-	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
-						new_rel_allvisible, nindexes > 0,
-						newRelFrozenXid, newRelminMxid, false);
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_18
@@ -2545,11 +2509,7 @@ static const TableAmRoutine columnar_am_methods = {
 	.tuple_lock = columnar_tuple_lock,
 	.finish_bulk_insert = columnar_finish_bulk_insert,
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	.relation_set_new_filelocator = columnar_relation_set_new_filelocator,
-#else
-	.relation_set_new_filenode = columnar_relation_set_new_filelocator,
-#endif
 	.relation_nontransactional_truncate = columnar_relation_nontransactional_truncate,
 	.relation_copy_data = columnar_relation_copy_data,
 	.relation_copy_for_cluster = columnar_relation_copy_for_cluster,

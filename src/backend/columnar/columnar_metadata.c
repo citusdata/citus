@@ -62,13 +62,9 @@
 
 #include "distributed/listutils.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 #include "parser/parse_relation.h"
 #include "storage/relfilelocator.h"
 #include "utils/relfilenumbermap.h"
-#else
-#include "utils/relfilenodemap.h"
-#endif
 
 #define COLUMNAR_RELOPTION_NAMESPACE "columnar"
 #define SLOW_METADATA_ACCESS_WARNING \
@@ -1789,10 +1785,8 @@ create_estate_for_relation(Relation rel)
 	rte->rellockmode = AccessShareLock;
 
 /* Prepare permission info on PG 16+ */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	List *perminfos = NIL;
 	addRTEPermissionInfo(&perminfos, rte);
-#endif
 
 /* Initialize the range table, with the right signature for each PG version */
 #if PG_VERSION_NUM >= PG_VERSION_18
@@ -1804,20 +1798,13 @@ create_estate_for_relation(Relation rel)
 		perminfos,
 		NULL  /* unpruned_relids: not used by columnar */
 		);
-#elif PG_VERSION_NUM >= PG_VERSION_16
+#else
 
 	/* PG 16–17: three-arg signature (permInfos) */
 	ExecInitRangeTable(
 		estate,
 		list_make1(rte),
 		perminfos
-		);
-#else
-
-	/* PG 15: two-arg signature */
-	ExecInitRangeTable(
-		estate,
-		list_make1(rte)
 		);
 #endif
 

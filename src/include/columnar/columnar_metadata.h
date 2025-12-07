@@ -17,11 +17,7 @@
 #include "pg_version_compat.h"
 #include "pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 #include "storage/relfilelocator.h"
-#else
-#include "storage/relfilenode.h"
-#endif
 
 
 /*

@@ -35,12 +35,8 @@
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 #include "storage/relfilelocator.h"
 #include "utils/relfilenumbermap.h"
-#else
-#include "utils/relfilenodemap.h"
-#endif
 
 struct ColumnarWriteState
 {

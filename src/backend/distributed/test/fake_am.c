@@ -562,11 +562,7 @@ static const TableAmRoutine fake_methods = {
 	.tuple_satisfies_snapshot = fake_tuple_satisfies_snapshot,
 	.index_delete_tuples = fake_index_delete_tuples,
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	.relation_set_new_filelocator = fake_relation_set_new_filenode,
-#else
-	.relation_set_new_filenode = fake_relation_set_new_filenode,
-#endif
 	.relation_nontransactional_truncate = fake_relation_nontransactional_truncate,
 	.relation_copy_data = fake_copy_data,
 	.relation_copy_for_cluster = fake_copy_for_cluster,
