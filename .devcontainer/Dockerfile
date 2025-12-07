@@ -72,18 +72,6 @@ ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
 USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
-FROM base AS pg15
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.14
-RUN rm .pgenv/src/*.tar*
-RUN make -C .pgenv/src/postgresql-*/ clean
-RUN make -C .pgenv/src/postgresql-*/src/include install
-
-# create a staging directory with all files we want to copy from our pgenv build
-# we will copy the contents of the staged folder into the final image at once
-RUN mkdir .pgenv-staging/
-RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
-RUN rm .pgenv-staging/config/default.conf
-
 FROM base AS pg16
 RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.10
 RUN rm .pgenv/src/*.tar*
@@ -198,7 +186,6 @@ RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
 
 COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 
-COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg17 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 

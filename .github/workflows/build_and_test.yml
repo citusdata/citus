@@ -32,11 +32,10 @@ jobs:
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.33"
       sql_snapshot_pg_version: "17.6"
-      image_suffix: "-ve4d3aa0"
-      pg15_version: '{ "major": "15", "full": "15.14" }'
+      image_suffix: "-v9555df2"
       pg16_version: '{ "major": "16", "full": "16.10" }'
       pg17_version: '{ "major": "17", "full": "17.6" }'
-      upgrade_pg_versions: "15.14-16.10-17.6"
+      upgrade_pg_versions: "16.10-17.6"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -110,7 +109,6 @@ jobs:
         image_suffix:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
-          - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
     runs-on: ubuntu-latest
@@ -141,7 +139,6 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
         make:
@@ -163,10 +160,6 @@ jobs:
           - check-enterprise-isolation-logicalrep-3
         include:
           - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-failure
             pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
@@ -175,10 +168,6 @@ jobs:
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
             pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
@@ -187,10 +176,6 @@ jobs:
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
             pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
             image_name: ${{ needs.params.outputs.fail_test_image_name }}
@@ -201,19 +186,11 @@ jobs:
           - make: installcheck
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg15_version }}
-          - make: installcheck
-            suite: cdc
-            image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg16_version }}
           - make: installcheck
             suite: cdc
             image_name: ${{ needs.params.outputs.test_image_name }}
             pg_version: ${{ needs.params.outputs.pg17_version }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg15_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
           - make: check-query-generator
             pg_version: ${{ needs.params.outputs.pg16_version }}
             suite: regress
@@ -268,7 +245,6 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
@@ -315,11 +291,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - old_pg_major: 15
-            new_pg_major: 16
           - old_pg_major: 16
-            new_pg_major: 17
-          - old_pg_major: 15
             new_pg_major: 17
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
@@ -376,7 +348,6 @@ jobs:
       fail-fast: false
       matrix:
         pg_version:
-          - ${{ needs.params.outputs.pg15_version }}
           - ${{ needs.params.outputs.pg16_version }}
     steps:
     - uses: actions/checkout@v4
