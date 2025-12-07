@@ -96,7 +96,7 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("name or argument lists may not contain nulls")));
 		}
-		typename = typeStringToTypeName_compat(TextDatumGetCString(elems[0]), NULL);
+		typename = typeStringToTypeName(TextDatumGetCString(elems[0]), NULL);
 	}
 	else if (type == OBJECT_LARGEOBJECT)
 	{
@@ -163,8 +163,8 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 						 errmsg("name or argument lists may not contain nulls")));
 			}
 			args = lappend(args,
-						   typeStringToTypeName_compat(TextDatumGetCString(elems[i]),
-													   NULL));
+						   typeStringToTypeName(TextDatumGetCString(elems[i]),
+												NULL));
 		}
 	}
 	else

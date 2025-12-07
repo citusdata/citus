@@ -100,6 +100,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/relation_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/replication_origin_session_utils.h"
@@ -110,7 +111,6 @@
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/relation_utils.h"
 
 
 /* constant used in binary protocol */

@@ -42,6 +42,7 @@
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
@@ -547,7 +548,7 @@ ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
 	 * "anti-correlated" (-1) since both help us avoiding from reading the
 	 * same stripe again and again.
 	 */
-	double absIndexCorrelation = float_abs(indexCorrelation);
+	double absIndexCorrelation = fabs(indexCorrelation);
 
 	/*
 	 * To estimate the number of stripes that we need to read, we do linear
@@ -666,7 +667,7 @@ CheckVarStats(PlannerInfo *root, Var *var, Oid sortop, float4 *absVarCorrelation
 	 * If the Var is not highly correlated, then the chunk's min/max bounds
 	 * will be nearly useless.
 	 */
-	if (float_abs(varCorrelation) < ColumnarQualPushdownCorrelationThreshold)
+	if (fabs(varCorrelation) < ColumnarQualPushdownCorrelationThreshold)
 	{
 		if (absVarCorrelation)
 		{
@@ -674,7 +675,7 @@ CheckVarStats(PlannerInfo *root, Var *var, Oid sortop, float4 *absVarCorrelation
 			 * Report absVarCorrelation if caller wants to know why given
 			 * var is rejected.
 			 */
-			*absVarCorrelation = float_abs(varCorrelation);
+			*absVarCorrelation = fabs(varCorrelation);
 		}
 		return false;
 	}

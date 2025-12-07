@@ -12,11 +12,12 @@
 
 #include "postgres.h"
 
-#include "distributed/relation_utils.h"
-
 #include "miscadmin.h"
+
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+
+#include "distributed/relation_utils.h"
 
 
 /*

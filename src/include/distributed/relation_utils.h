@@ -13,9 +13,10 @@
 
 #include "postgres.h"
 
-#include "pg_version_constants.h"
 #include "parser/parse_relation.h"
 #include "utils/relcache.h"
+
+#include "pg_version_constants.h"
 
 extern char * RelationGetNamespaceName(Relation relation);
 extern RTEPermissionInfo * GetFilledPermissionInfo(Oid relid, bool inh,

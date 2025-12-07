@@ -25,6 +25,7 @@
 #include "storage/fd.h"
 #include "utils/datum.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 

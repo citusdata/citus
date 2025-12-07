@@ -734,7 +734,7 @@ MakeSetStatementArguments(char *configurationName, char *configurationValue)
 	 * using this function
 	 */
 	int gucCount = 0;
-	struct config_generic **gucVariables = get_guc_variables_compat(&gucCount);
+	struct config_generic **gucVariables = get_guc_variables(&gucCount);
 
 	struct config_generic **matchingConfig =
 		(struct config_generic **) SafeBsearch((void *) &key,

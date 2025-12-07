@@ -14,10 +14,10 @@
 
 #include "postgres.h"
 
+#include "storage/relfilelocator.h"
+
 #include "pg_version_compat.h"
 #include "pg_version_constants.h"
-
-#include "storage/relfilelocator.h"
 
 
 /*

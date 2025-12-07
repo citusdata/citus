@@ -19,6 +19,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
+#include "storage/relfilelocator.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
@@ -26,8 +27,6 @@
 
 #include "columnar/columnar_compression.h"
 #include "columnar/columnar_metadata.h"
-
-#include "storage/relfilelocator.h"
 
 #define COLUMNAR_AM_NAME "columnar"
 #define COLUMNAR_MODULE_NAME "citus_columnar"

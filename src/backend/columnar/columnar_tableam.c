@@ -208,8 +208,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 							uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
 	CheckCitusColumnarVersion(ERROR);
-	RelFileNumber relfilenumber = RelationPhysicalIdentifierNumber_compat(
-		RelationPhysicalIdentifier_compat(relation));
+	RelFileNumber relfilenumber = relation->rd_locator.relNumber;
 
 	/*
 	 * A memory context to use for scan-wide data, including the lazily
@@ -435,8 +434,7 @@ columnar_index_fetch_begin(Relation rel)
 {
 	CheckCitusColumnarVersion(ERROR);
 
-	RelFileNumber relfilenumber = RelationPhysicalIdentifierNumber_compat(
-		RelationPhysicalIdentifier_compat(rel));
+	RelFileNumber relfilenumber = rel->rd_locator.relNumber;
 	if (PendingWritesInUpperTransactions(relfilenumber, GetCurrentSubTransactionId()))
 	{
 		/* XXX: maybe we can just flush the data and continue */
@@ -865,11 +863,9 @@ columnar_relation_set_new_filelocator(Relation rel,
 	 * state. If they are equal, this is a new relation object and we don't
 	 * need to clean anything.
 	 */
-	if (RelationPhysicalIdentifierNumber_compat(RelationPhysicalIdentifier_compat(rel)) !=
-		RelationPhysicalIdentifierNumberPtr_compat(newrlocator))
+	if (rel->rd_locator.relNumber != newrlocator->relNumber)
 	{
-		MarkRelfilenumberDropped(RelationPhysicalIdentifierNumber_compat(
-									 RelationPhysicalIdentifier_compat(rel)),
+		MarkRelfilenumberDropped(rel->rd_locator.relNumber,
 								 GetCurrentSubTransactionId());
 
 		DeleteMetadataRows(rel);
@@ -892,9 +888,9 @@ static void
 columnar_relation_nontransactional_truncate(Relation rel)
 {
 	CheckCitusColumnarVersion(ERROR);
-	RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
+	RelFileLocator relfilelocator = rel->rd_locator;
 
-	NonTransactionDropWriteState(RelationPhysicalIdentifierNumber_compat(relfilelocator));
+	NonTransactionDropWriteState(relfilelocator.relNumber);
 
 	/* Delete old relfilenode metadata */
 	DeleteMetadataRows(rel);
@@ -1843,8 +1839,8 @@ TupleSortSkipSmallerItemPointers(Tuplesortstate *tupleSort, ItemPointer targetIt
 		Datum *abbrev = NULL;
 		Datum tsDatum;
 		bool tsDatumIsNull;
-		if (!tuplesort_getdatum_compat(tupleSort, forwardDirection, false,
-									   &tsDatum, &tsDatumIsNull, abbrev))
+		if (!tuplesort_getdatum(tupleSort, forwardDirection, false,
+								&tsDatum, &tsDatumIsNull, abbrev))
 		{
 			ItemPointerSetInvalid(&tsItemPointerData);
 			break;
@@ -2085,12 +2081,12 @@ ColumnarTableDropHook(Oid relid)
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(relid, AccessExclusiveLock);
-		RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
+		RelFileLocator relfilelocator = rel->rd_locator;
 
 		DeleteMetadataRows(rel);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
-		MarkRelfilenumberDropped(RelationPhysicalIdentifierNumber_compat(relfilelocator),
+		MarkRelfilenumberDropped(relfilelocator.relNumber,
 								 GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */

@@ -23,10 +23,12 @@
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "storage/fd.h"
+#include "storage/relfilelocator.h"
 #include "storage/smgr.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/relfilenumbermap.h"
 
 #include "pg_version_compat.h"
 #include "pg_version_constants.h"
@@ -34,9 +36,6 @@
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
-
-#include "storage/relfilelocator.h"
-#include "utils/relfilenumbermap.h"
 
 struct ColumnarWriteState
 {
@@ -99,7 +98,7 @@ ColumnarBeginWrite(Relation rel,
 				   ColumnarOptions options,
 				   TupleDesc tupleDescriptor)
 {
-	RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
+	RelFileLocator relfilelocator = rel->rd_locator;
 
 	/* get comparison function pointers for each of the columns */
 	uint32 columnCount = tupleDescriptor->natts;
