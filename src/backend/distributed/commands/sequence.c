@@ -463,7 +463,8 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 																			DEPENDENCY_INTERNAL))
 	{
 		ereport(ERROR, (errmsg(
-							"Altering a distributed sequence is currently not supported.")));
+							"Altering a distributed sequence is currently not supported.")
+						));
 	}
 
 	/*
@@ -991,8 +992,8 @@ FilterDistributedSequences(GrantStmt *stmt)
 {
 	bool grantOnSequenceCommand = (stmt->targtype == ACL_TARGET_OBJECT &&
 								   stmt->objtype == OBJECT_SEQUENCE);
-	bool grantOnAllSequencesInSchemaCommand = (stmt->targtype ==
-											   ACL_TARGET_ALL_IN_SCHEMA &&
+	bool grantOnAllSequencesInSchemaCommand = (stmt->targtype == ACL_TARGET_ALL_IN_SCHEMA
+																		&&
 											   stmt->objtype == OBJECT_SEQUENCE);
 
 	/* we are only interested in sequence level grants */
@@ -1036,7 +1037,8 @@ FilterDistributedSequences(GrantStmt *stmt)
 				RangeVar *distributedSequence = makeRangeVar(get_namespace_name(
 																 namespaceOid),
 															 get_rel_name(
-																 sequenceAddress->objectId),
+																 sequenceAddress->objectId
+																 ),
 															 -1);
 				grantSequenceList = lappend(grantSequenceList, distributedSequence);
 			}

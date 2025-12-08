@@ -156,9 +156,10 @@ static bool AllDistributedRelationsInRestrictionContextColocated(
 	restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static bool HasPlaceHolderVar(Node *node);
-static JoinRestrictionContext * FilterJoinRestrictionContext(
-	JoinRestrictionContext *joinRestrictionContext, Relids
-	queryRteIdentities);
+static JoinRestrictionContext * FilterJoinRestrictionContext(JoinRestrictionContext *
+															 joinRestrictionContext,
+															 Relids
+															 queryRteIdentities);
 static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
@@ -614,7 +615,8 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *restrictionCon
 	List *attributeEquivalenceList = GenerateAllAttributeEquivalences(restrictionContext);
 
 	return RestrictionEquivalenceForPartitionKeysViaEquivalences(restrictionContext,
-																 attributeEquivalenceList);
+																 attributeEquivalenceList)
+	;
 }
 
 
@@ -1160,8 +1162,8 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
  * with a single AttributeEquivalenceClassMember.
  */
 static AttributeEquivalenceClass *
-GenerateEquivalenceClassForRelationRestriction(
-	RelationRestrictionContext *relationRestrictionContext)
+GenerateEquivalenceClassForRelationRestriction(RelationRestrictionContext *
+											   relationRestrictionContext)
 {
 	ListCell *relationRestrictionCell = NULL;
 	AttributeEquivalenceClassMember *eqMember = NULL;
@@ -2071,8 +2073,8 @@ FindQueryContainingRTEIdentityInternal(Node *node,
  * distributed  relations in the given relation restrictions list are co-located.
  */
 static bool
-AllDistributedRelationsInRestrictionContextColocated(
-	RelationRestrictionContext *restrictionContext)
+AllDistributedRelationsInRestrictionContextColocated(RelationRestrictionContext *
+													 restrictionContext)
 {
 	RelationRestriction *relationRestriction = NULL;
 	List *relationIdList = NIL;

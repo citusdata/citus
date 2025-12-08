@@ -72,7 +72,8 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 						errmsg(
-							"pg_catalog.split_copy_info array cannot contain null values")));
+							"pg_catalog.split_copy_info array cannot contain null values")
+						));
 	}
 
 	const int slice_ndim = 0;

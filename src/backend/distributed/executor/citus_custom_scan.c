@@ -67,8 +67,8 @@ static void CitusPreExecScan(CitusScanState *scanState);
 static bool ModifyJobNeedsEvaluation(Job *workerJob);
 static void RegenerateTaskForFasthPathQuery(Job *workerJob);
 static void RegenerateTaskListForInsert(Job *workerJob);
-static DistributedPlan * CopyDistributedPlanWithoutCache(
-	DistributedPlan *originalDistributedPlan);
+static DistributedPlan * CopyDistributedPlanWithoutCache(DistributedPlan *
+														 originalDistributedPlan);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 static void EnsureForceDelegationDistributionKey(Job *job);

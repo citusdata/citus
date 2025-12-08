@@ -149,13 +149,14 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 		}
 
 		default:
-
+		{
 			/*
 			 * Nodes that are not supported by Citus: we pass-through to the
 			 * main PostgreSQL executor. Any Citus-supported RenameStmt
 			 * renameType must appear above in the switch, explicitly.
 			 */
 			return NIL;
+		}
 	}
 
 	bool isCitusRelation = IsCitusTable(tableRelationId);

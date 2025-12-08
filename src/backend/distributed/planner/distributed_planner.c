@@ -85,8 +85,8 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static PlannedStmt * CreateDistributedPlannedStmt(
-	DistributedPlanningContext *planContext);
+static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
+;
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 															   DistributedPlanningContext
 															   *planContext);
@@ -125,14 +125,14 @@ static void AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo,
 													  Const *resultFormatConst);
 static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
-static void CreateAndPushPlannerRestrictionContext(
-	DistributedPlanningContext *planContext,
-	FastPathRestrictionContext *
-	fastPathContext);
+static void CreateAndPushPlannerRestrictionContext(DistributedPlanningContext *planContext
+										   ,
+												   FastPathRestrictionContext *
+												   fastPathContext);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
-static void ResetPlannerRestrictionContext(
-	PlannerRestrictionContext *plannerRestrictionContext);
+static void ResetPlannerRestrictionContext(PlannerRestrictionContext *
+										   plannerRestrictionContext);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);

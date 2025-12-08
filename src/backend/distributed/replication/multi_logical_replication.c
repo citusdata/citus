@@ -131,8 +131,8 @@ static void ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 static void WaitForMiliseconds(long timeout);
-static XLogRecPtr GetSubscriptionPosition(
-	GroupedLogicalRepTargets *groupedLogicalRepTargets);
+static XLogRecPtr GetSubscriptionPosition(GroupedLogicalRepTargets *
+										  groupedLogicalRepTargets);
 
 static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);

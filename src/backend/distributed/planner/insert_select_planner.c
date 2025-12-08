@@ -66,7 +66,8 @@ static bool InsertSelectHasRouterSelect(Query *originalQuery,
 										PlannerRestrictionContext *
 										plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
-											   CitusTableCacheEntry *targetTableCacheEntry,
+											   CitusTableCacheEntry *targetTableCacheEntry
+																						  ,
 											   ShardInterval *shardInterval,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext,
@@ -1155,7 +1156,8 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		TargetEntry *newInsertTargetEntry = makeTargetEntry((Expr *) newInsertVar,
 															originalAttrNo,
 															oldInsertTargetEntry->resname,
-															oldInsertTargetEntry->resjunk);
+															oldInsertTargetEntry->resjunk)
+		;
 
 		newInsertTargetlist = lappend(newInsertTargetlist, newInsertTargetEntry);
 		resno++;

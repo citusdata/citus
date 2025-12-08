@@ -26,7 +26,8 @@ extern int ValuesMaterializationThreshold;
 
 extern bool CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit);
 extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
-									  PlannerRestrictionContext *plannerRestrictionContext);
+									  PlannerRestrictionContext *plannerRestrictionContext
+									  );
 extern bool JoinTreeContainsSubquery(Query *query);
 extern bool IsNodeSubquery(Node *node);
 extern bool HasEmptyJoinTree(Query *query);
@@ -37,12 +38,12 @@ extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(
-	Query *originalQuery,
-	PlannerRestrictionContext
-	*
-	plannerRestrictionContext,
-	bool plannerPhase);
+extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery
+						,
+																	  PlannerRestrictionContext
+																	  *
+																	  plannerRestrictionContext,
+																	  bool plannerPhase);
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
 																 outerMostQueryHasLimit);

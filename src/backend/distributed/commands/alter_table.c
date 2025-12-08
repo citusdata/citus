@@ -77,9 +77,9 @@
 #define ALTER_TABLE_SET_ACCESS_METHOD 'm'
 
 #define UNDISTRIBUTE_TABLE_CASCADE_HINT \
-	"Use cascade option to undistribute all the relations involved in " \
-	"a foreign key relationship with %s by executing SELECT " \
-	"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
+		"Use cascade option to undistribute all the relations involved in " \
+		"a foreign key relationship with %s by executing SELECT " \
+		"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
 
 
 typedef TableConversionReturn *(*TableConversionFunction)(struct
@@ -185,8 +185,8 @@ typedef struct TableConversionState
 
 
 static TableConversionReturn * AlterDistributedTable(TableConversionParameters *params);
-static TableConversionReturn * AlterTableSetAccessMethod(
-	TableConversionParameters *params);
+static TableConversionReturn * AlterTableSetAccessMethod(TableConversionParameters *params
+														 );
 static TableConversionReturn * ConvertTable(TableConversionState *con);
 static TableConversionReturn * ConvertTableInternal(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
@@ -216,7 +216,8 @@ static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
-												   CascadeToColocatedOption cascadeOption);
+												   CascadeToColocatedOption cascadeOption)
+;
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static List * WrapTableDDLCommands(List *commandStrings);
@@ -506,7 +507,8 @@ UndistributeTable(TableConversionParameters *params)
 		IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
 		EnsureUndistributeTenantTableSafe(params->relationId,
-										  TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE]);
+										  TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE])
+		;
 	}
 
 	if (!params->cascadeViaForeignKeys)

@@ -118,8 +118,10 @@ ObjectTypeToKeyword(ObjectType objtype)
 		}
 
 		default:
+		{
 			elog(ERROR, "Unknown object type: %d", objtype);
 			return NULL;
+		}
 	}
 }
 

@@ -831,7 +831,8 @@ IsShardKeyValueAllowed(Const *shardKey, uint32 colocationId)
 	ereport(DEBUG4, errmsg("Comparing saved:%s with Shard key: %s colocationid:%d:%d",
 						   pretty_format_node_dump(
 							   nodeToString(
-								   AllowedDistributionColumnValue.distributionColumnValue)),
+								   AllowedDistributionColumnValue.distributionColumnValue)
+							   ),
 						   pretty_format_node_dump(nodeToString(shardKey)),
 						   AllowedDistributionColumnValue.colocationId, colocationId));
 

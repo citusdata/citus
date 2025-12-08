@@ -703,7 +703,8 @@ EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
 	 * the relation because the distribution column can be modified in that period.
 	 */
 	Oid distributionColumnType = ColumnTypeIdForRelationColumnName(relationId,
-																   distributionColumnName);
+																   distributionColumnName)
+	;
 
 	text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
 	Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
@@ -1108,8 +1109,8 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 				 DistributedTableParams *distributedTableParams)
 {
 	if ((tableType == HASH_DISTRIBUTED || tableType == APPEND_DISTRIBUTED ||
-		 tableType == RANGE_DISTRIBUTED || tableType == SINGLE_SHARD_DISTRIBUTED) !=
-		(distributedTableParams != NULL))
+		 tableType == RANGE_DISTRIBUTED || tableType == SINGLE_SHARD_DISTRIBUTED) != (
+			distributedTableParams != NULL))
 	{
 		ereport(ERROR, (errmsg("distributed table params must be provided "
 							   "when creating a distributed table and must "

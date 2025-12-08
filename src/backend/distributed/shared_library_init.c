@@ -132,15 +132,15 @@ ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
  * module.
  */
 #define DEFINE_COLUMNAR_PASSTHROUGH_FUNC(funcname) \
-	static PGFunction CppConcat(extern_, funcname); \
-	PG_FUNCTION_INFO_V1(funcname); \
-	Datum funcname(PG_FUNCTION_ARGS) \
-	{ \
-		return CppConcat(extern_, funcname)(fcinfo); \
-	}
+		static PGFunction CppConcat(extern_, funcname); \
+		PG_FUNCTION_INFO_V1(funcname); \
+		Datum funcname(PG_FUNCTION_ARGS) \
+		{ \
+			return CppConcat(extern_, funcname)(fcinfo); \
+		}
 #define INIT_COLUMNAR_SYMBOL(typename, funcname) \
-	CppConcat(extern_, funcname) = \
-		(typename) (void *) lookup_external_function(handle, # funcname)
+		CppConcat(extern_, funcname) = \
+			(typename) (void *) lookup_external_function(handle, # funcname)
 
 #define CDC_DECODER_DYNAMIC_LIB_PATH "$libdir/citus_decoders:$libdir"
 

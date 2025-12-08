@@ -153,8 +153,8 @@ static String * MakeDummyColumnString(int dummyColumnId);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
-static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
-	Query *query);
+static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *
+																				query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
 static bool ContainsSearchClauseWalker(Node *node, void *context);
@@ -855,7 +855,8 @@ DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList)
 							 "Modifying local tables with remote local tables is "
 							 "not supported.",
 							 NULL,
-							 "Consider wrapping remote local table to a CTE, or subquery");
+							 "Consider wrapping remote local table to a CTE, or subquery")
+		;
 	}
 	return NULL;
 }
@@ -3152,7 +3153,8 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 		if (cachedShardInterval == NULL)
 		{
 			ereport(ERROR, (errmsg(
-								"could not find shardinterval to which to send the query")));
+								"could not find shardinterval to which to send the query")
+							));
 		}
 
 		if (outputPartitionValueConst != NULL)

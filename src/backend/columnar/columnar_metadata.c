@@ -72,9 +72,9 @@
 
 #define COLUMNAR_RELOPTION_NAMESPACE "columnar"
 #define SLOW_METADATA_ACCESS_WARNING \
-	"Metadata index %s is not available, this might mean slower read/writes " \
-	"on columnar tables. This is expected during Postgres upgrades and not " \
-	"expected otherwise."
+		"Metadata index %s is not available, this might mean slower read/writes " \
+		"on columnar tables. This is expected during Postgres upgrades and not " \
+		"expected otherwise."
 
 typedef struct
 {
@@ -1332,7 +1332,8 @@ ColumnarRelationId(Oid relid, RelFileLocator relfilelocator)
 {
 	return OidIsValid(relid) ? relid : RelidByRelfilenumber(RelationTablespace_compat(
 																relfilelocator),
-															RelationPhysicalIdentifierNumber_compat(
+															RelationPhysicalIdentifierNumber_compat
+															(
 																relfilelocator));
 }
 

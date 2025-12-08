@@ -541,7 +541,8 @@ StatCountersShmemInit(void)
 	SharedBackendStatsSlotArray = (BackendStatsSlot *)
 								  ShmemInitStruct("Citus Shared Backend Stats Slot Array",
 												  SharedBackendStatsSlotArrayShmemSize(),
-												  &sharedBackendStatsSlotArrayAlreadyInit);
+												  &sharedBackendStatsSlotArrayAlreadyInit)
+	;
 
 	bool sharedSavedBackendStatsHashLockAlreadyInit = false;
 	SharedSavedBackendStatsHashLock = ShmemInitStruct(

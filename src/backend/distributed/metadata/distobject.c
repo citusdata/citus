@@ -338,8 +338,8 @@ ShouldMarkRelationDistributed(Oid relationId)
 	bool ownedByExtension = IsTableOwnedByExtension(relationId);
 	bool alreadyDistributed = IsObjectDistributed(relationAddress);
 	bool hasUnsupportedDependency =
-		DeferErrorIfAnyObjectHasUnsupportedDependency(list_make1(relationAddress)) !=
-		NULL;
+		DeferErrorIfAnyObjectHasUnsupportedDependency(list_make1(relationAddress)) != NULL
+	;
 	bool hasCircularDependency =
 		DeferErrorIfCircularDependencyExists(relationAddress) != NULL;
 

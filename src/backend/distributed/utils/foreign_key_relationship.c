@@ -81,7 +81,8 @@ static List * GetRelationshipNodesForFKeyConnectedRelations(
 static List * GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode);
 static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 																			relationId,
-																			bool *isFound);
+																			bool *isFound)
+;
 static void CreateForeignConstraintRelationshipGraph(void);
 static bool IsForeignConstraintRelationshipGraphValid(void);
 static List * GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode,
@@ -177,8 +178,8 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
  * to given relation node via a foreign key relationhip graph.
  */
 static List *
-GetRelationshipNodesForFKeyConnectedRelations(
-	ForeignConstraintRelationshipNode *relationshipNode)
+GetRelationshipNodesForFKeyConnectedRelations(ForeignConstraintRelationshipNode *
+											  relationshipNode)
 {
 	HTAB *oidVisitedMap = CreateSimpleHashSetWithName(Oid, "oid visited hash set");
 
@@ -566,8 +567,8 @@ PopulateAdjacencyLists(void)
 		/* we just saw this edge, no need to add it twice */
 		if (currentFConstraintRelationshipEdge->referencingRelationOID ==
 			prevReferencingOid &&
-			currentFConstraintRelationshipEdge->referencedRelationOID ==
-			prevReferencedOid)
+			currentFConstraintRelationshipEdge->referencedRelationOID == prevReferencedOid
+			)
 		{
 			continue;
 		}

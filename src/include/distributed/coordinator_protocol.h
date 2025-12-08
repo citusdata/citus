@@ -59,12 +59,13 @@
 
 /* Remote call definitions to help with data staging and deletion */
 #define WORKER_APPLY_SHARD_DDL_COMMAND \
-	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s, %s)"
+		"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s, %s)"
 #define WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA \
-	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
+		"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
 #define WORKER_APPLY_INTER_SHARD_DDL_COMMAND \
-	"SELECT worker_apply_inter_shard_ddl_command (" UINT64_FORMAT ", %s, " UINT64_FORMAT \
-	", %s, %s)"
+		"SELECT worker_apply_inter_shard_ddl_command (" UINT64_FORMAT \
+		", %s, " UINT64_FORMAT \
+		", %s, %s)"
 #define SHARD_RANGE_QUERY "SELECT min(%s), max(%s) FROM %s"
 #define SHARD_TABLE_SIZE_QUERY "SELECT pg_table_size(%s)"
 #define SHARD_CSTORE_TABLE_SIZE_QUERY "SELECT cstore_table_size(%s)"
@@ -225,7 +226,8 @@ extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId,
-										   IncludeSequenceDefaults includeSequenceDefaults,
+										   IncludeSequenceDefaults includeSequenceDefaults
+																						  ,
 										   IncludeIdentities includeIdentityDefaults,
 										   bool creatingShellTableOnRemoteNode);
 extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,

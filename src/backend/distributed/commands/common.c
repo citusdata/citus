@@ -64,8 +64,8 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 		return NIL;
 	}
 
-	if (ops->qualify && DistOpsValidityState(stmt, ops) ==
-		ShouldQualifyAfterLocalCreation)
+	if (ops->qualify && DistOpsValidityState(stmt, ops) == ShouldQualifyAfterLocalCreation
+		)
 	{
 		/* qualify the statement after local creation */
 		ops->qualify(stmt);

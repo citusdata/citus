@@ -131,17 +131,19 @@ static void UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 												   uint32 colocationId);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
-static void CreatePartitioningHierarchyForBlockingSplit(
-	List *shardGroupSplitIntervalListList,
-	List *workersForPlacementList);
+static void CreatePartitioningHierarchyForBlockingSplit(List *
+														shardGroupSplitIntervalListList,
+														List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static Task * CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode);
-static StringInfo CreateSplitShardReplicationSetupUDF(
-	List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList,
-	List *destinationWorkerNodesList,
-	DistributionColumnMap *
-	distributionColumnOverrides);
+static StringInfo CreateSplitShardReplicationSetupUDF(List *
+													  sourceColocatedShardIntervalList,
+													  List *
+													  shardGroupSplitIntervalListList,
+													  List *destinationWorkerNodesList,
+													  DistributionColumnMap *
+													  distributionColumnOverrides);
 static List * ParseReplicationSlotInfoFromResult(PGresult *result);
 
 static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
@@ -883,7 +885,8 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
 									  MaxAdaptiveExecutorPoolSize,
-									  NULL /* jobIdList (ignored by API implementation) */);
+									  NULL /* jobIdList (ignored by API implementation) */
+									  );
 }
 
 
@@ -1881,7 +1884,8 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg(
 							"Failed to run worker_split_shard_replication_setup UDF. It should successfully execute "
-							" for splitting a shard in a non-blocking way. Please retry.")));
+							" for splitting a shard in a non-blocking way. Please retry.")
+						));
 	}
 
 	/* Get replication slot information */

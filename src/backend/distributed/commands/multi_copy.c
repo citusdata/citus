@@ -1272,7 +1272,9 @@ ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result)
 		}
 
 		default:
+		{
 			Assert(false); /* there are no other options for this enum */
+		}
 	}
 }
 
@@ -2468,7 +2470,7 @@ ProcessAppendToShardOption(Oid relationId, CopyStmt *copyStatement)
 		if (!IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 		{
 			ereport(ERROR, (errmsg(APPEND_TO_SHARD_OPTION " is only valid for "
-														  "append-distributed tables")));
+								   "append-distributed tables")));
 		}
 
 		/* throws an error if shard does not exist */
@@ -2859,7 +2861,8 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 		if (strcmp(option->defname, "on_error") == 0)
 		{
 			ereport(ERROR, (errmsg(
-								"Citus does not support COPY FROM with ON_ERROR option.")));
+								"Citus does not support COPY FROM with ON_ERROR option."))
+					);
 		}
 		else if (strcmp(option->defname, "log_verbosity") == 0)
 		{
@@ -2877,7 +2880,8 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 	if (log_verbosity)
 	{
 		ereport(ERROR, (errmsg(
-							"Citus does not support COPY FROM with LOG_VERBOSITY option.")));
+							"Citus does not support COPY FROM with LOG_VERBOSITY option.")
+						));
 	}
 #endif
 }

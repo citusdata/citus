@@ -161,7 +161,8 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 RecursivePlanningContext *
 														 recursivePlanningContext);
 static bool RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
-														 RecursivePlanningContext *context,
+														 RecursivePlanningContext *context
+																						  ,
 														 bool chainedJoin);
 static void RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 											   RecursivePlanningContext *context);
@@ -207,8 +208,8 @@ static bool CanPushdownRecurringOuterJoinOnOuterRTE(RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoinOnInnerVar(Var *innervar, RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query);
 #if PG_VERSION_NUM < PG_VERSION_17
-static bool hasPseudoconstantQuals(
-	RelationRestrictionContext *relationRestrictionContext);
+static bool hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
+;
 #endif
 
 /*
@@ -2192,6 +2193,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
+
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -2241,6 +2243,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
+
 			/* use the types in the function definition otherwise */
 			else
 			{
@@ -2780,8 +2783,8 @@ CanPushdownRecurringOuterJoinOnInnerVar(Var *innerVar, RangeTblEntry *rte)
 	}
 
 	/* Check if the inner variable is part of the distribution column */
-	if (cacheEntry->partitionColumn && innerVar->varattno ==
-		cacheEntry->partitionColumn->varattno)
+	if (cacheEntry->partitionColumn && innerVar->varattno == cacheEntry->partitionColumn->
+		varattno)
 	{
 		return true;
 	}
@@ -2922,7 +2925,8 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 			joinExpr->larg, query->rtable))
 	{
 		ereport(DEBUG5, (errmsg(
-							 "Lateral join is not supported for pushdown in this path.")));
+							 "Lateral join is not supported for pushdown in this path.")))
+		;
 		return false;
 	}
 
@@ -2983,6 +2987,7 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 				return true;
 			}
 		}
+
 		/* the inner table is a subquery, extract the base relation referred in the qual */
 		else if (rte && rte->rtekind == RTE_SUBQUERY)
 		{

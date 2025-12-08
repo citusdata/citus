@@ -18,10 +18,10 @@
 
 
 #define NOT_SUPPORTED_IN_COMMUNITY(name) \
-	PG_FUNCTION_INFO_V1(name); \
-	Datum name(PG_FUNCTION_ARGS) { \
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), \
-						errmsg(# name "() is only supported on Citus Enterprise"))); \
-	}
+		PG_FUNCTION_INFO_V1(name); \
+		Datum name(PG_FUNCTION_ARGS) { \
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), \
+							errmsg(# name "() is only supported on Citus Enterprise"))); \
+		}
 
 #endif

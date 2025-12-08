@@ -15,20 +15,20 @@
 
 #if PG_VERSION_NUM >= PG_VERSION_18
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
-	create_foreignscan_path( \
-		(a),            /* root            */ \
-		(b),            /* rel             */ \
-		(c),            /* target          */ \
-		(d),            /* rows            */ \
-		0,              /* disabled_nodes  */ \
-		(e),            /* startup_cost    */ \
-		(f),            /* total_cost      */ \
-		(g),            /* pathkeys        */ \
-		(h),            /* required_outer  */ \
-		(i),            /* fdw_outerpath   */ \
-		(j),            /* fdw_restrictinfo*/ \
-		(k)             /* fdw_private     */ \
-		)
+		create_foreignscan_path( \
+			(a),        /* root            */ \
+			(b),        /* rel             */ \
+			(c),        /* target          */ \
+			(d),        /* rows            */ \
+			0,          /* disabled_nodes  */ \
+			(e),        /* startup_cost    */ \
+			(f),        /* total_cost      */ \
+			(g),        /* pathkeys        */ \
+			(h),        /* required_outer  */ \
+			(i),        /* fdw_outerpath   */ \
+			(j),        /* fdw_restrictinfo*/ \
+			(k)         /* fdw_private     */ \
+			)
 
 /* PG-18 introduced get_op_index_interpretation, old name was get_op_btree_interpretation */
 #define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
@@ -38,11 +38,11 @@
 
 #elif PG_VERSION_NUM >= PG_VERSION_17
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
-	create_foreignscan_path( \
-		(a), (b), (c), (d), \
-		(e), (f), \
-		(g), (h), (i), (j), (k) \
-		)
+		create_foreignscan_path( \
+			(a), (b), (c), (d), \
+			(e), (f), \
+			(g), (h), (i), (j), (k) \
+			)
 
 #endif
 
@@ -364,7 +364,9 @@ getObjectClass(const ObjectAddress *object)
 		}
 
 		case TransformRelationId:
+		{
 			return OCLASS_TRANSFORM;
+		}
 	}
 
 	/* shouldn't get here */
@@ -638,13 +640,13 @@ typedef RangeTblEntry RTEPermissionInfo;
 #define fcGetArgValue(fc, n) ((fc)->args[n].value)
 #define fcGetArgNull(fc, n) ((fc)->args[n].isnull)
 #define fcSetArgExt(fc, n, val, is_null) \
-	(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
+		(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
 #define fcSetArg(fc, n, value) fcSetArgExt(fc, n, value, false)
 #define fcSetArgNull(fc, n) fcSetArgExt(fc, n, (Datum) 0, true)
 
 #define CREATE_SEQUENCE_COMMAND \
-	"CREATE %sSEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
-	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
-	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
+		"CREATE %sSEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
+		" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
+		" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
 
 #endif   /* PG_VERSION_COMPAT_H */

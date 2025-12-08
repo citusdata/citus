@@ -646,7 +646,8 @@ static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLev
 																	modLevel,
 																	List *taskList,
 																	bool
-																	exludeFromTransaction);
+																	exludeFromTransaction)
+;
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
@@ -711,8 +712,8 @@ static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
 static int GetEventSetSize(List *sessionList);
-static bool ProcessSessionsWithFailedWaitEventSetOperations(
-	DistributedExecution *execution);
+static bool ProcessSessionsWithFailedWaitEventSetOperations(DistributedExecution *
+															execution);
 static bool HasIncompleteConnectionEstablishment(DistributedExecution *execution);
 static void RebuildWaitEventSet(DistributedExecution *execution);
 static void RebuildWaitEventSetForSessions(DistributedExecution *execution);
@@ -2635,8 +2636,10 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 
 		/* open a new connection to the worker */
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
-																	  workerPool->nodeName,
-																	  workerPool->nodePort,
+																	  workerPool->nodeName
+																						  ,
+																	  workerPool->nodePort
+																						  ,
 																	  NULL, NULL);
 		if (!connection)
 		{

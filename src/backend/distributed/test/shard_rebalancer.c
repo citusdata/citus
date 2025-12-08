@@ -34,8 +34,8 @@
 #include "distributed/shard_rebalancer.h"
 
 /* static declarations for json conversion */
-static List * JsonArrayToShardPlacementTestInfoList(
-	ArrayType *shardPlacementJsonArrayObject);
+static List * JsonArrayToShardPlacementTestInfoList(ArrayType *
+													shardPlacementJsonArrayObject);
 static List * JsonArrayToWorkerTestInfoList(ArrayType *workerNodeJsonArrayObject);
 static bool JsonFieldValueBoolDefault(Datum jsonDocument, const char *key,
 									  bool defaultValue);
