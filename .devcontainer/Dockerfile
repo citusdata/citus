@@ -113,10 +113,10 @@ FROM base AS uncrustify-builder
 RUN sudo apt update && sudo apt install -y cmake tree
 
 WORKDIR /uncrustify
-RUN curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.68.1.tar.gz | tar xz
-WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/
+RUN curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.82.0.tar.gz | tar xz
+WORKDIR /uncrustify/uncrustify-uncrustify-0.82.0/
 RUN mkdir build
-WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/build/
+WORKDIR /uncrustify/uncrustify-uncrustify-0.82.0/build/
 RUN cmake ..
 RUN MAKEFLAGS="-j $(nproc)" make -s
 
