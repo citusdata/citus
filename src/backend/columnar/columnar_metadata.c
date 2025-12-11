@@ -1330,11 +1330,10 @@ GetHighestUsedAddress(Relation rel)
 Oid
 ColumnarRelationId(Oid relid, RelFileLocator relfilelocator)
 {
-	return OidIsValid(relid) ? relid : RelidByRelfilenumber(RelationTablespace_compat(
-																relfilelocator),
+	return OidIsValid(relid) ? relid : RelidByRelfilenumber(RelationTablespace_compat
+																(relfilelocator),
 															RelationPhysicalIdentifierNumber_compat
-															(
-																relfilelocator));
+																(relfilelocator));
 }
 
 

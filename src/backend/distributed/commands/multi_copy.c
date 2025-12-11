@@ -2860,9 +2860,8 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 	{
 		if (strcmp(option->defname, "on_error") == 0)
 		{
-			ereport(ERROR, (errmsg(
-								"Citus does not support COPY FROM with ON_ERROR option."))
-					);
+			ereport(ERROR, (errmsg("Citus does not support "
+								   "COPY FROM with ON_ERROR option.")));
 		}
 		else if (strcmp(option->defname, "log_verbosity") == 0)
 		{
@@ -2879,9 +2878,8 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 	 */
 	if (log_verbosity)
 	{
-		ereport(ERROR, (errmsg(
-							"Citus does not support COPY FROM with LOG_VERBOSITY option.")
-						));
+		ereport(ERROR, (errmsg("Citus does not support "
+							   "COPY FROM with LOG_VERBOSITY option.")));
 	}
 #endif
 }

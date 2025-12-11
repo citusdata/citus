@@ -94,8 +94,8 @@ static bool RangeVarListHasLocalRelationConvertedByUser(List *relationRangeVarLi
 														AlterTableStmt *
 														alterTableStatement);
 static int CompareRangeVarsByOid(const void *leftElement, const void *rightElement);
-static List * GetAlterTableAddFKeyRightRelationIdList(AlterTableStmt *alterTableStatement)
-;
+static List * GetAlterTableAddFKeyRightRelationIdList(AlterTableStmt *
+													  alterTableStatement);
 static List * GetAlterTableAddFKeyRightRelationRangeVarList(AlterTableStmt *
 															alterTableStatement);
 static List * GetAlterTableAddFKeyConstraintList(AlterTableStmt *alterTableStatement);
@@ -3431,14 +3431,13 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									if (commandList->length > 1 ||
 										columnConstraints->length > 1)
 									{
-										ereport(ERROR, (errcode(
-															ERRCODE_FEATURE_NOT_SUPPORTED)
-																						  ,
-														errmsg(
-															"cannot execute ADD COLUMN .. DEFAULT nextval('..')"
-															" command with other subcommands/constraints"),
-														errhint(
-															"You can issue each subcommand separately")));
+										ereport(ERROR,
+												(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												 errmsg(
+													 "cannot execute ADD COLUMN .. DEFAULT nextval('..')"
+													 " command with other subcommands/constraints"),
+												 errhint(
+													 "You can issue each subcommand separately")));
 									}
 
 									/*
@@ -3447,15 +3446,14 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									 */
 									if (!TableEmpty(relationId))
 									{
-										ereport(ERROR, (errcode(
-															ERRCODE_FEATURE_NOT_SUPPORTED)
-																						  ,
-														errmsg(
-															"cannot add a column involving DEFAULT nextval('..') "
-															"because the table is not empty"),
-														errhint(
-															"You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
-															"Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
+										ereport(ERROR,
+												(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												 errmsg(
+													 "cannot add a column involving DEFAULT nextval('..') "
+													 "because the table is not empty"),
+												 errhint(
+													 "You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
+													 "Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
 									}
 								}
 							}

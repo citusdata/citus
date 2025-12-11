@@ -675,9 +675,9 @@ SharedConnectionStatsShmemInit(void)
 		ConnectionStatsSharedState->sharedConnectionHashTrancheId = LWLockNewTrancheId();
 		ConnectionStatsSharedState->sharedConnectionHashTrancheName =
 			"Shared Connection Tracking Hash Tranche";
-		LWLockRegisterTranche(ConnectionStatsSharedState->sharedConnectionHashTrancheId,
-							  ConnectionStatsSharedState->sharedConnectionHashTrancheName)
-		;
+		LWLockRegisterTranche(
+			ConnectionStatsSharedState->sharedConnectionHashTrancheId,
+			ConnectionStatsSharedState->sharedConnectionHashTrancheName);
 
 		LWLockInitialize(&ConnectionStatsSharedState->sharedConnectionHashLock,
 						 ConnectionStatsSharedState->sharedConnectionHashTrancheId);

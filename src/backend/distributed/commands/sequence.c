@@ -462,9 +462,8 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	if (IsAnyObjectDistributed(addresses) || SequenceUsedInDistributedTable(address,
 																			DEPENDENCY_INTERNAL))
 	{
-		ereport(ERROR, (errmsg(
-							"Altering a distributed sequence is currently not supported.")
-						));
+		ereport(ERROR, (errmsg("Altering a distributed sequence "
+							   "is currently not supported.")));
 	}
 
 	/*
@@ -1034,12 +1033,10 @@ FilterDistributedSequences(GrantStmt *stmt)
 			 */
 			if (list_member_oid(namespaceOidList, namespaceOid))
 			{
-				RangeVar *distributedSequence = makeRangeVar(get_namespace_name(
-																 namespaceOid),
-															 get_rel_name(
-																 sequenceAddress->objectId
-																 ),
-															 -1);
+				RangeVar *distributedSequence = makeRangeVar(
+					get_namespace_name(namespaceOid),
+					get_rel_name(sequenceAddress->objectId),
+					-1);
 				grantSequenceList = lappend(grantSequenceList, distributedSequence);
 			}
 		}

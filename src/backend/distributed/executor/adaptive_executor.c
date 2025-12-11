@@ -642,12 +642,11 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 xactProperties,
 														 List *jobIdList,
 														 bool localExecutionSupported);
-static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLevel
-																	modLevel,
-																	List *taskList,
-																	bool
-																	exludeFromTransaction)
-;
+static TransactionProperties DecideTaskListTransactionProperties(RowModifyLevel
+																 modLevel,
+																 List *taskList,
+																 bool
+																 excludeFromTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
@@ -843,7 +842,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	bool excludeFromXact = false;
 
-	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
+	TransactionProperties xactProperties = DecideTaskListTransactionProperties(
 		distributedPlan->modLevel, taskList, excludeFromXact);
 
 	/*
@@ -942,7 +941,7 @@ ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported)
 		modLevel, utilityTaskList, MaxAdaptiveExecutorPoolSize, localExecutionSupported
 		);
 	executionParams->xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList, false);
+		DecideTaskListTransactionProperties(modLevel, utilityTaskList, false);
 	executionParams->isUtilityCommand = true;
 
 	return ExecuteTaskListExtended(executionParams);
@@ -964,8 +963,8 @@ ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize,
 
 	bool excludeFromXact = false;
 	executionParams->xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList,
-											   excludeFromXact);
+		DecideTaskListTransactionProperties(modLevel, utilityTaskList,
+											excludeFromXact);
 	executionParams->isUtilityCommand = true;
 
 	return ExecuteTaskListExtended(executionParams);
@@ -985,7 +984,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList)
 		);
 
 	bool excludeFromXact = false;
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+	executionParams->xactProperties = DecideTaskListTransactionProperties(
 		modLevel, taskList, excludeFromXact);
 
 	return ExecuteTaskListExtended(executionParams);
@@ -1011,7 +1010,7 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 		modLevel, taskList, targetPoolSize, localExecutionSupported
 		);
 
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+	executionParams->xactProperties = DecideTaskListTransactionProperties(
 		modLevel, taskList, true);
 	return ExecuteTaskListExtended(executionParams);
 }
@@ -1033,7 +1032,7 @@ CreateDefaultExecutionParams(RowModifyLevel modLevel, List *taskList,
 		modLevel, taskList, targetPoolSize, localExecutionSupported
 		);
 
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+	executionParams->xactProperties = DecideTaskListTransactionProperties(
 		modLevel, taskList, false);
 	executionParams->expectResults = expectResults;
 	executionParams->tupleDestination = tupleDest;
@@ -1253,7 +1252,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 
 /*
- * DecideTransactionPropertiesForTaskList decides whether to use remote transaction
+ * DecideTaskListTransactionProperties decides whether to use remote transaction
  * blocks, whether to use 2PC for the given task list, and whether to error on any
  * failure.
  *
@@ -1261,8 +1260,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
  * errorOnAnyFailure, but not the other way around) we keep them in the same place.
  */
 static TransactionProperties
-DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, bool
-									   exludeFromTransaction)
+DecideTaskListTransactionProperties(RowModifyLevel modLevel, List *taskList, bool
+									excludeFromTransaction)
 {
 	TransactionProperties xactProperties;
 
@@ -1278,7 +1277,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (exludeFromTransaction)
+	if (excludeFromTransaction)
 	{
 		xactProperties.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_DISALLOWED;
 		return xactProperties;
@@ -2635,12 +2634,8 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 		connectionFlags |= adaptiveConnectionManagementFlag;
 
 		/* open a new connection to the worker */
-		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
-																	  workerPool->nodeName
-																						  ,
-																	  workerPool->nodePort
-																						  ,
-																	  NULL, NULL);
+		MultiConnection *connection = StartNodeUserDatabaseConnection(
+			connectionFlags, workerPool->nodeName, workerPool->nodePort, NULL, NULL);
 		if (!connection)
 		{
 			/* connection can only be NULL for optional connections */

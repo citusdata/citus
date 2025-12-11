@@ -107,10 +107,9 @@ static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid
 															char *colocateWithTableName,
 															const ObjectAddress *
 															functionAddress);
-static void DistributeFunctionColocatedWithSingleShardTable(const
-															ObjectAddress *functionAddress
-																						  ,
-															text *colocateWithText);
+static void DistributeFunctionColocatedWithSingleShardTable(const ObjectAddress *
+															functionAddress, text *
+															colocateWithText);
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
 static List * FilterDistributedFunctions(GrantStmt *grantStmt);
