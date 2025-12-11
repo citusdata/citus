@@ -561,15 +561,15 @@ extern List * PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryStr
 												processUtilityContext);
 extern List * PostprocessAlterSequenceSchemaStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
-											   ProcessUtilityContext processUtilityContext
-											   );
+											   ProcessUtilityContext
+											   processUtilityContext);
 extern List * PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterSequencePersistenceStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);
 extern List * PreprocessSequenceAlterTableStmt(Node *node, const char *queryString,
-											   ProcessUtilityContext processUtilityContext
-											   );
+											   ProcessUtilityContext
+											   processUtilityContext);
 extern List * PreprocessDropSequenceStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 extern List * SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok, bool
@@ -642,8 +642,8 @@ extern void PrepareAlterTableStmtForConstraint(AlterTableStmt *alterTableStateme
 extern List * PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 									   ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString,
-											  ProcessUtilityContext processUtilityContext)
-;
+											  ProcessUtilityContext
+											  processUtilityContext);
 extern List * PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
 extern void SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStmt,
@@ -839,8 +839,7 @@ extern List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
 extern void ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *
-																	   utilityCommandList)
-;
+																	   utilityCmdList);
 extern void ExecuteAndLogUtilityCommandList(List *ddlCommandList);
 extern void ExecuteAndLogUtilityCommand(const char *commandString);
 extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,

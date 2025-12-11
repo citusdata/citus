@@ -271,8 +271,8 @@ static void AppendTargetEntryToGroupClause(TargetEntry *targetEntry,
 static bool WorkerAggregateWalker(Node *node,
 								  WorkerAggregateWalkerContext *walkerContext);
 static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
-											WorkerAggregateWalkerContext *walkerContextry)
-;
+											WorkerAggregateWalkerContext *
+											walkerContextry);
 static AggregateType GetAggregateType(Aggref *aggregatExpression);
 static Oid AggregateArgumentType(Aggref *aggregate);
 static Expr * FirstAggregateArgument(Aggref *aggregate);
@@ -294,8 +294,8 @@ static Const * MakeIntegerConst(int32 integerValue);
 /* Local functions forward declarations for aggregate expression checks */
 static bool HasNonDistributableAggregates(MultiNode *logicalPlanNode);
 static bool CanPushDownExpression(Node *expression,
-								  const ExtendedOpNodeProperties *extendedOpNodeProperties
-								  );
+								  const ExtendedOpNodeProperties *
+								  extendedOpNodeProperties);
 static DeferredErrorMessage * DeferErrorIfHasNonDistributableAggregates(MultiNode *
 																		logicalPlanNode);
 static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(Aggref *

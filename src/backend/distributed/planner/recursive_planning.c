@@ -161,8 +161,8 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 RecursivePlanningContext *
 														 recursivePlanningContext);
 static bool RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
-														 RecursivePlanningContext *context
-																						  ,
+														 RecursivePlanningContext *
+														 context,
 														 bool chainedJoin);
 static void RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 											   RecursivePlanningContext *context);
@@ -208,8 +208,8 @@ static bool CanPushdownRecurringOuterJoinOnOuterRTE(RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoinOnInnerVar(Var *innervar, RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query);
 #if PG_VERSION_NUM < PG_VERSION_17
-static bool hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
-;
+static bool hasPseudoconstantQuals(RelationRestrictionContext *
+								   relationRestrictionContext);
 #endif
 
 /*
@@ -2783,8 +2783,8 @@ CanPushdownRecurringOuterJoinOnInnerVar(Var *innerVar, RangeTblEntry *rte)
 	}
 
 	/* Check if the inner variable is part of the distribution column */
-	if (cacheEntry->partitionColumn && innerVar->varattno == cacheEntry->partitionColumn->
-		varattno)
+	if (cacheEntry->partitionColumn &&
+		innerVar->varattno == cacheEntry->partitionColumn->varattno)
 	{
 		return true;
 	}
@@ -2924,9 +2924,8 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) || JoinTreeContainsLateral(
 			joinExpr->larg, query->rtable))
 	{
-		ereport(DEBUG5, (errmsg(
-							 "Lateral join is not supported for pushdown in this path.")))
-		;
+		ereport(DEBUG5, (errmsg("Lateral join is not supported for pushdown "
+								"in this path.")));
 		return false;
 	}
 

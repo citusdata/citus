@@ -76,8 +76,8 @@ static List * DropTaskList(Oid relationId, char *schemaName, char *relationName,
 						   List *deletableShardIntervalList);
 static void ExecuteDropShardPlacementCommandRemotely(ShardPlacement *shardPlacement,
 													 const char *shardRelationName,
-													 const char *dropShardPlacementCommand
-													 );
+													 const char *
+													 dropShardPlacementCommand);
 static char * CreateDropShardPlacementCommand(const char *schemaName,
 											  const char *shardRelationName,
 											  char storageType);

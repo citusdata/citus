@@ -824,8 +824,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	char *subqueryForPartitionedShards =
 		GenerateSizeQueryForRelationNameList(partitionedShardNames,
 											 GetWorkerPartitionedSizeUDFNameBySizeQueryType
-											 (
-												 sizeQueryType));
+												 (sizeQueryType));
 
 	/* SELECT SUM(pg_..._size) FROM VALUES (...) */
 	char *subqueryForNonPartitionedShards =
@@ -4267,11 +4266,9 @@ CancelTasksForJob(int64 jobid)
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
 
 	const bool indexOK = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-													DistBackgroundTaskJobIdTaskIdIndexId()
-																						  ,
-													indexOK, NULL,
-													lengthof(scanKey), scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(
+		pgDistBackgroundTasks, DistBackgroundTaskJobIdTaskIdIndexId(),
+		indexOK, NULL, lengthof(scanKey), scanKey);
 
 	List *runningTaskPids = NIL;
 	HeapTuple taskTuple = NULL;

@@ -67,8 +67,8 @@ static DeferredErrorMessage * MergeQualAndTargetListFunctionsSupported(Oid
 																	   Query *query,
 																	   Node *quals,
 																	   List *targetList,
-																	   CmdType commandType
-																	   );
+																	   CmdType
+																	   commandType);
 
 static DistributedPlan * CreateRouterMergePlan(Oid targetRelationId, Query *originalQuery,
 											   Query *query,
@@ -575,8 +575,8 @@ IsDistributionColumnInMergeSource(Expr *columnExpression, Query *query, bool
 		Var *distributionColumn = DistPartitionKey(relationId);
 
 		/* not all distributed tables have partition column */
-		if (distributionColumn != NULL && column->varattno == distributionColumn->varattno
-			)
+		if (distributionColumn != NULL &&
+			column->varattno == distributionColumn->varattno)
 		{
 			isDistributionColumn = true;
 		}
@@ -1046,9 +1046,9 @@ DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
 								 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	ListCell *restrictionCell = NULL;
-	foreach(restrictionCell,
-			plannerRestrictionContext->relationRestrictionContext->relationRestrictionList
-			)
+	foreach(
+		restrictionCell,
+		plannerRestrictionContext->relationRestrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(restrictionCell);
@@ -1080,8 +1080,8 @@ DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
  */
 static DeferredErrorMessage *
 DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
-									  PlannerRestrictionContext *plannerRestrictionContext
-																						  ,
+									  PlannerRestrictionContext *
+									  plannerRestrictionContext,
 									  Oid targetRelationId)
 {
 	List *distTablesList = NIL;
@@ -1118,9 +1118,8 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 
 	if (list_length(distTablesList) > 0 && list_length(localTablesList) > 0)
 	{
-		ereport(DEBUG1, (errmsg(
-							 "A mix of distributed and local table, try repartitioning")))
-		;
+		ereport(DEBUG1, (errmsg("A mix of distributed and local table, "
+								"try repartitioning")));
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "A mix of distributed and citus-local table, "
 							 "routable query is not possible", NULL, NULL);

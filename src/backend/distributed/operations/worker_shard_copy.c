@@ -471,8 +471,8 @@ WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
 	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
 	bool isBinaryCopy = localCopyOutState->binary;
-	bool shouldAddBinaryHeaders = (isBinaryCopy && localCopyOutState->fe_msgbuf->len == 0)
-	;
+	bool shouldAddBinaryHeaders = (isBinaryCopy &&
+								   localCopyOutState->fe_msgbuf->len == 0);
 	if (shouldAddBinaryHeaders)
 	{
 		AppendCopyBinaryHeaders(localCopyOutState);

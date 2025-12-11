@@ -96,8 +96,8 @@ static bool NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
 static bool AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 											QueueMonitorExecutionContext *
 											queueMonitorExecutionContext);
-static void AssignRunnableTasks(QueueMonitorExecutionContext *queueMonitorExecutionContext
-								);
+static void AssignRunnableTasks(QueueMonitorExecutionContext *
+								queueMonitorExecutionContext);
 static List * GetRunningTaskEntries(HTAB *currentExecutors);
 static shm_mq_result ReadFromExecutorQueue(BackgroundExecutorHashEntry *
 										   backgroundExecutorHashEntry,
@@ -106,8 +106,8 @@ static void CheckAndResetLastWorkerAllocationFailure(QueueMonitorExecutionContex
 													 queueMonitorExecutionContext);
 static TaskExecutionStatus TaskConcurrentCancelCheck(TaskExecutionContext *
 													 taskExecutionContext);
-static TaskExecutionStatus ConsumeExecutorQueue(TaskExecutionContext *taskExecutionContext
-												);
+static TaskExecutionStatus ConsumeExecutorQueue(TaskExecutionContext *
+												taskExecutionContext);
 static void TaskHadError(TaskExecutionContext *taskExecutionContext);
 static void TaskEnded(TaskExecutionContext *taskExecutionContext);
 static void TerminateAllTaskExecutors(HTAB *currentExecutors);
@@ -537,8 +537,8 @@ NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
  */
 static bool
 AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
-								QueueMonitorExecutionContext *queueMonitorExecutionContext
-								)
+								QueueMonitorExecutionContext *
+								queueMonitorExecutionContext)
 {
 	Assert(runnableTask && runnableTask->status == BACKGROUND_TASK_STATUS_RUNNABLE);
 

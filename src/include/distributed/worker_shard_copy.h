@@ -16,8 +16,8 @@
 extern bool EnableBinaryProtocol;
 
 extern DestReceiver * CreateShardCopyDestReceiver(EState *executorState,
-												  List *destinationShardFullyQualifiedName
-																						  ,
+												  List *
+												  destinationShardFullyQualifiedName,
 												  uint32_t destinationNodeId);
 
 extern const char * CopyableColumnNamesFromRelationName(const char *schemaName, const

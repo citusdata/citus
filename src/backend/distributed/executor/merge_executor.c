@@ -43,7 +43,8 @@ static HTAB * ExecuteMergeSourcePlanIntoColocatedIntermediateResults(Oid targetR
 																	 char *
 																	 intermediateResultIdPrefix,
 																	 int
-																	 partitionColumnIndex);
+																	 partitionColumnIndex)
+;
 
 
 /*

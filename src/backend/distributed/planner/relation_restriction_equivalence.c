@@ -614,9 +614,9 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *restrictionCon
 
 	List *attributeEquivalenceList = GenerateAllAttributeEquivalences(restrictionContext);
 
-	return RestrictionEquivalenceForPartitionKeysViaEquivalences(restrictionContext,
-																 attributeEquivalenceList)
-	;
+	return RestrictionEquivalenceForPartitionKeysViaEquivalences(
+		restrictionContext,
+		attributeEquivalenceList);
 }
 
 

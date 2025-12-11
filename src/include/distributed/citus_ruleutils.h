@@ -29,8 +29,8 @@ extern char * pg_get_serverdef_string(Oid tableRelationId);
 extern char * pg_get_sequencedef_string(Oid sequenceRelid);
 extern Form_pg_sequence pg_get_sequencedef(Oid sequenceRelationId);
 extern char * pg_get_tableschemadef_string(Oid tableRelationId,
-										   IncludeSequenceDefaults includeSequenceDefaults
-																						  ,
+										   IncludeSequenceDefaults
+										   includeSequenceDefaults,
 										   IncludeIdentities includeIdentityDefaults,
 										   char *accessMethod);
 extern void EnsureRelationKindSupported(Oid relationId);

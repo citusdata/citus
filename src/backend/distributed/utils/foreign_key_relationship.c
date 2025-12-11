@@ -81,8 +81,8 @@ static List * GetRelationshipNodesForFKeyConnectedRelations(
 static List * GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode);
 static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 																			relationId,
-																			bool *isFound)
-;
+																			bool *
+																			isFound);
 static void CreateForeignConstraintRelationshipGraph(void);
 static bool IsForeignConstraintRelationshipGraphValid(void);
 static List * GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode,

@@ -21,8 +21,8 @@ extern MultiConnection * StartPlacementConnection(uint32 flags,
 												  struct ShardPlacement *placement,
 												  const char *userName);
 extern MultiConnection *  GetConnectionIfPlacementAccessedInXact(int flags,
-																 List *placementAccessList
-																						  ,
+																 List *
+																 placementAccessList,
 																 const char *userName);
 extern MultiConnection * StartPlacementListConnection(uint32 flags,
 													  List *placementAccessList,

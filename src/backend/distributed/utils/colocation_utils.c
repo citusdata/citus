@@ -531,8 +531,8 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 			continue;
 		}
 
-		if (colocationId == INVALID_COLOCATION_ID || colocationId > colocationForm->
-			colocationid)
+		if (colocationId == INVALID_COLOCATION_ID ||
+			colocationId > colocationForm->colocationid)
 		{
 			/*
 			 * We assign the smallest colocation id among all the matches so that we

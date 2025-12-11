@@ -185,8 +185,8 @@ typedef struct TableConversionState
 
 
 static TableConversionReturn * AlterDistributedTable(TableConversionParameters *params);
-static TableConversionReturn * AlterTableSetAccessMethod(TableConversionParameters *params
-														 );
+static TableConversionReturn * AlterTableSetAccessMethod(TableConversionParameters *
+														 params);
 static TableConversionReturn * ConvertTable(TableConversionState *con);
 static TableConversionReturn * ConvertTableInternal(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,

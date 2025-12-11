@@ -818,7 +818,7 @@ CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 		ROW_MODIFY_NONE,
 		ddlTaskExecList,
 		MaxAdaptiveExecutorPoolSize,
-		NULL /* jobIdList (ignored by API implementation) */);
+		NULL /* jobIdList (ignored by API impl.) */);
 }
 
 
@@ -885,8 +885,7 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
 									  MaxAdaptiveExecutorPoolSize,
-									  NULL /* jobIdList (ignored by API implementation) */
-									  );
+									  NULL /* jobIdList (ignored by API impl.) */);
 }
 
 
@@ -1883,9 +1882,9 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg(
-							"Failed to run worker_split_shard_replication_setup UDF. It should successfully execute "
-							" for splitting a shard in a non-blocking way. Please retry.")
-						));
+							"Failed to run worker_split_shard_replication_setup UDF. "
+							"It should successfully execute for splitting a shard in "
+							"a non-blocking way. Please retry.")));
 	}
 
 	/* Get replication slot information */

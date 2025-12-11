@@ -180,10 +180,10 @@ static bool FollowExtAndInternalDependencies(ObjectAddressCollector *collector,
 											 DependencyDefinition *definition);
 static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
-static void ApplyAddCitusDependedObjectsToDependencyList(ObjectAddressCollector *collector
-									 ,
-														 DependencyDefinition *definition)
-;
+static void ApplyAddCitusDependedObjectsToDependencyList(ObjectAddressCollector *
+														 collector,
+														 DependencyDefinition *
+														 definition);
 static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);

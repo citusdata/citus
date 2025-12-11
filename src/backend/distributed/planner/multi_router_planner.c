@@ -855,8 +855,8 @@ DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList)
 							 "Modifying local tables with remote local tables is "
 							 "not supported.",
 							 NULL,
-							 "Consider wrapping remote local table to a CTE, or subquery")
-		;
+							 "Consider wrapping remote local table to a CTE, "
+							 "or subquery");
 	}
 	return NULL;
 }
@@ -3152,9 +3152,8 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
 		if (cachedShardInterval == NULL)
 		{
-			ereport(ERROR, (errmsg(
-								"could not find shardinterval to which to send the query")
-							));
+			ereport(ERROR, (errmsg("could not find shardinterval to which to send "
+								   "the query")));
 		}
 
 		if (outputPartitionValueConst != NULL)

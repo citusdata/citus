@@ -376,12 +376,12 @@ ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
 			HeapTupleHeader tupleHeader =
 				DatumGetHeapTupleHeader(fcGetArgValue(fcinfo, argumentIndex));
 
-			if (HeapTupleHeaderGetNatts(tupleHeader) != aggregationArgumentContext->
-				argumentCount ||
-				HeapTupleHeaderGetTypeId(tupleHeader) != aggregationArgumentContext->
-				tupleDesc->tdtypeid ||
-				HeapTupleHeaderGetTypMod(tupleHeader) != aggregationArgumentContext->
-				tupleDesc->tdtypmod)
+			if (HeapTupleHeaderGetNatts(
+					tupleHeader) != aggregationArgumentContext->argumentCount ||
+				HeapTupleHeaderGetTypeId(
+					tupleHeader) != aggregationArgumentContext->tupleDesc->tdtypeid ||
+				HeapTupleHeaderGetTypMod(
+					tupleHeader) != aggregationArgumentContext->tupleDesc->tdtypmod)
 			{
 				ereport(ERROR, (errmsg("worker_partial_agg_sfunc received "
 									   "incompatible record")));
@@ -817,9 +817,8 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 
 	if (!TypecheckCoordCombineAggReturnType(fcinfo, ffunc, box))
 	{
-		ereport(ERROR, (errmsg(
-							"coord_combine_agg_ffunc could not confirm type correctness"))
-				);
+		ereport(ERROR, (errmsg("coord_combine_agg_ffunc could not "
+							   "confirm type correctness")));
 	}
 
 	if (ffunc == InvalidOid)
