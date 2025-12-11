@@ -61,8 +61,12 @@ static void CreateFixPartitionShardIndexNames(Oid parentRelationId,
 static List * WorkerFixPartitionShardIndexNamesCommandList(uint64 parentShardId,
 														   List *indexIdList,
 														   Oid partitionRelationId);
-static List * WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(
-	char *qualifiedParentShardIndexName, Oid parentIndexId, Oid partitionRelationId);
+static List * WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(char *
+																			  qualifiedParentShardIndexName,
+																			  Oid
+																			  parentIndexId,
+																			  Oid
+																			  partitionRelationId);
 static List * WorkerFixPartitionShardIndexNamesCommandListForPartitionIndex(Oid
 																			partitionIndexId,
 																			char *
@@ -652,8 +656,10 @@ WorkerFixPartitionShardIndexNamesCommandList(uint64 parentShardId,
  * given partition. Otherwise, all the partitions are included.
  */
 static List *
-WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(
-	char *qualifiedParentShardIndexName, Oid parentIndexId, Oid partitionRelationId)
+WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(char *
+																qualifiedParentShardIndexName,
+																Oid parentIndexId, Oid
+																partitionRelationId)
 {
 	List *commandList = NIL;
 

@@ -547,7 +547,8 @@ ColumnarStorageTruncate(Relation rel, uint64 newDataReservation)
 	if (!ColumnarLogicalOffsetIsValid(newDataReservation))
 	{
 		elog(ERROR,
-			 "attempted to truncate relation %d to invalid logical offset: " UINT64_FORMAT,
+			 "attempted to truncate relation %d to "
+			 "invalid logical offset: " UINT64_FORMAT,
 			 rel->rd_id, newDataReservation);
 	}
 

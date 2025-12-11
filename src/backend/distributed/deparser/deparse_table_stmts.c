@@ -536,8 +536,10 @@ GeneratedWhenStr(char generatedWhen)
 		}
 
 		default:
+		{
 			ereport(ERROR, (errmsg("unrecognized generated_when: %d",
 								   generatedWhen)));
+		}
 	}
 }
 

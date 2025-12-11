@@ -64,8 +64,8 @@ static int GetNumberOfIndexParameters(IndexStmt *createIndexStatement);
 static bool IndexAlreadyExists(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetIndexId(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement);
-static void SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(
-	IndexStmt *createIndexStatement);
+static void SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(IndexStmt *
+																  createIndexStatement);
 static char * GenerateLongestShardPartitionIndexName(IndexStmt *createIndexStatement);
 static char * GenerateDefaultIndexName(IndexStmt *createIndexStatement);
 static List * GenerateIndexParameters(IndexStmt *createIndexStatement);

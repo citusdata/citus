@@ -41,8 +41,8 @@
 #include "distributed/listutils.h"
 
 #define UNEXPECTED_STRIPE_READ_ERR_MSG \
-	"attempted to read an unexpected stripe while reading columnar " \
-	"table %s, stripe with id=" UINT64_FORMAT " is not flushed"
+		"attempted to read an unexpected stripe while reading columnar " \
+		"table %s, stripe with id=" UINT64_FORMAT " is not flushed"
 
 typedef struct ChunkGroupReadState
 {
@@ -758,7 +758,9 @@ SnapshotMightSeeUnflushedStripes(Snapshot snapshot)
 		}
 
 		default:
+		{
 			return false;
+		}
 	}
 }
 

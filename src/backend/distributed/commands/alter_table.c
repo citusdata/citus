@@ -77,9 +77,9 @@
 #define ALTER_TABLE_SET_ACCESS_METHOD 'm'
 
 #define UNDISTRIBUTE_TABLE_CASCADE_HINT \
-	"Use cascade option to undistribute all the relations involved in " \
-	"a foreign key relationship with %s by executing SELECT " \
-	"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
+		"Use cascade option to undistribute all the relations involved in " \
+		"a foreign key relationship with %s by executing SELECT " \
+		"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
 
 
 typedef TableConversionReturn *(*TableConversionFunction)(struct
@@ -185,8 +185,8 @@ typedef struct TableConversionState
 
 
 static TableConversionReturn * AlterDistributedTable(TableConversionParameters *params);
-static TableConversionReturn * AlterTableSetAccessMethod(
-	TableConversionParameters *params);
+static TableConversionReturn * AlterTableSetAccessMethod(TableConversionParameters *
+														 params);
 static TableConversionReturn * ConvertTable(TableConversionState *con);
 static TableConversionReturn * ConvertTableInternal(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
@@ -215,8 +215,8 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *qualifiedSequece
 static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
-static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
-												   CascadeToColocatedOption cascadeOption);
+static bool WillRecreateFKeyToReferenceTable(Oid relationId,
+											 CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static List * WrapTableDDLCommands(List *commandStrings);
@@ -505,8 +505,9 @@ UndistributeTable(TableConversionParameters *params)
 	if (!params->bypassTenantCheck && IsTenantSchema(schemaId) &&
 		IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		EnsureUndistributeTenantTableSafe(params->relationId,
-										  TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE]);
+		EnsureUndistributeTenantTableSafe(
+			params->relationId,
+			TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE]);
 	}
 
 	if (!params->cascadeViaForeignKeys)
@@ -577,7 +578,7 @@ AlterDistributedTable(TableConversionParameters *params)
 	TableConversionState *con = CreateTableConversion(params);
 	CheckAlterDistributedTableConversionParameters(con);
 
-	if (WillRecreateForeignKeyToReferenceTable(con->relationId, con->cascadeToColocated))
+	if (WillRecreateFKeyToReferenceTable(con->relationId, con->cascadeToColocated))
 	{
 		ereport(DEBUG1, (errmsg("setting multi shard modify mode to sequential")));
 		SetLocalMultiShardModifyModeToSequential();
@@ -2193,13 +2194,13 @@ GetAccessMethodForMatViewIfExists(Oid viewOid)
 
 
 /*
- * WillRecreateForeignKeyToReferenceTable checks if the table of relationId has any foreign
+ * WillRecreateFKeyToReferenceTable checks if the table of relationId has any foreign
  * key to a reference table, if conversion will be cascaded to colocated table this function
  * also checks if any of the colocated tables have a foreign key to a reference table too
  */
 bool
-WillRecreateForeignKeyToReferenceTable(Oid relationId,
-									   CascadeToColocatedOption cascadeOption)
+WillRecreateFKeyToReferenceTable(Oid relationId,
+								 CascadeToColocatedOption cascadeOption)
 {
 	if (cascadeOption == CASCADE_TO_COLOCATED_NO ||
 		cascadeOption == CASCADE_TO_COLOCATED_UNSPECIFIED)

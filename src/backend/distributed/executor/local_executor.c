@@ -824,7 +824,7 @@ RecordNonDistTableAccessesForTask(Task *task)
 		 * if we're wrong.
 		 */
 		ereport(ERROR, (errmsg("shard " UINT64_FORMAT " does not have any shard "
-													  "placements",
+							   "placements",
 							   task->anchorShardId)));
 	}
 

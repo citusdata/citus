@@ -634,8 +634,9 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
  * false.
  */
 bool
-SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
-	MultiConnection *workerConnection, List *commandList)
+SendOptionalCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *
+																workerConnection, List *
+																commandList)
 {
 	if (PQstatus(workerConnection->pgConn) != CONNECTION_OK)
 	{

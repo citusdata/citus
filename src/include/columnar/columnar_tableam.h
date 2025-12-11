@@ -29,7 +29,7 @@
  * to the following interval: [FirstOffsetNumber, MaxHeapTuplesPerPage].
  */
 #define VALID_ITEMPOINTER_OFFSETS \
-	((uint64) (MaxHeapTuplesPerPage - FirstOffsetNumber + 1))
+		((uint64) (MaxHeapTuplesPerPage - FirstOffsetNumber + 1))
 
 /*
  * Number of valid ItemPointer BlockNumber's for "row number" <> "ItemPointer"

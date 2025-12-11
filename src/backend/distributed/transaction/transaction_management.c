@@ -58,7 +58,7 @@
 #include "distributed/worker_log_messages.h"
 
 #define COMMIT_MANAGEMENT_COMMAND_2PC \
-	"SELECT citus_internal.commit_management_command_2pc()"
+		"SELECT citus_internal.commit_management_command_2pc()"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;

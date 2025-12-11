@@ -50,7 +50,7 @@
 
 #define DEFAULT_STATISTICS_TARGET -1
 #define ALTER_INDEX_COLUMN_SET_STATS_COMMAND \
-	"ALTER INDEX %s ALTER COLUMN %d SET STATISTICS %d"
+		"ALTER INDEX %s ALTER COLUMN %d SET STATISTICS %d"
 
 static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
 													  int16 attnum,

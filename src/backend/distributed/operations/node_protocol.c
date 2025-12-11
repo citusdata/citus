@@ -78,7 +78,8 @@ static void GatherIndexAndConstraintDefinitionListExcludingReplicaIdentity(Form_
 																		   indexForm,
 																		   List **
 																		   indexDDLEventList,
-																		   int indexFlags);
+																		   int
+																		   indexFlags);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
 
 static char * CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,

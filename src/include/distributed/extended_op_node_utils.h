@@ -40,8 +40,9 @@ typedef struct ExtendedOpNodeProperties
 } ExtendedOpNodeProperties;
 
 
-extern ExtendedOpNodeProperties BuildExtendedOpNodeProperties(
-	MultiExtendedOp *extendedOpNode, bool hasNonDistributableAggregates);
+extern ExtendedOpNodeProperties BuildExtendedOpNodeProperties(MultiExtendedOp *
+															  extendedOpNode, bool
+															  hasNonDistributableAggregates);
 
 
 #endif /* EXTENDED_OP_NODE_UTILS_H_ */

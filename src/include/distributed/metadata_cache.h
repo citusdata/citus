@@ -210,7 +210,8 @@ extern ShardPlacement * ShardPlacementForFunctionColocatedWithDistTable(
 	DistObjectCacheEntry *procedure, List *argumentList, Var *partitionColumn,
 	CitusTableCacheEntry
 	*cacheEntry,
-	PlannedStmt *plan);
+	PlannedStmt *
+	plan);
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
