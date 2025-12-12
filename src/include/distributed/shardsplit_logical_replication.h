@@ -34,10 +34,11 @@ extern List * PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHa
 														  List *
 														  shardGroupSplitIntervalListList,
 														  List *workersForPlacementList);
-extern HTAB *  CreateShardSplitInfoMapForPublication(
-	List *sourceColocatedShardIntervalList,
-	List *shardGroupSplitIntervalListList,
-	List *destinationWorkerNodesList);
+extern HTAB *  CreateShardSplitInfoMapForPublication(List *
+													 sourceColocatedShardIntervalList,
+													 List *
+													 shardGroupSplitIntervalListList,
+													 List *destinationWorkerNodesList);
 
 /* Functions to drop publisher-subscriber resources */
 extern void DropAllShardSplitLeftOvers(WorkerNode *sourceNode,

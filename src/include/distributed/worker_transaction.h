@@ -81,8 +81,10 @@ extern bool SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 	List *
 	commandList);
 extern bool SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(const
-																			char *nodeName,
-																			int32 nodePort,
+																			char *
+																			nodeName,
+																			int32
+																			nodePort,
 																			const char *
 																			nodeUser,
 																			List *
@@ -100,16 +102,17 @@ extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,
 													  int32 nodePort,
 													  const char *nodeUser,
 													  List *commandList);
-extern void SendCommandListToWorkerOutsideTransactionWithConnection(
-	MultiConnection *workerConnection,
-	List *commandList);
+extern void SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *
+																	workerConnection,
+																	List *commandList);
 extern void SendCommandListToWorkerListWithBareConnections(List *workerConnections,
 														   List *commandList);
-extern void SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-	List *workerNodeList,
-	const char *
-	nodeUser,
-	List *commandList);
+extern void SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *
+																		workerNodeList,
+																		const char *
+																		nodeUser,
+																		List *
+																		commandList);
 extern void RemoveWorkerTransaction(const char *nodeName, int32 nodePort);
 
 /* helper functions for worker transactions */

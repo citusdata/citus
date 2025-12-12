@@ -85,8 +85,8 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static PlannedStmt * CreateDistributedPlannedStmt(
-	DistributedPlanningContext *planContext);
+static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
+												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 															   DistributedPlanningContext
 															   *planContext);
@@ -125,12 +125,14 @@ static void AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo,
 													  Const *resultFormatConst);
 static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
-static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(
-	FastPathRestrictionContext *fastPathContext);
+static void CreateAndPushPlannerRestrictionContext(DistributedPlanningContext *
+												   planContext,
+												   FastPathRestrictionContext *
+												   fastPathContext);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
-static void ResetPlannerRestrictionContext(
-	PlannerRestrictionContext *plannerRestrictionContext);
+static void ResetPlannerRestrictionContext(PlannerRestrictionContext *
+										   plannerRestrictionContext);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
@@ -245,9 +247,9 @@ distributed_planner(Query *parse,
 	 */
 	HideCitusDependentObjectsOnQueriesOfPgMetaTables((Node *) parse, NULL);
 
-	/* create a restriction context and put it at the end of context list */
-	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext(
-		&fastPathContext);
+	/* create a restriction context and put it at the end of our plan context's context list */
+	CreateAndPushPlannerRestrictionContext(&planContext,
+										   &fastPathContext);
 
 	/*
 	 * We keep track of how many times we've recursed into the planner, primarily
@@ -281,6 +283,9 @@ distributed_planner(Query *parse,
 				Assert(saveNestLevel > 0);
 				AtEOXact_GUC(true, saveNestLevel);
 			}
+
+			/* Pop the plan context from the current restriction context */
+			planContext.plannerRestrictionContext->planContext = NULL;
 #endif
 			needsDistributedPlanning = CheckPostPlanDistribution(&planContext,
 																 needsDistributedPlanning,
@@ -2033,6 +2038,32 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		lappend(relationRestrictionContext->relationRestrictionList, relationRestriction);
 
 	MemoryContextSwitchTo(oldMemoryContext);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+	if (root->query_level == 1 && plannerRestrictionContext->planContext != NULL)
+	{
+		/* We're at the top query with a distributed context; see if Postgres
+		 * has changed the query tree we passed to it in distributed_planner().
+		 * This check was necessitated by PG commit 1e4351a, becuase in it the
+		 * planner modfies a copy of the passed in query tree with the consequence
+		 * that changes are not reflected back to the caller of standard_planner().
+		 */
+		Query *query = plannerRestrictionContext->planContext->query;
+		if (root->parse != query)
+		{
+			/*
+			 * The Postgres planner has reconstructed the query tree, so the query
+			 * tree our distributed context passed in (to standard_planner() is
+			 * updated to track the new query tree.
+			 */
+			ereport(DEBUG4, (errmsg(
+								 "Detected query reconstruction by Postgres planner, updating "
+								 "planContext to track it")));
+
+			plannerRestrictionContext->planContext->query = root->parse;
+		}
+	}
+#endif
 }
 
 
@@ -2410,11 +2441,13 @@ CopyPlanParamList(List *originalPlanParamList)
  * context with an empty relation restriction context and an empty join and
  * a copy of the given fast path restriction context (if present). Finally,
  * the planner restriction context is inserted to the beginning of the
- * global plannerRestrictionContextList and it is returned.
+ * global plannerRestrictionContextList and, in PG18+, given a reference to
+ * its distributed plan context.
  */
-static PlannerRestrictionContext *
-CreateAndPushPlannerRestrictionContext(
-	FastPathRestrictionContext *fastPathRestrictionContext)
+static void
+CreateAndPushPlannerRestrictionContext(DistributedPlanningContext *planContext,
+									   FastPathRestrictionContext *
+									   fastPathRestrictionContext)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
 		palloc0(sizeof(PlannerRestrictionContext));
@@ -2451,7 +2484,11 @@ CreateAndPushPlannerRestrictionContext(
 	plannerRestrictionContextList = lcons(plannerRestrictionContext,
 										  plannerRestrictionContextList);
 
-	return plannerRestrictionContext;
+	planContext->plannerRestrictionContext = plannerRestrictionContext;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+	plannerRestrictionContext->planContext = planContext;
+#endif
 }
 
 
@@ -2512,6 +2549,18 @@ CurrentPlannerRestrictionContext(void)
 static void
 PopPlannerRestrictionContext(void)
 {
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/*
+	 * PG18+: Clear the restriction context's planContext pointer; this is done
+	 * by distributed_planner() when popping the context, but in case of error
+	 * during standard_planner() we want to clean up here also.
+	 */
+	PlannerRestrictionContext *plannerRestrictionContext =
+		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
+	plannerRestrictionContext->planContext = NULL;
+#endif
+
 	plannerRestrictionContextList = list_delete_first(plannerRestrictionContextList);
 }
 

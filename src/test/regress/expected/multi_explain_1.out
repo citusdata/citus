@@ -14,7 +14,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
  server_version_ge_16
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18;
@@ -675,7 +675,7 @@ Aggregate
                     ->  GroupAggregate
                           Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                           ->  Sort
-                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
+                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                                 ->  Hash Join
                                       Hash Cond: (users.composite_id = events.composite_id)
                                       ->  Seq Scan on users_1400289 users
@@ -767,7 +767,7 @@ HashAggregate
                     ->  GroupAggregate
                           Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone
                           ->  Sort
-                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone, events.event_time
+                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone
                                 ->  Hash Left Join
                                       Hash Cond: (users.composite_id = subquery_2.composite_id)
                                       ->  HashAggregate
@@ -880,7 +880,7 @@ Sort
                                 Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
                                 Filter: (array_ndims(array_agg(('action=>1'::text) ORDER BY events.event_time)) > 0)
                                 ->  Sort
-                                      Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay, events.event_time
+                                      Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
                                       ->  Hash Left Join
                                             Hash Cond: (users.composite_id = subquery_2.composite_id)
                                             ->  HashAggregate
@@ -985,7 +985,7 @@ Limit
                                 ->  GroupAggregate
                                       Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                                       ->  Sort
-                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
+                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                                             ->  Nested Loop Left Join
                                                   ->  Limit
                                                         ->  Sort
@@ -2378,16 +2378,11 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Tuple data received from node: 8 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Aggregate (actual rows=1 loops=1)
-              ->  Merge Join (actual rows=10 loops=1)
-                    Merge Cond: (intermediate_result.a = ref_table.a)
-                    ->  Sort (actual rows=10 loops=1)
-                          Sort Key: intermediate_result.a
-                          Sort Method: quicksort  Memory: 25kB
+              ->  Hash Join (actual rows=10 loops=1)
+                    Hash Cond: (ref_table.a = intermediate_result.a)
+                    ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
+                    ->  Hash (actual rows=10 loops=1)
                           ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
-                    ->  Sort (actual rows=10 loops=1)
-                          Sort Key: ref_table.a
-                          Sort Method: quicksort  Memory: 25kB
-                          ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 Aggregate (actual rows=1 loops=1)
@@ -2446,12 +2441,9 @@ Aggregate (actual rows=1 loops=1)
               ->  Aggregate (actual rows=1 loops=1)
                     InitPlan 1
                       ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
-                    ->  Sort (actual rows=4 loops=1)
-                          Sort Key: dist_table.a
-                          Sort Method: quicksort  Memory: 25kB
-                          ->  Result (actual rows=4 loops=1)
-                                One-Time Filter: (InitPlan 1).col1
-                                ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
+                    ->  Result (actual rows=4 loops=1)
+                          One-Time Filter: (InitPlan 1).col1
+                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
 BEGIN;
 EXPLAIN :default_analyze_flags
 WITH r AS (
@@ -2493,10 +2485,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Tuple data received from node: 8 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Aggregate (actual rows=1 loops=1)
-              ->  Sort (actual rows=10 loops=1)
-                    Sort Key: intermediate_result.a2
-                    Sort Method: quicksort  Memory: 25kB
-                    ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
+              ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
 ROLLBACK;
 -- https://github.com/citusdata/citus/issues/4074
 prepare ref_select(int) AS select * from ref_table where 1 = $1;

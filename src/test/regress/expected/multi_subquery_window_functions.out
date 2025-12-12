@@ -675,6 +675,7 @@ LIMIT
        2 |     1
 (5 rows)
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
     SELECT *
     FROM (
@@ -708,8 +709,9 @@ EXPLAIN (COSTS FALSE)
              GROUP BY
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
-    LIMIT 5;
-                                                           QUERY PLAN
+    LIMIT 5
+', true);
+                                                         explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort

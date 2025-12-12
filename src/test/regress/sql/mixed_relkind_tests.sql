@@ -232,10 +232,12 @@ SELECT a, COUNT(*) OVER (PARTITION BY a) FROM partitioned_distributed_table ORDE
 $Q$);
 
 -- pull to coordinator WINDOW
+select public.explain_filter('
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a+1) FROM partitioned_distributed_table ORDER BY 1,2;
-$Q$);
+$Q$)
+', true);
 
 -- FOR UPDATE
 SELECT * FROM partitioned_distributed_table WHERE a = 1 ORDER BY 1,2 FOR UPDATE;

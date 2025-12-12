@@ -2410,9 +2410,10 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		}
 
 		default:
-
+		{
 			/* FALL THROUGH */
 			break;
+		}
 	}
 
 	if (columnarOptions != NIL && columnarRangeVar == NULL)

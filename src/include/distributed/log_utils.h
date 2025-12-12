@@ -23,10 +23,10 @@ extern bool IsLoggableLevel(int logLevel);
 #undef ereport
 
 #define ereport(elevel, rest) \
-	do { \
-		int ereport_loglevel = elevel; \
-		(void) (ereport_loglevel); \
-		ereport_domain(elevel, TEXTDOMAIN, rest); \
-	} while (0)
+		do { \
+			int ereport_loglevel = elevel; \
+			(void) (ereport_loglevel); \
+			ereport_domain(elevel, TEXTDOMAIN, rest); \
+		} while (0)
 
 #endif /* LOG_UTILS_H */

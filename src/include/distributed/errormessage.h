@@ -37,8 +37,8 @@ typedef struct DeferredErrorMessage
  * serialized/copied/deserialized, i.e. can be embedded in plans and such.
  */
 #define DeferredError(code, message, detail, hint) \
-	DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, \
-						  PG_FUNCNAME_MACRO)
+		DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, \
+							  PG_FUNCNAME_MACRO)
 
 DeferredErrorMessage * DeferredErrorInternal(int code, const char *message,
 											 const char *detail, const char *hint,
@@ -54,21 +54,21 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message,
  */
 #ifdef HAVE__BUILTIN_CONSTANT_P
 #define RaiseDeferredError(error, elevel) \
-	do { \
-		RaiseDeferredErrorInternal(error, elevel); \
-		if (__builtin_constant_p(elevel) && (elevel) >= ERROR) { \
-			pg_unreachable(); } \
-	} \
-	while (0)
+		do { \
+			RaiseDeferredErrorInternal(error, elevel); \
+			if (__builtin_constant_p(elevel) && (elevel) >= ERROR) { \
+				pg_unreachable(); } \
+		} \
+		while (0)
 #else  /* !HAVE_BUILTIN_CONSTANT_P */
 #define RaiseDeferredError(error, elevel) \
-	do { \
-		const int elevel_ = (elevel); \
-		RaiseDeferredErrorInternal(error, elevel_); \
-		if (elevel_ >= ERROR) { \
-			pg_unreachable(); } \
-	} \
-	while (0)
+		do { \
+			const int elevel_ = (elevel); \
+			RaiseDeferredErrorInternal(error, elevel_); \
+			if (elevel_ >= ERROR) { \
+				pg_unreachable(); } \
+		} \
+		while (0)
 #endif /* HAVE_BUILTIN_CONSTANT_P */
 
 void RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel);

@@ -107,8 +107,12 @@ static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int v
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
 static char * RecurringTypeDescription(RecurringTuplesType recurType);
-static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
-	PlannerInfo *plannerInfo, Relids recurringRelIds, Relids nonRecurringRelIds);
+static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *
+																		plannerInfo,
+																		Relids
+																		recurringRelIds,
+																		Relids
+																		nonRecurringRelIds);
 static bool ContainsLateralSubquery(PlannerInfo *plannerInfo);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
 static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
@@ -790,9 +794,9 @@ FromClauseRecurringTupleType(Query *queryTree)
  * such queries have lateral subqueries.
  */
 static DeferredErrorMessage *
-DeferredErrorIfUnsupportedRecurringTuplesJoin(
-	PlannerRestrictionContext *plannerRestrictionContext,
-	bool plannerPhase)
+DeferredErrorIfUnsupportedRecurringTuplesJoin(PlannerRestrictionContext *
+											  plannerRestrictionContext,
+											  bool plannerPhase)
 {
 	List *joinRestrictionList =
 		plannerRestrictionContext->joinRestrictionContext->joinRestrictionList;

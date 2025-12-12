@@ -63,87 +63,87 @@ typedef enum CitusOperations
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/
 #define SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, db, shardid) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 db, \
-						 (uint32) ((shardid) >> 32), \
-						 (uint32) (shardid), \
-						 ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 db, \
+							 (uint32) ((shardid) >> 32), \
+							 (uint32) (shardid), \
+							 ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA)
 
 #define SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(tag, db, colocationId, \
 													   shardIntervalIndex) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 db, \
-						 (uint32) shardIntervalIndex, \
-						 (uint32) colocationId, \
-						 ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 db, \
+							 (uint32) shardIntervalIndex, \
+							 (uint32) colocationId, \
+							 ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA)
 
 /* reuse advisory lock, but with different, unused field 4 (5)*/
 #define SET_LOCKTAG_SHARD_RESOURCE(tag, db, shardid) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 db, \
-						 (uint32) ((shardid) >> 32), \
-						 (uint32) (shardid), \
-						 ADV_LOCKTAG_CLASS_CITUS_SHARD)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 db, \
+							 (uint32) ((shardid) >> 32), \
+							 (uint32) (shardid), \
+							 ADV_LOCKTAG_CLASS_CITUS_SHARD)
 
 /* advisory lock for citus shard move/copy operations,
  * also it has the database hardcoded to MyDatabaseId,
  * to ensure the locks are local to each database */
 #define SET_LOCKTAG_SHARD_MOVE(tag, shardid) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) ((shardid) >> 32), \
-						 (uint32) (shardid), \
-						 ADV_LOCKTAG_CLASS_CITUS_SHARD_MOVE)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 MyDatabaseId, \
+							 (uint32) ((shardid) >> 32), \
+							 (uint32) (shardid), \
+							 ADV_LOCKTAG_CLASS_CITUS_SHARD_MOVE)
 
 /* reuse advisory lock, but with different, unused field 4 (7)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
 #define SET_LOCKTAG_REBALANCE_COLOCATION(tag, colocationOrTableId) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) ((colocationOrTableId) >> 32), \
-						 (uint32) (colocationOrTableId), \
-						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 MyDatabaseId, \
+							 (uint32) ((colocationOrTableId) >> 32), \
+							 (uint32) (colocationOrTableId), \
+							 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION)
 
 /* reuse advisory lock, but with different, unused field 4 (13)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
 #define SET_LOCKTAG_REBALANCE_PLACEMENT_COLOCATION(tag, colocationOrTableId) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) ((colocationOrTableId) >> 32), \
-						 (uint32) (colocationOrTableId), \
-						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 MyDatabaseId, \
+							 (uint32) ((colocationOrTableId) >> 32), \
+							 (uint32) (colocationOrTableId), \
+							 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION)
 
 
 /* advisory lock for citus operations, also it has the database hardcoded to MyDatabaseId,
  * to ensure the locks are local to each database */
 #define SET_LOCKTAG_CITUS_OPERATION(tag, operationId) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) 0, \
-						 (uint32) operationId, \
-						 ADV_LOCKTAG_CLASS_CITUS_OPERATIONS)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 MyDatabaseId, \
+							 (uint32) 0, \
+							 (uint32) operationId, \
+							 ADV_LOCKTAG_CLASS_CITUS_OPERATIONS)
 
 /* reuse advisory lock, but with different, unused field 4 (10)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
 #define SET_LOCKTAG_CLEANUP_OPERATION_ID(tag, operationId) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) ((operationId) >> 32), \
-						 (uint32) operationId, \
-						 ADV_LOCKTAG_CLASS_CITUS_CLEANUP_OPERATION_ID)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 MyDatabaseId, \
+							 (uint32) ((operationId) >> 32), \
+							 (uint32) operationId, \
+							 ADV_LOCKTAG_CLASS_CITUS_CLEANUP_OPERATION_ID)
 
 /* reuse advisory lock, but with different, unused field 4 (14)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
 #define SET_LOCKTAG_BACKGROUND_TASK(tag, taskId) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) ((taskId) >> 32), \
-						 (uint32) (taskId), \
-						 ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 MyDatabaseId, \
+							 (uint32) ((taskId) >> 32), \
+							 (uint32) (taskId), \
+							 ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK)
 
 /*
  * IsNodeWideObjectClass returns true if the given object class is node-wide,
@@ -171,7 +171,8 @@ IsNodeWideObjectClass(ObjectClass objectClass)
 	 * this assertion check based on latest supported major Postgres version.
 	 */
 	StaticAssertStmt(PG_MAJORVERSION_NUM <= 18,
-					 "better to check if any of newly added ObjectClass'es are node-wide");
+					 "better to check if any of newly added ObjectClass'es are node-wide")
+	;
 
 	switch (objectClass)
 	{
@@ -182,12 +183,14 @@ IsNodeWideObjectClass(ObjectClass objectClass)
 #if PG_VERSION_NUM >= PG_VERSION_16
 		case OCLASS_ROLE_MEMBERSHIP:
 #endif
-			{
-				return true;
-			}
+		{
+			return true;
+		}
 
 		default:
+		{
 			return false;
+		}
 	}
 }
 
@@ -202,12 +205,12 @@ IsNodeWideObjectClass(ObjectClass objectClass)
  * not node-wide, and global if it is.
  */
 #define SET_LOCKTAG_GLOBAL_DDL_SERIALIZATION(tag, objectClass, oid) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 (uint32) (IsNodeWideObjectClass(objectClass) ? InvalidOid : \
-								   MyDatabaseId), \
-						 (uint32) objectClass, \
-						 (uint32) oid, \
-						 ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION)
+		SET_LOCKTAG_ADVISORY(tag, \
+							 (uint32) (IsNodeWideObjectClass(objectClass) ? InvalidOid : \
+									   MyDatabaseId), \
+							 (uint32) objectClass, \
+							 (uint32) oid, \
+							 ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION)
 
 /*
  * DistLockConfigs are used to configure the locking behaviour of AcquireDistributedLockOnRelations

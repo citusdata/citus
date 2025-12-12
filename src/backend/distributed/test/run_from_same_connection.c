@@ -35,9 +35,9 @@
 
 
 #define ALTER_CURRENT_PROCESS_ID \
-	"ALTER SYSTEM SET citus.isolation_test_session_process_id TO %d"
+		"ALTER SYSTEM SET citus.isolation_test_session_process_id TO %d"
 #define ALTER_CURRENT_WORKER_PROCESS_ID \
-	"ALTER SYSTEM SET citus.isolation_test_session_remote_process_id TO %ld"
+		"ALTER SYSTEM SET citus.isolation_test_session_remote_process_id TO %ld"
 #define GET_PROCESS_ID "SELECT process_id FROM get_current_transaction_id()"
 
 

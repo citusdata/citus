@@ -6,9 +6,19 @@
 -- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
 -- The alternative output can be deleted when we drop support for PG15
 --
+-- This test file has an alternative output because of the following in PG18:
+-- https://github.com/postgres/postgres/commit/161320b4b960ee4fe918959be6529ae9b106ea5a
+-- The alternative output can be deleted when we drop support for PG17
+--
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
  server_version_ge_16
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18;
+ server_version_ge_18
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -111,6 +121,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Node Type": "Sort",
       "Parallel Aware": false,
       "Async Capable": false,
+      "Disabled": false,
       "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
       "Plans": [
         {
@@ -120,6 +131,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Parent Relationship": "Outer",
           "Parallel Aware": false,
           "Async Capable": false,
+          "Disabled": false,
           "Group Key": ["remote_scan.l_quantity"],
           "Plans": [
             {
@@ -128,6 +140,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
               "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Async Capable": false,
+              "Disabled": false,
               "Distributed Query": {
                 "Job": {
                   "Task Count": 2,
@@ -144,6 +157,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Partial Mode": "Simple",
                               "Parallel Aware": false,
                               "Async Capable": false,
+                              "Disabled": false,
                               "Group Key": ["l_quantity"],
                               "Plans": [
                                 {
@@ -152,7 +166,8 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Parallel Aware": false,
                                   "Async Capable": false,
                                   "Relation Name": "lineitem_360000",
-                                  "Alias": "lineitem"
+                                  "Alias": "lineitem",
+                                  "Disabled": false
                                 }
                               ]
                             }
@@ -1184,6 +1199,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Partial Mode": "Simple",
       "Parallel Aware": false,
       "Async Capable": false,
+      "Disabled": false,
       "Plans": [
         {
           "Node Type": "Custom Scan",
@@ -1191,6 +1207,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Custom Plan Provider": "Citus Adaptive",
           "Parallel Aware": false,
           "Async Capable": false,
+          "Disabled": false,
           "Distributed Query": {
             "Job": {
               "Task Count": 6,
@@ -1744,8 +1761,9 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
        "Node Type": "Result",  +
        "Parallel Aware": false,+
        "Async Capable": false, +
-       "Actual Rows": 1,       +
-       "Actual Loops": 1       +
+       "Actual Rows": 1,    +
+       "Actual Loops": 1,      +
+       "Disabled": false       +
      },                        +
      "Triggers": [             +
      ]                         +
@@ -2170,108 +2188,69 @@ SELECT * FROM explain_pk ORDER BY 1;
 ROLLBACK;
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 2,
-          "Tasks Shown": "One of 2",
-          "Tasks": [
-            {
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "ModifyTable",
-                      "Operation": "Insert",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "citus_table_alias",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1,
-                      "Plans": [
-                        {
-                          "Node Type": "Result",
-                          "Parent Relationship": "Outer",
-                          "Parallel Aware": false,
-                          "Async Capable": false,
-                          "Actual Rows": 1,
-                          "Actual Loops": 1
-                        }
-                      ]
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 2
+        Tasks Shown: "One of 2"
+        Tasks:
+          - Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "ModifyTable"
+                  Operation: "Insert"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "citus_table_alias"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                  Plans:
+                    - Node Type: "Result"
+                      Parent Relationship: "Outer"
+                      Parallel Aware: false
+                      Async Capable: false
+                      Actual Rows: 1
+                      Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 4,
-          "Tuple data received from nodes": "0 bytes",
-          "Tasks Shown": "One of 4",
-          "Tasks": [
-            {
-              "Tuple data received from node": "0 bytes",
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "Seq Scan",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "explain_pk",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) SELECT * FROM explain_pk;
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 4
+        Tuple data received from nodes: "0 bytes"
+        Tasks Shown: "One of 4"
+        Tasks:
+          - Tuple data received from node: "0 bytes"
+            Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "Seq Scan"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "explain_pk"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -3118,7 +3097,9 @@ CREATE TABLE distributed_table_1(a int, b int);
 SELECT create_distributed_table('distributed_table_1','a');
 
 INSERT INTO distributed_table_1 values (1,1);
-EXPLAIN :default_analyze_flags SELECT row_number() OVER() AS r FROM distributed_table_1;
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off) SELECT row_number() OVER() AS r FROM distributed_table_1
+', true);
 WindowAgg (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Task Count: 2
@@ -3130,11 +3111,13 @@ CREATE TABLE distributed_table_2(a int, b int);
 SELECT create_distributed_table('distributed_table_2','a');
 
 INSERT INTO distributed_table_2 VALUES (1,1);
-EXPLAIN :default_analyze_flags
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)
 WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
 SELECT * FROM distributed_table_2
 JOIN r ON (r = distributed_table_2.b)
-LIMIT 3;
+LIMIT 3
+', true);
 Limit (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         ->  Distributed Subplan XXX_1
@@ -3282,6 +3265,7 @@ SELECT * FROM a;
       "Async Capable": false,
       "Actual Rows": 1,
       "Actual Loops": 1,
+      "Disabled": false,
       "Distributed Query": {
         "Subplans": [
           {
@@ -3296,6 +3280,7 @@ SELECT * FROM a;
                   "Async Capable": false,
                   "Actual Rows": 1,
                   "Actual Loops": 1,
+                  "Disabled": false,
                   "Distributed Query": {
                     "Job": {
                       "Task Count": 1,
@@ -3317,6 +3302,7 @@ SELECT * FROM a;
                                   "Alias": "test_subplans_570038",
                                   "Actual Rows": 1,
                                   "Actual Loops": 1,
+                                  "Disabled": false,
                                   "Plans": [
                                     {
                                       "Node Type": "Result",
@@ -3324,7 +3310,8 @@ SELECT * FROM a;
                                       "Parallel Aware": false,
                                       "Async Capable": false,
                                       "Actual Rows": 1,
-                                      "Actual Loops": 1
+                                      "Actual Loops": 1,
+                                      "Disabled": false
                                     }
                                   ]
                                 },
@@ -3363,7 +3350,8 @@ SELECT * FROM a;
                       "Function Name": "read_intermediate_result",
                       "Alias": "intermediate_result",
                       "Actual Rows": 1,
-                      "Actual Loops": 1
+                      "Actual Loops": 1,
+                      "Disabled": false
                     },
                     "Triggers": [
                     ]

@@ -50,7 +50,7 @@
 #include "distributed/worker_transaction.h"
 
 #define LOCK_RELATION_IF_EXISTS \
-	"SELECT pg_catalog.lock_relation_if_exists(%s, %s);"
+		"SELECT pg_catalog.lock_relation_if_exists(%s, %s);"
 
 /* static definition and declarations */
 struct LockModeToStringType

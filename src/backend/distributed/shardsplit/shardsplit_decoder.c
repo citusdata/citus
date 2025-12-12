@@ -210,9 +210,11 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 		/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
 		default:
+		{
 			ereport(ERROR, errmsg(
 						"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
 						change->action));
+		}
 	}
 #else
 	switch (change->action)
@@ -245,9 +247,11 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 		/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
 		default:
+		{
 			ereport(ERROR, errmsg(
 						"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
 						change->action));
+		}
 	}
 #endif
 
@@ -318,9 +322,11 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 			/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
 			default:
+			{
 				ereport(ERROR, errmsg(
 							"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
 							change->action));
+			}
 		}
 #else
 		switch (change->action)
@@ -373,9 +379,11 @@ shard_split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 			/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
 			default:
+			{
 				ereport(ERROR, errmsg(
 							"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
 							change->action));
+			}
 		}
 #endif
 	}

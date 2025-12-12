@@ -48,7 +48,8 @@ extern void SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(Oid relatio
 extern void SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(Oid
 																	  parentRelationId,
 																	  Oid
-																	  partitionRelationId);
+																	  partitionRelationId)
+;
 
 /* DistOpsOperationType to be used in DistributeObjectOps */
 typedef enum DistOpsOperationType
@@ -560,13 +561,15 @@ extern List * PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryStr
 												processUtilityContext);
 extern List * PostprocessAlterSequenceSchemaStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
-											   ProcessUtilityContext processUtilityContext);
+											   ProcessUtilityContext
+											   processUtilityContext);
 extern List * PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterSequencePersistenceStmt(Node *node, const char *queryString,
 													 ProcessUtilityContext
 													 processUtilityContext);
 extern List * PreprocessSequenceAlterTableStmt(Node *node, const char *queryString,
-											   ProcessUtilityContext processUtilityContext);
+											   ProcessUtilityContext
+											   processUtilityContext);
 extern List * PreprocessDropSequenceStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 extern List * SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok, bool
@@ -639,7 +642,8 @@ extern void PrepareAlterTableStmtForConstraint(AlterTableStmt *alterTableStateme
 extern List * PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 									   ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString,
-											  ProcessUtilityContext processUtilityContext);
+											  ProcessUtilityContext
+											  processUtilityContext);
 extern List * PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
 extern void SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStmt,
@@ -789,9 +793,9 @@ extern List * PostprocessAlterTriggerDependsStmt(Node *node, const char *querySt
 extern List * PreprocessAlterTriggerDependsStmt(Node *node, const char *queryString,
 												ProcessUtilityContext
 												processUtilityContext);
-extern void AlterTriggerDependsEventExtendNames(
-	AlterObjectDependsStmt *alterTriggerDependsStmt,
-	char *schemaName, uint64 shardId);
+extern void AlterTriggerDependsEventExtendNames(AlterObjectDependsStmt *
+												alterTriggerDependsStmt,
+												char *schemaName, uint64 shardId);
 extern void ErrorOutForTriggerIfNotSupported(Oid relationId);
 extern void ErrorIfRelationHasUnsupportedTrigger(Oid relationId);
 extern List * PreprocessDropTriggerStmt(Node *node, const char *queryString,
@@ -834,8 +838,8 @@ extern bool RelationIdListHasReferenceTable(List *relationIdList);
 extern List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
-extern void ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(
-	List *utilityCommandList);
+extern void ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *
+																	   utilityCmdList);
 extern void ExecuteAndLogUtilityCommandList(List *ddlCommandList);
 extern void ExecuteAndLogUtilityCommand(const char *commandString);
 extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
