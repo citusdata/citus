@@ -29,6 +29,7 @@
 #include "optimizer/plancat.h"
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
+#include "parser/parse_relation.h"
 #include "parser/parse_type.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
@@ -70,10 +71,6 @@
 #include "distributed/stats/stat_tenants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "parser/parse_relation.h"
-#endif
 
 
 static List *plannerRestrictionContextList = NIL;
@@ -1510,7 +1507,6 @@ static void
 ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan, PlannedStmt *concatPlan)
 {
 	mainPlan->rtable = list_concat(mainPlan->rtable, concatPlan->rtable);
-#if PG_VERSION_NUM >= PG_VERSION_16
 
 	/*
 	 * concatPlan's range table list is concatenated to mainPlan's range table list
@@ -1532,7 +1528,6 @@ ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan, PlannedStmt *concatPlan)
 
 	/* finally, concatenate perminfos as well */
 	mainPlan->permInfos = list_concat(mainPlan->permInfos, concatPlan->permInfos);
-#endif
 }
 
 
@@ -2017,18 +2012,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	if (isCitusTable)
 	{
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
-
-#if PG_VERSION_NUM == PG_VERSION_15
-
-		/*
-		 * Postgres 15.0 had a bug regarding inherited statistics expressions,
-		 * which is fixed in 15.1 via Postgres commit
-		 * 1f1865e9083625239769c26f68b9c2861b8d4b1c.
-		 *
-		 * Hence, we only set this value on exactly PG15.0
-		 */
-		relOptInfo->statlist = NIL;
-#endif
 
 		relationRestrictionContext->allReferenceTables &=
 			IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);

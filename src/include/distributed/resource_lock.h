@@ -180,9 +180,7 @@ IsNodeWideObjectClass(ObjectClass objectClass)
 		case OCLASS_DATABASE:
 		case OCLASS_TBLSPACE:
 		case OCLASS_PARAMETER_ACL:
-#if PG_VERSION_NUM >= PG_VERSION_16
 		case OCLASS_ROLE_MEMBERSHIP:
-#endif
 		{
 			return true;
 		}

@@ -43,9 +43,7 @@ typedef struct CitusVacuumParams
 	VacOptValue truncate;
 	VacOptValue index_cleanup;
 	int nworkers;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	int ring_size;
-#endif
 } CitusVacuumParams;
 
 /*
@@ -353,19 +351,12 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	}
 
 	/* if no flags remain, exit early */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (vacuumFlags & VACOPT_PROCESS_TOAST &&
 		vacuumFlags & VACOPT_PROCESS_MAIN)
 	{
 		/* process toast and process main are true by default */
 		if (((vacuumFlags & ~VACOPT_PROCESS_TOAST) & ~VACOPT_PROCESS_MAIN) == 0 &&
 			vacuumParams.ring_size == -1 &&
-#else
-	if (vacuumFlags & VACOPT_PROCESS_TOAST)
-	{
-		/* process toast is true by default */
-		if ((vacuumFlags & ~VACOPT_PROCESS_TOAST) == 0 &&
-#endif
 			vacuumParams.truncate == VACOPTVALUE_UNSPECIFIED &&
 			vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED &&
 			vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
@@ -413,7 +404,6 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		appendStringInfoString(vacuumPrefix, "PROCESS_TOAST FALSE,");
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (!(vacuumFlags & VACOPT_PROCESS_MAIN))
 	{
 		appendStringInfoString(vacuumPrefix, "PROCESS_MAIN FALSE,");
@@ -433,7 +423,6 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	{
 		appendStringInfo(vacuumPrefix, "BUFFER_USAGE_LIMIT %d,", vacuumParams.ring_size);
 	}
-#endif
 
 	if (vacuumParams.truncate != VACOPTVALUE_UNSPECIFIED)
 	{
@@ -537,13 +526,10 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	bool full = false;
 	bool disable_page_skipping = false;
 	bool process_toast = true;
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 	bool process_main = true;
 	bool skip_database_stats = false;
 	bool only_database_stats = false;
 	params.ring_size = -1;
-#endif
 
 	/* Set default value */
 	params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
@@ -563,13 +549,11 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		{
 			skip_locked = defGetBoolean(opt);
 		}
-#if PG_VERSION_NUM >= PG_VERSION_16
 		else if (strcmp(opt->defname, "buffer_usage_limit") == 0)
 		{
 			char *vac_buffer_size = defGetString(opt);
 			parse_int(vac_buffer_size, &params.ring_size, GUC_UNIT_KB, NULL);
 		}
-#endif
 		else if (!vacstmt->is_vacuumcmd)
 		{
 			ereport(ERROR,
@@ -594,7 +578,6 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		{
 			disable_page_skipping = defGetBoolean(opt);
 		}
-#if PG_VERSION_NUM >= PG_VERSION_16
 		else if (strcmp(opt->defname, "process_main") == 0)
 		{
 			process_main = defGetBoolean(opt);
@@ -607,7 +590,6 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		{
 			only_database_stats = defGetBoolean(opt);
 		}
-#endif
 		else if (strcmp(opt->defname, "process_toast") == 0)
 		{
 			process_toast = defGetBoolean(opt);
@@ -678,11 +660,9 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 					 (analyze ? VACOPT_ANALYZE : 0) |
 					 (freeze ? VACOPT_FREEZE : 0) |
 					 (full ? VACOPT_FULL : 0) |
-#if PG_VERSION_NUM >= PG_VERSION_16
 					 (process_main ? VACOPT_PROCESS_MAIN : 0) |
 					 (skip_database_stats ? VACOPT_SKIP_DATABASE_STATS : 0) |
 					 (only_database_stats ? VACOPT_ONLY_DATABASE_STATS : 0) |
-#endif
 					 (process_toast ? VACOPT_PROCESS_TOAST : 0) |
 					 (disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0);
 	return params;

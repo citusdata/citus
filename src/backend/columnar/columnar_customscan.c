@@ -39,11 +39,10 @@
 #include "optimizer/paths.h"
 #include "optimizer/plancat.h"
 #include "optimizer/restrictinfo.h"
-#if PG_VERSION_NUM >= PG_VERSION_16
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
-#endif
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
@@ -140,9 +139,7 @@ static List * set_deparse_context_planstate(List *dpcontext, Node *node,
 /* other helpers */
 static List * ColumnarVarNeeded(ColumnarScanState *columnarScanState);
 static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
-#if PG_VERSION_NUM >= PG_VERSION_16
 static Bitmapset * fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset *columns);
-#endif
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
@@ -551,7 +548,7 @@ ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
 	 * "anti-correlated" (-1) since both help us avoiding from reading the
 	 * same stripe again and again.
 	 */
-	double absIndexCorrelation = float_abs(indexCorrelation);
+	double absIndexCorrelation = fabs(indexCorrelation);
 
 	/*
 	 * To estimate the number of stripes that we need to read, we do linear
@@ -670,7 +667,7 @@ CheckVarStats(PlannerInfo *root, Var *var, Oid sortop, float4 *absVarCorrelation
 	 * If the Var is not highly correlated, then the chunk's min/max bounds
 	 * will be nearly useless.
 	 */
-	if (float_abs(varCorrelation) < ColumnarQualPushdownCorrelationThreshold)
+	if (fabs(varCorrelation) < ColumnarQualPushdownCorrelationThreshold)
 	{
 		if (absVarCorrelation)
 		{
@@ -678,7 +675,7 @@ CheckVarStats(PlannerInfo *root, Var *var, Oid sortop, float4 *absVarCorrelation
 			 * Report absVarCorrelation if caller wants to know why given
 			 * var is rejected.
 			 */
-			*absVarCorrelation = float_abs(varCorrelation);
+			*absVarCorrelation = fabs(varCorrelation);
 		}
 		return false;
 	}
@@ -1063,9 +1060,7 @@ FindCandidateRelids(PlannerInfo *root, RelOptInfo *rel, List *joinClauses)
 	 * For the relevant PG16 commit requiring this addition:
 	 * postgres/postgres@2489d76
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	candidateRelids = bms_del_members(candidateRelids, root->outer_join_rels);
-#endif
 
 	return candidateRelids;
 }
@@ -1394,7 +1389,6 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 	}
 
 	int numberOfColumnsRead = 0;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (rte->perminfoindex > 0)
 	{
 		/*
@@ -1426,9 +1420,6 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 																	  perminfo->
 																	  selectedCols));
 	}
-#else
-	numberOfColumnsRead = bms_num_members(rte->selectedCols);
-#endif
 
 	int numberOfClausesPushed = list_length(allClauses);
 
@@ -1448,8 +1439,6 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 	add_path(rel, path);
 }
 
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 
 /*
  * fixup_inherited_columns
@@ -1507,9 +1496,6 @@ fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset *columns)
 
 	return result;
 }
-
-
-#endif
 
 
 /*

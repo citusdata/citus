@@ -255,8 +255,7 @@ ColumnarReadFlushPendingWrites(ColumnarReadState *readState)
 {
 	Assert(!readState->snapshotRegisteredByUs);
 
-	RelFileNumber relfilenumber = RelationPhysicalIdentifierNumber_compat(
-		RelationPhysicalIdentifier_compat(readState->relation));
+	RelFileNumber relfilenumber = readState->relation->rd_locator.relNumber;
 	FlushWriteStateForRelfilenumber(relfilenumber, GetCurrentSubTransactionId());
 
 	if (readState->snapshot == InvalidSnapshot || !IsMVCCSnapshot(readState->snapshot))

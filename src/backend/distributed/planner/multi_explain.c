@@ -287,13 +287,11 @@ PG_FUNCTION_INFO_V1(worker_save_query_explain_analyze);
 void
 CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es)
 {
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (es->generic)
 	{
 		ereport(ERROR, (errmsg(
 							"EXPLAIN GENERIC_PLAN is currently not supported for Citus tables")));
 	}
-#endif
 
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;

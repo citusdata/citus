@@ -176,12 +176,6 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 
 	appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
 
-	/* postgres version >= PG15
-	 * UNIQUE [ NULLS [ NOT ] DISTINCT ] ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
-	 * postgres version < PG15
-	 * UNIQUE ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
-	 * PRIMARY KEY ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
-	 */
 	if (constraint->contype == CONSTR_PRIMARY || constraint->contype == CONSTR_UNIQUE)
 	{
 		if (constraint->contype == CONSTR_PRIMARY)
