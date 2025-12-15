@@ -1189,9 +1189,6 @@ PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 /*
  * ReplicationSlotNameForNodeAndOwnerForOperation returns the name of the
  * replication slot for the given node, table owner and operation id.
- *
- * Note that PG15 introduced a new ReplicationSlotName function that caused name conflicts
- * and we renamed this function.
  */
 char *
 ReplicationSlotNameForNodeAndOwnerForOperation(LogicalRepType type, uint32_t nodeId,
