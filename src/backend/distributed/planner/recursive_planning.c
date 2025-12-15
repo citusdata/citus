@@ -513,7 +513,6 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 	if (!EnableOuterJoinsWithPseudoconstantQualsPrePG17 && !hasOuterJoin)
 	{
 		/*
-		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1
 		 * PG16 commit 695f5deb7902865901eb2d50a70523af655c3a00
 		 * disallows replacing joins with scans in queries with pseudoconstant quals.
 		 * This commit prevents the set_join_pathlist_hook from being called
@@ -529,9 +528,9 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 			FindNodeMatchingCheckFunction((Node *) query->jointree, IsOuterJoinExpr))
 		{
 			ereport(ERROR, (errmsg("Distributed queries with outer joins and "
-								   "pseudoconstant quals are not supported in PG15 and PG16."),
+								   "pseudoconstant quals are not supported in PG16."),
 							errdetail(
-								"PG15 and PG16 disallow replacing joins with scans when the"
+								"PG16 disallows replacing joins with scans when the"
 								" query has pseudoconstant quals"),
 							errhint("Consider upgrading your PG version to PG17+")));
 		}

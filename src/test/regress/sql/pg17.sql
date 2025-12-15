@@ -192,7 +192,7 @@ RESET client_min_messages;
 RESET search_path;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
 
--- Queries with outer joins with pseudoconstant quals work only in PG17
+-- Queries with outer joins with pseudoconstant quals work only in PG17+
 -- Relevant PG17 commit:
 -- https://github.com/postgres/postgres/commit/9e9931d2b
 
