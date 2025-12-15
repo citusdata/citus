@@ -2651,6 +2651,96 @@ DROP COLLATION ignore_accents;
 DROP COLLATION ctest_det;
 DROP COLLATION ctest_nondet;
 DROP COLLATION case_insensitive;
+-- PG18 Feature: GUC for CREATE DATABASE file copy method
+-- PG18 commit: https://github.com/postgres/postgres/commit/f78ca6f3e
+-- Citus supports the wal_log strategy only for CREATE DATABASE.
+-- Here we show that the expected error (from PR #7249) occurs
+-- when the file_copy strategy is attempted.
+SET citus.enable_create_database_propagation=on;
+SHOW file_copy_method;
+ file_copy_method
+---------------------------------------------------------------------
+ copy
+(1 row)
+
+-- Error output is expected here
+CREATE DATABASE copied_db WITH strategy file_copy;
+ERROR:  Only wal_log is supported as strategy parameter for CREATE DATABASE
+SET file_copy_method TO clone;
+-- Also errors out, per #7249
+CREATE DATABASE cloned_db WITH strategy file_copy;
+ERROR:  Only wal_log is supported as strategy parameter for CREATE DATABASE
+RESET file_copy_method;
+-- This is okay
+CREATE DATABASE copied_db
+    WITH strategy wal_log;
+-- Show that file_copy works for ALTER DATABASE ... SET TABLESPACE
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+\c - - - :worker_1_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+\c - - - :worker_2_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+\c - - - :master_port
+SET citus.enable_create_database_propagation TO on;
+SET file_copy_method TO clone;
+SET citus.log_remote_commands TO true;
+SELECT datname, spcname
+FROM pg_database d, pg_tablespace t
+WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+  datname  |  spcname
+---------------------------------------------------------------------
+ copied_db | pg_default
+(1 row)
+
+ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_internal.acquire_citus_advisory_object_class_lock(26, 'copied_db')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT datname, spcname
+FROM pg_database d, pg_tablespace t
+WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+  datname  |       spcname
+---------------------------------------------------------------------
+ copied_db | alter_db_tablespace
+(1 row)
+
+RESET file_copy_method;
+RESET citus.log_remote_commands;
+-- Enable alter_db_tablespace to be dropped
+ALTER DATABASE copied_db SET TABLESPACE pg_default;
+DROP DATABASE copied_db;
+-- Done with DATABASE commands
+RESET citus.enable_create_database_propagation;
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  DROP TABLESPACE "alter_db_tablespace"
+  $$
+);
+     result
+---------------------------------------------------------------------
+ DROP TABLESPACE
+ DROP TABLESPACE
+ DROP TABLESPACE
+(3 rows)
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
