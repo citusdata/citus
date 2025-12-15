@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * pg_get_object_address_13_14_15.c
+ * pg_get_object_address_16_17_18.c
  *
  * Copied functions from Postgres pg_get_object_address with acl/owner check.
  * Since we need to use intermediate data types Relation and Node from
