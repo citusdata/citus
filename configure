@@ -2549,11 +2549,13 @@ fi
 
 # check we're building against a supported version of PostgreSQL
 citusac_pg_config_version=$($PG_CONFIG --version 2>/dev/null)
-version_num=$(echo "$citusac_pg_config_version"|
-              $SED -e 's/^PostgreSQL \([0-9]*\)\(\.[0-9]*\)\{0,1\}\(.*\)$/\1\2/')
+# Extract major[.minor] from "PostgreSQL X[.Y] ..."
+version_num=$(printf '%s\n' "$citusac_pg_config_version" \
+  | $SED -nE 's/^PostgreSQL[[:space:]]+([0-9]+(\.[0-9]+)?).*/\1/p')
 
-# if PostgreSQL version starts with two digits, the major version is those digits
-version_num=$(echo "$version_num"| $SED -e 's/^\([0-9]\{2\}\)\(.*\)$/\1/')
+# If it starts with two digits (10+), keep only the major.
+version_num=$(printf '%s\n' "$version_num" \
+  | $SED -E 's/^([0-9]{2}).*$/\1/')
 
 if test -z "$version_num"; then
   as_fn_error $? "Could not detect PostgreSQL version from pg_config." "$LINENO" 5
