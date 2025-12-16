@@ -122,6 +122,10 @@ jobs:
           - ubuntu-jammy-all
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
+        exclude:
+          # PG18 is not supported on Ubuntu focal
+          - packaging_docker_image: ubuntu-focal-all
+            POSTGRES_VERSION: 18
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}
