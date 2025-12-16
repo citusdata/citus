@@ -1590,6 +1590,77 @@ DROP COLLATION ctest_det;
 DROP COLLATION ctest_nondet;
 DROP COLLATION case_insensitive;
 
+-- PG18 Feature: GUC for CREATE DATABASE file copy method
+-- PG18 commit: https://github.com/postgres/postgres/commit/f78ca6f3e
+
+-- Citus supports the wal_log strategy only for CREATE DATABASE.
+-- Here we show that the expected error (from PR #7249) occurs
+-- when the file_copy strategy is attempted.
+
+SET citus.enable_create_database_propagation=on;
+
+SHOW file_copy_method;
+
+-- Error output is expected here
+CREATE DATABASE copied_db WITH strategy file_copy;
+
+SET file_copy_method TO clone;
+
+-- Also errors out, per #7249
+CREATE DATABASE cloned_db WITH strategy file_copy;
+
+RESET file_copy_method;
+
+-- This is okay
+CREATE DATABASE copied_db
+    WITH strategy wal_log;
+
+-- Show that file_copy works for ALTER DATABASE ... SET TABLESPACE
+
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :worker_1_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :worker_2_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+
+\c - - - :master_port
+
+SET citus.enable_create_database_propagation TO on;
+SET file_copy_method TO clone;
+SET citus.log_remote_commands TO true;
+
+SELECT datname, spcname
+FROM pg_database d, pg_tablespace t
+WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+
+ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace;
+
+SELECT datname, spcname
+FROM pg_database d, pg_tablespace t
+WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+
+RESET file_copy_method;
+RESET citus.log_remote_commands;
+
+-- Enable alter_db_tablespace to be dropped
+ALTER DATABASE copied_db SET TABLESPACE pg_default;
+
+DROP DATABASE copied_db;
+
+-- Done with DATABASE commands
+RESET citus.enable_create_database_propagation;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  DROP TABLESPACE "alter_db_tablespace"
+  $$
+);
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
