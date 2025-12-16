@@ -135,9 +135,7 @@ typedef struct RangeTableEntryDetails
 	RangeTblEntry *rangeTableEntry;
 	List *requiredAttributeNumbers;
 	bool hasConstantFilterOnUniqueColumn;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	RTEPermissionInfo *perminfo;
-#endif
 } RangeTableEntryDetails;
 
 /*
@@ -208,17 +206,11 @@ RecursivelyPlanLocalTableJoins(Query *query,
 		GetPlannerRestrictionContext(context);
 
 	List *rangeTableList = query->rtable;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	List *rteperminfos = query->rteperminfos;
-#endif
 	int resultRTEIdentity = ResultRTEIdentity(query);
 	ConversionCandidates *conversionCandidates =
 		CreateConversionCandidates(plannerRestrictionContext,
-#if PG_VERSION_NUM >= PG_VERSION_16
 								   rangeTableList, resultRTEIdentity, rteperminfos);
-#else
-								   rangeTableList, resultRTEIdentity, NIL);
-#endif
 
 	ConversionChoice conversionChoise =
 		GetConversionChoice(conversionCandidates, plannerRestrictionContext);
@@ -333,12 +325,8 @@ ConvertRTEsToSubquery(List *rangeTableEntryDetailsList, RecursivePlanningContext
 		RangeTblEntry *rangeTableEntry = rangeTableEntryDetails->rangeTableEntry;
 		List *requiredAttributeNumbers = rangeTableEntryDetails->requiredAttributeNumbers;
 		ReplaceRTERelationWithRteSubquery(rangeTableEntry,
-#if PG_VERSION_NUM >= PG_VERSION_16
 										  requiredAttributeNumbers, context,
 										  rangeTableEntryDetails->perminfo);
-#else
-										  requiredAttributeNumbers, context, NULL);
-#endif
 	}
 }
 
@@ -581,14 +569,12 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 			RequiredAttrNumbersForRelation(rangeTableEntry, plannerRestrictionContext);
 		rangeTableEntryDetails->hasConstantFilterOnUniqueColumn =
 			HasConstantFilterOnUniqueColumn(rangeTableEntry, relationRestriction);
-#if PG_VERSION_NUM >= PG_VERSION_16
 		rangeTableEntryDetails->perminfo = NULL;
 		if (rangeTableEntry->perminfoindex)
 		{
 			rangeTableEntryDetails->perminfo = getRTEPermissionInfo(rteperminfos,
 																	rangeTableEntry);
 		}
-#endif
 
 		bool referenceOrDistributedTable =
 			IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE) ||

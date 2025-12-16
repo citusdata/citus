@@ -19,6 +19,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
+#include "storage/relfilelocator.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
@@ -26,12 +27,6 @@
 
 #include "columnar/columnar_compression.h"
 #include "columnar/columnar_metadata.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "storage/relfilelocator.h"
-#else
-#include "storage/relfilenode.h"
-#endif
 
 #define COLUMNAR_AM_NAME "columnar"
 #define COLUMNAR_MODULE_NAME "citus_columnar"

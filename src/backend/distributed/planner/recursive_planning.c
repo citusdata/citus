@@ -513,7 +513,6 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 	if (!EnableOuterJoinsWithPseudoconstantQualsPrePG17 && !hasOuterJoin)
 	{
 		/*
-		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1
 		 * PG16 commit 695f5deb7902865901eb2d50a70523af655c3a00
 		 * disallows replacing joins with scans in queries with pseudoconstant quals.
 		 * This commit prevents the set_join_pathlist_hook from being called
@@ -529,9 +528,9 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 			FindNodeMatchingCheckFunction((Node *) query->jointree, IsOuterJoinExpr))
 		{
 			ereport(ERROR, (errmsg("Distributed queries with outer joins and "
-								   "pseudoconstant quals are not supported in PG15 and PG16."),
+								   "pseudoconstant quals are not supported in PG16."),
 							errdetail(
-								"PG15 and PG16 disallow replacing joins with scans when the"
+								"PG16 disallows replacing joins with scans when the"
 								" query has pseudoconstant quals"),
 							errhint("Consider upgrading your PG version to PG17+")));
 		}
@@ -974,7 +973,6 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 		List *requiredAttributes =
 			RequiredAttrNumbersForRelation(distributedRte, restrictionContext);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 		RTEPermissionInfo *perminfo = NULL;
 		if (distributedRte->perminfoindex)
 		{
@@ -983,10 +981,6 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 
 		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
 										  recursivePlanningContext, perminfo);
-#else
-		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
-										  recursivePlanningContext, NULL);
-#endif
 	}
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
@@ -1875,9 +1869,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	rangeTableEntry->perminfoindex = 0;
-#endif
 	rangeTableEntry->subquery = subquery;
 
 	/*
@@ -1950,13 +1942,10 @@ CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetLis
 	innerSubqueryRTE->eref->colnames = innerSubqueryColNames;
 	outerSubquery->rtable = list_make1(innerSubqueryRTE);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/* sanity check */
 	Assert(innerSubqueryRTE->rtekind == RTE_SUBQUERY &&
 		   innerSubqueryRTE->perminfoindex == 0);
 	outerSubquery->rteperminfos = NIL;
-#endif
 
 
 	/* set the FROM expression to the subquery */
@@ -2132,13 +2121,10 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 	/* set the FROM expression to the subquery */
 	subquery->rtable = list_make1(newRangeTableEntry);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/* sanity check */
 	Assert(newRangeTableEntry->rtekind == RTE_FUNCTION &&
 		   newRangeTableEntry->perminfoindex == 0);
 	subquery->rteperminfos = NIL;
-#endif
 
 	newRangeTableRef->rtindex = 1;
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
@@ -2462,9 +2448,7 @@ BuildEmptyResultQuery(List *targetEntryList, char *resultId)
 	valuesQuery->canSetTag = true;
 	valuesQuery->commandType = CMD_SELECT;
 	valuesQuery->rtable = list_make1(valuesRangeTable);
-	#if PG_VERSION_NUM >= PG_VERSION_16
 	valuesQuery->rteperminfos = NIL;
-	#endif
 	valuesQuery->jointree = valuesJoinTree;
 	valuesQuery->targetList = valueTargetList;
 
@@ -2481,9 +2465,7 @@ BuildEmptyResultQuery(List *targetEntryList, char *resultId)
 	resultQuery->commandType = CMD_SELECT;
 	resultQuery->canSetTag = true;
 	resultQuery->rtable = list_make1(emptyRangeTable);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	resultQuery->rteperminfos = NIL;
-#endif
 	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
 	rangeTableRef->rtindex = 1;
 
@@ -2633,9 +2615,7 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 	Query *resultQuery = makeNode(Query);
 	resultQuery->commandType = CMD_SELECT;
 	resultQuery->rtable = list_make1(rangeTableEntry);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	resultQuery->rteperminfos = NIL;
-#endif
 	resultQuery->jointree = joinTree;
 	resultQuery->targetList = targetList;
 

@@ -1,18 +1,9 @@
-
-
 SHOW server_version \gset
 SELECT CASE
            WHEN substring(current_setting('server_version'), '\d+')::int >= 17 THEN '17+'
            WHEN substring(current_setting('server_version'), '\d+')::int IN (15, 16) THEN '15_16'
-           WHEN substring(current_setting('server_version'), '\d+')::int = 14 THEN '14'
            ELSE 'Unsupported version'
        END AS version_category;
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
-\gset
-\if :server_version_ge_15
-\else
-\q
-\endif
 
 --
 -- MERGE test from PG community (adapted to Citus by converting all tables to Citus local)

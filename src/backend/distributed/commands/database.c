@@ -81,10 +81,7 @@ typedef struct DatabaseCollationInfo
 	char *datctype;
 	char *daticulocale;
 	char *datcollversion;
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 	char *daticurules;
-#endif
 } DatabaseCollationInfo;
 
 static char * GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database
@@ -853,14 +850,12 @@ GetDatabaseCollation(Oid dbOid)
 		info.datcollversion = TextDatumGetCString(collverDatum);
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	Datum icurulesDatum = heap_getattr(tup, Anum_pg_database_daticurules, tupdesc,
 									   &isNull);
 	if (!isNull)
 	{
 		info.daticurules = TextDatumGetCString(icurulesDatum);
 	}
-#endif
 
 	table_close(rel, AccessShareLock);
 	heap_freetuple(tup);
@@ -954,13 +949,11 @@ GenerateCreateDatabaseStatementFromPgDatabase(Form_pg_database databaseForm)
 					 quote_identifier(GetLocaleProviderString(
 										  databaseForm->datlocprovider)));
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (collInfo.daticurules != NULL)
 	{
 		appendStringInfo(&str, " ICU_RULES = %s", quote_identifier(
 							 collInfo.daticurules));
 	}
-#endif
 
 	return str.data;
 }

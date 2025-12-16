@@ -379,7 +379,7 @@ drop cascades to table pg17_corr_subq_folding.users
 drop cascades to table pg17_corr_subq_folding.events
 drop cascades to table pg17_corr_subq_folding.users_ref
 drop cascades to table pg17_corr_subq_folding.users_ref_20240023
--- Queries with outer joins with pseudoconstant quals work only in PG17
+-- Queries with outer joins with pseudoconstant quals work only in PG17+
 -- Relevant PG17 commit:
 -- https://github.com/postgres/postgres/commit/9e9931d2b
 CREATE SCHEMA pg17_outerjoin;

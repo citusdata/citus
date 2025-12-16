@@ -29,6 +29,7 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc_d.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
@@ -80,10 +81,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "catalog/pg_proc_d.h"
-#endif
 
 #define DISK_SPACE_FIELDS 2
 

@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * pg_get_object_address_13_14_15.c
+ * pg_get_object_address_16_17_18.c
  *
  * Copied functions from Postgres pg_get_object_address with acl/owner check.
  * Since we need to use intermediate data types Relation and Node from
@@ -96,7 +96,7 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("name or argument lists may not contain nulls")));
 		}
-		typename = typeStringToTypeName_compat(TextDatumGetCString(elems[0]), NULL);
+		typename = typeStringToTypeName(TextDatumGetCString(elems[0]), NULL);
 	}
 	else if (type == OBJECT_LARGEOBJECT)
 	{
@@ -163,8 +163,8 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 						 errmsg("name or argument lists may not contain nulls")));
 			}
 			args = lappend(args,
-						   typeStringToTypeName_compat(TextDatumGetCString(elems[i]),
-													   NULL));
+						   typeStringToTypeName(TextDatumGetCString(elems[i]),
+												NULL));
 		}
 	}
 	else

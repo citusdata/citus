@@ -38,7 +38,7 @@ typedef struct DeferredErrorMessage
  */
 #define DeferredError(code, message, detail, hint) \
 		DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, \
-							  PG_FUNCNAME_MACRO)
+							  __func__)
 
 DeferredErrorMessage * DeferredErrorInternal(int code, const char *message,
 											 const char *detail, const char *hint,

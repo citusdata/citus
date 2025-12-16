@@ -334,7 +334,7 @@ drop cascades to table pg17_corr_subq_folding.users
 drop cascades to table pg17_corr_subq_folding.events
 drop cascades to table pg17_corr_subq_folding.users_ref
 drop cascades to table pg17_corr_subq_folding.users_ref_20240023
--- Queries with outer joins with pseudoconstant quals work only in PG17
+-- Queries with outer joins with pseudoconstant quals work only in PG17+
 -- Relevant PG17 commit:
 -- https://github.com/postgres/postgres/commit/9e9931d2b
 CREATE SCHEMA pg17_outerjoin;
@@ -371,8 +371,8 @@ select * from
   (t0 full outer join t3
     on (t0.c3 = t3.c26 ))
 where (exists (select  * from t4)) order by 1, 2, 3;
-ERROR:  Distributed queries with outer joins and pseudoconstant quals are not supported in PG15 and PG16.
-DETAIL:  PG15 and PG16 disallow replacing joins with scans when the query has pseudoconstant quals
+ERROR:  Distributed queries with outer joins and pseudoconstant quals are not supported in PG16.
+DETAIL:  PG16 disallows replacing joins with scans when the query has pseudoconstant quals
 HINT:  Consider upgrading your PG version to PG17+
 SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
 -- wrong result pre-pg17
@@ -417,8 +417,8 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
 where not((85) in (select 1 from t2));
-ERROR:  Distributed queries with outer joins and pseudoconstant quals are not supported in PG15 and PG16.
-DETAIL:  PG15 and PG16 disallow replacing joins with scans when the query has pseudoconstant quals
+ERROR:  Distributed queries with outer joins and pseudoconstant quals are not supported in PG16.
+DETAIL:  PG16 disallows replacing joins with scans when the query has pseudoconstant quals
 HINT:  Consider upgrading your PG version to PG17+
 SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
 -- wrong result pre-pg17
@@ -459,8 +459,8 @@ select t6.vkey
 from (t5 right outer join t6
     on (t5.c10 = t6.vkey))
 where exists (select * from t6);
-ERROR:  Distributed queries with outer joins and pseudoconstant quals are not supported in PG15 and PG16.
-DETAIL:  PG15 and PG16 disallow replacing joins with scans when the query has pseudoconstant quals
+ERROR:  Distributed queries with outer joins and pseudoconstant quals are not supported in PG16.
+DETAIL:  PG16 disallows replacing joins with scans when the query has pseudoconstant quals
 HINT:  Consider upgrading your PG version to PG17+
 SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
 -- wrong result pre-pg17

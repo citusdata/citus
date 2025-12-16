@@ -2058,9 +2058,7 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	pushedDownQuery->targetList = subqueryTargetEntryList;
 	pushedDownQuery->jointree = copyObject(queryTree->jointree);
 	pushedDownQuery->rtable = copyObject(queryTree->rtable);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	pushedDownQuery->rteperminfos = copyObject(queryTree->rteperminfos);
-#endif
 	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
 	pushedDownQuery->querySource = queryTree->querySource;
 	pushedDownQuery->hasSubLinks = queryTree->hasSubLinks;
@@ -2194,9 +2192,7 @@ CreateSubqueryTargetListAndAdjustVars(List *columnList)
 		 * the var - is empty. Otherwise, when given the query, the Postgres planner
 		 * may attempt to access a non-existent range table and segfault, as in #7787.
 		 */
-#if PG_VERSION_NUM >= PG_VERSION_16
 		column->varnullingrels = NULL;
-#endif
 	}
 
 	return subqueryTargetEntryList;
