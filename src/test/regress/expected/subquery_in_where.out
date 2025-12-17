@@ -735,23 +735,13 @@ WHERE
 -- make the clause recurring
 CREATE TABLE local_table(id int, value_1 int);
 INSERT INTO local_table VALUES(1,1), (2,2);
-SELECT
-	*
-FROM
-	(SELECT
-		*
-	FROM
-		local_table) as sub_table
-WHERE
-	id
-IN
-	(SELECT
-		user_id
-	FROM
-		users_table);
+SELECT s.*
+FROM (SELECT * FROM local_table) AS s
+WHERE s.id IN (SELECT u.user_id FROM users_table u)
+ORDER BY s.id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT id, value_1 FROM subquery_in_where.local_table
-DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, value_1 FROM (SELECT intermediate_result.id, intermediate_result.value_1 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, value_1 integer)) sub_table WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table u
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, value_1 FROM (SELECT intermediate_result.id, intermediate_result.value_1 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, value_1 integer)) s WHERE (id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) ORDER BY id
  id | value_1
 ---------------------------------------------------------------------
   1 |       1
