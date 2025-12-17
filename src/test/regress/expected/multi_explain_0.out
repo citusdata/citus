@@ -1,14 +1,13 @@
 --
 -- MULTI_EXPLAIN
 --
--- This test file has an alternative output because of the following in PG16:
--- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
--- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
--- The alternative output can be deleted when we drop support for PG15
+-- This test file has an alternative output because of the following in PG18:
+-- https://github.com/postgres/postgres/commit/161320b4b960ee4fe918959be6529ae9b106ea5a
+-- The alternative output can be deleted when we drop support for PG17
 --
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
- server_version_ge_16
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18;
+ server_version_ge_18
 ---------------------------------------------------------------------
  f
 (1 row)
@@ -665,7 +664,7 @@ Aggregate
                     ->  GroupAggregate
                           Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                           ->  Sort
-                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
                                 ->  Hash Join
                                       Hash Cond: (users.composite_id = events.composite_id)
                                       ->  Seq Scan on users_1400289 users
@@ -757,7 +756,7 @@ HashAggregate
                     ->  GroupAggregate
                           Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone
                           ->  Sort
-                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone
+                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.hasdone, events.event_time
                                 ->  Hash Left Join
                                       Hash Cond: (users.composite_id = subquery_2.composite_id)
                                       ->  HashAggregate
@@ -870,7 +869,7 @@ Sort
                                 Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
                                 Filter: (array_ndims(array_agg(('action=>1'::text) ORDER BY events.event_time)) > 0)
                                 ->  Sort
-                                      Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
+                                      Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay, events.event_time
                                       ->  Hash Left Join
                                             Hash Cond: (users.composite_id = subquery_2.composite_id)
                                             ->  HashAggregate
@@ -975,7 +974,7 @@ Limit
                                 ->  GroupAggregate
                                       Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                                       ->  Sort
-                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
                                             ->  Nested Loop Left Join
                                                   ->  Limit
                                                         ->  Sort
@@ -2170,108 +2169,69 @@ SELECT * FROM explain_pk ORDER BY 1;
 ROLLBACK;
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 2,
-          "Tasks Shown": "One of 2",
-          "Tasks": [
-            {
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "ModifyTable",
-                      "Operation": "Insert",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "citus_table_alias",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1,
-                      "Plans": [
-                        {
-                          "Node Type": "Result",
-                          "Parent Relationship": "Outer",
-                          "Parallel Aware": false,
-                          "Async Capable": false,
-                          "Actual Rows": 1,
-                          "Actual Loops": 1
-                        }
-                      ]
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 2
+        Tasks Shown: "One of 2"
+        Tasks:
+          - Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "ModifyTable"
+                  Operation: "Insert"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "citus_table_alias"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                  Plans:
+                    - Node Type: "Result"
+                      Parent Relationship: "Outer"
+                      Parallel Aware: false
+                      Async Capable: false
+                      Actual Rows: 1
+                      Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 4,
-          "Tuple data received from nodes": "0 bytes",
-          "Tasks Shown": "One of 4",
-          "Tasks": [
-            {
-              "Tuple data received from node": "0 bytes",
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "Seq Scan",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "explain_pk",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) SELECT * FROM explain_pk;
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 4
+        Tuple data received from nodes: "0 bytes"
+        Tasks Shown: "One of 4"
+        Tasks:
+          - Tuple data received from node: "0 bytes"
+            Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "Seq Scan"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "explain_pk"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -2407,11 +2367,16 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Tuple data received from node: 8 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Aggregate (actual rows=1 loops=1)
-              ->  Hash Join (actual rows=10 loops=1)
-                    Hash Cond: (ref_table.a = intermediate_result.a)
-                    ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
-                    ->  Hash (actual rows=10 loops=1)
+              ->  Merge Join (actual rows=10 loops=1)
+                    Merge Cond: (intermediate_result.a = ref_table.a)
+                    ->  Sort (actual rows=10 loops=1)
+                          Sort Key: intermediate_result.a
+                          Sort Method: quicksort  Memory: 25kB
                           ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
+                    ->  Sort (actual rows=10 loops=1)
+                          Sort Key: ref_table.a
+                          Sort Method: quicksort  Memory: 25kB
+                          ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 Aggregate (actual rows=1 loops=1)
@@ -2470,9 +2435,12 @@ Aggregate (actual rows=1 loops=1)
               ->  Aggregate (actual rows=1 loops=1)
                     InitPlan 1
                       ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
-                    ->  Result (actual rows=4 loops=1)
-                          One-Time Filter: (InitPlan 1).col1
-                          ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
+                    ->  Sort (actual rows=4 loops=1)
+                          Sort Key: dist_table.a
+                          Sort Method: quicksort  Memory: 25kB
+                          ->  Result (actual rows=4 loops=1)
+                                One-Time Filter: (InitPlan 1).col1
+                                ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
 BEGIN;
 EXPLAIN :default_analyze_flags
 WITH r AS (
@@ -2514,7 +2482,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Tuple data received from node: 8 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Aggregate (actual rows=1 loops=1)
-              ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
+              ->  Sort (actual rows=10 loops=1)
+                    Sort Key: intermediate_result.a2
+                    Sort Method: quicksort  Memory: 25kB
+                    ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
 ROLLBACK;
 -- https://github.com/citusdata/citus/issues/4074
 prepare ref_select(int) AS select * from ref_table where 1 = $1;

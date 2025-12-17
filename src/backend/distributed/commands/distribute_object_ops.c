@@ -2165,7 +2165,9 @@ GetDistributeObjectOps(Node *node)
 				}
 
 				default:
+				{
 					return &Any_SecLabel;
+				}
 			}
 		}
 

@@ -28,7 +28,8 @@ static void AppendCreateExtensionStmtOptions(StringInfo buf, List *options);
 static void AppendDropExtensionStmt(StringInfo buf, DropStmt *stmt);
 static void AppendExtensionNameList(StringInfo buf, List *objects);
 static void AppendAlterExtensionSchemaStmt(StringInfo buf,
-										   AlterObjectSchemaStmt *alterExtensionSchemaStmt);
+										   AlterObjectSchemaStmt *
+										   alterExtensionSchemaStmt);
 static void AppendAlterExtensionStmt(StringInfo buf,
 									 AlterExtensionStmt *alterExtensionStmt);
 

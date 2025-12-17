@@ -66,7 +66,8 @@ static bool InsertSelectHasRouterSelect(Query *originalQuery,
 										PlannerRestrictionContext *
 										plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
-											   CitusTableCacheEntry *targetTableCacheEntry,
+											   CitusTableCacheEntry *
+											   targetTableCacheEntry,
 											   ShardInterval *shardInterval,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext,
@@ -623,8 +624,6 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	combineQuery->canSetTag = true;
 	combineQuery->rtable = list_make1(rangeTableEntry);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/*
 	 * This part of the code is more of a sanity check for readability,
 	 * it doesn't really do anything.
@@ -636,7 +635,6 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	Assert(rangeTableEntry->rtekind == RTE_FUNCTION &&
 		   rangeTableEntry->perminfoindex == 0);
 	combineQuery->rteperminfos = NIL;
-#endif
 
 	combineQuery->targetList = targetList;
 	combineQuery->jointree = joinTree;
@@ -1152,10 +1150,11 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 									exprTypmod((Node *) newSubqueryTargetEntry->expr),
 									exprCollation((Node *) newSubqueryTargetEntry->expr),
 									0);
-		TargetEntry *newInsertTargetEntry = makeTargetEntry((Expr *) newInsertVar,
-															originalAttrNo,
-															oldInsertTargetEntry->resname,
-															oldInsertTargetEntry->resjunk);
+		TargetEntry *newInsertTargetEntry = makeTargetEntry(
+			(Expr *) newInsertVar,
+			originalAttrNo,
+			oldInsertTargetEntry->resname,
+			oldInsertTargetEntry->resjunk);
 
 		newInsertTargetlist = lappend(newInsertTargetlist, newInsertTargetEntry);
 		resno++;
@@ -1599,13 +1598,10 @@ WrapSubquery(Query *subquery)
 
 	outerQuery->rtable = list_make1(rte_subq);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/* Ensure RTE_SUBQUERY has proper permission handling */
 	Assert(rte_subq->rtekind == RTE_SUBQUERY &&
 		   rte_subq->perminfoindex == 0);
 	outerQuery->rteperminfos = NIL;
-#endif
 
 	RangeTblRef *rtref = makeNode(RangeTblRef);
 	rtref->rtindex = 1;  /* Only one RTE, so index is 1 */

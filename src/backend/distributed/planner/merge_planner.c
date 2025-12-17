@@ -67,7 +67,8 @@ static DeferredErrorMessage * MergeQualAndTargetListFunctionsSupported(Oid
 																	   Query *query,
 																	   Node *quals,
 																	   List *targetList,
-																	   CmdType commandType);
+																	   CmdType
+																	   commandType);
 
 static DistributedPlan * CreateRouterMergePlan(Oid targetRelationId, Query *originalQuery,
 											   Query *query,
@@ -426,10 +427,10 @@ ErrorIfMergeHasUnsupportedTables(Oid targetRelationId, List *rangeTableList)
 #if PG_VERSION_NUM >= PG_VERSION_18
 			case RTE_GROUP:
 #endif
-				{
-					/* Skip them as base table(s) will be checked */
-					continue;
-				}
+			{
+				/* Skip them as base table(s) will be checked */
+				continue;
+			}
 
 			/*
 			 * RTE_NAMEDTUPLESTORE is typically used in ephmeral named relations,
@@ -574,8 +575,8 @@ IsDistributionColumnInMergeSource(Expr *columnExpression, Query *query, bool
 		Var *distributionColumn = DistPartitionKey(relationId);
 
 		/* not all distributed tables have partition column */
-		if (distributionColumn != NULL && column->varattno ==
-			distributionColumn->varattno)
+		if (distributionColumn != NULL &&
+			column->varattno == distributionColumn->varattno)
 		{
 			isDistributionColumn = true;
 		}
@@ -835,11 +836,9 @@ ConvertCteRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte)
 	Query *cteQuery = (Query *) copyObject(sourceCte->ctequery);
 
 	sourceRte->rtekind = RTE_SUBQUERY;
-#if PG_VERSION_NUM >= PG_VERSION_16
 
 	/* sanity check - sourceRte was RTE_CTE previously so it should have no perminfo */
 	Assert(sourceRte->perminfoindex == 0);
-#endif
 
 	/*
 	 * As we are delinking the CTE from main query, we have to walk through the
@@ -889,8 +888,6 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 	/* we copy the input rteRelation to preserve the rteIdentity */
 	RangeTblEntry *newRangeTableEntry = copyObject(sourceRte);
 	sourceResultsQuery->rtable = list_make1(newRangeTableEntry);
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 	sourceResultsQuery->rteperminfos = NIL;
 	if (sourceRte->perminfoindex)
 	{
@@ -902,7 +899,6 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 		newRangeTableEntry->perminfoindex = 1;
 		sourceResultsQuery->rteperminfos = list_make1(perminfo);
 	}
-#endif
 
 	/* set the FROM expression to the subquery */
 	newRangeTableRef->rtindex = SINGLE_RTE_INDEX;
@@ -929,9 +925,7 @@ ConvertRelationRTEIntoSubquery(Query *mergeQuery, RangeTblEntry *sourceRte,
 
 	/* replace the function with the constructed subquery */
 	sourceRte->rtekind = RTE_SUBQUERY;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	sourceRte->perminfoindex = 0;
-#endif
 	sourceRte->subquery = sourceResultsQuery;
 	sourceRte->inh = false;
 }
@@ -1045,8 +1039,9 @@ DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
 								 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	ListCell *restrictionCell = NULL;
-	foreach(restrictionCell,
-			plannerRestrictionContext->relationRestrictionContext->relationRestrictionList)
+	foreach(
+		restrictionCell,
+		plannerRestrictionContext->relationRestrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(restrictionCell);
@@ -1078,7 +1073,8 @@ DeferErrorIfTargetHasFalseClause(Oid targetRelationId,
  */
 static DeferredErrorMessage *
 DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
-									  PlannerRestrictionContext *plannerRestrictionContext,
+									  PlannerRestrictionContext *
+									  plannerRestrictionContext,
 									  Oid targetRelationId)
 {
 	List *distTablesList = NIL;
@@ -1115,8 +1111,8 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 
 	if (list_length(distTablesList) > 0 && list_length(localTablesList) > 0)
 	{
-		ereport(DEBUG1, (errmsg(
-							 "A mix of distributed and local table, try repartitioning")));
+		ereport(DEBUG1, (errmsg("A mix of distributed and local table, "
+								"try repartitioning")));
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "A mix of distributed and citus-local table, "
 							 "routable query is not possible", NULL, NULL);

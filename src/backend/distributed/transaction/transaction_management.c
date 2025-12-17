@@ -25,6 +25,7 @@
 #include "storage/fd.h"
 #include "utils/datum.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -58,7 +59,7 @@
 #include "distributed/worker_log_messages.h"
 
 #define COMMIT_MANAGEMENT_COMMAND_2PC \
-	"SELECT citus_internal.commit_management_command_2pc()"
+		"SELECT citus_internal.commit_management_command_2pc()"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -807,13 +808,9 @@ AdjustMaxPreparedTransactions(void)
 	 * really check if max_prepared_xacts is configured by the user explicitly,
 	 * so check if it's value is default.
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	struct config_generic *gconf = find_option("max_prepared_transactions",
 											   false, false, ERROR);
 	if (gconf->source == PGC_S_DEFAULT)
-#else
-	if (max_prepared_xacts == 0)
-#endif
 	{
 		char newvalue[12];
 

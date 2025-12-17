@@ -41,8 +41,8 @@
 #include "distributed/listutils.h"
 
 #define UNEXPECTED_STRIPE_READ_ERR_MSG \
-	"attempted to read an unexpected stripe while reading columnar " \
-	"table %s, stripe with id=" UINT64_FORMAT " is not flushed"
+		"attempted to read an unexpected stripe while reading columnar " \
+		"table %s, stripe with id=" UINT64_FORMAT " is not flushed"
 
 typedef struct ChunkGroupReadState
 {
@@ -255,8 +255,7 @@ ColumnarReadFlushPendingWrites(ColumnarReadState *readState)
 {
 	Assert(!readState->snapshotRegisteredByUs);
 
-	RelFileNumber relfilenumber = RelationPhysicalIdentifierNumber_compat(
-		RelationPhysicalIdentifier_compat(readState->relation));
+	RelFileNumber relfilenumber = readState->relation->rd_locator.relNumber;
 	FlushWriteStateForRelfilenumber(relfilenumber, GetCurrentSubTransactionId());
 
 	if (readState->snapshot == InvalidSnapshot || !IsMVCCSnapshot(readState->snapshot))
@@ -758,7 +757,9 @@ SnapshotMightSeeUnflushedStripes(Snapshot snapshot)
 		}
 
 		default:
+		{
 			return false;
+		}
 	}
 }
 

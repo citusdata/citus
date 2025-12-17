@@ -14,7 +14,7 @@
 
 /* saved backend stats - constants */
 #define SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME \
-	"citus_stat_counters saved backend stats hash"
+		"citus_stat_counters saved backend stats hash"
 
 /* default value for the GUC variable */
 #define ENABLE_STAT_COUNTERS_DEFAULT false

@@ -43,7 +43,7 @@
 
 #define ENABLE_SSL_QUERY "ALTER SYSTEM SET ssl TO on;"
 #define RESET_CITUS_NODE_CONNINFO \
-	"ALTER SYSTEM SET citus.node_conninfo TO 'sslmode=prefer';"
+		"ALTER SYSTEM SET citus.node_conninfo TO 'sslmode=prefer';"
 
 #define CITUS_AUTO_SSL_COMMON_NAME "citus-auto-ssl"
 #define X509_SUBJECT_COMMON_NAME "CN"
@@ -65,7 +65,7 @@
 								  "ECDHE-RSA-AES128-SHA256:" \
 								  "ECDHE-RSA-AES256-SHA384"
 #define SET_CITUS_SSL_CIPHERS_QUERY \
-	"ALTER SYSTEM SET ssl_ciphers TO '" CITUS_DEFAULT_SSL_CIPHERS "';"
+		"ALTER SYSTEM SET ssl_ciphers TO '" CITUS_DEFAULT_SSL_CIPHERS "';"
 
 
 /* forward declaration of helper functions */

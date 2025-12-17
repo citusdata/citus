@@ -47,13 +47,13 @@
 
 
 #define BehaviorIsRestrictOrNoAction(x) \
-	((x) == FKCONSTR_ACTION_NOACTION || (x) == FKCONSTR_ACTION_RESTRICT)
+		((x) == FKCONSTR_ACTION_NOACTION || (x) == FKCONSTR_ACTION_RESTRICT)
 
 
 #define USE_CREATE_REFERENCE_TABLE_HINT \
-	"You could use SELECT create_reference_table('%s') " \
-	"to replicate the referenced table to all nodes or " \
-	"consider dropping the foreign key"
+		"You could use SELECT create_reference_table('%s') " \
+		"to replicate the referenced table to all nodes or " \
+		"consider dropping the foreign key"
 
 
 typedef bool (*CheckRelationFunc)(Oid);

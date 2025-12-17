@@ -414,10 +414,6 @@ BEGIN;
   -- this wouldn't flush any data
   insert into events (payload) select 'hello-'||s from generate_series(1, 10) s;
 
-  SHOW server_version \gset
-  SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
-  \gset
-
   -- Since table is large enough, normally postgres would prefer using
   -- parallel workers when building the index.
   --
@@ -430,11 +426,7 @@ BEGIN;
   -- following commnad to fail since we prevent using parallel workers for
   -- columnar tables.
 
-  \if :server_version_ge_16
   SET LOCAL debug_parallel_query = regress;
-  \else
-  SET LOCAL force_parallel_mode = regress;
-  \endif
   SET LOCAL min_parallel_table_scan_size = 1;
   SET LOCAL parallel_tuple_cost = 0;
   SET LOCAL max_parallel_workers = 4;

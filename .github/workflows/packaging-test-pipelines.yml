@@ -29,7 +29,7 @@ jobs:
           # Postgres versions are stored in .github/workflows/build_and_test.yml
           # file in json strings with major and full keys.
           # Below command extracts the versions and get the unique values.
-          pg_versions=$(cat .github/workflows/build_and_test.yml | grep -oE '"major": "[0-9]+", "full": "[0-9.]+"' | sed -E 's/"major": "([0-9]+)", "full": "([0-9.]+)"/\1/g' | sort | uniq | tr '\n', ',')
+          pg_versions=$(cat .github/workflows/build_and_test.yml | grep -oE '"major": "[0-9]+", "full": "[^"]+"' | sed -E 's/.*"major": "([0-9]+)".*/\1/' | sort -n | uniq | tr '\n' ',')
           pg_versions_array="[ ${pg_versions} ]"
           echo "Supported PG Versions: ${pg_versions_array}"
           # Below line is needed to set the output variable to be used in the next job
@@ -122,6 +122,10 @@ jobs:
           - ubuntu-jammy-all
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
+        exclude:
+          # PG18 is not supported on Ubuntu focal
+          - packaging_docker_image: ubuntu-focal-all
+            POSTGRES_VERSION: 18
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}

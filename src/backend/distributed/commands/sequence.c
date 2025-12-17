@@ -177,8 +177,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 
-		if (attributeForm->attisdropped ||
-			attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		if (IsDroppedOrGenerated(attributeForm))
 		{
 			/* skip dropped columns and columns with GENERATED AS ALWAYS expressions */
 			continue;
@@ -463,8 +462,8 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	if (IsAnyObjectDistributed(addresses) || SequenceUsedInDistributedTable(address,
 																			DEPENDENCY_INTERNAL))
 	{
-		ereport(ERROR, (errmsg(
-							"Altering a distributed sequence is currently not supported.")));
+		ereport(ERROR, (errmsg("Altering a distributed sequence "
+							   "is currently not supported.")));
 	}
 
 	/*
@@ -992,8 +991,8 @@ FilterDistributedSequences(GrantStmt *stmt)
 {
 	bool grantOnSequenceCommand = (stmt->targtype == ACL_TARGET_OBJECT &&
 								   stmt->objtype == OBJECT_SEQUENCE);
-	bool grantOnAllSequencesInSchemaCommand = (stmt->targtype ==
-											   ACL_TARGET_ALL_IN_SCHEMA &&
+	bool grantOnAllSequencesInSchemaCommand = (stmt->targtype == ACL_TARGET_ALL_IN_SCHEMA
+																		&&
 											   stmt->objtype == OBJECT_SEQUENCE);
 
 	/* we are only interested in sequence level grants */
@@ -1034,11 +1033,10 @@ FilterDistributedSequences(GrantStmt *stmt)
 			 */
 			if (list_member_oid(namespaceOidList, namespaceOid))
 			{
-				RangeVar *distributedSequence = makeRangeVar(get_namespace_name(
-																 namespaceOid),
-															 get_rel_name(
-																 sequenceAddress->objectId),
-															 -1);
+				RangeVar *distributedSequence = makeRangeVar(
+					get_namespace_name(namespaceOid),
+					get_rel_name(sequenceAddress->objectId),
+					-1);
 				grantSequenceList = lappend(grantSequenceList, distributedSequence);
 			}
 		}

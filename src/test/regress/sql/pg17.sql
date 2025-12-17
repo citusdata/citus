@@ -192,7 +192,7 @@ RESET client_min_messages;
 RESET search_path;
 DROP SCHEMA pg17_corr_subq_folding CASCADE;
 
--- Queries with outer joins with pseudoconstant quals work only in PG17
+-- Queries with outer joins with pseudoconstant quals work only in PG17+
 -- Relevant PG17 commit:
 -- https://github.com/postgres/postgres/commit/9e9931d2b
 
@@ -1292,7 +1292,7 @@ SET citus.grep_remote_commands TO '%12242024%';
 select public.explain_filter('explain (memory) select * from int8_tbl i8');
 select public.explain_filter('explain (memory, analyze, buffers false) select * from int8_tbl i8');
 select public.explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
-select public.explain_filter('explain (memory, analyze, buffers false, format json) select * from int8_tbl i8');
+select public.explain_filter('explain (memory, analyze, buffers false, format yaml) select * from int8_tbl i8');
 prepare int8_query as select * from int8_tbl i8;
 select public.explain_filter('explain (memory) execute int8_query');
 

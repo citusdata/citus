@@ -156,9 +156,10 @@ static bool AllDistributedRelationsInRestrictionContextColocated(
 	restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static bool HasPlaceHolderVar(Node *node);
-static JoinRestrictionContext * FilterJoinRestrictionContext(
-	JoinRestrictionContext *joinRestrictionContext, Relids
-	queryRteIdentities);
+static JoinRestrictionContext * FilterJoinRestrictionContext(JoinRestrictionContext *
+															 joinRestrictionContext,
+															 Relids
+															 queryRteIdentities);
 static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
@@ -613,8 +614,9 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *restrictionCon
 
 	List *attributeEquivalenceList = GenerateAllAttributeEquivalences(restrictionContext);
 
-	return RestrictionEquivalenceForPartitionKeysViaEquivalences(restrictionContext,
-																 attributeEquivalenceList);
+	return RestrictionEquivalenceForPartitionKeysViaEquivalences(
+		restrictionContext,
+		attributeEquivalenceList);
 }
 
 
@@ -1160,8 +1162,8 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
  * with a single AttributeEquivalenceClassMember.
  */
 static AttributeEquivalenceClass *
-GenerateEquivalenceClassForRelationRestriction(
-	RelationRestrictionContext *relationRestrictionContext)
+GenerateEquivalenceClassForRelationRestriction(RelationRestrictionContext *
+											   relationRestrictionContext)
 {
 	ListCell *relationRestrictionCell = NULL;
 	AttributeEquivalenceClassMember *eqMember = NULL;
@@ -1508,7 +1510,6 @@ GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToB
 bool
 IsRelOptOuterJoin(PlannerInfo *root, int varNo)
 {
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (root->simple_rel_array_size <= varNo)
 	{
 		return true;
@@ -1520,7 +1521,6 @@ IsRelOptOuterJoin(PlannerInfo *root, int varNo)
 		/* must be an outer join */
 		return true;
 	}
-#endif
 	return false;
 }
 
@@ -2071,8 +2071,8 @@ FindQueryContainingRTEIdentityInternal(Node *node,
  * distributed  relations in the given relation restrictions list are co-located.
  */
 static bool
-AllDistributedRelationsInRestrictionContextColocated(
-	RelationRestrictionContext *restrictionContext)
+AllDistributedRelationsInRestrictionContextColocated(RelationRestrictionContext *
+													 restrictionContext)
 {
 	RelationRestriction *relationRestriction = NULL;
 	List *relationIdList = NIL;

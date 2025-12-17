@@ -86,7 +86,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Node Type": "Sort",
       "Parallel Aware": false,
       "Async Capable": false,
-      "Disabled": false,
       "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
       "Plans": [
         {
@@ -96,7 +95,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Parent Relationship": "Outer",
           "Parallel Aware": false,
           "Async Capable": false,
-          "Disabled": false,
           "Group Key": ["remote_scan.l_quantity"],
           "Plans": [
             {
@@ -105,7 +103,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
               "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Async Capable": false,
-              "Disabled": false,
               "Distributed Query": {
                 "Job": {
                   "Task Count": 16,
@@ -122,7 +119,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Partial Mode": "Simple",
                               "Parallel Aware": false,
                               "Async Capable": false,
-                              "Disabled": false,
                               "Group Key": ["l_quantity"],
                               "Plans": [
                                 {
@@ -131,8 +127,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Parallel Aware": false,
                                   "Async Capable": false,
                                   "Relation Name": "lineitem_mx_1220052",
-                                  "Alias": "lineitem_mx",
-                                  "Disabled": false
+                                  "Alias": "lineitem_mx"
                                 }
                               ]
                             }
@@ -558,7 +553,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Partial Mode": "Simple",
       "Parallel Aware": false,
       "Async Capable": false,
-      "Disabled": false,
       "Plans": [
         {
           "Node Type": "Custom Scan",
@@ -566,7 +560,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Custom Plan Provider": "Citus Adaptive",
           "Parallel Aware": false,
           "Async Capable": false,
-          "Disabled": false,
           "Distributed Query": {
             "Job": {
               "Task Count": 16,
@@ -583,7 +576,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                           "Partial Mode": "Simple",
                           "Parallel Aware": false,
                           "Async Capable": false,
-                          "Disabled": false,
                           "Plans": [
                             {
                               "Node Type": "Hash Join",
@@ -591,7 +583,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Parallel Aware": false,
                               "Async Capable": false,
                               "Join Type": "Inner",
-                              "Disabled": false,
                               "Inner Unique": false,
                               "Hash Cond": "(lineitem_mx.l_orderkey = orders_mx.o_orderkey)",
                               "Plans": [
@@ -601,7 +592,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Parallel Aware": false,
                                   "Async Capable": false,
                                   "Join Type": "Inner",
-                                  "Disabled": false,
                                   "Inner Unique": false,
                                   "Hash Cond": "(supplier_mx.s_suppkey = lineitem_mx.l_suppkey)",
                                   "Plans": [
@@ -611,15 +601,13 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                       "Parallel Aware": false,
                                       "Async Capable": false,
                                       "Relation Name": "supplier_mx_1220087",
-                                      "Alias": "supplier_mx",
-                                      "Disabled": false
+                                      "Alias": "supplier_mx"
                                     },
                                     {
                                       "Node Type": "Hash",
                                       "Parent Relationship": "Inner",
                                       "Parallel Aware": false,
                                       "Async Capable": false,
-                                      "Disabled": false,
                                       "Plans": [
                                         {
                                           "Node Type": "Seq Scan",
@@ -627,8 +615,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                           "Parallel Aware": false,
                                           "Async Capable": false,
                                           "Relation Name": "lineitem_mx_1220052",
-                                          "Alias": "lineitem_mx",
-                                          "Disabled": false
+                                          "Alias": "lineitem_mx"
                                         }
                                       ]
                                     }
@@ -639,7 +626,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Parent Relationship": "Inner",
                                   "Parallel Aware": false,
                                   "Async Capable": false,
-                                  "Disabled": false,
                                   "Plans": [
                                     {
                                       "Node Type": "Hash Join",
@@ -647,7 +633,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                       "Parallel Aware": false,
                                       "Async Capable": false,
                                       "Join Type": "Inner",
-                                      "Disabled": false,
                                       "Inner Unique": false,
                                       "Hash Cond": "(customer_mx.c_custkey = orders_mx.o_custkey)",
                                       "Plans": [
@@ -657,15 +642,13 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                           "Parallel Aware": false,
                                           "Async Capable": false,
                                           "Relation Name": "customer_mx_1220084",
-                                          "Alias": "customer_mx",
-                                          "Disabled": false
+                                          "Alias": "customer_mx"
                                         },
                                         {
                                           "Node Type": "Hash",
                                           "Parent Relationship": "Inner",
                                           "Parallel Aware": false,
                                           "Async Capable": false,
-                                          "Disabled": false,
                                           "Plans": [
                                             {
                                               "Node Type": "Seq Scan",
@@ -673,8 +656,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                               "Parallel Aware": false,
                                               "Async Capable": false,
                                               "Relation Name": "orders_mx_1220068",
-                                              "Alias": "orders_mx",
-                                              "Disabled": false
+                                              "Alias": "orders_mx"
                                             }
                                           ]
                                         }

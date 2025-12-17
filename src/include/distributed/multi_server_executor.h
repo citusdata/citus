@@ -20,8 +20,8 @@
 /* Adaptive executor repartitioning related defines */
 #define WORKER_CREATE_SCHEMA_QUERY "SELECT worker_create_schema (" UINT64_FORMAT ", %s);"
 #define WORKER_REPARTITION_CLEANUP_QUERY "SELECT worker_repartition_cleanup (" \
-	UINT64_FORMAT \
-	");"
+		UINT64_FORMAT \
+		");"
 
 
 /* Enumeration that represents distributed executor types */

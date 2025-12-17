@@ -271,7 +271,8 @@ static void AppendTargetEntryToGroupClause(TargetEntry *targetEntry,
 static bool WorkerAggregateWalker(Node *node,
 								  WorkerAggregateWalkerContext *walkerContext);
 static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
-											WorkerAggregateWalkerContext *walkerContextry);
+											WorkerAggregateWalkerContext *
+											walkerContextry);
 static AggregateType GetAggregateType(Aggref *aggregatExpression);
 static Oid AggregateArgumentType(Aggref *aggregate);
 static Expr * FirstAggregateArgument(Aggref *aggregate);
@@ -293,18 +294,19 @@ static Const * MakeIntegerConst(int32 integerValue);
 /* Local functions forward declarations for aggregate expression checks */
 static bool HasNonDistributableAggregates(MultiNode *logicalPlanNode);
 static bool CanPushDownExpression(Node *expression,
-								  const ExtendedOpNodeProperties *extendedOpNodeProperties);
-static DeferredErrorMessage * DeferErrorIfHasNonDistributableAggregates(
-	MultiNode *logicalPlanNode);
-static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(
-	Aggref *arrayAggregateExpression);
+								  const ExtendedOpNodeProperties *
+								  extendedOpNodeProperties);
+static DeferredErrorMessage * DeferErrorIfHasNonDistributableAggregates(MultiNode *
+																		logicalPlanNode);
+static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(Aggref *
+																	arrayAggregateExpression);
 static DeferredErrorMessage * DeferErrorIfUnsupportedJsonAggregate(AggregateType type,
 																   Aggref *
 																   aggregateExpression);
-static DeferredErrorMessage * DeferErrorIfUnsupportedAggregateDistinct(
-	Aggref *aggregateExpression,
-	MultiNode *
-	logicalPlanNode);
+static DeferredErrorMessage * DeferErrorIfUnsupportedAggregateDistinct(Aggref *
+																	   aggregateExpression,
+																	   MultiNode *
+																	   logicalPlanNode);
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
 static bool TablePartitioningSupportsDistinct(List *tableNodeList,
 											  MultiExtendedOp *opNode,
@@ -322,10 +324,10 @@ static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByComplexExpression(List *sortClauseList, List *targetList);
 static bool HasOrderByHllType(List *sortClauseList, List *targetList);
-static bool ShouldProcessDistinctOrderAndLimitForWorker(
-	ExtendedOpNodeProperties *extendedOpNodeProperties,
-	bool pushingDownOriginalGrouping,
-	Node *havingQual);
+static bool ShouldProcessDistinctOrderAndLimitForWorker(ExtendedOpNodeProperties *
+														extendedOpNodeProperties,
+														bool pushingDownOriginalGrouping,
+														Node *havingQual);
 static bool IsIndexInRange(const List *list, int index);
 
 /*
@@ -5061,10 +5063,10 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
  * neither should ProcessLimitOrderByForWorkerQuery.
  */
 static bool
-ShouldProcessDistinctOrderAndLimitForWorker(
-	ExtendedOpNodeProperties *extendedOpNodeProperties,
-	bool pushingDownOriginalGrouping,
-	Node *havingQual)
+ShouldProcessDistinctOrderAndLimitForWorker(ExtendedOpNodeProperties *
+											extendedOpNodeProperties,
+											bool pushingDownOriginalGrouping,
+											Node *havingQual)
 {
 	if (extendedOpNodeProperties->pullUpIntermediateRows)
 	{

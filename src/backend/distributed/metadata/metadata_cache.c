@@ -88,10 +88,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 
-#if PG_VERSION_NUM < PG_VERSION_16
-#include "utils/relfilenodemap.h"
-#endif
-
 
 /* user configuration */
 int ReadFromSecondaries = USE_SECONDARY_NODES_NEVER;
