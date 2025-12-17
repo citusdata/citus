@@ -140,9 +140,9 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg15_version }},
           ${{ needs.params.outputs.pg16_version }},
-          ${{ needs.params.outputs.pg17_version }}
+          ${{ needs.params.outputs.pg17_version }},
+          ${{ needs.params.outputs.pg18_version }}
         ]
       make_targets: '["check-split", "check-multi", "check-multi-1", "check-multi-mx", "check-vanilla", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
@@ -158,9 +158,9 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg15_version }},
           ${{ needs.params.outputs.pg16_version }},
-          ${{ needs.params.outputs.pg17_version }}
+          ${{ needs.params.outputs.pg17_version }},
+          ${{ needs.params.outputs.pg18_version }}
         ]
       make_targets: '["check-failure", "check-enterprise-failure", "check-pytest", "check-query-generator"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
@@ -176,9 +176,9 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg15_version }},
           ${{ needs.params.outputs.pg16_version }},
-          ${{ needs.params.outputs.pg17_version }}
+          ${{ needs.params.outputs.pg17_version }},
+          ${{ needs.params.outputs.pg18_version }}
         ]
       make_targets: '["installcheck"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
