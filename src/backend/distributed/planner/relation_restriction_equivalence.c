@@ -103,8 +103,8 @@ static bool ContainsMultipleDistributedRelations(PlannerRestrictionContext *
 												 plannerRestrictionContext);
 static List * GenerateAttributeEquivalencesForRelationRestrictions(
 	RelationRestrictionContext *restrictionContext);
-static List * MergeEquivalenceClassesWithSameFunctions(
-	RelationRestrictionContext *restrictionContext);
+static List * MergeEquivalenceClassesWithSameFunctions(RelationRestrictionContext *
+													   restrictionContext);
 static AttributeEquivalenceClass * AttributeEquivalenceClassForEquivalenceClass(
 	EquivalenceClass *plannerEqClass, RelationRestriction *relationRestriction);
 static void AddToAttributeEquivalenceClass(AttributeEquivalenceClass *
