@@ -34,57 +34,57 @@ CitusSetTag(Node *node, int tag)
 
 
 #define DECLARE_FROM_AND_NEW_NODE(nodeTypeName) \
-	nodeTypeName *newnode = \
-		(nodeTypeName *) CitusSetTag((Node *) target_node, T_ ## nodeTypeName); \
-	nodeTypeName *from = (nodeTypeName *) source_node
+		nodeTypeName *newnode = \
+			(nodeTypeName *) CitusSetTag((Node *) target_node, T_ ## nodeTypeName); \
+		nodeTypeName *from = (nodeTypeName *) source_node
 
 /* Copy a simple scalar field (int, float, bool, enum, etc) */
 #define COPY_SCALAR_FIELD(fldname) \
-	(newnode->fldname = from->fldname)
+		(newnode->fldname = from->fldname)
 
 /* Copy a field that is a pointer to some kind of Node or Node tree */
 #define COPY_NODE_FIELD(fldname) \
-	(newnode->fldname = copyObject(from->fldname))
+		(newnode->fldname = copyObject(from->fldname))
 
 /* Copy a field that is a pointer to a C string, or perhaps NULL */
 #define COPY_STRING_FIELD(fldname) \
-	(newnode->fldname = from->fldname ? pstrdup(from->fldname) : (char *) NULL)
+		(newnode->fldname = from->fldname ? pstrdup(from->fldname) : (char *) NULL)
 
 /* Copy a node array. Target array is also allocated. */
 #define COPY_NODE_ARRAY(fldname, type, count) \
-	do { \
-		int i = 0; \
-		newnode->fldname = (type **) palloc(count * sizeof(type *)); \
-		for (i = 0; i < count; ++i) \
-		{ \
-			newnode->fldname[i] = copyObject(from->fldname[i]); \
+		do { \
+			int i = 0; \
+			newnode->fldname = (type **) palloc(count * sizeof(type *)); \
+			for (i = 0; i < count; ++i) \
+			{ \
+				newnode->fldname[i] = copyObject(from->fldname[i]); \
+			} \
 		} \
-	} \
-	while (0)
+		while (0)
 
 /* Copy a scalar array. Target array is also allocated. */
 #define COPY_SCALAR_ARRAY(fldname, type, count) \
-	do { \
-		int i = 0; \
-		newnode->fldname = (type *) palloc(count * sizeof(type)); \
-		for (i = 0; i < count; ++i) \
-		{ \
-			newnode->fldname[i] = from->fldname[i]; \
+		do { \
+			int i = 0; \
+			newnode->fldname = (type *) palloc(count * sizeof(type)); \
+			for (i = 0; i < count; ++i) \
+			{ \
+				newnode->fldname[i] = from->fldname[i]; \
+			} \
 		} \
-	} \
-	while (0)
+		while (0)
 
 #define COPY_STRING_LIST(fldname) \
-	do { \
-		char *curString = NULL; \
-		List *newList = NIL; \
-		foreach_declared_ptr(curString, from->fldname) { \
-			char *newString = curString ? pstrdup(curString) : (char *) NULL; \
-			newList = lappend(newList, newString); \
+		do { \
+			char *curString = NULL; \
+			List *newList = NIL; \
+			foreach_declared_ptr(curString, from->fldname) { \
+				char *newString = curString ? pstrdup(curString) : (char *) NULL; \
+				newList = lappend(newList, newString); \
+			} \
+			newnode->fldname = newList; \
 		} \
-		newnode->fldname = newList; \
-	} \
-	while (0)
+		while (0)
 
 static void CopyTaskQuery(Task *newnode, Task *from);
 

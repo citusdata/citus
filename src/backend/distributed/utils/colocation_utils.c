@@ -531,8 +531,8 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 			continue;
 		}
 
-		if (colocationId == INVALID_COLOCATION_ID || colocationId >
-			colocationForm->colocationid)
+		if (colocationId == INVALID_COLOCATION_ID ||
+			colocationId > colocationForm->colocationid)
 		{
 			/*
 			 * We assign the smallest colocation id among all the matches so that we
@@ -1051,8 +1051,8 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		 * Since we iterate over co-located tables, shard count of each table should be
 		 * same and greater than shardIntervalIndex.
 		 */
-		Assert(cacheEntry->shardIntervalArrayLength ==
-			   colocatedTableCacheEntry->shardIntervalArrayLength);
+		Assert(cacheEntry->shardIntervalArrayLength == colocatedTableCacheEntry->
+			   shardIntervalArrayLength);
 
 		ShardInterval *colocatedShardInterval =
 			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
@@ -1122,8 +1122,8 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
 		 * Since we iterate over co-located tables, shard count of each table should be
 		 * same and greater than shardIntervalIndex.
 		 */
-		Assert(cacheEntry->shardIntervalArrayLength ==
-			   colocatedTableCacheEntry->shardIntervalArrayLength);
+		Assert(cacheEntry->shardIntervalArrayLength == colocatedTableCacheEntry->
+			   shardIntervalArrayLength);
 
 		ShardInterval *colocatedShardInterval =
 			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];

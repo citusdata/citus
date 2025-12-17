@@ -400,7 +400,6 @@ DeparseGrantRoleStmt(Node *node)
 static void
 AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 {
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (!stmt->is_grant)
 	{
 		DefElem *opt = NULL;
@@ -423,12 +422,6 @@ AppendRevokeAdminOptionFor(StringInfo buf, GrantRoleStmt *stmt)
 			}
 		}
 	}
-#else
-	if (!stmt->is_grant && stmt->admin_opt)
-	{
-		appendStringInfo(buf, "ADMIN OPTION FOR ");
-	}
-#endif
 }
 
 
@@ -437,7 +430,6 @@ AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 {
 	if (stmt->is_grant)
 	{
-#if PG_VERSION_NUM >= PG_VERSION_16
 		int opt_count = 0;
 		DefElem *opt = NULL;
 		foreach_declared_ptr(opt, stmt->opt)
@@ -463,12 +455,6 @@ AppendGrantWithAdminOption(StringInfo buf, GrantRoleStmt *stmt)
 				}
 			}
 		}
-#else
-		if (stmt->admin_opt)
-		{
-			appendStringInfo(buf, " WITH ADMIN OPTION");
-		}
-#endif
 	}
 }
 

@@ -828,12 +828,13 @@ IsShardKeyValueAllowed(Const *shardKey, uint32 colocationId)
 	Assert(AllowedDistributionColumnValue.isActive);
 	Assert(ExecutorLevel > AllowedDistributionColumnValue.executorLevel);
 
-	ereport(DEBUG4, errmsg("Comparing saved:%s with Shard key: %s colocationid:%d:%d",
-						   pretty_format_node_dump(
-							   nodeToString(
-								   AllowedDistributionColumnValue.distributionColumnValue)),
-						   pretty_format_node_dump(nodeToString(shardKey)),
-						   AllowedDistributionColumnValue.colocationId, colocationId));
+	ereport(DEBUG4, errmsg(
+				"Comparing saved:%s with Shard key: %s colocationid:%d:%d",
+				pretty_format_node_dump(
+					nodeToString(AllowedDistributionColumnValue.
+								 distributionColumnValue)),
+				pretty_format_node_dump(nodeToString(shardKey)),
+				AllowedDistributionColumnValue.colocationId, colocationId));
 
 	return (equal(AllowedDistributionColumnValue.distributionColumnValue, shardKey) &&
 			(AllowedDistributionColumnValue.colocationId == colocationId));

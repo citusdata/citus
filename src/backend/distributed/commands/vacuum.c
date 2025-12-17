@@ -43,26 +43,30 @@ typedef struct CitusVacuumParams
 	VacOptValue truncate;
 	VacOptValue index_cleanup;
 	int nworkers;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	int ring_size;
-#endif
 } CitusVacuumParams;
 
+/*
+ * Information we track per VACUUM/ANALYZE target relation.
+ */
+typedef struct CitusVacuumRelation
+{
+	VacuumRelation *vacuumRelation;
+	Oid relationId;
+} CitusVacuumRelation;
+
 /* Local functions forward declarations for processing distributed table commands */
-static bool IsDistributedVacuumStmt(List *vacuumRelationIdList);
+static bool IsDistributedVacuumStmt(List *vacuumRelationList);
 static List * VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams,
 							 List *vacuumColumnList);
 static char * DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
 static char * DeparseVacuumColumnNames(List *columnNameList);
-static List * VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex);
-static List * ExtractVacuumTargetRels(VacuumStmt *vacuumStmt);
-static void ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
+static void ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationList,
 											 CitusVacuumParams vacuumParams);
 static void ExecuteUnqualifiedVacuumTasks(VacuumStmt *vacuumStmt,
 										  CitusVacuumParams vacuumParams);
 static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
-static List * VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams
-								   vacuumParams);
+static List * VacuumRelationList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams);
 
 /*
  * PostprocessVacuumStmt processes vacuum statements that may need propagation to
@@ -97,7 +101,7 @@ PostprocessVacuumStmt(Node *node, const char *vacuumCommand)
 	 * when no table is specified propagate the command as it is;
 	 * otherwise, only propagate when there is at least 1 citus table
 	 */
-	List *relationIdList = VacuumRelationIdList(vacuumStmt, vacuumParams);
+	List *vacuumRelationList = VacuumRelationList(vacuumStmt, vacuumParams);
 
 	if (list_length(vacuumStmt->rels) == 0)
 	{
@@ -105,11 +109,11 @@ PostprocessVacuumStmt(Node *node, const char *vacuumCommand)
 
 		ExecuteUnqualifiedVacuumTasks(vacuumStmt, vacuumParams);
 	}
-	else if (IsDistributedVacuumStmt(relationIdList))
+	else if (IsDistributedVacuumStmt(vacuumRelationList))
 	{
 		/* there is at least 1 citus table specified */
 
-		ExecuteVacuumOnDistributedTables(vacuumStmt, relationIdList,
+		ExecuteVacuumOnDistributedTables(vacuumStmt, vacuumRelationList,
 										 vacuumParams);
 	}
 
@@ -120,39 +124,58 @@ PostprocessVacuumStmt(Node *node, const char *vacuumCommand)
 
 
 /*
- * VacuumRelationIdList returns the oid of the relations in the given vacuum statement.
+ * VacuumRelationList returns the list of relations in the given vacuum statement,
+ * along with their resolved Oids (if they can be locked).
  */
 static List *
-VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
+VacuumRelationList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
 {
 	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
 						ShareUpdateExclusiveLock;
 
 	bool skipLocked = (vacuumParams.options & VACOPT_SKIP_LOCKED);
 
-	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
+	List *relationList = NIL;
 
-	List *relationIdList = NIL;
-
-	RangeVar *vacuumRelation = NULL;
-	foreach_declared_ptr(vacuumRelation, vacuumRelationList)
+	VacuumRelation *vacuumRelation = NULL;
+	foreach_declared_ptr(vacuumRelation, vacuumStmt->rels)
 	{
+		Oid relationId = InvalidOid;
+
 		/*
 		 * If skip_locked option is enabled, we are skipping that relation
-		 * if the lock for it is currently not available; else, we get the lock.
+		 * if the lock for it is currently not available; otherwise, we get the lock.
 		 */
-		Oid relationId = RangeVarGetRelidExtended(vacuumRelation,
+		if (vacuumRelation->relation)
+		{
+			relationId = RangeVarGetRelidExtended(vacuumRelation->relation,
 												  lockMode,
 												  skipLocked ? RVR_SKIP_LOCKED : 0, NULL,
 												  NULL);
+		}
+		else if (OidIsValid(vacuumRelation->oid))
+		{
+			/* fall back to the Oid directly when provided */
+			if (!skipLocked || ConditionalLockRelationOid(vacuumRelation->oid, lockMode))
+			{
+				if (!skipLocked)
+				{
+					LockRelationOid(vacuumRelation->oid, lockMode);
+				}
+				relationId = vacuumRelation->oid;
+			}
+		}
 
 		if (OidIsValid(relationId))
 		{
-			relationIdList = lappend_oid(relationIdList, relationId);
+			CitusVacuumRelation *relation = palloc(sizeof(CitusVacuumRelation));
+			relation->vacuumRelation = vacuumRelation;
+			relation->relationId = relationId;
+			relationList = lappend(relationList, relation);
 		}
 	}
 
-	return relationIdList;
+	return relationList;
 }
 
 
@@ -161,12 +184,13 @@ VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
  * otherwise, it returns false.
  */
 static bool
-IsDistributedVacuumStmt(List *vacuumRelationIdList)
+IsDistributedVacuumStmt(List *vacuumRelationList)
 {
-	Oid relationId = InvalidOid;
-	foreach_declared_oid(relationId, vacuumRelationIdList)
+	CitusVacuumRelation *vacuumRelation = NULL;
+	foreach_declared_ptr(vacuumRelation, vacuumRelationList)
 	{
-		if (OidIsValid(relationId) && IsCitusTable(relationId))
+		if (OidIsValid(vacuumRelation->relationId) &&
+			IsCitusTable(vacuumRelation->relationId))
 		{
 			return true;
 		}
@@ -181,24 +205,31 @@ IsDistributedVacuumStmt(List *vacuumRelationIdList)
  * if they are citus tables.
  */
 static void
-ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
+ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationList,
 								 CitusVacuumParams vacuumParams)
 {
-	int relationIndex = 0;
-
-	Oid relationId = InvalidOid;
-	foreach_declared_oid(relationId, relationIdList)
+	CitusVacuumRelation *vacuumRelationEntry = NULL;
+	foreach_declared_ptr(vacuumRelationEntry, relationList)
 	{
+		Oid relationId = vacuumRelationEntry->relationId;
+		VacuumRelation *vacuumRelation = vacuumRelationEntry->vacuumRelation;
+
+		RangeVar *relation = vacuumRelation->relation;
+		if (relation != NULL && !relation->inh)
+		{
+			/* ONLY specified, so don't recurse to shard placements */
+			continue;
+		}
+
 		if (IsCitusTable(relationId))
 		{
-			List *vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
+			List *vacuumColumnList = vacuumRelation->va_cols;
 			List *taskList = VacuumTaskList(relationId, vacuumParams, vacuumColumnList);
 
 			/* local execution is not implemented for VACUUM commands */
 			bool localExecutionSupported = false;
 			ExecuteUtilityTaskList(taskList, localExecutionSupported);
 		}
-		relationIndex++;
 	}
 }
 
@@ -320,19 +351,12 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	}
 
 	/* if no flags remain, exit early */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (vacuumFlags & VACOPT_PROCESS_TOAST &&
 		vacuumFlags & VACOPT_PROCESS_MAIN)
 	{
 		/* process toast and process main are true by default */
 		if (((vacuumFlags & ~VACOPT_PROCESS_TOAST) & ~VACOPT_PROCESS_MAIN) == 0 &&
 			vacuumParams.ring_size == -1 &&
-#else
-	if (vacuumFlags & VACOPT_PROCESS_TOAST)
-	{
-		/* process toast is true by default */
-		if ((vacuumFlags & ~VACOPT_PROCESS_TOAST) == 0 &&
-#endif
 			vacuumParams.truncate == VACOPTVALUE_UNSPECIFIED &&
 			vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED &&
 			vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
@@ -380,7 +404,6 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		appendStringInfoString(vacuumPrefix, "PROCESS_TOAST FALSE,");
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (!(vacuumFlags & VACOPT_PROCESS_MAIN))
 	{
 		appendStringInfoString(vacuumPrefix, "PROCESS_MAIN FALSE,");
@@ -400,7 +423,6 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	{
 		appendStringInfo(vacuumPrefix, "BUFFER_USAGE_LIMIT %d,", vacuumParams.ring_size);
 	}
-#endif
 
 	if (vacuumParams.truncate != VACOPTVALUE_UNSPECIFIED)
 	{
@@ -485,39 +507,6 @@ DeparseVacuumColumnNames(List *columnNameList)
 
 
 /*
- * VacuumColumnList returns list of columns from relation
- * in the vacuum statement at specified relationIndex.
- */
-static List *
-VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex)
-{
-	VacuumRelation *vacuumRelation = (VacuumRelation *) list_nth(vacuumStmt->rels,
-																 relationIndex);
-
-	return vacuumRelation->va_cols;
-}
-
-
-/*
- * ExtractVacuumTargetRels returns list of target
- * relations from vacuum statement.
- */
-static List *
-ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
-{
-	List *vacuumList = NIL;
-
-	VacuumRelation *vacuumRelation = NULL;
-	foreach_declared_ptr(vacuumRelation, vacuumStmt->rels)
-	{
-		vacuumList = lappend(vacuumList, vacuumRelation->relation);
-	}
-
-	return vacuumList;
-}
-
-
-/*
  * VacuumStmtParams returns a CitusVacuumParams based on the supplied VacuumStmt.
  */
 
@@ -537,13 +526,10 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	bool full = false;
 	bool disable_page_skipping = false;
 	bool process_toast = true;
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 	bool process_main = true;
 	bool skip_database_stats = false;
 	bool only_database_stats = false;
 	params.ring_size = -1;
-#endif
 
 	/* Set default value */
 	params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
@@ -563,13 +549,11 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		{
 			skip_locked = defGetBoolean(opt);
 		}
-#if PG_VERSION_NUM >= PG_VERSION_16
 		else if (strcmp(opt->defname, "buffer_usage_limit") == 0)
 		{
 			char *vac_buffer_size = defGetString(opt);
 			parse_int(vac_buffer_size, &params.ring_size, GUC_UNIT_KB, NULL);
 		}
-#endif
 		else if (!vacstmt->is_vacuumcmd)
 		{
 			ereport(ERROR,
@@ -594,7 +578,6 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		{
 			disable_page_skipping = defGetBoolean(opt);
 		}
-#if PG_VERSION_NUM >= PG_VERSION_16
 		else if (strcmp(opt->defname, "process_main") == 0)
 		{
 			process_main = defGetBoolean(opt);
@@ -607,7 +590,6 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		{
 			only_database_stats = defGetBoolean(opt);
 		}
-#endif
 		else if (strcmp(opt->defname, "process_toast") == 0)
 		{
 			process_toast = defGetBoolean(opt);
@@ -678,11 +660,9 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 					 (analyze ? VACOPT_ANALYZE : 0) |
 					 (freeze ? VACOPT_FREEZE : 0) |
 					 (full ? VACOPT_FULL : 0) |
-#if PG_VERSION_NUM >= PG_VERSION_16
 					 (process_main ? VACOPT_PROCESS_MAIN : 0) |
 					 (skip_database_stats ? VACOPT_SKIP_DATABASE_STATS : 0) |
 					 (only_database_stats ? VACOPT_ONLY_DATABASE_STATS : 0) |
-#endif
 					 (process_toast ? VACOPT_PROCESS_TOAST : 0) |
 					 (disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0);
 	return params;

@@ -72,20 +72,8 @@ ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
 USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
-FROM base AS pg15
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 15.14
-RUN rm .pgenv/src/*.tar*
-RUN make -C .pgenv/src/postgresql-*/ clean
-RUN make -C .pgenv/src/postgresql-*/src/include install
-
-# create a staging directory with all files we want to copy from our pgenv build
-# we will copy the contents of the staged folder into the final image at once
-RUN mkdir .pgenv-staging/
-RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
-RUN rm .pgenv-staging/config/default.conf
-
 FROM base AS pg16
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.10
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 16.11
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -97,7 +85,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg17
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.6
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 17.7
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -108,15 +96,27 @@ RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
+FROM base AS pg18
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 18.1
+RUN rm .pgenv/src/*.tar*
+RUN make -C .pgenv/src/postgresql-*/ clean
+RUN make -C .pgenv/src/postgresql-*/src/include install
+
+# Stage the pgenv artifacts for PG18
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+
+
 FROM base AS uncrustify-builder
 
 RUN sudo apt update && sudo apt install -y cmake tree
 
 WORKDIR /uncrustify
-RUN curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.68.1.tar.gz | tar xz
-WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/
+RUN curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.82.0.tar.gz | tar xz
+WORKDIR /uncrustify/uncrustify-uncrustify-0.82.0/
 RUN mkdir build
-WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/build/
+WORKDIR /uncrustify/uncrustify-uncrustify-0.82.0/build/
 RUN cmake ..
 RUN MAKEFLAGS="-j $(nproc)" make -s
 
@@ -198,9 +198,9 @@ RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
 
 COPY --link --from=uncrustify-builder /uncrustify/usr/ /usr/
 
-COPY --link --from=pg15 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg16 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --link --from=pg17 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --link --from=pg18 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
 COPY --link --from=pipenv /home/citus/.local/share/virtualenvs/ /home/citus/.local/share/virtualenvs/
 
@@ -216,7 +216,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch 17.6
+RUN pgenv switch 18.1
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700

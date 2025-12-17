@@ -191,8 +191,8 @@ static HTAB *ConnectionShardHash;
 
 static MultiConnection * FindPlacementListConnection(int flags, List *placementAccessList,
 													 const char *userName);
-static ConnectionPlacementHashEntry * FindOrCreatePlacementEntry(
-	ShardPlacement *placement);
+static ConnectionPlacementHashEntry * FindOrCreatePlacementEntry(ShardPlacement *
+																 placement);
 static bool CanUseExistingConnection(uint32 flags, const char *userName,
 									 ConnectionReference *placementConnection);
 static bool ConnectionAccessedDifferentPlacement(MultiConnection *connection,

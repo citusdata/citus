@@ -35,7 +35,7 @@ extern void RegisterNodes(void);
 #define READFUNC_ARGS struct ExtensibleNode *node
 #define OUTFUNC_ARGS StringInfo str, const struct ExtensibleNode *raw_node
 #define COPYFUNC_ARGS struct ExtensibleNode *target_node, const struct \
-	ExtensibleNode *source_node
+		ExtensibleNode *source_node
 
 extern void ReadUnsupportedCitusNode(READFUNC_ARGS);
 

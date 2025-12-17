@@ -290,30 +290,10 @@ s/\/\*\{"cId":.*\*\///g
 # Notice message that contains current columnar version that makes it harder to bump versions
 s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION )"[0-9]+\.[0-9]+-[0-9]+"/\1 "x.y-z"/
 
-# pg16 changes
-# can be removed when dropping PG14&15 support
-#if PG_VERSION_NUM < PG_VERSION_16
-# (This is not preprocessor directive, but a reminder for the developer that will drop PG14&15 support )
-
-s/, password_required=false//g
-s/provide the file or change sslmode/provide the file, use the system's trusted roots with sslrootcert=system, or change sslmode/g
-
-#pg18 varreturningtype - change needed for PG16, PG17 tests
-s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2/g
-
-#pg16 varnullingrels and pg18 varreturningtype - change needed for PG15 tests
-s/(:varcollid [0-9]+) :varlevelsup 0/\1 :varnullingrels (b) :varlevelsup 0 :varreturningtype 0/g
-
-s/table_name_for_view\.([_a-z0-9]+)(,| |$)/\1\2/g
-s/permission denied to terminate process/must be a superuser to terminate superuser process/g
-s/permission denied to cancel query/must be a superuser to cancel superuser query/g
-
-#endif /* PG_VERSION_NUM < PG_VERSION_16 */
-
 # pg17 changes
-# can be removed when dropping PG15&16 support
+# can be removed when dropping PG16 support
 #if PG_VERSION_NUM < PG_VERSION_17
-# (This is not preprocessor directive, but a reminder for the developer that will drop PG15&16 support )
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG16 support )
 
 s/COPY DEFAULT only available using COPY FROM/COPY DEFAULT cannot be used with COPY TO/
 s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter character must not appear in the DEFAULT specification/
@@ -321,7 +301,7 @@ s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter cha
 #endif /* PG_VERSION_NUM < PG_VERSION_17 */
 
 # PG 17 Removes outer parentheses from CHECK constraints
-# we add them back for pg15,pg16 compatibility
+# we add them back for pg16 compatibility
 # e.g. change CHECK other_col >= 100 to CHECK (other_col >= 100)
 s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
@@ -364,9 +344,6 @@ s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
 # ignore any “Disabled:” lines in test output
 /^\s*Disabled:/d
 
-# ignore any JSON-style Disabled field
-/^\s*"Disabled":/d
-
 # ignore XML <Disabled>true</Disabled> or <Disabled>false</Disabled>
 /^\s*<Disabled>.*<\/Disabled>/d
 # pg18 “Disabled” change end
@@ -406,3 +383,8 @@ s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*
 # Output
 /^[[:space:]]*Output:/   s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
 # end PG18 window ref normalization
+
+# pg18 varreturningtype - change needed for PG16, PG17 tests
+# can be removed when dropping pg17 support
+s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2/g
+# end pg18 varreturningtype

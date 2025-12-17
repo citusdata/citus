@@ -107,8 +107,12 @@ static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int v
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
 static char * RecurringTypeDescription(RecurringTuplesType recurType);
-static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
-	PlannerInfo *plannerInfo, Relids recurringRelIds, Relids nonRecurringRelIds);
+static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *
+																		plannerInfo,
+																		Relids
+																		recurringRelIds,
+																		Relids
+																		nonRecurringRelIds);
 static bool ContainsLateralSubquery(PlannerInfo *plannerInfo);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
 static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
@@ -790,9 +794,9 @@ FromClauseRecurringTupleType(Query *queryTree)
  * such queries have lateral subqueries.
  */
 static DeferredErrorMessage *
-DeferredErrorIfUnsupportedRecurringTuplesJoin(
-	PlannerRestrictionContext *plannerRestrictionContext,
-	bool plannerPhase)
+DeferredErrorIfUnsupportedRecurringTuplesJoin(PlannerRestrictionContext *
+											  plannerRestrictionContext,
+											  bool plannerPhase)
 {
 	List *joinRestrictionList =
 		plannerRestrictionContext->joinRestrictionContext->joinRestrictionList;
@@ -2054,9 +2058,7 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	pushedDownQuery->targetList = subqueryTargetEntryList;
 	pushedDownQuery->jointree = copyObject(queryTree->jointree);
 	pushedDownQuery->rtable = copyObject(queryTree->rtable);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	pushedDownQuery->rteperminfos = copyObject(queryTree->rteperminfos);
-#endif
 	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
 	pushedDownQuery->querySource = queryTree->querySource;
 	pushedDownQuery->hasSubLinks = queryTree->hasSubLinks;
@@ -2190,9 +2192,7 @@ CreateSubqueryTargetListAndAdjustVars(List *columnList)
 		 * the var - is empty. Otherwise, when given the query, the Postgres planner
 		 * may attempt to access a non-existent range table and segfault, as in #7787.
 		 */
-#if PG_VERSION_NUM >= PG_VERSION_16
 		column->varnullingrels = NULL;
-#endif
 	}
 
 	return subqueryTargetEntryList;

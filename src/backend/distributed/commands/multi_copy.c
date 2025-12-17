@@ -100,6 +100,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/relation_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/replication_origin_session_utils.h"
@@ -110,10 +111,6 @@
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "distributed/relation_utils.h"
-#endif
 
 
 /* constant used in binary protocol */
@@ -350,7 +347,6 @@ static void LogLocalCopyToRelationExecution(uint64 shardId);
 static void LogLocalCopyToFileExecution(uint64 shardId);
 static void ErrorIfMergeInCopy(CopyStmt *copyStatement);
 
-
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
 
@@ -484,9 +480,7 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -804,9 +798,7 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -1277,7 +1269,9 @@ ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result)
 		}
 
 		default:
+		{
 			Assert(false); /* there are no other options for this enum */
+		}
 	}
 }
 
@@ -1316,9 +1310,7 @@ TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor)
 	for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, columnIndex);
-		if (attr->attisdropped ||
-			attr->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(attr))
 		{
 			typeArray[columnIndex] = InvalidOid;
 		}
@@ -1486,9 +1478,7 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 			value = CoerceColumnValue(value, &columnCoercionPaths[columnIndex]);
 		}
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -1607,9 +1597,7 @@ AvailableColumnCount(TupleDesc tupleDescriptor)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
-		if (!currentColumn->attisdropped &&
-			currentColumn->attgenerated != ATTRIBUTE_GENERATED_STORED
-			)
+		if (!IsDroppedOrGenerated(currentColumn))
 		{
 			columnCount++;
 		}
@@ -2479,7 +2467,7 @@ ProcessAppendToShardOption(Oid relationId, CopyStmt *copyStatement)
 		if (!IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 		{
 			ereport(ERROR, (errmsg(APPEND_TO_SHARD_OPTION " is only valid for "
-														  "append-distributed tables")));
+								   "append-distributed tables")));
 		}
 
 		/* throws an error if shard does not exist */
@@ -2869,8 +2857,8 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 	{
 		if (strcmp(option->defname, "on_error") == 0)
 		{
-			ereport(ERROR, (errmsg(
-								"Citus does not support COPY FROM with ON_ERROR option.")));
+			ereport(ERROR, (errmsg("Citus does not support "
+								   "COPY FROM with ON_ERROR option.")));
 		}
 		else if (strcmp(option->defname, "log_verbosity") == 0)
 		{
@@ -2887,8 +2875,8 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 	 */
 	if (log_verbosity)
 	{
-		ereport(ERROR, (errmsg(
-							"Citus does not support COPY FROM with LOG_VERBOSITY option.")));
+		ereport(ERROR, (errmsg("Citus does not support "
+							   "COPY FROM with LOG_VERBOSITY option.")));
 	}
 #endif
 }
@@ -3262,12 +3250,8 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	RangeTblEntry *rte = (RangeTblEntry*) linitial(range_table);
 	tupDesc = RelationGetDescr(rel);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	/* create permission info for rte */
 	RTEPermissionInfo *perminfo = GetFilledPermissionInfo(rel->rd_id, rte->inh, required_access);
-#else
-	rte->requiredPerms = required_access;
-#endif
 
 	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
 	foreach(cur, attnums)
@@ -3276,29 +3260,17 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 
 		if (is_from)
 		{
-#if PG_VERSION_NUM >= PG_VERSION_16
 			perminfo->insertedCols = bms_add_member(perminfo->insertedCols, attno);
-#else
-			rte->insertedCols = bms_add_member(rte->insertedCols, attno);
-#endif
 		}
 		else
 		{
-#if PG_VERSION_NUM >= PG_VERSION_16
 			perminfo->selectedCols = bms_add_member(perminfo->selectedCols, attno);
-#else
-			rte->selectedCols = bms_add_member(rte->selectedCols, attno);
-#endif
 		}
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	/* link rte to its permission info then check permissions */
 	rte->perminfoindex = 1;
 	ExecCheckPermissions(list_make1(rte), list_make1(perminfo), true);
-#else
-	ExecCheckRTPerms(range_table, true);
-#endif
 
 	/* TODO: Perform RLS checks once supported */
 
@@ -3998,4 +3970,21 @@ UnclaimCopyConnections(List *connectionStateList)
 		CopyConnectionState *connectionState = lfirst(connectionStateCell);
 		UnclaimConnection(connectionState->connection);
 	}
+}
+
+
+/*
+ * IsDroppedOrGenerated - helper function for determining if an attribute is
+ * dropped or generated. Used by COPY and Citus DDL to skip such columns.
+ */
+inline bool
+IsDroppedOrGenerated(Form_pg_attribute attr)
+{
+	/*
+	 * If the "is dropped" flag is true or the generated column flag
+	 * is not the default nul character (in which case its value is 's'
+	 * for ATTRIBUTE_GENERATED_STORED or possibly 'v' with PG18+ for
+	 * ATTRIBUTE_GENERATED_VIRTUAL) then return true.
+	 */
+	return attr->attisdropped || (attr->attgenerated != '\0');
 }

@@ -132,15 +132,15 @@ ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
  * module.
  */
 #define DEFINE_COLUMNAR_PASSTHROUGH_FUNC(funcname) \
-	static PGFunction CppConcat(extern_, funcname); \
-	PG_FUNCTION_INFO_V1(funcname); \
-	Datum funcname(PG_FUNCTION_ARGS) \
-	{ \
-		return CppConcat(extern_, funcname)(fcinfo); \
-	}
+		static PGFunction CppConcat(extern_, funcname); \
+		PG_FUNCTION_INFO_V1(funcname); \
+		Datum funcname(PG_FUNCTION_ARGS) \
+		{ \
+			return CppConcat(extern_, funcname)(fcinfo); \
+		}
 #define INIT_COLUMNAR_SYMBOL(typename, funcname) \
-	CppConcat(extern_, funcname) = \
-		(typename) (void *) lookup_external_function(handle, # funcname)
+		CppConcat(extern_, funcname) = \
+			(typename) (void *) lookup_external_function(handle, # funcname)
 
 #define CDC_DECODER_DYNAMIC_LIB_PATH "$libdir/citus_decoders:$libdir"
 
@@ -2803,7 +2803,7 @@ static void
 OverridePostgresConfigProperties(void)
 {
 	int gucCount = 0;
-	struct config_generic **guc_vars = get_guc_variables_compat(&gucCount);
+	struct config_generic **guc_vars = get_guc_variables(&gucCount);
 
 	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
 	{
@@ -2982,7 +2982,7 @@ ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource sou
 		}
 
 		char *prefixAscii = pstrdup(appNamePrefix);
-		pg_clean_ascii_compat(prefixAscii, 0);
+		pg_clean_ascii(prefixAscii, 0);
 
 		if (strcmp(prefixAscii, appNamePrefix) != 0)
 		{

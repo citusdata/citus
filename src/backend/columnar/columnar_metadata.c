@@ -43,15 +43,18 @@
 #include "executor/spi.h"
 #include "lib/stringinfo.h"
 #include "nodes/execnodes.h"
+#include "parser/parse_relation.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
 #include "storage/procarray.h"
+#include "storage/relfilelocator.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/relfilenumbermap.h"
 
 #include "citus_version.h"
 #include "pg_version_constants.h"
@@ -62,19 +65,11 @@
 
 #include "distributed/listutils.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "parser/parse_relation.h"
-#include "storage/relfilelocator.h"
-#include "utils/relfilenumbermap.h"
-#else
-#include "utils/relfilenodemap.h"
-#endif
-
 #define COLUMNAR_RELOPTION_NAMESPACE "columnar"
 #define SLOW_METADATA_ACCESS_WARNING \
-	"Metadata index %s is not available, this might mean slower read/writes " \
-	"on columnar tables. This is expected during Postgres upgrades and not " \
-	"expected otherwise."
+		"Metadata index %s is not available, this might mean slower read/writes " \
+		"on columnar tables. This is expected during Postgres upgrades and not " \
+		"expected otherwise."
 
 typedef struct
 {
@@ -730,7 +725,7 @@ ReadStripeSkipList(Relation rel, uint64 stripe,
 	ScanKeyData scanKey[2];
 
 	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
-									   RelationPhysicalIdentifier_compat(rel));
+									   rel->rd_locator);
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
@@ -1277,7 +1272,7 @@ List *
 StripesForRelfilelocator(Relation rel)
 {
 	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
-									   RelationPhysicalIdentifier_compat(rel));
+									   rel->rd_locator);
 
 	/*
 	 * PG18 requires snapshot to be active or registered before it's used
@@ -1309,7 +1304,7 @@ uint64
 GetHighestUsedAddress(Relation rel)
 {
 	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
-									   RelationPhysicalIdentifier_compat(rel));
+									   rel->rd_locator);
 
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
@@ -1330,10 +1325,8 @@ GetHighestUsedAddress(Relation rel)
 Oid
 ColumnarRelationId(Oid relid, RelFileLocator relfilelocator)
 {
-	return OidIsValid(relid) ? relid : RelidByRelfilenumber(RelationTablespace_compat(
-																relfilelocator),
-															RelationPhysicalIdentifierNumber_compat(
-																relfilelocator));
+	return OidIsValid(relid) ? relid : RelidByRelfilenumber(relfilelocator.spcOid,
+															relfilelocator.relNumber);
 }
 
 
@@ -1624,7 +1617,7 @@ DeleteMetadataRows(Relation rel)
 	}
 
 	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
-									   RelationPhysicalIdentifier_compat(rel));
+									   rel->rd_locator);
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
 										   Anum_columnar_stripe_storageid,
@@ -1789,10 +1782,8 @@ create_estate_for_relation(Relation rel)
 	rte->rellockmode = AccessShareLock;
 
 /* Prepare permission info on PG 16+ */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	List *perminfos = NIL;
 	addRTEPermissionInfo(&perminfos, rte);
-#endif
 
 /* Initialize the range table, with the right signature for each PG version */
 #if PG_VERSION_NUM >= PG_VERSION_18
@@ -1804,20 +1795,13 @@ create_estate_for_relation(Relation rel)
 		perminfos,
 		NULL  /* unpruned_relids: not used by columnar */
 		);
-#elif PG_VERSION_NUM >= PG_VERSION_16
+#else
 
 	/* PG 16–17: three-arg signature (permInfos) */
 	ExecInitRangeTable(
 		estate,
 		list_make1(rte),
 		perminfos
-		);
-#else
-
-	/* PG 15: two-arg signature */
-	ExecInitRangeTable(
-		estate,
-		list_make1(rte)
 		);
 #endif
 

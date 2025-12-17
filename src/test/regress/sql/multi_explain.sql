@@ -1,13 +1,12 @@
 --
 -- MULTI_EXPLAIN
 --
--- This test file has an alternative output because of the following in PG16:
--- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
--- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
--- The alternative output can be deleted when we drop support for PG15
+-- This test file has an alternative output because of the following in PG18:
+-- https://github.com/postgres/postgres/commit/161320b4b960ee4fe918959be6529ae9b106ea5a
+-- The alternative output can be deleted when we drop support for PG17
 --
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18;
 
 SET citus.next_shard_id TO 570000;
 
@@ -930,10 +929,10 @@ ROLLBACK;
 
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
 
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) SELECT * FROM explain_pk;
 
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);

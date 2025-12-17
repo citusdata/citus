@@ -242,8 +242,8 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg(
-						 "only simple column references are allowed in CREATE STATISTICS")));
+					 errmsg("only simple column references are allowed "
+							"in CREATE STATISTICS")));
 		}
 
 		const char *columnName = quote_identifier(column->name);

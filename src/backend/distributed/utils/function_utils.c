@@ -42,8 +42,8 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 					bool missingOK)
 {
 	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
-	List *qualifiedFunctionNameList = stringToQualifiedNameList_compat(
-		qualifiedFunctionName);
+	List *qualifiedFunctionNameList = stringToQualifiedNameList(qualifiedFunctionName,
+																NULL);
 	List *argumentList = NIL;
 	const bool findVariadics = false;
 	const bool findDefaults = false;

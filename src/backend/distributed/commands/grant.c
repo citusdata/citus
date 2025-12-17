@@ -96,6 +96,7 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 			{
 				appendStringInfo(&privsString, "%s", priv->priv_name);
 			}
+
 			/*
 			 * ALL can only be set alone.
 			 * And ALL is not added as a keyword in priv_name by parser, but
@@ -108,6 +109,7 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 				/* this is used for column level only */
 				appendStringInfo(&privsString, "ALL");
 			}
+
 			/*
 			 * Instead of relying only on the syntax check done by Postgres and
 			 * adding an assert here, add a default ERROR if ALL is not first
@@ -227,8 +229,8 @@ CollectGrantTableIdList(GrantStmt *grantStmt)
 
 	bool grantOnTableCommand = (grantStmt->targtype == ACL_TARGET_OBJECT &&
 								grantStmt->objtype == OBJECT_TABLE);
-	bool grantAllTablesOnSchemaCommand = (grantStmt->targtype ==
-										  ACL_TARGET_ALL_IN_SCHEMA &&
+	bool grantAllTablesOnSchemaCommand = (grantStmt->targtype == ACL_TARGET_ALL_IN_SCHEMA
+																   &&
 										  grantStmt->objtype == OBJECT_TABLE);
 
 	/* we are only interested in table level grants */
