@@ -554,7 +554,8 @@ IN
 	(SELECT
 		user_id
 	FROM
-		users_table);
+		users_table)
+ORDER BY id;
 
 -- Use local table in WHERE clause
 SELECT
@@ -928,6 +929,98 @@ where TRUE or (((t3.vkey) >= (select
 
 -- Distributed table t3 is now empty
 SELECT vkey, pkey FROM t3;
+
+-- Test case where citus table is reduced to a distributed subplan
+-- Exposed by issue
+
+INSERT INTO t0 (vkey, pkey, c0) values
+(1, 10000, make_timestamp(2032, 9, 4, 13, 38, 0)),
+(2, 11000, make_timestamp(2024, 8, 31, 17, 51, 0)),
+(3, 12000, make_timestamp(2028, 4, 1, 3, 32, 0)),
+(4, 13000, make_timestamp(2029, 11, 4, 13, 49, 0)),
+(5, 14000, make_timestamp(2031, 3, 29, 18, 17, 0)),
+(6, 15000, make_timestamp(2030, 5, 17, 11, 32, 0)),
+(7, 16000, make_timestamp(2027, 9, 22, 12, 58, 0)),
+(8, 17000, make_timestamp(2026, 12, 3, 13, 44, 0)),
+(9, 18000, make_timestamp(2028, 2, 24, 14, 05, 0)),
+(10,19000, make_timestamp(2031, 4, 14, 15, 12, 0));
+
+INSERT INTO t3 (vkey, pkey, c9) values
+(1, 10000, make_timestamp(2032, 9, 4, 13, 38, 0)),
+(2, 11000, make_timestamp(2024, 8, 31, 17, 51, 0)),
+(3, 12000, make_timestamp(2028, 4, 1, 3, 32, 0)),
+(4, 13000, make_timestamp(2029, 11, 4, 13, 49, 0)),
+(5, 14000, make_timestamp(2031, 3, 29, 18, 17, 0)),
+(6, 15000, make_timestamp(2030, 5, 17, 11, 32, 0)),
+(7, 16000, make_timestamp(2027, 9, 22, 12, 58, 0)),
+(8, 17000, make_timestamp(2026, 12, 3, 13, 44, 0)),
+(9, 18000, make_timestamp(2028, 2, 24, 14, 05, 0)),
+(10,19000, make_timestamp(2031, 4, 14, 15, 12, 0));
+
+-- minimal repro: without the fix, c_1 column is NULL
+SELECT c_1, c_2
+FROM (SELECT
+             (SELECT c9 FROM t3 ORDER BY vkey limit 1 OFFSET 4) AS c_1,
+             ref_0.vkey as c_2
+      FROM t0 AS ref_0
+      WHERE true::bool
+) as subq_0
+WHERE subq_0.c_2 = 7
+ORDER BY c_1, c_2;
+
+-- remove redundant WHERE clause => same result set
+SELECT c_1, c_2
+FROM (SELECT
+             (SELECT c9 FROM t3 ORDER BY vkey limit 1 OFFSET 4) AS c_1,
+             ref_0.vkey as c_2
+      FROM t0 AS ref_0
+) as subq_0
+WHERE subq_0.c_2 = 7
+ORDER BY c_1, c_2;
+
+-- Repro query from issue #8313
+SELECT c_0, c_1, c_2, c_7
+FROM (SELECT (SELECT c0 FROM t0 ORDER BY vkey LIMIT 1 OFFSET 2) AS c_0,
+             (SELECT c9 FROM t3 ORDER BY vkey limit 1 OFFSET 4) AS c_1,
+             ref_0.vkey as c_2,
+             ref_0.vkey as c_3,
+             (SELECT pg_catalog.min(vkey) FROM t0) AS c_7
+      FROM t0 AS ref_0
+      WHERE true::bool
+      ORDER BY c_0 DESC, c_1 DESC, c_2 ASC, c_3 ASC, c_7 ASC
+) as subq_0
+where (((select vkey from t3 order by vkey limit 1 offset 6)
+      ) between ((subq_0.c_7)) and (subq_0.c_3))
+order by c_0, c_1, c_2;
+
+-- Variant of redundant WHERE clause
+SELECT c_0, c_1, c_2, c_7
+FROM (SELECT (SELECT c0 FROM t0 ORDER BY vkey LIMIT 1 OFFSET 2) AS c_0,
+             (SELECT c9 FROM t3 ORDER BY vkey limit 1 OFFSET 4) AS c_1,
+             ref_0.vkey as c_2,
+             ref_0.vkey as c_3,
+             (SELECT pg_catalog.min(vkey) FROM t0) AS c_7
+      FROM t0 AS ref_0
+      WHERE true::bool or (ref_0.vkey % 3 = 0)
+      ORDER BY c_0 DESC, c_1 DESC, c_2 ASC, c_3 ASC, c_7 ASC
+) as subq_0
+where (((select vkey from t3 order by vkey limit 1 offset 6)
+      ) between ((subq_0.c_7)) and (subq_0.c_3))
+order by c_0, c_1, c_2;
+
+-- Remove redundant WHERE clause => same result set
+SELECT c_0, c_1, c_2, c_7
+FROM (SELECT (SELECT c0 FROM t0 ORDER BY vkey LIMIT 1 OFFSET 2) AS c_0,
+             (SELECT c9 FROM t3 ORDER BY vkey limit 1 OFFSET 4) AS c_1,
+             ref_0.vkey as c_2,
+             ref_0.vkey as c_3,
+             (SELECT pg_catalog.min(vkey) FROM t0) AS c_7
+      FROM t0 AS ref_0
+      ORDER BY c_0 DESC, c_1 DESC, c_2 ASC, c_3 ASC, c_7 ASC
+) as subq_0
+where (((select vkey from t3 order by vkey limit 1 offset 6)
+      ) between ((subq_0.c_7)) and (subq_0.c_3))
+order by c_0, c_1, c_2;
 
 -- Redundant WHERE clause with distributed parititioned table
 CREATE TABLE a (a int);
