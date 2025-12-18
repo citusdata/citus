@@ -132,127 +132,60 @@ jobs:
           ./build-${{ env.PG_MAJOR }}/*
           ./install-${{ env.PG_MAJOR }}.tar
   test-citus:
-    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }}
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - regress
-        image_name:
-          - ${{ needs.params.outputs.test_image_name }}
-        pg_version:
-          - ${{ needs.params.outputs.pg16_version }}
-          - ${{ needs.params.outputs.pg17_version }}
-          - ${{ needs.params.outputs.pg18_version }}
-        make:
-          - check-split
-          - check-multi
-          - check-multi-1
-          - check-multi-mx
-          - check-vanilla
-          - check-isolation
-          - check-operations
-          - check-follower-cluster
-          - check-add-backup-node
-          - check-columnar
-          - check-columnar-isolation
-          - check-enterprise
-          - check-enterprise-isolation
-          - check-enterprise-isolation-logicalrep-1
-          - check-enterprise-isolation-logicalrep-2
-          - check-enterprise-isolation-logicalrep-3
-        include:
-          - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg17_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-failure
-            pg_version: ${{ needs.params.outputs.pg18_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg17_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-enterprise-failure
-            pg_version: ${{ needs.params.outputs.pg18_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg17_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-pytest
-            pg_version: ${{ needs.params.outputs.pg18_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: installcheck
-            suite: cdc
-            image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-          - make: installcheck
-            suite: cdc
-            image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg17_version }}
-          - make: installcheck
-            suite: cdc
-            image_name: ${{ needs.params.outputs.test_image_name }}
-            pg_version: ${{ needs.params.outputs.pg18_version }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg16_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg17_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-          - make: check-query-generator
-            pg_version: ${{ needs.params.outputs.pg18_version }}
-            suite: regress
-            image_name: ${{ needs.params.outputs.fail_test_image_name }}
-    runs-on: ubuntu-latest
-    container:
-      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
-      options: >-
-        --user root
-        --dns=8.8.8.8
-        --cap-add=SYS_NICE
-        --security-opt seccomp=unconfined
-      # Due to Github creates a default network for each job, we need to use
-      # --dns= to have similar DNS settings as our other CI systems or local
-      # machines. Otherwise, we may see different results.
-      # and grant caps so PG18's NUMA introspection (pg_shmem_allocations_numa -> move_pages)
-      # doesn't fail with EPERM in CI.
+    name: Test Citus
+    uses: ./.github/workflows/run_tests.yml
     needs:
-    - params
-    - build
-    steps:
-    - uses: actions/checkout@v4
-    - uses: "./.github/actions/setup_extension"
-    - name: Run Test
-      run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
-      timeout-minutes: 20
-    - uses: "./.github/actions/save_logs_and_results"
-      if: always()
-      with:
-        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
-    - uses: "./.github/actions/upload_coverage"
-      if: always()
-      with:
-        flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
-        codecov_token: ${{ secrets.CODECOV_TOKEN }}
+      - params
+      - build
+    with:
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg16_version }},
+          ${{ needs.params.outputs.pg17_version }},
+          ${{ needs.params.outputs.pg18_version }}
+        ]
+      make_targets: '["check-split", "check-multi", "check-multi-1", "check-multi-mx", "check-vanilla", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.test_image_name }}
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus-failure:
+    name: Test Citus Failure
+    uses: ./.github/workflows/run_tests.yml
+    needs:
+      - params
+      - build
+    with:
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg16_version }},
+          ${{ needs.params.outputs.pg17_version }},
+          ${{ needs.params.outputs.pg18_version }}
+        ]
+      make_targets: '["check-failure", "check-enterprise-failure", "check-pytest", "check-query-generator"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.fail_test_image_name }}
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus-cdc:
+    name: Test Citus CDC
+    uses: ./.github/workflows/run_tests.yml
+    needs:
+      - params
+      - build
+    with:
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg16_version }},
+          ${{ needs.params.outputs.pg17_version }},
+          ${{ needs.params.outputs.pg18_version }}
+        ]
+      make_targets: '["installcheck"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.test_image_name }}
+      suite: cdc
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
     name: PG${{ fromJson(matrix.pg_version).major }} - check-arbitrary-configs-${{ matrix.parallel }}
     runs-on: ["self-hosted", "1ES.Pool=1es-gha-citusdata-pool"]
