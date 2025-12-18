@@ -2957,6 +2957,59 @@ SELECT result FROM run_command_on_all_nodes(
  DROP TABLESPACE
 (3 rows)
 
+-- PG18 Feature: EXPLAIN (WAL) reports WAL buffers becoming full.
+-- PG18 commit: https://github.com/postgres/postgres/commit/320545bfc
+SET search_path TO pg18_nn;
+SET citus.explain_all_tasks TO true;
+CREATE TABLE wal_explain_dist(id int, payload text);
+SELECT create_distributed_table('wal_explain_dist', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO wal_explain_dist VALUES
+  (1, 'one'), (2, 'two'), (3, 'three');
+-- Helper to capture distributed EXPLAIN ANALYZE (WAL) as JSON
+CREATE OR REPLACE FUNCTION explain_analyze_wal_json(query text)
+RETURNS jsonb
+AS $$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE true, WAL true, FORMAT JSON) %s', query)
+    INTO result;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TEMP TABLE wal_explain_plan(plan jsonb);
+INSERT INTO wal_explain_plan(plan)
+SELECT explain_analyze_wal_json($$SELECT count(*) FROM wal_explain_dist$$);
+-- Ensure Citus keeps distributed-task context in the WAL-aware EXPLAIN output
+SELECT jsonb_path_exists(plan, '$.**."Task Count"') AS wal_explain_distributed_plan
+FROM wal_explain_plan;
+ wal_explain_distributed_plan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- New PG18 field: wal_buffers_full must survive the distributed EXPLAIN path
+SELECT jsonb_path_exists(plan, '$.**."WAL Buffers Full"') AS wal_buffers_full_present
+FROM wal_explain_plan;
+ wal_buffers_full_present
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT jsonb_path_query_first(plan, '$.**."WAL Buffers Full"') AS wal_buffers_full_value
+FROM wal_explain_plan;
+ wal_buffers_full_value
+---------------------------------------------------------------------
+ 0
+(1 row)
+
+DROP TABLE wal_explain_plan;
+SET citus.explain_all_tasks TO default;
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
