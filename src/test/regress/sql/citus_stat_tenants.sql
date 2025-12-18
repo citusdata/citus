@@ -418,6 +418,41 @@ SELECT tenant_attribute, read_count_in_this_period, read_count_in_last_period, q
 FROM citus_stat_tenants(true)
 ORDER BY tenant_attribute;
 
+-- test cache with multi-shard queries #8330
+\c - - - :master_port
+SET search_path TO citus_stat_tenants;
+SET citus.shard_replication_factor TO 1;
+
+SELECT citus_stat_tenants_reset();
+CREATE TABLE referenced (shard_key int NOT NULL, other_key bigint NOT NULL, PRIMARY KEY (shard_key, other_key));
+CREATE TABLE referencing (shard_key int NOT NULL, other_key bigint NOT NULL);
+
+SELECT create_distributed_table('referenced', 'shard_key', shard_count := 4);
+SELECT create_distributed_table('referencing', 'shard_key', shard_count := 4, colocate_with := 'none');
+SELECT update_distributed_table_colocation('referencing', colocate_with => 'referenced');
+ALTER TABLE referencing ADD CONSTRAINT fkey FOREIGN KEY (shard_key, other_key) REFERENCES referenced(shard_key, other_key);
+INSERT INTO referenced VALUES (0, 1), (0, 2), (1, 2);
+
+\c - - - :worker_2_port
+SET search_path TO citus_stat_tenants;
+
+PREPARE prep_stmt (bigint, int, bigint, int) AS INSERT INTO referencing (shard_key, other_key) VALUES ($1, $2), ($3, $4);
+
+EXECUTE prep_stmt(0, 1, 0, 2);
+EXECUTE prep_stmt(0, 1, 0, 2);
+EXECUTE prep_stmt(0, 1, 0, 2);
+EXECUTE prep_stmt(0, 1, 0, 2);
+EXECUTE prep_stmt(0, 1, 0, 2);
+EXECUTE prep_stmt(0, 1, 0, 2);
+EXECUTE prep_stmt(0, 1, 0, 2);
+EXECUTE prep_stmt(0, 1, 1, 2);  -- multi-shard query shouldn't use local cache and fail
+
+SELECT shard_key, other_key, count(1)
+FROM referencing
+GROUP BY shard_key, other_key
+ORDER BY shard_key, other_key;
+
+\c - - - :master_port
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_stat_tenants CASCADE;
 DROP SCHEMA citus_stat_tenants_t1 CASCADE;
