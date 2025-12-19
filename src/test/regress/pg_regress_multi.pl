@@ -323,7 +323,6 @@ sub setup_symlink
     return unless (defined $targetfile && $targetfile ne "");
 
     -e $targetfile or die "Target is not found at $targetfile";
-
     my $backup = $originalfile . ".bak";
     rename($originalfile, $backup) or die "Failed to copy $originalfile to $backup: $!";
 
@@ -820,8 +819,12 @@ if (!$conninfo)
 # Routine to shutdown servers at failure/exit
 sub ShutdownServers()
 {
-    restore_original(catfile($libdir, "citus.so"));
-    restore_original(catfile($libdir, "citus_columnar.so"));
+    # Determine the actual PostgreSQL library directory for cleanup
+    my $psqlLibdir =`$pgConfig --pkglibdir`;
+    chomp $psqlLibdir;
+    
+    restore_original(catfile($psqlLibdir, "citus.so")) if defined $psqlLibdir;
+    restore_original(catfile($psqlLibdir, "citus_columnar.so")) if defined $psqlLibdir;
 
     if (!$conninfo && $serversAreShutdown eq "FALSE")
     {
@@ -951,9 +954,13 @@ if ($followercluster && $backupnodetest == 0)
 # Ensure citus.so points to alternative library if provided
 if ($citusLibdir)
 {
-    print "Setting up symlinks to load citus extension libraries from alternative directory: $citusLibdir\n";
-    setup_symlink(catfile($libdir, "citus.so"), catfile($citusLibdir, "citus.so"));
-    setup_symlink(catfile($libdir, "citus_columnar.so"), catfile($citusLibdir, "citus_columnar.so"));
+    print "Setting up symlinks to load citus extension libraries from alternative directory: $citusLibdir\n";  
+    # Determine the actual PostgreSQL library directory
+    my $psqlLibdir =`$pgConfig --pkglibdir`;
+    chomp $psqlLibdir;
+    
+    setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
+    setup_symlink(catfile($psqlLibdir, "citus_columnar.so"), catfile($citusLibdir, "citus_columnar.so"));
 }
 
 # Start servers
