@@ -150,7 +150,7 @@ jobs:
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-so-n-1:
-    name: Test Citus SO N-1
+    name: Test Citus Lib N-1
     uses: ./.github/workflows/run_tests.yml
     needs:
       - params
