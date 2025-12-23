@@ -2193,11 +2193,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggfilter = NULL;
 
 		/*
-		 * If return type aggregate is anyelement, its actual return type is
-		 * determined on the type of its argument. So we replace it with the
-		 * argument type in that case.
+		 * Polymorphic aggregates determine their actual return type based on
+		 * their argument type, so replace it with the worker return type.
 		 */
-		if (masterReturnType == ANYELEMENTOID)
+		if (IsPolymorphicType(masterReturnType))
 		{
 			newMasterAggregate->aggtype = workerReturnType;
 
@@ -3561,10 +3560,63 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
  * and returns the corresponding aggregate function oid for the given function
  * name and input type.
  */
+typedef enum AggregateArgMatchLevel
+{
+	AGG_MATCH_NONE = 0,
+	AGG_MATCH_RECORD = 1,
+	AGG_MATCH_GENERAL_POLY = 2,
+	AGG_MATCH_ARRAY_POLY = 3,
+	AGG_MATCH_EXACT = 4
+} AggregateArgMatchLevel;
+
+static AggregateArgMatchLevel
+AggregateArgumentMatchLevel(Oid declaredArgType, Oid inputType)
+{
+	bool inputIsArray = type_is_array(inputType) ||
+						inputType == ANYARRAYOID ||
+						inputType == ANYCOMPATIBLEARRAYOID;
+	bool inputIsEnum = type_is_enum(inputType) ||
+					   inputType == ANYENUMOID;
+
+	if (declaredArgType == inputType)
+	{
+		return AGG_MATCH_EXACT;
+	}
+
+	if ((declaredArgType == ANYARRAYOID ||
+		 declaredArgType == ANYCOMPATIBLEARRAYOID) &&
+		inputIsArray)
+	{
+		return AGG_MATCH_ARRAY_POLY;
+	}
+
+	if (declaredArgType == ANYELEMENTOID ||
+		declaredArgType == ANYCOMPATIBLEOID)
+	{
+		return AGG_MATCH_GENERAL_POLY;
+	}
+
+	if (declaredArgType == ANYENUMOID &&
+		inputIsEnum)
+	{
+		return AGG_MATCH_GENERAL_POLY;
+	}
+
+	if (declaredArgType == RECORDOID &&
+		type_is_rowtype(inputType))
+	{
+		return AGG_MATCH_RECORD;
+	}
+
+	return AGG_MATCH_NONE;
+}
+
+
 static Oid
 AggregateFunctionOid(const char *functionName, Oid inputType)
 {
 	Oid functionOid = InvalidOid;
+	AggregateArgMatchLevel bestMatch = AGG_MATCH_NONE;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
@@ -3586,12 +3638,19 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 
 		if (argumentCount == 1)
 		{
-			/* check if input type and found value type match */
-			if (procForm->proargtypes.values[0] == inputType ||
-				procForm->proargtypes.values[0] == ANYELEMENTOID)
+			Oid declaredArgType = procForm->proargtypes.values[0];
+			AggregateArgMatchLevel matchLevel =
+				AggregateArgumentMatchLevel(declaredArgType, inputType);
+
+			if (matchLevel > bestMatch)
 			{
+				bestMatch = matchLevel;
 				functionOid = procForm->oid;
-				break;
+
+				if (bestMatch == AGG_MATCH_EXACT)
+				{
+					break;
+				}
 			}
 		}
 		Assert(argumentCount <= 1);
