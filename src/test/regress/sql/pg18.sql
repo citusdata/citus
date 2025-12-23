@@ -1891,6 +1891,72 @@ FROM wal_explain_plan;
 DROP TABLE wal_explain_plan;
 SET citus.explain_all_tasks TO default;
 
+-- ============================================================
+-- PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
+-- - ANYARRAY: min/max over int[] should work on distributed tables
+-- - RECORD  : PG18 min/max over composites (record) should work;
+--            validate via cast + field extraction to avoid record I/O issues
+-- ============================================================
+
+CREATE SCHEMA pg18_minmax;
+SET search_path TO pg18_minmax;
+
+-- ------------------------------------------------------------
+-- Case A: ANYARRAY (int[])
+-- ------------------------------------------------------------
+CREATE TABLE sales_data (
+    product_id int,
+    product text,
+    monthly_sales int[]
+);
+
+SELECT create_distributed_table('sales_data', 'product_id');
+
+INSERT INTO sales_data VALUES
+    (1, 'Laptop',   ARRAY[45, 52, 38]),
+    (2, 'Mouse',    ARRAY[67, 71, 58]),
+    (3, 'Keyboard', ARRAY[23, 28, 15]);
+
+SELECT
+    MIN(monthly_sales) AS min_sales_pattern,
+    MAX(monthly_sales) AS max_sales_pattern
+FROM sales_data;
+
+-- ------------------------------------------------------------
+-- Case B: RECORD (PG18 composite min/max)
+-- ------------------------------------------------------------
+CREATE TYPE product_rating AS (
+    average_score DECIMAL(3,2),
+    review_count INTEGER
+);
+
+CREATE TABLE product_ratings (
+    id int,
+    rating product_rating
+);
+
+SELECT create_distributed_table('product_ratings', 'id');
+
+INSERT INTO product_ratings VALUES
+    (1, ROW(4.5, 120)::product_rating),
+    (2, ROW(4.2,  89)::product_rating),
+    (3, ROW(4.8, 156)::product_rating);
+
+SET citus.explain_all_tasks TO on;
+EXPLAIN (COSTS FALSE)
+SELECT min(rating), max(rating) FROM product_ratings;
+
+SELECT
+  ((MIN(rating))::product_rating).average_score AS lowest_avg,
+  ((MIN(rating))::product_rating).review_count  AS lowest_count,
+  ((MAX(rating))::product_rating).average_score AS highest_avg,
+  ((MAX(rating))::product_rating).review_count  AS highest_count
+FROM product_ratings;
+
+DROP SCHEMA pg18_minmax CASCADE;
+-- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
+
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
