@@ -1,3 +1,4 @@
+CREATE EXTENSION citus_columnar;
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1508000;
@@ -577,3 +578,4 @@ select citus_add_local_table_to_metadata('root_tbl');
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;
+DROP EXTENSION citus_columnar CASCADE;
