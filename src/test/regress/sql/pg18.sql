@@ -1896,6 +1896,38 @@ SET citus.explain_all_tasks TO default;
 -- Relevant PG18 commit: https://github.com/postgres/postgres/commit/9324c8c58
 SELECT * FROM pg_get_loaded_modules() WHERE file_name LIKE 'citus%' ORDER BY module_name;
 
+-- ============================================================
+-- PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
+-- ============================================================
+
+CREATE SCHEMA pg18_minmax;
+SET search_path TO pg18_minmax;
+
+-- ------------------------------------------------------------
+-- Case A: ANYARRAY (int[])
+-- ------------------------------------------------------------
+CREATE TABLE sales_data (
+    product_id int,
+    product text,
+    monthly_sales int[]
+);
+
+SELECT create_distributed_table('sales_data', 'product_id');
+
+INSERT INTO sales_data VALUES
+    (1, 'Laptop',   ARRAY[45, 52, 38]),
+    (2, 'Mouse',    ARRAY[67, 71, 58]),
+    (3, 'Keyboard', ARRAY[23, 28, 15]);
+
+SELECT
+    MIN(monthly_sales) AS min_sales_pattern,
+    MAX(monthly_sales) AS max_sales_pattern
+FROM sales_data;
+
+DROP SCHEMA pg18_minmax CASCADE;
+-- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
+
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
