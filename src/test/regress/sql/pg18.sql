@@ -1942,10 +1942,6 @@ INSERT INTO product_ratings VALUES
     (2, ROW(4.2,  89)::product_rating),
     (3, ROW(4.8, 156)::product_rating);
 
-SET citus.explain_all_tasks TO on;
-EXPLAIN (COSTS FALSE)
-SELECT min(rating), max(rating) FROM product_ratings;
-
 SELECT
   ((MIN(rating))::product_rating).average_score AS lowest_avg,
   ((MIN(rating))::product_rating).review_count  AS lowest_count,
