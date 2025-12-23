@@ -944,6 +944,10 @@ IsCitusCustomScan(Plan *plan)
 	}
 
 	Node *privateNode = (Node *) linitial(customScan->custom_private);
+	//shoud check privateNode is null ptr
+	if (privateNode == NULL){
+		return false;
+	}
 	if (!CitusIsA(privateNode, DistributedPlan))
 	{
 		return false;
