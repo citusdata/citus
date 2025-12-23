@@ -1019,7 +1019,13 @@ TaskAccessesLocalNode(Task *task)
 	{
 		if (taskPlacement->groupId == localGroupId)
 		{
-			return true;
+			//check if it's running on standby node
+			if(RecoveryInProgress()) 
+			{
+			  return false;
+			}else{
+			  return true;
+			}
 		}
 	}
 
