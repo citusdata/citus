@@ -2170,6 +2170,7 @@ WHERE schemaid IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
 (1 row)
 
 RESET citus.enable_schema_based_sharding;
+DROP EXTENSION citus_columnar;
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
 DROP TABLE version_mismatch_table;
