@@ -4,10 +4,12 @@ url = "https://pypi.python.org/simple"
 verify_ssl = true
 
 [packages]
-mitmproxy = {editable = true, ref = "main", git = "https://github.com/citusdata/mitmproxy.git"}
+mitmproxy = "==11.0.2"
+"aioquic" = ">=1.1.0,<1.2.1"
+"mitmproxy-rs" = ">=0.10.7,<0.11.0"
 construct = "*"
 docopt = "==0.6.2"
-cryptography = ">=41.0.4"
+cryptography = "==44.0.3"
 pytest = "*"
 psycopg = "*"
 filelock = "*"
@@ -16,13 +18,15 @@ pytest-timeout = "*"
 pytest-xdist = "*"
 pytest-repeat = "*"
 pyyaml = "*"
-werkzeug = "==3.0.6"
+werkzeug = "==3.1.0"
+"typing-extensions" = "==4.11.0"
+pyperclip = "==1.9.0"
 
 [dev-packages]
-black = "*"
+black = "==24.10.0"
 isort = "*"
 flake8 = "*"
 flake8-bugbear = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.10"
