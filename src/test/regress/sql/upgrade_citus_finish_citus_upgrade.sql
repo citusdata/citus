@@ -1,3 +1,7 @@
+-- Note on alternative output files:
+--   src/test/regress/expected/upgrade_citus_finish_citus_upgrade.out is for testing upgrades from Citus v12.1 to the latest version on PG16.
+--   src/test/regress/expected/upgrade_citus_finish_citus_upgrade_0.out is for testing upgrades from Citus v13.2 to the latest version on PG17.
+
 -- Citus upgrades are finished by calling a procedure
 -- this is a transactional procedure, so rollback should be fine
 BEGIN;
