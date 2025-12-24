@@ -1,3 +1,4 @@
+CREATE EXTENSION citus_columnar;
 CREATE SCHEMA start_stop_metadata_sync;
 SET search_path TO "start_stop_metadata_sync";
 SET citus.next_shard_id TO 980000;
@@ -619,3 +620,4 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 (1 row)
 
+DROP EXTENSION citus_columnar CASCADE;

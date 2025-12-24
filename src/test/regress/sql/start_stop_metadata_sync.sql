@@ -1,3 +1,4 @@
+CREATE EXTENSION citus_columnar;
 CREATE SCHEMA start_stop_metadata_sync;
 SET search_path TO "start_stop_metadata_sync";
 SET citus.next_shard_id TO 980000;
@@ -288,3 +289,4 @@ SET client_min_messages TO WARNING;
 DROP SCHEMA start_stop_metadata_sync CASCADE;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+DROP EXTENSION citus_columnar CASCADE;
