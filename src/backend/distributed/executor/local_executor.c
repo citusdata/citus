@@ -1021,8 +1021,7 @@ TaskAccessesLocalNode(Task *task)
 		{
 			//check if it's running on standby node
 			if( (task->taskType == MODIFY_TASK||
-                 task->taskType ==DDL_TASK ||
-                 task->taskType == VACUUM_ANALYZE_TASK) && RecoveryInProgress()) 
+                 task->taskType ==DDL_TASK) && RecoveryInProgress()) 
 			{
 			  return false;
 			}else{
