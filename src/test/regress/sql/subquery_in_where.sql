@@ -542,20 +542,10 @@ WHERE
 CREATE TABLE local_table(id int, value_1 int);
 INSERT INTO local_table VALUES(1,1), (2,2);
 
-SELECT
-	*
-FROM
-	(SELECT
-		*
-	FROM
-		local_table) as sub_table
-WHERE
-	id
-IN
-	(SELECT
-		user_id
-	FROM
-		users_table);
+SELECT s.*
+FROM (SELECT * FROM local_table) AS s
+WHERE s.id IN (SELECT u.user_id FROM users_table u)
+ORDER BY s.id;
 
 -- Use local table in WHERE clause
 SELECT
