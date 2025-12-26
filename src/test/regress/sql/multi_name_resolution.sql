@@ -5,6 +5,9 @@
 -- There was a failure compiling queries with shadowed subquery aliases
 -- https://github.com/citusdata/citus/issues/2642
 
+-- make sure coordinator is always in metadata.
+SELECT citus_set_coordinator_host('localhost');
+
 CREATE SCHEMA multi_name_resolution;
 SET search_path TO multi_name_resolution;
 
