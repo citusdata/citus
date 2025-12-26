@@ -310,6 +310,7 @@ jobs:
       matrix:
         pg_version:
           - ${{ needs.params.outputs.pg16_version }}
+          - ${{ needs.params.outputs.pg17_version }}
     steps:
     - uses: actions/checkout@v4
     - uses: "./.github/actions/setup_extension"
