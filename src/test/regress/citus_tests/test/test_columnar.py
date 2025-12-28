@@ -71,7 +71,7 @@ def test_recovery(coord):
     # test crashing while having an open transaction
     with pytest.raises(
         psycopg.OperationalError,
-        match="server closed the connection unexpectedly|consuming input failed: EOF detected|SSL SYSCALL error: EOF detected"
+        match="server closed the connection unexpectedly|consuming input failed: EOF detected|SSL SYSCALL error: EOF detected",
     ):
         with coord.transaction() as cur:
             cur.execute(
@@ -88,7 +88,7 @@ def test_recovery(coord):
     # test crashing while having a prepared transaction
     with pytest.raises(
         psycopg.OperationalError,
-        match="server closed the connection unexpectedly|consuming input failed: EOF detected",
+        match="server closed the connection unexpectedly|consuming input failed: EOF detected|consuming input failed: SSL SYSCALL error: EOF detected",
     ):
         with coord.transaction() as cur:
             cur.execute(
