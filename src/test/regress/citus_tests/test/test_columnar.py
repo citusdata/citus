@@ -96,7 +96,8 @@ def test_recovery(coord):
         match=(
             "server closed the connection unexpectedly|"
             "consuming input failed: EOF detected|"
-            "consuming input failed: SSL SYSCALL error: EOF detected"
+            "consuming input failed: SSL SYSCALL error: EOF detected|"
+            "SSL error: unexpected eof while reading"
         ),
     ):
         with coord.transaction() as cur:
