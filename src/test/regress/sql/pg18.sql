@@ -1919,6 +1919,31 @@ SELECT
     MAX(monthly_sales) AS max_sales_pattern
 FROM sales_data;
 
+-- ------------------------------------------------------------
+-- Case B: RECORD (PG18 composite min/max)
+-- ------------------------------------------------------------
+CREATE TYPE product_rating AS (
+    average_score DECIMAL(3,2),
+    review_count INTEGER
+);
+
+CREATE TABLE product_ratings (
+    id int,
+    rating product_rating
+);
+
+SELECT create_distributed_table('product_ratings', 'id');
+
+INSERT INTO product_ratings VALUES
+    (1, ROW(4.5, 120)::product_rating),
+    (2, ROW(4.2,  89)::product_rating),
+    (3, ROW(4.8, 156)::product_rating);
+
+SELECT
+    MIN(rating) AS lowest_rating,
+    MAX(rating) AS highest_rating
+FROM product_ratings;
+
 DROP SCHEMA pg18_minmax CASCADE;
 -- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
 
