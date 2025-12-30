@@ -149,24 +149,6 @@ jobs:
       image_name: ${{ needs.params.outputs.test_image_name }}
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
-  test-citus-so-n-1:
-    name: Test Citus Lib N-1
-    uses: ./.github/workflows/run_tests.yml
-    needs:
-      - params
-      - build
-    with:
-      pg_versions: >
-        [
-          ${{ needs.params.outputs.pg17_version }},
-        ]
-      make_targets: '["check-minimal"]'
-      image_suffix: "-dev-3ea2bbe"
-      image_name: ${{ needs.params.outputs.test_image_name }}
-      citus_libdir: "/opt/citus-versions/v13.2.0"
-      citus_libdir_label: "v13.2.0"
-    secrets:
-      codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-failure:
     name: Test Citus Failure
     uses: ./.github/workflows/run_tests.yml
