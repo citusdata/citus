@@ -37,6 +37,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 
 #include "pg_version_constants.h"
 
@@ -1722,6 +1723,33 @@ BlessRecordExpression(Expr *expr)
 		BlessTupleDesc(rowTupleDesc);
 
 		typeMod = rowTupleDesc->tdtypmod;
+	}
+	else if (IsA(expr, Aggref))
+	{
+		Aggref *aggref = (Aggref *) expr;
+
+		if (aggref->aggtype == RECORDOID && list_length(aggref->args) > 0)
+		{
+			TargetEntry *argTle = (TargetEntry *) linitial(aggref->args);
+			Oid argTypeId = exprType((Node *) argTle->expr);
+			int32 argTypeMod = exprTypmod((Node *) argTle->expr);
+
+			if (argTypeId == RECORDOID || argTypeId == RECORDARRAYOID)
+			{
+				argTypeMod = BlessRecordExpression((Expr *) argTle->expr);
+			}
+
+			if (type_is_rowtype(argTypeId))
+			{
+				TupleDesc argTupleDesc =
+					lookup_rowtype_tupdesc_copy(argTypeId, argTypeMod);
+
+				argTupleDesc->tdtypeid = RECORDOID;
+				argTupleDesc->tdtypmod = -1;
+				BlessTupleDesc(argTupleDesc);
+				typeMod = argTupleDesc->tdtypmod;
+			}
+		}
 	}
 	else if (IsA(expr, ArrayExpr))
 	{
