@@ -1280,6 +1280,7 @@ if ($exitcode == 0) {
 	exit 0;
 }
 else {
-	die "Failed in ". ($endTime - $startTime)." seconds. \n";
-
+	print STDERR "Failed in ". ($endTime - $startTime)." seconds. \n";
+	exit 1;
 }
+
