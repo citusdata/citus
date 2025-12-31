@@ -17,6 +17,7 @@ endif
 ifndef CITUSLIBDIR
 CITUSLIBDIR := ""
 endif
+
 # Add ./bin to $PATH so we use our custom diff instead of the default diff tool.
 # We do this to be able to mask shard Ids, placement Ids, node ports, etc.
 MAKEFILE_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
