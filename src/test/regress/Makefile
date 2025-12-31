@@ -11,7 +11,11 @@ MAJORVERSION := $(basename $(VERSION))
 endif
 
 ifndef CITUSVERSION
-CITUSVERSION := ""
+CITUSVERSION :=
+endif
+
+ifndef CITUSLIBDIR
+CITUSLIBDIR :=
 endif
 # Add ./bin to $PATH so we use our custom diff instead of the default diff tool.
 # We do this to be able to mask shard Ids, placement Ids, node ports, etc.
@@ -31,7 +35,7 @@ export PGISOLATIONTIMEOUT = 60
 ## Citus regression support
 ##
 MULTI_INSTALLDIR=$(CURDIR)/tmp_check/install
-pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)" --postgres-srcdir="$(postgres_abs_srcdir)" --citus_abs_srcdir="$(citus_abs_srcdir)" --citus-version=$(CITUSVERSION)
+pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)" --postgres-srcdir="$(postgres_abs_srcdir)" --citus_abs_srcdir="$(citus_abs_srcdir)" $(if $(CITUSVERSION),--citus-version=$(CITUSVERSION)) $(if $(CITUSLIBDIR),--citus-libdir=$(CITUSLIBDIR))
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) --launcher="$(citus_abs_srcdir)/log_test_times"
 
 pg_upgrade_check = $(citus_abs_srcdir)/citus_tests/upgrade/pg_upgrade_test.py

@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: "./.github/actions/setup_extension"
       - name: Run Test
-        run: ${{ inputs.citus_version && format('CITUSVERSION={0} ', inputs.citus_version) || '' }}gosu circleci make -C src/test/${{ inputs.suite }} ${{ matrix.make }}
+        run: CITUSVERSION=${{ inputs.citus_version }} gosu circleci make -C src/test/${{ inputs.suite }} ${{ matrix.make }}
         timeout-minutes: 20
       - uses: "./.github/actions/save_logs_and_results"
         if: always()
