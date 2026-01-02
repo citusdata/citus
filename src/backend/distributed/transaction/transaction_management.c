@@ -25,6 +25,7 @@
 #include "storage/fd.h"
 #include "utils/datum.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -807,13 +808,9 @@ AdjustMaxPreparedTransactions(void)
 	 * really check if max_prepared_xacts is configured by the user explicitly,
 	 * so check if it's value is default.
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	struct config_generic *gconf = find_option("max_prepared_transactions",
 											   false, false, ERROR);
 	if (gconf->source == PGC_S_DEFAULT)
-#else
-	if (max_prepared_xacts == 0)
-#endif
 	{
 		char newvalue[12];
 

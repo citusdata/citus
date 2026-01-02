@@ -74,9 +74,9 @@ SELECT pg_typeof(:maintenance_daemon_gpid);
 
 \set VERBOSITY terse
 SELECT pg_cancel_backend(:maintenance_daemon_gpid);
-ERROR:  must be a superuser to cancel superuser query
+ERROR:  permission denied to cancel query
 SELECT pg_terminate_backend(:maintenance_daemon_gpid);
-ERROR:  must be a superuser to terminate superuser process
+ERROR:  permission denied to terminate process
 \set VERBOSITY default
 -- we can cancel our own backend
 SELECT pg_cancel_backend(citus_backend_gpid());

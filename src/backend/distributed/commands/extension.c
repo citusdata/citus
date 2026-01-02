@@ -80,7 +80,7 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parseTree)
 	if (newExtensionVersion != NULL)
 	{
 		/*  explicit version provided in CREATE or ALTER EXTENSION UPDATE; verify */
-		if (!MajorVersionsCompatible(newExtensionVersion, CITUS_EXTENSIONVERSION))
+		if (!MinorVersionsCompatibleRelaxed(newExtensionVersion, CITUS_EXTENSIONVERSION))
 		{
 			ereport(ERROR, (errmsg("specified version incompatible with loaded "
 								   "Citus library"),

@@ -25,9 +25,7 @@
 #include <lz4.h>
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 #include "varatt.h"
-#endif
 
 #if HAVE_LIBZSTD
 #include <zstd.h>

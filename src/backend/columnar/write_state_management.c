@@ -146,9 +146,7 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 	}
 
 	WriteStateMapEntry *hashEntry = hash_search(WriteStateMap,
-												&RelationPhysicalIdentifierNumber_compat(
-													RelationPhysicalIdentifier_compat(
-														relation)),
+												&(relation->rd_locator.relNumber),
 												HASH_ENTER, &found);
 	if (!found)
 	{

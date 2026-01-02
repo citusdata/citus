@@ -251,10 +251,6 @@ RESET citus.enable_metadata_sync;
 -- the shards and indexes do not show up
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
--- PG16 added one more backend type B_STANDALONE_BACKEND
--- and also alphabetized the backend types, hence the orders changed
--- Relevant PG16 commit:
--- https://github.com/postgres/postgres/commit/0c679464a837079acc75ff1d45eaa83f79e05690
 -- Relevant Pg17 commit:
 -- https://github.com/postgres/postgres/commit/067701f57758f9baed5bd9d868539738d77bfa92
 -- Relevant PG18 commit:
@@ -262,7 +258,6 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18 \gset
 SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17 \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16 \gset
 \if :server_version_ge_18
   SELECT 1 AS client_backend \gset
   SELECT 5 AS bgworker \gset
@@ -271,14 +266,10 @@ SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16 \g
   SELECT 1 AS client_backend \gset
   SELECT 4 AS bgworker \gset
   SELECT 5 AS walsender \gset
-\elif :server_version_ge_16
+\else
   SELECT 4 AS client_backend \gset
   SELECT 5 AS bgworker \gset
   SELECT 12 AS walsender \gset
-\else
-  SELECT 3 AS client_backend \gset
-  SELECT 4 AS bgworker \gset
-  SELECT 9 AS walsender \gset
 \endif
 
 -- say, we set it to bgworker

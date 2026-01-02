@@ -734,7 +734,7 @@ MakeSetStatementArguments(char *configurationName, char *configurationValue)
 	 * using this function
 	 */
 	int gucCount = 0;
-	struct config_generic **gucVariables = get_guc_variables_compat(&gucCount);
+	struct config_generic **gucVariables = get_guc_variables(&gucCount);
 
 	struct config_generic **matchingConfig =
 		(struct config_generic **) SafeBsearch((void *) &key,
@@ -851,12 +851,8 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
 
 		if (strcmp(option->defname, "adminmembers") == 0)
 		{
-#if PG_VERSION_NUM >= PG_VERSION_16
 			DefElem *opt = makeDefElem("admin", (Node *) makeBoolean(true), -1);
 			grantRoleStmt->opt = list_make1(opt);
-#else
-			grantRoleStmt->admin_opt = true;
-#endif
 		}
 
 		stmts = lappend(stmts, grantRoleStmt);
@@ -916,8 +912,6 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 		grantorRole->rolename = GetUserNameFromId(membership->grantor, false);
 		grantRoleStmt->grantor = grantorRole;
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 		/* inherit option is always included */
 		DefElem *inherit_opt;
 		if (membership->inherit_option)
@@ -943,9 +937,6 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 			DefElem *set_opt = makeDefElem("set", (Node *) makeBoolean(false), -1);
 			grantRoleStmt->opt = lappend(grantRoleStmt->opt, set_opt);
 		}
-#else
-		grantRoleStmt->admin_opt = membership->admin_option;
-#endif
 
 		stmts = lappend(stmts, grantRoleStmt);
 	}

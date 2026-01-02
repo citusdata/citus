@@ -100,6 +100,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/relation_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/replication_origin_session_utils.h"
@@ -110,10 +111,6 @@
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "distributed/relation_utils.h"
-#endif
 
 
 /* constant used in binary protocol */
@@ -3253,12 +3250,8 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	RangeTblEntry *rte = (RangeTblEntry*) linitial(range_table);
 	tupDesc = RelationGetDescr(rel);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	/* create permission info for rte */
 	RTEPermissionInfo *perminfo = GetFilledPermissionInfo(rel->rd_id, rte->inh, required_access);
-#else
-	rte->requiredPerms = required_access;
-#endif
 
 	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
 	foreach(cur, attnums)
@@ -3267,29 +3260,17 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 
 		if (is_from)
 		{
-#if PG_VERSION_NUM >= PG_VERSION_16
 			perminfo->insertedCols = bms_add_member(perminfo->insertedCols, attno);
-#else
-			rte->insertedCols = bms_add_member(rte->insertedCols, attno);
-#endif
 		}
 		else
 		{
-#if PG_VERSION_NUM >= PG_VERSION_16
 			perminfo->selectedCols = bms_add_member(perminfo->selectedCols, attno);
-#else
-			rte->selectedCols = bms_add_member(rte->selectedCols, attno);
-#endif
 		}
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	/* link rte to its permission info then check permissions */
 	rte->perminfoindex = 1;
 	ExecCheckPermissions(list_make1(rte), list_make1(perminfo), true);
-#else
-	ExecCheckRTPerms(range_table, true);
-#endif
 
 	/* TODO: Perform RLS checks once supported */
 

@@ -19,6 +19,7 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_namespace.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "lib/stringinfo.h"
@@ -52,10 +53,6 @@
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "catalog/pg_namespace.h"
-#endif
 
 
 /* Local functions forward declarations for helper functions */

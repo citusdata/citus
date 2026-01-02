@@ -2680,32 +2680,6 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 
 	DistributedExecution *execution = workerPool->distributedExecution;
 
-
-	/*
-	 * Although not ideal, there is a slight difference in the implementations
-	 * of PG15+ and others.
-	 *
-	 * Recreating the WaitEventSet even once is prohibitively expensive (almost
-	 * ~7% overhead for select-only pgbench). For all versions, the aim is to
-	 * be able to create the WaitEventSet only once after any new connections
-	 * are added to the execution. That is the main reason behind the implementation
-	 * differences.
-	 *
-	 * For pre-PG15 versions, we leave the waitEventSet recreation to the main
-	 * execution loop. For PG15+, we do it right here.
-	 *
-	 * We require this difference because for PG15+, there is a new type of
-	 * WaitEvent (WL_SOCKET_CLOSED). We can provide this new event at this point,
-	 * and check RemoteSocketClosedForAnySession(). For earlier versions, we have
-	 * to defer the rebuildWaitEventSet as there is no other event to waitFor
-	 * at this point. We could have forced to re-build, but that would mean we try to
-	 * create waitEventSet without any actual events. That has some other implications
-	 * such that we have to avoid certain optimizations of WaitEventSet creation.
-	 *
-	 * Instead, we prefer this slight difference, which in effect has almost no
-	 * difference, but doing things in different points in time.
-	 */
-
 	/* we added new connections, rebuild the waitEventSet */
 	RebuildWaitEventSetForSessions(execution);
 

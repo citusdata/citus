@@ -83,6 +83,16 @@ typedef struct AttributeEquivalenceClassMember
 	AttrNumber varattno;
 } AttributeEquivalenceClassMember;
 
+/*
+ * ECGroupByExpr
+ * Helper structure to group EquivalenceClasses by their non-Var expressions.
+ */
+typedef struct ECGroupByExpr
+{
+	Node *strippedExpr;           /* The canonical non-Var expression (stripped) */
+	List *ecsWithThisExpr;        /* List of EquivalenceClass* sharing this expr */
+	List *varsInTheseECs;         /* Cached list of Var* from all these ECs */
+} ECGroupByExpr;
 
 static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
 static bool ContextContainsAppendRelation(RelationRestrictionContext *restrictionContext);
@@ -93,6 +103,8 @@ static bool ContainsMultipleDistributedRelations(PlannerRestrictionContext *
 												 plannerRestrictionContext);
 static List * GenerateAttributeEquivalencesForRelationRestrictions(
 	RelationRestrictionContext *restrictionContext);
+static List * MergeEquivalenceClassesWithSameFunctions(RelationRestrictionContext *
+													   restrictionContext);
 static AttributeEquivalenceClass * AttributeEquivalenceClassForEquivalenceClass(
 	EquivalenceClass *plannerEqClass, RelationRestriction *relationRestriction);
 static void AddToAttributeEquivalenceClass(AttributeEquivalenceClass *
@@ -828,16 +840,34 @@ GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
 {
 	List *attributeEquivalenceList = NIL;
 	ListCell *relationRestrictionCell = NULL;
+	bool foundRLSPattern = false;
 
 	if (restrictionContext == NULL)
 	{
 		return attributeEquivalenceList;
 	}
 
+	/*
+	 * First pass: Process equivalence classes using the original algorithm.
+	 * This builds the standard attribute equivalence list.
+	 *
+	 * Skip RLS pattern detection entirely if the query doesn't
+	 * use Row Level Security. The hasRowSecurity flag is checked from the query's
+	 * parse tree when any table has RLS policies active. This allows us to skip
+	 * both the pattern detection loop AND the expensive merge pass for non-RLS
+	 * queries (common case).
+	 *
+	 * For RLS queries, detect patterns efficiently. We only need
+	 * to find one EC with both Var + non-Var members to justify the merge pass.
+	 * Once found, skip further pattern checks and focus on building equivalences.
+	 */
+	bool skipRLSProcessing = true;
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
+
+		skipRLSProcessing = !relationRestriction->plannerInfo->parse->hasRowSecurity;
 		List *equivalenceClasses = relationRestriction->plannerInfo->eq_classes;
 		ListCell *equivalenceClassCell = NULL;
 
@@ -845,6 +875,44 @@ GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
 		{
 			EquivalenceClass *plannerEqClass =
 				(EquivalenceClass *) lfirst(equivalenceClassCell);
+
+			/*
+			 * RLS pattern = EC with both Var and non-Var (function) members.
+			 * Finding even one such pattern means we need the merge pass.
+			 */
+			if (!skipRLSProcessing && !foundRLSPattern)
+			{
+				bool hasVar = false;
+				bool hasNonVar = false;
+				ListCell *memberCell = NULL;
+
+				foreach(memberCell, plannerEqClass->ec_members)
+				{
+					EquivalenceMember *member = (EquivalenceMember *) lfirst(memberCell);
+					Node *expr = strip_implicit_coercions((Node *) member->em_expr);
+
+					if (IsA(expr, Var))
+					{
+						hasVar = true;
+					}
+					else if (member->em_is_const &&
+							 !IsA(expr, Param) && !IsA(expr, Const))
+					{
+						/*
+						 * Found a pseudoconstant expression (no Vars) that's not a
+						 * Param or Const - this is the RLS function pattern.
+						 */
+						hasNonVar = true;
+					}
+
+					/* Early exit: If we've found both, we have the pattern */
+					if (hasVar && hasNonVar)
+					{
+						foundRLSPattern = true;
+						break;
+					}
+				}
+			}
 
 			AttributeEquivalenceClass *attributeEquivalence =
 				AttributeEquivalenceClassForEquivalenceClass(plannerEqClass,
@@ -856,7 +924,268 @@ GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
 		}
 	}
 
+	/*
+	 * Second pass: Handle RLS-specific case where PostgreSQL splits join conditions
+	 * across multiple EquivalenceClasses due to volatile functions in RLS policies.
+	 *
+	 * When RLS policies use volatile functions (e.g., current_setting()), PostgreSQL
+	 * creates separate EquivalenceClasses that both contain the same volatile function:
+	 *   EC1: [table_a.tenant_id, current_setting(...)]
+	 *   EC2: [table_b.tenant_id, current_setting(...)]
+	 *
+	 * We need to recognize that these should be merged to detect that tables are
+	 * joined on their distribution columns: [table_a.tenant_id, table_b.tenant_id]
+	 */
+	if (foundRLSPattern)
+	{
+		List *rlsMergedList = MergeEquivalenceClassesWithSameFunctions(
+			restrictionContext);
+
+		/* Append any newly created merged classes to the original list */
+		attributeEquivalenceList = list_concat(attributeEquivalenceList, rlsMergedList);
+	}
+
 	return attributeEquivalenceList;
+}
+
+
+/*
+ * MergeEquivalenceClassesWithSameFunctions scans equivalence classes
+ * looking for RLS-specific patterns where volatile functions cause PostgreSQL to
+ * split what should be a single join condition across multiple EquivalenceClasses.
+ *
+ * This function specifically targets the pattern:
+ *   EC1: [table_a.col, COERCEVIAIO(func(...))]
+ *   EC2: [table_b.col, COERCEVIAIO(func(...))]
+ *
+ * Where the underlying function calls are identical after stripping implicit coercions
+ * (e.g., both resolve to current_setting('session.current_tenant_id')).
+ *
+ * PostgreSQL wraps RLS policy expressions in COERCEVIAIO nodes to handle type
+ * conversions (e.g., text → UUID). We strip these to compare the actual function calls.
+ *
+ * Returns a list of newly created merged AttributeEquivalenceClasses. Each merged
+ * class contains the Var members from pairs of EquivalenceClasses that share identical
+ * non-Var expressions. For example, if EC1 contains [table_a.tenant_id, func()] and
+ * EC2 contains [table_b.tenant_id, func()], the returned list will include a new
+ * AttributeEquivalenceClass with [table_a.tenant_id, table_b.tenant_id]. Only classes
+ * with 2+ members are returned (indicating an actual join between tables).
+ */
+static List *
+MergeEquivalenceClassesWithSameFunctions(RelationRestrictionContext *restrictionContext)
+{
+	List *newlyMergedClasses = NIL;
+	List *ecGroupList = NIL;  /* List of ECGroupByExpr* */
+	ListCell *relationRestrictionCell = NULL;
+
+	if (restrictionContext == NULL)
+	{
+		return NIL;
+	}
+
+	/*
+	 * Phase 1: Collect candidate ECs and group them by their non-Var expressions.
+	 *
+	 * Strategy: For each EC, extract and strip all non-Var expressions, then
+	 * find or create a group for each unique expression. This gives us direct
+	 * access to all ECs sharing the same expression.
+	 */
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(relationRestrictionCell);
+		List *equivalenceClasses = relationRestriction->plannerInfo->eq_classes;
+		ListCell *equivalenceClassCell = NULL;
+
+		foreach(equivalenceClassCell, equivalenceClasses)
+		{
+			EquivalenceClass *ec = (EquivalenceClass *) lfirst(equivalenceClassCell);
+			bool hasVar = false;
+			List *nonVarExprs = NIL;
+			ListCell *memberCell = NULL;
+
+			/*
+			 * Single pass through EC members: collect Vars and non-Var expressions.
+			 * Strip coercions once and cache the results.
+			 */
+			foreach(memberCell, ec->ec_members)
+			{
+				EquivalenceMember *member = (EquivalenceMember *) lfirst(memberCell);
+				Node *expr = strip_implicit_coercions((Node *) member->em_expr);
+
+				if (IsA(expr, Var))
+				{
+					hasVar = true;
+				}
+				else if (member->em_is_const && !IsA(expr, Param) && !IsA(expr, Const))
+				{
+					/*
+					 * Found a pseudoconstant expression (no Vars) - potential RLS function.
+					 * After stripping, this is typically a FUNCEXPR like
+					 * current_setting('session.current_tenant_id').
+					 */
+					nonVarExprs = lappend(nonVarExprs, expr);
+				}
+			}
+
+			/* Only process ECs with both Var and non-Var members (RLS pattern) */
+			if (!hasVar || nonVarExprs == NIL)
+			{
+				continue;
+			}
+
+			/*
+			 * For each non-Var expression in this EC, find or create a group.
+			 * Multiple ECs with the same expression will be grouped together.
+			 */
+			ListCell *exprCell = NULL;
+			foreach(exprCell, nonVarExprs)
+			{
+				Node *strippedExpr = (Node *) lfirst(exprCell);
+				ECGroupByExpr *matchingGroup = NULL;
+				ListCell *groupCell = NULL;
+
+				/* Search for existing group with this expression */
+				foreach(groupCell, ecGroupList)
+				{
+					ECGroupByExpr *group = (ECGroupByExpr *) lfirst(groupCell);
+
+					if (equal(group->strippedExpr, strippedExpr))
+					{
+						matchingGroup = group;
+						break;
+					}
+				}
+
+				/* Create new group if this is the first EC with this expression */
+				if (matchingGroup == NULL)
+				{
+					matchingGroup = palloc0(sizeof(ECGroupByExpr));
+					matchingGroup->strippedExpr = strippedExpr;
+					matchingGroup->ecsWithThisExpr = NIL;
+					matchingGroup->varsInTheseECs = NIL;
+					ecGroupList = lappend(ecGroupList, matchingGroup);
+				}
+
+				/* Add this EC to the group (avoid duplicates) */
+				if (!list_member_ptr(matchingGroup->ecsWithThisExpr, ec))
+				{
+					matchingGroup->ecsWithThisExpr =
+						lappend(matchingGroup->ecsWithThisExpr, ec);
+				}
+			}
+		}
+	}
+
+	/*
+	 * Phase 2: For each group with 2+ ECs, extract all Vars and create a merged
+	 * AttributeEquivalenceClass. This is where we detect the join pattern.
+	 *
+	 * Idea here is that if multiple ECs share the same non-Var expression (e.g., RLS
+	 * function), then all Vars in those ECs are implicitly equal to each other.
+	 */
+	ListCell *groupCell = NULL;
+	foreach(groupCell, ecGroupList)
+	{
+		ECGroupByExpr *group = (ECGroupByExpr *) lfirst(groupCell);
+
+		/* Skip groups with only one EC - no join to detect */
+		if (list_length(group->ecsWithThisExpr) < 2)
+		{
+			continue;
+		}
+
+		/*
+		 * Extract all Vars from all ECs in this group.
+		 * These Vars are implicitly equal via the shared expression.
+		 */
+		ListCell *ecCell = NULL;
+		foreach(ecCell, group->ecsWithThisExpr)
+		{
+			EquivalenceClass *ec = (EquivalenceClass *) lfirst(ecCell);
+			ListCell *memberCell = NULL;
+
+			foreach(memberCell, ec->ec_members)
+			{
+				EquivalenceMember *member = (EquivalenceMember *) lfirst(memberCell);
+				Node *expr = strip_implicit_coercions((Node *) member->em_expr);
+
+				if (IsA(expr, Var))
+				{
+					/* Cache this Var for later processing */
+					group->varsInTheseECs = lappend(group->varsInTheseECs, expr);
+				}
+			}
+		}
+
+		/* Need at least 2 Vars from different tables to represent a join */
+		if (list_length(group->varsInTheseECs) < 2)
+		{
+			continue;
+		}
+
+		/*
+		 * Create the merged AttributeEquivalenceClass.
+		 */
+		AttributeEquivalenceClass *mergedClass =
+			palloc0(sizeof(AttributeEquivalenceClass));
+		mergedClass->equivalenceId = AttributeEquivalenceId++;
+		mergedClass->equivalentAttributes = NIL;
+
+		/*
+		 * Match each Var to its RelationRestriction by comparing varno to
+		 * the restriction's index field (which is the RTE index).
+		 */
+		ListCell *varCell = NULL;
+		foreach(varCell, group->varsInTheseECs)
+		{
+			Var *var = (Var *) lfirst(varCell);
+			ListCell *relResCell = NULL;
+			bool foundMatch = false;
+
+			/*
+			 * Find the RelationRestriction that corresponds to this Var.
+			 * The index field contains the RTE index (varno) of the relation.
+			 */
+			foreach(relResCell, restrictionContext->relationRestrictionList)
+			{
+				RelationRestriction *relRestriction =
+					(RelationRestriction *) lfirst(relResCell);
+
+				/* Direct match: varno equals the restriction's index */
+				if (var->varno == relRestriction->index)
+				{
+					/*
+					 * Process this Var through AddToAttributeEquivalenceClass.
+					 * This handles subqueries, UNION ALL, LATERAL joins, etc.
+					 */
+					AddToAttributeEquivalenceClass(mergedClass,
+												   relRestriction->plannerInfo, var);
+					foundMatch = true;
+					break;
+				}
+			}
+
+			/*
+			 * If we didn't find a matching restriction, this Var might be from
+			 * a context not tracked in our restriction list (e.g., subquery).
+			 * We skip it as we only care about Vars from distributed tables.
+			 */
+			if (!foundMatch)
+			{
+				elog(DEBUG2, "Skipping Var with varno=%d in RLS merge - "
+							 "no matching RelationRestriction found", var->varno);
+			}
+		}
+
+		/* Only emit if we successfully merged attributes from multiple sources */
+		if (list_length(mergedClass->equivalentAttributes) >= 2)
+		{
+			newlyMergedClasses = lappend(newlyMergedClasses, mergedClass);
+		}
+	}
+
+	return newlyMergedClasses;
 }
 
 
@@ -1510,7 +1839,6 @@ GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToB
 bool
 IsRelOptOuterJoin(PlannerInfo *root, int varNo)
 {
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (root->simple_rel_array_size <= varNo)
 	{
 		return true;
@@ -1522,7 +1850,6 @@ IsRelOptOuterJoin(PlannerInfo *root, int varNo)
 		/* must be an outer join */
 		return true;
 	}
-#endif
 	return false;
 }
 

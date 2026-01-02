@@ -162,6 +162,8 @@ static bool CitusColumnarHasBeenLoadedInternal(void);
 static bool CitusColumnarHasBeenLoaded(void);
 static bool CheckCitusColumnarVersion(int elevel);
 static bool MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion);
+static bool MinorVersionsCompatibleRelaxedColumnar(char *leftVersion, char *rightVersion);
+static int ParseVersionComponent(const char *version, char **endPtr);
 
 /* global variables for CheckCitusColumnarVersion */
 static bool extensionLoadedColumnar = false;
@@ -208,8 +210,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 							uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
 	CheckCitusColumnarVersion(ERROR);
-	RelFileNumber relfilenumber = RelationPhysicalIdentifierNumber_compat(
-		RelationPhysicalIdentifier_compat(relation));
+	RelFileNumber relfilenumber = relation->rd_locator.relNumber;
 
 	/*
 	 * A memory context to use for scan-wide data, including the lazily
@@ -435,8 +436,7 @@ columnar_index_fetch_begin(Relation rel)
 {
 	CheckCitusColumnarVersion(ERROR);
 
-	RelFileNumber relfilenumber = RelationPhysicalIdentifierNumber_compat(
-		RelationPhysicalIdentifier_compat(rel));
+	RelFileNumber relfilenumber = rel->rd_locator.relNumber;
 	if (PendingWritesInUpperTransactions(relfilenumber, GetCurrentSubTransactionId()))
 	{
 		/* XXX: maybe we can just flush the data and continue */
@@ -865,11 +865,9 @@ columnar_relation_set_new_filelocator(Relation rel,
 	 * state. If they are equal, this is a new relation object and we don't
 	 * need to clean anything.
 	 */
-	if (RelationPhysicalIdentifierNumber_compat(RelationPhysicalIdentifier_compat(rel)) !=
-		RelationPhysicalIdentifierNumberPtr_compat(newrlocator))
+	if (rel->rd_locator.relNumber != newrlocator->relNumber)
 	{
-		MarkRelfilenumberDropped(RelationPhysicalIdentifierNumber_compat(
-									 RelationPhysicalIdentifier_compat(rel)),
+		MarkRelfilenumberDropped(rel->rd_locator.relNumber,
 								 GetCurrentSubTransactionId());
 
 		DeleteMetadataRows(rel);
@@ -892,9 +890,9 @@ static void
 columnar_relation_nontransactional_truncate(Relation rel)
 {
 	CheckCitusColumnarVersion(ERROR);
-	RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
+	RelFileLocator relfilelocator = rel->rd_locator;
 
-	NonTransactionDropWriteState(RelationPhysicalIdentifierNumber_compat(relfilelocator));
+	NonTransactionDropWriteState(relfilelocator.relNumber);
 
 	/* Delete old relfilenode metadata */
 	DeleteMetadataRows(rel);
@@ -1098,7 +1096,6 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	List *indexList = RelationGetIndexList(rel);
 	int nindexes = list_length(indexList);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	struct VacuumCutoffs cutoffs;
 	vacuum_get_cutoffs(rel, params, &cutoffs);
 
@@ -1138,68 +1135,6 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 						newRelFrozenXid, newRelminMxid,
 						&frozenxid_updated, &minmulti_updated,
 						false);
-#endif
-
-#else
-	TransactionId oldestXmin;
-	TransactionId freezeLimit;
-	MultiXactId multiXactCutoff;
-
-	/* initialize xids */
-#if (PG_VERSION_NUM >= PG_VERSION_15) && (PG_VERSION_NUM < PG_VERSION_16)
-	MultiXactId oldestMxact;
-	vacuum_set_xid_limits(rel,
-						  params->freeze_min_age,
-						  params->freeze_table_age,
-						  params->multixact_freeze_min_age,
-						  params->multixact_freeze_table_age,
-						  &oldestXmin, &oldestMxact,
-						  &freezeLimit, &multiXactCutoff);
-
-	Assert(MultiXactIdPrecedesOrEquals(multiXactCutoff, oldestMxact));
-#else
-	TransactionId xidFullScanLimit;
-	MultiXactId mxactFullScanLimit;
-	vacuum_set_xid_limits(rel,
-						  params->freeze_min_age,
-						  params->freeze_table_age,
-						  params->multixact_freeze_min_age,
-						  params->multixact_freeze_table_age,
-						  &oldestXmin, &freezeLimit, &xidFullScanLimit,
-						  &multiXactCutoff, &mxactFullScanLimit);
-#endif
-
-	Assert(TransactionIdPrecedesOrEquals(freezeLimit, oldestXmin));
-
-	/*
-	 * Columnar storage doesn't hold any transaction IDs, so we can always
-	 * just advance to the most aggressive value.
-	 */
-	TransactionId newRelFrozenXid = oldestXmin;
-#if (PG_VERSION_NUM >= PG_VERSION_15) && (PG_VERSION_NUM < PG_VERSION_16)
-	MultiXactId newRelminMxid = oldestMxact;
-#else
-	MultiXactId newRelminMxid = multiXactCutoff;
-#endif
-
-	double new_live_tuples = ColumnarTableTupleCount(rel);
-
-	/* all visible pages are always 0 */
-	BlockNumber new_rel_allvisible = 0;
-
-#if (PG_VERSION_NUM >= PG_VERSION_15) && (PG_VERSION_NUM < PG_VERSION_16)
-	bool frozenxid_updated;
-	bool minmulti_updated;
-
-	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
-						new_rel_allvisible, nindexes > 0,
-						newRelFrozenXid, newRelminMxid,
-						&frozenxid_updated, &minmulti_updated, false);
-#else
-	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
-						new_rel_allvisible, nindexes > 0,
-						newRelFrozenXid, newRelminMxid, false);
-#endif
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_18
@@ -1906,8 +1841,8 @@ TupleSortSkipSmallerItemPointers(Tuplesortstate *tupleSort, ItemPointer targetIt
 		Datum *abbrev = NULL;
 		Datum tsDatum;
 		bool tsDatumIsNull;
-		if (!tuplesort_getdatum_compat(tupleSort, forwardDirection, false,
-									   &tsDatum, &tsDatumIsNull, abbrev))
+		if (!tuplesort_getdatum(tupleSort, forwardDirection, false,
+								&tsDatum, &tsDatumIsNull, abbrev))
 		{
 			ItemPointerSetInvalid(&tsItemPointerData);
 			break;
@@ -2148,12 +2083,12 @@ ColumnarTableDropHook(Oid relid)
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(relid, AccessExclusiveLock);
-		RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
+		RelFileLocator relfilelocator = rel->rd_locator;
 
 		DeleteMetadataRows(rel);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
-		MarkRelfilenumberDropped(RelationPhysicalIdentifierNumber_compat(relfilelocator),
+		MarkRelfilenumberDropped(relfilelocator.relNumber,
 								 GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */
@@ -2572,11 +2507,7 @@ static const TableAmRoutine columnar_am_methods = {
 	.tuple_lock = columnar_tuple_lock,
 	.finish_bulk_insert = columnar_finish_bulk_insert,
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 	.relation_set_new_filelocator = columnar_relation_set_new_filelocator,
-#else
-	.relation_set_new_filenode = columnar_relation_set_new_filelocator,
-#endif
 	.relation_nontransactional_truncate = columnar_relation_nontransactional_truncate,
 	.relation_copy_data = columnar_relation_copy_data,
 	.relation_copy_for_cluster = columnar_relation_copy_for_cluster,
@@ -2940,7 +2871,7 @@ CheckInstalledVersionColumnar(int elevel)
 
 	char *installedVersion = InstalledExtensionVersionColumnar();
 
-	if (!MajorVersionsCompatibleColumnar(installedVersion, CITUS_EXTENSIONVERSION))
+	if (!MinorVersionsCompatibleRelaxedColumnar(installedVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(elevel, (errmsg("loaded Citus library version differs from installed "
 								"extension version"),
@@ -2996,6 +2927,55 @@ MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion)
 	}
 
 	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
+}
+
+
+/*
+ * ParseVersionComponent parses the integer at the current position and
+ * advances endPtr past the parsed digits to the next character.
+ */
+static int
+ParseVersionComponent(const char *version, char **endPtr)
+{
+	errno = 0;
+	long int val = strtol(version, endPtr, 10);
+
+	if (errno == ERANGE || val > INT_MAX || val < INT_MIN)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						errmsg("Invalid integer in version string")));
+	}
+	return (int) val;
+}
+
+
+/*
+ * MinorVersionsCompatibleRelaxedColumnar checks if two versions have the same major
+ * version and their minor versions differ by at most 1. The schema version
+ * (after '-') is ignored. Returns true if compatible, false otherwise.
+ *
+ * Version format expected: "major.minor-schema" (e.g., "13.1-2")
+ */
+bool
+MinorVersionsCompatibleRelaxedColumnar(char *leftVersion, char *rightVersion)
+{
+	char *leftSep;
+	char *rightSep;
+
+	int leftMajor = ParseVersionComponent(leftVersion, &leftSep);
+	int rightMajor = ParseVersionComponent(rightVersion, &rightSep);
+
+	if (leftMajor != rightMajor)
+	{
+		return false;
+	}
+
+	int leftMinor = (*leftSep == '.') ? ParseVersionComponent(leftSep + 1, &leftSep) : 0;
+	int rightMinor = (*rightSep == '.') ? ParseVersionComponent(rightSep + 1, &rightSep) :
+					 0;
+
+	int diff = leftMinor - rightMinor;
+	return diff >= -1 && diff <= 1;
 }
 
 

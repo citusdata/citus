@@ -610,11 +610,10 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 	subquery->jointree = joinTree;
 
 	rte->rtekind = RTE_SUBQUERY;
-#if PG_VERSION_NUM >= PG_VERSION_16
 
 	/* no permission checking for this RTE */
 	rte->perminfoindex = 0;
-#endif
+
 	rte->subquery = subquery;
 	rte->alias = copyObject(rte->eref);
 }

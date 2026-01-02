@@ -3195,7 +3195,7 @@ SignalMetadataSyncDaemon(Oid database, int sig)
 	int backendCount = pgstat_fetch_stat_numbackends();
 	for (int backend = 1; backend <= backendCount; backend++)
 	{
-		LocalPgBackendStatus *localBeEntry = pgstat_fetch_stat_local_beentry(backend);
+		LocalPgBackendStatus *localBeEntry = pgstat_get_local_beentry_by_index(backend);
 		if (!localBeEntry)
 		{
 			continue;

@@ -1249,8 +1249,224 @@ DROP PUBLICATION pub_gen_cols_stored;
 DROP PUBLICATION pub_gen_cols_none;
 DROP PUBLICATION pub_gen_cols_list_includes_b;
 DROP PUBLICATION pub_gen_cols_list_excludes_b;
+-- ============================================================
+-- PG18: replicate stored generated columns when included in publication column list
+-- Upstream: 745217a05
+-- Publisher: worker1  |  Subscriber: worker2
+-- We validate initial COPY + streaming INSERT/UPDATE semantics.
+-- ============================================================
+CREATE OR REPLACE FUNCTION wait_for_expected_rowcount_at_table(tableName text, expectedCount integer)
+RETURNS void AS $$
+DECLARE
+  actualCount integer;
+  i int;
+BEGIN
+  FOR i IN 1..600 LOOP
+    EXECUTE FORMAT('SELECT COUNT(*) FROM %s', tableName) INTO actualCount;
+    EXIT WHEN actualCount = expectedCount;
+    PERFORM pg_sleep(0.05);
+  END LOOP;
+
+  IF actualCount IS DISTINCT FROM expectedCount THEN
+    RAISE EXCEPTION 'timeout waiting for % rows in %, got %',
+      expectedCount, tableName, actualCount;
+  END IF;
+END$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION wait_for_expected_rowcount_at_query(query text, expectedCount integer)
+RETURNS void AS $$
+DECLARE
+  actualCount integer;
+  i int;
+BEGIN
+  FOR i IN 1..600 LOOP
+    EXECUTE query INTO actualCount;
+    EXIT WHEN actualCount = expectedCount;
+    PERFORM pg_sleep(0.05);
+  END LOOP;
+
+  IF actualCount IS DISTINCT FROM expectedCount THEN
+    RAISE EXCEPTION 'timeout waiting for query [%] to return %, got %',
+      query, expectedCount, actualCount;
+  END IF;
+END$$ LANGUAGE plpgsql;
+-- Build conninfo safely (psql vars do NOT expand inside single quotes)
+\set conninfo_w1 '\'user=postgres host=localhost port=' :worker_1_port ' dbname=regression\''
+-- --------------------------
+-- Case A: column list includes generated column b
+-- Expectation: subscriber receives b values (publisher b = a*10) because b is published in the column list.
+-- --------------------------
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+DROP PUBLICATION IF EXISTS pub_gen_repl_a;
+NOTICE:  publication "pub_gen_repl_a" does not exist, skipping
+DROP TABLE IF EXISTS gen_pub_repl_a;
+NOTICE:  table "gen_pub_repl_a" does not exist, skipping
+CREATE TABLE gen_pub_repl_a (
+    id int PRIMARY KEY,
+    a  int,
+    b  int GENERATED ALWAYS AS (a * 10) STORED
+);
+INSERT INTO gen_pub_repl_a (id, a) VALUES (1, 2), (2, 7);
+SET citus.enable_ddl_propagation TO off;
+CREATE PUBLICATION pub_gen_repl_a
+    FOR TABLE gen_pub_repl_a (id, a, b)
+    WITH (publish = 'insert, update', publish_generated_columns = none);
+RESET citus.enable_ddl_propagation;
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+DROP SUBSCRIPTION IF EXISTS sub_gen_repl_a;
+NOTICE:  subscription "sub_gen_repl_a" does not exist, skipping
+DROP TABLE IF EXISTS gen_pub_repl_a;
+NOTICE:  table "gen_pub_repl_a" does not exist, skipping
+-- IMPORTANT: subscriber b is NOT generated. This is the PG18 “replicate generated values” use-case.
+CREATE TABLE gen_pub_repl_a (
+    id int PRIMARY KEY,
+    a  int,
+    b  int
+);
+CREATE SUBSCRIPTION sub_gen_repl_a
+    CONNECTION :conninfo_w1
+    PUBLICATION pub_gen_repl_a
+    WITH (copy_data = true);
+NOTICE:  created replication slot "sub_gen_repl_a" on publisher
+SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_a', 2);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM gen_pub_repl_a ORDER BY id;  -- expect b=20,70
+ id | a | b
+---------------------------------------------------------------------
+  1 | 2 | 20
+  2 | 7 | 70
+(2 rows)
+
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+INSERT INTO gen_pub_repl_a (id, a) VALUES (3, 9);
+UPDATE gen_pub_repl_a SET a = 5 WHERE id = 1;
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_a', 3);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT wait_for_expected_rowcount_at_query(
+  $$SELECT COUNT(*) FROM gen_pub_repl_a WHERE id=1 AND a=5 AND b=50$$, 1);
+ wait_for_expected_rowcount_at_query
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM gen_pub_repl_a ORDER BY id;  -- expect (1,5,50) (2,7,70) (3,9,90)
+ id | a | b
+---------------------------------------------------------------------
+  1 | 5 | 50
+  2 | 7 | 70
+  3 | 9 | 90
+(3 rows)
+
+-- Cleanup Case A
+DROP SUBSCRIPTION sub_gen_repl_a;
+NOTICE:  dropped replication slot "sub_gen_repl_a" on publisher
+DROP TABLE gen_pub_repl_a;
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+DROP PUBLICATION pub_gen_repl_a;
+DROP TABLE gen_pub_repl_a;
+-- --------------------------
+-- Case B: column list excludes generated column b but publish_generated_columns=stored
+-- Expectation (precedence): b is NOT replicated because column list excludes it, so subscriber b stays NULL.
+-- --------------------------
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+DROP PUBLICATION IF EXISTS pub_gen_repl_b;
+NOTICE:  publication "pub_gen_repl_b" does not exist, skipping
+DROP TABLE IF EXISTS gen_pub_repl_b;
+NOTICE:  table "gen_pub_repl_b" does not exist, skipping
+CREATE TABLE gen_pub_repl_b (
+    id int PRIMARY KEY,
+    a  int,
+    b  int GENERATED ALWAYS AS (a * 10) STORED
+);
+INSERT INTO gen_pub_repl_b (id, a) VALUES (1, 2), (2, 7);
+SET citus.enable_ddl_propagation TO off;
+CREATE PUBLICATION pub_gen_repl_b
+    FOR TABLE gen_pub_repl_b (id, a)
+    WITH (publish = 'insert, update', publish_generated_columns = stored);
+RESET citus.enable_ddl_propagation;
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+DROP SUBSCRIPTION IF EXISTS sub_gen_repl_b;
+NOTICE:  subscription "sub_gen_repl_b" does not exist, skipping
+DROP TABLE IF EXISTS gen_pub_repl_b;
+NOTICE:  table "gen_pub_repl_b" does not exist, skipping
+CREATE TABLE gen_pub_repl_b (
+    id int PRIMARY KEY,
+    a  int,
+    b  int
+);
+CREATE SUBSCRIPTION sub_gen_repl_b
+    CONNECTION :conninfo_w1
+    PUBLICATION pub_gen_repl_b
+    WITH (copy_data = true);
+NOTICE:  created replication slot "sub_gen_repl_b" on publisher
+SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_b', 2);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM gen_pub_repl_b ORDER BY id;  -- expect b is NULL
+ id | a | b
+---------------------------------------------------------------------
+  1 | 2 |
+  2 | 7 |
+(2 rows)
+
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+INSERT INTO gen_pub_repl_b (id, a) VALUES (3, 9);
+UPDATE gen_pub_repl_b SET a = 5 WHERE id = 1;
+\c - - - :worker_2_port
+SET search_path TO pg18_publication;
+SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_b', 3);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT wait_for_expected_rowcount_at_query(
+  $$SELECT COUNT(*) FROM gen_pub_repl_b WHERE id=1 AND a=5 AND b IS NULL$$, 1);
+ wait_for_expected_rowcount_at_query
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM gen_pub_repl_b ORDER BY id;
+ id | a | b
+---------------------------------------------------------------------
+  1 | 5 |
+  2 | 7 |
+  3 | 9 |
+(3 rows)
+
+-- Cleanup B
+DROP SUBSCRIPTION sub_gen_repl_b;
+NOTICE:  dropped replication slot "sub_gen_repl_b" on publisher
+DROP TABLE gen_pub_repl_b;
+\c - - - :worker_1_port
+SET search_path TO pg18_publication;
+DROP PUBLICATION pub_gen_repl_b;
+DROP TABLE gen_pub_repl_b;
+\c - - - :master_port
+SET search_path TO pg18_publication;
+SET client_min_messages TO ERROR;
 DROP SCHEMA pg18_publication CASCADE;
-NOTICE:  drop cascades to table gen_pub_tab
+RESET client_min_messages;
 SET search_path TO pg18_nn;
 -- END: PG18: verify publish_generated_columns is preserved for distributed tables
 -- PG18 Feature: FOREIGN KEY constraints can be specified as NOT ENFORCED
@@ -1415,6 +1631,208 @@ INSERT INTO NE_CHECK_TBL (x) VALUES (5), (15), (8), (12);
 ERROR:  new row for relation "ne_check_tbl_4754044" violates check constraint "check_x2_4754044"
 DETAIL:  Failing row contains (15, null).
 CONTEXT:  while executing command on localhost:xxxxx
+-- PG18 Feature: dropping of constraints ONLY on partitioned tables
+-- PG18 commit: https://github.com/postgres/postgres/commit/4dea33ce7
+-- Here we verify that dropping constraints ONLY on partitioned tables
+-- works correctly in Citus. This is done by repeating the tests of the
+-- PG commit (4dea33ce7) on a table that is a distributed table in Citus,
+-- in addition to a Postgres partitioned table.
+CREATE TABLE partitioned_table (
+	a int,
+	b char(3)
+) PARTITION BY LIST (a);
+SELECT create_distributed_table('partitioned_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check that violating rows are correctly reported
+CREATE TABLE part_2 (LIKE partitioned_table);
+INSERT INTO part_2 VALUES (3, 'aaa');
+ALTER TABLE partitioned_table ATTACH PARTITION part_2 FOR VALUES IN (2);
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.part_2$$)
+ERROR:  partition constraint of relation "part_2" is violated by some row
+-- should be ok after deleting the bad row
+DELETE FROM part_2;
+ALTER TABLE partitioned_table ATTACH PARTITION part_2 FOR VALUES IN (2);
+-- PG18's "cannot add NOT NULL or check constraints to *only* the parent, when
+-- partitions exist" applies to Citus distributed tables as well.
+ALTER TABLE ONLY partitioned_table ALTER b SET NOT NULL;
+ERROR:  constraint must be added to child tables too
+HINT:  Do not specify the ONLY keyword.
+ALTER TABLE ONLY partitioned_table ADD CONSTRAINT check_b CHECK (b <> 'zzz');
+ERROR:  constraint must be added to child tables too
+-- Dropping constraints from parent should be ok
+ALTER TABLE partitioned_table ALTER b SET NOT NULL;
+ALTER TABLE ONLY partitioned_table ALTER b DROP NOT NULL;
+ALTER TABLE partitioned_table ADD CONSTRAINT check_b CHECK (b <> 'zzz');
+ALTER TABLE ONLY partitioned_table DROP CONSTRAINT check_b;
+-- ... and the partitions still have the NOT NULL constraint:
+select relname, attname, attnotnull
+from pg_class inner join pg_attribute on (oid=attrelid)
+where relname = 'part_2' and attname = 'b' ;
+ relname | attname | attnotnull
+---------------------------------------------------------------------
+ part_2  | b       | t
+(1 row)
+
+-- ... and the check_b constraint:
+select relname, conname, pg_get_expr(conbin, conrelid, true)
+from pg_class inner join pg_constraint on (pg_class.oid=conrelid)
+where relname = 'part_2' and conname = 'check_b' ;
+ relname | conname |    pg_get_expr
+---------------------------------------------------------------------
+ part_2  | check_b | b <> 'zzz'::bpchar
+(1 row)
+
+-- PG18 Feature: partitioned tables can have NOT VALID foreign keys
+-- PG18 commit: https://github.com/postgres/postgres/commit/b663b9436
+-- As with dropping constraints only on the partitioned tables, for
+-- NOT VALID foreign keys, we verify that foreign key declarations
+-- that use NOT VALID work correctly in Citus by repeating the tests
+-- of the PG commit (b663b9436) on a table that is a distributed
+-- table in Citus, in addition to a Postgres partitioned table.
+CREATE TABLE fk_notpartitioned_pk (a int, b int, PRIMARY KEY (a, b), c int);
+CREATE TABLE fk_partitioned_fk (b int, a int) PARTITION BY RANGE (a, b);
+SELECT create_reference_table('fk_notpartitioned_pk');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('fk_partitioned_fk', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE fk_partitioned_fk ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
+-- Attaching a child table with the same valid foreign key constraint.
+CREATE TABLE fk_partitioned_fk_1 (a int, b int);
+ALTER TABLE fk_partitioned_fk_1 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk;
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_1 FOR VALUES FROM (0,0) TO (1000,1000);
+-- Child constraint will remain valid.
+SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
+WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+           conname            | convalidated |      conrelid
+---------------------------------------------------------------------
+ fk_partitioned_fk_a_b_fkey   | f            | fk_partitioned_fk
+ fk_partitioned_fk_1_a_b_fkey | t            | fk_partitioned_fk_1
+(2 rows)
+
+-- Validate the constraint
+ALTER TABLE fk_partitioned_fk VALIDATE CONSTRAINT fk_partitioned_fk_a_b_fkey;
+-- All constraints are now valid.
+SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
+WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+           conname            | convalidated |      conrelid
+---------------------------------------------------------------------
+ fk_partitioned_fk_a_b_fkey   | t            | fk_partitioned_fk
+ fk_partitioned_fk_1_a_b_fkey | t            | fk_partitioned_fk_1
+(2 rows)
+
+-- Attaching a child with a NOT VALID constraint.
+CREATE TABLE fk_partitioned_fk_2 (a int, b int);
+INSERT INTO fk_partitioned_fk_2 VALUES(1000, 1000); -- doesn't exist in referenced table
+ALTER TABLE fk_partitioned_fk_2 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
+-- It will fail because the attach operation implicitly validates the data.
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_2 FOR VALUES FROM (1000,1000) TO (2000,2000);
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.fk_partitioned_fk_2$$)
+ERROR:  insert or update on table "fk_partitioned_fk_2_4754072" violates foreign key constraint "fk_partitioned_fk_2_a_b_fkey_4754072"
+DETAIL:  Key (a, b)=(1000, 1000) is not present in table "fk_notpartitioned_pk_4754060".
+CONTEXT:  while executing command on localhost:xxxxx
+-- Remove the invalid data and try again.
+TRUNCATE fk_partitioned_fk_2;
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_2 FOR VALUES FROM (1000,1000) TO (2000,2000);
+-- The child constraint will also be valid.
+SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_partitioned_fk_2'::regclass;
+           conname            | convalidated
+---------------------------------------------------------------------
+ fk_partitioned_fk_2_a_b_fkey | t
+(1 row)
+
+-- Test case where the child constraint is invalid, the grandchild constraint
+-- is valid, and the validation for the grandchild should be skipped when a
+-- valid constraint is applied to the top parent.
+CREATE TABLE fk_partitioned_fk_3 (a int, b int) PARTITION BY RANGE (a, b);
+ALTER TABLE fk_partitioned_fk_3 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
+SELECT create_distributed_table('fk_partitioned_fk_3', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE fk_partitioned_fk_3_1 (a int, b int);
+ALTER TABLE fk_partitioned_fk_3_1 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk;
+SELECT create_distributed_table('fk_partitioned_fk_3_1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE fk_partitioned_fk_3 ATTACH PARTITION fk_partitioned_fk_3_1 FOR VALUES FROM (2000,2000) TO (3000,3000);
+-- Fails because Citus does not support multi-level (grandchild) partitions
+ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_3 FOR VALUES FROM (2000,2000) TO (3000,3000);
+ERROR:  Citus doesn't support multi-level partitioned tables
+DETAIL:  Relation "fk_partitioned_fk_3" is partitioned table itself and it is also partition of relation "fk_partitioned_fk".
+-- All constraints are now valid, except for fk_partitioned_fk_3
+-- because the attach failed because of Citus not yet supporting
+-- multi-level partitions.
+SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
+WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+            conname             | convalidated |       conrelid
+---------------------------------------------------------------------
+ fk_partitioned_fk_a_b_fkey     | t            | fk_partitioned_fk
+ fk_partitioned_fk_1_a_b_fkey   | t            | fk_partitioned_fk_1
+ fk_partitioned_fk_2_a_b_fkey   | t            | fk_partitioned_fk_2
+ fk_partitioned_fk_3_a_b_fkey   | f            | fk_partitioned_fk_3
+ fk_partitioned_fk_3_1_a_b_fkey | t            | fk_partitioned_fk_3_1
+(5 rows)
+
+DROP TABLE fk_partitioned_fk, fk_notpartitioned_pk CASCADE;
+NOTICE:  drop cascades to constraint fk_partitioned_fk_3_a_b_fkey on table fk_partitioned_fk_3
+-- NOT VALID foreign key on a non-partitioned table referencing a partitioned table
+CREATE TABLE fk_partitioned_pk (a int, b int, PRIMARY KEY (a, b)) PARTITION BY RANGE (a, b);
+SELECT create_distributed_table('fk_partitioned_pk', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE fk_partitioned_pk_1 PARTITION OF fk_partitioned_pk FOR VALUES FROM (0,0) TO (1000,1000);
+CREATE TABLE fk_notpartitioned_fk (b int, a int);
+SELECT create_distributed_table('fk_notpartitioned_fk', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE fk_notpartitioned_fk ADD FOREIGN KEY (a, b) REFERENCES fk_partitioned_pk NOT VALID;
+-- Constraint will be invalid.
+SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_notpartitioned_fk'::regclass;
+             conname             | convalidated
+---------------------------------------------------------------------
+ fk_notpartitioned_fk_a_b_fkey   | f
+ fk_notpartitioned_fk_a_b_fkey_1 | f
+(2 rows)
+
+ALTER TABLE fk_notpartitioned_fk VALIDATE CONSTRAINT fk_notpartitioned_fk_a_b_fkey;
+-- All constraints are now valid.
+SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_notpartitioned_fk'::regclass;
+             conname             | convalidated
+---------------------------------------------------------------------
+ fk_notpartitioned_fk_a_b_fkey   | t
+ fk_notpartitioned_fk_a_b_fkey_1 | t
+(2 rows)
+
+DROP TABLE fk_notpartitioned_fk, fk_partitioned_pk;
 -- PG18 Feature: Generated Virtual Columns
 -- PG18 commit: https://github.com/postgres/postgres/commit/83ea6c540
 -- Verify that generated virtual columns are supported on distributed tables.
@@ -2449,6 +2867,149 @@ DROP COLLATION ignore_accents;
 DROP COLLATION ctest_det;
 DROP COLLATION ctest_nondet;
 DROP COLLATION case_insensitive;
+-- PG18 Feature: GUC for CREATE DATABASE file copy method
+-- PG18 commit: https://github.com/postgres/postgres/commit/f78ca6f3e
+-- Citus supports the wal_log strategy only for CREATE DATABASE.
+-- Here we show that the expected error (from PR #7249) occurs
+-- when the file_copy strategy is attempted.
+SET citus.enable_create_database_propagation=on;
+SHOW file_copy_method;
+ file_copy_method
+---------------------------------------------------------------------
+ copy
+(1 row)
+
+-- Error output is expected here
+CREATE DATABASE copied_db WITH strategy file_copy;
+ERROR:  Only wal_log is supported as strategy parameter for CREATE DATABASE
+SET file_copy_method TO clone;
+-- Also errors out, per #7249
+CREATE DATABASE cloned_db WITH strategy file_copy;
+ERROR:  Only wal_log is supported as strategy parameter for CREATE DATABASE
+RESET file_copy_method;
+-- This is okay
+CREATE DATABASE copied_db
+    WITH strategy wal_log;
+-- Show that file_copy works for ALTER DATABASE ... SET TABLESPACE
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+\c - - - :worker_1_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+\c - - - :worker_2_port
+\set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
+CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
+\c - - - :master_port
+SET citus.enable_create_database_propagation TO on;
+SET file_copy_method TO clone;
+SET citus.log_remote_commands TO true;
+SELECT datname, spcname
+FROM pg_database d, pg_tablespace t
+WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+  datname  |  spcname
+---------------------------------------------------------------------
+ copied_db | pg_default
+(1 row)
+
+ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_internal.acquire_citus_advisory_object_class_lock(26, 'copied_db')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT datname, spcname
+FROM pg_database d, pg_tablespace t
+WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+  datname  |       spcname
+---------------------------------------------------------------------
+ copied_db | alter_db_tablespace
+(1 row)
+
+RESET file_copy_method;
+RESET citus.log_remote_commands;
+-- Enable alter_db_tablespace to be dropped
+ALTER DATABASE copied_db SET TABLESPACE pg_default;
+DROP DATABASE copied_db;
+-- Done with DATABASE commands
+RESET citus.enable_create_database_propagation;
+SELECT result FROM run_command_on_all_nodes(
+  $$
+  DROP TABLESPACE "alter_db_tablespace"
+  $$
+);
+     result
+---------------------------------------------------------------------
+ DROP TABLESPACE
+ DROP TABLESPACE
+ DROP TABLESPACE
+(3 rows)
+
+-- PG18 Feature: EXPLAIN (WAL) reports WAL buffers becoming full.
+-- PG18 commit: https://github.com/postgres/postgres/commit/320545bfc
+SET search_path TO pg18_nn;
+SET citus.explain_all_tasks TO true;
+CREATE TABLE wal_explain_dist(id int, payload text);
+SELECT create_distributed_table('wal_explain_dist', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO wal_explain_dist VALUES
+  (1, 'one'), (2, 'two'), (3, 'three');
+-- Helper to capture distributed EXPLAIN ANALYZE (WAL) as JSON
+CREATE OR REPLACE FUNCTION explain_analyze_wal_json(query text)
+RETURNS jsonb
+AS $$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE true, WAL true, FORMAT JSON) %s', query)
+    INTO result;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TEMP TABLE wal_explain_plan(plan jsonb);
+INSERT INTO wal_explain_plan(plan)
+SELECT explain_analyze_wal_json($$SELECT count(*) FROM wal_explain_dist$$);
+-- Ensure Citus keeps distributed-task context in the WAL-aware EXPLAIN output
+SELECT jsonb_path_exists(plan, '$.**."Task Count"') AS wal_explain_distributed_plan
+FROM wal_explain_plan;
+ wal_explain_distributed_plan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- New PG18 field: wal_buffers_full must survive the distributed EXPLAIN path
+SELECT jsonb_path_exists(plan, '$.**."WAL Buffers Full"') AS wal_buffers_full_present
+FROM wal_explain_plan;
+ wal_buffers_full_present
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT jsonb_path_query_first(plan, '$.**."WAL Buffers Full"') AS wal_buffers_full_value
+FROM wal_explain_plan;
+ wal_buffers_full_value
+---------------------------------------------------------------------
+ 0
+(1 row)
+
+DROP TABLE wal_explain_plan;
+SET citus.explain_all_tasks TO default;
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
