@@ -149,6 +149,37 @@ jobs:
       image_name: ${{ needs.params.outputs.test_image_name }}
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus:
+    name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }} - Test Expected Failure
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - regress
+        image_name:
+          - ${{ needs.params.outputs.test_image_name }}
+        pg_version:
+          - ${{ needs.params.outputs.pg17_version }}
+        make:
+          - check-split
+        include:
+          - make: check-failure
+            pg_version: ${{ needs.params.outputs.pg17_version }}
+            suite: regress
+            image_name: ${{ needs.params.outputs.fail_test_image_name }}
+    runs-on: ubuntu-latest
+    container:
+      image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
+      options: >-
+        --user root
+        --dns=8.8.8.8
+        --cap-add=SYS_NICE
+        --security-opt seccomp=unconfined
+      # Due to Github creates a default network for each job, we need to use
+      # --dns= to have similar DNS settings as our other CI systems or local
+      # machines. Otherwise, we may see different results.
+      # and grant caps so PG18's NUMA introspection (pg_shmem_allocations_numa -> move_pages)
+      # doesn't fail with EPERM in CI.      
   test-citus-failure:
     name: Test Citus Failure
     uses: ./.github/workflows/run_tests.yml
