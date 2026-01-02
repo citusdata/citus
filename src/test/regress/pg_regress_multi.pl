@@ -819,6 +819,8 @@ if (!$conninfo)
 # Routine to shutdown servers at failure/exit
 sub ShutdownServers()
 {
+    my $saved_status = $?;
+
     # Determine the actual PostgreSQL library directory for cleanup
     my $psqlLibdir =`$pgConfig --pkglibdir`;
     chomp $psqlLibdir;
@@ -859,6 +861,9 @@ sub ShutdownServers()
         }
         $serversAreShutdown = "TRUE";
     }
+
+    # restore saved status
+    $? = $saved_status;
 }
 
 # setup the signal handler before we fork
@@ -923,7 +928,9 @@ $SIG{__DIE__} = \&ShutdownServers;
 # Shutdown servers on exit only if help option is not used
 END
 {
-    if ($? != 1)
+    my $saved_status = $?;
+
+    if ($saved_status != 1)
     {
         ShutdownServers();
     }
@@ -933,6 +940,9 @@ END
     {
         revert_replace_postgres();
     }
+
+    # restore saved status
+    $? = $saved_status;
 }
 
 # want to use valgrind, replace binary before starting server
