@@ -149,7 +149,7 @@ jobs:
       image_name: ${{ needs.params.outputs.test_image_name }}
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
-  test-citus:
+  test-citus-2:
     name: PG${{ fromJson(matrix.pg_version).major }} - ${{ matrix.make }} - Test Expected Failure
     strategy:
       fail-fast: false
