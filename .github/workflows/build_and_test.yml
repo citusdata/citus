@@ -179,7 +179,25 @@ jobs:
       # --dns= to have similar DNS settings as our other CI systems or local
       # machines. Otherwise, we may see different results.
       # and grant caps so PG18's NUMA introspection (pg_shmem_allocations_numa -> move_pages)
-      # doesn't fail with EPERM in CI.      
+      # doesn't fail with EPERM in CI.
+    needs:
+    - params
+    - build
+    steps:
+    - uses: actions/checkout@v4
+    - uses: "./.github/actions/setup_extension"
+    - name: Run Test
+      run: gosu circleci make -C src/test/${{ matrix.suite }} ${{ matrix.make }}
+      timeout-minutes: 20
+    - uses: "./.github/actions/save_logs_and_results"
+      if: always()
+      with:
+        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
+    - uses: "./.github/actions/upload_coverage"
+      if: always()
+      with:
+        flags: ${{ env.PG_MAJOR }}_${{ matrix.suite }}_${{ matrix.make }}
+        codecov_token: ${{ secrets.CODECOV_TOKEN }}            
   test-citus-failure:
     name: Test Citus Failure
     uses: ./.github/workflows/run_tests.yml
