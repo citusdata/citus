@@ -914,7 +914,7 @@ if ($useMitmproxy)
   if ($mitmPid eq 0) {
     print("forked, about to exec mitmdump\n");
     setpgrp(0,0); # we're about to spawn both a shell and a mitmdump, kill them as a group
-    exec("mitmdump --rawtcp -p $mitmPort --mode reverse:localhost:57638 -s $regressdir/mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn >proxy.output 2>&1");
+    exec("mitmdump --rawtcp -p $mitmPort --mode reverse:tcp://localhost:57638 -s $regressdir/mitmscripts/fluent.py --set fifo=$mitmFifoPath --set flow_detail=0 --set termlog_verbosity=warn --set connection_strategy=lazy >proxy.output 2>&1");
     die 'could not start mitmdump';
   }
 }

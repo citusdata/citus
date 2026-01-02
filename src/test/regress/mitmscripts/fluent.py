@@ -157,22 +157,27 @@ class ResetHandler(Handler):
         flow.kill()  # tell mitmproxy this connection should be closed
 
         # this is a mitmproxy.connections.ClientConnection(mitmproxy.tcp.BaseHandler)
-        client_conn = flow.client_conn
-        # this is a regular socket object
-        conn = client_conn.connection
+        client_conn = getattr(flow, "client_conn", None)
 
-        # cause linux to send a RST
-        LINGER_ON, LINGER_TIMEOUT = 1, 0
-        conn.setsockopt(
-            socket.SOL_SOCKET,
-            socket.SO_LINGER,
-            struct.pack("ii", LINGER_ON, LINGER_TIMEOUT),
-        )
-        conn.close()
+        # this is a regular socket object on mitmproxy versions < 12.2.
+        # Newer releases no longer expose the raw socket via the "connection"
+        # attribute, so guard access accordingly.
+        conn = getattr(client_conn, "connection", None)
 
-        # closing the connection isn't ideal, this thread later crashes when mitmproxy
-        # tries to call conn.shutdown(), but there's nothing else to clean up so that's
-        # maybe okay
+        if conn is not None:
+            # mitmproxy < 12 exposed the raw socket so we could force a TCP RST. Keep
+            # that behaviour for older versions to ensure tests stay reproducible.
+            LINGER_ON, LINGER_TIMEOUT = 1, 0
+            conn.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_LINGER,
+                struct.pack("ii", LINGER_ON, LINGER_TIMEOUT),
+            )
+            conn.close()
+        else:
+            # mitmproxy >= 12 hides the socket; flow.kill() already tears the
+            # connection down, so there's nothing additional we can do here.
+            pass
 
         return "done"
 
@@ -460,7 +465,7 @@ def tcp_message(flow: tcp.TCPFlow):
     This callback is hit every time mitmproxy receives a packet. It's the main entrypoint
     into this script.
     """
-    global connection_count
+    global connection_count  # noqa: F824
 
     tcp_msg = flow.messages[-1]
 
