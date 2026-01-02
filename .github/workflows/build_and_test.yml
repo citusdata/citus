@@ -192,7 +192,7 @@ jobs:
     - uses: "./.github/actions/save_logs_and_results"
       if: always()
       with:
-        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}
+        folder: ${{ fromJson(matrix.pg_version).major }}_${{ matrix.make }}-test2
     - uses: "./.github/actions/upload_coverage"
       if: always()
       with:
