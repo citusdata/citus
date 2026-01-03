@@ -1891,6 +1891,11 @@ FROM wal_explain_plan;
 DROP TABLE wal_explain_plan;
 SET citus.explain_all_tasks TO default;
 
+-- PG18 PG_MODULE_MAGIC_EXT MACRO
+-- and new function pg_get_loaded_modules
+-- Relevant PG18 commit: https://github.com/postgres/postgres/commit/9324c8c58
+SELECT * FROM pg_get_loaded_modules() WHERE file_name LIKE 'citus%' ORDER BY module_name;
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
