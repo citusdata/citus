@@ -286,6 +286,48 @@ sub write_settings_to_postgres_conf
     close $fd;
 }
 
+my $host = "localhost";
+my $user = "postgres";
+my $dbname = "postgres";
+
+# n.b. previously this was on port 57640, which caused issues because that's in the
+# ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
+# binding to it. 9060 is now used because it will never be used for client connections,
+# and there don't appear to be any other applications on this port that developers are
+# likely to be running.
+my $mitmPort = 9060;
+
+# Set some default configuration options
+my $masterPort = 57636;
+
+sub create_coordinator_database_and_extensions
+{
+    my $databaseName = "regression";
+
+    system(catfile($bindir, "psql"),
+            ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", "postgres",
+        '-c', "CREATE DATABASE regression;")) == 0
+        or die "Could not create regression database on coordinator.";
+
+    for my $extension (@extensions)
+    {
+        if ($extension eq "citus" && $citusversion ne "")
+        {
+            system(catfile($bindir, "psql"),
+                   ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $databaseName,
+                    '-c', "CREATE EXTENSION IF NOT EXISTS $extension VERSION '$citusversion';")) == 0
+                or die "Could not create extension $extension VERSION $citusversion on coordinator";
+        }
+        else
+        {
+            system(catfile($bindir, "psql"),
+                   ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $databaseName,
+                    '-c', "CREATE EXTENSION IF NOT EXISTS $extension;")) == 0
+                or die "Could not create extension $extension on coordinator";
+        }
+    }
+}
+
 # revert changes replace_postgres() performed
 sub revert_replace_postgres
 {
@@ -349,20 +391,6 @@ sub restore_original
 # always want to call initdb under normal postgres, so revert from a
 # partial run, even if we're now not using valgrind.
 revert_replace_postgres();
-
-my $host = "localhost";
-my $user = "postgres";
-my $dbname = "postgres";
-
-# n.b. previously this was on port 57640, which caused issues because that's in the
-# ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
-# binding to it. 9060 is now used because it will never be used for client connections,
-# and there don't appear to be any other applications on this port that developers are
-# likely to be running.
-my $mitmPort = 9060;
-
-# Set some default configuration options
-my $masterPort = 57636;
 
 my @workerHosts = ();
 my @workerPorts = ();
@@ -1128,6 +1156,14 @@ else
     }
 }
 
+# If a Citus version is specified, make sure the coordinator uses it too.
+# Otherwise pg_regress will create the database and install the extension without an
+# explicit VERSION.
+if (!$conninfo && $citusversion ne "")
+{
+    create_coordinator_database_and_extensions();
+}
+
 # Prepare pg_regress arguments
 my @arguments = (
     "--host", $host,
@@ -1144,6 +1180,12 @@ for my $extension (@extensions)
 
 # Append remaining ARGV arguments to pg_regress arguments
 push(@arguments, @ARGV);
+
+# Ensure pg_regress/pg_isolation_regress uses the coordinator DB we created above
+if (!$conninfo && $citusversion ne "")
+{
+    push(@arguments, "--use-existing");
+}
 
 my $startTime = time();
 
