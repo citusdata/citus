@@ -3554,35 +3554,61 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
 	return supportsSafeCombine;
 }
 
+
 /*
  * AggregateArgMatchLevel and AggregateArgumentMatchLevel()
  *
- * When Citus plans distributed aggregates, we often need to look up the
- * underlying Postgres aggregate function OID by name (e.g., "min"/"max") and
- * the input argument type. This lookup is used when constructing the
- * coordinator-side “combine” aggregate over the per-shard results.
+ * Citus needs to resolve an aggregate function OID by (name, argument type)
+ * when planning distributed aggregates. In the multi-shard path we run the
+ * aggregate on each shard (worker tasks) and then build a coordinator-side
+ * “combine” aggregate over the per-shard results. To construct that master
+ * aggregate expression, we must find the correct underlying Postgres aggregate
+ * implementation (OID).
  *
  * Postgres defines many aggregates using polymorphic pseudo-types rather than
  * concrete types. For example, min/max are defined for:
- *   - anyarray / anycompatiblearray   (arrays, e.g. int[])
- *   - anyenum / anycompatible / anyelement
- *   - record                          (row/composite types)
- * so a naive “exact type only” match is insufficient and can fail with
+ *   - anyarray / anycompatiblearray   (e.g., int[], text[])
+ *   - anyenum                         (e.g., a user-defined enum type)
+ *   - anyelement / anycompatible      (e.g., int4, text, numeric)
+ *   - record                          (e.g., a named composite/row type)
+ * so an “exact type only” lookup can miss the right candidate and fail with
  * "no matching oid for function".
  *
- * AggregateArgMatchLevel is a small ranking of how well a candidate aggregate
- * declaration matches a given input type. AggregateArgumentMatchLevel() returns
- * that rank for (declared_arg_type, actual_input_type).
+ * AggregateArgMatchLevel is a ranking of how well a candidate aggregate
+ * declaration matches the input type. AggregateArgumentMatchLevel() computes
+ * that rank for a pair of types:
  *
- * The lookup routine then scans candidate aggregates and selects the best match
- * (highest rank), preferring:
- *   1) exact matches (AGG_MATCH_EXACT)
- *   2) array-polymorphic matches for array inputs (AGG_MATCH_ARRAY_POLY)
- *   3) general polymorphic matches (AGG_MATCH_GENERAL_POLY)
- *   4) record matches for rowtypes (AGG_MATCH_RECORD)
- * This makes aggregate OID resolution robust across PG versions and type
- * categories, especially for PG18 where additional min/max polymorphic
- * signatures are used.
+ *   declaredArgType: the aggregate's declared argument type taken from a
+ *     pg_proc candidate (e.g., ANYARRAYOID, ANYELEMENTOID, RECORDOID, or a
+ *     concrete type OID).
+ *
+ *   inputType: the actual argument type of the user query expression for which
+ *     we are resolving the aggregate (e.g., INT4OID for int, the array type OID
+ *     for int[], or a rowtype OID for a composite type column).
+ *
+ * The OID resolution logic scans candidate aggregates and selects the best
+ * match (highest rank), preferring:
+ *   1) AGG_MATCH_EXACT:
+ *        declaredArgType == inputType
+ *        Example: min(int4) with inputType = INT4OID.
+ *
+ *   2) AGG_MATCH_ARRAY_POLY:
+ *        declaredArgType is ANYARRAY/ANYCOMPATIBLEARRAY and inputType is an
+ *        array type.
+ *        Example: min(int[]) matches min(anyarray).
+ *
+ *   3) AGG_MATCH_GENERAL_POLY:
+ *        declaredArgType is ANYELEMENT/ANYCOMPATIBLE/ANYENUM and is compatible
+ *        with inputType.
+ *        Example: min(mood_enum) matches min(anyenum), or min(text) matches a
+ *        polymorphic min(anyelement).
+ *
+ *   4) AGG_MATCH_RECORD:
+ *        declaredArgType is RECORD and inputType is a rowtype/composite.
+ *        Example: min(product_rating) matches min(record).
+ *
+ * This makes aggregate OID resolution robust across PG versions and additional
+ * polymorphic signatures introduced in PG18 (notably for min/max).
  */
 typedef enum AggregateArgMatchLevel
 {
@@ -3634,6 +3660,7 @@ AggregateArgumentMatchLevel(Oid declaredArgType, Oid inputType)
 
 	return AGG_MATCH_NONE;
 }
+
 
 /*
  * AggregateFunctionOid performs a reverse lookup on aggregate function name,
