@@ -3554,11 +3554,35 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
 	return supportsSafeCombine;
 }
 
-
 /*
- * AggregateFunctionOid performs a reverse lookup on aggregate function name,
- * and returns the corresponding aggregate function oid for the given function
- * name and input type.
+ * AggregateArgMatchLevel and AggregateArgumentMatchLevel()
+ *
+ * When Citus plans distributed aggregates, we often need to look up the
+ * underlying Postgres aggregate function OID by name (e.g., "min"/"max") and
+ * the input argument type. This lookup is used when constructing the
+ * coordinator-side “combine” aggregate over the per-shard results.
+ *
+ * Postgres defines many aggregates using polymorphic pseudo-types rather than
+ * concrete types. For example, min/max are defined for:
+ *   - anyarray / anycompatiblearray   (arrays, e.g. int[])
+ *   - anyenum / anycompatible / anyelement
+ *   - record                          (row/composite types)
+ * so a naive “exact type only” match is insufficient and can fail with
+ * "no matching oid for function".
+ *
+ * AggregateArgMatchLevel is a small ranking of how well a candidate aggregate
+ * declaration matches a given input type. AggregateArgumentMatchLevel() returns
+ * that rank for (declared_arg_type, actual_input_type).
+ *
+ * The lookup routine then scans candidate aggregates and selects the best match
+ * (highest rank), preferring:
+ *   1) exact matches (AGG_MATCH_EXACT)
+ *   2) array-polymorphic matches for array inputs (AGG_MATCH_ARRAY_POLY)
+ *   3) general polymorphic matches (AGG_MATCH_GENERAL_POLY)
+ *   4) record matches for rowtypes (AGG_MATCH_RECORD)
+ * This makes aggregate OID resolution robust across PG versions and type
+ * categories, especially for PG18 where additional min/max polymorphic
+ * signatures are used.
  */
 typedef enum AggregateArgMatchLevel
 {
@@ -3611,7 +3635,11 @@ AggregateArgumentMatchLevel(Oid declaredArgType, Oid inputType)
 	return AGG_MATCH_NONE;
 }
 
-
+/*
+ * AggregateFunctionOid performs a reverse lookup on aggregate function name,
+ * and returns the corresponding aggregate function oid for the given function
+ * name and input type.
+ */
 static Oid
 AggregateFunctionOid(const char *functionName, Oid inputType)
 {
