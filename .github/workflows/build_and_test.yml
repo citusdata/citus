@@ -160,7 +160,7 @@ jobs:
         [
           ${{ needs.params.outputs.pg17_version }}
         ]
-      make_targets: '["check-split", "check-multi", "check-multi-1", "check-multi-1-create-citus", "check-multi-mx", "check-vanilla", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
+      make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
       citus_libdir: "/opt/citus-versions/v13.2.0"
@@ -178,7 +178,7 @@ jobs:
         [
           ${{ needs.params.outputs.pg17_version }}
         ]
-      make_targets: '["check-multi-1"]'
+      make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
       citus_version: "13.2-1"
