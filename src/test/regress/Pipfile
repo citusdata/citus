@@ -4,7 +4,7 @@ url = "https://pypi.python.org/simple"
 verify_ssl = true
 
 [packages]
-mitmproxy = {git = "https://github.com/citusdata/mitmproxy.git", ref = "upgrade/12.2.1"}
+mitmproxy = {git = "https://github.com/citusdata/mitmproxy.git", ref = "main"}
 "aioquic" = ">=1.2.0,<1.3.0"
 "mitmproxy-rs" = ">=0.12.6,<0.13.0"
 argon2-cffi = ">=23.1.0"
