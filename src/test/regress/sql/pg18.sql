@@ -1904,25 +1904,53 @@ CREATE SCHEMA pg18_minmax;
 SET search_path TO pg18_minmax;
 
 -- ------------------------------------------------------------
--- Case A: ANYARRAY (int[])
+-- AGG_MATCH_EXACT: min/max(int4)
 -- ------------------------------------------------------------
-CREATE TABLE sales_data (
-    product_id int,
-    product text,
-    monthly_sales int[]
-);
+CREATE TABLE exact_t (id int, v int);
+SELECT create_distributed_table('exact_t', 'id');
 
-SELECT create_distributed_table('sales_data', 'product_id');
-
-INSERT INTO sales_data VALUES
-    (1, 'Laptop',   ARRAY[45, 52, 38]),
-    (2, 'Mouse',    ARRAY[67, 71, 58]),
-    (3, 'Keyboard', ARRAY[23, 28, 15]);
+INSERT INTO exact_t VALUES (1, 10), (2, 3), (3, 7);
 
 SELECT
-    MIN(monthly_sales) AS min_sales_pattern,
-    MAX(monthly_sales) AS max_sales_pattern
-FROM sales_data;
+  min(v) AS exact_min,
+  max(v) AS exact_max
+FROM exact_t;
+-- expected: min_v=3, max_v=10
+
+-- ------------------------------------------------------------
+-- AGG_MATCH_ARRAY_POLY: min/max(anyarray) with int[]
+-- ------------------------------------------------------------
+CREATE TABLE array_t (id int, v int[]);
+SELECT create_distributed_table('array_t', 'id');
+
+INSERT INTO array_t VALUES
+  (1, ARRAY[45, 52, 38]),
+  (2, ARRAY[67, 71, 58]),
+  (3, ARRAY[23, 28, 15]);
+
+SELECT
+  min(v) AS array_min,
+  max(v) AS array_max
+FROM array_t;
+-- expected:
+-- min_v = {23,28,15}
+-- max_v = {67,71,58}
+
+-- ------------------------------------------------------------
+-- AGG_MATCH_GENERAL_POLY: min/max(anyenum) with a user enum
+-- ------------------------------------------------------------
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+CREATE TABLE enum_t (id int, m mood);
+SELECT create_distributed_table('enum_t', 'id');
+
+INSERT INTO enum_t VALUES (1, 'ok'), (2, 'happy'), (3, 'sad');
+
+SELECT
+  min(m) AS enum_min,
+  max(m) AS enum_max
+FROM enum_t;
+-- expected: min_m = sad, max_m = happy
 
 DROP SCHEMA pg18_minmax CASCADE;
 -- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
