@@ -666,9 +666,9 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
 			.colocateWithTableName = parentRelationName,
 		};
-		bool allowFromWorkersIfPostgresTable = false;
+		bool allowFromWorkers = false;
 		CreateSingleShardTable(partitionRelationId, colocationParam,
-							   allowFromWorkersIfPostgresTable);
+							   allowFromWorkers);
 		return;
 	}
 
