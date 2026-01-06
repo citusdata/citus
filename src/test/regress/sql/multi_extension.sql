@@ -1141,6 +1141,7 @@ WHERE schemaid IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
 
 RESET citus.enable_schema_based_sharding;
 
+DROP EXTENSION citus_columnar;
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
 

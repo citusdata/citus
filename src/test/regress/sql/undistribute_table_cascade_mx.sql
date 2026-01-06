@@ -1,3 +1,4 @@
+CREATE EXTENSION citus_columnar;
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1517000;
@@ -134,3 +135,4 @@ $$);
 
 -- cleanup at exit
 DROP SCHEMA undistribute_table_cascade_mx CASCADE;
+DROP EXTENSION citus_columnar CASCADE;
