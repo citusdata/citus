@@ -86,7 +86,7 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 
@@ -172,7 +172,7 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 		return;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	if (!ShouldSyncTableMetadataViaCatalog(relationId))
 	{
@@ -191,7 +191,7 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 
 	/* drop the distributed table metadata on the workers */
 	char *deleteDistributionCommand = DistributionDeleteCommand(schemaName, tableName);
-	SendCommandToWorkersWithMetadata(deleteDistributionCommand);
+	SendCommandToRemoteNodesWithMetadata(deleteDistributionCommand);
 }
 
 
