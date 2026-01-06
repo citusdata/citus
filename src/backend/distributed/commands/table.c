@@ -136,7 +136,7 @@ static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command);
 
 /*
- * PreprocessDropTableStmt processes DROP TABLE commands for partitioned tables.
+ * PreprocessDropTableStmt processes DROP TABLE commands for Citus tables.
  * If we are trying to DROP partitioned tables, we first need to go to MX nodes
  * and DETACH partitions from their parents. Otherwise, we process DROP command
  * multiple times in MX workers. For shards, we send DROP commands with IF EXISTS
@@ -170,6 +170,20 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		}
 
 		/*
+		 * For the Citus tables except tenant schema tables, we don't allow
+		 * dropping from the workers. For tenant schema tables, we allow dropping
+		 * from the workers only if the coordinator is in the metadata.
+		 */
+		if (IsTenantSchema(get_rel_namespace(relationId)))
+		{
+			EnsurePropagationToCoordinator();
+		}
+		else
+		{
+			EnsureCoordinator();
+		}
+
+		/*
 		 * While changing the tables that are part of a colocation group we need to
 		 * prevent concurrent mutations to the placements of the shard groups.
 		 */
@@ -185,13 +199,14 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			MarkInvalidateForeignKeyGraph();
 		}
 
-		/* we're only interested in partitioned and mx tables */
+		/*
+		 * From this point on, we're only interested in partitioned Citus
+		 * tables & only if MX is enabled.
+		 */
 		if (!ShouldSyncTableMetadata(relationId) || !PartitionedTable(relationId))
 		{
 			continue;
 		}
-
-		EnsureCoordinator();
 
 		List *partitionList = PartitionList(relationId);
 		if (list_length(partitionList) == 0)
@@ -199,7 +214,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			continue;
 		}
 
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		Oid partitionRelationId = InvalidOid;
 		foreach_declared_oid(partitionRelationId, partitionList)
@@ -207,10 +222,10 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			char *detachPartitionCommand =
 				GenerateDetachPartitionCommand(partitionRelationId);
 
-			SendCommandToWorkersWithMetadata(detachPartitionCommand);
+			SendCommandToRemoteNodesWithMetadata(detachPartitionCommand);
 		}
 
-		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 
 	return NIL;
