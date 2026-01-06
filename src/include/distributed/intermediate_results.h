@@ -112,8 +112,8 @@ extern List * PartitionTasklistResults(const char *resultIdPrefix, List *selectT
 									   int partitionColumnIndex,
 									   CitusTableCacheEntry *distributionScheme,
 									   bool binaryFormat);
-extern char * QueryStringForFragmentsTransfer(
-	NodeToNodeFragmentsTransfer *fragmentsTransfer);
+extern char * QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *
+											  fragmentsTransfer);
 extern void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
 								   Oid intervalTypeId, ArrayType **minValueArray,
 								   ArrayType **maxValueArray);

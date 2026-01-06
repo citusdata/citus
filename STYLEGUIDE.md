@@ -11,9 +11,9 @@ tool. This tool uses `uncrustify` under the hood.
 
 ```bash
 # Uncrustify changes the way it formats code every release a bit. To make sure
-# everyone formats consistently we use version 0.68.1:
-curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.68.1.tar.gz | tar xz
-cd uncrustify-uncrustify-0.68.1/
+# everyone formats consistently we use version 0.82.0:
+curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.82.0.tar.gz | tar xz
+cd uncrustify-uncrustify-0.82.0/
 mkdir build
 cd build
 cmake ..

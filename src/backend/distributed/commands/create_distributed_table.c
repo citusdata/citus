@@ -175,8 +175,9 @@ static bool DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationD
 static int numeric_typmod_scale(int32 typmod);
 static bool is_valid_numeric_typmod(int32 typmod);
 
-static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
-														Var *distributionColumn);
+static void DistributionColumnIsGeneratedCheck(TupleDesc relationDesc,
+											   Var *distributionColumn,
+											   const char *relationName);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
 static uint64 DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 											 DestReceiver *copyDest,
@@ -701,8 +702,9 @@ EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
 	 * given table. We should make those checks after local table conversion by acquiring locks to
 	 * the relation because the distribution column can be modified in that period.
 	 */
-	Oid distributionColumnType = ColumnTypeIdForRelationColumnName(relationId,
-																   distributionColumnName);
+	Oid distributionColumnType = ColumnTypeIdForRelationColumnName(
+		relationId,
+		distributionColumnName);
 
 	text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
 	Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
@@ -1107,8 +1109,8 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 				 DistributedTableParams *distributedTableParams)
 {
 	if ((tableType == HASH_DISTRIBUTED || tableType == APPEND_DISTRIBUTED ||
-		 tableType == RANGE_DISTRIBUTED || tableType == SINGLE_SHARD_DISTRIBUTED) !=
-		(distributedTableParams != NULL))
+		 tableType == SINGLE_SHARD_DISTRIBUTED ||
+		 tableType == RANGE_DISTRIBUTED) != (distributedTableParams != NULL))
 	{
 		ereport(ERROR, (errmsg("distributed table params must be provided "
 							   "when creating a distributed table and must "
@@ -1270,17 +1272,10 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 							  colocationId, citusTableParams.replicationModel,
 							  autoConverted);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/*
 	 * PG16+ supports truncate triggers on foreign tables
 	 */
 	if (RegularTable(relationId) || IsForeignTable(relationId))
-#else
-
-	/* foreign tables do not support TRUNCATE trigger */
-	if (RegularTable(relationId))
-#endif
 	{
 		CreateTruncateTrigger(relationId);
 	}
@@ -2103,13 +2098,10 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	/* verify target relation is not distributed by a generated stored column
 	 */
-	if (distributionMethod != DISTRIBUTE_BY_NONE &&
-		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
+	if (distributionMethod != DISTRIBUTE_BY_NONE)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute relation: %s", relationName),
-						errdetail("Distribution column must not use GENERATED ALWAYS "
-								  "AS (...) STORED.")));
+		DistributionColumnIsGeneratedCheck(relationDesc, distributionColumn,
+										   relationName);
 	}
 
 	/* verify target relation is not distributed by a column of type numeric with negative scale */
@@ -2829,9 +2821,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped ||
-			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-			)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
 			continue;
 		}
@@ -2893,22 +2883,43 @@ DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 
 
 /*
- * DistributionColumnUsesGeneratedStoredColumn returns whether a given relation uses
- * GENERATED ALWAYS AS (...) STORED on distribution column
+ * DistributionColumnIsGeneratedCheck throws an error if a given relation uses
+ * GENERATED ALWAYS AS (...) STORED | VIRTUAL on distribution column
  */
-static bool
-DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
-											Var *distributionColumn)
+static void
+DistributionColumnIsGeneratedCheck(TupleDesc relationDesc,
+								   Var *distributionColumn,
+								   const char *relationName)
 {
 	Form_pg_attribute attributeForm = TupleDescAttr(relationDesc,
 													distributionColumn->varattno - 1);
-
-	if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+	switch (attributeForm->attgenerated)
 	{
-		return true;
-	}
+		case ATTRIBUTE_GENERATED_STORED:
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot distribute relation: %s", relationName),
+							errdetail("Distribution column must not use GENERATED ALWAYS "
+									  "AS (...) STORED.")));
+			break;
+		}
 
-	return false;
+#if PG_VERSION_NUM >= PG_VERSION_18
+		case ATTRIBUTE_GENERATED_VIRTUAL:
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot distribute relation: %s", relationName),
+							errdetail("Distribution column must not use GENERATED ALWAYS "
+									  "AS (...) VIRTUAL.")));
+			break;
+		}
+
+#endif
+		default:
+		{
+			break;
+		}
+	}
 }
 
 

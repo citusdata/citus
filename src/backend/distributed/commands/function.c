@@ -71,7 +71,7 @@
 #define DISABLE_LOCAL_CHECK_FUNCTION_BODIES "SET LOCAL check_function_bodies TO off;"
 #define RESET_CHECK_FUNCTION_BODIES "RESET check_function_bodies;"
 #define argumentStartsWith(arg, prefix) \
-	(strncmp(arg, prefix, strlen(prefix)) == 0)
+		(strncmp(arg, prefix, strlen(prefix)) == 0)
 
 /* forward declaration for helper functions*/
 static bool RecreateSameNonColocatedFunction(ObjectAddress functionAddress,
@@ -107,9 +107,9 @@ static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid
 															char *colocateWithTableName,
 															const ObjectAddress *
 															functionAddress);
-static void DistributeFunctionColocatedWithSingleShardTable(const
-															ObjectAddress *functionAddress,
-															text *colocateWithText);
+static void DistributeFunctionColocatedWithSingleShardTable(const ObjectAddress *
+															functionAddress, text *
+															colocateWithText);
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
 static List * FilterDistributedFunctions(GrantStmt *grantStmt);
@@ -1896,7 +1896,9 @@ ShouldAddFunctionSignature(FunctionParameterMode mode)
 		}
 
 		default:
+		{
 			return true;
+		}
 	}
 }
 

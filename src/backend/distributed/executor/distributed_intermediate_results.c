@@ -69,8 +69,8 @@ static List * WrapTasksForPartitioning(const char *resultIdPrefix,
 									   bool binaryFormat);
 static List * ExecutePartitionTaskList(List *partitionTaskList,
 									   CitusTableCacheEntry *targetRelation);
-static PartitioningTupleDest * CreatePartitioningTupleDest(
-	CitusTableCacheEntry *targetRelation);
+static PartitioningTupleDest * CreatePartitioningTupleDest(CitusTableCacheEntry *
+														   targetRelation);
 static void PartitioningTupleDestPutTuple(TupleDestination *self, Task *task,
 										  int placementIndex, int queryNumber,
 										  HeapTuple heapTuple, uint64 tupleLibpqSize);

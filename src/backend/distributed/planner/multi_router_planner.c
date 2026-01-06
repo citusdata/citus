@@ -153,8 +153,8 @@ static String * MakeDummyColumnString(int dummyColumnId);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
-static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
-	Query *query);
+static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *
+																				query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
 static bool ContainsSearchClauseWalker(Node *node, void *context);
@@ -855,7 +855,8 @@ DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList)
 							 "Modifying local tables with remote local tables is "
 							 "not supported.",
 							 NULL,
-							 "Consider wrapping remote local table to a CTE, or subquery");
+							 "Consider wrapping remote local table to a CTE, "
+							 "or subquery");
 	}
 	return NULL;
 }
@@ -2259,13 +2260,10 @@ ConvertToQueryOnShard(Query *query, Oid citusTableOid, Oid shardId)
 	Assert(shardRelationId != InvalidOid);
 	citusTableRte->relid = shardRelationId;
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/* Change the range table permission oid to that of the shard's (PG16+) */
 	Assert(list_length(query->rteperminfos) == 1);
 	RTEPermissionInfo *rtePermInfo = (RTEPermissionInfo *) linitial(query->rteperminfos);
 	rtePermInfo->relid = shardRelationId;
-#endif
 
 	return true;
 }
@@ -2572,18 +2570,6 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 		{
 			continue;
 		}
-
-#if PG_VERSION_NUM >= 150013 && PG_VERSION_NUM < PG_VERSION_16
-		if (rangeTableEntry->rtekind == RTE_SUBQUERY && rangeTableEntry->relkind == 0)
-		{
-			/*
-			 * In PG15.13 commit https://github.com/postgres/postgres/commit/317aba70e
-			 * relid is retained when converting views to subqueries,
-			 * so we need an extra check identifying those views
-			 */
-			continue;
-		}
-#endif
 
 		if (rangeTableEntry->relkind == RELKIND_VIEW ||
 			rangeTableEntry->relkind == RELKIND_MATVIEW)
@@ -3151,8 +3137,8 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
 		if (cachedShardInterval == NULL)
 		{
-			ereport(ERROR, (errmsg(
-								"could not find shardinterval to which to send the query")));
+			ereport(ERROR, (errmsg("could not find shardinterval to which to send "
+								   "the query")));
 		}
 
 		if (outputPartitionValueConst != NULL)

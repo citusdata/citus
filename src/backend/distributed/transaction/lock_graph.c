@@ -740,8 +740,6 @@ UnlockLockData(void)
  * We have separate blocks for PG16 and <PG16 because SHM_QUEUE is completely
  * removed from PG16
  */
-
-#if PG_VERSION_NUM >= PG_VERSION_16
 static void
 AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remaining)
 {
@@ -818,86 +816,6 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 		currentProc = (PGPROC *) currentProc->links.next;
 	}
 }
-
-
-#else
-
-static void
-AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remaining)
-{
-	/* the lock for which this process is waiting */
-	LOCK *waitLock = waitingProc->waitLock;
-
-	/* determine the conflict mask for the lock level used by the process */
-	LockMethod lockMethodTable = GetLocksMethodTable(waitLock);
-	int conflictMask = lockMethodTable->conflictTab[waitingProc->waitLockMode];
-
-	/* iterate through the queue of processes holding the lock */
-	SHM_QUEUE *procLocks = &waitLock->procLocks;
-	PROCLOCK *procLock = (PROCLOCK *) SHMQueueNext(procLocks, procLocks,
-												   offsetof(PROCLOCK, lockLink));
-
-	while (procLock != NULL)
-	{
-		PGPROC *currentProc = procLock->tag.myProc;
-
-		/*
-		 * Skip processes from the same lock group, processes that don't conflict,
-		 * and processes that are waiting on safe operations.
-		 */
-		if (!IsSameLockGroup(waitingProc, currentProc) &&
-			IsConflictingLockMask(procLock->holdMask, conflictMask) &&
-			!IsProcessWaitingForSafeOperations(currentProc))
-		{
-			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
-		}
-
-		procLock = (PROCLOCK *) SHMQueueNext(procLocks, &procLock->lockLink,
-											 offsetof(PROCLOCK, lockLink));
-	}
-}
-
-
-static void
-AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remaining)
-{
-	/* the lock for which this process is waiting */
-	LOCK *waitLock = waitingProc->waitLock;
-
-	/* determine the conflict mask for the lock level used by the process */
-	LockMethod lockMethodTable = GetLocksMethodTable(waitLock);
-	int conflictMask = lockMethodTable->conflictTab[waitingProc->waitLockMode];
-
-	/* iterate through the wait queue */
-	PROC_QUEUE *waitQueue = &(waitLock->waitProcs);
-	int queueSize = waitQueue->size;
-	PGPROC *currentProc = (PGPROC *) waitQueue->links.next;
-
-	/*
-	 * Iterate through the queue from the start until we encounter waitingProc,
-	 * since we only care about processes in front of waitingProc in the queue.
-	 */
-	while (queueSize-- > 0 && currentProc != waitingProc)
-	{
-		int awaitMask = LOCKBIT_ON(currentProc->waitLockMode);
-
-		/*
-		 * Skip processes from the same lock group, processes that don't conflict,
-		 * and processes that are waiting on safe operations.
-		 */
-		if (!IsSameLockGroup(waitingProc, currentProc) &&
-			IsConflictingLockMask(awaitMask, conflictMask) &&
-			!IsProcessWaitingForSafeOperations(currentProc))
-		{
-			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
-		}
-
-		currentProc = (PGPROC *) currentProc->links.next;
-	}
-}
-
-
-#endif
 
 
 /*

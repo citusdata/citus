@@ -81,23 +81,23 @@ static void ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId,
 												  Oid partitionRelationId);
 static bool DeparserSupportsAlterTableAddColumn(AlterTableStmt *alterTableStatement,
 												AlterTableCmd *addColumnSubCommand);
-static bool ATDefinesFKeyBetweenPostgresAndCitusLocalOrRef(
-	AlterTableStmt *alterTableStatement);
+static bool ATDefinesFKeyBetweenPostgresAndCitusLocalOrRef(AlterTableStmt *
+														   alterTableStatement);
 static bool ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
 														 Oid rightRelationId);
 static bool RelationIdListContainsCitusTableType(List *relationIdList,
 												 CitusTableType citusTableType);
 static bool RelationIdListContainsPostgresTable(List *relationIdList);
-static void ConvertPostgresLocalTablesToCitusLocalTables(
-	AlterTableStmt *alterTableStatement);
+static void ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *
+														 alterTableStatement);
 static bool RangeVarListHasLocalRelationConvertedByUser(List *relationRangeVarList,
 														AlterTableStmt *
 														alterTableStatement);
 static int CompareRangeVarsByOid(const void *leftElement, const void *rightElement);
-static List * GetAlterTableAddFKeyRightRelationIdList(
-	AlterTableStmt *alterTableStatement);
-static List * GetAlterTableAddFKeyRightRelationRangeVarList(
-	AlterTableStmt *alterTableStatement);
+static List * GetAlterTableAddFKeyRightRelationIdList(AlterTableStmt *
+													  alterTableStatement);
+static List * GetAlterTableAddFKeyRightRelationRangeVarList(AlterTableStmt *
+															alterTableStatement);
 static List * GetAlterTableAddFKeyConstraintList(AlterTableStmt *alterTableStatement);
 static List * GetAlterTableCommandFKeyConstraintList(AlterTableCmd *command);
 static List * GetRangeVarListFromFKeyConstraintList(List *fKeyConstraintList);
@@ -1352,6 +1352,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 															 constraint);
 				}
 			}
+
 			/*
 			 * When constraint->indexname is not NULL we are handling an
 			 * ADD {PRIMARY KEY, UNIQUE} USING INDEX command. In this case
@@ -1532,6 +1533,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				}
 			}
 		}
+
 		/*
 		 * We check for ALTER COLUMN .. SET/DROP DEFAULT
 		 * we should not propagate anything to shards
@@ -2181,7 +2183,9 @@ AlterTableCommandTypeIsTrigger(AlterTableType alterTableType)
 		}
 
 		default:
+		{
 			return false;
+		}
 	}
 }
 
@@ -2719,6 +2723,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				}
 			}
 		}
+
 		/*
 		 * We check for ALTER COLUMN .. SET DEFAULT nextval('user_defined_seq')
 		 * we should make sure that the type of the column that uses
@@ -2815,6 +2820,7 @@ FixAlterTableStmtIndexNames(AlterTableStmt *alterTableStatement)
 
 			FixPartitionShardIndexNames(relationId, parentIndexOid);
 		}
+
 		/*
 		 * If this is an ALTER TABLE .. ATTACH PARTITION command
 		 * we have wrong index names generated on indexes of shards of
@@ -3425,13 +3431,13 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									if (commandList->length > 1 ||
 										columnConstraints->length > 1)
 									{
-										ereport(ERROR, (errcode(
-															ERRCODE_FEATURE_NOT_SUPPORTED),
-														errmsg(
-															"cannot execute ADD COLUMN .. DEFAULT nextval('..')"
-															" command with other subcommands/constraints"),
-														errhint(
-															"You can issue each subcommand separately")));
+										ereport(ERROR,
+												(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												 errmsg(
+													 "cannot execute ADD COLUMN .. DEFAULT nextval('..')"
+													 " command with other subcommands/constraints"),
+												 errhint(
+													 "You can issue each subcommand separately")));
 									}
 
 									/*
@@ -3440,14 +3446,14 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									 */
 									if (!TableEmpty(relationId))
 									{
-										ereport(ERROR, (errcode(
-															ERRCODE_FEATURE_NOT_SUPPORTED),
-														errmsg(
-															"cannot add a column involving DEFAULT nextval('..') "
-															"because the table is not empty"),
-														errhint(
-															"You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
-															"Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
+										ereport(ERROR,
+												(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												 errmsg(
+													 "cannot add a column involving DEFAULT nextval('..') "
+													 "because the table is not empty"),
+												 errhint(
+													 "You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
+													 "Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
 									}
 								}
 							}

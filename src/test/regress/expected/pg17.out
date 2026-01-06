@@ -379,7 +379,7 @@ drop cascades to table pg17_corr_subq_folding.users
 drop cascades to table pg17_corr_subq_folding.events
 drop cascades to table pg17_corr_subq_folding.users_ref
 drop cascades to table pg17_corr_subq_folding.users_ref_20240023
--- Queries with outer joins with pseudoconstant quals work only in PG17
+-- Queries with outer joins with pseudoconstant quals work only in PG17+
 -- Relevant PG17 commit:
 -- https://github.com/postgres/postgres/commit/9e9931d2b
 CREATE SCHEMA pg17_outerjoin;
@@ -2149,81 +2149,61 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
    Planning Time: N.N
 (1 row)
 
-select public.explain_filter('explain (memory, analyze, buffers false, format json) select * from int8_tbl i8');
-NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "JSON"}') AS (field_0 bigint, field_1 bigint)
+select public.explain_filter('explain (memory, analyze, buffers false, format yaml) select * from int8_tbl i8');
+NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "YAML"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
                           explain_filter
 ---------------------------------------------------------------------
- [                                                               +
-   {                                                             +
-     "Plan": {                                                   +
-       "Node Type": "Custom Scan",                               +
-       "Custom Plan Provider": "Citus Adaptive",                 +
-       "Parallel Aware": false,                                  +
-       "Async Capable": false,                                   +
-       "Startup Cost": N.N,                                      +
-       "Total Cost": N.N,                                        +
-       "Plan Rows": N,                                           +
-       "Plan Width": N,                                          +
-       "Actual Startup Time": N.N,                               +
-       "Actual Total Time": N.N,                                 +
-       "Actual Rows": N,                                         +
-       "Actual Loops": N,                                        +
-       "Distributed Query": {                                    +
-         "Job": {                                                +
-           "Task Count": N,                                      +
-           "Tuple data received from nodes": "N bytes",          +
-           "Tasks Shown": "One of N",                            +
-           "Tasks": [                                            +
-             {                                                   +
-               "Tuple data received from node": "N bytes",       +
-               "Node": "host=localhost port=N dbname=regression",+
-               "Remote Plan": [                                  +
-                 [                                               +
-                   {                                             +
-                     "Plan": {                                   +
-                       "Node Type": "Seq Scan",                  +
-                       "Parallel Aware": false,                  +
-                       "Async Capable": false,                   +
-                       "Relation Name": "int8_tbl_12242024",     +
-                       "Alias": "i8",                            +
-                       "Startup Cost": N.N,                      +
-                       "Total Cost": N.N,                        +
-                       "Plan Rows": N,                           +
-                       "Plan Width": N,                          +
-                       "Actual Startup Time": N.N,               +
-                       "Actual Total Time": N.N,                 +
-                       "Actual Rows": N,                         +
-                       "Actual Loops": N                         +
-                     },                                          +
-                     "Planning": {                               +
-                       "Memory Used": N,                         +
-                       "Memory Allocated": N                     +
-                     },                                          +
-                     "Planning Time": N.N,                       +
-                     "Triggers": [                               +
-                     ],                                          +
-                     "Execution Time": N.N                       +
-                   }                                             +
-                 ]                                               +
-                                                                 +
-               ]                                                 +
-             }                                                   +
-           ]                                                     +
-         }                                                       +
-       }                                                         +
-     },                                                          +
-     "Planning": {                                               +
-       "Memory Used": N,                                         +
-       "Memory Allocated": N                                     +
-     },                                                          +
-     "Planning Time": N.N,                                       +
-     "Triggers": [                                               +
-     ],                                                          +
-     "Execution Time": N.N                                       +
-   }                                                             +
- ]
+ - Plan:                                                    +
+     Node Type: "Custom Scan"                               +
+     Custom Plan Provider: "Citus Adaptive"                 +
+     Parallel Aware: false                                  +
+     Async Capable: false                                   +
+     Startup Cost: N.N                                      +
+     Total Cost: N.N                                        +
+     Plan Rows: N                                           +
+     Plan Width: N                                          +
+     Actual Startup Time: N.N                               +
+     Actual Total Time: N.N                                 +
+     Actual Rows: N                                       +
+     Actual Loops: N                                        +
+     Distributed Query:                                     +
+       Job:                                                 +
+         Task Count: N                                      +
+         Tuple data received from nodes: "N bytes"          +
+         Tasks Shown: "One of N"                            +
+         Tasks:                                             +
+           - Tuple data received from node: "N bytes"       +
+             Node: "host=localhost port=N dbname=regression"+
+             Remote Plan:                                   +
+               - Plan:                                      +
+                   Node Type: "Seq Scan"                    +
+                   Parallel Aware: false                    +
+                   Async Capable: false                     +
+                   Relation Name: "int8_tbl_12242024"       +
+                   Alias: "i8"                              +
+                   Startup Cost: N.N                        +
+                   Total Cost: N.N                          +
+                   Plan Rows: N                             +
+                   Plan Width: N                            +
+                   Actual Startup Time: N.N                 +
+                   Actual Total Time: N.N                   +
+                   Actual Rows: N                         +
+                   Actual Loops: N                          +
+                 Planning:                                  +
+                   Memory Used: N                           +
+                   Memory Allocated: N                      +
+                 Planning Time: N.N                         +
+                 Triggers:                                  +
+                 Execution Time: N.N                        +
+                                                            +
+   Planning:                                                +
+     Memory Used: N                                         +
+     Memory Allocated: N                                    +
+   Planning Time: N.N                                       +
+   Triggers:                                                +
+   Execution Time: N.N
 (1 row)
 
 prepare int8_query as select * from int8_tbl i8;

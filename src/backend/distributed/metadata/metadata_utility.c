@@ -29,6 +29,7 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc_d.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
@@ -81,10 +82,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "catalog/pg_proc_d.h"
-#endif
-
 #define DISK_SPACE_FIELDS 2
 
 /* Local functions forward declarations */
@@ -127,11 +124,11 @@ static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[
 static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
 
 #define InitFieldValue(attno, values, isnull, initValue) \
-	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
+		(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
 #define InitFieldText(attno, values, isnull, initValue) \
-	(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
+		(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
 #define InitFieldNull(attno, values, isnull) \
-	(void) SetFieldNull((attno), (values), (isnull), NULL)
+		(void) SetFieldNull((attno), (values), (isnull), NULL)
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_local_disk_space_stats);
@@ -823,8 +820,8 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	/* SELECT SUM(worker_partitioned_...) FROM VALUES (...) */
 	char *subqueryForPartitionedShards =
 		GenerateSizeQueryForRelationNameList(partitionedShardNames,
-											 GetWorkerPartitionedSizeUDFNameBySizeQueryType(
-												 sizeQueryType));
+											 GetWorkerPartitionedSizeUDFNameBySizeQueryType
+												 (sizeQueryType));
 
 	/* SELECT SUM(pg_..._size) FROM VALUES (...) */
 	char *subqueryForNonPartitionedShards =
@@ -4266,10 +4263,9 @@ CancelTasksForJob(int64 jobid)
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
 
 	const bool indexOK = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-													DistBackgroundTaskJobIdTaskIdIndexId(),
-													indexOK, NULL,
-													lengthof(scanKey), scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(
+		pgDistBackgroundTasks, DistBackgroundTaskJobIdTaskIdIndexId(),
+		indexOK, NULL, lengthof(scanKey), scanKey);
 
 	List *runningTaskPids = NIL;
 	HeapTuple taskTuple = NULL;

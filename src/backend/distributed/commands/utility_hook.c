@@ -1297,7 +1297,8 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 							 "partial failure, potentially leading to an inconsistent "
 							 "state.\nIf the problematic command is a CREATE operation, "
 							 "consider using the 'IF EXISTS' syntax to drop the object,"
-							 "\nif applicable, and then re-attempt the original command.")));
+							 "\nif applicable, and then re-attempt "
+							 "the original command.")));
 			}
 
 			PG_RE_THROW();

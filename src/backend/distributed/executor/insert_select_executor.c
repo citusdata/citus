@@ -66,7 +66,8 @@ static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 														  List *insertTargetList,
 														  PlannedStmt *selectPlan,
 														  EState *executorState,
-														  char *intermediateResultIdPrefix);
+														  char *
+														  intermediateResultIdPrefix);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
 

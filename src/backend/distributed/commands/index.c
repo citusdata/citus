@@ -19,6 +19,7 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_namespace.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "lib/stringinfo.h"
@@ -53,10 +54,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "catalog/pg_namespace.h"
-#endif
-
 
 /* Local functions forward declarations for helper functions */
 static void ErrorIfCreateIndexHasTooManyColumns(IndexStmt *createIndexStatement);
@@ -64,8 +61,8 @@ static int GetNumberOfIndexParameters(IndexStmt *createIndexStatement);
 static bool IndexAlreadyExists(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetIndexId(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement);
-static void SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(
-	IndexStmt *createIndexStatement);
+static void SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(IndexStmt *
+																  createIndexStatement);
 static char * GenerateLongestShardPartitionIndexName(IndexStmt *createIndexStatement);
 static char * GenerateDefaultIndexName(IndexStmt *createIndexStatement);
 static List * GenerateIndexParameters(IndexStmt *createIndexStatement);
