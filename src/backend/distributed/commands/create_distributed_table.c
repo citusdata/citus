@@ -169,8 +169,6 @@ static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
 static void CopyLocalDataIntoShards(Oid distributedTableId);
-static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
-
 static bool DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
 															 Var *distributionColumn);
 static int numeric_typmod_scale(int32 typmod);
@@ -2709,7 +2707,7 @@ CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId)
 
 	/* get the table columns for distributed table */
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
-	List *columnNameList = TupleDescColumnNameList(destTupleDescriptor);
+	List *columnNameList = CopyablePlainColumnNameListFromTupleDesc(destTupleDescriptor);
 
 	RelationClose(distributedRelation);
 
@@ -2820,11 +2818,11 @@ DoCopyFromLocalTableIntoShards(Relation localRelation,
 
 
 /*
- * TupleDescColumnNameList returns a list of column names for the given tuple
- * descriptor as plain strings.
+ * CopyablePlainColumnNameListFromTupleDesc returns the list of copyable column
+ * names for the given tuple descriptor as plain strings.
  */
-static List *
-TupleDescColumnNameList(TupleDesc tupleDescriptor)
+List *
+CopyablePlainColumnNameListFromTupleDesc(TupleDesc tupleDescriptor)
 {
 	List *columnNameList = NIL;
 
