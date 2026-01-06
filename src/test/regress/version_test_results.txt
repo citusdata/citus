@@ -1,0 +1,144 @@
+Starting version tests at Tue Jan  6 10:30:53 AM UTC 2026
+======================================
+
+Running: EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 14.0devel  | 14.0-1
+ worker      |     57638 | 14.0devel  | 14.0-1
+ coordinator |           | 14.0devel  | 14.0-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSVERSION=13.2-1 N1MODE=workeronly EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 14.0devel  | 13.2-1
+ worker      |     57638 | 14.0devel  | 14.0-1
+ coordinator |           | 14.0devel  | 14.0-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSVERSION=13.2-1 N1MODE=coordinatoronly EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 14.0devel  | 14.0-1
+ worker      |     57638 | 14.0devel  | 14.0-1
+ coordinator |           | 14.0devel  | 13.2-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSVERSION=13.2-1 N1MODE=all EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 14.0devel  | 13.2-1
+ worker      |     57638 | 14.0devel  | 13.2-1
+ coordinator |           | 14.0devel  | 13.2-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSLIBDIR=~/citus-libs/17/v13.2.0 N1MODE=workeronly EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 13.2.0     | 14.0-1
+ worker      |     57638 | 14.0devel  | 14.0-1
+ coordinator |           | 14.0devel  | 14.0-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSLIBDIR=~/citus-libs/17/v13.2.0 N1MODE=coordinatoronly EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 14.0devel  | 14.0-1
+ worker      |     57638 | 14.0devel  | 14.0-1
+ coordinator |           | 13.2.0     | 14.0-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSLIBDIR=~/citus-libs/17/v13.2.0 N1MODE=all EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 13.2.0     | 14.0-1
+ worker      |     57638 | 13.2.0     | 14.0-1
+ coordinator |           | 13.2.0     | 14.0-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSLIBDIR=~/citus-libs/17/v13.2.0 CITUSVERSION=13.2-1 N1MODE=workeronly EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 13.2.0     | 13.2-1
+ worker      |     57638 | 14.0devel  | 14.0-1
+ coordinator |           | 14.0devel  | 14.0-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSLIBDIR=~/citus-libs/17/v13.2.0 CITUSVERSION=13.2-1 N1MODE=coordinatoronly EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 14.0devel  | 14.0-1
+ worker      |     57638 | 14.0devel  | 14.0-1
+ coordinator |           | 13.2.0     | 13.2-1
+(3 rows)
+
+
+======================================
+
+Running: CITUSLIBDIR=~/citus-libs/17/v13.2.0 CITUSVERSION=13.2-1 N1MODE=all EXTRA_TESTS=versions make check-minimal
+--------------------------------------
+
+\set ECHO none
+  node_type  | node_port | so_version | sql_version
+---------------------------------------------------------------------
+ worker      |     57637 | 13.2.0     | 13.2-1
+ worker      |     57638 | 13.2.0     | 13.2-1
+ coordinator |           | 13.2.0     | 13.2-1
+(3 rows)
+
+
+======================================
+
+All tests completed at Tue Jan  6 10:31:56 AM UTC 2026
