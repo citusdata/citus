@@ -186,6 +186,14 @@ DEPS = {
         # because it queries node group id and it changes as we add / remove nodes
         repeatable=False,
     ),
+    "multi_mx_metadata": TestDeps(
+        None,
+        [
+            "multi_cluster_management",
+            "remove_coordinator_from_metadata",
+            "multi_test_catalog_views",
+        ],
+    ),
     "multi_mx_add_coordinator": TestDeps(
         None,
         [
