@@ -30,6 +30,10 @@ on:
         required: false
         type: string
         default: ""
+      n_1_mode:
+        required: false
+        type: string
+        default: ""
     secrets:
       codecov_token:
         required: false
@@ -57,14 +61,14 @@ jobs:
         if: ${{ inputs.citus_libdir != '' }}
         run: chmod -R a+w /usr/lib/postgresql/${{ matrix.pg_version.major }}/lib/
       - name: Run Test
-        run: CITUSVERSION=${{ inputs.citus_version }} CITUSLIBDIR=${{ inputs.citus_libdir }} gosu circleci make -C src/test/${{ inputs.suite }} ${{ matrix.make }}
+        run: CITUSVERSION=${{ inputs.citus_version }} CITUSLIBDIR=${{ inputs.citus_libdir }} N_1_MODE=${{ inputs.n_1_mode }} gosu circleci make -C src/test/${{ inputs.suite }} ${{ matrix.make }}
         timeout-minutes: 20
       - uses: "./.github/actions/save_logs_and_results"
         if: always()
         with:
-          folder: ${{ matrix.pg_version.major }}_${{ matrix.make }}${{ inputs.citus_version && format('_{0}', inputs.citus_version) || '' }}${{ inputs.citus_libdir_label && format('_{0}', inputs.citus_libdir_label) || '' }}
+          folder: ${{ matrix.pg_version.major }}_${{ matrix.make }}${{ inputs.citus_version && format('_{0}', inputs.citus_version) || '' }}${{ inputs.citus_libdir_label && format('_{0}', inputs.citus_libdir_label) || '' }}${{ inputs.n_1_mode && format('_{0}', inputs.n_1_mode) || '' }}
       - uses: "./.github/actions/upload_coverage"
         if: always()
         with:
-          flags: ${{ env.PG_MAJOR }}_${{ inputs.suite }}_${{ matrix.make }}
+          flags: ${{ env.PG_MAJOR }}_${{ inputs.suite }}_${{ matrix.make }}${{ inputs.citus_version && format('_{0}', inputs.citus_version) || '' }}${{ inputs.citus_libdir_label && format('_{0}', inputs.citus_libdir_label) || '' }}${{ inputs.n_1_mode && format('_{0}', inputs.n_1_mode) || '' }}
           codecov_token: ${{ secrets.codecov_token }}
