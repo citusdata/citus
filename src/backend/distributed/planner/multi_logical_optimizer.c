@@ -2196,7 +2196,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 * Polymorphic aggregates determine their actual return type based on
 		 * their argument type, so replace it with the worker return type.
 		 */
-		if (IsPolymorphicType(masterReturnType))
+		if (IsPolymorphicTypeFamily1(masterReturnType))
 		{
 			newMasterAggregate->aggtype = workerReturnType;
 
@@ -3622,14 +3622,13 @@ typedef enum AggregateArgMatchLevel
 static AggregateArgMatchLevel
 AggregateArgumentMatchLevel(Oid declaredArgType, Oid inputType)
 {
-	/* Treat polymorphic “input type” OIDs as matching their families too. */
-	bool inputIsArray = (inputType == ANYARRAYOID) || type_is_array(inputType);
-	bool inputIsEnum = (inputType == ANYENUMOID) || type_is_enum(inputType);
-
 	if (declaredArgType == inputType)
 	{
 		return AGG_MATCH_EXACT;
 	}
+
+	bool inputIsArray = (inputType == ANYARRAYOID) || type_is_array(inputType);
+	bool inputIsEnum = (inputType == ANYENUMOID) || type_is_enum(inputType);
 
 	switch (declaredArgType)
 	{
