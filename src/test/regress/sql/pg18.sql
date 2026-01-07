@@ -1897,14 +1897,15 @@ SET citus.explain_all_tasks TO default;
 SELECT * FROM pg_get_loaded_modules() WHERE file_name LIKE 'citus%' ORDER BY module_name;
 
 -- ============================================================
--- PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
+-- PG18: MIN/MAX aggregate OID resolution
 -- ============================================================
 
 CREATE SCHEMA pg18_minmax;
 SET search_path TO pg18_minmax;
 
 -- ------------------------------------------------------------
--- AGG_MATCH_EXACT: min/max(int4)
+-- AGG_MATCH_EXACT
+-- declaredArgType == inputType (e.g., INT4OID)
 -- ------------------------------------------------------------
 CREATE TABLE exact_t (id int, v int);
 SELECT create_distributed_table('exact_t', 'id');
@@ -1915,10 +1916,11 @@ SELECT
   min(v) AS exact_min,
   max(v) AS exact_max
 FROM exact_t;
--- expected: min_v=3, max_v=10
+-- expected: exact_min=3, exact_max=10
 
 -- ------------------------------------------------------------
--- AGG_MATCH_ARRAY_POLY: min/max(anyarray) with int[]
+-- AGG_MATCH_ARRAY_POLY
+-- declaredArgType == ANYARRAYOID, inputType is an array type (e.g., INT4ARRAYOID)
 -- ------------------------------------------------------------
 CREATE TABLE array_t (id int, v int[]);
 SELECT create_distributed_table('array_t', 'id');
@@ -1932,12 +1934,11 @@ SELECT
   min(v) AS array_min,
   max(v) AS array_max
 FROM array_t;
--- expected:
--- min_v = {23,28,15}
--- max_v = {67,71,58}
+-- expected: array_min={23,28,15}, array_max={67,71,58}
 
 -- ------------------------------------------------------------
--- AGG_MATCH_GENERAL_POLY: min/max(anyenum) with a user enum
+-- AGG_MATCH_GENERAL_POLY
+-- declaredArgType == ANYENUMOID, inputType is an enum type (user-defined)
 -- ------------------------------------------------------------
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
@@ -1950,7 +1951,7 @@ SELECT
   min(m) AS enum_min,
   max(m) AS enum_max
 FROM enum_t;
--- expected: min_m = sad, max_m = happy
+-- expected: enum_min=sad, enum_max=happy
 
 DROP SCHEMA pg18_minmax CASCADE;
 -- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD

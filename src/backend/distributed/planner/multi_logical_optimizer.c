@@ -3567,9 +3567,9 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
  *
  * Postgres defines many aggregates using polymorphic pseudo-types rather than
  * concrete types. For example, min/max are defined for:
- *   - anyarray / anycompatiblearray   (e.g., int[], text[])
+ *   - anyarray       	               (e.g., int[], text[])
  *   - anyenum                         (e.g., a user-defined enum type)
- *   - anyelement / anycompatible      (e.g., int4, text, numeric)
+ *   - anyelement                      (e.g., int4, text, numeric)
  *   - record                          (e.g., a named composite/row type)
  * so an “exact type only” lookup can miss the right candidate and fail with
  * "no matching oid for function".
@@ -3593,12 +3593,12 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
  *        Example: min(int4) with inputType = INT4OID.
  *
  *   2) AGG_MATCH_ARRAY_POLY:
- *        declaredArgType is ANYARRAY/ANYCOMPATIBLEARRAY and inputType is an
+ *        declaredArgType is ANYARRAY and inputType is an
  *        array type.
  *        Example: min(int[]) matches min(anyarray).
  *
  *   3) AGG_MATCH_GENERAL_POLY:
- *        declaredArgType is ANYELEMENT/ANYCOMPATIBLE/ANYENUM and is compatible
+ *        declaredArgType is ANYELEMENT/ANYENUM and is compatible
  *        with inputType.
  *        Example: min(mood_enum) matches min(anyenum), or min(text) matches a
  *        polymorphic min(anyelement).
@@ -3622,43 +3622,42 @@ typedef enum AggregateArgMatchLevel
 static AggregateArgMatchLevel
 AggregateArgumentMatchLevel(Oid declaredArgType, Oid inputType)
 {
-	bool inputIsArray = type_is_array(inputType) ||
-						inputType == ANYARRAYOID ||
-						inputType == ANYCOMPATIBLEARRAYOID;
-	bool inputIsEnum = type_is_enum(inputType) ||
-					   inputType == ANYENUMOID;
+	/* Treat polymorphic “input type” OIDs as matching their families too. */
+	bool inputIsArray = (inputType == ANYARRAYOID) || type_is_array(inputType);
+	bool inputIsEnum = (inputType == ANYENUMOID) || type_is_enum(inputType);
 
 	if (declaredArgType == inputType)
 	{
 		return AGG_MATCH_EXACT;
 	}
 
-	if ((declaredArgType == ANYARRAYOID ||
-		 declaredArgType == ANYCOMPATIBLEARRAYOID) &&
-		inputIsArray)
+	switch (declaredArgType)
 	{
-		return AGG_MATCH_ARRAY_POLY;
-	}
+		case ANYARRAYOID:
+		{
+			return inputIsArray ? AGG_MATCH_ARRAY_POLY : AGG_MATCH_NONE;
+		}
 
-	if (declaredArgType == ANYELEMENTOID ||
-		declaredArgType == ANYCOMPATIBLEOID)
-	{
-		return AGG_MATCH_GENERAL_POLY;
-	}
+		case ANYELEMENTOID:
+		{
+			return AGG_MATCH_GENERAL_POLY;
+		}
 
-	if (declaredArgType == ANYENUMOID &&
-		inputIsEnum)
-	{
-		return AGG_MATCH_GENERAL_POLY;
-	}
+		case ANYENUMOID:
+		{
+			return inputIsEnum ? AGG_MATCH_GENERAL_POLY : AGG_MATCH_NONE;
+		}
 
-	if (declaredArgType == RECORDOID &&
-		type_is_rowtype(inputType))
-	{
-		return AGG_MATCH_RECORD;
-	}
+		case RECORDOID:
+		{
+			return type_is_rowtype(inputType) ? AGG_MATCH_RECORD : AGG_MATCH_NONE;
+		}
 
-	return AGG_MATCH_NONE;
+		default:
+		{
+			return AGG_MATCH_NONE;
+		}
+	}
 }
 
 
