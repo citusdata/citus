@@ -94,8 +94,9 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static PlannedStmt * CreateDistributedPlannedStmt(
-	DistributedPlanningContext *planContext);
+static bool PlanContainsDistributedSubPlanRTE(List *subPlanList);
+static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
+												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 															   DistributedPlanningContext
 															   *planContext);
@@ -414,6 +415,49 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 				*maybeHasForeignDistributedTable = true;
 			}
 
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the given
+ * subPlanList is a Read Intermediate Result function scan.
+ *
+ * It is used by the check after standard_planner() to determine whether the plan
+ * still requires distributed planning; in addition to checking the range table for
+ * distributed tables, we also need to check whether there are any subplans that
+ * read intermediate results, which indicates a distributed subplan and therefore
+ * that distributed planning is required.
+ */
+static bool
+PlanContainsDistributedSubPlanRTE(List *subPlanList)
+{
+	ListCell *subPlanCell = NULL;
+
+	foreach(subPlanCell, subPlanList)
+	{
+		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (!IsA(planRoot, FunctionScan))
+		{
+			continue;
+		}
+
+		List *functionList = ((FunctionScan *) planRoot)->functions;
+
+		if (functionList == NIL)
+		{
+			continue;
+		}
+
+		RangeTblFunction *rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+
+		if (IsReadIntermediateResultFunction(rangeTblfunction->funcexpr))
+		{
 			return true;
 		}
 	}
@@ -2761,20 +2805,26 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 		#endif
 
 		/*
-		 * The WHERE quals have been eliminated by the Postgres planner, possibly by
-		 * an OR clause that was simplified to TRUE. In such cases, we need to check
-		 * if the planned query still requires distributed planning.
+		 * If the WHERE quals have been eliminated by the Postgres planner, possibly
+		 * by an OR clause that was simplified to TRUE, we need to check if the
+		 * planned query still requires distributed planning.
 		 */
 		if (origQuals != NULL && plannedQuals == NULL)
 		{
-			bool planHasDistTable = ListContainsDistributedTableRTE(
+			/* First check if the plan has a distributed table */
+			bool planHasDistribution = ListContainsDistributedTableRTE(
 				planContext->plan->rtable, NULL);
 
+			/* ..or a distributed subplan */
+			planHasDistribution = planHasDistribution ||
+								  PlanContainsDistributedSubPlanRTE(
+				planContext->plan->subplans);
+
 			/*
-			 * If the Postgres plan has a distributed table, we know for sure that
+			 * The plan has a distributed relation, so we know for sure that
 			 * the query requires distributed planning.
 			 */
-			if (planHasDistTable)
+			if (planHasDistribution)
 			{
 				return true;
 			}
@@ -2787,8 +2837,16 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 			List *rtesPostPlan = ExtractRangeTableEntryList(plannedQuery);
 			if (list_length(rtesPostPlan) < list_length(rangeTableList))
 			{
-				isDistributedQuery = ListContainsDistributedTableRTE(
+				bool hasDistTable = ListContainsDistributedTableRTE(
 					rtesPostPlan, NULL);
+				if (hasDistTable != isDistributedQuery)
+				{
+					ereport(DEBUG4, (errmsg(
+										 "Plan has flipped from distributed to local "
+										 "after Postgres planning, updating distributed to %u",
+										 hasDistTable)));
+					isDistributedQuery = hasDistTable;
+				}
 			}
 		}
 	}
