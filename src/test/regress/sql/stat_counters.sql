@@ -703,8 +703,8 @@ insert into dist_table_1 (a, b) values (1, 1), (2, 2), (3, 3);
 -- across the nodes. For the read part, we increment query_execution_single_shard
 -- because we go through distributed planning if there are read_intermediate_result()
 -- calls in a query, so it happens to be a distributed plan and goes through our
--- CustomScan callbacks. For the repartitioning of the intermediate result, just
--- as usual, we don't increment any counters.
+-- CustomScan callbacks. And as usual, we increment query counters for the
+-- repartitioning of intermediate result too.
 --
 -- Then, the final insert query happens between the distributed table and the
 -- colocated intermediate result, so this increments query_execution_multi_shard
@@ -712,7 +712,7 @@ insert into dist_table_1 (a, b) values (1, 1), (2, 2), (3, 3);
 CALL exec_query_and_check_query_counters($$
     INSERT INTO dist_table SELECT * FROM (SELECT * FROM dist_table_1 ORDER BY a LIMIT 16) q RETURNING *
     $$,
-    1, 2
+    1, 3
 );
 
 -- Same query but without RETURNING - this goes through a different code path, but
@@ -732,7 +732,8 @@ CALL exec_query_and_check_query_counters($$
 
 -- A similar query but with a cte.
 -- Subplan execution for the cte, additionally, first increments query_execution_multi_shard
--- for "SELECT * FROM dist_table" when creating the intermediate result for it and then
+-- for "SELECT * FROM dist_table" when creating the intermediate result for it, then increments
+-- query_execution_multi_shard again when repartitioning the intermediate result, and then
 -- query_execution_single_shard for;
 --   <intermediate-result>
 --   EXCEPT
@@ -749,7 +750,7 @@ CALL exec_query_and_check_query_counters($$
     JOIN cte ON q.a = cte.a
     RETURNING *
     $$,
-    2, 3
+    2, 4
 );
 
 -- the same query but this time the cte is part of the select, not the insert
@@ -765,7 +766,7 @@ CALL exec_query_and_check_query_counters($$
     JOIN cte ON q.a = cte.a
     RETURNING *
     $$,
-    2, 3
+    2, 4
 );
 
 -- same with explain
@@ -860,8 +861,12 @@ CALL exec_query_and_check_query_counters($$
 --   SELECT .. FROM (SELECT .. FROM read_intermediate_result(..)) citus_insert_select_subquery
 --
 -- So, while repartitioning the source query, we perform a single-shard read
--- query because we read from an intermediate result and we then partition it
--- across the nodes. For the read part, we increment query_execution_single_shard
+-- query because we read from an intermediate result and this increments
+-- query_execution_single_shard. And then we partition the intermediate result
+-- across the nodes and repartitioning the intermediate result increments
+-- query_execution_multi_shard.
+--
+-- For the read part, we increment query_execution_single_shard
 -- because we go through distributed planning if there are read_intermediate_result()
 -- calls in a query, so it happens to be a distributed plan and goes through our
 -- CustomScan callbacks. For the repartitioning of the intermediate result, just
@@ -878,7 +883,7 @@ CALL exec_query_and_check_query_counters($$
     WHEN NOT MATCHED THEN
         INSERT (a, b) VALUES (s.a, s.b)
     $$,
-    1, 2
+    1, 3
 );
 
 truncate dist_table;

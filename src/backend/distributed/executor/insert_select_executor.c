@@ -351,10 +351,10 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  columnNameList);
 
 	/*
-	 * We don't track query counters for the COPY commands that are executed to
+	 * We track query counters for the COPY commands that are executed to
 	 * prepare intermediate results.
 	 */
-	const bool trackQueryCounters = false;
+	const bool trackQueryCounters = true;
 
 	/* set up a DestReceiver that copies into the intermediate table */
 	const bool publishableData = true;
