@@ -25,7 +25,7 @@ pytest-timeout = "*"
 pytest-xdist = "*"
 pytest-repeat = "*"
 pyyaml = "*"
-werkzeug = "==3.1.0"
+werkzeug = "==3.1.4"
 "typing-extensions" = ">=4.13.2,<5"
 pyperclip = "==1.9.0"
 

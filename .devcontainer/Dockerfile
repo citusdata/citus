@@ -39,8 +39,8 @@ RUN apt update && apt install -y \
     xsltproc \
     zlib1g-dev \
  && add-apt-repository ppa:deadsnakes/ppa -y \
- && apt install -y \
-    python3.9-full \
+ && apt install -y \ 
+   python3.12 python3.12-venv python3.12-distutils \
  # software properties pulls in pkexec, which makes the debugger unusable in vscode
  && apt purge -y \
     software-properties-common \
