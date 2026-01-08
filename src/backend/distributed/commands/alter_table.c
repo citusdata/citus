@@ -214,6 +214,9 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *qualifiedSequece
 														  char *qualifiedTargetName);
 static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
+static void DisableTrackingQueryCountersForReplaceTablePlan(Oid sourceId, Oid targetId,
+															PlannedStmt *insertSelectPlan)
+;
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateFKeyToReferenceTable(Oid relationId,
 											 CascadeToColocatedOption cascadeOption);
@@ -1835,7 +1838,19 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 							 insertColumnString, qualifiedSourceName);
 		}
 
-		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
+		Query *queryTree = ParseQueryString(query->data, NULL, 0);
+		PlannedStmt *insertSelectPlan = planner(queryTree, query->data, 0, NULL);
+
+		/*
+		 * We don't want to track query counters when pulling data from the
+		 * source or when inserting it into target. Below we disable query counter
+		 * tracking for the distributed plans.
+		 */
+		DisableTrackingQueryCountersForReplaceTablePlan(sourceId, targetId,
+														insertSelectPlan);
+
+		/* execute the INSERT .. SELECT plan */
+		ExecutePlanIntoDestReceiver(insertSelectPlan, NULL, None_Receiver);
 	}
 
 	/*
@@ -1902,6 +1917,86 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 					 qualifiedTargetName,
 					 quote_identifier(sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
+}
+
+
+/*
+ * DisableTrackingQueryCountersForReplaceTablePlan takes a PlannedStmt for
+ * the INSERT .. SELECT plan used in ReplaceTable() and disables tracking query
+ * counters for the distributed parts of the plan.
+ */
+static void
+DisableTrackingQueryCountersForReplaceTablePlan(Oid sourceId, Oid targetId,
+												PlannedStmt *insertSelectPlan)
+{
+	if (IsCitusTable(targetId) && IsCitusTable(sourceId))
+	{
+		if (!IsCitusCustomScan(insertSelectPlan->planTree))
+		{
+			ereport(ERROR, (errmsg("unexpectedly got a planTree that is not a Citus "
+								   "custom scan for INSERT part of the INSERT .. "
+								   "SELECT while inserting into a distributed table")));
+		}
+
+		DistributedPlan *distributedInsert =
+			GetDistributedPlan((CustomScan *) insertSelectPlan->planTree);
+
+		distributedInsert->disableTrackingQueryCounters = true;
+
+		/* note that selectPlan will be null if the INSERT .. SELECT is pushable */
+		PlannedStmt *selectPlan = distributedInsert->
+								  selectPlanForModifyViaCoordinatorOrRepartition;
+		if (selectPlan)
+		{
+			if (!IsCitusCustomScan(selectPlan->planTree))
+			{
+				ereport(ERROR, (errmsg("unexpectedly got a planTree that is not a Citus "
+									   "custom scan for SELECT part of the INSERT .. "
+									   "SELECT while inserting from a distributed table"))
+						);
+			}
+
+			DistributedPlan *distributedSelect =
+				GetDistributedPlan((CustomScan *) selectPlan->planTree);
+
+			distributedSelect->disableTrackingQueryCounters = true;
+		}
+	}
+	else if (!IsCitusTable(targetId) && IsCitusTable(sourceId))
+	{
+		/*
+		 * Inserting into a local table from a distributed table. In that case,
+		 * we only need to disable query counter tracking for the SELECT part of
+		 * the plan.
+		 */
+		CustomScan *customScan = FetchCitusCustomScanIfExists(insertSelectPlan->planTree);
+		if (!customScan)
+		{
+			ereport(ERROR, (errmsg("unexpectedly couldn't find the Citus custom "
+								   "scan for SELECT part of the INSERT .. "
+								   "SELECT while inserting from a distributed table")));
+		}
+
+		DistributedPlan *distributedSelect = GetDistributedPlan(customScan);
+
+		distributedSelect->disableTrackingQueryCounters = true;
+	}
+	else if (IsCitusTable(targetId) && !IsCitusTable(sourceId))
+	{
+		/*
+		 * Today, callers don't provide a local source table to ReplaceTable() when
+		 * the target table is a distributed table.
+		 */
+		ereport(ERROR, (errmsg("unexpectedly got a local source table while inserting "
+							   "into a distributed target table")));
+	}
+	else
+	{
+		/*
+		 * Insert into a local table from a local source table, don't need to
+		 * do anything special.
+		 */
+	}
 }
 
 
