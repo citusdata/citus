@@ -3,44 +3,43 @@
 set -euxo pipefail
 
 pg_version=$1
-citus_old_version=$2
+citus_version=$2
 
 base="$(pwd)"
 
-install_citus_and_tar() {
-    # do everything in a subdirectory to avoid clutter in current directory
-    mkdir -p "${builddir}" && cd "${builddir}"
+# If tarball already exsists we're good
+if [ -f "${base}/install-pg${pg_version}-citus${citus_version}.tar" ]; then
+    exit 0
+fi
 
-    "${citus_dir}/configure" --without-libcurl
+basedir="${base}/${citus_version}"
 
-    installdir="${builddir}/install"
-    make "-j$(nproc)" && mkdir -p "${installdir}" && make DESTDIR="${installdir}" install
+rm -rf "${basedir}"
+mkdir -p "${basedir}"
+cd "${basedir}"
+citus_dir=${basedir}/citus_$citus_version
+git clone --branch "$citus_version" https://github.com/citusdata/citus.git --depth 1 citus_"$citus_version"
+builddir="${basedir}/build"
 
-    cd "${installdir}" && find . -type f -print >"${builddir}/files.lst"
+# do everything in a subdirectory to avoid clutter in current directory
+mkdir -p "${builddir}"
+cd "${builddir}"
 
-    tar cvf "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
-    mv "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" "${base}/install-pg${pg_version}-citus${citus_version}.tar"
+"${citus_dir}/configure" --without-libcurl
 
-    cd "${builddir}" && rm -rf install files.lst && make clean
-}
+installdir="${builddir}/install"
+make "-j$(nproc)"
+mkdir -p "${installdir}"
+make DESTDIR="${installdir}" install
 
-build_ext() {
-    citus_version="$1"
-    # If tarball already exsists we're good
-    if [ -f "${base}/install-pg${pg_version}-citus${citus_version}.tar" ]; then
-        return
-    fi
+cd "${installdir}"
 
-    basedir="${base}/${citus_version}"
+find . -type f -print >"${builddir}/files.lst"
 
-    rm -rf "${basedir}"
-    mkdir -p "${basedir}"
-    cd "${basedir}"
-    citus_dir=${basedir}/citus_$citus_version
-    git clone --branch "$citus_version" https://github.com/citusdata/citus.git --depth 1 citus_"$citus_version"
-    builddir="${basedir}/build"
+tar cvf "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" $(cat "${builddir}"/files.lst)
+mv "${basedir}/install-pg${pg_version}-citus${citus_version}.tar" "${base}/install-pg${pg_version}-citus${citus_version}.tar"
 
-    install_citus_and_tar
-}
+cd "${builddir}"
+rm -rf install files.lst
+make clean
 
-build_ext "${citus_old_version}"
