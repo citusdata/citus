@@ -284,6 +284,19 @@ CopyFromQueryIntoNoneDistTable(PlannedStmt *selectPlan, Oid noneDistTableId)
 													 estate, NULL, nonPublishableData,
 													 trackQueryCounters);
 
+	/* ensure it's a router plan, see FinalizePlan() */
+	if (!IsCitusCustomScan(selectPlan->planTree))
+	{
+		ereport(ERROR, (errmsg("unexpectedly got a planTree that is not a Citus "
+							   "custom scan while moving shard placement data ")));
+	}
+
+	DistributedPlan *distributedSelect =
+		GetDistributedPlan((CustomScan *) selectPlan->planTree);
+
+	/* we don't track query counters when reading data for copying into shards */
+	distributedSelect->disableTrackingQueryCounters = true;
+
 	ExecutePlanIntoDestReceiver(selectPlan, NULL, copyDest);
 
 	FreeExecutorState(estate);
