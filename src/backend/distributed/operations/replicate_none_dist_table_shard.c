@@ -284,6 +284,9 @@ CopyFromQueryIntoNoneDistTable(PlannedStmt *selectPlan, Oid noneDistTableId)
 													 estate, NULL, nonPublishableData,
 													 trackQueryCounters);
 
+	/* we don't track query counters when reading data for copying into shards */
+	DisableTrackingQueryCountersForPlannedStmt(selectPlan);
+
 	ExecutePlanIntoDestReceiver(selectPlan, NULL, copyDest);
 
 	FreeExecutorState(estate);
