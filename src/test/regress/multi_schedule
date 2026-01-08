@@ -114,6 +114,7 @@ test: run_command_on_all_nodes
 test: background_task_queue_monitor
 test: citus_internal_access
 test: function_with_case_when
+test: comment_on_table_column
 
 # Causal clock test
 test: clock
