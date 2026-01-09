@@ -2252,6 +2252,8 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	/* In the second loop, populate taskRequiredForShardIndex */
 	bool updateQualsForOuterJoin = false;
 	bool outerPartHasDistributedTable = false;
+	bool noDistTables = bms_is_empty(distributedTableIndex);
+	bool hasRefOrSchemaShardedTable = false;
 	forboth_ptr(prunedShardList, prunedRelationShardList,
 				relationRestriction, relationRestrictionContext->relationRestrictionList)
 	{
@@ -2260,6 +2262,37 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (!HasDistributionKeyCacheEntry(cacheEntry))
 		{
+			if (noDistTables && !hasRefOrSchemaShardedTable)
+			{
+				/*
+				 * Before continuing, check if we're looking at a reference or schema-
+				 * sharded table. If so, and it is the first such table we've seen, we
+				 * add a task for shard index 0; all reference and schema sharded tables
+				 * have shard index 0 so we can hard-code the value rather than looking at
+				 * the shardIndex in pruned shard list, as is done further on down for
+				 * distributed tables.
+				 *
+				 * Note that this only needs to be done once, regardless of how many
+				 * reference or schema sharded tables there are; they all have the
+				 * same shard index (0), and will require just one task.
+				 *
+				 * Also note that this is only done if there are no distributed tables
+				 * involved; the relevant shard indexes will get added, and furthermore
+				 * we don't want to incorrectly add shard index 0 if for example a left
+				 * outer join between a reference table and a distributed table also has
+				 * a restriction that prunes out shard index 0 of the distributed table.
+				 */
+				CitusTableType currentTableType = GetCitusTableType(cacheEntry);
+				hasRefOrSchemaShardedTable = currentTableType == REFERENCE_TABLE ||
+											 currentTableType == SINGLE_SHARD_DISTRIBUTED;
+				if (hasRefOrSchemaShardedTable)
+				{
+					taskRequiredForShardIndex = bms_add_member(taskRequiredForShardIndex,
+															   0);
+					minShardOffset = 0;
+				}
+			}
+
 			continue;
 		}
 
@@ -2348,6 +2381,12 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 		++taskIdIndex;
 	}
+
+	/* If we detected a reference or schema sharded table then there
+	 * should be no distributed tables involved and exactly one task.
+	 */
+	Assert(!hasRefOrSchemaShardedTable || (noDistTables &&
+										   list_length(sqlTaskList) == 1));
 
 	/* If it is a modify task with multiple tables */
 	if (taskType == MODIFY_TASK && list_length(
