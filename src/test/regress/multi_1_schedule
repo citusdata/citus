@@ -45,6 +45,7 @@ test: comment_on_role
 test: single_shard_table_udfs
 test: schema_based_sharding
 test: citus_schema_distribute_undistribute
+test: citus_schema_distribute_concurrently
 # Don't parallelize stat_counters with others because we don't want statistics
 # to be updated by other tests concurrently except Citus Maintenance Daemon.
 #
