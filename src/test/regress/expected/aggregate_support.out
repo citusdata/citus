@@ -116,6 +116,7 @@ DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE]
 (1 row)
 
 -- generate test data
+SET citus.next_shard_id TO 83674000;
 create table aggdata (id int, key int, val int, valf float8);
 select create_distributed_table('aggdata', 'id');
  create_distributed_table
@@ -270,6 +271,28 @@ select covar_pop(valf,val)::numeric(10,5), covar_samp(valf,val)::numeric(10,5) f
 ---------------------------------------------------------------------
  706.56939 |  824.33095
 (1 row)
+
+-- explain works on a distributed table
+set citus.explain_analyze_sort_method to 'taskId';
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, sum2_strict(val) from aggdata group by key order by key;
+                                          QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=7 loops=1)
+   Sort Key: remote_scan.key
+   Sort Method: quicksort  Memory: 25kB
+   ->  HashAggregate (actual rows=7 loops=1)
+         Group Key: remote_scan.key
+         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+               Task Count: 4
+               Tuple data received from nodes: 64 bytes
+               Tasks Shown: One of 4
+               ->  Task
+                     Tuple data received from node: 28 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate (actual rows=4 loops=1)
+                           Group Key: key
+                           ->  Seq Scan on aggdata_83674000 aggdata (actual rows=4 loops=1)
+(17 rows)
 
 -- binary string aggregation
 create function binstragg_sfunc(s text, e1 text, e2 text)
