@@ -39,6 +39,10 @@ PG_FUNCTION_INFO_V1(worker_partial_agg_ffunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_sfunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_ffunc);
 
+PG_FUNCTION_INFO_V1(worker_binary_partial_agg_ffunc);
+PG_FUNCTION_INFO_V1(coord_binary_combine_agg_sfunc);
+PG_FUNCTION_INFO_V1(coord_binary_combine_agg_ffunc);
+
 /*
  * Holds information describing the structure of aggregation arguments
  * and helps to efficiently handle both a single argument and multiple
@@ -604,14 +608,16 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_partial_agg_ffunc serializes transition state,
+ * serializes transition state,
  * essentially implementing the following pseudocode:
  *
- * (box) -> text
+ * (box) -> (cstring|bytea)
  * return box.agg.stype.output(box.value)
+ *
+ * The return is a bytea if isBinaryOutput is true.
  */
-Datum
-worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
+static Datum
+WorkerPartialAggFFuncCore(PG_FUNCTION_ARGS, bool isBinaryOutput)
 {
 	LOCAL_FCINFO(innerFcinfo, 1);
 	FmgrInfo info;
@@ -648,7 +654,14 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	Oid transtype = aggform->aggtranstype;
 	ReleaseSysCache(aggtuple);
 
-	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
+	if (isBinaryOutput)
+	{
+		getTypeBinaryOutputInfo(transtype, &typoutput, &typIsVarlena);
+	}
+	else
+	{
+		getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
+	}
 
 	fmgr_info(typoutput, &info);
 
@@ -667,17 +680,37 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 
 /*
- * coord_combine_agg_sfunc deserializes transition state from worker
- * & advances transition state using combinefunc,
+ * worker_partial_agg_ffunc serializes transition state,
  * essentially implementing the following pseudocode:
  *
- * (box, agg, text) -> box
- * box.agg = agg
- * box.value = agg.combine(box.value, agg.stype.input(text))
- * return box
+ * (box) -> text
+ * return box.agg.stype.output(box.value)
  */
 Datum
-coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
+worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	bool isBinaryOutput = false;
+	return WorkerPartialAggFFuncCore(fcinfo, isBinaryOutput);
+}
+
+
+/*
+ * worker_partial_binary_agg_ffunc serializes transition state,
+ * essentially implementing the following pseudocode:
+ *
+ * (box) -> bytea
+ * return box.agg.stype.output(box.value)
+ */
+Datum
+worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	bool isBinaryOutput = true;
+	return WorkerPartialAggFFuncCore(fcinfo, isBinaryOutput);
+}
+
+
+static Datum
+CoordinatorCombineAggSfuncCore(PG_FUNCTION_ARGS, bool isBinaryInput)
 {
 	LOCAL_FCINFO(innerFcinfo, 3);
 	FmgrInfo info;
@@ -731,13 +764,38 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	bool valueNull = PG_ARGISNULL(2);
 	HeapTuple transtypetuple = GetTypeForm(box->transtype, &transtypeform);
 	Oid ioparam = getTypeIOParam(transtypetuple);
-	Oid deserial = transtypeform->typinput;
+	Oid deserial = isBinaryInput ? transtypeform->typreceive : transtypeform->typinput;
 	ReleaseSysCache(transtypetuple);
 
 	fmgr_info(deserial, &info);
 	if (valueNull && info.fn_strict)
 	{
 		value = (Datum) 0;
+	}
+	else if (isBinaryInput)
+	{
+		StringInfoData buf;
+
+		InitFunctionCallInfoData(*innerFcinfo, &info, 3, fcinfo->fncollation,
+								 fcinfo->context, fcinfo->resultinfo);
+		if (valueNull)
+		{
+			fcSetArgExt(innerFcinfo, 0, (Datum) 0, valueNull);
+		}
+		else
+		{
+			bytea *byteaInput = PG_GETARG_BYTEA_PP(2);
+			initReadOnlyStringInfo(&buf,
+								   (char *) VARDATA_ANY(byteaInput),
+								   VARSIZE_ANY_EXHDR(byteaInput));
+			fcSetArg(innerFcinfo, 0, PointerGetDatum(&buf));
+		}
+
+		fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
+		fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
+
+		value = FunctionCallInvoke(innerFcinfo);
+		valueNull = innerFcinfo->isnull;
 	}
 	else
 	{
@@ -784,14 +842,51 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 
 
 /*
- * coord_combine_agg_ffunc applies finalfunc of aggregate to state,
+ * coord_combine_agg_sfunc deserializes transition state from worker
+ * & advances transition state using combinefunc,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, agg, text) -> box
+ * box.agg = agg
+ * box.value = agg.combine(box.value, agg.stype.input(text))
+ * return box
+ */
+Datum
+coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	bool isBinaryInput = false;
+	return CoordinatorCombineAggSfuncCore(fcinfo, isBinaryInput);
+}
+
+
+/*
+ * coord_binary_combine_agg_sfunc deserializes transition state from worker
+ * & advances transition state using combinefunc,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, agg, bytea) -> box
+ * box.agg = agg
+ * box.value = agg.combine(box.value, agg.stype.receive(bytea))
+ * return box
+ */
+Datum
+coord_binary_combine_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	bool isBinaryInput = true;
+	return CoordinatorCombineAggSfuncCore(fcinfo, isBinaryInput);
+}
+
+
+/*
+ * Applies finalfunc of aggregate to state,
  * essentially implementing the following pseudocode:
  *
  * (box, ...) -> fval
  * return box.agg.ffunc(box.value)
+ * Used by both the binary and text versions of the finalfunc.
  */
-Datum
-coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
+static Datum
+CoordCombineAggFuncCore(PG_FUNCTION_ARGS)
 {
 	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
 	LOCAL_FCINFO(innerFcinfo, FUNC_MAX_ARGS);
@@ -859,6 +954,34 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	Datum result = FunctionCallInvoke(innerFcinfo);
 	fcinfo->isnull = innerFcinfo->isnull;
 	return result;
+}
+
+
+/*
+ * coord_combine_agg_ffunc applies finalfunc of aggregate to state,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, ...) -> fval
+ * return box.agg.ffunc(box.value)
+ */
+Datum
+coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return CoordCombineAggFuncCore(fcinfo);
+}
+
+
+/*
+ * coord_binary_combine_agg_ffunc applies finalfunc of aggregate to state,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, ...) -> fval
+ * return box.agg.ffunc(box.value)
+ */
+Datum
+coord_binary_combine_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return CoordCombineAggFuncCore(fcinfo);
 }
 
 
