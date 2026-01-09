@@ -781,21 +781,47 @@ CoordinatorCombineAggSfuncCore(PG_FUNCTION_ARGS, bool isBinaryInput)
 		if (valueNull)
 		{
 			fcSetArgExt(innerFcinfo, 0, (Datum) 0, valueNull);
+
+			fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
+			fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
+
+			value = FunctionCallInvoke(innerFcinfo);
+			valueNull = innerFcinfo->isnull;
 		}
 		else
 		{
 			bytea *byteaInput = PG_GETARG_BYTEA_PP(2);
+#if PG_VERSION_NUM >= 170000
 			initReadOnlyStringInfo(&buf,
 								   (char *) VARDATA_ANY(byteaInput),
 								   VARSIZE_ANY_EXHDR(byteaInput));
 			fcSetArg(innerFcinfo, 0, PointerGetDatum(&buf));
+			fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
+			fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
+
+			value = FunctionCallInvoke(innerFcinfo);
+			valueNull = innerFcinfo->isnull;
+#else
+
+			/*
+			 * Read Only StringInfo is not a characteristic in pg16
+			 * or below. We can't follow what's there in arrayfuncs since
+			 * the Send function won't guarantee to append an extra null byte at the end.
+			 * So we manually set up a StringInfo with a trailing null byte.
+			 */
+			initStringInfo(&buf);
+			appendBinaryStringInfo(&buf,
+								   (char *) VARDATA_ANY(byteaInput),
+								   VARSIZE_ANY_EXHDR(byteaInput));
+			fcSetArg(innerFcinfo, 0, PointerGetDatum(&buf));
+			fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
+			fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
+
+			value = FunctionCallInvoke(innerFcinfo);
+			valueNull = innerFcinfo->isnull;
+			pfree(buf.data);
+#endif
 		}
-
-		fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
-		fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
-
-		value = FunctionCallInvoke(innerFcinfo);
-		valueNull = innerFcinfo->isnull;
 	}
 	else
 	{
