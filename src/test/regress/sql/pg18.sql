@@ -1891,6 +1891,72 @@ FROM wal_explain_plan;
 DROP TABLE wal_explain_plan;
 SET citus.explain_all_tasks TO default;
 
+-- PG18 PG_MODULE_MAGIC_EXT MACRO
+-- and new function pg_get_loaded_modules
+-- Relevant PG18 commit: https://github.com/postgres/postgres/commit/9324c8c58
+SELECT * FROM pg_get_loaded_modules() WHERE file_name LIKE 'citus%' ORDER BY module_name;
+
+-- ============================================================
+-- PG18: MIN/MAX aggregate OID resolution
+-- ============================================================
+
+CREATE SCHEMA pg18_minmax;
+SET search_path TO pg18_minmax;
+
+-- ------------------------------------------------------------
+-- AGG_MATCH_EXACT
+-- declaredArgType == inputType (e.g., INT4OID)
+-- ------------------------------------------------------------
+CREATE TABLE exact_t (id int, v int);
+SELECT create_distributed_table('exact_t', 'id');
+
+INSERT INTO exact_t VALUES (1, 10), (2, 3), (3, 7);
+
+SELECT
+  min(v) AS exact_min,
+  max(v) AS exact_max
+FROM exact_t;
+-- expected: exact_min=3, exact_max=10
+
+-- ------------------------------------------------------------
+-- AGG_MATCH_ARRAY_POLY
+-- declaredArgType == ANYARRAYOID, inputType is an array type (e.g., INT4ARRAYOID)
+-- ------------------------------------------------------------
+CREATE TABLE array_t (id int, v int[]);
+SELECT create_distributed_table('array_t', 'id');
+
+INSERT INTO array_t VALUES
+  (1, ARRAY[45, 52, 38]),
+  (2, ARRAY[67, 71, 58]),
+  (3, ARRAY[23, 28, 15]);
+
+SELECT
+  min(v) AS array_min,
+  max(v) AS array_max
+FROM array_t;
+-- expected: array_min={23,28,15}, array_max={67,71,58}
+
+-- ------------------------------------------------------------
+-- AGG_MATCH_GENERAL_POLY
+-- declaredArgType == ANYENUMOID, inputType is an enum type (user-defined)
+-- ------------------------------------------------------------
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+CREATE TABLE enum_t (id int, m mood);
+SELECT create_distributed_table('enum_t', 'id');
+
+INSERT INTO enum_t VALUES (1, 'ok'), (2, 'happy'), (3, 'sad');
+
+SELECT
+  min(m) AS enum_min,
+  max(m) AS enum_max
+FROM enum_t;
+-- expected: enum_min=sad, enum_max=happy
+
+DROP SCHEMA pg18_minmax CASCADE;
+-- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
+
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
