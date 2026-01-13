@@ -609,7 +609,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 
 /*
  * Given an STypeBox, returns its transition type Oid
- * for the aggregate being computed.
+ * for the worker aggregate being computed.
  */
 static Oid
 GetAggregateTransitionType(StypeBox *box)
