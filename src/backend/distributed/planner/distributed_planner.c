@@ -1769,13 +1769,27 @@ BlessRecordExpression(Expr *expr)
 		typeMod = rowTupleDesc->tdtypmod;
 	}
 
-	/* Record aggregates need blessed typmods to parse worker results. */
+	/*
+	 * Record aggregates need blessed typmods to parse worker results.
+	 * For PG18, AGG_MATCH_RECORD allows MIN/MAX on composite types.
+	 *
+	 * Limitation: For multi-argument aggregates returning RECORD, we only
+	 * bless the first argument's type. This works for MIN/MAX (single-argument)
+	 * but may not handle custom multi-argument aggregates correctly.
+	 */
 	else if (IsA(expr, Aggref))
 	{
 		Aggref *aggref = (Aggref *) expr;
 
 		if (aggref->aggtype == RECORDOID && list_length(aggref->args) > 0)
 		{
+			if (list_length(aggref->args) > 1)
+			{
+				ereport(DEBUG2,
+						(errmsg("blessing record aggregate with %d arguments, using first",
+								list_length(aggref->args))));
+			}
+
 			TargetEntry *argTle = (TargetEntry *) linitial(aggref->args);
 			Oid argTypeId = exprType((Node *) argTle->expr);
 			int32 argTypeMod = exprTypmod((Node *) argTle->expr);
@@ -1796,6 +1810,11 @@ BlessRecordExpression(Expr *expr)
 				BlessTupleDesc(argTupleDesc);
 				typeMod = argTupleDesc->tdtypmod;
 			}
+			/*
+			 * If argTypeId is not a rowtype, we leave typeMod as -1.
+			 * This should not happen in practice since AGG_MATCH_RECORD
+			 * only matches rowtypes, but it's safe to fall through.
+			 */
 		}
 	}
 	else if (IsA(expr, ArrayExpr))
