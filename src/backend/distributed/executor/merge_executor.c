@@ -170,19 +170,22 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 									distSourceTaskList, partitionColumnIndex,
 									targetRelation, binaryFormat);
 
-	if (list_length(distSourceTaskList) <= 1)
+	if (!distSourcePlan->disableTrackingQueryCounters)
 	{
-		/*
-		 * Probably we will never get here for a repartitioned MERGE
-		 * because when the source is a single shard table, we should
-		 * most probably choose to use ExecuteSourceAtCoordAndRedistribution(),
-		 * but we still keep this here.
-		 */
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		if (list_length(distSourceTaskList) <= 1)
+		{
+			/*
+			 * Probably we will never get here for a repartitioned MERGE
+			 * because when the source is a single shard table, we should
+			 * most probably choose to use ExecuteSourceAtCoordAndRedistribution(),
+			 * but we still keep this here.
+			 */
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
 	}
 
 	ereport(DEBUG1, (errmsg("Executing final MERGE on workers using "
@@ -213,13 +216,22 @@ ExecuteSourceAtWorkerAndRepartition(CitusScanState *scanState)
 											  hasReturning,
 											  paramListInfo);
 
-	if (list_length(taskList) <= 1)
+	if (!distributedPlan->disableTrackingQueryCounters)
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		if (list_length(taskList) <= 1)
+		{
+			/*
+			 * Probably we will never get here for a repartitioned MERGE
+			 * because when the source is a single shard table, we should
+			 * most probably choose to use ExecuteSourceAtCoordAndRedistribution(),
+			 * but we still keep this here.
+			 */
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
 	}
 
 	executorState->es_processed = rowsMerged;
@@ -314,7 +326,7 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 		prunedTaskList = list_concat(prunedTaskList, emptySourceTaskList);
 	}
 
-	if (prunedTaskList == NIL)
+	if (!distributedPlan->disableTrackingQueryCounters && prunedTaskList == NIL)
 	{
 		/*
 		 * No task to execute, but we still increment STAT_QUERY_EXECUTION_SINGLE_SHARD
@@ -341,13 +353,16 @@ ExecuteSourceAtCoordAndRedistribution(CitusScanState *scanState)
 											  hasReturning,
 											  paramListInfo);
 
-	if (list_length(prunedTaskList) == 1)
+	if (!distributedPlan->disableTrackingQueryCounters)
 	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-	}
-	else
-	{
-		IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		if (list_length(prunedTaskList) == 1)
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+		else
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+		}
 	}
 
 	executorState->es_processed = rowsMerged;

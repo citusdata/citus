@@ -204,6 +204,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 
 	WRITE_NODE_FIELD(planningError);
 	WRITE_INT_FIELD(sourceResultRepartitionColumnIndex);
+	WRITE_BOOL_FIELD(disableTrackingQueryCounters);
 }
 
 
