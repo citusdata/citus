@@ -1980,6 +1980,29 @@ SELECT
 FROM product_ratings;
 -- expected: record_min=(4.20,89), record_max=(4.80,156)
 
+-- ------------------------------------------------------------
+-- Aggref argTypeId == RECORDOID (anonymous row expression)
+-- The aggregate argument here is a row constructor (x,y), which has type RECORD.
+-- This hits the BlessRecordExpression(Aggref) branch where argTypeId == RECORDOID.
+-- ------------------------------------------------------------
+
+CREATE TABLE record_arg_t (id int, x int, y int);
+SELECT create_distributed_table('record_arg_t', 'id');
+
+INSERT INTO record_arg_t VALUES
+  (1, 1, 20),
+  (2, 1, 10),
+  (3, 2, 30);
+
+SELECT
+  min((x, y)) AS record_arg_min,
+  max((x, y)) AS record_arg_max
+FROM record_arg_t;
+
+-- expected:
+-- record_arg_min = (1,10)
+-- record_arg_max = (2,30)
+
 DROP SCHEMA pg18_minmax CASCADE;
 -- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
 
