@@ -608,34 +608,13 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 
 
 /*
- * serializes transition state,
- * essentially implementing the following pseudocode:
- *
- * (box) -> (cstring|bytea)
- * return box.agg.stype.output(box.value)
- *
- * The return is a bytea if isBinaryOutput is true.
+ * Given an STypeBox, returns its transition type Oid
+ * for the aggregate being computed.
  */
-static Datum
-WorkerPartialAggFFuncCore(PG_FUNCTION_ARGS, bool isBinaryOutput)
+static Oid
+GetAggregateTransitionType(StypeBox *box)
 {
-	LOCAL_FCINFO(innerFcinfo, 1);
-	FmgrInfo info;
-	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
 	Form_pg_aggregate aggform;
-	Oid typoutput = InvalidOid;
-	bool typIsVarlena = false;
-
-	if (box == NULL)
-	{
-		box = TryCreateStypeBoxFromFcinfoAggref(fcinfo);
-	}
-
-	if (box == NULL || box->valueNull)
-	{
-		PG_RETURN_NULL();
-	}
-
 	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
 
 	if (aggform->aggcombinefn == InvalidOid)
@@ -651,18 +630,59 @@ WorkerPartialAggFFuncCore(PG_FUNCTION_ARGS, bool isBinaryOutput)
 					 "worker_partial_agg_ffunc does not support aggregates with INTERNAL transition state")));
 	}
 
-	Oid transtype = aggform->aggtranstype;
+	Oid transType = aggform->aggtranstype;
 	ReleaseSysCache(aggtuple);
 
-	if (isBinaryOutput)
+	return transType;
+}
+
+
+/*
+ * serializes transition state,
+ * returning an StypeBox and setting transtype to the transition type Oid.
+ */
+static StypeBox *
+WorkerPartialAggregateApplyFFunc(PG_FUNCTION_ARGS)
+{
+	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
+
+	if (box == NULL)
 	{
-		getTypeBinaryOutputInfo(transtype, &typoutput, &typIsVarlena);
-	}
-	else
-	{
-		getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
+		box = TryCreateStypeBoxFromFcinfoAggref(fcinfo);
 	}
 
+	if (box == NULL || box->valueNull)
+	{
+		return NULL;
+	}
+
+	return box;
+}
+
+
+/*
+ * worker_partial_agg_ffunc serializes transition state,
+ * essentially implementing the following pseudocode:
+ *
+ * (box) -> text
+ * return box.agg.stype.output(box.value)
+ */
+Datum
+worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	LOCAL_FCINFO(innerFcinfo, 1);
+
+	FmgrInfo info;
+	Oid typoutput = InvalidOid;
+	bool typIsVarlena = false;
+	StypeBox *box = WorkerPartialAggregateApplyFFunc(fcinfo);
+	if (box == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	Oid transtype = GetAggregateTransitionType(box);
+	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
 	fmgr_info(typoutput, &info);
 
 	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
@@ -680,21 +700,6 @@ WorkerPartialAggFFuncCore(PG_FUNCTION_ARGS, bool isBinaryOutput)
 
 
 /*
- * worker_partial_agg_ffunc serializes transition state,
- * essentially implementing the following pseudocode:
- *
- * (box) -> text
- * return box.agg.stype.output(box.value)
- */
-Datum
-worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
-{
-	bool isBinaryOutput = false;
-	return WorkerPartialAggFFuncCore(fcinfo, isBinaryOutput);
-}
-
-
-/*
  * worker_partial_binary_agg_ffunc serializes transition state,
  * essentially implementing the following pseudocode:
  *
@@ -704,8 +709,32 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 Datum
 worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
 {
-	bool isBinaryOutput = true;
-	return WorkerPartialAggFFuncCore(fcinfo, isBinaryOutput);
+	LOCAL_FCINFO(innerFcinfo, 1);
+
+	FmgrInfo info;
+	Oid typoutput = InvalidOid;
+	bool typIsVarlena = false;
+	StypeBox *box = WorkerPartialAggregateApplyFFunc(fcinfo);
+	if (box == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	Oid transtype = GetAggregateTransitionType(box);
+	getTypeBinaryOutputInfo(transtype, &typoutput, &typIsVarlena);
+	fmgr_info(typoutput, &info);
+
+	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+
+	Datum result = FunctionCallInvoke(innerFcinfo);
+
+	if (innerFcinfo->isnull)
+	{
+		PG_RETURN_NULL();
+	}
+	PG_RETURN_DATUM(result);
 }
 
 
