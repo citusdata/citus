@@ -1786,8 +1786,9 @@ BlessRecordExpression(Expr *expr)
 			if (list_length(aggref->args) > 1)
 			{
 				ereport(DEBUG2,
-						(errmsg("blessing record aggregate with %d arguments, using first",
-								list_length(aggref->args))));
+						(errmsg(
+							 "blessing record aggregate with %d arguments, using first",
+							 list_length(aggref->args))));
 			}
 
 			TargetEntry *argTle = (TargetEntry *) linitial(aggref->args);
@@ -1810,6 +1811,7 @@ BlessRecordExpression(Expr *expr)
 				BlessTupleDesc(argTupleDesc);
 				typeMod = argTupleDesc->tdtypmod;
 			}
+
 			/*
 			 * If argTypeId is not a rowtype, we leave typeMod as -1.
 			 * This should not happen in practice since AGG_MATCH_RECORD
