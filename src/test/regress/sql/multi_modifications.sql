@@ -1294,5 +1294,62 @@ DELETE FROM summary_table WHERE id < (
 CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
 
+-- Test the fix for https://github.com/citusdata/citus/issues/8198
+--
+CREATE TABLE t1 (vkey int4, pkey int4, c1 text);
+SELECT create_distributed_table('t1','vkey');
+
+CREATE TABLE t2 (vkey int4, pkey int4, c1 text);
+SELECT create_distributed_table('t2','vkey');
+
+CREATE TABLE t3 (vkey int4, pkey int4, c1 text);
+SELECT create_distributed_table('t3','vkey');
+
+CREATE TABLE t4 (vkey int4, c11 text);
+SELECT create_reference_table('t4');
+
+-- Issue https://github.com/citusdata/citus/issues/8198 exposed
+-- a conflict between evaluating expressions for the coordinator
+-- and regenerating worker queries on modify operations; the
+-- evaluation can make changes to the expression by e.g constant
+-- folding, and cause query deparsing to error out or generate
+-- an assert fail because it is expecting a specific expression
+-- type.
+
+-- The following queries used to error out before the fix.
+-- Note that the INSERT codepath is not affected, only DELETE
+-- and UPDATE.
+
+DELETE FROM t1 WHERE
+((true::bool) in (select null::bool as c_foo from t2 as ref_0))
+  or ((pg_catalog.citus_version()) <=
+      (select 'arKwIv+u}<7XL?*74+YE' as c_bar
+       from (t3 as ref_3 full outer join t4 as ref_4
+          on (ref_3.vkey = ref_4.vkey )) limit 1));
+
+UPDATE t1 set c1 = 'foo' WHERE
+((true::bool) in (select null::bool as c_foo from t2 as ref_0))
+  or ((pg_catalog.citus_version()) <=
+      (select 'arKwIv+u}<7XL?*74+YE' as c_bar
+       from (t3 as ref_3 full outer join t4 as ref_4
+          on (ref_3.vkey = ref_4.vkey )) limit 1));
+
+-- The following queries used to cause an assert fail, and thus
+-- a process crash, before the fix.
+
+DELETE FROM t1 WHERE
+((false::bool) in (select null::bool as c_foo from t2 as ref_0))
+  or ((pg_catalog.citus_version()) <=
+      (select 'arKwIv+u}<7XL?*74+YE' as c_bar
+       from (t3 as ref_3 full outer join t4 as ref_4
+          on (ref_3.vkey = ref_4.vkey )) limit 1));
+
+UPDATE t1 set c1 = 'foo' WHERE
+((false::bool) in (select null::bool as c_foo from t2 as ref_0))
+  or ((pg_catalog.citus_version()) <=
+      (select 'arKwIv+u}<7XL?*74+YE' as c_bar
+       from (t3 as ref_3 full outer join t4 as ref_4
+          on (ref_3.vkey = ref_4.vkey )) limit 1));
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA multi_modifications CASCADE;
