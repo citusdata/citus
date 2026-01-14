@@ -39,6 +39,10 @@ PG_FUNCTION_INFO_V1(worker_partial_agg_ffunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_sfunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_ffunc);
 
+PG_FUNCTION_INFO_V1(worker_binary_partial_agg_ffunc);
+PG_FUNCTION_INFO_V1(coord_binary_combine_agg_sfunc);
+PG_FUNCTION_INFO_V1(coord_binary_combine_agg_ffunc);
+
 /*
  * Holds information describing the structure of aggregation arguments
  * and helps to efficiently handle both a single argument and multiple
@@ -604,32 +608,13 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_partial_agg_ffunc serializes transition state,
- * essentially implementing the following pseudocode:
- *
- * (box) -> text
- * return box.agg.stype.output(box.value)
+ * Given an STypeBox, returns its transition type Oid
+ * for the worker aggregate being computed.
  */
-Datum
-worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
+static Oid
+GetAggregateTransitionType(StypeBox *box)
 {
-	LOCAL_FCINFO(innerFcinfo, 1);
-	FmgrInfo info;
-	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
 	Form_pg_aggregate aggform;
-	Oid typoutput = InvalidOid;
-	bool typIsVarlena = false;
-
-	if (box == NULL)
-	{
-		box = TryCreateStypeBoxFromFcinfoAggref(fcinfo);
-	}
-
-	if (box == NULL || box->valueNull)
-	{
-		PG_RETURN_NULL();
-	}
-
 	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
 
 	if (aggform->aggcombinefn == InvalidOid)
@@ -645,11 +630,59 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 					 "worker_partial_agg_ffunc does not support aggregates with INTERNAL transition state")));
 	}
 
-	Oid transtype = aggform->aggtranstype;
+	Oid transType = aggform->aggtranstype;
 	ReleaseSysCache(aggtuple);
 
-	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
+	return transType;
+}
 
+
+/*
+ * serializes transition state,
+ * returning an StypeBox and setting transtype to the transition type Oid.
+ */
+static StypeBox *
+WorkerPartialAggregateApplyFFunc(PG_FUNCTION_ARGS)
+{
+	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
+
+	if (box == NULL)
+	{
+		box = TryCreateStypeBoxFromFcinfoAggref(fcinfo);
+	}
+
+	if (box == NULL || box->valueNull)
+	{
+		return NULL;
+	}
+
+	return box;
+}
+
+
+/*
+ * worker_partial_agg_ffunc serializes transition state,
+ * essentially implementing the following pseudocode:
+ *
+ * (box) -> text
+ * return box.agg.stype.output(box.value)
+ */
+Datum
+worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	LOCAL_FCINFO(innerFcinfo, 1);
+
+	FmgrInfo info;
+	Oid typoutput = InvalidOid;
+	bool typIsVarlena = false;
+	StypeBox *box = WorkerPartialAggregateApplyFFunc(fcinfo);
+	if (box == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	Oid transtype = GetAggregateTransitionType(box);
+	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
 	fmgr_info(typoutput, &info);
 
 	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
@@ -667,17 +700,46 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 
 /*
- * coord_combine_agg_sfunc deserializes transition state from worker
- * & advances transition state using combinefunc,
+ * worker_partial_binary_agg_ffunc serializes transition state,
  * essentially implementing the following pseudocode:
  *
- * (box, agg, text) -> box
- * box.agg = agg
- * box.value = agg.combine(box.value, agg.stype.input(text))
- * return box
+ * (box) -> bytea
+ * return box.agg.stype.output(box.value)
  */
 Datum
-coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
+worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	LOCAL_FCINFO(innerFcinfo, 1);
+
+	FmgrInfo info;
+	Oid typoutput = InvalidOid;
+	bool typIsVarlena = false;
+	StypeBox *box = WorkerPartialAggregateApplyFFunc(fcinfo);
+	if (box == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	Oid transtype = GetAggregateTransitionType(box);
+	getTypeBinaryOutputInfo(transtype, &typoutput, &typIsVarlena);
+	fmgr_info(typoutput, &info);
+
+	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+
+	Datum result = FunctionCallInvoke(innerFcinfo);
+
+	if (innerFcinfo->isnull)
+	{
+		PG_RETURN_NULL();
+	}
+	PG_RETURN_DATUM(result);
+}
+
+
+static Datum
+CoordinatorCombineAggSfuncCore(PG_FUNCTION_ARGS, bool isBinaryInput)
 {
 	LOCAL_FCINFO(innerFcinfo, 3);
 	FmgrInfo info;
@@ -731,13 +793,64 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	bool valueNull = PG_ARGISNULL(2);
 	HeapTuple transtypetuple = GetTypeForm(box->transtype, &transtypeform);
 	Oid ioparam = getTypeIOParam(transtypetuple);
-	Oid deserial = transtypeform->typinput;
+	Oid deserial = isBinaryInput ? transtypeform->typreceive : transtypeform->typinput;
 	ReleaseSysCache(transtypetuple);
 
 	fmgr_info(deserial, &info);
 	if (valueNull && info.fn_strict)
 	{
 		value = (Datum) 0;
+	}
+	else if (isBinaryInput)
+	{
+		StringInfoData buf;
+
+		InitFunctionCallInfoData(*innerFcinfo, &info, 3, fcinfo->fncollation,
+								 fcinfo->context, fcinfo->resultinfo);
+		if (valueNull)
+		{
+			fcSetArgExt(innerFcinfo, 0, (Datum) 0, valueNull);
+
+			fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
+			fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
+
+			value = FunctionCallInvoke(innerFcinfo);
+			valueNull = innerFcinfo->isnull;
+		}
+		else
+		{
+			bytea *byteaInput = PG_GETARG_BYTEA_PP(2);
+#if PG_VERSION_NUM >= 170000
+			initReadOnlyStringInfo(&buf,
+								   (char *) VARDATA_ANY(byteaInput),
+								   VARSIZE_ANY_EXHDR(byteaInput));
+			fcSetArg(innerFcinfo, 0, PointerGetDatum(&buf));
+			fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
+			fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
+
+			value = FunctionCallInvoke(innerFcinfo);
+			valueNull = innerFcinfo->isnull;
+#else
+
+			/*
+			 * Read Only StringInfo is not a characteristic in pg16
+			 * or below. We can't follow what's there in arrayfuncs since
+			 * the Send function won't guarantee to append an extra null byte at the end.
+			 * So we manually set up a StringInfo with a trailing null byte.
+			 */
+			initStringInfo(&buf);
+			appendBinaryStringInfo(&buf,
+								   (char *) VARDATA_ANY(byteaInput),
+								   VARSIZE_ANY_EXHDR(byteaInput));
+			fcSetArg(innerFcinfo, 0, PointerGetDatum(&buf));
+			fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
+			fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
+
+			value = FunctionCallInvoke(innerFcinfo);
+			valueNull = innerFcinfo->isnull;
+			pfree(buf.data);
+#endif
+		}
 	}
 	else
 	{
@@ -784,14 +897,51 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 
 
 /*
- * coord_combine_agg_ffunc applies finalfunc of aggregate to state,
+ * coord_combine_agg_sfunc deserializes transition state from worker
+ * & advances transition state using combinefunc,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, agg, text) -> box
+ * box.agg = agg
+ * box.value = agg.combine(box.value, agg.stype.input(text))
+ * return box
+ */
+Datum
+coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	bool isBinaryInput = false;
+	return CoordinatorCombineAggSfuncCore(fcinfo, isBinaryInput);
+}
+
+
+/*
+ * coord_binary_combine_agg_sfunc deserializes transition state from worker
+ * & advances transition state using combinefunc,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, agg, bytea) -> box
+ * box.agg = agg
+ * box.value = agg.combine(box.value, agg.stype.receive(bytea))
+ * return box
+ */
+Datum
+coord_binary_combine_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	bool isBinaryInput = true;
+	return CoordinatorCombineAggSfuncCore(fcinfo, isBinaryInput);
+}
+
+
+/*
+ * Applies finalfunc of aggregate to state,
  * essentially implementing the following pseudocode:
  *
  * (box, ...) -> fval
  * return box.agg.ffunc(box.value)
+ * Used by both the binary and text versions of the finalfunc.
  */
-Datum
-coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
+static Datum
+CoordCombineAggFuncCore(PG_FUNCTION_ARGS)
 {
 	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
 	LOCAL_FCINFO(innerFcinfo, FUNC_MAX_ARGS);
@@ -859,6 +1009,34 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	Datum result = FunctionCallInvoke(innerFcinfo);
 	fcinfo->isnull = innerFcinfo->isnull;
 	return result;
+}
+
+
+/*
+ * coord_combine_agg_ffunc applies finalfunc of aggregate to state,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, ...) -> fval
+ * return box.agg.ffunc(box.value)
+ */
+Datum
+coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return CoordCombineAggFuncCore(fcinfo);
+}
+
+
+/*
+ * coord_binary_combine_agg_ffunc applies finalfunc of aggregate to state,
+ * essentially implementing the following pseudocode:
+ *
+ * (box, ...) -> fval
+ * return box.agg.ffunc(box.value)
+ */
+Datum
+coord_binary_combine_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return CoordCombineAggFuncCore(fcinfo);
 }
 
 

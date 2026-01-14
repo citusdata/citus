@@ -1665,9 +1665,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 14.0-1
 ALTER EXTENSION citus UPDATE TO '14.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+ previous_object |                                  current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function coord_binary_combine_agg(oid,bytea,anyelement) anyelement
+                 | function coord_binary_combine_agg_ffunc(internal,oid,bytea,anyelement) anyelement
+                 | function coord_binary_combine_agg_sfunc(internal,oid,bytea,anyelement) internal
+                 | function worker_binary_partial_agg(oid,anyelement) bytea
+                 | function worker_binary_partial_agg_ffunc(internal) bytea
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
