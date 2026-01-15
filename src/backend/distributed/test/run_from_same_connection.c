@@ -29,6 +29,7 @@
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/version_compat.h"
@@ -163,6 +164,27 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 		elog(ERROR,
 			 "start_session_level_connection_to_node must be called first to open a session level connection");
 	}
+
+	/*
+	 * Connection saved in start_session_level_connection_to_node() might have
+	 * been already used as a citus internal connection before to connect to
+	 * another node or, it might have been the case after it's saved as a
+	 * session level connection. And when sending commands over a citus internal
+	 * connection, sometimes we disable citus.enable_ddl_propagation and don't
+	 * care about enabling it back, given that a citus internal connection
+	 * should never be interested in what citus.enable_ddl_propagation is set
+	 * to. In such cases, it'll stay as disabled and unless we disabled it in
+	 * system level etc., this is not something we want when executing a command
+	 * that's not for Citus internal purposes via this UDF. For this reason, we
+	 * first reset it here.
+	 *
+	 * Ideally, maybe we should ensure that all the code-paths that disable
+	 * citus.enable_ddl_propagation for a citus internal connection re-enable it
+	 * back, but it's not really something that such a connection should ever
+	 * be interested in. Plus, this only affects isolation tests, so we choose
+	 * to reset it here instead.
+	 */
+	ExecuteCriticalRemoteCommand(singleConnection, "RESET citus.enable_ddl_propagation");
 
 	appendStringInfo(processStringInfo, ALTER_CURRENT_PROCESS_ID, MyProcPid);
 	appendStringInfo(workerProcessStringInfo, ALTER_CURRENT_WORKER_PROCESS_ID,
