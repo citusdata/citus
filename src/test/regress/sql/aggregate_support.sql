@@ -106,6 +106,7 @@ select create_distributed_function('psum(int,int)');
 select create_distributed_function('psum_strict(int,int)');
 
 -- generate test data
+SET citus.next_shard_id TO 83674000;
 create table aggdata (id int, key int, val int, valf float8);
 select create_distributed_table('aggdata', 'id');
 insert into aggdata (id, key, val, valf) values (1, 1, 2, 11.2), (2, 1, NULL, 2.1), (3, 2, 2, 3.22), (4, 2, 3, 4.23), (5, 2, 5, 5.25), (6, 3, 4, 63.4), (7, 5, NULL, 75), (8, 6, NULL, NULL), (9, 6, NULL, 96), (10, 7, 8, 1078), (11, 9, 0, 1.19);
@@ -138,6 +139,10 @@ select regr_avgx(valf,val)::numeric(10,5), regr_avgy(valf,val)::numeric(10,5) fr
 select regr_r2(valf,val)::numeric(10,5) from aggdata;
 select regr_slope(valf,val)::numeric(10,5), regr_intercept(valf,val)::numeric(10,5) from aggdata;
 select covar_pop(valf,val)::numeric(10,5), covar_samp(valf,val)::numeric(10,5) from aggdata;
+
+-- explain works on a distributed table
+set citus.explain_analyze_sort_method to 'taskId';
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, sum2_strict(val) from aggdata group by key order by key;
 
 -- binary string aggregation
 create function binstragg_sfunc(s text, e1 text, e2 text)

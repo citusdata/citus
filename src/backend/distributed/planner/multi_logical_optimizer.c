@@ -279,6 +279,9 @@ static Expr * FirstAggregateArgument(Aggref *aggregate);
 static bool AggregateEnabledCustom(Aggref *aggregateExpression);
 static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes);
 static Oid WorkerPartialAggOid(void);
+static Oid WorkerBinaryPartialAggOid(void);
+static Oid CoordBinaryCombineAggOid(void);
+static bool IsTypeBinarySerializable(Oid transitionType);
 static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
@@ -2115,6 +2118,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
+		bool useBinaryCoordinatorCombine = false;
 
 		if (!HeapTupleIsValid(aggTuple))
 		{
@@ -2126,13 +2130,17 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
+			useBinaryCoordinatorCombine = aggform->aggtranstype != InvalidOid &&
+										  IsTypeBinarySerializable(aggform->aggtranstype);
 			ReleaseSysCache(aggTuple);
 		}
 
 		if (combine != InvalidOid)
 		{
-			Oid coordCombineId = CoordCombineAggOid();
-			Oid workerReturnType = CSTRINGOID;
+			Oid coordCombineId =
+				useBinaryCoordinatorCombine ? CoordBinaryCombineAggOid()
+											: CoordCombineAggOid();
+			Oid workerReturnType = useBinaryCoordinatorCombine ? BYTEAOID : CSTRINGOID;
 			int32 workerReturnTypeMod = -1;
 			Oid workerCollationId = InvalidOid;
 			Oid resultType = exprType((Node *) originalAggregate);
@@ -2159,7 +2167,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			newMasterAggregate->aggkind = AGGKIND_NORMAL;
 			newMasterAggregate->aggfilter = NULL;
 			newMasterAggregate->aggtranstype = INTERNALOID;
-			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, CSTRINGOID,
+			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, workerReturnType,
 															 resultType);
 			newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
@@ -3275,6 +3283,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
+		bool useBinaryWorkerAggregate = false;
 
 		if (!HeapTupleIsValid(aggTuple))
 		{
@@ -3286,13 +3295,14 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
+			useBinaryWorkerAggregate = (OidIsValid(aggform->aggtranstype) &&
+										IsTypeBinarySerializable(aggform->aggtranstype));
+
 			ReleaseSysCache(aggTuple);
 		}
 
 		if (combine != InvalidOid)
 		{
-			Oid workerPartialId = WorkerPartialAggOid();
-
 			Const *aggOidParam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
 										   ObjectIdGetDatum(originalAggregate->aggfnoid),
 										   false, true);
@@ -3340,8 +3350,18 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 			/* worker_partial_agg(agg, arg) or worker_partial_agg(agg, ROW(...args)) */
 			Aggref *newWorkerAggregate = copyObject(originalAggregate);
-			newWorkerAggregate->aggfnoid = workerPartialId;
-			newWorkerAggregate->aggtype = CSTRINGOID;
+
+			if (useBinaryWorkerAggregate)
+			{
+				newWorkerAggregate->aggfnoid = WorkerBinaryPartialAggOid();
+				newWorkerAggregate->aggtype = BYTEAOID;
+			}
+			else
+			{
+				newWorkerAggregate->aggfnoid = WorkerPartialAggOid();
+				newWorkerAggregate->aggtype = CSTRINGOID;
+			}
+
 			newWorkerAggregate->args = newWorkerAggregateArgs;
 			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 			newWorkerAggregate->aggtranstype = INTERNALOID;
@@ -3780,6 +3800,39 @@ CoordCombineAggOid()
 
 
 /*
+ * WorkerBinaryPartialAggOid looks up oid of pg_catalog.worker_binary_partial_agg
+ */
+static Oid
+WorkerBinaryPartialAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(WORKER_BINARY_PARTIAL_AGGREGATE_NAME, 2, argtypes
+										 );
+}
+
+
+/*
+ * CoordBinaryCombineAggOid looks up oid of pg_catalog.coord_binary_combine_agg
+ */
+static Oid
+CoordBinaryCombineAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		BYTEAOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(COORD_BINARY_COMBINE_AGGREGATE_NAME, 3, argtypes)
+	;
+}
+
+
+/*
  * TypeOid looks for a type that has the given name and schema, and returns the
  * corresponding type's oid.
  */
@@ -3791,6 +3844,25 @@ TypeOid(Oid schemaId, const char *typeName)
 								  ObjectIdGetDatum(schemaId));
 
 	return typeOid;
+}
+
+
+static bool
+IsTypeBinarySerializable(Oid transitionType)
+{
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(transitionType));
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		elog(ERROR, "citus cache lookup failed for transition type %u", transitionType);
+	}
+
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	bool isBinaryCoercible = typeForm->typsend != InvalidOid &&
+							 typeForm->typreceive != InvalidOid;
+
+	ReleaseSysCache(typeTuple);
+
+	return isBinaryCoercible;
 }
 
 
