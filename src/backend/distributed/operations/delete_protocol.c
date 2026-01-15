@@ -130,7 +130,11 @@ citus_drop_all_shards(PG_FUNCTION_ARGS)
 		PG_RETURN_INT32(-1);
 	}
 
-	EnsureCoordinator();
+	/*
+	 * Today we support DROP from workers only if the table is a
+	 * distributed-schema table, but it's okay to not ensure this here.
+	 */
+	EnsurePropagationToCoordinator();
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
 
 	/*
@@ -241,9 +245,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	 */
 	int32 localGroupId = GetLocalGroupId();
 
-	/* DROP table commands are currently only supported from the coordinator */
-	Assert(localGroupId == COORDINATOR_GROUP_ID);
-
 	Use2PCForCoordinatedTransaction();
 
 	List *dropTaskList = DropTaskList(relationId, schemaName, relationName,
@@ -270,8 +271,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 			 * delete the shard placement metadata and skip dropping the shard for now.
 			 */
 			bool skipIfDropSchemaOrDBInProgress = isLocalShardPlacement &&
-												  DropSchemaOrDBInProgress() &&
-												  localGroupId == COORDINATOR_GROUP_ID;
+												  DropSchemaOrDBInProgress();
 
 			/*
 			 * We want to send commands to drop shards when both

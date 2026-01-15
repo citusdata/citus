@@ -206,9 +206,9 @@ RETURNS jsonb AS $func$
     EXECUTE format(
       $$
       SELECT jsonb_agg(to_jsonb(q1.*) ORDER BY q1.constraint_names) AS fkeys_with_different_config FROM (
-        SELECT array_agg(constraint_name ORDER BY constraint_oid) AS constraint_names,
-               array_agg(referencing_table::regclass::text ORDER BY constraint_oid) AS referencing_tables,
-               array_agg(referenced_table::regclass::text ORDER BY constraint_oid) AS referenced_tables,
+        SELECT array_agg(constraint_name ORDER BY constraint_name) AS constraint_names,
+               array_agg(referencing_table::regclass::text ORDER BY constraint_name) AS referencing_tables,
+               array_agg(referenced_table::regclass::text ORDER BY constraint_name) AS referenced_tables,
                referencing_columns, referenced_columns, deferable, deferred, on_update, on_delete, match_type, referencing_columns_set_null_or_default
         FROM (
           SELECT
@@ -254,8 +254,8 @@ RETURNS jsonb AS $func$
     EXECUTE format(
       $$
       SELECT jsonb_agg(to_jsonb(q1.*) ORDER BY q1.indexnames) AS index_defs FROM (
-        SELECT array_agg(indexname ORDER BY indexrelid) AS indexnames,
-               array_agg(indexdef ORDER BY indexrelid) AS indexdefs
+        SELECT array_agg(indexname ORDER BY indexrelid::regclass::text) AS indexnames,
+               array_agg(indexdef ORDER BY indexrelid::regclass::text) AS indexdefs
         FROM pg_indexes
         JOIN pg_index
         ON (indexrelid = (schemaname || '.' || indexname)::regclass)
@@ -282,7 +282,7 @@ RETURNS jsonb AS $func$
         SELECT column_name, column_default::text, generation_expression::text
         FROM information_schema.columns
         WHERE table_schema = '%1$s' AND table_name = '%2$s' AND
-              column_default IS NOT NULL OR generation_expression IS NOT NULL
+              (column_default IS NOT NULL OR generation_expression IS NOT NULL)
       ) q1
       $$,
       schemaname, tablename) INTO result;
@@ -299,7 +299,7 @@ RETURNS jsonb AS $func$
       $$
       SELECT to_jsonb(q2.*) FROM (
         SELECT relnames, jsonb_agg(to_jsonb(q1.*) - 'relnames' ORDER BY q1.column_name) AS column_attrs FROM (
-          SELECT array_agg(attrelid::regclass::text ORDER BY attrelid) AS relnames,
+          SELECT array_agg(attrelid::regclass::text ORDER BY attrelid::regclass::text) AS relnames,
                  attname AS column_name, typname AS type_name, collname AS collation_name, attcompression AS compression_method, attnotnull AS not_null
           FROM pg_attribute pa
           LEFT JOIN pg_type pt ON (pa.atttypid = pt.oid)
@@ -794,4 +794,3 @@ BEGIN
     END LOOP;
 END;
 $$;
-

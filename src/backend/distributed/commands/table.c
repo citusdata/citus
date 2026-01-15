@@ -54,6 +54,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 
 
@@ -124,7 +125,7 @@ static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
 
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												char *colname, TypeName *typeName,
-												bool ifNotExists);
+												bool ifNotExists, bool forceUseNextVal);
 static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 														  relationId);
 
@@ -136,7 +137,7 @@ static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command);
 
 /*
- * PreprocessDropTableStmt processes DROP TABLE commands for partitioned tables.
+ * PreprocessDropTableStmt processes DROP TABLE commands for Citus tables.
  * If we are trying to DROP partitioned tables, we first need to go to MX nodes
  * and DETACH partitions from their parents. Otherwise, we process DROP command
  * multiple times in MX workers. For shards, we send DROP commands with IF EXISTS
@@ -170,13 +171,33 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		}
 
 		/*
+		 * For the Citus tables except tenant schema tables, we don't allow
+		 * dropping from the workers. For tenant schema tables, we allow dropping
+		 * from the workers only if the coordinator is in the metadata.
+		 */
+		EnsureCoordinatorUnlessTenantSchema(relationId);
+
+		/*
 		 * While changing the tables that are part of a colocation group we need to
 		 * prevent concurrent mutations to the placements of the shard groups.
 		 */
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (cacheEntry->colocationId != INVALID_COLOCATION_ID)
 		{
-			LockColocationId(cacheEntry->colocationId, ShareLock);
+			/*
+			 * If we're on a worker, we acquire the lock on the coordinator via the
+			 * remote metadata connection to the coordinator.
+			 */
+			if (IsCoordinator())
+			{
+				LockColocationId(cacheEntry->colocationId, ShareLock);
+			}
+			else
+			{
+				char *command = LockColocationIdCommand(cacheEntry->colocationId,
+														ShareLock);
+				SendCommandToCoordinator(command);
+			}
 		}
 
 		/* invalidate foreign key cache if the table involved in any foreign key */
@@ -185,13 +206,14 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			MarkInvalidateForeignKeyGraph();
 		}
 
-		/* we're only interested in partitioned and mx tables */
+		/*
+		 * From this point on, we're only interested in partitioned Citus
+		 * tables & only if MX is enabled.
+		 */
 		if (!ShouldSyncTableMetadata(relationId) || !PartitionedTable(relationId))
 		{
 			continue;
 		}
-
-		EnsureCoordinator();
 
 		List *partitionList = PartitionList(relationId);
 		if (list_length(partitionList) == 0)
@@ -199,7 +221,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			continue;
 		}
 
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		Oid partitionRelationId = InvalidOid;
 		foreach_declared_oid(partitionRelationId, partitionList)
@@ -207,10 +229,10 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			char *detachPartitionCommand =
 				GenerateDetachPartitionCommand(partitionRelationId);
 
-			SendCommandToWorkersWithMetadata(detachPartitionCommand);
+			SendCommandToRemoteNodesWithMetadata(detachPartitionCommand);
 		}
 
-		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 
 	return NIL;
@@ -666,7 +688,9 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
 			.colocateWithTableName = parentRelationName,
 		};
-		CreateSingleShardTable(partitionRelationId, colocationParam);
+		bool allowFromWorkers = false;
+		CreateSingleShardTable(partitionRelationId, colocationParam,
+							   allowFromWorkers);
 		return;
 	}
 
@@ -1260,7 +1284,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
-	EnsureCoordinator();
+	EnsureCoordinatorUnlessTenantSchema(leftRelationId);
 
 	/* these will be set in below loop according to subcommands */
 	Oid rightRelationId = InvalidOid;
@@ -1289,10 +1313,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 * alterTableStmt
 	 */
 	bool deparseAT = false;
-	bool propagateCommandToWorkers = true;
+	bool propagateCommandToRemoteNodes = true;
 
 	/*
-	 * Sometimes we want to run a different DDL Command string in MX workers
+	 * Sometimes we want to run a different DDL Command string on remote MX workers
 	 * For example, in cases where worker_nextval should be used instead
 	 * of nextval() in column defaults with type int and smallint
 	 */
@@ -1546,7 +1570,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
-				propagateCommandToWorkers = false;
+				propagateCommandToRemoteNodes = false;
 				useInitialDDLCommandString = false;
 			}
 		}
@@ -1642,7 +1666,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (OidIsValid(rightRelationId))
 	{
 		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
-		if (referencedIsLocalTable || !propagateCommandToWorkers)
+		if (referencedIsLocalTable || !propagateCommandToRemoteNodes)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -1657,7 +1681,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	{
 		/* ... otherwise use standard DDL task list function */
 		ddlJob->taskList = DDLTaskList(leftRelationId, alterTableCommand);
-		if (!propagateCommandToWorkers)
+		if (!propagateCommandToRemoteNodes)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -2401,10 +2425,16 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	}
 
 	/* Undistribute table if its old schema is a tenant schema */
-	if (IsTenantSchema(oldSchemaId) && IsCoordinator())
+	if (IsTenantSchema(oldSchemaId))
 	{
 		EnsureUndistributeTenantTableSafe(relationId,
 										  TenantOperationNames[TENANT_SET_SCHEMA]);
+
+		if (!IsCoordinator())
+		{
+			ereport(ERROR, (errmsg("moving distributed schema tables to another "
+								   "schema from workers is not supported yet")));
+		}
 
 		char *oldSchemaName = get_namespace_name(oldSchemaId);
 		char *tableName = stmt->relation->relname;
@@ -2620,10 +2650,47 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 	}
 
-	/* for the new sequences coming with this ALTER TABLE statement */
-	bool needMetadataSyncForNewSequences = false;
-
-	char *alterTableDefaultNextvalCmd = NULL;
+	/*
+	 * If this is an ALTER TABLE ADD COLUMN .. DEFAULT nextval('..') or
+	 * an ALTER TABLE ALTER COLUMN .. SET DEFAULT nextval('..') command,
+	 * we need to adjust the sequence ranges on all workers, and since
+	 * EnsureAllObjectDependenciesExistOnAllNodes() already does so for
+	 * all remote nodes when propagating the sequence, there is nothing
+	 * that needs to be additionally done from this perspective when we
+	 * are on the coordinator because in that case all remote nodes are
+	 * workers anyways.
+	 *
+	 * For this reason, we also we want to do the same for the local node
+	 * if it's not the coordinator. So sequenceOidToAdjustRangesForLocalWorker
+	 * is set only when we're on a worker so that we can adjust sequence
+	 * ranges for the local worker as well.
+	 *
+	 * For such commands, we also need to adjust nextval default command
+	 * for the column that uses the sequence on all workers.
+	 * defaultNextvalCmdForRemoteWorkers already does all the work for
+	 * remote workers, i.e., alters the column or adds it in a way that
+	 * uses appropriate function call as column default expression, so
+	 * it's sufficient when we're on the coordinator.
+	 *
+	 * However, when we're on a worker, we also need to take such actions
+	 * on coordinator as well, so it's when defaultNextvalCmdForCoordinator
+	 * becomes useful, which alters the column or adds it in a way that
+	 * uses appropriate function call as column default expression. And for
+	 * the local worker, we also need to take such actions as well, but in
+	 * that case, the original DDL has already been executed on the local
+	 * node, so this means that the column is either just added or is an
+	 * existing column that's being altered now. So, in any case, we only
+	 * need to alter the column default to use appropriate function call
+	 * for both types of DDLs, so it's when defaultNextvalCmdForLocalWorker
+	 * becomes useful.
+	 *
+	 * Note that for any of these commands, we don't allow issuing them
+	 * together with other subcommands, see ErrorIfUnsupportedAlterTableStmt().
+	 */
+	char *defaultNextvalCmdForRemoteWorkers = NULL;
+	char *defaultNextvalCmdForCoordinator = NULL;
+	char *defaultNextvalCmdForLocalWorker = NULL;
+	Oid sequenceOidToAdjustRangesForLocalWorker = InvalidOid;
 
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
@@ -2706,8 +2773,11 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 							{
 								if (ShouldSyncTableMetadata(relationId))
 								{
-									needMetadataSyncForNewSequences = true;
-									alterTableDefaultNextvalCmd =
+									Assert(list_length(commandList) == 1 &&
+										   list_length(columnConstraints) == 1);
+
+									bool forceUseNextVal = false;
+									defaultNextvalCmdForRemoteWorkers =
 										GetAddColumnWithNextvalDefaultCmd(seqOid,
 																		  relationId,
 																		  columnDefinition
@@ -2715,7 +2785,33 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 																		  columnDefinition
 																		  ->typeName,
 																		  command->
-																		  missing_ok);
+																		  missing_ok,
+																		  forceUseNextVal)
+									;
+
+									if (!IsCoordinator())
+									{
+										forceUseNextVal = true;
+										defaultNextvalCmdForCoordinator =
+											GetAddColumnWithNextvalDefaultCmd(seqOid,
+																			  relationId,
+																			  columnDefinition
+																			  ->colname,
+																			  columnDefinition
+																			  ->typeName,
+																			  command->
+																			  missing_ok,
+																			  forceUseNextVal);
+
+										forceUseNextVal = false;
+										defaultNextvalCmdForLocalWorker =
+											GetAlterColumnWithNextvalDefaultCmd(
+												seqOid, relationId, columnDefinition->
+												colname,
+												command->missing_ok, forceUseNextVal);
+
+										sequenceOidToAdjustRangesForLocalWorker = seqOid;
+									}
 								}
 							}
 						}
@@ -2743,33 +2839,90 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				{
 					if (ShouldSyncTableMetadata(relationId))
 					{
-						needMetadataSyncForNewSequences = true;
+						Assert(list_length(commandList) == 1);
+
 						bool missingTableOk = false;
-						alterTableDefaultNextvalCmd = GetAlterColumnWithNextvalDefaultCmd(
-							seqOid, relationId, command->name, missingTableOk);
+						bool forceUseNextVal = false;
+						defaultNextvalCmdForRemoteWorkers =
+							GetAlterColumnWithNextvalDefaultCmd(
+								seqOid, relationId, command->name,
+								missingTableOk, forceUseNextVal);
+
+						if (!IsCoordinator())
+						{
+							forceUseNextVal = true;
+							defaultNextvalCmdForCoordinator =
+								GetAlterColumnWithNextvalDefaultCmd(
+									seqOid, relationId, command->name,
+									missingTableOk, forceUseNextVal);
+
+							forceUseNextVal = false;
+							defaultNextvalCmdForLocalWorker =
+								GetAlterColumnWithNextvalDefaultCmd(
+									seqOid, relationId, command->name,
+									missingTableOk, forceUseNextVal);
+
+							sequenceOidToAdjustRangesForLocalWorker = seqOid;
+						}
 					}
 				}
 			}
 		}
 	}
 
-	if (needMetadataSyncForNewSequences)
+	/*
+	 * It's easy to retrieve the sequence id to create the proper commands
+	 * in postprocess, after the dependency between the sequence and the table
+	 * has been created. We already return ddlJobs in PreprocessAlterTableStmt,
+	 * hence we can't return ddlJobs in PostprocessAlterTableStmt.
+	 * That's why we execute defaultNextvalCmdForRemoteWorkers and
+	 * defaultNextvalCmdForCoordinator here instead of in ExecuteDistributedDDLJob().
+	 */
+
+	if (defaultNextvalCmdForRemoteWorkers)
 	{
 		/* prevent recursive propagation */
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToRemoteWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
-		/*
-		 * It's easy to retrieve the sequence id to create the proper commands
-		 * in postprocess, after the dependency between the sequence and the table
-		 * has been created. We already return ddlJobs in PreprocessAlterTableStmt,
-		 * hence we can't return ddlJobs in PostprocessAlterTableStmt.
-		 * That's why we execute the following here instead of
-		 * in ExecuteDistributedDDLJob
-		 */
-		SendCommandToWorkersWithMetadata(alterTableDefaultNextvalCmd);
+		SendCommandToRemoteWorkersWithMetadata(defaultNextvalCmdForRemoteWorkers);
 
-		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+		SendCommandToRemoteWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
+
+	if (defaultNextvalCmdForCoordinator)
+	{
+		/* prevent recursive propagation */
+		SendCommandToCoordinator(DISABLE_DDL_PROPAGATION);
+
+		SendCommandToCoordinator(defaultNextvalCmdForCoordinator);
+
+		SendCommandToCoordinator(ENABLE_DDL_PROPAGATION);
+	}
+
+	/* before executing commands for the local node, make sure to prevent recursive propagation */
+	bool oldEnableDDLPropagation = EnableDDLPropagation;
+	SetLocalEnableDDLPropagation(false);
+
+	if (OidIsValid(sequenceOidToAdjustRangesForLocalWorker))
+	{
+		Oid sequenceSchemaOid =
+			get_rel_namespace(sequenceOidToAdjustRangesForLocalWorker);
+		char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
+		char *sequenceName = get_rel_name(sequenceOidToAdjustRangesForLocalWorker);
+		Oid sequenceTypeId = pg_get_sequencedef(sequenceOidToAdjustRangesForLocalWorker)->
+							 seqtypid;
+
+		AlterSequenceMinMax(sequenceOidToAdjustRangesForLocalWorker, sequenceSchemaName,
+							sequenceName,
+							sequenceTypeId);
+	}
+
+	if (defaultNextvalCmdForLocalWorker)
+	{
+		ExecuteAndLogUtilityCommand(defaultNextvalCmdForLocalWorker);
+	}
+
+	SetLocalEnableDDLPropagation(oldEnableDDLPropagation);
 }
 
 
@@ -2933,17 +3086,22 @@ get_attrdef_oid(Oid relationId, AttrNumber attnum)
 /*
  * GetAlterColumnWithNextvalDefaultCmd returns a string representing:
  * ALTER TABLE ALTER COLUMN .. SET DEFAULT nextval()
- * If sequence type is not bigint, we use worker_nextval() instead of nextval().
+ *
+ * If sequence type is not bigint, we use worker_nextval() instead of nextval(),
+ * unless forceUseNextVal is set to true; otherwise, we always use nextval()
+ * for the default expression.
+ *
  */
 char *
-GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname, bool
-									missingTableOk)
+GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname,
+									bool missingTableOk, bool forceUseNextVal)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	char *nextvalFunctionName = "nextval";
-	bool useWorkerNextval = (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
+	bool useWorkerNextval =
+		!forceUseNextVal && (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
 	if (useWorkerNextval)
 	{
 		/*
@@ -2978,17 +3136,22 @@ GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colna
 /*
  * GetAddColumnWithNextvalDefaultCmd returns a string representing:
  * ALTER TABLE ADD COLUMN .. DEFAULT nextval()
- * If sequence type is not bigint, we use worker_nextval() instead of nextval().
+ *
+ * If sequence type is not bigint, we use worker_nextval() instead of nextval(),
+ * unless forceUseNextVal is set to true; otherwise, we always use nextval()
+ * for the default expression.
  */
 static char *
 GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname,
-								  TypeName *typeName, bool ifNotExists)
+								  TypeName *typeName, bool ifNotExists,
+								  bool forceUseNextVal)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	char *nextvalFunctionName = "nextval";
-	bool useWorkerNextval = (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
+	bool useWorkerNextval =
+		!forceUseNextVal && (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
 	if (useWorkerNextval)
 	{
 		/*
@@ -3335,7 +3498,13 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						{
 							/*
 							 * We currently don't support adding a serial column for an MX table
-							 * TODO: record the dependency in the workers
+							 * Note: Once this is allowed;
+							 *       i) Record the dependency in the remote nodes.
+							 *       ii) Similar to what we do at the end of CreateCitusTable()
+							 *           when creating a distributed table from a worker, once
+							 *           this is allowed, we should adjust sequence ranges and
+							 *           nextval calls on the local node when executing on a
+							 *           worker.
 							 */
 							if (ShouldSyncTableMetadata(relationId))
 							{
@@ -3386,6 +3555,10 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						{
 							/*
 							 * We currently don't support adding an identity column for an MX table
+							 * Note: Similar to what we do at the end of CreateCitusTable() when
+							 *       creating a distributed table from a worker, once this is allowed,
+							 *       we should adjust sequence ranges and nextval calls on the local
+							 *       node when executing on a worker.
 							 */
 							if (ShouldSyncTableMetadata(relationId))
 							{
@@ -4334,11 +4507,6 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 {
 	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
-	if (!IsCoordinator())
-	{
-		return;
-	}
-
 	/*
 	 * We will let Postgres deal with missing_ok
 	 */
@@ -4349,16 +4517,24 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 
 	/* We have already asserted that we have exactly 1 address in the addresses. */
 	ObjectAddress *tableAddress = linitial(tableAddresses);
-	char relKind = get_rel_relkind(tableAddress->objectId);
+
+	Oid relationId = tableAddress->objectId;
+	if (!OidIsValid(relationId))
+	{
+		Assert(stmt->missing_ok);
+		return;
+	}
+
+	char relKind = get_rel_relkind(relationId);
 	if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_VIEW)
 	{
 		return;
 	}
 
-	Oid relationId = tableAddress->objectId;
 	Oid schemaId = get_namespace_oid(stmt->newschema, stmt->missing_ok);
 	if (!OidIsValid(schemaId))
 	{
+		Assert(stmt->missing_ok);
 		return;
 	}
 
@@ -4368,16 +4544,22 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 	 * that by seeing the table is still a single shard table. (i.e. not undistributed
 	 * at `preprocess` step)
 	 */
-	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
-		IsTenantSchema(schemaId))
+	if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
-
-		char *schemaName = get_namespace_name(schemaId);
-		char *tableName = stmt->relation->relname;
-		ereport(NOTICE, (errmsg("Moving %s into distributed schema %s",
-								tableName, schemaName)));
-
-		CreateTenantSchemaTable(relationId);
+		return;
 	}
+
+	if (!ShouldCreateTenantSchemaTable(relationId))
+	{
+		return;
+	}
+
+	EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+
+	char *schemaName = get_namespace_name(schemaId);
+	char *tableName = stmt->relation->relname;
+	ereport(NOTICE, (errmsg("Moving %s into distributed schema %s",
+							tableName, schemaName)));
+
+	CreateTenantSchemaTable(relationId);
 }

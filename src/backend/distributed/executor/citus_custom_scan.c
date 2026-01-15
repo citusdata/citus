@@ -270,13 +270,16 @@ CitusExecScan(CustomScanState *node)
 
 		AdaptiveExecutor(scanState);
 
-		if (isMultiTaskPlan)
+		if (!scanState->distributedPlan->disableTrackingQueryCounters)
 		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-		}
-		else
-		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			if (isMultiTaskPlan)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
 		}
 
 		scanState->finishedRemoteScan = true;

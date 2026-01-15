@@ -3039,9 +3039,7 @@ CitusCopySelect(CopyStmt *copyStatement)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
 
-		if (attr->attisdropped ||
-			attr->attgenerated
-			)
+		if (IsDroppedOrGenerated(attr))
 		{
 			continue;
 		}
