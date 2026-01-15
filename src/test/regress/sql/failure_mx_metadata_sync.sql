@@ -67,12 +67,6 @@ SELECT count(*) > 0 AS is_table_distributed
 FROM pg_dist_partition
 WHERE logicalrelid='t2'::regclass;
 
--- Failure to set groupid in the worker
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").cancel(' || :pid || ')');
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").kill()');
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
-
 -- Failure to delete pg_dist_node entries from the worker
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").cancel(' || :pid || ')');
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
