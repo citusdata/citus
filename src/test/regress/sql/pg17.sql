@@ -5,6 +5,17 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
 \gset
 
+-- test invalid statistics
+-- behavior is same among PG versions, error message differs
+-- relevant PG16 commits: d84a6c3dad1 and f30c04682cd
+CREATE STATISTICS tst ON a FROM (VALUES (x)) AS foo;
+
+CREATE FUNCTION tftest(int) returns table(a int, b int) as $$
+SELECT $1, $1+i FROM generate_series(1,5) g(i);
+$$ LANGUAGE sql IMMUTABLE STRICT;
+CREATE STATISTICS alt_stat2 ON a FROM tftest(1);
+DROP FUNCTION tftest;
+
 -- PG17 has the capabilty to pull up a correlated ANY subquery to a join if
 -- the subquery only refers to its immediate parent query. Previously, the
 -- subquery needed to be implemented as a SubPlan node, typically as a

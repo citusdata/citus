@@ -34,7 +34,14 @@ QualifyCreateStatisticsStmt(Node *node)
 {
 	CreateStatsStmt *stmt = castNode(CreateStatsStmt, node);
 
-	RangeVar *relation = (RangeVar *) linitial(stmt->relations);
+	Node *relationNode = (Node *) linitial(stmt->relations);
+
+	if (!IsA(relationNode, RangeVar))
+	{
+		return;
+	}
+
+	RangeVar *relation = (RangeVar *) relationNode;
 
 	if (relation->schemaname == NULL)
 	{
