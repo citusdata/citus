@@ -64,10 +64,6 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
-
-	EnsureSequentialMode(OBJECT_SCHEMA);
-
 	bool missingOk = createSchemaStmt->if_not_exists;
 	List *schemaAdressList = CreateSchemaStmtObjectAddress(node, missingOk, true);
 	Assert(list_length(schemaAdressList) == 1);
@@ -77,6 +73,23 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 	{
 		return NIL;
 	}
+
+	/*
+	 * We allow creating distributed schemas only when schema-based sharding is
+	 * enabled and the schema is suitable for the feature.
+	 */
+	char *schemaName = get_namespace_name(schemaId);
+	bool shouldUseSchemaBasedSharding = ShouldUseSchemaBasedSharding(schemaName);
+	if (shouldUseSchemaBasedSharding)
+	{
+		EnsurePropagationToCoordinator();
+	}
+	else
+	{
+		EnsureCoordinator();
+	}
+
+	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
@@ -88,8 +101,7 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 
 	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
 
-	char *schemaName = get_namespace_name(schemaId);
-	if (ShouldUseSchemaBasedSharding(schemaName))
+	if (shouldUseSchemaBasedSharding)
 	{
 		/* for now, we don't allow creating tenant tables when creating the schema itself */
 		if (CreateSchemaStmtCreatesTable(createSchemaStmt))
@@ -130,7 +142,7 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -157,11 +169,31 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	/*
+	 * If dropping a distributed schema that's not used for schema-based sharding,
+	 * ensure we're on the coordinator ...
+	 */
+	String *schemaVal = NULL;
+	foreach_declared_ptr(schemaVal, distributedSchemas)
+	{
+		bool missingOk = false;
+		if (!IsTenantSchema(get_namespace_oid(strVal(schemaVal), missingOk)))
+		{
+			EnsureCoordinator();
+			break;
+		}
+	}
+
+	/*
+	 * ... otherwise, ensuring propagation to the coordinator is sufficient. Note that
+	 * doing this even when the first condition holds is harmless, since propagation
+	 * to the coordinator is a weaker requirement than being on the coordinator itself.
+	 */
+	EnsurePropagationToCoordinator();
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
-	String *schemaVal = NULL;
+	schemaVal = NULL;
 	foreach_declared_ptr(schemaVal, distributedSchemas)
 	{
 		if (SchemaHasDistributedTableWithFKey(strVal(schemaVal)))
@@ -190,7 +222,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 

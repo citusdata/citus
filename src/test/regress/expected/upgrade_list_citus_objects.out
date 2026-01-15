@@ -96,6 +96,7 @@ ORDER BY 1;
  function citus_internal.delete_shard_metadata(bigint)
  function citus_internal.delete_tenant_schema(oid)
  function citus_internal.find_groupid_for_node(text,integer)
+ function citus_internal.get_next_colocation_id()
  function citus_internal.global_blocked_processes()
  function citus_internal.is_replication_origin_tracking_active()
  function citus_internal.local_blocked_processes()
@@ -408,6 +409,6 @@ ORDER BY 1;
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(376 rows)
+(377 rows)
 
 DROP TABLE extension_basic_types;

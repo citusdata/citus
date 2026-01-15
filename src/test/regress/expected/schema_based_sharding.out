@@ -1490,8 +1490,7 @@ HINT:  Connect to the coordinator node and try again.
 -- test creating a tenant schema from workers
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA worker_tenant_schema;
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
+DROP SCHEMA worker_tenant_schema;
 SET citus.enable_schema_based_sharding TO OFF;
 -- Enable the GUC on workers to make sure that the CREATE SCHEMA/ TABLE
 -- commands that we send to workers don't recursively try creating a
@@ -1511,14 +1510,11 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
--- Verify that citus_internal.unregister_tenant_schema_globally is a no-op
--- on workers.
+-- Verify that citus_internal.unregister_tenant_schema_globally can be called
+-- from workers too, but it will fail for this case as we didn't yet drop the
+-- schema.
 SELECT citus_internal.unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
- unregister_tenant_schema_globally
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  schema is expected to be already dropped because this function is only expected to be called from Citus drop hook
 \c - - - :master_port
 SET search_path TO regular_schema;
 SET citus.next_shard_id TO 1950000;
