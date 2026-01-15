@@ -148,7 +148,8 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
 static char * RemoteSchemaIdExpressionById(Oid schemaId);
 static char * RemoteSchemaIdExpressionByName(char *schemaName);
-static char * RemoteTypeIdExpression(Oid typeId);
+static char * GetRemoteTypeName(Oid typeId);
+static char * GetRemoteTypeNamespace(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 static char * RemoteTableIdExpression(Oid relationId);
 
@@ -4076,13 +4077,53 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 {
 	StringInfo insertColocationCommand = makeStringInfo();
 
+	/*
+	 * Get type name and schema separately to defer type resolution.
+	 * This approach matches how SendColocationMetadataCommands handles types.
+	 */
+	char *typeName = GetRemoteTypeName(distributionColumnType);
+	char *typeSchemaName = GetRemoteTypeNamespace(distributionColumnType);
+
 	appendStringInfo(insertColocationCommand,
-					 "SELECT pg_catalog.citus_internal_add_colocation_metadata("
-					 "%d, %d, %d, %s, %s)",
+					 "WITH colocation_data("
+					 "colocationid, shardcount, replicationfactor, "
+					 "typeschema, typename, collationid) "
+					 "AS (VALUES (%d, %d, %d, ",
 					 colocationId,
 					 shardCount,
-					 replicationFactor,
-					 RemoteTypeIdExpression(distributionColumnType),
+					 replicationFactor);
+
+	if (typeSchemaName != NULL && typeName != NULL)
+	{
+		/* Use quote_identifier so the schema name can be cast to regnamespace */
+		appendStringInfo(insertColocationCommand,
+						 "%s, %s, ",
+						 quote_literal_cstr(quote_identifier(typeSchemaName)),
+						 quote_literal_cstr(typeName));
+	}
+	else if (typeName != NULL)
+	{
+		appendStringInfo(insertColocationCommand,
+						 "NULL, %s, ",
+						 quote_literal_cstr(typeName));
+	}
+	else
+	{
+		appendStringInfo(insertColocationCommand,
+						 "NULL, NULL, ");
+	}
+
+	appendStringInfo(insertColocationCommand,
+					 "%s)) "
+					 "SELECT citus_internal.add_colocation_metadata("
+					 "colocationid, shardcount, replicationfactor, "
+					 "coalesce(t.oid, 0), collationid) "
+					 "FROM colocation_data "
+					 "LEFT JOIN pg_type t ON ("
+					 "typename = t.typname "
+					 "AND (typeschema IS NULL OR "
+					 "t.typnamespace = "
+					 "(SELECT oid FROM pg_namespace WHERE nspname = typeschema)))",
 					 RemoteCollationIdExpression(distributionColumnCollation));
 
 	return insertColocationCommand->data;
@@ -4090,37 +4131,61 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 
 
 /*
- * RemoteTypeIdExpression returns an expression in text form that can
- * be used to obtain the OID of a type on a different node when included
- * in a query string.
+ * GetRemoteTypeName returns the unqualified name of a type.
+ * Returns NULL for InvalidOid.
  */
 static char *
-RemoteTypeIdExpression(Oid typeId)
+GetRemoteTypeName(Oid typeId)
 {
-	/* by default, use 0 (InvalidOid) */
-	char *expression = "0";
-
-	/* we also have pg_dist_colocation entries for reference tables */
-	if (typeId != InvalidOid)
+	if (typeId == InvalidOid)
 	{
-		char *typeName = format_type_extended(typeId, -1,
-											  FORMAT_TYPE_FORCE_QUALIFY |
-											  FORMAT_TYPE_ALLOW_INVALID);
-
-		/* format_type_extended returns ??? in case of an unknown type */
-		if (strcmp(typeName, "???") != 0)
-		{
-			StringInfo regtypeExpression = makeStringInfo();
-
-			appendStringInfo(regtypeExpression,
-							 "%s::regtype",
-							 quote_literal_cstr(typeName));
-
-			expression = regtypeExpression->data;
-		}
+		return NULL;
 	}
 
-	return expression;
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeId));
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		return NULL;
+	}
+
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	char *typeName = pstrdup(NameStr(typeForm->typname));
+
+	ReleaseSysCache(typeTuple);
+	return typeName;
+}
+
+
+/*
+ * GetRemoteTypeNamespace returns the schema name of a type.
+ * Returns NULL for InvalidOid or types in pg_catalog.
+ */
+static char *
+GetRemoteTypeNamespace(Oid typeId)
+{
+	if (typeId == InvalidOid)
+	{
+		return NULL;
+	}
+
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeId));
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		return NULL;
+	}
+
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	Oid typeNamespace = typeForm->typnamespace;
+
+	ReleaseSysCache(typeTuple);
+
+	/* Don't include schema for pg_catalog types for backward compatibility */
+	if (typeNamespace == PG_CATALOG_NAMESPACE)
+	{
+		return NULL;
+	}
+
+	return get_namespace_name(typeNamespace);
 }
 
 
@@ -4837,19 +4902,52 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		StringInfo colocationGroupCreateCommand = makeStringInfo();
 		appendStringInfo(colocationGroupCreateCommand,
 						 "WITH colocation_group_data (colocationid, shardcount, "
-						 "replicationfactor, distributioncolumntype, "
+						 "replicationfactor, distributioncolumntypeschema, "
+						 "distributioncolumntypename, "
 						 "distributioncolumncollationname, "
 						 "distributioncolumncollationschema)  AS (VALUES ");
 
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(nextTuple);
 
+		/*
+		 * Get the type name and schema separately to defer type resolution.
+		 * This is necessary when the type (e.g., a domain) is defined in a
+		 * non-public schema that may not exist on the worker yet.
+		 */
+		char *typeName =
+			GetRemoteTypeName(colocationForm->distributioncolumntype);
+		char *typeSchemaName =
+			GetRemoteTypeNamespace(colocationForm->distributioncolumntype);
+
 		appendStringInfo(colocationGroupCreateCommand,
-						 "(%d, %d, %d, %s, ",
+						 "(%d, %d, %d, ",
 						 colocationForm->colocationid,
 						 colocationForm->shardcount,
-						 colocationForm->replicationfactor,
-						 RemoteTypeIdExpression(colocationForm->distributioncolumntype));
+						 colocationForm->replicationfactor);
+
+		/* Add type schema and name */
+		if (typeSchemaName != NULL && typeName != NULL)
+		{
+			/* Use quote_identifier so the schema name can be cast to regnamespace */
+			appendStringInfo(colocationGroupCreateCommand,
+							 "%s, %s, ",
+							 quote_literal_cstr(quote_identifier(typeSchemaName)),
+							 quote_literal_cstr(typeName));
+		}
+		else if (typeName != NULL)
+		{
+			/* Type is in pg_catalog or no schema qualifier needed */
+			appendStringInfo(colocationGroupCreateCommand,
+							 "NULL, %s, ",
+							 quote_literal_cstr(typeName));
+		}
+		else
+		{
+			/* InvalidOid or unknown type */
+			appendStringInfo(colocationGroupCreateCommand,
+							 "NULL, NULL, ");
+		}
 
 		/*
 		 * For collations, include the names in the VALUES section and then
@@ -4885,14 +4983,25 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 							 "NULL, NULL)");
 		}
 
+		/*
+		 * Use LEFT JOIN with pg_type to resolve the type OID at runtime.
+		 * This defers type resolution until execution on the worker, allowing
+		 * the type and its schema to be created first by dependency commands.
+		 */
 		appendStringInfo(colocationGroupCreateCommand,
 						 ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
 						 "colocationid, shardcount, replicationfactor, "
-						 "distributioncolumntype, coalesce(c.oid, 0)) "
-						 "FROM colocation_group_data d LEFT JOIN pg_collation c "
+						 "coalesce(t.oid, 0), coalesce(c.oid, 0)) "
+						 "FROM colocation_group_data d "
+						 "LEFT JOIN pg_type t ON ("
+						 "d.distributioncolumntypename = t.typname "
+						 "AND (d.distributioncolumntypeschema IS NULL OR "
+						 "t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
+						 "nspname = d.distributioncolumntypeschema))) "
+						 "LEFT JOIN pg_collation c "
 						 "ON (d.distributioncolumncollationname = c.collname "
-						 "AND d.distributioncolumncollationschema::regnamespace"
-						 " = c.collnamespace)");
+						 "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "
+						 "nspname = d.distributioncolumncollationschema))");
 
 		List *commandList = list_make1(colocationGroupCreateCommand->data);
 		SendOrCollectCommandListToActivatedNodes(context, commandList);
