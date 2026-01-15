@@ -108,7 +108,7 @@ check-base: all
 
 # check-minimal only sets up the cluster
 check-minimal: all
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus --load-extension=hll \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/minimal_schedule $(EXTRA_TESTS)
 
 check-base-vg: all

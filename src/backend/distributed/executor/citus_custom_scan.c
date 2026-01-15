@@ -11,9 +11,11 @@
 
 #include "miscadmin.h"
 
+#include "catalog/pg_operator.h"
 #include "commands/copy.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "utils/datum.h"
@@ -75,6 +77,7 @@ static void EnsureForceDelegationDistributionKey(Job *job);
 static void EnsureAnchorShardsInJobExist(Job *job);
 static bool AnchorShardsInTaskListExist(List *taskList);
 static void TryToRerouteFastPathModifyQuery(Job *job);
+static void CheckQueryDeparseSafety(Query *query);
 
 
 /* create custom scan methods for all executors */
@@ -426,7 +429,15 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		/*
 		 * When there is no deferred pruning, but we did evaluate functions, then
 		 * we only rebuild the query strings in the existing tasks.
+		 *
+		 * Note that because we did evaluate functions we should also
+		 * sanity check the query first, to prevent issues like #8198
+		 * where 'false IN (SELECT ..)' is constant folded to 'NOT
+		 * (SELECT ..)' triggering an assert in ruleutils.
 		 */
+
+		CheckQueryDeparseSafety(workerJob->jobQuery);
+
 		RebuildQueryStrings(workerJob);
 	}
 
@@ -1037,4 +1048,79 @@ EnsureForceDelegationDistributionKey(Job *job)
 							"consider disabling forced delegation through "
 							"create_distributed_table(..., force_delegation := false)")));
 	}
+}
+
+
+/*
+ * CheckDeparseWalker is used to walk over an expression tree and ensure
+ * that any SubLink testexpr is safe to deparse after coordinator-side
+ * evaluation.
+ *
+ * Specifically, we convert any non-OpExpr testexpr into an OpExpr of the
+ * form TRUE = testexpr, and NOT expressions into FALSE = arg. If the deparser
+ * sees something other than an OpExpr in a SubLink testexpr, it will
+ * raise an assertion failure or error out.
+ */
+static bool
+CheckDeparseWalker(Node *expr, void *context)
+{
+	if (expr == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(expr, SubLink))
+	{
+		SubLink *sublink = (SubLink *) expr;
+		Node *testexpr = sublink->testexpr;
+
+		if (testexpr && IsA(testexpr, BoolExpr) && ((BoolExpr *) testexpr)->boolop ==
+			NOT_EXPR)
+		{
+			Node *arg = linitial(((BoolExpr *) testexpr)->args);
+
+			/*
+			 * testexpr is of the form: NOT (arg)
+			 * convert NOT (arg) to FALSE = arg
+			 */
+			sublink->testexpr = (Node *) make_opclause(BooleanEqualOperator, BOOLOID,
+													   false,
+													   (Expr *) makeBoolConst(false,
+																			  false),
+													   (Expr *) arg,
+													   InvalidOid, InvalidOid);
+		}
+		else if (testexpr && !IsA(testexpr, OpExpr))
+		{
+			/*
+			 * testexpr is something other than an OpExpr
+			 * convert testexpr to TRUE = testexpr
+			 */
+			sublink->testexpr = (Node *) make_opclause(BooleanEqualOperator, BOOLOID,
+													   false,
+													   (Expr *) makeBoolConst(true,
+																			  false),
+													   (Expr *) testexpr,
+													   InvalidOid, InvalidOid);
+		}
+	}
+
+	return expression_tree_walker(expr, CheckDeparseWalker, NULL);
+}
+
+
+/*
+ * CheckQueryDeparseSafety is used by CitusBeginModifyScan to ensure that the
+ * query's quals are safe to deparse after coordinator-required evaluation;
+ * ExecuteCoordinatorEvaluableExpressions() may have reduced or constant-folded
+ * expressions in a way that could trigger asserts in the deparser.
+ *
+ * Note that this is only needed for UPDATE and DELTE queries, since INSERTs always
+ * use deferred pruning. So we just need to check the query's quals.
+ */
+static
+void
+CheckQueryDeparseSafety(Query *query)
+{
+	CheckDeparseWalker(query->jointree->quals, NULL);
 }

@@ -221,6 +221,9 @@ ORDER BY 1;
  function cluster_clock_send(cluster_clock)
  function column_name_to_column(regclass,text)
  function column_to_column_name(regclass,text)
+ function coord_binary_combine_agg(oid,bytea,anyelement)
+ function coord_binary_combine_agg_ffunc(internal,oid,bytea,anyelement)
+ function coord_binary_combine_agg_sfunc(internal,oid,bytea,anyelement)
  function coord_combine_agg(oid,cstring,anyelement)
  function coord_combine_agg_ffunc(internal,oid,cstring,anyelement)
  function coord_combine_agg_sfunc(internal,oid,cstring,anyelement)
@@ -311,6 +314,8 @@ ORDER BY 1;
  function worker_apply_sequence_command(text,regtype)
  function worker_apply_shard_ddl_command(bigint,text)
  function worker_apply_shard_ddl_command(bigint,text,text)
+ function worker_binary_partial_agg(oid,anyelement)
+ function worker_binary_partial_agg_ffunc(internal)
  function worker_change_sequence_dependency(regclass,regclass,regclass)
  function worker_copy_table_to_node(regclass,integer)
  function worker_create_or_alter_role(text,text,text)
@@ -402,6 +407,6 @@ ORDER BY 1;
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(370 rows)
+(375 rows)
 
 DROP TABLE extension_basic_types;
