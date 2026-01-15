@@ -265,23 +265,7 @@ EnsureFKeysForTenantTable(Oid relationId)
 void
 CreateTenantSchemaTable(Oid relationId)
 {
-	if (!IsCoordinator())
-	{
-		/*
-		 * We don't support creating tenant tables from workers. We could
-		 * let ShouldCreateTenantSchemaTable() to return false to allow users
-		 * to create a local table as usual but that would be confusing because
-		 * it might sound like we allow creating tenant tables from workers.
-		 * For this reason, we prefer to throw an error instead.
-		 *
-		 * Indeed, CreateSingleShardTable() would already do so but we
-		 * prefer to throw an error with a more meaningful message, rather
-		 * than saying "operation is not allowed on this node".
-		 */
-		ereport(ERROR, (errmsg("cannot create tables in a distributed schema from "
-							   "a worker node"),
-						errhint("Connect to the coordinator node and try again.")));
-	}
+	EnsurePropagationToCoordinator();
 
 	EnsureTableKindSupportedForTenantSchema(relationId);
 
@@ -301,7 +285,8 @@ CreateTenantSchemaTable(Oid relationId)
 		.colocationParamType = COLOCATE_WITH_COLOCATION_ID,
 		.colocationId = colocationId,
 	};
-	CreateSingleShardTable(relationId, colocationParam);
+	bool allowFromWorkers = true;
+	CreateSingleShardTable(relationId, colocationParam, allowFromWorkers);
 }
 
 
@@ -553,7 +538,7 @@ UnregisterTenantSchemaGlobally(Oid schemaId, char *schemaName)
 	DeleteTenantSchemaLocally(schemaId);
 	if (EnableMetadataSync)
 	{
-		SendCommandToWorkersWithMetadata(TenantSchemaDeleteCommand(schemaName));
+		SendCommandToRemoteNodesWithMetadata(TenantSchemaDeleteCommand(schemaName));
 	}
 
 	DeleteColocationGroup(tenantSchemaColocationId);
@@ -579,10 +564,22 @@ citus_internal_unregister_tenant_schema_globally(PG_FUNCTION_ARGS)
 	char *schemaNameStr = text_to_cstring(schemaName);
 
 	/*
-	 * Skip on workers because we expect this to be called from the coordinator
-	 * only via drop hook.
+	 * Have this check to make sure we execute this only on the backend executing
+	 * the distributed "DROP SCHEMA" command -not on internal backends propagating
+	 * the DDL to remote nodes- to prevent other nodes from trying to unregister
+	 * the same tenant schema globally, since the backend executing the distributed
+	 * "DROP SCHEMA" command already does so globally via this function.
+	 *
+	 * Actually, even if didn't have this check, the other nodes would still be
+	 * prevented from trying to unregister the same tenant schema globally. This
+	 * is because, when dropping a distributed schema, we first delete the tenant
+	 * schema from metadata globally and then we drop the schema itself on other
+	 * nodes. So, when the drop hook is called on other nodes, it would not try to
+	 * unregister the tenant schema globally since the schema would not be found
+	 * in the tenant schema metadata. However, having this check makes it more
+	 * explicit and guards us against future changes.
 	 */
-	if (!IsCoordinator())
+	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
 	{
 		PG_RETURN_VOID();
 	}
@@ -684,7 +681,9 @@ citus_schema_distribute(PG_FUNCTION_ARGS)
 			originalForeignKeyRecreationCommands, fkeyCommandsForRelation);
 
 		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
-		CreateSingleShardTable(relationId, colocationParam);
+		bool allowFromWorkers = false;
+		CreateSingleShardTable(relationId, colocationParam,
+							   allowFromWorkers);
 	}
 
 	/* We can skip foreign key validations as we are sure about them at start */
