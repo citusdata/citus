@@ -4180,7 +4180,7 @@ SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount, int replicati
 	 * We require superuser for all pg_dist_colocation operations because we have
 	 * no reasonable way of restricting access.
 	 */
-	SendCommandToWorkersWithMetadataViaSuperUser(command);
+	SendCommandToRemoteNodesWithMetadataViaSuperUser(command);
 }
 
 
@@ -4357,7 +4357,7 @@ SyncDeleteColocationGroupToNodes(uint32 colocationId)
 	 * We require superuser for all pg_dist_colocation operations because we have
 	 * no reasonable way of restricting access.
 	 */
-	SendCommandToWorkersWithMetadataViaSuperUser(command);
+	SendCommandToRemoteNodesWithMetadataViaSuperUser(command);
 }
 
 
