@@ -1009,6 +1009,7 @@ CREATE TABLE tenant_3.tbl_1(a int, b text);
 -- test creating a tenant schema from workers
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA worker_tenant_schema;
+DROP SCHEMA worker_tenant_schema;
 SET citus.enable_schema_based_sharding TO OFF;
 
 -- Enable the GUC on workers to make sure that the CREATE SCHEMA/ TABLE
@@ -1022,8 +1023,9 @@ SELECT pg_reload_conf();
 ALTER SYSTEM SET citus.enable_schema_based_sharding TO ON;
 SELECT pg_reload_conf();
 
--- Verify that citus_internal.unregister_tenant_schema_globally is a no-op
--- on workers.
+-- Verify that citus_internal.unregister_tenant_schema_globally can be called
+-- from workers too, but it will fail for this case as we didn't yet drop the
+-- schema.
 SELECT citus_internal.unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
 
 \c - - - :master_port
