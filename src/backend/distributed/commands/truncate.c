@@ -175,11 +175,12 @@ Datum
 truncate_local_data_after_distributing_table(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 
 	Oid relationId = PG_GETARG_OID(0);
 
 	EnsureLocalTableCanBeTruncated(relationId);
+
+	EnsureCoordinatorUnlessTenantSchema(relationId);
 
 	TruncateStmt *truncateStmt = makeNode(TruncateStmt);
 

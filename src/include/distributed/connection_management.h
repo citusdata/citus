@@ -84,6 +84,14 @@ enum MultiConnectionMode
 	 */
 	REQUIRE_CLEAN_CONNECTION = 1 << 3,
 
+	/*
+	 * Note that a connection returned with this flag is not guaranteed to stay
+	 * outside of transactions, e.g., if we later start a coordinated transaction
+	 * and execute a command over this connection. For this reason, the callers
+	 * should also mark the connection exclusive by using
+	 * ClaimConnectionExclusively() to keep using the same connection outside of
+	 * transactions for multiple commands.
+	 */
 	OUTSIDE_TRANSACTION = 1 << 4,
 
 	/*
