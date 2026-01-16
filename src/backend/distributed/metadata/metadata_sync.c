@@ -4115,7 +4115,7 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 
 	appendStringInfo(insertColocationCommand,
 					 "%s)) "
-					 "SELECT citus_internal.add_colocation_metadata("
+					 "SELECT pg_catalog.citus_internal_add_colocation_metadata("
 					 "colocationid, shardcount, replicationfactor, "
 					 "coalesce(t.oid, 0), collationid) "
 					 "FROM colocation_data "
