@@ -53,6 +53,93 @@ SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN
 SET search_path TO "Update Colocation";
 SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN ('t1'::regclass, 't2'::regclass);
 
+\c - - - :master_port
+SET search_path TO "Update Colocation";
+
+create table test_a_tbl_1(text_col text collate "C" unique);
+create table test_a_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_a_tbl_1', 'text_col');
+select create_distributed_table('test_a_tbl_2', 'text_col');
+
+-- make sure we assign them to different colocation groups
+select result as colocationids_different from run_command_on_all_nodes($$
+    select count(*) = 2 from (
+        select distinct(colocationid)
+        from pg_dist_partition
+        join pg_class on (logicalrelid = pg_class.oid)
+        join pg_namespace on (relnamespace = pg_namespace.oid)
+        join pg_dist_colocation using (colocationid)
+        where pg_namespace.nspname = 'Update Colocation'
+          and pg_class.relname in ('test_a_tbl_1', 'test_a_tbl_2')
+    ) q;
+$$);
+
+DROP TABLE test_a_tbl_1, test_a_tbl_2;
+
+create table test_d_tbl_1(text_col text collate "C" unique);
+create table test_d_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_d_tbl_1', 'text_col', shard_count=>4);
+select create_distributed_table('test_d_tbl_2', 'text_col', shard_count=>6);
+select alter_distributed_table('test_d_tbl_2', shard_count=>4);
+
+-- make sure we assign them to different colocation groups
+select result as colocationids_different from run_command_on_all_nodes($$
+    select count(*) = 2 from (
+        select distinct(colocationid)
+        from pg_dist_partition
+        join pg_class on (logicalrelid = pg_class.oid)
+        join pg_namespace on (relnamespace = pg_namespace.oid)
+        join pg_dist_colocation using (colocationid)
+        where pg_namespace.nspname = 'Update Colocation'
+          and pg_class.relname in ('test_d_tbl_1', 'test_d_tbl_2')
+    ) q;
+$$);
+
+DROP TABLE test_d_tbl_1, test_d_tbl_2;
+
+create table test_b_tbl_1(text_col text collate "C" unique);
+create table test_b_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_b_tbl_1', 'text_col');
+
+-- errors
+select create_distributed_table('test_b_tbl_2', 'text_col', colocate_with => 'test_b_tbl_1');
+
+DROP TABLE test_b_tbl_1, test_b_tbl_2;
+
+create table test_c_tbl_1(text_col text collate "C" unique);
+create table test_c_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_c_tbl_1', 'text_col');
+select create_distributed_table('test_c_tbl_2', 'text_col', colocate_with => 'none');
+
+-- errors
+select alter_distributed_table('test_c_tbl_2', colocate_with=>'test_c_tbl_1');
+
+create table test_c_tbl_3(int_col int, text_col text collate "C");
+create table test_c_tbl_4(text_col text collate "en-x-icu");
+
+select create_distributed_table('test_c_tbl_3', 'int_col');
+select create_distributed_table('test_c_tbl_4', 'text_col', colocate_with => 'none');
+
+-- errors
+select alter_distributed_table('test_c_tbl_3', colocate_with=>'test_c_tbl_4', distribution_column:='text_col');
+
+DROP TABLE test_c_tbl_1, test_c_tbl_2;
+
 \c - postgres - :master_port
 SET client_min_messages TO ERROR;
 DROP SCHEMA "Update Colocation" cascade;
+
+SET citus.enable_ddl_propagation TO OFF;
+DROP ROLE mx_update_colocation;
+
+\c - postgres - :worker_1_port
+SET citus.enable_ddl_propagation TO OFF;
+DROP ROLE mx_update_colocation;
+
+\c - postgres - :worker_2_port
+SET citus.enable_ddl_propagation TO OFF;
+DROP ROLE mx_update_colocation;

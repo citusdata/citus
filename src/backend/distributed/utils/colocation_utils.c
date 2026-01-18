@@ -1378,8 +1378,7 @@ DeleteColocationGroupLocally(uint32 colocationId)
  */
 uint32
 FindColocateWithColocationId(Oid relationId, char replicationModel,
-							 Oid distributionColumnType,
-							 Oid distributionColumnCollation,
+							 Var *distributionColumn,
 							 int shardCount, bool shardCountIsStrict,
 							 char *colocateWithTableName)
 {
@@ -1387,6 +1386,12 @@ FindColocateWithColocationId(Oid relationId, char replicationModel,
 
 	if (IsColocateWithDefault(colocateWithTableName))
 	{
+		/* distributionColumn can only be null for single-shard tables */
+		Oid distributionColumnType =
+			distributionColumn ? distributionColumn->vartype : InvalidOid;
+		Oid distributionColumnCollation =
+			distributionColumn ? distributionColumn->varcollid : InvalidOid;
+
 		/* check for default colocation group */
 		colocationId = ColocationId(shardCount, ShardReplicationFactor,
 									distributionColumnType,
@@ -1419,7 +1424,7 @@ FindColocateWithColocationId(Oid relationId, char replicationModel,
 		Oid sourceRelationId = ResolveRelationId(colocateWithTableNameText, false);
 
 		EnsureTableCanBeColocatedWith(relationId, replicationModel,
-									  distributionColumnType, sourceRelationId);
+									  distributionColumn, sourceRelationId);
 
 		colocationId = TableColocationId(sourceRelationId);
 	}
@@ -1437,7 +1442,7 @@ FindColocateWithColocationId(Oid relationId, char replicationModel,
  */
 void
 EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
-							  Oid distributionColumnType, Oid sourceRelationId)
+							  Var *distributionColumn, Oid sourceRelationId)
 {
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 
@@ -1465,19 +1470,8 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 	}
 
 	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
-	Oid sourceDistributionColumnType = !sourceDistributionColumn ? InvalidOid :
-									   sourceDistributionColumn->vartype;
-	if (sourceDistributionColumnType != distributionColumnType)
-	{
-		char *relationName = get_rel_name(relationId);
-		char *sourceRelationName = get_rel_name(sourceRelationId);
-
-		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
-							   sourceRelationName, relationName),
-						errdetail("Distribution column types don't match for "
-								  "%s and %s.", sourceRelationName,
-								  relationName)));
-	}
+	EnsureColumnTypeEquality(sourceRelationId, relationId,
+							 sourceDistributionColumn, distributionColumn);
 
 	/* prevent colocating regular tables with tenant tables */
 	Oid sourceRelationSchemaId = get_rel_namespace(sourceRelationId);

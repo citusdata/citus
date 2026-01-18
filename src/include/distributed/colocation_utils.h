@@ -53,13 +53,11 @@ extern List * ColocationGroupTableList(uint32 colocationId, uint32 count);
 extern void DeleteColocationGroup(uint32 colocationId);
 extern void DeleteColocationGroupLocally(uint32 colocationId);
 extern uint32 FindColocateWithColocationId(Oid relationId, char replicationModel,
-										   Oid distributionColumnType,
-										   Oid distributionColumnCollation,
+										   Var *distributionColumn,
 										   int shardCount, bool shardCountIsStrict,
 										   char *colocateWithTableName);
 extern void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
-										  Oid distributionColumnType,
-										  Oid sourceRelationId);
+										  Var *distributionColumn, Oid sourceRelationId);
 extern void AcquireColocationDefaultLock(void);
 extern void ReleaseColocationDefaultLock(void);
 
