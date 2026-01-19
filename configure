@@ -694,8 +694,6 @@ enable_option_checking
 with_extra_version
 with_pg_version_check
 enable_coverage
-with_libcurl
-with_reports_hostname
 with_lz4
 with_zstd
 with_security_flags
@@ -1329,11 +1327,6 @@ Optional Packages:
                           append STRING to version
   --without-pg-version-check
                           do not check postgres version during configure
-  --without-libcurl       do not use libcurl for anonymous statistics
-                          collection
-  --with-reports-hostname=HOSTNAME
-                          Use HOSTNAME as hostname for statistics collection
-                          and update checks
   --without-lz4           do not use lz4
   --without-zstd          do not use zstd
   --with-security-flags   use security flags
@@ -4426,132 +4419,6 @@ if test "$enable_coverage" = yes; then
     CITUS_CPPFLAGS="$CITUS_CPPFLAGS -DNDEBUG"
     CITUS_LDFLAGS="$CITUS_LDFLAGS --coverage"
 fi
-
-#
-# libcurl
-#
-
-
-
-# Check whether --with-libcurl was given.
-if test "${with_libcurl+set}" = set; then :
-  withval=$with_libcurl;
-  case $withval in
-    yes)
-
-$as_echo "#define HAVE_LIBCURL 1" >>confdefs.h
-
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-libcurl option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_libcurl=yes
-
-$as_echo "#define HAVE_LIBCURL 1" >>confdefs.h
-
-fi
-
-
-
-if test "$with_libcurl" = yes; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for curl_global_init in -lcurl" >&5
-$as_echo_n "checking for curl_global_init in -lcurl... " >&6; }
-if ${ac_cv_lib_curl_curl_global_init+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lcurl  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char curl_global_init ();
-int
-main ()
-{
-return curl_global_init ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib_curl_curl_global_init=yes
-else
-  ac_cv_lib_curl_curl_global_init=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_curl_curl_global_init" >&5
-$as_echo "$ac_cv_lib_curl_curl_global_init" >&6; }
-if test "x$ac_cv_lib_curl_curl_global_init" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBCURL 1
-_ACEOF
-
-  LIBS="-lcurl $LIBS"
-
-else
-  as_fn_error $? "libcurl not found
-If you have libcurl already installed, see config.log for details on the
-failure. It is possible the compiler isn't looking in the proper directory.
-Use --without-libcurl to disable anonymous statistics collection." "$LINENO" 5
-fi
-
-  ac_fn_c_check_header_mongrel "$LINENO" "curl/curl.h" "ac_cv_header_curl_curl_h" "$ac_includes_default"
-if test "x$ac_cv_header_curl_curl_h" = xyes; then :
-
-else
-  as_fn_error $? "libcurl header not found
-If you have libcurl already installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory.
-Use --without-libcurl to disable libcurl support." "$LINENO" 5
-fi
-
-
-fi
-
-# REPORTS_BASE_URL definition
-
-
-
-# Check whether --with-reports-hostname was given.
-if test "${with_reports_hostname+set}" = set; then :
-  withval=$with_reports_hostname;
-  case $withval in
-    yes)
-      as_fn_error $? "argument required for --with-reports-hostname option" "$LINENO" 5
-      ;;
-    no)
-      as_fn_error $? "argument required for --with-reports-hostname option" "$LINENO" 5
-      ;;
-    *)
-      REPORTS_BASE_URL="https://${withval}"
-      ;;
-  esac
-
-else
-  REPORTS_BASE_URL="https://reports.citusdata.com"
-fi
-
-
-
-cat >>confdefs.h <<_ACEOF
-#define REPORTS_BASE_URL "$REPORTS_BASE_URL"
-_ACEOF
-
 
 #
 # LZ4
