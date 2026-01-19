@@ -872,7 +872,7 @@ columnar_relation_set_new_filelocator(Relation rel,
 									 RelationPhysicalIdentifier_compat(rel)),
 								 GetCurrentSubTransactionId());
 
-		DeleteMetadataRows(RelationPhysicalIdentifier_compat(rel));
+		DeleteMetadataRows(rel);
 	}
 
 	*freezeXid = RecentXmin;
@@ -897,7 +897,7 @@ columnar_relation_nontransactional_truncate(Relation rel)
 	NonTransactionDropWriteState(RelationPhysicalIdentifierNumber_compat(relfilelocator));
 
 	/* Delete old relfilenode metadata */
-	DeleteMetadataRows(relfilelocator);
+	DeleteMetadataRows(rel);
 
 	/*
 	 * No need to set new relfilenode, since the table was created in this
@@ -960,8 +960,7 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	ColumnarOptions columnarOptions = { 0 };
 	ReadColumnarOptions(OldHeap->rd_id, &columnarOptions);
 
-	ColumnarWriteState *writeState = ColumnarBeginWrite(RelationPhysicalIdentifier_compat(
-															NewHeap),
+	ColumnarWriteState *writeState = ColumnarBeginWrite(NewHeap,
 														columnarOptions,
 														targetDesc);
 
@@ -1036,8 +1035,7 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 static uint64
 ColumnarTableTupleCount(Relation relation)
 {
-	List *stripeList = StripesForRelfilelocator(RelationPhysicalIdentifier_compat(
-													relation));
+	List *stripeList = StripesForRelfilelocator(relation);
 	uint64 tupleCount = 0;
 
 	ListCell *lc = NULL;
@@ -1202,7 +1200,6 @@ static void
 LogRelationStats(Relation rel, int elevel)
 {
 	ListCell *stripeMetadataCell = NULL;
-	RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
 	StringInfo infoBuf = makeStringInfo();
 
 	int compressionStats[COMPRESSION_COUNT] = { 0 };
@@ -1213,13 +1210,13 @@ LogRelationStats(Relation rel, int elevel)
 	uint64 droppedChunksWithData = 0;
 	uint64 totalDecompressedLength = 0;
 
-	List *stripeList = StripesForRelfilelocator(relfilelocator);
+	List *stripeList = StripesForRelfilelocator(rel);
 	int stripeCount = list_length(stripeList);
 
 	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
-		StripeSkipList *skiplist = ReadStripeSkipList(relfilelocator, stripe->id,
+		StripeSkipList *skiplist = ReadStripeSkipList(rel, stripe->id,
 													  RelationGetDescr(rel),
 													  stripe->chunkCount,
 													  GetTransactionSnapshot());
@@ -1355,8 +1352,7 @@ TruncateColumnar(Relation rel, int elevel)
 	 * new stripes be added beyond highestPhysicalAddress while
 	 * we're truncating.
 	 */
-	uint64 newDataReservation = Max(GetHighestUsedAddress(
-										RelationPhysicalIdentifier_compat(rel)) + 1,
+	uint64 newDataReservation = Max(GetHighestUsedAddress(rel) + 1,
 									ColumnarFirstLogicalOffset);
 
 	BlockNumber old_rel_pages = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
@@ -2107,7 +2103,7 @@ ColumnarTableDropHook(Oid relid)
 		Relation rel = table_open(relid, AccessExclusiveLock);
 		RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
 
-		DeleteMetadataRows(relfilelocator);
+		DeleteMetadataRows(rel);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
 		MarkRelfilenumberDropped(RelationPhysicalIdentifierNumber_compat(relfilelocator),
