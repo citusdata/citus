@@ -119,7 +119,7 @@
 
 /* marks shared object as one loadable by the postgres version compiled against */
 #if PG_VERSION_NUM >= PG_VERSION_18
-PG_MODULE_MAGIC_EXT(.name = "citus", .version = "14.0devel");
+PG_MODULE_MAGIC_EXT(.name = "citus", .version = "15.0devel");
 #else
 PG_MODULE_MAGIC;
 #endif
