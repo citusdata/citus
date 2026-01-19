@@ -1277,7 +1277,14 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
-	EnsureCoordinator();
+	if (IsTenantSchema(get_rel_namespace(leftRelationId)))
+	{
+		EnsurePropagationToCoordinator();
+	}
+	else
+	{
+		EnsureCoordinator();
+	}
 
 	/* these will be set in below loop according to subcommands */
 	Oid rightRelationId = InvalidOid;
@@ -1306,10 +1313,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 * alterTableStmt
 	 */
 	bool deparseAT = false;
-	bool propagateCommandToWorkers = true;
+	bool propagateCommandToRemoteNodes = true;
 
 	/*
-	 * Sometimes we want to run a different DDL Command string in MX workers
+	 * Sometimes we want to run a different DDL Command string on remote MX workers
 	 * For example, in cases where worker_nextval should be used instead
 	 * of nextval() in column defaults with type int and smallint
 	 */
@@ -1563,7 +1570,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
-				propagateCommandToWorkers = false;
+				propagateCommandToRemoteNodes = false;
 				useInitialDDLCommandString = false;
 			}
 		}
@@ -1659,7 +1666,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (OidIsValid(rightRelationId))
 	{
 		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
-		if (referencedIsLocalTable || !propagateCommandToWorkers)
+		if (referencedIsLocalTable || !propagateCommandToRemoteNodes)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -1674,7 +1681,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	{
 		/* ... otherwise use standard DDL task list function */
 		ddlJob->taskList = DDLTaskList(leftRelationId, alterTableCommand);
-		if (!propagateCommandToWorkers)
+		if (!propagateCommandToRemoteNodes)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -2779,7 +2786,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 	if (needMetadataSyncForNewSequences)
 	{
 		/* prevent recursive propagation */
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		/*
 		 * It's easy to retrieve the sequence id to create the proper commands
@@ -2789,9 +2796,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		 * That's why we execute the following here instead of
 		 * in ExecuteDistributedDDLJob
 		 */
-		SendCommandToWorkersWithMetadata(alterTableDefaultNextvalCmd);
+		SendCommandToRemoteNodesWithMetadata(alterTableDefaultNextvalCmd);
 
-		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 }
 
