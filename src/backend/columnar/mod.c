@@ -22,7 +22,7 @@
 
 
 #if PG_VERSION_NUM >= PG_VERSION_18
-PG_MODULE_MAGIC_EXT(.name = "citus_columnar", .version = "14.0devel");
+PG_MODULE_MAGIC_EXT(.name = "citus_columnar", .version = "15.0devel");
 #else
 PG_MODULE_MAGIC;
 #endif
