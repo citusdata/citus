@@ -49,7 +49,7 @@ CITUS_ARBITRARY_TEST_DIR = "./tmp_citus_test"
 
 MASTER = "master"
 # This should be updated when citus version changes
-MASTER_VERSION = "14.1"
+MASTER_VERSION = "15.0"
 
 HOME = expanduser("~")
 
