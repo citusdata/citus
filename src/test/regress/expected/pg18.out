@@ -3016,8 +3016,8 @@ SET citus.explain_all_tasks TO default;
 SELECT * FROM pg_get_loaded_modules() WHERE file_name LIKE 'citus%' ORDER BY module_name;
     module_name     |  version  |       file_name
 ---------------------------------------------------------------------
- citus              | 14.0devel | citus.so
- citus_columnar     | 14.0devel | citus_columnar.so
+ citus              | 14.1devel | citus.so
+ citus_columnar     | 14.1devel | citus_columnar.so
 (2 rows)
 
 -- ============================================================
