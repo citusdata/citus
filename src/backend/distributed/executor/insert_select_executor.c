@@ -50,6 +50,7 @@
 #include "distributed/repartition_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
@@ -183,6 +184,22 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 																	  targetRelation,
 																	  binaryFormat);
 
+			if (list_length(distSelectTaskList) <= 1)
+			{
+				/*
+				 * Probably we will never get here for a repartitioned
+				 * INSERT..SELECT because when the source is a single shard
+				 * table, we should most probably choose to use
+				 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
+				 * here.
+				 */
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+
 			/*
 			 * At this point select query has been executed on workers and results
 			 * have been fetched in such a way that they are colocated with corresponding
@@ -202,6 +219,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			uint64 rowsInserted = ExecuteTaskListIntoTupleDest(ROW_MODIFY_COMMUTATIVE,
 															   taskList, tupleDest,
 															   hasReturning);
+
+			if (list_length(taskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
 
 			executorState->es_processed = rowsInserted;
 
@@ -277,6 +303,15 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 					SortTupleStore(scanState);
 				}
 			}
+
+			if (list_length(prunedTaskList) <= 1)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
 		}
 		else
 		{
@@ -318,6 +353,12 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
 																  columnNameList);
 
+	/*
+	 * We don't track query counters for the COPY commands that are executed to
+	 * prepare intermediate results.
+	 */
+	const bool trackQueryCounters = false;
+
 	/* set up a DestReceiver that copies into the intermediate table */
 	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
@@ -325,7 +366,8 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  partitionColumnIndex,
 																  executorState,
 																  intermediateResultIdPrefix,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
@@ -354,13 +396,20 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	int partitionColumnIndex = PartitionColumnIndexFromColumnList(targetRelationId,
 																  columnNameList);
 
+	/*
+	 * We want to track query counters for the COPY commands that are executed to
+	 * perform the final INSERT for such INSERT..SELECT queries.
+	 */
+	const bool trackQueryCounters = true;
+
 	/* set up a DestReceiver that copies into the distributed table */
 	const bool publishableData = true;
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
 																  executorState, NULL,
-																  publishableData);
+																  publishableData,
+																  trackQueryCounters);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 
