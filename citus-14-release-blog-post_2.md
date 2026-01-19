@@ -1,12 +1,12 @@
 # Citus 14: PostgreSQL 18 support (and what it took to get there)
 
-Welcome to the release notes for **Citus 14**. The headline for 14 is **PostgreSQL 18 support**—so you can upgrade to Postgres 18 (released **2025-09-25**) while keeping Citus distributed SQL working end-to-end across coordinator + workers.
+Welcome to the release notes for **Citus 14**. The headline for 14 is **PostgreSQL 18 support**—so you can upgrade to Postgres 18 while keeping Citus distributed SQL working end-to-end across coordinator + workers.
 
-Like prior major releases, once Citus is compatible with the new Postgres major, many upstream improvements “just work”—but PG18 also introduces **new SQL surface area** and **behavior changes** that require Citus-specific work (parsing/deparsing, DDL propagation, and regression stability). (See prior major release notes for context.)
+Like prior major releases, once Citus is compatible with the new Postgres major, many upstream improvements but PG18 also introduces **new SQL surface area** and **behavior changes** that require Citus-specific work (parsing/deparsing, DDL propagation, and regression stability). (See prior major release notes for context.)
 
-**Citus 14** is primarily about **PostgreSQL 18 compatibility**—so teams can adopt Postgres 18 while keeping the distributed SQL, sharding, and operational model that Citus clusters depend on.
+**Citus 14** is primarily about **PostgreSQL 18 compatibility** so teams can adopt Postgres 18 while keeping the distributed SQL, sharding, and operational model that Citus clusters depend on.
 
-PostgreSQL 18’s **release date is September 25, 2025**, and it’s a substantial release: asynchronous I/O (AIO), skip-scan for multicolumn B-tree indexes, `uuidv7()`, virtual generated columns by default, OAuth authentication, `RETURNING OLD/NEW`, and temporal constraints.
+PostgreSQL 18’s substantial release: asynchronous I/O (AIO), skip-scan for multicolumn B-tree indexes, `uuidv7()`, virtual generated columns by default, OAuth authentication, `RETURNING OLD/NEW`, and temporal constraints.
 
 Because Citus is implemented as a Postgres extension, most upstream improvements “just work” once compatibility lands—but major releases also bring **SQL surface-area changes** and **planner/behavior shifts** that require Citus-specific work to keep distributed semantics correct across **coordinator + workers**, and to keep DDL/DML/utility commands working end-to-end.
 
@@ -34,9 +34,7 @@ This page dives deep into many of the changes in Citus 14, including:
 
 ## PostgreSQL 18 support intro
 
-Postgres 18 includes major improvements like **AIO**, **skip-scan**, and `uuidv7()`. Once Citus is compatible with PG18, these upstream performance and UX improvements generally benefit Citus clusters automatically—especially for shard-heavy scans and maintenance.
-
-Citus 14’s PG18-specific work focuses on the remaining pieces: new syntax and behavior that must be understood and preserved across distributed planning + coordinator/worker execution. The tracking issue is maintained publicly.
+Postgres 18 brings performance and UX improvements like **AIO**, **skip-scan**, and `uuidv7()`. Once Citus is compatible, these benefit Citus clusters automatically—especially for shard-heavy scans and maintenance. Citus 14 focuses on the PG18-specific syntax and behavior that need distributed planning, deparsing, and propagation updates so coordinator + workers stay in sync.
 
 ## PostgreSQL 18 highlights that matter in Citus clusters
 
@@ -226,13 +224,17 @@ SELECT * FROM ctl_ft2 ORDER BY a;
 ```
 ---
 
-### PG18: Generated columns: virtual-by-default + logical replication knobs
+### PG18: Generated Columns (Virtual by Default + Logical Replication Knobs)
 
-Postgres 18 changes the default behavior for generated columns: **generated columns are virtual by default** (computed on read), which can reduce write amplification for workloads where the generated value is rarely queried. Postgres 18 also improves **logical replication support** for generated columns via the `publish_generated_columns` publication option.
+PostgreSQL 18 changes generated column behavior significantly:
+
+**Key changes:**
+1. **Virtual by default:** Generated columns are now computed on read rather than stored, reducing write amplification
+2. **Logical replication support:** New `publish_generated_columns` publication option for replicating generated values
 
 Citus 14 ensures these PG18 changes work cleanly in distributed clusters by updating distributed DDL propagation and metadata handling so generated-column definitions remain consistent across coordinator and workers.
 
-**Example: virtual generated column on a distributed table**
+**Example 1: Virtual generated column** (computed on read):
 
 ```sql
 CREATE TABLE events (
@@ -253,7 +255,7 @@ FROM events
 ORDER BY id;
 ```
 
-**Example: explicit `STORED` generated column**
+**Example 2: Explicit `STORED` generated column**
 
 If you want the value materialized at write time (e.g., heavily filtered/indexed), use `STORED` explicitly.
 
@@ -267,7 +269,7 @@ CREATE TABLE events_stored (
 SELECT create_distributed_table('events_stored', 'id');
 ```
 
-**Example: publish generated columns in logical replication**
+**Example 3: Publishing generated columns in logical replication**
 
 ```sql
 CREATE PUBLICATION pub_events
@@ -313,9 +315,7 @@ If you omit `ONLY`, Postgres may process children as well (depending on the comm
 VACUUM (ANALYZE) metrics;
 ANALYZE metrics;
 ```
----
-
-### PG18: Constraints: `NOT ENFORCED` (partitioned-table additions)
+### PG18: Constraints: `NOT ENFORCED` (Partitioned-Table Additions)
 
 Postgres 18 expands constraint syntax and catalog semantics in ways Citus must **parse/deparse** and **propagate** correctly across coordinator + workers:
 
@@ -325,7 +325,7 @@ Postgres 18 expands constraint syntax and catalog semantics in ways Citus must *
   * `NOT VALID` foreign keys on partitioned tables
   * `ALTER TABLE ... DROP CONSTRAINT ONLY` on partitioned tables
 
-**Example: `NOT ENFORCED` constraints + catalog visibility**
+**Example 1: `NOT ENFORCED` constraints**
 
 ```sql
 CREATE TABLE customers (id bigint PRIMARY KEY);
@@ -352,7 +352,7 @@ WHERE conrelid = 'orders'::regclass
 ORDER BY conname;
 ```
 
-**Example: partitioned-table `NOT VALID` FK + `DROP CONSTRAINT ONLY`**
+**Example 2: Partitioned-table constraints**
 
 ```sql
 CREATE TABLE parent (id bigint PRIMARY KEY);
@@ -376,13 +376,11 @@ ALTER TABLE child
 ALTER TABLE child DROP CONSTRAINT ONLY child_parent_fk;
 ```
 
----
-
 ### PG18: DML: `RETURNING OLD/NEW`
 
 Postgres 18 lets `RETURNING` reference both the **previous** (`old`) and **new** (`new`) row values in `INSERT/UPDATE/DELETE/MERGE`. Citus 14 preserves these semantics in distributed execution and ensures results are returned correctly from coordinator + workers.
 
-Example:
+**Example 1: UPDATE with old and new values:**
 
 ```sql
 UPDATE t
@@ -391,7 +389,7 @@ WHERE id = 42
 RETURNING old.v AS old_v, new.v AS new_v;
 ```
 
-Example with `DELETE` (capture deleted values):
+**Example 2: DELETE capturing old values:**
 
 ```sql
 DELETE FROM t
@@ -399,9 +397,9 @@ WHERE id = 42
 RETURNING old.v AS deleted_v;
 ```
 
----
+### PG18: Utility/Ops Plumbing and Observability
 
-### PG18: Utility/ops plumbing and observability
+PostgreSQL 18 introduces several infrastructure improvements that affect tooling and extension development:
 
 Citus 14 adapts to PG18 interface/output changes that affect tooling and extension plumbing:
 
@@ -409,17 +407,41 @@ Citus 14 adapts to PG18 interface/output changes that affect tooling and extensi
 * `EXPLAIN (WAL)` adds a “WAL buffers full” field; Citus propagates it through distributed EXPLAIN output.
 * New extension macro `PG_MODULE_MAGIC_EXT` so extensions can report name/version metadata.
 
-Example: distributed EXPLAIN showing the new WAL field:
+**Example 1: Enhanced EXPLAIN output:**
 
 ```sql
 EXPLAIN (ANALYZE, WAL)
 SELECT count(*) FROM dist_table;
 ```
 
-Example: set the new GUC (session-level):
+**Example 2: Configuring file copy method:**
 
 ```sql
 SET file_copy_method = 'copy';
 ```
 
 ---
+
+## Community Contributions
+
+Citus 14 includes valuable contributions from the community. We're grateful for these improvements:
+
+* Pull request **#8371**: Avoids using the local plan cache for **multi-shard** queries, contributed by **@imranzaheer612**. ([GitHub][1])
+* Pull request **#8309**: Keeps temporary relation OIDs (“temp reloid”) for **columnar** cases to preserve correct behavior on PG18+, contributed by **@manaldush**. ([GitHub][2])
+* Pull request **#8253**: Moves `PushActiveSnapshot` outside a loop to improve correctness/efficiency, contributed by **@ivan-v-kush**. ([GitHub][3])
+* Pull request **#8301**: Fixes a GUC configuration issue that could crash when running with **ASAN**, contributed by **@visridha**. ([GitHub][4])
+
+[1]: https://github.com/citusdata/citus/pull/8371 "Don't use local plan cache for multi shard queries by imranzaheer612 · Pull Request #8371 · citusdata/citus · GitHub"
+[2]: https://github.com/citusdata/citus/pull/8309 "Keep temp reloid for columnar cases by manaldush · Pull Request #8309 · citusdata/citus · GitHub"
+[3]: https://github.com/citusdata/citus/pull/8253 "Move PushActiveSnapshot outside a for loop by ivan-v-kush · Pull Request #8253 · citusdata/citus · GitHub"
+[4]: https://github.com/citusdata/citus/pull/8301 "Update GUC setting to not crash with ASAN by visridha · Pull Request #8301 · citusdata/citus · GitHub"
+
+## Deprecations
+
+With Citus 14, we removed **PostgreSQL 15** support, following Citus’s policy of supporting the latest **3 PostgreSQL major releases**. We highly encourage you to upgrade to **Citus 14** and **PostgreSQL 18**.
+
+---
+
+## Notable Fixes
+
+_TODO: Add highlights of the most impactful fixes in Citus 14._ 
