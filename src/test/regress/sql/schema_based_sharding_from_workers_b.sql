@@ -303,8 +303,15 @@ SELECT * FROM tenant_8.table_1 ORDER BY c;
 -- add not null constraint
 ALTER TABLE tenant_8.table_1 ALTER COLUMN b SET NOT NULL;
 
+-- we want to hide the error message context because the node reporting the foreign key
+-- violation might change from one run to another.
+\set VERBOSITY terse
+
 -- not null constraint violation, error out
 INSERT INTO tenant_8.table_1 VALUES (NULL, 2, 'test');
+
+\set VERBOSITY default
+
 -- drop not null constraint and try again
 ALTER TABLE tenant_8.table_1 ALTER COLUMN b DROP NOT NULL;
 INSERT INTO tenant_8.table_1 VALUES (NULL, 3, 'test');
@@ -355,6 +362,8 @@ $$
 SET client_min_messages TO WARNING;
 DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8 CASCADE;
 DROP SCHEMA regular_schema CASCADE;
+DROP FUNCTION create_citus_local_with_data(text);
+DROP SEQUENCE dist_seq;
 
 -- reset it fwiw
 ALTER SYSTEM RESET citus.next_shard_id;
