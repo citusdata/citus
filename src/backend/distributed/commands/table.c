@@ -136,7 +136,7 @@ static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command);
 
 /*
- * PreprocessDropTableStmt processes DROP TABLE commands for partitioned tables.
+ * PreprocessDropTableStmt processes DROP TABLE commands for Citus tables.
  * If we are trying to DROP partitioned tables, we first need to go to MX nodes
  * and DETACH partitions from their parents. Otherwise, we process DROP command
  * multiple times in MX workers. For shards, we send DROP commands with IF EXISTS
@@ -170,6 +170,20 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		}
 
 		/*
+		 * For the Citus tables except tenant schema tables, we don't allow
+		 * dropping from the workers. For tenant schema tables, we allow dropping
+		 * from the workers only if the coordinator is in the metadata.
+		 */
+		if (IsTenantSchema(get_rel_namespace(relationId)))
+		{
+			EnsurePropagationToCoordinator();
+		}
+		else
+		{
+			EnsureCoordinator();
+		}
+
+		/*
 		 * While changing the tables that are part of a colocation group we need to
 		 * prevent concurrent mutations to the placements of the shard groups.
 		 */
@@ -185,13 +199,14 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			MarkInvalidateForeignKeyGraph();
 		}
 
-		/* we're only interested in partitioned and mx tables */
+		/*
+		 * From this point on, we're only interested in partitioned Citus
+		 * tables & only if MX is enabled.
+		 */
 		if (!ShouldSyncTableMetadata(relationId) || !PartitionedTable(relationId))
 		{
 			continue;
 		}
-
-		EnsureCoordinator();
 
 		List *partitionList = PartitionList(relationId);
 		if (list_length(partitionList) == 0)
@@ -199,7 +214,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			continue;
 		}
 
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		Oid partitionRelationId = InvalidOid;
 		foreach_declared_oid(partitionRelationId, partitionList)
@@ -207,10 +222,10 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			char *detachPartitionCommand =
 				GenerateDetachPartitionCommand(partitionRelationId);
 
-			SendCommandToWorkersWithMetadata(detachPartitionCommand);
+			SendCommandToRemoteNodesWithMetadata(detachPartitionCommand);
 		}
 
-		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 
 	return NIL;
@@ -666,7 +681,9 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 			.colocationParamType = COLOCATE_WITH_TABLE_LIKE_OPT,
 			.colocateWithTableName = parentRelationName,
 		};
-		CreateSingleShardTable(partitionRelationId, colocationParam);
+		bool allowFromWorkers = false;
+		CreateSingleShardTable(partitionRelationId, colocationParam,
+							   allowFromWorkers);
 		return;
 	}
 
@@ -1260,7 +1277,14 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
-	EnsureCoordinator();
+	if (IsTenantSchema(get_rel_namespace(leftRelationId)))
+	{
+		EnsurePropagationToCoordinator();
+	}
+	else
+	{
+		EnsureCoordinator();
+	}
 
 	/* these will be set in below loop according to subcommands */
 	Oid rightRelationId = InvalidOid;
@@ -1289,10 +1313,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 * alterTableStmt
 	 */
 	bool deparseAT = false;
-	bool propagateCommandToWorkers = true;
+	bool propagateCommandToRemoteNodes = true;
 
 	/*
-	 * Sometimes we want to run a different DDL Command string in MX workers
+	 * Sometimes we want to run a different DDL Command string on remote MX workers
 	 * For example, in cases where worker_nextval should be used instead
 	 * of nextval() in column defaults with type int and smallint
 	 */
@@ -1546,7 +1570,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
-				propagateCommandToWorkers = false;
+				propagateCommandToRemoteNodes = false;
 				useInitialDDLCommandString = false;
 			}
 		}
@@ -1642,7 +1666,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (OidIsValid(rightRelationId))
 	{
 		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
-		if (referencedIsLocalTable || !propagateCommandToWorkers)
+		if (referencedIsLocalTable || !propagateCommandToRemoteNodes)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -1657,7 +1681,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	{
 		/* ... otherwise use standard DDL task list function */
 		ddlJob->taskList = DDLTaskList(leftRelationId, alterTableCommand);
-		if (!propagateCommandToWorkers)
+		if (!propagateCommandToRemoteNodes)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -2401,10 +2425,16 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	}
 
 	/* Undistribute table if its old schema is a tenant schema */
-	if (IsTenantSchema(oldSchemaId) && IsCoordinator())
+	if (IsTenantSchema(oldSchemaId))
 	{
 		EnsureUndistributeTenantTableSafe(relationId,
 										  TenantOperationNames[TENANT_SET_SCHEMA]);
+
+		if (!IsCoordinator())
+		{
+			ereport(ERROR, (errmsg("moving distributed schema tables to another "
+								   "schema from workers is not supported yet")));
+		}
 
 		char *oldSchemaName = get_namespace_name(oldSchemaId);
 		char *tableName = stmt->relation->relname;
@@ -2756,7 +2786,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 	if (needMetadataSyncForNewSequences)
 	{
 		/* prevent recursive propagation */
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		/*
 		 * It's easy to retrieve the sequence id to create the proper commands
@@ -2766,9 +2796,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		 * That's why we execute the following here instead of
 		 * in ExecuteDistributedDDLJob
 		 */
-		SendCommandToWorkersWithMetadata(alterTableDefaultNextvalCmd);
+		SendCommandToRemoteNodesWithMetadata(alterTableDefaultNextvalCmd);
 
-		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+		SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 }
 
@@ -4334,11 +4364,6 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 {
 	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
-	if (!IsCoordinator())
-	{
-		return;
-	}
-
 	/*
 	 * We will let Postgres deal with missing_ok
 	 */
@@ -4349,16 +4374,24 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 
 	/* We have already asserted that we have exactly 1 address in the addresses. */
 	ObjectAddress *tableAddress = linitial(tableAddresses);
-	char relKind = get_rel_relkind(tableAddress->objectId);
+
+	Oid relationId = tableAddress->objectId;
+	if (!OidIsValid(relationId))
+	{
+		Assert(stmt->missing_ok);
+		return;
+	}
+
+	char relKind = get_rel_relkind(relationId);
 	if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_VIEW)
 	{
 		return;
 	}
 
-	Oid relationId = tableAddress->objectId;
 	Oid schemaId = get_namespace_oid(stmt->newschema, stmt->missing_ok);
 	if (!OidIsValid(schemaId))
 	{
+		Assert(stmt->missing_ok);
 		return;
 	}
 
@@ -4368,16 +4401,22 @@ ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *stmt)
 	 * that by seeing the table is still a single shard table. (i.e. not undistributed
 	 * at `preprocess` step)
 	 */
-	if (!IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED) &&
-		IsTenantSchema(schemaId))
+	if (IsCitusTableType(relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
-
-		char *schemaName = get_namespace_name(schemaId);
-		char *tableName = stmt->relation->relname;
-		ereport(NOTICE, (errmsg("Moving %s into distributed schema %s",
-								tableName, schemaName)));
-
-		CreateTenantSchemaTable(relationId);
+		return;
 	}
+
+	if (!ShouldCreateTenantSchemaTable(relationId))
+	{
+		return;
+	}
+
+	EnsureTenantTable(relationId, "ALTER TABLE SET SCHEMA");
+
+	char *schemaName = get_namespace_name(schemaId);
+	char *tableName = stmt->relation->relname;
+	ereport(NOTICE, (errmsg("Moving %s into distributed schema %s",
+							tableName, schemaName)));
+
+	CreateTenantSchemaTable(relationId);
 }
