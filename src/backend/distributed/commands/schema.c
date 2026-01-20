@@ -64,6 +64,10 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	EnsureSequentialMode(OBJECT_SCHEMA);
+
+	EnsurePropagationToCoordinator();
+
 	bool missingOk = createSchemaStmt->if_not_exists;
 	List *schemaAdressList = CreateSchemaStmtObjectAddress(node, missingOk, true);
 	Assert(list_length(schemaAdressList) == 1);
@@ -73,23 +77,6 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 	{
 		return NIL;
 	}
-
-	/*
-	 * We allow creating distributed schemas only when schema-based sharding is
-	 * enabled and the schema is suitable for the feature.
-	 */
-	char *schemaName = get_namespace_name(schemaId);
-	bool shouldUseSchemaBasedSharding = ShouldUseSchemaBasedSharding(schemaName);
-	if (shouldUseSchemaBasedSharding)
-	{
-		EnsurePropagationToCoordinator();
-	}
-	else
-	{
-		EnsureCoordinator();
-	}
-
-	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
@@ -101,7 +88,8 @@ PostprocessCreateSchemaStmt(Node *node, const char *queryString)
 
 	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
 
-	if (shouldUseSchemaBasedSharding)
+	char *schemaName = get_namespace_name(schemaId);
+	if (ShouldUseSchemaBasedSharding(schemaName))
 	{
 		/* for now, we don't allow creating tenant tables when creating the schema itself */
 		if (CreateSchemaStmtCreatesTable(createSchemaStmt))
