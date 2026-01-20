@@ -64,6 +64,76 @@ SELECT create_citus_local_with_data('citus_local_1');
 SELECT create_citus_local_with_data('citus_local_2');
 SELECT create_citus_local_with_data('citus_local_3');
 
+SELECT create_citus_local_with_data('citus_local_4');
+SELECT create_citus_local_with_data('citus_local_5');
+SELECT create_citus_local_with_data('citus_local_6');
+
+SELECT * INTO regular_schema.old_data_coordinator FROM regular_schema.citus_local_4;
+
+SET citus.enable_schema_based_sharding TO ON;
+
+CREATE SCHEMA tenant_4;
+CREATE SCHEMA tenant_5;
+CREATE SCHEMA tenant_6;
+
+SET citus.enable_schema_based_sharding TO OFF;
+
+-- Verify data consistency after moving to a distributed schema.
+--
+-- Repeat this for three different schemas to test copying data
+-- i) to shards on different workers and ii) to a shard on the
+-- coordinator, i.e., this node.
+--
+-- First, test this within a transaction block (and rollback) and then
+-- outside of a transaction block.
+BEGIN;
+    ALTER TABLE regular_schema.citus_local_4 SET SCHEMA tenant_4;
+    SELECT COUNT(*) = 0 FROM (
+        (TABLE tenant_4.citus_local_4) EXCEPT (TABLE regular_schema.old_data_coordinator)
+        UNION
+        (TABLE regular_schema.old_data_coordinator EXCEPT TABLE tenant_4.citus_local_4)
+    );
+ROLLBACK;
+
+ALTER TABLE regular_schema.citus_local_4 SET SCHEMA tenant_4;
+SELECT COUNT(*) = 0 FROM (
+    (TABLE tenant_4.citus_local_4) EXCEPT (TABLE regular_schema.old_data_coordinator)
+    UNION
+    (TABLE regular_schema.old_data_coordinator EXCEPT TABLE tenant_4.citus_local_4)
+);
+
+BEGIN;
+    ALTER TABLE regular_schema.citus_local_5 SET SCHEMA tenant_5;
+    SELECT COUNT(*) = 0 FROM (
+        (TABLE tenant_5.citus_local_5) EXCEPT (TABLE regular_schema.old_data_coordinator)
+        UNION
+        (TABLE regular_schema.old_data_coordinator EXCEPT TABLE tenant_5.citus_local_5)
+    );
+ROLLBACK;
+
+ALTER TABLE regular_schema.citus_local_5 SET SCHEMA tenant_5;
+SELECT COUNT(*) = 0 FROM (
+    (TABLE tenant_5.citus_local_5) EXCEPT (TABLE regular_schema.old_data_coordinator)
+    UNION
+    (TABLE regular_schema.old_data_coordinator EXCEPT TABLE tenant_5.citus_local_5)
+);
+
+BEGIN;
+    ALTER TABLE regular_schema.citus_local_6 SET SCHEMA tenant_6;
+    SELECT COUNT(*) = 0 FROM (
+        (TABLE tenant_6.citus_local_6) EXCEPT (TABLE regular_schema.old_data_coordinator)
+        UNION
+        (TABLE regular_schema.old_data_coordinator EXCEPT TABLE tenant_6.citus_local_6)
+    );
+ROLLBACK;
+
+ALTER TABLE regular_schema.citus_local_6 SET SCHEMA tenant_6;
+SELECT COUNT(*) = 0 FROM (
+    (TABLE tenant_6.citus_local_6) EXCEPT (TABLE regular_schema.old_data_coordinator)
+    UNION
+    (TABLE regular_schema.old_data_coordinator EXCEPT TABLE tenant_6.citus_local_6)
+);
+
 \c - - - :worker_1_port
 
 -- When creating a tenant table from workers, we always fetch the next shard id
@@ -79,7 +149,7 @@ SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO WARNING;
 
-SELECT * INTO regular_schema.old_data FROM regular_schema.citus_local_1;
+SELECT * INTO regular_schema.old_data_worker FROM regular_schema.citus_local_1;
 
 SET citus.enable_schema_based_sharding TO ON;
 
@@ -98,47 +168,47 @@ CREATE SCHEMA tenant_3;
 BEGIN;
     ALTER TABLE regular_schema.citus_local_1 SET SCHEMA tenant_1;
     SELECT COUNT(*) = 0 FROM (
-        (TABLE tenant_1.citus_local_1) EXCEPT (TABLE regular_schema.old_data)
+        (TABLE tenant_1.citus_local_1) EXCEPT (TABLE regular_schema.old_data_worker)
         UNION
-        (TABLE regular_schema.old_data EXCEPT TABLE tenant_1.citus_local_1)
+        (TABLE regular_schema.old_data_worker EXCEPT TABLE tenant_1.citus_local_1)
     );
 ROLLBACK;
 
 ALTER TABLE regular_schema.citus_local_1 SET SCHEMA tenant_1;
 SELECT COUNT(*) = 0 FROM (
-    (TABLE tenant_1.citus_local_1) EXCEPT (TABLE regular_schema.old_data)
+    (TABLE tenant_1.citus_local_1) EXCEPT (TABLE regular_schema.old_data_worker)
     UNION
-    (TABLE regular_schema.old_data EXCEPT TABLE tenant_1.citus_local_1)
+    (TABLE regular_schema.old_data_worker EXCEPT TABLE tenant_1.citus_local_1)
 );
 
 BEGIN;
     ALTER TABLE regular_schema.citus_local_2 SET SCHEMA tenant_2;
     SELECT COUNT(*) = 0 FROM (
-        (TABLE tenant_2.citus_local_2) EXCEPT (TABLE regular_schema.old_data)
+        (TABLE tenant_2.citus_local_2) EXCEPT (TABLE regular_schema.old_data_worker)
         UNION
-        (TABLE regular_schema.old_data EXCEPT TABLE tenant_2.citus_local_2)
+        (TABLE regular_schema.old_data_worker EXCEPT TABLE tenant_2.citus_local_2)
     );
 ROLLBACK;
 
 ALTER TABLE regular_schema.citus_local_2 SET SCHEMA tenant_2;
 SELECT COUNT(*) = 0 FROM (
-    (TABLE tenant_2.citus_local_2) EXCEPT (TABLE regular_schema.old_data)
+    (TABLE tenant_2.citus_local_2) EXCEPT (TABLE regular_schema.old_data_worker)
     UNION
-    (TABLE regular_schema.old_data EXCEPT TABLE tenant_2.citus_local_2)
+    (TABLE regular_schema.old_data_worker EXCEPT TABLE tenant_2.citus_local_2)
 );
 
 BEGIN;
     ALTER TABLE regular_schema.citus_local_3 SET SCHEMA tenant_3;
     SELECT COUNT(*) = 0 FROM (
-        (TABLE tenant_3.citus_local_3) EXCEPT (TABLE regular_schema.old_data)
+        (TABLE tenant_3.citus_local_3) EXCEPT (TABLE regular_schema.old_data_worker)
         UNION
-        (TABLE regular_schema.old_data EXCEPT TABLE tenant_3.citus_local_3)
+        (TABLE regular_schema.old_data_worker EXCEPT TABLE tenant_3.citus_local_3)
     );
 ROLLBACK;
 
 ALTER TABLE regular_schema.citus_local_3 SET SCHEMA tenant_3;
 SELECT COUNT(*) = 0 FROM (
-    (TABLE tenant_3.citus_local_3) EXCEPT (TABLE regular_schema.old_data)
+    (TABLE tenant_3.citus_local_3) EXCEPT (TABLE regular_schema.old_data_worker)
     UNION
-    (TABLE regular_schema.old_data EXCEPT TABLE tenant_3.citus_local_3)
+    (TABLE regular_schema.old_data_worker EXCEPT TABLE tenant_3.citus_local_3)
 );
