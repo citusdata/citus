@@ -1278,6 +1278,12 @@ DROP TABLE public.local_table;
 -- regular propagated schemas
 DROP SCHEMA tenant_5, regular_schema, tenant_3 CASCADE;
 
+-- cannot drop non-schema-distributed tables together with schema-distributed tables from workers
+DROP TABLE tenant_7.tbl_1, ref_tbl_1;
+
+-- can drop tables from multiple distributed schemas together
+DROP TABLE IF EXISTS tenant_7.tbl_1, tenant_6.tbl_1, tenant_7.tbl_2, tenant_7.tbl_3, tenant_7.tbl_4, does_not_exists;
+
 DROP SCHEMA tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema, sc1 CASCADE;
 
 DROP ROLE citus_schema_role, citus_schema_nonpri, authschema;
