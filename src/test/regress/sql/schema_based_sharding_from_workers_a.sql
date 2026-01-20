@@ -399,6 +399,28 @@ SELECT EXISTS(
 ) AS is_partition;
 $$);
 
+-- verify that we allow detaching a tenant partition from a tenant partitioned table
+ALTER TABLE tenant_4.parent_attach_test DETACH PARTITION tenant_4.child_attach_test;
+
+-- verify they're still sharing the same colocation group
+SELECT result FROM run_command_on_all_nodes($$
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_4.parent_attach_test'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'tenant_4.child_attach_test'::regclass);
+$$);
+
+-- verify that they're no longer in parent-child relationship
+SELECT result FROM run_command_on_all_nodes($$
+SELECT NOT EXISTS(
+    SELECT 1
+    FROM pg_inherits
+    WHERE inhrelid = 'tenant_4.child_attach_test'::regclass AND
+          inhparent = 'tenant_4.parent_attach_test'::regclass
+) AS is_partition;
+$$);
+
 -- errors out because shard replication factor > 1
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
