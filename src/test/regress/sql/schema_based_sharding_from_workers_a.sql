@@ -125,6 +125,10 @@ BEGIN
 END;
 $$;
 
+CREATE SCHEMA regular_schema_1;
+CREATE TABLE regular_schema_1.dist_table(a int, b text);
+SELECT create_distributed_table('regular_schema_1.dist_table', 'a', shard_count => 4);
+
 \c - - - :worker_1_port
 
 SET citus.enable_schema_based_sharding TO ON;
@@ -399,6 +403,28 @@ SELECT EXISTS(
 ) AS is_partition;
 $$);
 
+-- verify that we allow detaching a tenant partition from a tenant partitioned table
+ALTER TABLE tenant_4.parent_attach_test DETACH PARTITION tenant_4.child_attach_test;
+
+-- verify they're still sharing the same colocation group
+SELECT result FROM run_command_on_all_nodes($$
+SELECT COUNT(*)=1 FROM pg_dist_partition
+WHERE logicalrelid = 'tenant_4.parent_attach_test'::regclass AND
+       partmethod = 'n' AND repmodel = 's' AND colocationid = (
+        SELECT colocationid FROM pg_dist_partition
+        WHERE logicalrelid = 'tenant_4.child_attach_test'::regclass);
+$$);
+
+-- verify that they're no longer in parent-child relationship
+SELECT result FROM run_command_on_all_nodes($$
+SELECT NOT EXISTS(
+    SELECT 1
+    FROM pg_inherits
+    WHERE inhrelid = 'tenant_4.child_attach_test'::regclass AND
+          inhparent = 'tenant_4.parent_attach_test'::regclass
+) AS is_partition;
+$$);
+
 -- errors out because shard replication factor > 1
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE tenant_4.tbl_3 AS SELECT 1 AS a, 'text' as b;
@@ -411,9 +437,20 @@ CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b
 CREATE UNLOGGED TABLE IF NOT EXISTS tenant_4.tbl_4 AS SELECT 1 as a, 'text' as b WITH NO DATA;
 SELECT 1 as a, 'text' as b INTO tenant_4.tbl_5;
 
--- verify we can query the newly created tenant tables
-SELECT * FROM tenant_4.tbl_3;
-SELECT COUNT(*) FROM tenant_4.tbl_5;
+-- verify we can query the newly created tenant tables from any node
+SELECT result FROM run_command_on_all_nodes($$
+SELECT jsonb_agg(
+         jsonb_build_object(
+           'a', a,
+           'b', b
+         )
+         ORDER BY a
+       )
+    FROM tenant_4.tbl_3
+$$);
+SELECT result FROM run_command_on_all_nodes($$
+SELECT COUNT(*) FROM tenant_4.tbl_5
+$$);
 
 -- verify that we don't allow creating tenant tables by using CREATE TABLE OF commands
 CREATE TABLE tenant_4.employees OF regular_schema.employee_type (
@@ -1274,18 +1311,83 @@ $$);
 SET client_min_messages TO WARNING;
 DROP TABLE public.local_table;
 
--- show that we don't allow dropping distributed schemas from workers together with
--- regular propagated schemas
-DROP SCHEMA tenant_5, regular_schema, tenant_3 CASCADE;
+-- On all nodes, save metadata records related to regular_schema and regular_schema_1
+-- for later verification of cleanup after dropping these propagated schemas from
+-- workers.
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT logicalrelid INTO expect_pg_dist_partition_cleanup
+    FROM pg_dist_partition
+    JOIN pg_class ON logicalrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    WHERE pg_namespace.nspname IN ('regular_schema', 'regular_schema_1');
+$$);
 
-DROP SCHEMA tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema, sc1 CASCADE;
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT shardid INTO expect_pg_dist_shard_cleanup
+    FROM pg_dist_shard
+    JOIN pg_dist_partition ON pg_dist_shard.logicalrelid = pg_dist_partition.logicalrelid
+    JOIN pg_class ON pg_dist_partition.logicalrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    WHERE pg_namespace.nspname IN ('regular_schema', 'regular_schema_1');
+$$);
+
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT placementid INTO expect_pg_dist_placement_cleanup
+    FROM pg_dist_placement
+    JOIN pg_dist_shard ON pg_dist_placement.shardid = pg_dist_shard.shardid
+    JOIN pg_dist_partition ON pg_dist_shard.logicalrelid = pg_dist_partition.logicalrelid
+    JOIN pg_class ON pg_dist_partition.logicalrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    WHERE pg_namespace.nspname IN ('regular_schema', 'regular_schema_1');
+$$);
+
+CREATE SCHEMA local_schema;
+
+-- show that we allow dropping distributed schemas from workers together with
+-- regular propagated schemas
+DROP SCHEMA tenant_5, regular_schema, tenant_3, local_schema CASCADE;
+
+-- cannot drop non-schema-distributed tables together with schema-distributed tables from workers
+DROP TABLE tenant_7.tbl_1, regular_schema_1.dist_table;
+
+-- can drop tables from multiple distributed schemas together
+DROP TABLE IF EXISTS tenant_7.tbl_1, tenant_6.tbl_1, tenant_7.tbl_2, tenant_7.tbl_3, tenant_7.tbl_4, does_not_exists;
+
+-- can drop multiple distributed schemas together
+DROP SCHEMA tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema, sc1 CASCADE;
+
+-- can drop a regular propagated schema from worker too
+DROP SCHEMA regular_schema_1 CASCADE;
 
 DROP ROLE citus_schema_role, citus_schema_nonpri, authschema;
+
+-- verify that metadata related to regular_schema and regular_schema_1
+-- are cleaned up properly on all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT 0 = (
+        SELECT COUNT(*) FROM pg_dist_partition
+        JOIN expect_pg_dist_partition_cleanup
+        ON pg_dist_partition.logicalrelid = expect_pg_dist_partition_cleanup.logicalrelid
+    ) + (
+        SELECT COUNT(*) FROM pg_dist_shard
+        JOIN expect_pg_dist_shard_cleanup
+        ON pg_dist_shard.shardid = expect_pg_dist_shard_cleanup.shardid
+    ) + (
+        SELECT COUNT(*) FROM pg_dist_placement
+        JOIN expect_pg_dist_placement_cleanup
+        ON pg_dist_placement.placementid = expect_pg_dist_placement_cleanup.placementid
+    );
+$$);
+
+SELECT result FROM run_command_on_all_nodes($$
+    DROP TABLE expect_pg_dist_partition_cleanup,
+               expect_pg_dist_shard_cleanup,
+               expect_pg_dist_placement_cleanup;
+$$);
 
 \c - - - :master_port
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema CASCADE;
 
 SELECT citus_remove_node('localhost', :master_port);
 
