@@ -1854,6 +1854,8 @@ CreateTask(TaskType taskType)
 	task->partiallyLocalOrRemote = false;
 	task->relationShardList = NIL;
 
+	task->safeToPush = false;
+
 	return task;
 }
 
@@ -2501,6 +2503,56 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->relationRowLockList = relationRowLockList;
 	task->replicationModel = replicationModel;
 	task->parametersInQueryStringResolved = parametersInQueryResolved;
+
+	StringInfo sqlQueryString = makeStringInfo();
+	pg_get_query_def(query, sqlQueryString);
+	/* log the query string we generated */
+	ereport(DEBUG4, (errmsg("generated sql query for task %d", task->taskId),
+						errdetail("query string: \"%s\"",
+								sqlQueryString->data)));
+
+	// if (query->hasTargetSRFs)
+	// if (query->rtable)
+	// if (query->jointree)
+	// if (query->targetList)
+	// if (query->returningList)
+    /* Check the target list */
+	// task->safeToPush = true;
+	// ListCell *lc;
+	// bool foundUDF = false;
+	// foreach (lc, query->targetList)
+	// {
+	// 	TargetEntry *tle = (TargetEntry *) lfirst(lc);
+	// 	elog(DEBUG2, "walking target list");
+	// 	if (ContainsUDFWalker((Node *) tle->expr, &foundUDF))
+	// 	{
+	// 		task->safeToPush = false;
+	// 	elog(DEBUG2, "UNSAFE");
+	// 		// break;
+	// 	}
+	// }
+ //
+	/* quick check first */
+	// if (colocationId) //FIXME include header for INVALID_COLOCATION_ID ?
+	// {
+	// 	goto exitnow;
+	// }
+
+	ListCell *lc;
+	bool foundNonReferenceTable = false;
+	foreach (lc, relationShardList)
+	{
+		RelationShard *relationShard = (RelationShard *) lfirst(lc);
+		// elog(DEBUG2, "walking relation shard list");
+		if (!IsCitusTableType(relationShard->relationId, REFERENCE_TABLE))
+		{
+			foundNonReferenceTable = true;
+			// elog(DEBUG2, "found UNSAFE");
+		}
+	}
+
+	if (!foundNonReferenceTable)
+		task->safeToPush = true;
 
 	return list_make1(task);
 }

@@ -940,15 +940,17 @@ ExecutorBoundParams(void)
  * a function in a query that gets pushed down to the worker, and the
  * function performs a query on a distributed table.
  */
-void
-EnsureTaskExecutionAllowed(bool isRemote)
+bool
+EnsureTaskExecutionAllowed(bool isRemote, bool shouldError)
 {
 	if (IsTaskExecutionAllowed(isRemote))
 	{
-		return;
+		return true;
 	}
 
-	ereport(ERROR, (errmsg("cannot execute a distributed query from a query on a "
+	if (shouldError)
+		ereport(ERROR,
+				(errmsg("cannot execute a distributed query from a query on a "
 						   "shard"),
 					errdetail("Executing a distributed query in a function call that "
 							  "may be pushed to a remote node can lead to incorrect "
@@ -956,6 +958,8 @@ EnsureTaskExecutionAllowed(bool isRemote)
 					errhint("Avoid nesting of distributed queries or use alter user "
 							"current_user set citus.allow_nested_distributed_execution "
 							"to on to allow it with possible incorrectness.")));
+
+	return false;
 }
 
 

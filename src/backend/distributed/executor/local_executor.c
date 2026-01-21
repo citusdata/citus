@@ -230,7 +230,24 @@ ExecuteLocalTaskListExtended(List *taskList,
 	if (taskList != NIL)
 	{
 		bool isRemote = false;
-		EnsureTaskExecutionAllowed(isRemote);
+		if (!EnsureTaskExecutionAllowed(isRemote, false))
+		{
+			/* instead of erroring, let's check further */
+			Task *task = NULL;
+			foreach_ptr(task, taskList)
+			{
+				if (!task->safeToPush)
+					ereport(ERROR,
+							(errmsg("cannot execute a distributed query from a query on a "
+										"shard"),
+									errdetail("Executing a distributed query in a function call that "
+											"may be pushed to a remote node can lead to incorrect "
+											"results."),
+									errhint("Avoid nesting of distributed queries or use alter user "
+											"current_user set citus.allow_nested_distributed_execution "
+											"to on to allow it with possible incorrectness.")));
+			}
+		}
 	}
 
 	/*

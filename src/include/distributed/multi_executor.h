@@ -153,7 +153,7 @@ extern void EnsureSequentialMode(ObjectType objType);
 extern void SetLocalForceMaxQueryParallelization(void);
 extern void SortTupleStore(CitusScanState *scanState);
 extern ParamListInfo ExecutorBoundParams(void);
-extern void EnsureTaskExecutionAllowed(bool isRemote);
+extern bool EnsureTaskExecutionAllowed(bool isRemote, bool shouldError);
 
 
 #endif /* MULTI_EXECUTOR_H */
