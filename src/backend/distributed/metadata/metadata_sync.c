@@ -2973,7 +2973,7 @@ SyncNodeMetadataToNodesOptional(void)
 		/* we fetch the same node again to check if it's synced or not */
 		WorkerNode *nodeUpdated = FindWorkerNode(workerNode->workerName,
 												 workerNode->workerPort);
-		if (!nodeUpdated->metadataSynced)
+		if (nodeUpdated == NULL || !nodeUpdated->metadataSynced)
 		{
 			/* set the result to FAILED to trigger the sync again */
 			result = NODE_METADATA_SYNC_FAILED_SYNC;
