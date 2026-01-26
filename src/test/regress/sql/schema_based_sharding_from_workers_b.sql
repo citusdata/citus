@@ -137,6 +137,9 @@ SELECT COUNT(*) = 0 FROM (
     (TABLE regular_schema.old_data_coordinator EXCEPT TABLE tenant_6.citus_local_6)
 );
 
+CREATE TABLE regular_schema.reference_table (id bigint PRIMARY KEY);
+SELECT create_reference_table('regular_schema.reference_table');
+
 \c - - - :worker_1_port
 
 -- When creating a tenant table from workers, we always fetch the next shard id
@@ -328,8 +331,13 @@ ALTER TABLE tenant_8.table_1 ADD EXCLUDE USING btree (b with =);
 
 INSERT INTO tenant_8.table_1 VALUES (100, 150, 'test150');
 
+-- similarly, we want to hide the error message context here as well
+\set VERBOSITY terse
+
 -- should error out due to exclusion constraint violation
 INSERT INTO tenant_8.table_1 VALUES (100, 151, 'test151');
+
+\set VERBOSITY default
 
 -- test setting autovacuum option
 ALTER TABLE tenant_8.table_1 SET (autovacuum_enabled = false);
@@ -349,10 +357,141 @@ ALTER TABLE tenant_8.table_1 ADD PRIMARY KEY (e);
 
 SELECT * FROM tenant_8.table_1 ORDER BY c;
 
+-- test renaming table
+ALTER TABLE tenant_8.table_1 RENAME TO table_2;
+
+-- test renaming column
+ALTER TABLE tenant_8.table_2 RENAME COLUMN e TO f;
+
+-- test renaming an index
+ALTER INDEX tenant_8.table_1_pkey RENAME TO table_1_pkey_renamed;
+
 -- make sure that the shell table definition is same on all nodes
+-- TODOTASK: check if sequence ranges make sense
 SELECT result FROM run_command_on_all_nodes(
 $$
-SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_8.table_1') AS ddl_events;
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_8.table_2') AS ddl_events;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+CREATE SCHEMA alter_table_add_column;
+
+\c - - - :master_port
+
+CREATE SCHEMA alter_table_add_column_other_schema;
+
+CREATE OR REPLACE FUNCTION alter_table_add_column_other_schema.my_random(numeric)
+  RETURNS numeric AS
+$$
+BEGIN
+  RETURN 7 * $1;
+END;
+$$
+LANGUAGE plpgsql IMMUTABLE;
+
+SET search_path TO alter_table_add_column;
+
+CREATE COLLATION caseinsensitive (
+	provider = icu,
+	locale = 'und-u-ks-level2'
+);
+
+CREATE TYPE "simple_!\'custom_type" AS (a integer, b integer);
+
+\c - - - :worker_1_port
+
+SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2092000;$$);
+SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
+SELECT pg_sleep(0.1);
+
+SET citus.shard_replication_factor TO 1;
+SET search_path TO alter_table_add_column;
+SET citus.enable_schema_based_sharding TO ON;
+SET client_min_messages TO NOTICE;
+
+CREATE TABLE referenced (int_col integer PRIMARY KEY);
+CREATE TABLE referencing (text_col text);
+
+-- test alter table add column with various subcommands and options
+ALTER TABLE referencing ADD COLUMN test_1 integer DEFAULT (alter_table_add_column_other_schema.my_random(7) + random() + 5) NOT NULL CONSTRAINT fkey REFERENCES referenced(int_col) ON UPDATE SET DEFAULT ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE referencing ADD COLUMN test_2 integer UNIQUE REFERENCES referenced(int_col) ON UPDATE CASCADE ON DELETE SET DEFAULT NOT DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE referencing ADD COLUMN test_3 integer GENERATED ALWAYS AS (test_1 * alter_table_add_column_other_schema.my_random(1)) STORED UNIQUE REFERENCES referenced(int_col) MATCH FULL;
+ALTER TABLE referencing ADD COLUMN test_4 integer PRIMARY KEY WITH (fillfactor=70) NOT NULL REFERENCES referenced(int_col) MATCH SIMPLE ON UPDATE CASCADE ON DELETE SET DEFAULT;
+ALTER TABLE referencing ADD COLUMN test_5 integer CONSTRAINT unique_c UNIQUE WITH (fillfactor=50) NULL;
+ALTER TABLE referencing ADD COLUMN test_6 text COMPRESSION pglz COLLATE caseinsensitive NOT NULL;
+ALTER TABLE referencing ADD COLUMN "test_\'!7" "simple_!\'custom_type";
+
+-- we give up deparsing ALTER TABLE command if it needs to create a check constraint, and we fallback to legacy behavior
+ALTER TABLE referencing ADD COLUMN test_8 integer CHECK (test_8 > 0);
+ALTER TABLE referencing ADD COLUMN test_8 integer CONSTRAINT check_test_8 CHECK (test_8 > 0);
+
+-- error out properly even if the REFERENCES does not include the column list of the referenced table
+ALTER TABLE referencing ADD COLUMN test_9 bool, ADD COLUMN test_10 int REFERENCES referenced;
+ALTER TABLE referencing ADD COLUMN test_9 bool, ADD COLUMN test_10 int REFERENCES referenced(int_col);
+
+-- supress notice messages because we want to ignore the notice about skipping adding test_6
+-- on the shard, if the shard is local
+SET client_min_messages TO WARNING;
+
+-- try to add test_6 again, but with IF NOT EXISTS
+ALTER TABLE referencing ADD COLUMN IF NOT EXISTS test_6 text;
+ALTER TABLE referencing ADD COLUMN IF NOT EXISTS test_6 integer;
+
+SET client_min_messages TO NOTICE;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$SELECT get_grouped_fkey_constraints FROM get_grouped_fkey_constraints('alter_table_add_column.referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY result;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$SELECT get_index_defs FROM get_index_defs('alter_table_add_column', 'referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY result;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$SELECT get_column_defaults FROM get_column_defaults('alter_table_add_column', 'referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY result;
+
+SELECT result FROM run_command_on_all_nodes(
+  $$SELECT get_column_attrs FROM get_column_attrs('alter_table_add_column.referencing')$$
+)
+JOIN pg_dist_node USING (nodeid)
+ORDER BY result;
+
+CREATE SCHEMA tenant_9;
+
+CREATE SEQUENCE tenant_9.seq_1 START 5000 INCREMENT 5;
+
+-- create a more complicated table
+CREATE USER tenant_9_owner;
+CREATE TABLE tenant_9.table_1 (
+    a bigint NULL DEFAULT 100,
+    b text COLLATE "C" DEFAULT now()::text,
+    c int DEFAULT nextval('tenant_9.seq_1'::regclass),
+    d bigint GENERATED BY DEFAULT AS IDENTITY
+    (
+        MINVALUE 5
+        MAXVALUE 100
+        START WITH 10
+    ),
+    e int NOT NULL REFERENCES regular_schema.reference_table(id) MATCH FULL ON UPDATE RESTRICT ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    f int GENERATED ALWAYS AS (c * 2) STORED,
+    CONSTRAINT table_1_pkey PRIMARY KEY (a, b),
+    CONSTRAINT table_1_unique_b UNIQUE NULLS DISTINCT (b, a),
+    CONSTRAINT table_1_check_a_positive CHECK (a > 0)
+)
+PARTITION BY RANGE (a);
+
+-- make sure that the shell table definition is same on all nodes
+-- TODOTASK: check if sequence ranges make sense
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.table_1') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 
@@ -360,10 +499,11 @@ $$
 \c - - - :master_port
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8 CASCADE;
-DROP SCHEMA regular_schema CASCADE;
+DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8, tenant_9, alter_table_add_column CASCADE;
+DROP SCHEMA regular_schema, alter_table_add_column_other_schema CASCADE;
 DROP FUNCTION create_citus_local_with_data(text);
 DROP SEQUENCE dist_seq;
+DROP ROLE tenant_9_owner;
 
 -- reset it fwiw
 ALTER SYSTEM RESET citus.next_shard_id;
