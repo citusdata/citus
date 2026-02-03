@@ -1030,6 +1030,68 @@ ALTER INDEX tenant_9.index_with_name_1 RENAME TO index_with_name_1_renamed;
 ALTER INDEX tenant_9.index_with_name_3 RESET (fillfactor);
 ALTER INDEX tenant_9.index_with_name_5 SET (fillfactor = 80);
 ALTER INDEX tenant_9.index_with_name_5 ALTER COLUMN 1 SET STATISTICS 4646;
+SET citus.enable_schema_based_sharding TO OFF;
+CREATE SCHEMA regular_schema_worker_5;
+SET citus.enable_schema_based_sharding TO ON;
+CREATE TABLE regular_schema_worker_5.local_table_5 (a int, b text, c int);
+CREATE TABLE regular_schema_worker_5.local_table_6 (a int, b text, c int);
+CREATE VIEW regular_schema_worker_5.table_10_view_1 AS
+SELECT a FROM regular_schema_worker_5.local_table_5
+UNION
+SELECT a FROM regular_schema_worker_5.local_table_6;
+WARNING:  "view regular_schema_worker_5.table_10_view_1" has dependency to "table regular_schema_worker_5.local_table_6" that is not in Citus' metadata
+DETAIL:  "view regular_schema_worker_5.table_10_view_1" will be created only locally
+HINT:  Distribute "table regular_schema_worker_5.local_table_6" first to distribute "view regular_schema_worker_5.table_10_view_1"
+ALTER TABLE regular_schema_worker_5.local_table_5 SET SCHEMA tenant_9;
+NOTICE:  Moving local_table_5 into distributed schema tenant_9
+ALTER TABLE regular_schema_worker_5.local_table_6 SET SCHEMA tenant_9;
+NOTICE:  Moving local_table_6 into distributed schema tenant_9
+ALTER TABLE tenant_9.local_table_5 RENAME TO table_10;
+ALTER TABLE tenant_9.local_table_6 RENAME TO table_11;
+CREATE VIEW tenant_9.table_10_view_2 AS SELECT b FROM tenant_9.table_10;
+CREATE VIEW tenant_9.table_10_view_3 AS SELECT c FROM tenant_9.table_11;
+DROP VIEW tenant_9.table_10_view_2;
+ALTER VIEW tenant_9.table_10_view_3 RENAME TO table_10_view_3_renamed;
+ALTER VIEW regular_schema_worker_5.table_10_view_1 SET SCHEMA tenant_9;
+ALTER VIEW tenant_9.table_10_view_1 OWNER TO test_non_super_user;
+-- check distributed views on all nodes
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT jsonb_agg(
+    jsonb_build_object (
+        'schemaname', n.nspname,
+        'viewname', c.relname
+    )
+    ORDER BY n.nspname, c.relname
+)
+FROM pg_class c
+LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'v' AND n.nspname IN ('regular_schema_worker_5', 'tenant_9') AND c.relname LIKE 'table_10_view_%';
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+                                                             result
+---------------------------------------------------------------------
+ [{"viewname": "table_10_view_1", "schemaname": "tenant_9"}, {"viewname": "table_10_view_3_renamed", "schemaname": "tenant_9"}]
+ [{"viewname": "table_10_view_1", "schemaname": "tenant_9"}, {"viewname": "table_10_view_3_renamed", "schemaname": "tenant_9"}]
+ [{"viewname": "table_10_view_1", "schemaname": "tenant_9"}, {"viewname": "table_10_view_3_renamed", "schemaname": "tenant_9"}]
+(3 rows)
+
+-- check the owner of tenant_9.table_10_view_1 on all nodes
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT pg_get_userbyid(c.relowner)
+FROM pg_class c
+LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'v' AND n.nspname = 'tenant_9' AND c.relname = 'table_10_view_1';
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+       result
+---------------------------------------------------------------------
+ test_non_super_user
+ test_non_super_user
+ test_non_super_user
+(3 rows)
+
 -- make sure that the shell table definition is same on all nodes
 SELECT result FROM run_command_on_all_nodes(
 $$
@@ -1124,7 +1186,7 @@ $$
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8, tenant_9, alter_table_add_column CASCADE;
-DROP SCHEMA regular_schema, alter_table_add_column_other_schema, regular_schema_worker_1, regular_schema_worker_2, regular_schema_worker_3, regular_schema_worker_4 CASCADE;
+DROP SCHEMA regular_schema, alter_table_add_column_other_schema, regular_schema_worker_1, regular_schema_worker_2, regular_schema_worker_3, regular_schema_worker_4, regular_schema_worker_5 CASCADE;
 DROP FUNCTION create_citus_local_with_data(text);
 DROP SEQUENCE dist_seq;
 DROP ROLE tenant_9_owner;
