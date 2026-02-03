@@ -140,6 +140,10 @@ SELECT COUNT(*) = 0 FROM (
 CREATE TABLE regular_schema.reference_table (id bigint PRIMARY KEY);
 SELECT create_reference_table('regular_schema.reference_table');
 
+CREATE TABLE regular_schema.distributed_table (id int, text_col text);
+SELECT create_distributed_table('regular_schema.distributed_table', 'id');
+INSERT INTO regular_schema.distributed_table SELECT i, 'text_' || i FROM generate_series(1, 1000) AS i;
+
 \c - - - :worker_1_port
 
 -- When creating a tenant table from workers, we always fetch the next shard id
@@ -766,6 +770,53 @@ DROP TRIGGER trigger_to_drop ON tenant_9.table_8;
 -- not supported at all
 ALTER TRIGGER local_table_3_insert_statement_trigger_renamed ON tenant_9.table_8 DEPENDS ON EXTENSION citus;
 
+SET citus.enable_schema_based_sharding TO OFF;
+CREATE SCHEMA regular_schema_worker_4;
+SET citus.enable_schema_based_sharding TO ON;
+
+BEGIN;
+    -- Early in the transaction, force parallelization and make sure to use
+    -- remote connections even while accessing a local shard.
+    SET citus.force_max_query_parallelization TO ON;
+    SET citus.enable_local_execution TO OFF;
+
+    SELECT SUM(id) FROM regular_schema.distributed_table;
+
+    -- restore settings back
+    SET citus.force_max_query_parallelization TO OFF;
+    SET citus.enable_local_execution TO ON;
+
+    CREATE TABLE regular_schema_worker_4.local_table_4 (a int, b text, c int);
+    CREATE INDEX index_with_name_1 ON regular_schema_worker_4.local_table_4 USING btree (a) WITH (fillfactor = 90);
+    CREATE INDEX index_with_name_2 ON regular_schema_worker_4.local_table_4 USING btree (b);
+
+    ALTER TABLE regular_schema_worker_4.local_table_4 SET SCHEMA tenant_9;
+    ALTER TABLE tenant_9.local_table_4 RENAME TO table_9;
+
+    DROP INDEX tenant_9.index_with_name_2;
+
+    CREATE INDEX index_with_name_3 ON tenant_9.table_9 USING btree (b) WITH (fillfactor = 99);
+    CREATE INDEX ON tenant_9.table_9 USING btree (c);
+COMMIT;
+
+CREATE INDEX CONCURRENTLY ON tenant_9.table_9 USING btree (a, b);
+
+REINDEX TABLE tenant_9.table_9;
+REINDEX INDEX tenant_9.index_with_name_1;
+REINDEX INDEX CONCURRENTLY tenant_9.index_with_name_3;
+
+CREATE INDEX index_with_name_4 ON tenant_9.table_9 USING btree (a DESC);
+DROP INDEX CONCURRENTLY tenant_9.index_with_name_4;
+
+CREATE INDEX index_with_name_5 ON tenant_9.table_9 USING btree ((a + b::int) DESC) WITH (fillfactor = 60);
+
+ALTER INDEX tenant_9.index_with_name_1 RENAME TO index_with_name_1_renamed;
+
+ALTER INDEX tenant_9.index_with_name_3 RESET (fillfactor);
+ALTER INDEX tenant_9.index_with_name_5 SET (fillfactor = 80);
+
+ALTER INDEX tenant_9.index_with_name_5 ALTER COLUMN 1 SET STATISTICS 4646;
+
 -- make sure that the shell table definition is same on all nodes
 SELECT result FROM run_command_on_all_nodes(
 $$
@@ -808,12 +859,18 @@ SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.t
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.table_9') AS ddl_events;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
 -- cleanup
 \c - - - :master_port
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8, tenant_9, alter_table_add_column CASCADE;
-DROP SCHEMA regular_schema, alter_table_add_column_other_schema, regular_schema_worker_1, regular_schema_worker_2, regular_schema_worker_3 CASCADE;
+DROP SCHEMA regular_schema, alter_table_add_column_other_schema, regular_schema_worker_1, regular_schema_worker_2, regular_schema_worker_3, regular_schema_worker_4 CASCADE;
 DROP FUNCTION create_citus_local_with_data(text);
 DROP SEQUENCE dist_seq;
 DROP ROLE tenant_9_owner;
