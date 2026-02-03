@@ -1,20 +1,14 @@
--- create a temporary custom version of this function that's normally defined
--- in multi_test_helpers, so that this file can be run parallel with
--- multi_test_helpers during the minimal schedules
-CREATE OR REPLACE FUNCTION run_command_on_master_and_workers_temp(p_sql text)
-RETURNS void LANGUAGE plpgsql AS $$
-BEGIN
-     EXECUTE p_sql;
-     PERFORM run_command_on_workers(p_sql);
-END;$$;
-
 -- The following views are intended as alternatives to \d commands, whose
 -- output changed in PostgreSQL 10. In particular, they must be used any time
 -- a test wishes to print out the structure of a relation, which previously
 -- was safely accomplished by a \d invocation.
-SELECT run_command_on_master_and_workers_temp(
-$desc_views$
-CREATE VIEW table_fkey_cols AS
+--
+-- As we propagate CREATE VIEW commands when the view doesn't depend on an
+-- un-distributable dependency, all below views are implictly propagated as
+-- they only depend on catalog objects, which are created by initdb for each
+-- node separately and so are not assumed to be un-distributable by
+-- GetUndistributableDependency().
+CREATE OR REPLACE VIEW table_fkey_cols AS
 SELECT rc.constraint_name AS "name",
        kcu.column_name AS "column_name",
        uc_kcu.column_name AS "refd_column_name",
@@ -29,7 +23,7 @@ WHERE rc.constraint_schema = kcu.constraint_schema AND
       rc.unique_constraint_schema = uc_kcu.constraint_schema AND
       rc.unique_constraint_name = uc_kcu.constraint_name;
 
-CREATE VIEW table_fkeys AS
+CREATE OR REPLACE VIEW table_fkeys AS
 SELECT name AS "Constraint",
        format('FOREIGN KEY (%s) REFERENCES %s(%s)',
               string_agg(DISTINCT quote_ident(column_name), ', '),
@@ -39,7 +33,7 @@ SELECT name AS "Constraint",
 FROM table_fkey_cols
 GROUP BY (name, relid);
 
-CREATE VIEW table_attrs AS
+CREATE OR REPLACE VIEW table_attrs AS
 SELECT c.column_name AS "name",
        c.data_type AS "type",
        CASE
@@ -55,7 +49,7 @@ SELECT c.column_name AS "name",
 FROM information_schema.columns AS c
 ORDER BY ordinal_position;
 
-CREATE VIEW table_desc AS
+CREATE OR REPLACE VIEW table_desc AS
 SELECT "name" AS "Column",
        "type" || "modifier" AS "Type",
        rtrim((
@@ -85,7 +79,7 @@ WHERE c.contype <> 'n'         -- drop NOT NULL
   AND c.conrelid <> 0          -- table-level (exclude domain checks)
 ORDER BY "Constraint", "Definition";
 
-CREATE VIEW index_attrs AS
+CREATE OR REPLACE VIEW index_attrs AS
 WITH indexoid AS (
 	SELECT c.oid,
 	  n.nspname,
@@ -108,8 +102,3 @@ WHERE true
 	AND a.attnum > 0
 	AND NOT a.attisdropped
 ORDER BY a.attrelid, a.attnum;
-
-$desc_views$
-);
-
-DROP FUNCTION run_command_on_master_and_workers_temp(p_sql text);
