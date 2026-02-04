@@ -109,6 +109,7 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static AppendRelInfo * FindTargetAppendRelInfo(PlannerInfo *root, int relationRteIndex);
 static List * makeTargetListFromCustomScanList(List *custom_scan_tlist);
+static void DisableTrackingQueryCountersForPlanTree(struct Plan *planTree);
 static List * makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist);
 static int32 BlessRecordExpressionList(List *exprs);
 static void CheckNodeIsDumpable(Node *node);
@@ -1699,6 +1700,64 @@ makeTargetListFromCustomScanList(List *custom_scan_tlist)
 		resno++;
 	}
 	return targetList;
+}
+
+
+/*
+ * DisableTrackingQueryCountersForPlannedStmt takes a PlannedStmt and
+ * disables tracking query counters for the distributed parts of the plan.
+ */
+void
+DisableTrackingQueryCountersForPlannedStmt(PlannedStmt *plannedStmt)
+{
+	DisableTrackingQueryCountersForPlanTree(plannedStmt->planTree);
+}
+
+
+/*
+ * DisableTrackingQueryCountersForPlanTree takes a plan tree and
+ * disables tracking query counters for it if it's a distributed plan
+ * and its distributed children recursively.
+ *
+ * Note that today none of the callers provide a plan tree with subplans
+ * at any level, so we throw an error if we find any subplans to avoid
+ * unnecessary implementation.
+ */
+static void
+DisableTrackingQueryCountersForPlanTree(struct Plan *planTree)
+{
+	/* we don't expect very deep plan trees but let's be on the safe side */
+	CHECK_FOR_INTERRUPTS();
+	check_stack_depth();
+
+	if (planTree == NULL)
+	{
+		return;
+	}
+
+	DisableTrackingQueryCountersForPlanTree(planTree->lefttree);
+	DisableTrackingQueryCountersForPlanTree(planTree->righttree);
+
+	if (!IsCitusCustomScan(planTree))
+	{
+		return;
+	}
+
+	DistributedPlan *distPlan = GetDistributedPlan((CustomScan *) planTree);
+	distPlan->disableTrackingQueryCounters = true;
+
+	if (distPlan->selectPlanForModifyViaCoordinatorOrRepartition)
+	{
+		DisableTrackingQueryCountersForPlanTree(distPlan->
+												selectPlanForModifyViaCoordinatorOrRepartition
+												->planTree);
+	}
+
+	if (list_length(distPlan->subPlanList) > 0 ||
+		list_length(distPlan->usedSubPlanNodeList) > 0)
+	{
+		ereport(ERROR, (errmsg("unexpected subplans in distributed plan")));
+	}
 }
 
 

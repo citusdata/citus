@@ -117,7 +117,7 @@ extern List * GenerateGrantOnFDWQueriesFromAclItem(Oid serverId, AclItem *aclIte
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId,
 									 uint64 shardLength, int32 groupId);
 extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
-extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
+extern void CreateInterTableRelationshipOfRelationOnRemoteNodes(Oid relationId);
 extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
 extern List * DetachPartitionCommandList(void);
 extern void SyncNodeMetadataToNodes(void);

@@ -39,7 +39,6 @@ extern void InsertColocationGroupLocally(uint32 colocationId, int shardCount,
 										 Oid distributionColumnCollation);
 extern bool IsColocateWithNone(char *colocateWithTableName);
 extern bool IsColocateWithDefault(char *colocateWithTableName);
-extern uint32 GetNextColocationId(void);
 extern void ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId);
 extern void CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId);
 extern void CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId);

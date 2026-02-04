@@ -1525,7 +1525,9 @@ CreateCitusTableLike(TableConversionState *con)
 				.colocateWithTableName = quote_qualified_identifier(con->schemaName,
 																	con->relationName)
 			};
-			CreateSingleShardTable(con->newRelationId, colocationParam);
+			bool allowFromWorkers = false;
+			CreateSingleShardTable(con->newRelationId, colocationParam,
+								   allowFromWorkers);
 		}
 		else
 		{

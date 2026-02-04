@@ -139,6 +139,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(planningError);
 
 	COPY_SCALAR_FIELD(sourceResultRepartitionColumnIndex);
+	COPY_SCALAR_FIELD(disableTrackingQueryCounters);
 }
 
 

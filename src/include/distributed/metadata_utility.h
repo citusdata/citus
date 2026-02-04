@@ -325,7 +325,7 @@ extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
-extern bool IsRemoteShardPlacement(ShardPlacement *shardPlacement);
+extern bool IsNonCoordShardPlacement(ShardPlacement *shardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
 										   ShardPlacement *));
@@ -376,13 +376,14 @@ extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRowGlobally(uint64 placementId);
 extern void DeleteShardPlacementRow(uint64 placementId);
-extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam);
+extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
+								   bool allowFromWorkersIfPostgresTable);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName);
 extern void CreateReferenceTable(Oid relationId);
 extern void CreateTruncateTrigger(Oid relationId);
-extern uint64 CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId);
+extern List * CopyablePlainColumnNameListFromTupleDesc(TupleDesc tupleDescriptor);
 extern void EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 extern void UndistributeTables(List *relationIdList);

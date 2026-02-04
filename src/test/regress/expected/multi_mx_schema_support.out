@@ -487,9 +487,16 @@ SELECT table_schema AS "Shards' Schema"
 (1 row)
 
 -- Show that altering distributed schema is not allowed on worker nodes
+-- when the coordinator is not in the metadata.
+SELECT COUNT(*)=0 FROM pg_dist_node WHERE groupid = 0; -- verify that the coordinator is not in the metadata
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 ALTER SCHEMA mx_old_schema RENAME TO temp_mx_old_schema;
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
+ERROR:  coordinator is not added to the metadata
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 \c - - - :master_port
 ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;
 SELECT objid::oid::regnamespace::text as "Distributed Schemas"
