@@ -204,12 +204,16 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	 * ownership checks on workers. This is important when a non-owner user runs
 	 * CREATE EXTENSION IF NOT EXISTS for an existing extension - PostgreSQL's
 	 * standard_ProcessUtility succeeds (extension exists, no-op), but metadata
-	 * propagation would fail the ownership check. By skipping propagation when
-	 * the extension is already distributed, we match vanilla PostgreSQL behavior.
+	 * propagation would fail the ownership check.
+	 *
+	 * We still send the CREATE EXTENSION command to workers (with IF NOT EXISTS)
+	 * for idempotency - if the extension somehow doesn't exist on a worker, it
+	 * will be created. But we skip EnsureAllObjectDependenciesExistOnAllNodes
+	 * to avoid the ownership check that would fail for non-owner users.
 	 */
 	if (IsAnyObjectDistributed(extensionAddresses))
 	{
-		/* extension already distributed, skip metadata propagation */
+		/* extension already distributed, skip dependency propagation */
 		return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 	}
 
