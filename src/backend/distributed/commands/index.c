@@ -860,7 +860,7 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	 * when CREATE INDEX CONCURRENTLY IF NOT EXISTS is run on an already
 	 * existing index.
 	 */
-	bool shouldInvalidateIndex = true;
+	bool should_invalidate_index = true;
 	if (indexStmt->if_not_exists)
 	{
 		HeapTuple indexTuple = SearchSysCache1(INDEXRELID,
@@ -871,14 +871,14 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 			if (indexForm->indisvalid)
 			{
 				/* Index was already valid, so it existed before this command */
-				shouldInvalidateIndex = false;
+				should_invalidate_index = false;
 			}
 			ReleaseSysCache(indexTuple);
 		}
 	}
 
 	/* mark index as invalid, in-place (cannot be rolled back) */
-	if (shouldInvalidateIndex)
+	if (should_invalidate_index)
 	{
 		index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
 	}
