@@ -1825,7 +1825,7 @@ ExpandRolesToGroups(Oid roleid)
 													true, NULL, scanKeyCount, scanKey);
 
 	List *roles = NIL;
-	List *grantorOids = NIL;
+	List *seenGrantors = NIL;
 	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
@@ -1839,16 +1839,19 @@ ExpandRolesToGroups(Oid roleid)
 		/*
 		 * Add the grantor as a dependency if it's not the same as the current role.
 		 * We track grantors separately to avoid adding duplicates.
+		 * Note: For roles with many memberships, this O(n) duplicate check could be
+		 * optimized with a hash table, but given that most roles have relatively few
+		 * memberships, the list-based approach is simpler and sufficient.
 		 */
 		if (membership->grantor != roleid &&
-			!list_member_oid(grantorOids, membership->grantor))
+			!list_member_oid(seenGrantors, membership->grantor))
 		{
 			DependencyDefinition *grantorDefinition = palloc0(sizeof(DependencyDefinition));
 			grantorDefinition->mode = DependencyObjectAddress;
 			ObjectAddressSet(grantorDefinition->data.address, AuthIdRelationId,
 							 membership->grantor);
 			roles = lappend(roles, grantorDefinition);
-			grantorOids = lappend_oid(grantorOids, membership->grantor);
+			seenGrantors = lappend_oid(seenGrantors, membership->grantor);
 		}
 	}
 
