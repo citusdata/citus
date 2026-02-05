@@ -1801,8 +1801,8 @@ GetDependentRoleIdsFDW(Oid FDWOid)
 /*
  * ExpandRolesToGroups returns a list of object addresses pointing to roles that roleid
  * depends on. This includes:
- * 1. Roles that roleid is a member of (membership->roleid)
- * 2. Roles that are used as grantors for roleid's memberships (membership->grantor)
+ *   1. Roles that roleid is a member of (membership->roleid)
+ *   2. Roles that are used as grantors for roleid's memberships (membership->grantor)
  *
  * The second dependency is critical for proper role propagation order when adding nodes.
  * If role A is used as a grantor when granting role B to role C, then role A must be
@@ -1849,7 +1849,7 @@ ExpandRolesToGroups(Oid roleid)
 			DependencyDefinition *grantorDefinition = palloc0(sizeof(DependencyDefinition));
 			grantorDefinition->mode = DependencyObjectAddress;
 			ObjectAddressSet(grantorDefinition->data.address, AuthIdRelationId,
-							 membership->grantor);
+							membership->grantor);
 			roles = lappend(roles, grantorDefinition);
 			seenGrantors = lappend_oid(seenGrantors, membership->grantor);
 		}
