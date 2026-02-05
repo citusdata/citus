@@ -860,13 +860,17 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	 * when CREATE INDEX CONCURRENTLY IF NOT EXISTS is run on an already
 	 * existing index.
 	 */
-	bool skip_invalidation = false;
+	bool indexWasAlreadyValid = false;
 	if (indexStmt->if_not_exists)
 	{
 		/*
 		 * Check the current validity state of the index. If it's already valid,
 		 * it means the index existed before this command and PostgreSQL skipped
 		 * creation. We should not invalidate it in this case.
+		 * 
+		 * Note: SearchSysCache1 may return an invalid tuple if the index doesn't
+		 * exist in the catalog, which would mean the index was just created.
+		 * HeapTupleIsValid handles this case safely.
 		 */
 		HeapTuple indexTuple = SearchSysCache1(INDEXRELID,
 											   ObjectIdGetDatum(indexRelationId));
@@ -876,14 +880,14 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 			if (indexForm->indisvalid)
 			{
 				/* Index was already valid, so it existed before this command */
-				skip_invalidation = true;
+				indexWasAlreadyValid = true;
 			}
 			ReleaseSysCache(indexTuple);
 		}
 	}
 
 	/* mark index as invalid, in-place (cannot be rolled back) */
-	if (!skip_invalidation)
+	if (!indexWasAlreadyValid)
 	{
 		index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
 	}
