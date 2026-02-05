@@ -19,6 +19,7 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_index.h"
 #include "catalog/pg_namespace.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
@@ -853,8 +854,34 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 
 	PushActiveSnapshot(GetTransactionSnapshot());
 
+	/*
+	 * If IF NOT EXISTS was used and the index already existed (is valid),
+	 * skip invalidating it. This prevents invalidating an existing index
+	 * when CREATE INDEX CONCURRENTLY IF NOT EXISTS is run on an already
+	 * existing index.
+	 */
+	bool shouldInvalidateIndex = true;
+	if (indexStmt->if_not_exists)
+	{
+		HeapTuple indexTuple = SearchSysCache1(INDEXRELID,
+											   ObjectIdGetDatum(indexRelationId));
+		if (HeapTupleIsValid(indexTuple))
+		{
+			Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+			if (indexForm->indisvalid)
+			{
+				/* Index was already valid, so it existed before this command */
+				shouldInvalidateIndex = false;
+			}
+			ReleaseSysCache(indexTuple);
+		}
+	}
+
 	/* mark index as invalid, in-place (cannot be rolled back) */
-	index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
+	if (shouldInvalidateIndex)
+	{
+		index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
+	}
 	PopActiveSnapshot();
 
 	/* re-open a transaction command from here on out */
