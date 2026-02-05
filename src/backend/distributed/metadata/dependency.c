@@ -1800,7 +1800,13 @@ GetDependentRoleIdsFDW(Oid FDWOid)
 
 /*
  * ExpandRolesToGroups returns a list of object addresses pointing to roles that roleid
- * depends on.
+ * depends on. This includes:
+ * 1. Roles that roleid is a member of (membership->roleid)
+ * 2. Roles that are used as grantors for roleid's memberships (membership->grantor)
+ *
+ * The second dependency is critical for proper role propagation order when adding nodes.
+ * If role A is used as a grantor when granting role B to role C, then role A must be
+ * propagated before role C to ensure role A has the necessary admin option on role B.
  */
 static List *
 ExpandRolesToGroups(Oid roleid)
@@ -1819,15 +1825,31 @@ ExpandRolesToGroups(Oid roleid)
 													true, NULL, scanKeyCount, scanKey);
 
 	List *roles = NIL;
+	List *grantorOids = NIL;
 	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
-		DependencyDefinition *definition = palloc0(sizeof(DependencyDefinition));
-		definition->mode = DependencyObjectAddress;
-		ObjectAddressSet(definition->data.address, AuthIdRelationId, membership->roleid);
+		/* Add the role being granted as a dependency */
+		DependencyDefinition *roleDefinition = palloc0(sizeof(DependencyDefinition));
+		roleDefinition->mode = DependencyObjectAddress;
+		ObjectAddressSet(roleDefinition->data.address, AuthIdRelationId, membership->roleid);
+		roles = lappend(roles, roleDefinition);
 
-		roles = lappend(roles, definition);
+		/*
+		 * Add the grantor as a dependency if it's not the same as the current role.
+		 * We track grantors separately to avoid adding duplicates.
+		 */
+		if (membership->grantor != roleid &&
+			!list_member_oid(grantorOids, membership->grantor))
+		{
+			DependencyDefinition *grantorDefinition = palloc0(sizeof(DependencyDefinition));
+			grantorDefinition->mode = DependencyObjectAddress;
+			ObjectAddressSet(grantorDefinition->data.address, AuthIdRelationId,
+							 membership->grantor);
+			roles = lappend(roles, grantorDefinition);
+			grantorOids = lappend_oid(grantorOids, membership->grantor);
+		}
 	}
 
 	systable_endscan(scanDescriptor);
