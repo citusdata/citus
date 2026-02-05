@@ -369,7 +369,7 @@ ROLLBACK;
 
 -- Postgres already doesn't allow creating extensions in temp schema but
 -- let's have a test for that to track any furher changes in postgres.
-DROP EXTENSION isn CASCADE;
+DROP EXTENSION IF EXISTS isn CASCADE;
 CREATE EXTENSION isn WITH SCHEMA pg_temp;
 
 -- Test that CREATE EXTENSION IF NOT EXISTS works for non-owner users
@@ -398,4 +398,4 @@ DROP EXTENSION IF EXISTS seg CASCADE;
 DROP USER IF EXISTS non_owner_user;
 
 -- drop the schema and all the objects
-DROP SCHEMA "extension'test" CASCADE;
+DROP SCHEMA IF EXISTS "extension'test" CASCADE;
