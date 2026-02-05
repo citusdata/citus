@@ -523,7 +523,7 @@ $$);
 
 -- Distribute an extension-function where extension is not in pg_dist_object
 SET citus.enable_ddl_propagation TO false;
-CREATE EXTENSION seg;
+CREATE EXTENSION IF NOT EXISTS seg;
 SET citus.enable_ddl_propagation TO true;
 -- Check the extension in pg_dist_object
 SELECT count(*) FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND
@@ -583,8 +583,8 @@ $$);
  (localhost,57638,t,1)
 (2 rows)
 
-DROP EXTENSION seg;
-DROP TABLE test_extension_function;
+DROP EXTENSION IF EXISTS seg;
+DROP TABLE IF EXISTS test_extension_function;
 -- Test extension function altering distribution argument
 BEGIN;
 SET citus.shard_replication_factor = 1;
