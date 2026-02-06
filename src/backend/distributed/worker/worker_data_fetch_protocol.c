@@ -49,6 +49,7 @@
 #include "distributed/deparser.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -66,6 +67,7 @@
 static bool check_log_statement(List *stmt_list);
 static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 								Oid sequenceTypeId);
+static void SetLocalEnableDDLPropagation(bool state);
 
 
 /* exports for SQL callable functions */
@@ -73,6 +75,7 @@ PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
 PG_FUNCTION_INFO_V1(worker_adjust_identity_column_seq_ranges);
+PG_FUNCTION_INFO_V1(citus_internal_adjust_identity_column_seq_settings);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
 PG_FUNCTION_INFO_V1(worker_nextval);
 
@@ -137,10 +140,13 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_adjust_identity_column_seq_ranges takes a table oid, runs an ALTER SEQUENCE statement
- * for each identity column to adjust the minvalue and maxvalue of the sequence owned by
- * identity column such that the sequence creates globally unique values.
- * We use table oid instead of sequence name to avoid any potential conflicts between sequences of different tables. This way, we can safely iterate through identity columns on a specific table without any issues. While this may introduce a small amount of business logic to workers, it's a much safer approach overall.
+ * worker_adjust_identity_column_seq_ranges implements the legacy
+ * worker_adjust_identity_column_seq_ranges() UDF. It is kept for backward
+ * compatibility when an operation is initiated from a node that is not yet
+ * upgraded and still assumes the presence of this UDF version on remote nodes,
+ * calling it on nodes that have already been upgraded to a newer Citus version.
+ * Keeping this implementation allows upgraded nodes to continue responding to
+ * such calls.
  */
 Datum
 worker_adjust_identity_column_seq_ranges(PG_FUNCTION_ARGS)
@@ -192,6 +198,258 @@ worker_adjust_identity_column_seq_ranges(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_internal_adjust_identity_column_seq_settings takes a sequence oid;
+ * and if this's a worker node, then runs an ALTER SEQUENCE statement to adjust
+ * the minvalue and maxvalue of it so that the sequence creates globally unique
+ * values. When called on coordinator, the function sets the sequence's last value
+ * to the given last value.
+ */
+Datum
+citus_internal_adjust_identity_column_seq_settings(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	Oid sequenceId = PG_GETARG_OID(0);
+	int64 lastValue = PG_GETARG_INT64(1);
+
+	EnsureTableOwner(sequenceId);
+
+	/*
+	 * While altering a sequence, avoid propagating the DDL to other nodes
+	 * if it's already marked as distributed.
+	 */
+	bool oldEnableDDLPropagation = EnableDDLPropagation;
+	SetLocalEnableDDLPropagation(false);
+
+	Oid sequenceSchemaOid = get_rel_namespace(sequenceId);
+	char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
+	char *sequenceName = get_rel_name(sequenceId);
+	Oid sequenceTypeId = pg_get_sequencedef(sequenceId)->seqtypid;
+
+	if (IsCoordinator())
+	{
+		DirectFunctionCall2(setval_oid,
+							ObjectIdGetDatum(sequenceId),
+							Int64GetDatum(lastValue));
+	}
+	else
+	{
+		AlterSequenceMinMax(sequenceId, sequenceSchemaName, sequenceName,
+							sequenceTypeId);
+	}
+
+	SetLocalEnableDDLPropagation(oldEnableDDLPropagation);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * AdjustDependentSeqRangesOnLocalNode takes a table oid, finds all sequences
+ * the table depends on, and runs AlterSequenceMinMax() for each.
+ *
+ * Note that this doesn't adjust sequence ranges for identity columns by design,
+ * see comments written for the call made to GetAllDependenciesForObject() in
+ * the function body for more details.
+ */
+void
+AdjustDependentSeqRangesOnLocalNode(Oid relationId)
+{
+	/*
+	 * While altering a sequence, avoid propagating the DDL to other nodes
+	 * if it's already marked as distributed.
+	 */
+	bool oldEnableDDLPropagation = EnableDDLPropagation;
+	SetLocalEnableDDLPropagation(false);
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSubSet(address, RelationRelationId, relationId, 0);
+
+	/*
+	 * We use GetAllDependenciesForObject() instead of GetDependenciesForObject()
+	 * because we want to collect the sequences even if they're already marked
+	 * as distributed. This is because, today this function is called after most
+	 * of the work to distribute a table is done.
+	 *
+	 * Also note that as GetAllDependenciesForObject() uses ExpandCitusSupportedTypes(),
+	 * while it can capture the sequences used by serial columns, it explicitly
+	 * discards sequences used by identity columns.
+	 */
+	List *dependencies = GetAllDependenciesForObject(&address);
+	ObjectAddress *dependency = NULL;
+	foreach_declared_ptr(dependency, dependencies)
+	{
+		if (!getObjectClass(dependency) == OCLASS_CLASS ||
+			get_rel_relkind(dependency->objectId) != RELKIND_SEQUENCE)
+		{
+			continue;
+		}
+
+		Oid sequenceOid = dependency->objectId;
+		Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
+		char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
+		char *sequenceName = get_rel_name(sequenceOid);
+		Oid sequenceTypeId = pg_get_sequencedef(sequenceOid)->seqtypid;
+
+		AlterSequenceMinMax(sequenceOid, sequenceSchemaName, sequenceName,
+							sequenceTypeId);
+	}
+
+	SetLocalEnableDDLPropagation(oldEnableDDLPropagation);
+}
+
+
+/*
+ * AdjustIdentityColumnSeqRangeOnLocalNode takes a table oid, finds all identity
+ * columns on the table, and runs AlterSequenceMinMax() for each underlying sequence.
+ */
+void
+AdjustIdentityColumnSeqRangesOnLocalNode(Oid relationId)
+{
+	/*
+	 * While altering a sequence, avoid propagating the DDL to other nodes
+	 * if it's already marked as distributed.
+	 */
+	bool oldEnableDDLPropagation = EnableDDLPropagation;
+	SetLocalEnableDDLPropagation(false);
+
+	Relation tableRelation = relation_open(relationId, AccessShareLock);
+	TupleDesc tableTupleDesc = RelationGetDescr(tableRelation);
+
+	bool missingSequenceOk = false;
+
+	for (int attributeIndex = 0; attributeIndex < tableTupleDesc->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tableTupleDesc,
+														attributeIndex);
+
+		/* skip dropped columns */
+		if (attributeForm->attisdropped)
+		{
+			continue;
+		}
+
+		if (attributeForm->attidentity)
+		{
+			Oid sequenceOid = getIdentitySequence(identitySequenceRelation_compat(
+													  tableRelation),
+												  attributeForm->attnum,
+												  missingSequenceOk);
+
+			Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
+			char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
+			char *sequenceName = get_rel_name(sequenceOid);
+			Oid sequenceTypeId = pg_get_sequencedef(sequenceOid)->seqtypid;
+
+			AlterSequenceMinMax(sequenceOid, sequenceSchemaName, sequenceName,
+								sequenceTypeId);
+		}
+	}
+
+	relation_close(tableRelation, NoLock);
+
+	SetLocalEnableDDLPropagation(oldEnableDDLPropagation);
+}
+
+
+/*
+ * SetNextValColumnDefaultsToWorkerNextValOnLocalNode takes a table oid,
+ * finds all int / smallint based columns with nextval() default
+ * expressions on the table, and runs an ALTER COLUMN statement for each
+ * column to change the default expression to use worker_nextval() instead
+ * of nextval().
+ */
+void
+SetNextValColumnDefaultsToWorkerNextValOnLocalNode(Oid relationId)
+{
+	/*
+	 * While altering a sequence, avoid propagating the DDL to other nodes
+	 * if it's already marked as distributed.
+	 */
+	bool oldEnableDDLPropagation = EnableDDLPropagation;
+	SetLocalEnableDDLPropagation(false);
+
+	Relation tableRelation = relation_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(tableRelation);
+	relation_close(tableRelation, AccessShareLock);
+
+	TupleConstr *tupleConstraints = tupleDescriptor->constr;
+	AttrNumber defaultValueIndex = 0;
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor,
+														attributeIndex);
+
+		if (attributeForm->attisdropped || !attributeForm->atthasdef)
+		{
+			continue;
+		}
+
+		Assert(tupleConstraints != NULL);
+
+		AttrDefault *defaultValueList = tupleConstraints->defval;
+		Assert(defaultValueList != NULL);
+
+		AttrDefault *defaultValue = &(defaultValueList[defaultValueIndex]);
+		defaultValueIndex++;
+
+		Assert(defaultValue->adnum == (attributeIndex + 1));
+		Assert(defaultValueIndex <= tupleConstraints->num_defval);
+
+		if (attributeForm->attgenerated)
+		{
+			continue;
+		}
+
+		/* convert expression to node tree */
+		Node *defaultNode = (Node *) stringToNode(defaultValue->adbin);
+
+		if (!contain_nextval_expression_walker(defaultNode, NULL))
+		{
+			continue;
+		}
+
+		Oid seqOid = GetSequenceOid(relationId, defaultValue->adnum);
+		if (seqOid == InvalidOid || pg_get_sequencedef(seqOid)->seqtypid == INT8OID)
+		{
+			continue;
+		}
+
+		/*
+		 * We use worker_nextval for int and smallint types.
+		 * Check issue #5126 and PR #5254 for details.
+		 * https://github.com/citusdata/citus/issues/5126
+		 */
+		bool missingOk = false;
+		char *command =
+			GetAlterColumnWithNextvalDefaultCmd(seqOid, relationId,
+												NameStr(attributeForm->attname),
+												missingOk);
+
+		ExecuteAndLogUtilityCommand(command);
+	}
+
+	SetLocalEnableDDLPropagation(oldEnableDDLPropagation);
+}
+
+
+/*
+ * SetLocalEnableDDLPropagation is simply a C interface for setting
+ * the following:
+ *      SET LOCAL citus.enable_ddl_propagation = 'on'|'off';
+ */
+static void
+SetLocalEnableDDLPropagation(bool state)
+{
+	set_config_option("citus.enable_ddl_propagation", state == true ? "on" : "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
+/*
  * worker_apply_sequence_command takes a CREATE SEQUENCE command string, runs the
  * CREATE SEQUENCE command then creates and runs an ALTER SEQUENCE statement
  * which adjusts the minvalue and maxvalue of the sequence such that the sequence
@@ -204,6 +462,23 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 
 	text *commandText = PG_GETARG_TEXT_P(0);
 	Oid sequenceTypeId = PG_GETARG_OID(1);
+
+	/*
+	 * Support the legacy version of this UDF. This is for the sake of backward
+	 * compatibility when an operation is initiated from a node that is not yet
+	 * upgraded and still assumes the presence of the older UDF version on remote nodes,
+	 * calling it on nodes that have already been upgraded to a newer Citus version.
+	 * Keeping this implementation allows upgraded nodes to continue responding to
+	 * such calls.
+	 */
+	bool lastValueProvided = false;
+	int64 lastValue = 0;
+	if (PG_NARGS() == 3)
+	{
+		lastValueProvided = true;
+		lastValue = PG_GETARG_INT64(2);
+	}
+
 	const char *commandString = text_to_cstring(commandText);
 	Node *commandNode = ParseTreeNode(commandString);
 
@@ -237,7 +512,34 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 
 	Assert(sequenceRelationId != InvalidOid);
 
-	AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName, sequenceTypeId);
+	if (IsCoordinator())
+	{
+		/*
+		 * This cannot really happen but still check.
+		 *
+		 * This is because, in the older versions of Citus, we were never calling
+		 * this UDF on the coordinator node. For this reason, if this is executed
+		 * against the coordinator, then the node initiating the operation should
+		 * actually be assuming the new version of this UDF. In that case, last_value
+		 * must always be provided.
+		 */
+		if (!lastValueProvided)
+		{
+			ereport(ERROR,
+					(errmsg("last value must be provided when adjusting sequence "
+							"setting on coordinator")));
+		}
+
+		DirectFunctionCall2(setval_oid,
+							ObjectIdGetDatum(sequenceRelationId),
+							Int64GetDatum(lastValue));
+	}
+	else
+	{
+		AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName,
+							sequenceTypeId);
+	}
+
 
 	PG_RETURN_VOID();
 }

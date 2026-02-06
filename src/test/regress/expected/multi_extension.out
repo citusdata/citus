@@ -1687,10 +1687,12 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 15.0-1
 ALTER EXTENSION citus UPDATE TO '15.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object |                     current_object
+ previous_object |                                  current_object
 ---------------------------------------------------------------------
+                 | function citus_internal.adjust_identity_column_seq_settings(regclass,bigint) void
                  | function citus_internal.get_next_colocation_id() bigint
-(1 row)
+                 | function worker_apply_sequence_command(text,regtype,bigint) void
+(3 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

@@ -204,7 +204,10 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define ENABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'on'"
 #define DISABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'off'"
 #define ENABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'on'"
-#define WORKER_APPLY_SEQUENCE_COMMAND "SELECT worker_apply_sequence_command (%s,%s)"
+#define WORKER_APPLY_SEQUENCE_COMMAND \
+		"SELECT worker_apply_sequence_command (%s,%s," UINT64_FORMAT ")"
+#define WORKER_APPLY_SEQUENCE_COMMAND_LEGACY \
+		"SELECT worker_apply_sequence_command (%s,%s)"
 #define UPSERT_PLACEMENT \
 		"INSERT INTO pg_dist_placement " \
 		"(shardid, shardstate, shardlength, " \
@@ -218,8 +221,10 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 		"placementid = EXCLUDED.placementid"
 #define METADATA_SYNC_CHANNEL "metadata_sync"
 
-#define WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES \
+#define WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES_LEGACY \
 		"SELECT pg_catalog.worker_adjust_identity_column_seq_ranges(%s)"
+#define WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS \
+		"SELECT citus_internal.adjust_identity_column_seq_settings(%s, " UINT64_FORMAT ")"
 
 /* controlled via GUC */
 extern char *EnableManualMetadataChangesForUser;

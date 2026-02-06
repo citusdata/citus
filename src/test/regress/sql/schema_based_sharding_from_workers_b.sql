@@ -2,6 +2,15 @@ SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
+-- Remove the workers and add them with the groupids that we would assign at this point
+-- of multi_1_schedule so when we run this test file individually, we still produce
+-- the same sequence values when inserting into distributed tables using sequences from
+-- workers.
+SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port, groupid => 33);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port, groupid => 47);
+
 SET citus.next_shard_id TO 2090000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
@@ -300,7 +309,7 @@ BEGIN;
     SELECT * FROM tenant_8.table_1 ORDER BY c;
 
     -- cleanup the rows that were added to test the default behavior
-    DELETE FROM tenant_8.table_1 WHERE "b" = 'test' AND a > 1;
+    DELETE FROM tenant_8.table_1 WHERE "b" = 'test' AND a > 9288674231451649;
 COMMIT;
 
 -- alter column type
@@ -353,7 +362,7 @@ ALTER TABLE tenant_8.table_1 SET (autovacuum_enabled = false);
 
 BEGIN;
     -- test multiple subcommands
-    ALTER TABLE tenant_8.table_1 ADD COLUMN int_column1 INTEGER, DROP COLUMN d, ADD COLUMN e int;
+    ALTER TABLE tenant_8.table_1 ADD COLUMN int_column1 INTEGER, DROP COLUMN d, ADD COLUMN e bigint;
 
     UPDATE tenant_8.table_1 SET e = c * 10;
 
@@ -380,12 +389,7 @@ COMMIT;
 -- make sure that the shell table definition is same on all nodes
 SELECT result FROM run_command_on_all_nodes(
 $$
-SELECT regexp_replace(
-    string_agg(ddl_events, '; '),
-    -- TODOTASK: suppress sequence ranges for now, until we fix the code to properly assign them on all nodes when creating a distributed-schema table from a worker
-    'INCREMENT BY (\d+) MINVALUE (\d+) MAXVALUE (\d+) START WITH (\d+) CACHE (\d+) ',
-    'INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB '
-) FROM master_get_table_ddl_events('tenant_8.table_2') AS ddl_events;
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_8.table_2') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 
@@ -492,7 +496,6 @@ SELECT result FROM run_command_on_all_nodes($$
 $$);
 
 BEGIN;
-
     CREATE SCHEMA tenant_9;
 
     CREATE SEQUENCE tenant_9.seq_1 START 5000 INCREMENT 5;
@@ -519,12 +522,7 @@ COMMIT;
 
 SELECT result FROM run_command_on_all_nodes(
 $$
-SELECT regexp_replace(
-    string_agg(ddl_events, '; '),
-    -- TODOTASK: suppress sequence ranges for now, until we fix the code to properly assign them on all nodes when creating a distributed-schema table from a worker
-    'INCREMENT BY (\d+) MINVALUE (\d+) MAXVALUE (\d+) START WITH (\d+) CACHE (\d+) ',
-    'INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB '
-) FROM master_get_table_ddl_events('tenant_9.table_1') AS ddl_events;
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.table_1') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 

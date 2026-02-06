@@ -11,6 +11,34 @@ SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhavesha
         1
 (1 row)
 
+-- Remove the workers and add them with the groupids that we would assign at this point
+-- of multi_1_schedule so when we run this test file individually, we still produce
+-- the same sequence values when inserting into distributed tables using sequences from
+-- workers.
+SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port, groupid => 33);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port, groupid => 47);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SET citus.next_shard_id TO 2090000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
@@ -403,50 +431,50 @@ BEGIN;
     -- add column
     ALTER TABLE tenant_8.table_1 ADD COLUMN d bigint DEFAULT 2;
     SELECT * FROM tenant_8.table_1 ORDER BY c;
- a |  b   | c | d
+        a         |  b   |        c         | d
 ---------------------------------------------------------------------
- 1 | test | 1 | 2
+ 9288674231451649 | test | 9288674231451649 | 2
 (1 row)
 
     -- alter default, set to 3
     ALTER TABLE tenant_8.table_1 ALTER COLUMN d SET DEFAULT 3;
     INSERT INTO tenant_8.table_1("b") VALUES ('test');
     SELECT * FROM tenant_8.table_1 ORDER BY c;
- a |  b   | c | d
+        a         |  b   |        c         | d
 ---------------------------------------------------------------------
- 1 | test | 1 | 2
- 2 | test | 2 | 3
+ 9288674231451649 | test | 9288674231451649 | 2
+ 9288674231451650 | test | 9288674231451650 | 3
 (2 rows)
 
     -- drop default, see null
     ALTER TABLE tenant_8.table_1 ALTER COLUMN d DROP DEFAULT;
     INSERT INTO tenant_8.table_1("b") VALUES ('test');
     SELECT * FROM tenant_8.table_1 ORDER BY c;
- a |  b   | c | d
+        a         |  b   |        c         | d
 ---------------------------------------------------------------------
- 1 | test | 1 | 2
- 2 | test | 2 | 3
- 3 | test | 3 |
+ 9288674231451649 | test | 9288674231451649 | 2
+ 9288674231451650 | test | 9288674231451650 | 3
+ 9288674231451651 | test | 9288674231451651 |
 (3 rows)
 
     -- cleanup the rows that were added to test the default behavior
-    DELETE FROM tenant_8.table_1 WHERE "b" = 'test' AND a > 1;
+    DELETE FROM tenant_8.table_1 WHERE "b" = 'test' AND a > 9288674231451649;
 COMMIT;
 -- alter column type
 ALTER TABLE tenant_8.table_1 ALTER COLUMN d TYPE text;
 UPDATE tenant_8.table_1 SET d = 'this is a text' WHERE d = '2';
 SELECT * FROM tenant_8.table_1 ORDER BY c;
- a |  b   | c |       d
+        a         |  b   |        c         |       d
 ---------------------------------------------------------------------
- 1 | test | 1 | this is a text
+ 9288674231451649 | test | 9288674231451649 | this is a text
 (1 row)
 
 -- drop seq column
 ALTER TABLE tenant_8.table_1 DROP COLUMN a;
 SELECT * FROM tenant_8.table_1 ORDER BY c;
-  b   | c |       d
+  b   |        c         |       d
 ---------------------------------------------------------------------
- test | 1 | this is a text
+ test | 9288674231451649 | this is a text
 (1 row)
 
 -- add not null constraint
@@ -462,10 +490,10 @@ ERROR:  null value in column "b" violates not-null constraint
 ALTER TABLE tenant_8.table_1 ALTER COLUMN b DROP NOT NULL;
 INSERT INTO tenant_8.table_1 VALUES (NULL, 3, 'test');
 SELECT * FROM tenant_8.table_1 ORDER BY c;
-  b   | c |       d
+  b   |        c         |       d
 ---------------------------------------------------------------------
- test | 1 | this is a text
-      | 3 | test
+      |                3 | test
+ test | 9288674231451649 | this is a text
 (2 rows)
 
 -- add exclusion constraint
@@ -486,7 +514,7 @@ ERROR:  conflicting key value violates exclusion constraint "exc_b_2091002"
 ALTER TABLE tenant_8.table_1 SET (autovacuum_enabled = false);
 BEGIN;
     -- test multiple subcommands
-    ALTER TABLE tenant_8.table_1 ADD COLUMN int_column1 INTEGER, DROP COLUMN d, ADD COLUMN e int;
+    ALTER TABLE tenant_8.table_1 ADD COLUMN int_column1 INTEGER, DROP COLUMN d, ADD COLUMN e bigint;
     UPDATE tenant_8.table_1 SET e = c * 10;
     -- test unique constraint without a name
     ALTER TABLE tenant_8.table_1 ADD UNIQUE ("b");
@@ -495,11 +523,11 @@ BEGIN;
     ALTER TABLE tenant_8.table_1 DROP CONSTRAINT table_1_pkey;
     ALTER TABLE tenant_8.table_1 ADD PRIMARY KEY (e);
     SELECT * FROM tenant_8.table_1 ORDER BY c;
-  b   |  c  | int_column1 |  e
+  b   |        c         | int_column1 |         e
 ---------------------------------------------------------------------
- test |   1 |             |   10
-      |   3 |             |   30
- 100  | 150 |             | 1500
+      |                3 |             |                30
+ 100  |              150 |             |              1500
+ test | 9288674231451649 |             | 92886742314516490
 (3 rows)
 
     -- test renaming table
@@ -512,19 +540,14 @@ COMMIT;
 -- make sure that the shell table definition is same on all nodes
 SELECT result FROM run_command_on_all_nodes(
 $$
-SELECT regexp_replace(
-    string_agg(ddl_events, '; '),
-    -- TODOTASK: suppress sequence ranges for now, until we fix the code to properly assign them on all nodes when creating a distributed-schema table from a worker
-    'INCREMENT BY (\d+) MINVALUE (\d+) MAXVALUE (\d+) START WITH (\d+) CACHE (\d+) ',
-    'INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB '
-) FROM master_get_table_ddl_events('tenant_8.table_2') AS ddl_events;
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_8.table_2') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                                                                                                                                                                                                                                        result
+                                                                                                                                                                                                                                                                                                                                          result
 ---------------------------------------------------------------------
- CREATE TABLE tenant_8.table_2 (b text, c bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB NO CYCLE) NOT NULL, int_column1 integer, f integer NOT NULL) USING heap WITH (autovacuum_enabled='false'); ALTER TABLE tenant_8.table_2 OWNER TO postgres; ALTER TABLE tenant_8.table_2 ADD CONSTRAINT exc_b EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_excl EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_key UNIQUE (b); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_pkey_renamed PRIMARY KEY (f)
- CREATE TABLE tenant_8.table_2 (b text, c bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB NO CYCLE) NOT NULL, int_column1 integer, f integer NOT NULL) USING heap WITH (autovacuum_enabled='false'); ALTER TABLE tenant_8.table_2 OWNER TO postgres; ALTER TABLE tenant_8.table_2 ADD CONSTRAINT exc_b EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_excl EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_key UNIQUE (b); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_pkey_renamed PRIMARY KEY (f)
- CREATE TABLE tenant_8.table_2 (b text, c bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB NO CYCLE) NOT NULL, int_column1 integer, f integer NOT NULL) USING heap WITH (autovacuum_enabled='false'); ALTER TABLE tenant_8.table_2 OWNER TO postgres; ALTER TABLE tenant_8.table_2 ADD CONSTRAINT exc_b EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_excl EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_key UNIQUE (b); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_pkey_renamed PRIMARY KEY (f)
+ CREATE TABLE tenant_8.table_2 (b text, c bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE) NOT NULL, int_column1 integer, f bigint NOT NULL) USING heap WITH (autovacuum_enabled='false'); ALTER TABLE tenant_8.table_2 OWNER TO postgres; ALTER TABLE tenant_8.table_2 ADD CONSTRAINT exc_b EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_excl EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_key UNIQUE (b); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_pkey_renamed PRIMARY KEY (f)
+ CREATE TABLE tenant_8.table_2 (b text, c bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 1 MINVALUE 9288674231451649 MAXVALUE 9570149208162305 START WITH 9288674231451649 CACHE 1 NO CYCLE) NOT NULL, int_column1 integer, f bigint NOT NULL) USING heap WITH (autovacuum_enabled='false'); ALTER TABLE tenant_8.table_2 OWNER TO postgres; ALTER TABLE tenant_8.table_2 ADD CONSTRAINT exc_b EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_excl EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_key UNIQUE (b); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_pkey_renamed PRIMARY KEY (f)
+ CREATE TABLE tenant_8.table_2 (b text, c bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 1 MINVALUE 13229323905400833 MAXVALUE 13510798882111489 START WITH 13229323905400833 CACHE 1 NO CYCLE) NOT NULL, int_column1 integer, f bigint NOT NULL) USING heap WITH (autovacuum_enabled='false'); ALTER TABLE tenant_8.table_2 OWNER TO postgres; ALTER TABLE tenant_8.table_2 ADD CONSTRAINT exc_b EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_excl EXCLUDE USING btree (b WITH =); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_b_key UNIQUE (b); ALTER TABLE tenant_8.table_2 ADD CONSTRAINT table_1_pkey_renamed PRIMARY KEY (f)
 (3 rows)
 
 CREATE SCHEMA alter_table_add_column;
@@ -687,19 +710,14 @@ BEGIN;
 COMMIT;
 SELECT result FROM run_command_on_all_nodes(
 $$
-SELECT regexp_replace(
-    string_agg(ddl_events, '; '),
-    -- TODOTASK: suppress sequence ranges for now, until we fix the code to properly assign them on all nodes when creating a distributed-schema table from a worker
-    'INCREMENT BY (\d+) MINVALUE (\d+) MAXVALUE (\d+) START WITH (\d+) CACHE (\d+) ',
-    'INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB '
-) FROM master_get_table_ddl_events('tenant_9.table_1') AS ddl_events;
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.table_1') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                                                                                                                                                                                                                                                result
+                                                                                                                                                                                                                                                                                                                                                   result
 ---------------------------------------------------------------------
- CREATE TABLE tenant_9.table_1 (a bigint DEFAULT 100 NOT NULL, b text DEFAULT (now())::text NOT NULL COLLATE "C", c integer DEFAULT nextval('tenant_9.seq_1'::regclass), d bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB NO CYCLE) NOT NULL, e integer NOT NULL, f integer GENERATED ALWAYS AS ((c * 2)) STORED, CONSTRAINT table_1_check_a_positive CHECK ((a > 0))) PARTITION BY RANGE (a) ; ALTER TABLE tenant_9.table_1 OWNER TO postgres; ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_pkey PRIMARY KEY (a, b); ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_unique_b UNIQUE (b, a)
- CREATE TABLE tenant_9.table_1 (a bigint DEFAULT 100 NOT NULL, b text DEFAULT (now())::text NOT NULL COLLATE "C", c integer DEFAULT nextval('tenant_9.seq_1'::regclass), d bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB NO CYCLE) NOT NULL, e integer NOT NULL, f integer GENERATED ALWAYS AS ((c * 2)) STORED, CONSTRAINT table_1_check_a_positive CHECK ((a > 0))) PARTITION BY RANGE (a) ; ALTER TABLE tenant_9.table_1 OWNER TO postgres; ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_pkey PRIMARY KEY (a, b); ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_unique_b UNIQUE (b, a)
- CREATE TABLE tenant_9.table_1 (a bigint DEFAULT 100 NOT NULL, b text DEFAULT (now())::text NOT NULL COLLATE "C", c integer DEFAULT nextval('tenant_9.seq_1'::regclass), d bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB NO CYCLE) NOT NULL, e integer NOT NULL, f integer GENERATED ALWAYS AS ((c * 2)) STORED, CONSTRAINT table_1_check_a_positive CHECK ((a > 0))) PARTITION BY RANGE (a) ; ALTER TABLE tenant_9.table_1 OWNER TO postgres; ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_pkey PRIMARY KEY (a, b); ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_unique_b UNIQUE (b, a)
+ CREATE TABLE tenant_9.table_1 (a bigint DEFAULT 100 NOT NULL, b text DEFAULT (now())::text NOT NULL COLLATE "C", c integer DEFAULT nextval('tenant_9.seq_1'::regclass), d bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 1 MINVALUE 5 MAXVALUE 100 START WITH 10 CACHE 1 NO CYCLE) NOT NULL, e integer NOT NULL, f integer GENERATED ALWAYS AS ((c * 2)) STORED, CONSTRAINT table_1_check_a_positive CHECK ((a > 0))) PARTITION BY RANGE (a) ; ALTER TABLE tenant_9.table_1 OWNER TO postgres; ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_pkey PRIMARY KEY (a, b); ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_unique_b UNIQUE (b, a)
+ CREATE TABLE tenant_9.table_1 (a bigint DEFAULT 100 NOT NULL, b text DEFAULT (now())::text NOT NULL COLLATE "C", c integer DEFAULT nextval('tenant_9.seq_1'::regclass), d bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 1 MINVALUE 9288674231451649 MAXVALUE 9570149208162305 START WITH 9288674231451649 CACHE 1 NO CYCLE) NOT NULL, e integer NOT NULL, f integer GENERATED ALWAYS AS ((c * 2)) STORED, CONSTRAINT table_1_check_a_positive CHECK ((a > 0))) PARTITION BY RANGE (a) ; ALTER TABLE tenant_9.table_1 OWNER TO postgres; ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_pkey PRIMARY KEY (a, b); ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_unique_b UNIQUE (b, a)
+ CREATE TABLE tenant_9.table_1 (a bigint DEFAULT 100 NOT NULL, b text DEFAULT (now())::text NOT NULL COLLATE "C", c integer DEFAULT nextval('tenant_9.seq_1'::regclass), d bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 1 MINVALUE 13229323905400833 MAXVALUE 13510798882111489 START WITH 13229323905400833 CACHE 1 NO CYCLE) NOT NULL, e integer NOT NULL, f integer GENERATED ALWAYS AS ((c * 2)) STORED, CONSTRAINT table_1_check_a_positive CHECK ((a > 0))) PARTITION BY RANGE (a) ; ALTER TABLE tenant_9.table_1 OWNER TO postgres; ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_pkey PRIMARY KEY (a, b); ALTER TABLE tenant_9.table_1 ADD CONSTRAINT table_1_unique_b UNIQUE (b, a)
 (3 rows)
 
 CREATE TABLE tenant_9.table_2 (
@@ -714,8 +732,8 @@ $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
                                                                                                                                                result
 ---------------------------------------------------------------------
- CREATE TABLE tenant_9.table_2 (a integer DEFAULT worker_nextval('tenant_9.table_2_a_seq'::regclass) NOT NULL, b bigint DEFAULT nextval('tenant_9.table_2_b_seq'::regclass) NOT NULL) USING heap WITH (autovacuum_enabled='false', fillfactor='20'); ALTER TABLE tenant_9.table_2 OWNER TO postgres
  CREATE TABLE tenant_9.table_2 (a integer DEFAULT nextval('tenant_9.table_2_a_seq'::regclass) NOT NULL, b bigint DEFAULT nextval('tenant_9.table_2_b_seq'::regclass) NOT NULL) USING heap WITH (autovacuum_enabled='false', fillfactor='20'); ALTER TABLE tenant_9.table_2 OWNER TO postgres
+ CREATE TABLE tenant_9.table_2 (a integer DEFAULT worker_nextval('tenant_9.table_2_a_seq'::regclass) NOT NULL, b bigint DEFAULT nextval('tenant_9.table_2_b_seq'::regclass) NOT NULL) USING heap WITH (autovacuum_enabled='false', fillfactor='20'); ALTER TABLE tenant_9.table_2 OWNER TO postgres
  CREATE TABLE tenant_9.table_2 (a integer DEFAULT worker_nextval('tenant_9.table_2_a_seq'::regclass) NOT NULL, b bigint DEFAULT nextval('tenant_9.table_2_b_seq'::regclass) NOT NULL) USING heap WITH (autovacuum_enabled='false', fillfactor='20'); ALTER TABLE tenant_9.table_2 OWNER TO postgres
 (3 rows)
 

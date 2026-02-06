@@ -1318,6 +1318,31 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	}
 
 	/*
+	 * We already adjusted sequence ranges on remote workers.
+	 * PropagatePrerequisiteObjectsForDistributedTable() handles
+	 * dependent sequences, and SyncCitusTableMetadata() handles
+	 * identity column sequences. Here, we do the same on the
+	 * local node if it's not the coordinator.
+	 *
+	 * We don't do anything about the local node if it's the
+	 * coordinator because we don't need to adjust sequence
+	 * ranges on the coordinator.
+	 */
+	if (!IsCoordinator())
+	{
+		AdjustDependentSeqRangesOnLocalNode(relationId);
+
+		/*
+		 * Note that AdjustDependentSeqRangesOnLocalNode() doesn't adjust
+		 * sequence ranges for identity columns, so we need to adjust them
+		 * separately here.
+		 */
+		AdjustIdentityColumnSeqRangesOnLocalNode(relationId);
+
+		SetNextValColumnDefaultsToWorkerNextValOnLocalNode(relationId);
+	}
+
+	/*
 	 * We've a custom way of foreign key graph invalidation,
 	 * see InvalidateForeignKeyGraph().
 	 */
@@ -1813,7 +1838,7 @@ EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 		EnsureSequenceTypeSupported(sequenceOid, attributeTypeId, relationId);
 
 		/*
-		 * Alter the sequence's data type in the coordinator if needed.
+		 * Alter the sequence's data type in the current node if needed.
 		 *
 		 * First, we should only change the sequence type if the column
 		 * is a supported sequence type. For example, if a sequence is used

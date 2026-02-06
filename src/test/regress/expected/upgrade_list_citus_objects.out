@@ -87,6 +87,7 @@ ORDER BY 1;
  function citus_internal.add_placement_metadata(bigint,bigint,integer,bigint)
  function citus_internal.add_shard_metadata(regclass,bigint,"char",text,text)
  function citus_internal.add_tenant_schema(oid,integer)
+ function citus_internal.adjust_identity_column_seq_settings(regclass,bigint)
  function citus_internal.adjust_local_clock_to_remote(cluster_clock)
  function citus_internal.citus_internal_copy_single_shard_placement(bigint,integer,integer,integer,citus.shard_transfer_mode)
  function citus_internal.database_command(text)
@@ -314,6 +315,7 @@ ORDER BY 1;
  function worker_apply_inter_shard_ddl_command(bigint,text,bigint,text,text)
  function worker_apply_sequence_command(text)
  function worker_apply_sequence_command(text,regtype)
+ function worker_apply_sequence_command(text,regtype,bigint)
  function worker_apply_shard_ddl_command(bigint,text)
  function worker_apply_shard_ddl_command(bigint,text,text)
  function worker_binary_partial_agg(oid,anyelement)
@@ -409,6 +411,6 @@ ORDER BY 1;
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(377 rows)
+(379 rows)
 
 DROP TABLE extension_basic_types;
