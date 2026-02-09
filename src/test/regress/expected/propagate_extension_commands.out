@@ -630,7 +630,7 @@ DROP EXTENSION isn CASCADE;
 CREATE EXTENSION isn WITH SCHEMA pg_temp;
 ERROR:  schema "pg_temp" does not exist
 -- Test that CREATE EXTENSION IF NOT EXISTS works for non-owner users
--- when extension already exists (GitHub issue)
+-- when extension already exists
 RESET search_path;
 CREATE USER non_owner_user;
 -- Create extension as superuser
