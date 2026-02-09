@@ -92,6 +92,7 @@
 #include "distributed/shard_split.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/utils/distribution_column_map.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
@@ -2094,7 +2095,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod);
 
 	/* user really wants triggers? */
-	if (EnableUnsafeTriggers)
+	if (EnableUnsafeTriggers || IsTenantSchema(get_rel_namespace(relationId)))
 	{
 		ErrorIfRelationHasUnsupportedTrigger(relationId);
 	}

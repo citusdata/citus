@@ -667,6 +667,105 @@ SELECT COUNT(*)=5 FROM tenant_9.table_7;
 
 SET ROLE postgres;
 
+SET citus.enable_schema_based_sharding TO OFF;
+CREATE SCHEMA regular_schema_worker_3;
+SET citus.enable_schema_based_sharding TO ON;
+
+CREATE TABLE regular_schema_worker_3.local_table_3 (value int, tenant_id int);
+
+\c - - - :master_port
+
+CREATE FUNCTION regular_schema.local_table_3_increment_value_tf() RETURNS trigger AS $local_table_3_increment_value_tf$
+BEGIN
+    UPDATE tenant_9.table_8 SET value=value+1;
+    RETURN NEW;
+END;
+$local_table_3_increment_value_tf$ LANGUAGE plpgsql;
+
+CREATE FUNCTION regular_schema.local_table_3_notice_value_tf() RETURNS trigger AS $local_table_3_notice_value_tf$
+BEGIN
+    RAISE NOTICE 'New value is %', NEW.value;
+    RETURN NEW;
+END;
+$local_table_3_notice_value_tf$ LANGUAGE plpgsql;
+
+\c - - - :worker_1_port
+
+SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2093500;$$);
+SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
+SELECT pg_sleep(0.1);
+
+SET citus.shard_replication_factor TO 1;
+SET search_path TO alter_table_add_column;
+SET citus.enable_schema_based_sharding TO ON;
+SET client_min_messages TO NOTICE;
+
+CREATE TRIGGER local_table_3_insert_statement_trigger
+AFTER INSERT ON regular_schema_worker_3.local_table_3
+FOR EACH STATEMENT EXECUTE FUNCTION regular_schema.local_table_3_increment_value_tf();
+
+-- Disable this to make sure that we allow triggers on distributed-schema tables
+-- regardless of this setting as we don't think that triggers are unsafe on such
+-- tables.
+SET citus.enable_unsafe_triggers TO OFF;
+
+ALTER TABLE regular_schema_worker_3.local_table_3 SET SCHEMA tenant_9;
+ALTER TABLE tenant_9.local_table_3 RENAME TO table_8;
+
+INSERT INTO tenant_9.table_8 VALUES (1), (1);
+
+-- Show that trigger is executed only once, we should see two "2"s, not "1",
+-- i.e., the trigger didn't fire, and not "3", i.e., the trigger fired more
+-- than once.
+SELECT * FROM tenant_9.table_8;
+
+CREATE TRIGGER local_table_3_update_row_trigger
+AFTER UPDATE ON tenant_9.table_8
+FOR EACH ROW EXECUTE FUNCTION regular_schema.local_table_3_notice_value_tf();
+
+-- we want to hide the error message context because the node sending
+-- the notice might change from one run to another.
+\set VERBOSITY terse
+UPDATE tenant_9.table_8 SET value=0;
+\set VERBOSITY default
+
+ALTER TABLE tenant_9.table_8 DISABLE TRIGGER local_table_3_update_row_trigger;
+
+-- no notice should be raised
+UPDATE tenant_9.table_8 SET value=0;
+
+ALTER TABLE tenant_9.table_8 DISABLE TRIGGER ALL;
+
+INSERT INTO tenant_9.table_8 VALUES (1), (1);
+
+SELECT * FROM tenant_9.table_8 ORDER BY value;
+
+ALTER TABLE tenant_9.table_8 ENABLE TRIGGER ALL;
+ALTER TABLE tenant_9.table_8 DISABLE TRIGGER local_table_3_insert_statement_trigger;
+
+TRUNCATE tenant_9.table_8;
+
+INSERT INTO tenant_9.table_8 VALUES (2), (2);
+
+-- we want to hide the error message context because the node sending
+-- the notice might change from one run to another.
+\set VERBOSITY terse
+UPDATE tenant_9.table_8 SET value=5;
+\set VERBOSITY default
+
+SELECT * FROM tenant_9.table_8 ORDER BY value;
+
+ALTER TRIGGER local_table_3_insert_statement_trigger ON tenant_9.table_8 RENAME TO local_table_3_insert_statement_trigger_renamed;
+
+CREATE TRIGGER trigger_to_drop
+AFTER UPDATE ON tenant_9.table_8
+FOR EACH ROW EXECUTE FUNCTION regular_schema.local_table_3_notice_value_tf();
+
+DROP TRIGGER trigger_to_drop ON tenant_9.table_8;
+
+-- not supported at all
+ALTER TRIGGER local_table_3_insert_statement_trigger_renamed ON tenant_9.table_8 DEPENDS ON EXTENSION citus;
+
 -- make sure that the shell table definition is same on all nodes
 SELECT result FROM run_command_on_all_nodes(
 $$
@@ -703,12 +802,18 @@ SELECT replace(
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.table_8') AS ddl_events;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
 -- cleanup
 \c - - - :master_port
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8, tenant_9, alter_table_add_column CASCADE;
-DROP SCHEMA regular_schema, alter_table_add_column_other_schema, regular_schema_worker_1, regular_schema_worker_2 CASCADE;
+DROP SCHEMA regular_schema, alter_table_add_column_other_schema, regular_schema_worker_1, regular_schema_worker_2, regular_schema_worker_3 CASCADE;
 DROP FUNCTION create_citus_local_with_data(text);
 DROP SEQUENCE dist_seq;
 DROP ROLE tenant_9_owner;
