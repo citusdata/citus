@@ -1,3 +1,61 @@
+### citus v14.0.0 (February 9, 2026) ###
+
+* Drops PG15 support (#8372)
+
+* Adds support for PostgreSQL 18 (#8065)
+
+* Adds propagation of ENFORCED / NOT ENFORCED on CHECK
+  constraints (#8349)
+
+* Stops on-demand statistics collection for clusters and deprecates
+  citus.enable_statistics_collection GUC (#8460)
+
+* Disallows creating a distributed table or altering it to be colocated
+  with another table if distribution key collations don't
+  match (#8257)
+
+* Makes citus_create_restore_point MX-safe by blocking 2PC commit
+  decisions (#8352)
+
+* Supports binary transfer from worker to coordinator for custom
+  aggregates (#8446)
+
+* Ensures query remains safe for deparse when a modify scan needs to
+  evaluate expressions before worker query execution (#8443)
+
+* Avoids local plan cache reuse for multi-shard queries (#8447)
+
+* Tightens distributed plan check to cover distributed
+  subplans (#8388)
+
+* Improves performance by avoiding unnecessary shallow copy of target
+  list when no array or json subscripts are present (#8155)
+
+* Fixes multi-shard MIN/MAX on composite types by blessing record
+  aggregates (#8429)
+
+* Fixes distributed MIN/MAX for array types (#8421)
+
+* Fixes a bug that ignores reference or schema sharded tables in worker
+  subquery task construction when no distributed tables are
+  involved (#8440)
+
+* Fixes a planning error caused by a redundant WHERE clause (#8448)
+
+* Fixes a bug in redundant WHERE clause detection (#8162)
+
+* Fixes a bug that causes allowing UPDATE / MERGE queries that may
+  change the distribution column value (#8214)
+
+* Fixes a bug that causes an unexpected error when executing
+  repartitioned MERGE (#8201)
+
+* Fixes an assertion failure in Citus maintenance daemon that can
+  happen in very slow systems (#8158)
+
+* Removes an assertion from Postgres ruleutils that was rendered
+  meaningless by a previous Citus commit (#8136)
+
 ### citus v13.1.1 (Oct 1st, 2025) ###
 
 * Adds support for latest PG minors: 14.19, 15.14, 16.10 (#8142)
