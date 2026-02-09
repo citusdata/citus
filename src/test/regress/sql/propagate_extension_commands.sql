@@ -373,7 +373,7 @@ DROP EXTENSION isn CASCADE;
 CREATE EXTENSION isn WITH SCHEMA pg_temp;
 
 -- Test that CREATE EXTENSION IF NOT EXISTS works for non-owner users
--- when extension already exists (GitHub issue)
+-- when extension already exists
 RESET search_path;
 CREATE USER non_owner_user;
 
