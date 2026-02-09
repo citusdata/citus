@@ -375,11 +375,6 @@ CREATE EXTENSION isn WITH SCHEMA pg_temp;
 -- Test that CREATE EXTENSION IF NOT EXISTS works for non-owner users
 -- when extension already exists (GitHub issue)
 RESET search_path;
-
--- Ensure clean state for idempotent test runs
-DROP USER IF EXISTS non_owner_user;
-DROP EXTENSION IF EXISTS seg CASCADE;
-
 CREATE USER non_owner_user;
 
 -- Create extension as superuser
@@ -394,8 +389,8 @@ CREATE EXTENSION IF NOT EXISTS seg SCHEMA public;
 
 -- Clean up
 RESET ROLE;
-DROP EXTENSION IF EXISTS seg CASCADE;
-DROP USER IF EXISTS non_owner_user;
+DROP EXTENSION seg;
+DROP USER non_owner_user;
 
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;
