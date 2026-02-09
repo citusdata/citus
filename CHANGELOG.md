@@ -17,6 +17,19 @@
 * Allows configuring sslkeylogfile connection parameter using
   citus.node_conn_info on PostgreSQL 18 (#8437)
 
+* Fixes INSERT .. SELECT planning error with GROUP BY on
+  PostgreSQL 18 (#8256)
+
+* Fixes deparser error with named joins and whole-row references
+  on PostgreSQL 18 (#8300)
+
+* Fixes columnar temp table access failure on PostgreSQL 18 (#8309)
+
+* Fixes multi-shard MIN/MAX on composite types by blessing record
+  aggregates (#8429)
+
+* Fixes distributed MIN/MAX for array types (#8421)
+
 * Adds propagation of ENFORCED / NOT ENFORCED on CHECK
   constraints (#8349)
 
@@ -36,7 +49,7 @@
 * Ensures query remains safe for deparse when a modify scan needs to
   evaluate expressions before worker query execution (#8443)
 
-* Avoids local plan cache reuse for multi-shard queries (#8447)
+* Avoids local plan cache reuse for multi-shard queries (#8371)
 
 * Tightens distributed plan check to cover distributed
   subplans (#8388)
@@ -44,16 +57,9 @@
 * Improves performance by avoiding unnecessary shallow copy of target
   list when no array or json subscripts are present (#8155)
 
-* Fixes multi-shard MIN/MAX on composite types by blessing record
-  aggregates (#8429)
-
-* Fixes distributed MIN/MAX for array types (#8421)
-
 * Fixes a bug that ignores reference or schema sharded tables in worker
   subquery task construction when no distributed tables are
   involved (#8440)
-
-* Fixes a planning error caused by a redundant WHERE clause (#8448)
 
 * Fixes a bug in redundant WHERE clause detection (#8162)
 
@@ -68,14 +74,6 @@
 
 * Removes an assertion from Postgres ruleutils that was rendered
   meaningless by a previous Citus commit (#8136)
-
-* Fixes INSERT .. SELECT planning error with GROUP BY on
-  PostgreSQL 18 (#8256)
-
-* Fixes deparser error with named joins and whole-row references
-  on PostgreSQL 18 (#8300)
-
-* Fixes columnar temp table access failure on PostgreSQL 18 (#8309)
 
 * Fixes incorrect rejection of colocated joins when Row Level
   Security policies use volatile functions (#8357)
