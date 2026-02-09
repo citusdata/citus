@@ -313,7 +313,7 @@ $$);
 
 -- Distribute an extension-function where extension is not in pg_dist_object
 SET citus.enable_ddl_propagation TO false;
-CREATE EXTENSION IF NOT EXISTS seg;
+CREATE EXTENSION seg;
 SET citus.enable_ddl_propagation TO true;
 
 -- Check the extension in pg_dist_object
@@ -346,8 +346,8 @@ WHERE pg_proc.proname = 'seg_in' and
 pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 $$);
-DROP EXTENSION IF EXISTS seg;
-DROP TABLE IF EXISTS test_extension_function;
+DROP EXTENSION seg;
+DROP TABLE test_extension_function;
 
 
 -- Test extension function altering distribution argument
