@@ -4,6 +4,19 @@
 
 * Adds support for PostgreSQL 18 (#8065)
 
+* Adds support for virtual generated columns on distributed tables
+  for PostgreSQL 18 (#8346)
+
+* Propagates publish_generated_columns publication option to worker
+  nodes for distributed tables on PostgreSQL 18 (#8360)
+
+* Respects VACUUM/ANALYZE ONLY semantics for Citus tables by
+  skipping shard propagation when ONLY is specified on
+  PostgreSQL 18 (#8365)
+
+* Allows configuring sslkeylogfile connection parameter using
+  citus.node_conn_info on PostgreSQL 18 (#8437)
+
 * Adds propagation of ENFORCED / NOT ENFORCED on CHECK
   constraints (#8349)
 
@@ -55,6 +68,29 @@
 
 * Removes an assertion from Postgres ruleutils that was rendered
   meaningless by a previous Citus commit (#8136)
+
+* Fixes INSERT .. SELECT planning error with GROUP BY on
+  PostgreSQL 18 (#8256)
+
+* Fixes deparser error with named joins and whole-row references
+  on PostgreSQL 18 (#8300)
+
+* Fixes columnar temp table access failure on PostgreSQL 18 (#8309)
+
+* Fixes incorrect rejection of colocated joins when Row Level
+  Security policies use volatile functions (#8357)
+
+* Fixes metadata sync failure when distributed tables use domain
+  types defined in non-public schemas (#8363)
+
+* Fixes a crash on CREATE STATISTICS with non-table
+  expressions (#8213, #8227)
+
+* Fixes invalid input syntax for type bigint in citus_stats with
+  large tables (#8166)
+
+* Fixes an undefined behavior that could happen when computing
+  tenant score for citus_stat_tenants (#7954)
 
 ### citus v13.1.1 (Oct 1st, 2025) ###
 
