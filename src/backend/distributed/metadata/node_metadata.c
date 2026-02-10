@@ -58,6 +58,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/string_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
@@ -3166,6 +3167,25 @@ EnsurePropagationToCoordinator(void)
 	if (!IsCoordinator())
 	{
 		EnsureCoordinatorIsInMetadata();
+	}
+}
+
+
+/*
+ * EnsureCoordinatorUnlessTenantSchema ensures propagation to the the coordinator
+ * if the relation belongs to a tenant schema. Otherwise, it checks whether we're
+ * on the coordinator.
+ */
+void
+EnsureCoordinatorUnlessTenantSchema(Oid relationId)
+{
+	if (IsTenantSchema(get_rel_namespace(relationId)))
+	{
+		EnsurePropagationToCoordinator();
+	}
+	else
+	{
+		EnsureCoordinator();
 	}
 }
 
