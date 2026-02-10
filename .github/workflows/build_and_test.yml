@@ -14,7 +14,7 @@ on:
     branches:
       - "main"
       - "release-*"
-      - "feature/ddl-from-any-node-schema-based-sharding"
+      - "ddl-from-any-node-phase-3"
   pull_request:
     types: [opened, reopened,synchronize]
   merge_group:
