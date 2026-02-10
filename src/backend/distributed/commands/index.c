@@ -19,6 +19,7 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_index.h"
 #include "catalog/pg_namespace.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
@@ -853,8 +854,41 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 
 	PushActiveSnapshot(GetTransactionSnapshot());
 
+	/*
+	 * If IF NOT EXISTS was used and the index already exists (is valid),
+	 * skip invalidating it to prevent invalidating pre-existing indexes.
+	 */
+	bool index_was_already_valid = false;
+	if (indexStmt->if_not_exists)
+	{
+		/*
+		 * Check the current validity state of the index. If it's already valid,
+		 * it means the index existed before this command and PostgreSQL skipped
+		 * creation. We should not invalidate it in this case.
+		 *
+		 * Note: SearchSysCache1 returns NULL if the index doesn't exist in the
+		 * catalog yet, indicating it was just created. HeapTupleIsValid handles
+		 * this case by returning false.
+		 */
+		HeapTuple indexTuple = SearchSysCache1(INDEXRELID,
+											   ObjectIdGetDatum(indexRelationId));
+		if (HeapTupleIsValid(indexTuple))
+		{
+			Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+			if (indexForm->indisvalid)
+			{
+				/* Index was already valid, so it existed before this command */
+				index_was_already_valid = true;
+			}
+			ReleaseSysCache(indexTuple);
+		}
+	}
+
 	/* mark index as invalid, in-place (cannot be rolled back) */
-	index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
+	if (!index_was_already_valid)
+	{
+		index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
+	}
 	PopActiveSnapshot();
 
 	/* re-open a transaction command from here on out */
