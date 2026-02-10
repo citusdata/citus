@@ -37,7 +37,6 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
-#include "distributed/tenant_schema_metadata.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -181,14 +180,7 @@ truncate_local_data_after_distributing_table(PG_FUNCTION_ARGS)
 
 	EnsureLocalTableCanBeTruncated(relationId);
 
-	if (IsTenantSchema(get_rel_namespace(relationId)))
-	{
-		EnsurePropagationToCoordinator();
-	}
-	else
-	{
-		EnsureCoordinator();
-	}
+	EnsureCoordinatorUnlessTenantSchema(relationId);
 
 	TruncateStmt *truncateStmt = makeNode(TruncateStmt);
 

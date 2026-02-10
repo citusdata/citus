@@ -174,14 +174,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		 * dropping from the workers. For tenant schema tables, we allow dropping
 		 * from the workers only if the coordinator is in the metadata.
 		 */
-		if (IsTenantSchema(get_rel_namespace(relationId)))
-		{
-			EnsurePropagationToCoordinator();
-		}
-		else
-		{
-			EnsureCoordinator();
-		}
+		EnsureCoordinatorUnlessTenantSchema(relationId);
 
 		/*
 		 * While changing the tables that are part of a colocation group we need to
@@ -1277,14 +1270,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
-	if (IsTenantSchema(get_rel_namespace(leftRelationId)))
-	{
-		EnsurePropagationToCoordinator();
-	}
-	else
-	{
-		EnsureCoordinator();
-	}
+	EnsureCoordinatorUnlessTenantSchema(leftRelationId);
 
 	/* these will be set in below loop according to subcommands */
 	Oid rightRelationId = InvalidOid;
