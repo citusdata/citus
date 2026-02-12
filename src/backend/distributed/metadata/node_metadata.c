@@ -2378,6 +2378,11 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
 														localOnly);
 
+		/* reset local group id for the node to be removed */
+		char *updateLocalGroupIdCommand = LocalGroupIdUpdateCommand(0);
+		SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+			nodeName, nodePort, CurrentUserName(), list_make1(updateLocalGroupIdCommand));
+
 		/*
 		 * Secondary nodes are read-only, never 2PC is used.
 		 * Hence, no items can be inserted to pg_dist_transaction

@@ -460,6 +460,17 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		{
 			ereport(NOTICE, (errmsg("dropping metadata on the node (%s,%d)",
 									nodeNameString, nodePort)));
+
+			/*
+			 * Note that we don't yet reset the local group id on the to node we
+			 * stop syncing metadata to. This is because, resetting the local group
+			 * id means setting it to COORDINATOR_GROUP_ID, and we don't yet want it
+			 * to assume that it's the coordinator as we still have it as a worker
+			 * in the metadata.
+			 *
+			 * We reset local group id only after / if we remove the node from the
+			 * metadata, see RemoveNodeFromCluster().
+			 */
 			DropMetadataSnapshotOnNode(workerNode);
 		}
 		else
@@ -701,8 +712,6 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 									  WorkerDropAllShellTablesCommand(singleTransaction));
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
 										  NodeMetadataDropCommands());
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  LocalGroupIdUpdateCommand(0));
 
 	/* remove all dist table and object/table related metadata afterwards */
 	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PARTITIONS);
