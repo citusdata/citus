@@ -259,6 +259,11 @@ extern char * DeparseCreateDatabaseStmt(Node *node);
 extern char * DeparseDropDatabaseStmt(Node *node);
 extern char * DeparseAlterDatabaseRenameStmt(Node *node);
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+/* forward declarations for deparse_parameter_stmts.c*/
+extern char * DeparseGrantOnParameterStmt(Node *node);
+#endif /* PG_VERSION_NUM >= PG_VERSION_15 */
 
 /* forward declaration for deparse_publication_stmts.c */
 extern char * DeparseCreatePublicationStmt(Node *stmt);
