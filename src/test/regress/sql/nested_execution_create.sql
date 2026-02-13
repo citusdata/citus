@@ -1,5 +1,6 @@
 CREATE SCHEMA nested_execution;
 SET search_path TO nested_execution;
+GRANT ALL ON SCHEMA nested_execution TO regularuser;
 
 -- some of the next_execution tests change for single shard
 SET citus.shard_count TO 4;

@@ -1,5 +1,6 @@
 CREATE SCHEMA truncate_tests_schema;
 SET search_path TO truncate_tests_schema;
+GRANT ALL ON SCHEMA truncate_tests_schema TO regularuser;
 
 -- simple table
 CREATE TABLE basic_table(a int);
