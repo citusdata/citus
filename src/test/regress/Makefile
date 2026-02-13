@@ -11,11 +11,15 @@ MAJORVERSION := $(basename $(VERSION))
 endif
 
 ifndef CITUSVERSION
-CITUSVERSION := ""
+CITUSVERSION :=
 endif
 
 ifndef CITUSLIBDIR
-CITUSLIBDIR := ""
+CITUSLIBDIR :=
+endif
+
+ifndef N1MODE
+N1MODE :=
 endif
 # Add ./bin to $PATH so we use our custom diff instead of the default diff tool.
 # We do this to be able to mask shard Ids, placement Ids, node ports, etc.
@@ -35,7 +39,7 @@ export PGISOLATIONTIMEOUT = 60
 ## Citus regression support
 ##
 MULTI_INSTALLDIR=$(CURDIR)/tmp_check/install
-pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)" --postgres-srcdir="$(postgres_abs_srcdir)" --citus_abs_srcdir="$(citus_abs_srcdir)" --citus-version=$(CITUSVERSION) --citus-libdir="$(CITUSLIBDIR)"
+pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)" --postgres-srcdir="$(postgres_abs_srcdir)" --citus_abs_srcdir="$(citus_abs_srcdir)" $(if $(CITUSVERSION),--citus-version=$(CITUSVERSION)) $(if $(CITUSLIBDIR),--citus-libdir="$(CITUSLIBDIR)") $(if $(N1MODE),--n-1-mode=$(N1MODE))
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) --launcher="$(citus_abs_srcdir)/log_test_times"
 
 pg_upgrade_check = $(citus_abs_srcdir)/citus_tests/upgrade/pg_upgrade_test.py
@@ -52,7 +56,7 @@ vanilla_diffs_file = $(citus_abs_srcdir)/pg_vanilla_outputs/$(MAJORVERSION)/regr
 # intermediate, for muscle memory backward compatibility.
 check: check-full check-enterprise-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-1 check-operations check-add-backup-node check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local check-pytest check-query-generator check-tap
+check-full: check-multi check-multi-mx check-multi-1 check-multi-1-create-citus check-operations check-add-backup-node check-follower-cluster check-isolation check-failure check-split check-vanilla check-columnar check-columnar-isolation check-pg-upgrade check-arbitrary-configs check-citus-upgrade check-citus-upgrade-mixed check-citus-upgrade-local check-citus-upgrade-mixed-local check-pytest check-query-generator check-tap
 # check-enterprise-full triggers all enterprise specific tests
 check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure check-enterprise-isolation-logicalrep-1 check-enterprise-isolation-logicalrep-2 check-enterprise-isolation-logicalrep-3
 
@@ -168,6 +172,10 @@ check-enterprise: all
 check-multi-1: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
+
+check-multi-1-create-citus: all
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_create_citus_schedule $(EXTRA_TESTS)
 
 check-multi-hyperscale: all
 	$(pg_regress_multi_check) --conninfo="$(conninfo)" --load-extension=citus \
