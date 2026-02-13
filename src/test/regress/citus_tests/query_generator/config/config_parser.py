@@ -49,6 +49,7 @@ def parseTable(targetTableDict):
         col = parseColumn(columnDict)
         columns.append(col)
     distinctCopyCount = targetTableDict["distinctCopyCount"]
+    colocateWith = targetTableDict.get("colocateWith", "default")
     return Table(
         name,
         citusType,
@@ -58,6 +59,7 @@ def parseTable(targetTableDict):
         duplicateRate,
         columns,
         distinctCopyCount,
+        colocateWith,
     )
 
 
