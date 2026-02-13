@@ -110,7 +110,7 @@ ActiveReadableNodeCount(void)
  * NodeIsCoordinator returns true if the given node represents the coordinator.
  */
 bool
-NodeIsCoordinator(WorkerNode *node)
+NodeIsCoordinator(const WorkerNode *node)
 {
 	return node->groupId == COORDINATOR_GROUP_ID;
 }
@@ -354,12 +354,24 @@ CompareWorkerNodes(const void *leftElement, const void *rightElement)
  * WorkerNodeCompare compares two worker nodes by their host name and port
  * number. Two nodes that only differ by their rack locations are considered to
  * be equal to each other.
+ *
+ * This function also makes sure that coordinator nodes are always considered
+ * lexicographically smaller than other worker nodes.
  */
 int
 WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 {
 	const WorkerNode *workerLhs = (const WorkerNode *) lhsKey;
 	const WorkerNode *workerRhs = (const WorkerNode *) rhsKey;
+
+	if (NodeIsCoordinator(workerLhs))
+	{
+		return -1;
+	}
+	if (NodeIsCoordinator(workerRhs))
+	{
+		return 1;
+	}
 
 	return NodeNamePortCompare(workerLhs->workerName, workerRhs->workerName,
 							   workerLhs->workerPort, workerRhs->workerPort);
