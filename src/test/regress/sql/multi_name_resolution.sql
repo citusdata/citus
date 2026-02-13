@@ -29,4 +29,5 @@ FROM (
 ) AS join_alias(id_deep)
 WHERE bar.id_deep = join_alias.id_deep;
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA multi_name_resolution CASCADE;

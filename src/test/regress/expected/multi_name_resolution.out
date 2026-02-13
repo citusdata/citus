@@ -42,8 +42,5 @@ WHERE bar.id_deep = join_alias.id_deep;
 ---------------------------------------------------------------------
 (0 rows)
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA multi_name_resolution CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table namenest1
-drop cascades to table namenest2
-drop cascades to table namenest2_2250000000010
