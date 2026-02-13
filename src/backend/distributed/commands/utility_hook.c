@@ -366,10 +366,10 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 			ResetConstraintDropped();
 
 			/*
-			 * We're only interested in top-level CREATE TABLE commands
+			 * We're not interested in CREATE TABLE commands in the form a subcommand
 			 * to create a tenant schema table or a Citus managed table.
 			 */
-			if (context == PROCESS_UTILITY_TOPLEVEL &&
+			if (context != PROCESS_UTILITY_SUBCOMMAND &&
 				(IsA(parsetree, CreateStmt) ||
 				 IsA(parsetree, CreateForeignTableStmt) ||
 				 IsA(parsetree, CreateTableAsStmt)))

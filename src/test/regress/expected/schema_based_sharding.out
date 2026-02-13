@@ -1706,8 +1706,55 @@ $$);
  {t}
 (2 rows)
 
+SET citus.enable_schema_based_sharding TO ON;
+-- verify that creating tenant tables in a DO / function block works fine
+CREATE SCHEMA do_block_test;
+DO $$
+BEGIN
+    CREATE TABLE do_block_test.tbl_1(a int, b text);
+END;
+$$;
+CREATE OR REPLACE FUNCTION do_block_test.fn_1()
+RETURNS void AS $$
+BEGIN
+    CREATE TABLE do_block_test.tbl_2(a int, b text);
+END;
+$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION do_block_test.fn_2()
+RETURNS void AS $$
+    CREATE TABLE do_block_test.tbl_3(a int, b text);
+$$ LANGUAGE sql;
+SELECT do_block_test.fn_1();
+ fn_1
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT do_block_test.fn_2();
+ fn_2
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT COUNT(*)=3 FROM citus_tables
+    WHERE
+        table_name IN (
+            'do_block_test.tbl_1'::regclass,
+            'do_block_test.tbl_2'::regclass,
+            'do_block_test.tbl_3'::regclass
+        ) AND
+        citus_table_type = 'schema';
+$$);
+ result
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
 SET client_min_messages TO WARNING;
-DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema, sc1 CASCADE;
+DROP SCHEMA regular_schema, tenant_3, tenant_5, tenant_7, tenant_6, type_sch, citus_sch1, citus_sch2, citus_empty_sch1, citus_empty_sch2, authschema, sc1, do_block_test CASCADE;
 DROP ROLE citus_schema_role, citus_schema_nonpri, authschema;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
