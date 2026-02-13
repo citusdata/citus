@@ -240,7 +240,6 @@ DEPS = {
             "multi_sequence_default",
             "alter_database_propagation",
             "alter_role_propagation",
-            "grant_on_schema_propagation",
             "multi_test_catalog_views",
             "multi_drop_extension",
         ],

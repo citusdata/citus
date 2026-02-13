@@ -15,7 +15,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 150000;
 
 -- Prepare the environment
 SET citus.shard_replication_factor TO 1;
-SET citus.shard_count TO 5;
+SET citus.shard_count TO 11;
 
 -- Create test tables
 CREATE TABLE mx_table (col_1 int, col_2 text, col_3 BIGSERIAL);
@@ -187,6 +187,9 @@ DROP SEQUENCE mx_table_col_3_seq CASCADE;
 DROP TABLE mx_table;
 DROP TABLE mx_table_2;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
+
+-- Restore metadata sync to worker_2 to avoid affecting subsequent tests
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 RESET citus.shard_replication_factor;
 
