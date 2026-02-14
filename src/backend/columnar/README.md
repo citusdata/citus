@@ -111,6 +111,10 @@ The following options are available:
   chunk for _newly-inserted_ data. Existing chunks of data will not be
   changed and may have more rows than this maximum value. The default
   value is `10000`.
+* **columnar.chunk_group_size_limit**: ``<integer>`` - the maximum size in MB per
+  chunk group for _newly-inserted_ data. Existing chunks of data will not be
+  changed and may have more size than this maximum value. The default
+  value is `256`.
 
 View options for all tables with:
 
@@ -125,6 +129,7 @@ following GUCs:
 * `columnar.compression_level`
 * `columnar.stripe_row_limit`
 * `columnar.chunk_group_row_limit`
+* `columnar.chunk_group_size_limit`
 
 GUCs only affect newly-created *tables*, not any newly-created
 *stripes* on an existing table.
