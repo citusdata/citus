@@ -1945,15 +1945,22 @@ ExpandMergedSubscriptingRefEntries(List *targetEntryList)
 			Expr *refexpr = subsRef->refexpr;
 			subsRef->refexpr = NULL;
 
-			/*
-			 * Wrap the Expr that holds SubscriptingRef (directly or indirectly)
-			 * in a new TargetEntry; note that it doesn't have a refexpr anymore.
-			 */
-			TargetEntry *newTargetEntry = copyObject(targetEntry);
-			newTargetEntry->expr = expr;
-			expandedTargetEntries = lappend(expandedTargetEntries, newTargetEntry);
-
-			/* now inspect the refexpr that SubscriptingRef at hand were holding */
+		/*
+		 * Wrap the Expr that holds SubscriptingRef (directly or indirectly)
+		 * in a new TargetEntry; note that it doesn't have a refexpr anymore.
+		 */
+		TargetEntry *newTargetEntry = copyObject(targetEntry);
+		newTargetEntry->expr = expr;
+		
+		/*
+		 * PostgreSQL 18 compatibility: handle NULL or "?column?" resname
+		 */
+		if (newTargetEntry->resname == NULL || strcmp(newTargetEntry->resname, "?column?") == 0)
+		{
+			newTargetEntry->resname = psprintf("expr_col_%d", newTargetEntry->resno);
+		}
+		
+		expandedTargetEntries = lappend(expandedTargetEntries, newTargetEntry);			/* now inspect the refexpr that SubscriptingRef at hand were holding */
 			expr = refexpr;
 		}
 

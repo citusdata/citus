@@ -1,0 +1,2 @@
+# using postmaster on localhost, port 57636
+# diff command failed with status 512: diff  "/workspaces/citus/expected/subqueries_deep.out" "/workspaces/citus/results/subqueries_deep.out" > "/workspaces/citus/results/subqueries_deep.out.diff"Bail out!

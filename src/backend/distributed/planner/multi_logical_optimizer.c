@@ -1435,6 +1435,18 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
+		
+		/*
+		 * PostgreSQL 18 fix: Handle "?column?" names from intermediate expressions.
+		 * When flatCopyTargetEntry copies a target entry that has "?column?" as resname,
+		 * we need to generate a proper column name to avoid parsing errors on workers.
+		 */
+		if (newTargetEntry->resname == NULL || strcmp(newTargetEntry->resname, "?column?") == 0)
+		{
+			StringInfo generatedName = makeStringInfo();
+			appendStringInfo(generatedName, "expr_col_%d", originalTargetEntry->resno);
+			newTargetEntry->resname = generatedName->data;
+		}
 
 		if (CanPushDownExpression((Node *) originalExpression, extendedOpNodeProperties))
 		{
@@ -2956,7 +2968,7 @@ GenerateWorkerTargetEntry(TargetEntry *targetEntry, Expr *workerExpression,
 		newTargetEntry = makeNode(TargetEntry);
 	}
 
-	if (newTargetEntry->resname == NULL)
+	if (newTargetEntry->resname == NULL || strcmp(newTargetEntry->resname, "?column?") == 0)
 	{
 		newTargetEntry->resname = WorkerColumnName(targetProjectionNumber);
 	}
