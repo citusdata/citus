@@ -34,6 +34,7 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -51,6 +52,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/relation_utils.h"
 #include "distributed/resource_lock.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 
@@ -127,7 +129,7 @@ IsIndexRenameStmt(RenameStmt *renameStmt)
  * PreprocessIndexStmt determines whether a given CREATE INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
- * the coordinator node table and creates a DDLJob to encapsulate information needed
+ * the distributed table and creates a DDLJob to encapsulate information needed
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
@@ -181,7 +183,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsureCoordinatorUnlessTenantSchema(relationId);
 
 	if (createIndexStatement->idxname == NULL)
 	{
@@ -576,7 +578,7 @@ ReindexStmtFindRelationOid(ReindexStmt *reindexStmt, bool missingOk)
  * PreprocessReindexStmt determines whether a given REINDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
- * the coordinator node table and creates a DDLJob to encapsulate information needed
+ * the distributed table and creates a DDLJob to encapsulate information needed
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
@@ -688,7 +690,7 @@ ReindexStmtObjectAddress(Node *stmt, bool missing_ok, bool isPostprocess)
  * PreprocessDropIndexStmt determines whether a given DROP INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
- * the coordinator node table and creates a DDLJob to encapsulate information needed
+ * the distributed table and creates a DDLJob to encapsulate information needed
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
@@ -798,12 +800,6 @@ List *
 PostprocessIndexStmt(Node *node, const char *queryString)
 {
 	IndexStmt *indexStmt = castNode(IndexStmt, node);
-
-	/* this logic only applies to the coordinator */
-	if (!IsCoordinator())
-	{
-		return NIL;
-	}
 
 	/*
 	 * We make sure schema name is not null in the PreprocessIndexStmt
@@ -1351,7 +1347,7 @@ void
 MarkIndexValid(IndexStmt *indexStmt)
 {
 	Assert(indexStmt->concurrent);
-	Assert(IsCoordinator());
+	Assert(!IsCitusInternalBackend());
 
 	/*
 	 * We make sure schema name is not null in the PreprocessIndexStmt
