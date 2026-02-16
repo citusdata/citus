@@ -335,11 +335,12 @@ FixPartitionShardIndexNames(Oid relationId, Oid parentIndexOid)
 	}
 	else
 	{
+		char *relname = pstrdup(RelationGetRelationName(relation));
 		relation_close(relation, NoLock);
 		ereport(ERROR, (errmsg("Fixing shard index names is only applicable to "
 							   "partitioned tables or partitions, "
 							   "and \"%s\" is neither",
-							   RelationGetRelationName(relation))));
+							   relname)));
 	}
 
 	CreateFixPartitionShardIndexNames(parentRelationId,
