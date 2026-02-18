@@ -26,6 +26,7 @@
 
 extern bool AddAllLocalTablesToMetadata;
 extern bool EnableSchemaBasedSharding;
+extern char *DistributionColumnsGUC;
 
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;

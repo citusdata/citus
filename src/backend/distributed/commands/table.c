@@ -22,6 +22,7 @@
 #include "commands/tablecmds.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
+#include "miscadmin.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_type.h"
@@ -33,6 +34,7 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -65,6 +67,14 @@ bool EnableLocalReferenceForeignKeys = true;
  * distribution column.
  */
 bool AllowUnsafeConstraints = false;
+
+/*
+ * GUC citus.distribution_columns: a comma-separated priority list of column
+ * names (e.g. 'tenant_id,customer_id,department'). When a new table is created,
+ * Citus walks the list in order and distributes by the first column that exists
+ * in the table. Applies to CREATE TABLE and CREATE TABLE AS SELECT.
+ */
+char *DistributionColumnsGUC = "";
 
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
@@ -4233,10 +4243,177 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 
 
 /*
+ * FindMatchingDistributionColumn walks the comma-separated priority list in
+ * citus.distribution_columns and returns a palloc'd copy of the first column
+ * name that exists in the given relation. Returns NULL if none match or if
+ * the GUC is empty.
+ */
+static char *
+FindMatchingDistributionColumn(Oid relationId)
+{
+	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	{
+		return NULL;
+	}
+
+	/* work on a copy so we don't modify the GUC value */
+	char *rawList = pstrdup(DistributionColumnsGUC);
+	char *token = NULL;
+	char *savePtr = NULL;
+
+	for (token = strtok_r(rawList, ",", &savePtr);
+		 token != NULL;
+		 token = strtok_r(NULL, ",", &savePtr))
+	{
+		/* trim leading whitespace */
+		while (*token == ' ' || *token == '\t')
+		{
+			token++;
+		}
+
+		/* trim trailing whitespace */
+		char *end = token + strlen(token) - 1;
+		while (end > token && (*end == ' ' || *end == '\t'))
+		{
+			*end = '\0';
+			end--;
+		}
+
+		/* skip empty tokens (e.g. "col1,,col2") */
+		if (*token == '\0')
+		{
+			continue;
+		}
+
+		AttrNumber attNum = get_attnum(relationId, token);
+		if (attNum != InvalidAttrNumber)
+		{
+			char *result = pstrdup(token);
+			pfree(rawList);
+			return result;
+		}
+	}
+
+	pfree(rawList);
+	return NULL;
+}
+
+
+/*
+ * ShouldAutoDistributeNewTable returns true if citus.distribution_columns is
+ * set and the given relation has a column matching one of the names in the
+ * priority list.
+ */
+static bool
+ShouldAutoDistributeNewTable(Oid relationId)
+{
+	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	{
+		return false;
+	}
+
+	if (IsBinaryUpgrade)
+	{
+		return false;
+	}
+
+	/* internal backends (metadata sync, rebalancer) should not auto-distribute */
+	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
+	{
+		return false;
+	}
+
+	/* skip temp tables */
+	if (get_rel_persistence(relationId) == RELPERSISTENCE_TEMP)
+	{
+		return false;
+	}
+
+	/*
+	 * Skip tables that are already Citus tables (e.g. partitions that were
+	 * already distributed by PostprocessCreateTableStmtPartitionOf).
+	 */
+	if (IsCitusTable(relationId))
+	{
+		return false;
+	}
+
+	/*
+	 * Skip partitions of tables that are already distributed. They will be
+	 * distributed automatically by Citus when attached to their parent.
+	 * For partitions of local parents, the parent itself will be auto-
+	 * distributed (if it matches the GUC) and the partition will follow.
+	 */
+	if (PartitionTable(relationId))
+	{
+		return false;
+	}
+
+	/*
+	 * Skip foreign tables, materialized views, and bare inherited tables —
+	 * Citus cannot hash-distribute these relation kinds.
+	 */
+	char relkind = get_rel_relkind(relationId);
+	if (relkind == RELKIND_FOREIGN_TABLE ||
+		relkind == RELKIND_MATVIEW)
+	{
+		return false;
+	}
+
+	/* Citus does not support distributing tables with inheritance parents */
+	if (IsChildTable(relationId) || IsParentTable(relationId))
+	{
+		return false;
+	}
+
+	/* check whether any column in the priority list exists in this table */
+	char *matchedCol = FindMatchingDistributionColumn(relationId);
+	if (matchedCol == NULL)
+	{
+		return false;
+	}
+
+	pfree(matchedCol);
+	return true;
+}
+
+
+/*
+ * AutoDistributeNewTable distributes the given relation using the first
+ * matching column from the citus.distribution_columns priority list as
+ * the hash distribution column.
+ */
+static void
+AutoDistributeNewTable(Oid relationId)
+{
+	char *distributionColumn = FindMatchingDistributionColumn(relationId);
+	Assert(distributionColumn != NULL);
+
+	char *colocateWith = "default";
+	bool shardCountIsStrict = false;
+
+	ereport(NOTICE, (errmsg("auto-distributing table \"%s\" by column \"%s\" "
+							"(from citus.distribution_columns)",
+							get_rel_name(relationId), distributionColumn)));
+
+	CreateDistributedTable(relationId, distributionColumn,
+						   DISTRIBUTE_BY_HASH, ShardCount,
+						   shardCountIsStrict, colocateWith);
+
+	pfree(distributionColumn);
+}
+
+
+/*
  * ConvertNewTableIfNecessary converts the given table to a tenant schema
- * table or a Citus managed table if necessary.
+ * table, an auto-distributed table, or a Citus managed table if necessary.
  *
  * Input node is expected to be a CreateStmt or a CreateTableAsStmt.
+ *
+ * The precedence is:
+ *  1. Tenant schema tables (citus.enable_schema_based_sharding)
+ *  2. Auto-distributed tables (citus.distribution_columns)
+ *  3. Citus managed tables (citus.use_citus_managed_tables)
  */
 void
 ConvertNewTableIfNecessary(Node *createStmt)
@@ -4274,6 +4451,16 @@ ConvertNewTableIfNecessary(Node *createStmt)
 
 			CreateTenantSchemaTable(createdRelationId);
 		}
+		else if (ShouldAutoDistributeNewTable(createdRelationId))
+		{
+			/*
+			 * citus.distribution_columns is set and the table has a matching column.
+			 * Distribute the table by that column. Because CREATE TABLE AS SELECT
+			 * already loaded data into the local table, CreateDistributedTable will
+			 * move the data to the shards automatically.
+			 */
+			AutoDistributeNewTable(createdRelationId);
+		}
 
 		/*
 		 * We simply ignore the tables created by using that syntax when using
@@ -4295,9 +4482,10 @@ ConvertNewTableIfNecessary(Node *createStmt)
 	}
 
 	/*
-	 * Check ShouldCreateTenantSchemaTable() before ShouldAddNewTableToMetadata()
-	 * because we don't want to unnecessarily add the table into metadata
-	 * (as a Citus managed table) before distributing it as a tenant table.
+	 * Check ShouldCreateTenantSchemaTable() before ShouldAutoDistributeNewTable()
+	 * and ShouldAddNewTableToMetadata() because we don't want to unnecessarily
+	 * add the table into metadata (as a Citus managed table) before distributing
+	 * it as a tenant table.
 	 */
 	if (ShouldCreateTenantSchemaTable(createdRelationId))
 	{
@@ -4310,6 +4498,15 @@ ConvertNewTableIfNecessary(Node *createStmt)
 		{
 			CreateTenantSchemaTable(createdRelationId);
 		}
+	}
+	else if (ShouldAutoDistributeNewTable(createdRelationId))
+	{
+		/*
+		 * citus.distribution_columns is set and the table has a matching column.
+		 * For CREATE TABLE (without AS SELECT), the table is empty so this is
+		 * very fast — no data movement needed.
+		 */
+		AutoDistributeNewTable(createdRelationId);
 	}
 	else if (ShouldAddNewTableToMetadata(createdRelationId))
 	{
