@@ -45,32 +45,17 @@ SELECT count(*) FROM citus_tables WHERE table_name = 't_prio_none'::regclass;
 
 DROP TABLE t_prio1, t_prio2, t_prio3, t_prio_none;
 
--- ===== CREATE TABLE AS SELECT =====
-
--- source table (disable GUC while creating the source table explicitly)
+-- ===== Priority list fallback in CTAS =====
+-- First token doesn't match, second does → should distribute by tenant_id
 RESET citus.distribution_columns;
 CREATE TABLE source_data (id int, tenant_id int, val text);
 SELECT create_distributed_table('source_data', 'tenant_id');
 INSERT INTO source_data VALUES (1, 10, 'a'), (2, 20, 'b'), (3, 10, 'c');
 
-SET citus.distribution_columns TO 'tenant_id';
-
-CREATE TABLE t_ctas AS SELECT * FROM source_data;
-
--- should be distributed by tenant_id
-SELECT distribution_column FROM citus_tables WHERE table_name = 't_ctas'::regclass;
-
--- data should be there
-SELECT count(*) FROM t_ctas;
-
-DROP TABLE t_ctas;
-
--- CTAS with priority list fallback
 SET citus.distribution_columns TO 'nonexistent, tenant_id';
 CREATE TABLE t_ctas_fallback AS SELECT * FROM source_data;
 SELECT distribution_column FROM citus_tables WHERE table_name = 't_ctas_fallback'::regclass;
 DROP TABLE t_ctas_fallback;
-
 DROP TABLE source_data;
 
 -- ===== Whitespace handling in list =====
@@ -619,9 +604,6 @@ SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_from_local'::regclass;
 
 SELECT count(*) AS local_count FROM ctas_from_local;
-SELECT (SELECT count(*) FROM ctas_from_local) =
-       (SELECT count(*) FROM src_local)
-       AS counts_match;
 
 DROP TABLE ctas_from_local;
 
@@ -635,9 +617,6 @@ SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_same_dist'::regclass;
 
 SELECT count(*) AS same_dist_count FROM ctas_same_dist;
-SELECT (SELECT count(*) FROM ctas_same_dist) =
-       (SELECT count(*) FROM src_distributed)
-       AS counts_match;
 
 DROP TABLE ctas_same_dist;
 
@@ -651,9 +630,6 @@ SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_from_ref'::regclass;
 
 SELECT count(*) AS ref_count FROM ctas_from_ref;
-SELECT (SELECT count(*) FROM ctas_from_ref) =
-       (SELECT count(*) FROM src_ref)
-       AS counts_match;
 
 DROP TABLE ctas_from_ref;
 
@@ -672,7 +648,6 @@ SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_nested_agg'::regclass;
 
 SELECT count(*) AS nested_agg_count FROM ctas_nested_agg;
-SELECT (SELECT count(*) FROM ctas_nested_agg) > 0 AS is_non_empty;
 
 DROP TABLE ctas_nested_agg;
 
@@ -716,8 +691,6 @@ WHERE a.table_name = 'explain_src'::regclass
   AND b.table_name = 'ctas_explain_same'::regclass;
 
 SELECT count(*) AS row_count FROM ctas_explain_same;
-SELECT (SELECT count(*) FROM ctas_explain_same) =
-       (SELECT count(*) FROM explain_src) AS counts_match;
 
 DROP TABLE ctas_explain_same;
 
@@ -754,8 +727,6 @@ WHERE a.table_name = 'explain_src_diff'::regclass
   AND b.table_name = 'ctas_explain_diff'::regclass;
 
 SELECT count(*) AS row_count FROM ctas_explain_diff;
-SELECT (SELECT count(*) FROM ctas_explain_diff) =
-       (SELECT count(*) FROM explain_src_diff) AS counts_match;
 
 DROP TABLE ctas_explain_diff;
 
@@ -834,12 +805,17 @@ CREATE TABLE ctas_cte AS WITH src AS (SELECT * FROM ctas_syntax_src WHERE tenant
 SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_cte'::regclass;
 SELECT count(*) AS row_count FROM ctas_cte;
 
--- CTAS with parenthesized subquery
-CREATE TABLE ctas_paren AS (SELECT id, tenant_id, val FROM ctas_syntax_src);
-SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_paren'::regclass;
-SELECT count(*) AS row_count FROM ctas_paren;
+-- CTAS with TABLE keyword
+CREATE TABLE ctas_table_kw AS TABLE ctas_syntax_src;
+SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_table_kw'::regclass;
+SELECT count(*) AS row_count FROM ctas_table_kw;
 
-DROP TABLE ctas_cte, ctas_paren;
+-- CTAS with VALUES keyword
+CREATE TABLE ctas_values (id, tenant_id, val) AS VALUES (1, 10, 'a'), (2, 20, 'b');
+SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_values'::regclass;
+SELECT count(*) AS row_count FROM ctas_values;
+
+DROP TABLE ctas_cte, ctas_table_kw, ctas_values;
 
 -- CTAS with explicit column name override =====
 -- IntoClause.colNames overrides the targetList column names

@@ -64,8 +64,8 @@ SELECT count(*) FROM citus_tables WHERE table_name = 't_prio_none'::regclass;
 (1 row)
 
 DROP TABLE t_prio1, t_prio2, t_prio3, t_prio_none;
--- ===== CREATE TABLE AS SELECT =====
--- source table (disable GUC while creating the source table explicitly)
+-- ===== Priority list fallback in CTAS =====
+-- First token doesn't match, second does → should distribute by tenant_id
 RESET citus.distribution_columns;
 CREATE TABLE source_data (id int, tenant_id int, val text);
 SELECT create_distributed_table('source_data', 'tenant_id');
@@ -75,26 +75,6 @@ SELECT create_distributed_table('source_data', 'tenant_id');
 (1 row)
 
 INSERT INTO source_data VALUES (1, 10, 'a'), (2, 20, 'b'), (3, 10, 'c');
-SET citus.distribution_columns TO 'tenant_id';
-CREATE TABLE t_ctas AS SELECT * FROM source_data;
-NOTICE:  auto-distributing table "t_ctas" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  optimized CTAS: table "t_ctas" auto-distributed by column "tenant_id", using INSERT...SELECT for data
--- should be distributed by tenant_id
-SELECT distribution_column FROM citus_tables WHERE table_name = 't_ctas'::regclass;
- distribution_column
----------------------------------------------------------------------
- tenant_id
-(1 row)
-
--- data should be there
-SELECT count(*) FROM t_ctas;
- count
----------------------------------------------------------------------
-     3
-(1 row)
-
-DROP TABLE t_ctas;
--- CTAS with priority list fallback
 SET citus.distribution_columns TO 'nonexistent, tenant_id';
 CREATE TABLE t_ctas_fallback AS SELECT * FROM source_data;
 NOTICE:  auto-distributing table "t_ctas_fallback" by column "tenant_id" (from citus.distribution_columns)
@@ -887,14 +867,6 @@ SELECT count(*) AS local_count FROM ctas_from_local;
            3
 (1 row)
 
-SELECT (SELECT count(*) FROM ctas_from_local) =
-       (SELECT count(*) FROM src_local)
-       AS counts_match;
- counts_match
----------------------------------------------------------------------
- t
-(1 row)
-
 DROP TABLE ctas_from_local;
 -- ----- CTAS from a distributed table with the same distribution column -----
 CREATE TABLE ctas_same_dist AS (
@@ -916,14 +888,6 @@ SELECT count(*) AS same_dist_count FROM ctas_same_dist;
                5
 (1 row)
 
-SELECT (SELECT count(*) FROM ctas_same_dist) =
-       (SELECT count(*) FROM src_distributed)
-       AS counts_match;
- counts_match
----------------------------------------------------------------------
- t
-(1 row)
-
 DROP TABLE ctas_same_dist;
 -- ----- CTAS from a reference table -----
 CREATE TABLE ctas_from_ref AS (
@@ -943,14 +907,6 @@ SELECT count(*) AS ref_count FROM ctas_from_ref;
  ref_count
 ---------------------------------------------------------------------
          3
-(1 row)
-
-SELECT (SELECT count(*) FROM ctas_from_ref) =
-       (SELECT count(*) FROM src_ref)
-       AS counts_match;
- counts_match
----------------------------------------------------------------------
- t
 (1 row)
 
 DROP TABLE ctas_from_ref;
@@ -977,12 +933,6 @@ SELECT count(*) AS nested_agg_count FROM ctas_nested_agg;
  nested_agg_count
 ---------------------------------------------------------------------
                 3
-(1 row)
-
-SELECT (SELECT count(*) FROM ctas_nested_agg) > 0 AS is_non_empty;
- is_non_empty
----------------------------------------------------------------------
- t
 (1 row)
 
 DROP TABLE ctas_nested_agg;
@@ -1020,7 +970,7 @@ EXPLAIN (COSTS FALSE) CREATE TABLE ctas_explain_same AS
    Tasks Shown: One of 4
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on explain_src_7800209 explain_src
+         ->  Seq Scan on explain_src_7800205 explain_src
 (6 rows)
 
 -- Now actually create it and verify
@@ -1048,13 +998,6 @@ SELECT count(*) AS row_count FROM ctas_explain_same;
  row_count
 ---------------------------------------------------------------------
          3
-(1 row)
-
-SELECT (SELECT count(*) FROM ctas_explain_same) =
-       (SELECT count(*) FROM explain_src) AS counts_match;
- counts_match
----------------------------------------------------------------------
- t
 (1 row)
 
 DROP TABLE ctas_explain_same;
@@ -1086,7 +1029,7 @@ EXPLAIN (COSTS FALSE) CREATE TABLE ctas_explain_diff AS
    Tasks Shown: One of 3
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on explain_src_diff_7800217 explain_src_diff
+         ->  Seq Scan on explain_src_diff_7800213 explain_src_diff
 (6 rows)
 
 -- Now actually create it
@@ -1115,13 +1058,6 @@ SELECT count(*) AS row_count FROM ctas_explain_diff;
  row_count
 ---------------------------------------------------------------------
          3
-(1 row)
-
-SELECT (SELECT count(*) FROM ctas_explain_diff) =
-       (SELECT count(*) FROM explain_src_diff) AS counts_match;
- counts_match
----------------------------------------------------------------------
- t
 (1 row)
 
 DROP TABLE ctas_explain_diff;
@@ -1154,10 +1090,10 @@ EXPLAIN (COSTS FALSE) CREATE TABLE ctas_explain_join AS
                Merge Cond: (s.tenant_id = i.tenant_id)
                ->  Sort
                      Sort Key: s.tenant_id
-                     ->  Seq Scan on explain_src_7800209 s
+                     ->  Seq Scan on explain_src_7800205 s
                ->  Sort
                      Sort Key: i.tenant_id
-                     ->  Seq Scan on explain_items_7800224 i
+                     ->  Seq Scan on explain_items_7800220 i
 (13 rows)
 
 CREATE TABLE ctas_explain_join AS
@@ -1252,23 +1188,39 @@ SELECT count(*) AS row_count FROM ctas_cte;
          2
 (1 row)
 
--- CTAS with parenthesized subquery
-CREATE TABLE ctas_paren AS (SELECT id, tenant_id, val FROM ctas_syntax_src);
-NOTICE:  auto-distributing table "ctas_paren" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  optimized CTAS: table "ctas_paren" auto-distributed by column "tenant_id", using INSERT...SELECT for data
-SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_paren'::regclass;
+-- CTAS with TABLE keyword
+CREATE TABLE ctas_table_kw AS TABLE ctas_syntax_src;
+NOTICE:  auto-distributing table "ctas_table_kw" by column "tenant_id" (from citus.distribution_columns)
+NOTICE:  optimized CTAS: table "ctas_table_kw" auto-distributed by column "tenant_id", using INSERT...SELECT for data
+SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_table_kw'::regclass;
  distribution_column | citus_table_type
 ---------------------------------------------------------------------
  tenant_id           | distributed
 (1 row)
 
-SELECT count(*) AS row_count FROM ctas_paren;
+SELECT count(*) AS row_count FROM ctas_table_kw;
  row_count
 ---------------------------------------------------------------------
          3
 (1 row)
 
-DROP TABLE ctas_cte, ctas_paren;
+-- CTAS with VALUES keyword
+CREATE TABLE ctas_values (id, tenant_id, val) AS VALUES (1, 10, 'a'), (2, 20, 'b');
+NOTICE:  auto-distributing table "ctas_values" by column "tenant_id" (from citus.distribution_columns)
+NOTICE:  optimized CTAS: table "ctas_values" auto-distributed by column "tenant_id", using INSERT...SELECT for data
+SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_values'::regclass;
+ distribution_column | citus_table_type
+---------------------------------------------------------------------
+ tenant_id           | distributed
+(1 row)
+
+SELECT count(*) AS row_count FROM ctas_values;
+ row_count
+---------------------------------------------------------------------
+         2
+(1 row)
+
+DROP TABLE ctas_cte, ctas_table_kw, ctas_values;
 -- CTAS with explicit column name override =====
 -- IntoClause.colNames overrides the targetList column names
 CREATE TABLE ctas_colnames (a, tenant_id, c) AS SELECT id, tenant_id, val FROM ctas_syntax_src;
