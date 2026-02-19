@@ -670,6 +670,8 @@ extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 												  char *colname, bool missingTableOk);
 
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
+extern bool TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
+												const char *queryString);
 extern void ConvertNewTableIfNecessary(Node *createStmt);
 extern void ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *alterObjectSchemaStmt);
 

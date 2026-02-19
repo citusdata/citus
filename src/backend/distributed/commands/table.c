@@ -23,6 +23,9 @@
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
+#include "commands/defrem.h"
+#include "executor/spi.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_type.h"
@@ -30,6 +33,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
 #include "pg_version_constants.h"
@@ -137,6 +141,11 @@ static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												bool ifNotExists);
 static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 														  relationId);
+static char * FindMatchingDistributionColumnFromTargetList(List *targetList,
+														   List *colNames);
+static char * FindMatchingDistributionColumn(Oid relationId);
+static bool ShouldAutoDistributeNewTable(Oid relationId);
+static void AutoDistributeNewTable(Oid relationId);
 
 
 /*
@@ -4242,6 +4251,92 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 }
 
 
+
+/*
+ * FindMatchingDistributionColumnFromTargetList walks the GUC priority list
+ * and returns the first column name that appears in the given Query's
+ * targetList. This is used to determine the distribution column before
+ * the table exists (for CTAS optimization). colNames, if non-NULL,
+ * overrides the column names from the targetList (as used by IntoClause).
+ */
+static char *
+FindMatchingDistributionColumnFromTargetList(List *targetList, List *colNames)
+{
+	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	{
+		return NULL;
+	}
+
+	/* work on a copy so we don't modify the GUC value */
+	char *rawList = pstrdup(DistributionColumnsGUC);
+	char *token = NULL;
+	char *savePtr = NULL;
+
+	for (token = strtok_r(rawList, ",", &savePtr);
+		 token != NULL;
+		 token = strtok_r(NULL, ",", &savePtr))
+	{
+		/* trim leading whitespace */
+		while (*token == ' ' || *token == '\t')
+		{
+			token++;
+		}
+
+		/* trim trailing whitespace */
+		char *end = token + strlen(token) - 1;
+		while (end > token && (*end == ' ' || *end == '\t'))
+		{
+			*end = '\0';
+			end--;
+		}
+
+		/* skip empty tokens */
+		if (*token == '\0')
+		{
+			continue;
+		}
+
+		/*
+		 * Walk the target list to check if any output column matches.
+		 * If colNames is provided, use those names instead.
+		 */
+		int colIdx = 0;
+		ListCell *colCell = list_head(colNames);
+		TargetEntry *tle = NULL;
+		foreach_declared_ptr(tle, targetList)
+		{
+			if (tle->resjunk)
+			{
+				continue;
+			}
+
+			const char *colName = NULL;
+			if (colCell != NULL)
+			{
+				colName = strVal(lfirst(colCell));
+				colCell = lnext(colNames, colCell);
+			}
+			else
+			{
+				colName = tle->resname;
+			}
+
+			if (colName != NULL && strcmp(colName, token) == 0)
+			{
+				char *result = pstrdup(token);
+				pfree(rawList);
+				return result;
+			}
+
+			colIdx++;
+		}
+	}
+
+	pfree(rawList);
+	return NULL;
+}
+
+
 /*
  * FindMatchingDistributionColumn walks the comma-separated priority list in
  * citus.distribution_columns and returns a palloc'd copy of the first column
@@ -4401,6 +4496,421 @@ AutoDistributeNewTable(Oid relationId)
 						   shardCountIsStrict, colocateWith);
 
 	pfree(distributionColumn);
+}
+
+
+/*
+ * TryOptimizeCTASForAutoDistribution intercepts CREATE TABLE AS SELECT
+ * and converts it into CREATE TABLE + INSERT INTO ... SELECT to avoid
+ * pulling all data through the coordinator. When the auto-distribution
+ * GUC is set and the output columns match, we:
+ *   1. Create the empty target table
+ *   2. Distribute it (auto-distribution)
+ *   3. Execute INSERT INTO target SELECT ... (Citus pushes this down)
+ *
+ * Returns true if the CTAS was handled via the optimized path.
+ * Returns false if the normal (unoptimized) path should be used.
+ */
+bool
+TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
+								   const char *queryString)
+{
+	/* Quick bail-out if the GUC is not set */
+	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	{
+		return false;
+	}
+
+	if (IsBinaryUpgrade)
+	{
+		return false;
+	}
+
+	/* internal backends should not auto-distribute */
+	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
+	{
+		return false;
+	}
+
+	/* only handle regular tables, not materialized views */
+	if (ctasStmt->objtype != OBJECT_TABLE)
+	{
+		return false;
+	}
+
+	/* skip temp tables */
+	IntoClause *into = ctasStmt->into;
+	if (into->rel->relpersistence == RELPERSISTENCE_TEMP)
+	{
+		return false;
+	}
+
+	/*
+	 * Skip SELECT INTO syntax — it doesn't use "AS" so we can't easily
+	 * extract the SELECT part from the query string. Fall back to the
+	 * normal post-creation path for these.
+	 */
+	if (ctasStmt->is_select_into)
+	{
+		return false;
+	}
+
+	/*
+	 * The query must be an analyzed Query node by the time we get here.
+	 * If it's not (e.g. it's an EXECUTE), fall through to the normal path.
+	 */
+	if (!IsA(ctasStmt->query, Query))
+	{
+		return false;
+	}
+
+	Query *selectQuery = (Query *) ctasStmt->query;
+
+	/*
+	 * Check if any output column matches the distribution_columns GUC.
+	 * colNames from IntoClause override the target list column names.
+	 */
+	char *distColumn = FindMatchingDistributionColumnFromTargetList(
+		selectQuery->targetList, into->colNames);
+	if (distColumn == NULL)
+	{
+		return false;
+	}
+
+	/*
+	 * Build qualified table name for the target.
+	 */
+	const char *schemaName = into->rel->schemaname;
+	const char *tableName = into->rel->relname;
+	const char *qualifiedName = schemaName ?
+		quote_qualified_identifier(schemaName, tableName) :
+		quote_identifier(tableName);
+
+	/*
+	 * If IF NOT EXISTS is set and the table already exists, skip.
+	 */
+	if (ctasStmt->if_not_exists)
+	{
+		bool missingOk = true;
+		Oid existingOid = RangeVarGetRelid(into->rel, NoLock, missingOk);
+		if (OidIsValid(existingOid))
+		{
+			pfree(distColumn);
+			return false;
+		}
+	}
+
+	/*
+	 * Step 1: Build and execute CREATE TABLE with column definitions
+	 * derived from the SELECT's target list.
+	 */
+	StringInfoData createBuf;
+	initStringInfo(&createBuf);
+	appendStringInfo(&createBuf, "CREATE TABLE %s (", qualifiedName);
+
+	int colIdx = 0;
+	ListCell *colNameCell = list_head(into->colNames);
+	TargetEntry *tle = NULL;
+	foreach_declared_ptr(tle, selectQuery->targetList)
+	{
+		if (tle->resjunk)
+		{
+			continue;
+		}
+
+		const char *colName = NULL;
+		if (colNameCell != NULL)
+		{
+			colName = strVal(lfirst(colNameCell));
+			colNameCell = lnext(into->colNames, colNameCell);
+		}
+		else
+		{
+			colName = tle->resname;
+		}
+
+		if (colName == NULL)
+		{
+			/* Cannot determine column name, fall back to normal path */
+			pfree(createBuf.data);
+			pfree(distColumn);
+			return false;
+		}
+
+		Oid colType = exprType((Node *) tle->expr);
+		int32 colTypmod = exprTypmod((Node *) tle->expr);
+		Oid colCollation = exprCollation((Node *) tle->expr);
+
+		if (colIdx > 0)
+		{
+			appendStringInfoString(&createBuf, ", ");
+		}
+
+		bits16 formatFlags = FORMAT_TYPE_TYPEMOD_GIVEN | FORMAT_TYPE_FORCE_QUALIFY;
+		appendStringInfo(&createBuf, "%s %s",
+						 quote_identifier(colName),
+						 format_type_extended(colType, colTypmod, formatFlags));
+
+		/* Add COLLATE clause if non-default collation */
+		if (OidIsValid(colCollation) && colCollation != DEFAULT_COLLATION_OID)
+		{
+			appendStringInfo(&createBuf, " COLLATE %s",
+							 generate_collation_name(colCollation));
+		}
+
+		colIdx++;
+	}
+
+	if (colIdx == 0)
+	{
+		/* No columns — fall back */
+		pfree(createBuf.data);
+		pfree(distColumn);
+		return false;
+	}
+
+	appendStringInfoChar(&createBuf, ')');
+
+	/* Add WITH clause options if present */
+	if (into->options != NIL)
+	{
+		appendStringInfoString(&createBuf, " WITH (");
+		int optIdx = 0;
+		DefElem *opt = NULL;
+		foreach_declared_ptr(opt, into->options)
+		{
+			if (optIdx > 0)
+			{
+				appendStringInfoString(&createBuf, ", ");
+			}
+
+			if (opt->arg != NULL)
+			{
+				appendStringInfo(&createBuf, "%s = %s",
+								 opt->defname,
+								 defGetString(opt));
+			}
+			else
+			{
+				appendStringInfoString(&createBuf, opt->defname);
+			}
+			optIdx++;
+		}
+		appendStringInfoChar(&createBuf, ')');
+	}
+
+	/* Add tablespace if specified */
+	if (into->tableSpaceName != NULL)
+	{
+		appendStringInfo(&createBuf, " TABLESPACE %s",
+						 quote_identifier(into->tableSpaceName));
+	}
+
+	/*
+	 * Execute the CREATE TABLE via SPI (utility commands can't go through
+	 * ExecuteQueryStringIntoDestReceiver). This will trigger
+	 * ConvertNewTableIfNecessary for the CREATE TABLE path,
+	 * which will auto-distribute the empty table.
+	 */
+	ereport(DEBUG1, (errmsg("optimized CTAS: creating empty distributed table "
+							"before INSERT...SELECT")));
+
+	int spiResult = SPI_connect();
+	if (spiResult != SPI_OK_CONNECT)
+	{
+		ereport(ERROR, (errmsg("could not connect to SPI manager")));
+	}
+
+	spiResult = SPI_execute(createBuf.data, false, 0);
+	if (spiResult != SPI_OK_UTILITY)
+	{
+		ereport(ERROR, (errmsg("failed to execute CREATE TABLE via SPI: %s",
+							   createBuf.data)));
+	}
+
+	/*
+	 * Need to increment command counter so that subsequent commands
+	 * can see the new table.
+	 */
+	CommandCounterIncrement();
+
+	/*
+	 * The table was created by SPI as a sub-command, so the utility hook
+	 * won't auto-distribute it (ConvertNewTableIfNecessary only runs for
+	 * top-level commands). We must explicitly distribute it here.
+	 */
+	bool missingOk = false;
+	Oid createdRelationId = RangeVarGetRelid(into->rel, NoLock, missingOk);
+
+	if (ShouldAutoDistributeNewTable(createdRelationId))
+	{
+		AutoDistributeNewTable(createdRelationId);
+	}
+
+	if (!IsCitusTable(createdRelationId))
+	{
+		/*
+		 * Table was created but not distributed. Execute INSERT ... SELECT
+		 * to populate it, but this won't benefit from pushdown.
+		 */
+		ereport(DEBUG1, (errmsg("optimized CTAS: table was not auto-distributed, "
+								"falling back to coordinator INSERT")));
+	}
+	else
+	{
+		ereport(NOTICE, (errmsg("optimized CTAS: table \"%s\" auto-distributed by "
+								"column \"%s\", using INSERT...SELECT for data",
+								tableName, distColumn)));
+	}
+
+	/*
+	 * Step 2: Execute INSERT INTO target SELECT ... to populate the table.
+	 * When both source and target are co-located, Citus will push down
+	 * the INSERT...SELECT entirely to workers — no data round-trip.
+	 */
+	StringInfoData insertBuf;
+	initStringInfo(&insertBuf);
+	appendStringInfo(&insertBuf, "INSERT INTO %s %s",
+					 qualifiedName, queryString);
+
+	/*
+	 * But the queryString is the full CTAS statement. We need to extract
+	 * just the SELECT part. The query is already analyzed as a Query node,
+	 * so we can deparse it. However, deparsing a Query is complex.
+	 *
+	 * Instead, we can find the SELECT portion from the original queryString.
+	 * The CTAS syntax is:
+	 *   CREATE TABLE name AS <select_stmt>
+	 *   CREATE TABLE name (<cols>) AS <select_stmt>
+	 * We need to find the AS keyword and extract everything after it.
+	 *
+	 * A safer approach: use the Query directly via ExecuteQueryIntoDestReceiver
+	 * with a CitusCopyDestReceiver, or construct the INSERT via SPI.
+	 * But the simplest correct approach is to use SPI to run
+	 * "INSERT INTO <table> SELECT ..." where the SELECT is reconstructed.
+	 *
+	 * Actually, we can deparse the Query to get the SELECT string using
+	 * pg_get_querydef or deparse_query_string. Let's try another approach:
+	 * We'll parse and plan "INSERT INTO table SELECT * FROM source" but
+	 * the source query could be complex.
+	 *
+	 * The cleanest approach: find "AS" keyword in the original queryString
+	 * that separates the CREATE TABLE clause from the SELECT clause.
+	 */
+
+	/* Reset insertBuf and use a different approach */
+	resetStringInfo(&insertBuf);
+
+	/*
+	 * Find the SELECT part of the CTAS statement. We look for AS followed
+	 * by SELECT, (, or WITH (for CTEs). We need to handle:
+	 *   CREATE TABLE t AS SELECT ...
+	 *   CREATE TABLE t AS (SELECT ...)
+	 *   CREATE TABLE t (col1, col2) AS SELECT ...
+	 *   CREATE TABLE t AS WITH cte AS (...) SELECT ...
+	 */
+	const char *selectStart = NULL;
+	const char *ptr = queryString;
+
+	/*
+	 * Scan for the AS keyword that precedes the SELECT query.
+	 * We need to skip past the table name and any column list.
+	 * Look for pattern: AS followed by SELECT, (, or WITH.
+	 */
+	while (*ptr != '\0')
+	{
+		/* skip string literals */
+		if (*ptr == '\'')
+		{
+			ptr++;
+			while (*ptr != '\0' && *ptr != '\'')
+			{
+				if (*ptr == '\'' && *(ptr + 1) == '\'')
+				{
+					ptr += 2;
+				}
+				else
+				{
+					ptr++;
+				}
+			}
+			if (*ptr != '\0')
+			{
+				ptr++;
+			}
+			continue;
+		}
+
+		/* skip quoted identifiers */
+		if (*ptr == '\"')
+		{
+			ptr++;
+			while (*ptr != '\0' && *ptr != '\"')
+			{
+				ptr++;
+			}
+			if (*ptr != '\0')
+			{
+				ptr++;
+			}
+			continue;
+		}
+
+		/* Check for AS keyword (case-insensitive) */
+		if ((ptr[0] == 'A' || ptr[0] == 'a') &&
+			(ptr[1] == 'S' || ptr[1] == 's') &&
+			(ptr == queryString || !isalnum((unsigned char) ptr[-1])) &&
+			!isalnum((unsigned char) ptr[2]) && ptr[2] != '_')
+		{
+			const char *afterAs = ptr + 2;
+
+			/* skip whitespace after AS */
+			while (*afterAs == ' ' || *afterAs == '\t' || *afterAs == '\n' ||
+				   *afterAs == '\r')
+			{
+				afterAs++;
+			}
+
+			/* Check if what follows is a SELECT query indicator */
+			if (pg_strncasecmp(afterAs, "SELECT", 6) == 0 ||
+				pg_strncasecmp(afterAs, "WITH", 4) == 0 ||
+				pg_strncasecmp(afterAs, "TABLE", 5) == 0 ||
+				pg_strncasecmp(afterAs, "VALUES", 6) == 0 ||
+				*afterAs == '(')
+			{
+				selectStart = afterAs;
+				break;
+			}
+		}
+
+		ptr++;
+	}
+
+	if (selectStart == NULL)
+	{
+		/*
+		 * Could not find the SELECT part — this shouldn't happen for
+		 * valid CTAS, but fall back gracefully. The table is already
+		 * created (empty), so just let the caller know we handled it.
+		 */
+		ereport(WARNING, (errmsg("optimized CTAS: could not extract SELECT "
+								 "from query string, table is empty")));
+		SPI_finish();
+		return true;
+	}
+
+	appendStringInfo(&insertBuf, "INSERT INTO %s %s",
+					 qualifiedName, selectStart);
+
+	spiResult = SPI_execute(insertBuf.data, false, 0);
+	if (spiResult != SPI_OK_INSERT)
+	{
+		ereport(ERROR, (errmsg("failed to execute INSERT...SELECT via SPI")));
+	}
+
+	SPI_finish();
+
+	return true;
 }
 
 

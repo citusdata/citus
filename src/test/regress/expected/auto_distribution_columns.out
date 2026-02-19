@@ -78,10 +78,7 @@ INSERT INTO source_data VALUES (1, 10, 'a'), (2, 20, 'b'), (3, 10, 'c');
 SET citus.distribution_columns TO 'tenant_id';
 CREATE TABLE t_ctas AS SELECT * FROM source_data;
 NOTICE:  auto-distributing table "t_ctas" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.t_ctas$$)
+NOTICE:  optimized CTAS: table "t_ctas" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 -- should be distributed by tenant_id
 SELECT distribution_column FROM citus_tables WHERE table_name = 't_ctas'::regclass;
  distribution_column
@@ -101,10 +98,7 @@ DROP TABLE t_ctas;
 SET citus.distribution_columns TO 'nonexistent, tenant_id';
 CREATE TABLE t_ctas_fallback AS SELECT * FROM source_data;
 NOTICE:  auto-distributing table "t_ctas_fallback" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.t_ctas_fallback$$)
+NOTICE:  optimized CTAS: table "t_ctas_fallback" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 SELECT distribution_column FROM citus_tables WHERE table_name = 't_ctas_fallback'::regclass;
  distribution_column
 ---------------------------------------------------------------------
@@ -821,10 +815,7 @@ CREATE TABLE ctas_join AS (
     JOIN src_ref r ON d.tenant_id = r.code
 );
 NOTICE:  auto-distributing table "ctas_join" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_join$$)
+NOTICE:  optimized CTAS: table "ctas_join" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_join'::regclass;
  distribution_column | citus_table_type
@@ -881,10 +872,7 @@ CREATE TABLE ctas_from_local AS (
     SELECT id, tenant_id, note FROM src_local
 );
 NOTICE:  auto-distributing table "ctas_from_local" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_from_local$$)
+NOTICE:  optimized CTAS: table "ctas_from_local" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 -- has tenant_id → should be auto-distributed
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_from_local'::regclass;
@@ -913,10 +901,7 @@ CREATE TABLE ctas_same_dist AS (
     SELECT id, tenant_id, val FROM src_distributed
 );
 NOTICE:  auto-distributing table "ctas_same_dist" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_same_dist$$)
+NOTICE:  optimized CTAS: table "ctas_same_dist" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 -- auto-distributed by tenant_id (same as source)
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_same_dist'::regclass;
@@ -945,10 +930,7 @@ CREATE TABLE ctas_from_ref AS (
     SELECT code AS tenant_id, label FROM src_ref
 );
 NOTICE:  auto-distributing table "ctas_from_ref" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_from_ref$$)
+NOTICE:  optimized CTAS: table "ctas_from_ref" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 -- has tenant_id (aliased from code) → should be auto-distributed
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_from_ref'::regclass;
@@ -983,10 +965,7 @@ CREATE TABLE ctas_nested_agg AS (
     JOIN src_ref r ON sub.tenant_id = r.code
 );
 NOTICE:  auto-distributing table "ctas_nested_agg" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_nested_agg$$)
+NOTICE:  optimized CTAS: table "ctas_nested_agg" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_nested_agg'::regclass;
  distribution_column | citus_table_type
@@ -1048,10 +1027,7 @@ EXPLAIN (COSTS FALSE) CREATE TABLE ctas_explain_same AS
 CREATE TABLE ctas_explain_same AS
   SELECT * FROM explain_src;
 NOTICE:  auto-distributing table "ctas_explain_same" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_explain_same$$)
+NOTICE:  optimized CTAS: table "ctas_explain_same" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_explain_same'::regclass;
  distribution_column | citus_table_type
@@ -1117,10 +1093,7 @@ EXPLAIN (COSTS FALSE) CREATE TABLE ctas_explain_diff AS
 CREATE TABLE ctas_explain_diff AS
   SELECT id, category_id AS tenant_id, val FROM explain_src_diff;
 NOTICE:  auto-distributing table "ctas_explain_diff" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_explain_diff$$)
+NOTICE:  optimized CTAS: table "ctas_explain_diff" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_explain_diff'::regclass;
  distribution_column | citus_table_type
@@ -1191,10 +1164,7 @@ CREATE TABLE ctas_explain_join AS
   SELECT s.id, s.tenant_id, s.val, i.qty
   FROM explain_src s JOIN explain_items i ON s.tenant_id = i.tenant_id;
 NOTICE:  auto-distributing table "ctas_explain_join" by column "tenant_id" (from citus.distribution_columns)
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ctas_explain_join$$)
+NOTICE:  optimized CTAS: table "ctas_explain_join" auto-distributed by column "tenant_id", using INSERT...SELECT for data
 SELECT distribution_column, citus_table_type
 FROM citus_tables WHERE table_name = 'ctas_explain_join'::regclass;
  distribution_column | citus_table_type
