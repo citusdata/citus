@@ -4300,7 +4300,6 @@ FindMatchingDistributionColumnFromTargetList(List *targetList, List *colNames)
 		 * Walk the target list to check if any output column matches.
 		 * If colNames is provided, use those names instead.
 		 */
-		int colIdx = 0;
 		ListCell *colCell = list_head(colNames);
 		TargetEntry *tle = NULL;
 		foreach_declared_ptr(tle, targetList)
@@ -4327,8 +4326,6 @@ FindMatchingDistributionColumnFromTargetList(List *targetList, List *colNames)
 				pfree(rawList);
 				return result;
 			}
-
-			colIdx++;
 		}
 	}
 
@@ -4546,6 +4543,34 @@ TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
 	}
 
 	/*
+	 * If schema-based sharding is enabled and the target table would go
+	 * into a tenant schema, fall back to the normal path so that
+	 * ConvertNewTableIfNecessary can create a single-shard tenant table
+	 * (tenant schema takes precedence over auto-distribution).
+	 */
+	if (EnableSchemaBasedSharding)
+	{
+		Oid schemaOid = InvalidOid;
+		if (into->rel->schemaname != NULL)
+		{
+			schemaOid = get_namespace_oid(into->rel->schemaname, true);
+		}
+		else
+		{
+			List *searchPath = fetch_search_path(false);
+			if (searchPath != NIL)
+			{
+				schemaOid = linitial_oid(searchPath);
+				list_free(searchPath);
+			}
+		}
+		if (OidIsValid(schemaOid) && IsTenantSchema(schemaOid))
+		{
+			return false;
+		}
+	}
+
+	/*
 	 * Skip SELECT INTO syntax — it doesn't use "AS" so we can't easily
 	 * extract the SELECT part from the query string. Fall back to the
 	 * normal post-creation path for these.
@@ -4706,6 +4731,13 @@ TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
 						 quote_identifier(into->tableSpaceName));
 	}
 
+	/* Add access method if specified (e.g. USING columnar) */
+	if (into->accessMethod != NULL)
+	{
+		appendStringInfo(&createBuf, " USING %s",
+						 quote_identifier(into->accessMethod));
+	}
+
 	/*
 	 * Execute the CREATE TABLE via SPI (utility commands can't go through
 	 * ExecuteQueryStringIntoDestReceiver). This will trigger
@@ -4764,42 +4796,13 @@ TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
 	}
 
 	/*
-	 * Step 2: Execute INSERT INTO target SELECT ... to populate the table.
-	 * When both source and target are co-located, Citus will push down
-	 * the INSERT...SELECT entirely to workers — no data round-trip.
+	 * Step 2: Build INSERT INTO target SELECT ... to populate the table.
+	 * We extract the SELECT portion from the original queryString by
+	 * scanning for the AS keyword that separates CREATE TABLE ... from
+	 * the query body.
 	 */
 	StringInfoData insertBuf;
 	initStringInfo(&insertBuf);
-	appendStringInfo(&insertBuf, "INSERT INTO %s %s",
-					 qualifiedName, queryString);
-
-	/*
-	 * But the queryString is the full CTAS statement. We need to extract
-	 * just the SELECT part. The query is already analyzed as a Query node,
-	 * so we can deparse it. However, deparsing a Query is complex.
-	 *
-	 * Instead, we can find the SELECT portion from the original queryString.
-	 * The CTAS syntax is:
-	 *   CREATE TABLE name AS <select_stmt>
-	 *   CREATE TABLE name (<cols>) AS <select_stmt>
-	 * We need to find the AS keyword and extract everything after it.
-	 *
-	 * A safer approach: use the Query directly via ExecuteQueryIntoDestReceiver
-	 * with a CitusCopyDestReceiver, or construct the INSERT via SPI.
-	 * But the simplest correct approach is to use SPI to run
-	 * "INSERT INTO <table> SELECT ..." where the SELECT is reconstructed.
-	 *
-	 * Actually, we can deparse the Query to get the SELECT string using
-	 * pg_get_querydef or deparse_query_string. Let's try another approach:
-	 * We'll parse and plan "INSERT INTO table SELECT * FROM source" but
-	 * the source query could be complex.
-	 *
-	 * The cleanest approach: find "AS" keyword in the original queryString
-	 * that separates the CREATE TABLE clause from the SELECT clause.
-	 */
-
-	/* Reset insertBuf and use a different approach */
-	resetStringInfo(&insertBuf);
 
 	/*
 	 * Find the SELECT part of the CTAS statement. We look for AS followed
@@ -4819,15 +4822,22 @@ TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
 	 */
 	while (*ptr != '\0')
 	{
-		/* skip string literals */
+		/* skip string literals (handling '' escape sequences) */
 		if (*ptr == '\'')
 		{
 			ptr++;
-			while (*ptr != '\0' && *ptr != '\'')
+			while (*ptr != '\0')
 			{
-				if (*ptr == '\'' && *(ptr + 1) == '\'')
+				if (*ptr == '\'')
 				{
-					ptr += 2;
+					if (*(ptr + 1) == '\'')
+					{
+						ptr += 2; /* skip escaped quote */
+					}
+					else
+					{
+						break; /* end of string literal */
+					}
 				}
 				else
 				{

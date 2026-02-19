@@ -793,6 +793,71 @@ DROP TABLE explain_src, explain_src_diff;
 -- Cleanup CTAS source tables
 DROP TABLE src_distributed, src_no_match, src_ref, src_local;
 
+-- CTAS in tenant schema with distribution_columns set =====
+-- Tenant schema should take precedence over distribution_columns
+
+SET citus.enable_schema_based_sharding TO ON;
+SET citus.distribution_columns TO 'tenant_id';
+
+CREATE SCHEMA tenant_ctas_schema;
+CREATE TABLE tenant_ctas_schema.ctas_src (id int, tenant_id int, val text);
+INSERT INTO tenant_ctas_schema.ctas_src VALUES (1, 10, 'a'), (2, 20, 'b'), (3, 10, 'c');
+
+-- CTAS in tenant schema: should be single-shard tenant table, NOT hash-distributed
+CREATE TABLE tenant_ctas_schema.t_ctas AS SELECT * FROM tenant_ctas_schema.ctas_src;
+
+-- Verify it is a single-shard (tenant) table, not hash-distributed by tenant_id
+SELECT citus_table_type FROM citus_tables WHERE table_name = 'tenant_ctas_schema.t_ctas'::regclass;
+SELECT count(*) AS row_count FROM tenant_ctas_schema.t_ctas;
+
+BEGIN;
+  SET LOCAL client_min_messages TO WARNING;
+  DROP SCHEMA tenant_ctas_schema CASCADE;
+COMMIT;
+
+RESET citus.enable_schema_based_sharding;
+
+-- CTAS with CTE, TABLE syntax, and parenthesized subquery =====
+-- Test various SQL forms that the AS keyword scanner must handle
+
+-- Temporarily reset GUC so we can manually distribute the source table
+RESET citus.distribution_columns;
+CREATE TABLE ctas_syntax_src (id int, tenant_id int, val text);
+SELECT create_distributed_table('ctas_syntax_src', 'tenant_id');
+INSERT INTO ctas_syntax_src VALUES (1, 10, 'a'), (2, 20, 'b'), (3, 10, 'c');
+
+-- Re-enable auto-distribution for the CTAS tests
+SET citus.distribution_columns TO 'tenant_id';
+
+-- CTAS with CTE (WITH ... AS ... SELECT)
+CREATE TABLE ctas_cte AS WITH src AS (SELECT * FROM ctas_syntax_src WHERE tenant_id = 10) SELECT * FROM src;
+SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_cte'::regclass;
+SELECT count(*) AS row_count FROM ctas_cte;
+
+-- CTAS with parenthesized subquery
+CREATE TABLE ctas_paren AS (SELECT id, tenant_id, val FROM ctas_syntax_src);
+SELECT distribution_column, citus_table_type FROM citus_tables WHERE table_name = 'ctas_paren'::regclass;
+SELECT count(*) AS row_count FROM ctas_paren;
+
+DROP TABLE ctas_cte, ctas_paren;
+
+-- CTAS with explicit column name override =====
+-- IntoClause.colNames overrides the targetList column names
+
+CREATE TABLE ctas_colnames (a, tenant_id, c) AS SELECT id, tenant_id, val FROM ctas_syntax_src;
+-- Should distribute by tenant_id (the overridden name matches)
+SELECT distribution_column FROM citus_tables WHERE table_name = 'ctas_colnames'::regclass;
+SELECT count(*) AS row_count FROM ctas_colnames;
+
+-- Override renames 'tenant_id' to 'other_name' — should NOT match when
+-- 'other_name' is not in the distribution_columns GUC
+CREATE TABLE ctas_rename (a, other_name, c) AS SELECT id, tenant_id, val FROM ctas_syntax_src;
+SELECT count(*) FROM citus_tables WHERE table_name = 'ctas_rename'::regclass;
+
+DROP TABLE ctas_colnames;
+DROP TABLE IF EXISTS ctas_rename;
+DROP TABLE ctas_syntax_src;
+
 -- ===== Cleanup =====
 RESET citus.distribution_columns;
 RESET citus.shard_count;
