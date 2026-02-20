@@ -574,10 +574,11 @@ SELECT distribution_column FROM citus_tables WHERE table_name = 't_jsonb'::regcl
 
 DROP TABLE t_jsonb;
 -- ===== Quoted / case-sensitive column names =====
--- GUC value 'Tenant_Id' is stored as-is; PG stores unquoted column names lowercased
+-- GUC value uses standard PG identifier rules via SplitIdentifierString:
+-- unquoted names are downcased, quoted names preserve case.
 CREATE TABLE t_case1 (id int, tenant_id int);
 NOTICE:  auto-distributing table "t_case1" by column "tenant_id" (from citus.distribution_columns)
--- 'tenant_id' in GUC matches 'tenant_id' (stored lowercase) → distributed
+-- 'tenant_id' in GUC (already lowercase) matches 'tenant_id' → distributed
 SELECT distribution_column FROM citus_tables WHERE table_name = 't_case1'::regclass;
  distribution_column
 ---------------------------------------------------------------------
@@ -585,9 +586,9 @@ SELECT distribution_column FROM citus_tables WHERE table_name = 't_case1'::regcl
 (1 row)
 
 DROP TABLE t_case1;
--- Quoted column name preserves case
+-- Quoted column name preserves case in the table
 CREATE TABLE t_case2 (id int, "Tenant_Id" int);
--- GUC 'tenant_id' does NOT match "Tenant_Id" → should NOT be distributed
+-- GUC 'tenant_id' (lowercase) does NOT match "Tenant_Id" → should NOT be distributed
 SELECT count(*) FROM citus_tables WHERE table_name = 't_case2'::regclass;
  count
 ---------------------------------------------------------------------
@@ -595,18 +596,29 @@ SELECT count(*) FROM citus_tables WHERE table_name = 't_case2'::regclass;
 (1 row)
 
 DROP TABLE t_case2;
--- But if GUC matches exactly the quoted name
+-- Unquoted mixed-case GUC value gets downcased → does NOT match quoted column
 SET citus.distribution_columns TO 'Tenant_Id';
-CREATE TABLE t_case3 (id int, "Tenant_Id" int);
-NOTICE:  auto-distributing table "t_case3" by column "Tenant_Id" (from citus.distribution_columns)
--- GUC 'Tenant_Id' matches column "Tenant_Id" → distributed
-SELECT distribution_column FROM citus_tables WHERE table_name = 't_case3'::regclass;
+CREATE TABLE t_case3a (id int, "Tenant_Id" int);
+-- 'Tenant_Id' downcased to 'tenant_id', does NOT match "Tenant_Id" → NOT distributed
+SELECT count(*) FROM citus_tables WHERE table_name = 't_case3a'::regclass;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+DROP TABLE t_case3a;
+-- Quoted GUC value preserves case → matches quoted column
+SET citus.distribution_columns TO '"Tenant_Id"';
+CREATE TABLE t_case3b (id int, "Tenant_Id" int);
+NOTICE:  auto-distributing table "t_case3b" by column "Tenant_Id" (from citus.distribution_columns)
+-- '"Tenant_Id"' preserves case → matches column "Tenant_Id" → distributed
+SELECT distribution_column FROM citus_tables WHERE table_name = 't_case3b'::regclass;
  distribution_column
 ---------------------------------------------------------------------
  Tenant_Id
 (1 row)
 
-DROP TABLE t_case3;
+DROP TABLE t_case3b;
 SET citus.distribution_columns TO 'tenant_id';
 -- ===== UNIQUE constraint without distribution column → error on CREATE =====
 -- UNIQUE on non-distribution column causes auto-distribution to fail,
@@ -739,7 +751,10 @@ SELECT count(*) FROM citus_tables WHERE table_name = 't_alter_add'::regclass;
 
 DROP TABLE t_alter_add;
 -- ===== Empty tokens in GUC list (double comma) =====
+-- SplitIdentifierString rejects empty identifiers between commas
 SET citus.distribution_columns TO 'nonexistent,,tenant_id';
+ERROR:  invalid value for parameter "citus.distribution_columns": "nonexistent,,tenant_id"
+-- GUC was not changed (SET failed), so previous value is still active
 CREATE TABLE t_double_comma (id int, tenant_id int);
 NOTICE:  auto-distributing table "t_double_comma" by column "tenant_id" (from citus.distribution_columns)
 SELECT distribution_column FROM citus_tables WHERE table_name = 't_double_comma'::regclass;

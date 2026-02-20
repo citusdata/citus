@@ -409,24 +409,32 @@ DROP TABLE t_jsonb;
 
 -- ===== Quoted / case-sensitive column names =====
 
--- GUC value 'Tenant_Id' is stored as-is; PG stores unquoted column names lowercased
+-- GUC value uses standard PG identifier rules via SplitIdentifierString:
+-- unquoted names are downcased, quoted names preserve case.
 CREATE TABLE t_case1 (id int, tenant_id int);
--- 'tenant_id' in GUC matches 'tenant_id' (stored lowercase) → distributed
+-- 'tenant_id' in GUC (already lowercase) matches 'tenant_id' → distributed
 SELECT distribution_column FROM citus_tables WHERE table_name = 't_case1'::regclass;
 DROP TABLE t_case1;
 
--- Quoted column name preserves case
+-- Quoted column name preserves case in the table
 CREATE TABLE t_case2 (id int, "Tenant_Id" int);
--- GUC 'tenant_id' does NOT match "Tenant_Id" → should NOT be distributed
+-- GUC 'tenant_id' (lowercase) does NOT match "Tenant_Id" → should NOT be distributed
 SELECT count(*) FROM citus_tables WHERE table_name = 't_case2'::regclass;
 DROP TABLE t_case2;
 
--- But if GUC matches exactly the quoted name
+-- Unquoted mixed-case GUC value gets downcased → does NOT match quoted column
 SET citus.distribution_columns TO 'Tenant_Id';
-CREATE TABLE t_case3 (id int, "Tenant_Id" int);
--- GUC 'Tenant_Id' matches column "Tenant_Id" → distributed
-SELECT distribution_column FROM citus_tables WHERE table_name = 't_case3'::regclass;
-DROP TABLE t_case3;
+CREATE TABLE t_case3a (id int, "Tenant_Id" int);
+-- 'Tenant_Id' downcased to 'tenant_id', does NOT match "Tenant_Id" → NOT distributed
+SELECT count(*) FROM citus_tables WHERE table_name = 't_case3a'::regclass;
+DROP TABLE t_case3a;
+
+-- Quoted GUC value preserves case → matches quoted column
+SET citus.distribution_columns TO '"Tenant_Id"';
+CREATE TABLE t_case3b (id int, "Tenant_Id" int);
+-- '"Tenant_Id"' preserves case → matches column "Tenant_Id" → distributed
+SELECT distribution_column FROM citus_tables WHERE table_name = 't_case3b'::regclass;
+DROP TABLE t_case3b;
 
 SET citus.distribution_columns TO 'tenant_id';
 
@@ -521,8 +529,10 @@ SELECT count(*) FROM citus_tables WHERE table_name = 't_alter_add'::regclass;
 DROP TABLE t_alter_add;
 
 -- ===== Empty tokens in GUC list (double comma) =====
-
+-- SplitIdentifierString rejects empty identifiers between commas
 SET citus.distribution_columns TO 'nonexistent,,tenant_id';
+
+-- GUC was not changed (SET failed), so previous value is still active
 CREATE TABLE t_double_comma (id int, tenant_id int);
 SELECT distribution_column FROM citus_tables WHERE table_name = 't_double_comma'::regclass;
 DROP TABLE t_double_comma;

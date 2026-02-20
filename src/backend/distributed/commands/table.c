@@ -10,21 +10,23 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_type.h"
+#include "commands/defrem.h"
 #include "commands/tablecmds.h"
+#include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
-#include "miscadmin.h"
-#include "commands/defrem.h"
-#include "executor/spi.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
@@ -35,6 +37,7 @@
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
+#include "utils/varlena.h"
 
 #include "pg_version_constants.h"
 
@@ -78,7 +81,80 @@ bool AllowUnsafeConstraints = false;
  * Citus walks the list in order and distributes by the first column that exists
  * in the table. Applies to CREATE TABLE and CREATE TABLE AS SELECT.
  */
-char *DistributionColumnsGUC = "";
+char *DistributionColumns = "";
+
+/* Pre-parsed list of distribution column names (List of String nodes).
+ * Updated by AssignDistributionColumns whenever the GUC changes. */
+List *ParsedDistributionColumns = NIL;
+
+
+/*
+ * CheckDistributionColumns is the GUC check hook for
+ * citus.distribution_columns. It validates the comma-separated identifier
+ * list using SplitIdentifierString and rejects invalid input (e.g. empty
+ * tokens from double commas) before the assign hook runs.
+ */
+bool
+CheckDistributionColumns(char **newval, void **extra, GucSource source)
+{
+	if (*newval == NULL || (*newval)[0] == '\0')
+	{
+		return true;
+	}
+
+	char *rawCopy = pstrdup(*newval);
+	List *parsed = NIL;
+	bool valid = SplitIdentifierString(rawCopy, ',', &parsed);
+
+	list_free(parsed);
+	pfree(rawCopy);
+
+	return valid;
+}
+
+
+/*
+ * AssignDistributionColumns is the GUC assign hook for
+ * citus.distribution_columns. It parses the comma-separated string into
+ * a list of char* pointers (via SplitIdentifierString) so that callers
+ * don't re-tokenize on every use. The check hook has already validated
+ * the input, so SplitIdentifierString will always succeed here.
+ */
+void
+AssignDistributionColumns(const char *newval, void *extra)
+{
+	/*
+	 * SplitIdentifierString modifies the input string in-place and returns
+	 * a list of char* pointers into that string. We must keep the backing
+	 * string alive as long as ParsedDistributionColumns references it, and
+	 * free it on the next call. Everything must live in TopMemoryContext
+	 * so it survives transaction boundaries.
+	 */
+	static char *previousRawList = NULL;
+
+	list_free(ParsedDistributionColumns);
+	ParsedDistributionColumns = NIL;
+
+	if (previousRawList != NULL)
+	{
+		pfree(previousRawList);
+		previousRawList = NULL;
+	}
+
+	if (!newval || newval[0] == '\0')
+	{
+		return;
+	}
+
+	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
+
+	previousRawList = pstrdup(newval);
+
+	SplitIdentifierString(previousRawList, ',', &ParsedDistributionColumns);
+
+	MemoryContextSwitchTo(oldContext);
+}
+
 
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
@@ -4251,7 +4327,6 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 }
 
 
-
 /*
  * FindMatchingDistributionColumnFromTargetList walks the GUC priority list
  * and returns the first column name that appears in the given Query's
@@ -4262,77 +4337,67 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 static char *
 FindMatchingDistributionColumnFromTargetList(List *targetList, List *colNames)
 {
-	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	if (ParsedDistributionColumns == NIL)
 	{
 		return NULL;
 	}
 
-	/* work on a copy so we don't modify the GUC value */
-	char *rawList = pstrdup(DistributionColumnsGUC);
-	char *token = NULL;
-	char *savePtr = NULL;
+	/* Build list of available column names from colNames or targetList */
+	List *availableCols = NIL;
+	bool freeAvailableCols = false;
 
-	for (token = strtok_r(rawList, ",", &savePtr);
-		 token != NULL;
-		 token = strtok_r(NULL, ",", &savePtr))
+	if (colNames != NIL)
 	{
-		/* trim leading whitespace */
-		while (*token == ' ' || *token == '\t')
+		/* colNames is a List of String nodes; extract raw char* */
+		ListCell *cnCell = NULL;
+		foreach(cnCell, colNames)
 		{
-			token++;
+			availableCols = lappend(availableCols, strVal(lfirst(cnCell)));
 		}
-
-		/* trim trailing whitespace */
-		char *end = token + strlen(token) - 1;
-		while (end > token && (*end == ' ' || *end == '\t'))
+		freeAvailableCols = true;
+	}
+	else
+	{
+		ListCell *tlCell = NULL;
+		foreach(tlCell, targetList)
 		{
-			*end = '\0';
-			end--;
+			TargetEntry *tle = lfirst_node(TargetEntry, tlCell);
+			if (!tle->resjunk && tle->resname)
+			{
+				availableCols = lappend(availableCols, tle->resname);
+			}
 		}
+		freeAvailableCols = true;
+	}
 
-		/* skip empty tokens */
-		if (*token == '\0')
+	/* Walk priority list, return the first match */
+	ListCell *tokenCell = NULL;
+	foreach(tokenCell, ParsedDistributionColumns)
+	{
+		const char *candidate = (const char *) lfirst(tokenCell);
+
+		ListCell *colCell = NULL;
+		foreach(colCell, availableCols)
 		{
-			continue;
-		}
-
-		/*
-		 * Walk the target list to check if any output column matches.
-		 * If colNames is provided, use those names instead.
-		 */
-		ListCell *colCell = list_head(colNames);
-		TargetEntry *tle = NULL;
-		foreach_declared_ptr(tle, targetList)
-		{
-			if (tle->resjunk)
+			const char *colName = (const char *) lfirst(colCell);
+			if (pg_strcasecmp(candidate, colName) == 0)
 			{
-				continue;
-			}
-
-			const char *colName = NULL;
-			if (colCell != NULL)
-			{
-				colName = strVal(lfirst(colCell));
-				colCell = lnext(colNames, colCell);
-			}
-			else
-			{
-				colName = tle->resname;
-			}
-
-			if (colName != NULL && strcmp(colName, token) == 0)
-			{
-				char *result = pstrdup(token);
-				pfree(rawList);
-				return result;
+				if (freeAvailableCols)
+				{
+					list_free(availableCols);
+				}
+				return pstrdup(candidate);
 			}
 		}
 	}
 
-	pfree(rawList);
+	if (freeAvailableCols)
+	{
+		list_free(availableCols);
+	}
+
 	return NULL;
 }
-
 
 /*
  * FindMatchingDistributionColumn walks the comma-separated priority list in
@@ -4343,50 +4408,22 @@ FindMatchingDistributionColumnFromTargetList(List *targetList, List *colNames)
 static char *
 FindMatchingDistributionColumn(Oid relationId)
 {
-	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	if (ParsedDistributionColumns == NIL)
 	{
 		return NULL;
 	}
 
-	/* work on a copy so we don't modify the GUC value */
-	char *rawList = pstrdup(DistributionColumnsGUC);
-	char *token = NULL;
-	char *savePtr = NULL;
-
-	for (token = strtok_r(rawList, ",", &savePtr);
-		 token != NULL;
-		 token = strtok_r(NULL, ",", &savePtr))
+	ListCell *cell = NULL;
+	foreach(cell, ParsedDistributionColumns)
 	{
-		/* trim leading whitespace */
-		while (*token == ' ' || *token == '\t')
-		{
-			token++;
-		}
-
-		/* trim trailing whitespace */
-		char *end = token + strlen(token) - 1;
-		while (end > token && (*end == ' ' || *end == '\t'))
-		{
-			*end = '\0';
-			end--;
-		}
-
-		/* skip empty tokens (e.g. "col1,,col2") */
-		if (*token == '\0')
-		{
-			continue;
-		}
-
-		AttrNumber attNum = get_attnum(relationId, token);
+		const char *colName = (const char *) lfirst(cell);
+		AttrNumber attNum = get_attnum(relationId, colName);
 		if (attNum != InvalidAttrNumber)
 		{
-			char *result = pstrdup(token);
-			pfree(rawList);
-			return result;
+			return pstrdup(colName);
 		}
 	}
 
-	pfree(rawList);
 	return NULL;
 }
 
@@ -4399,7 +4436,7 @@ FindMatchingDistributionColumn(Oid relationId)
 static bool
 ShouldAutoDistributeNewTable(Oid relationId)
 {
-	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	if (ParsedDistributionColumns == NIL)
 	{
 		return false;
 	}
@@ -4513,7 +4550,7 @@ TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
 								   const char *queryString)
 {
 	/* Quick bail-out if the GUC is not set */
-	if (DistributionColumnsGUC == NULL || DistributionColumnsGUC[0] == '\0')
+	if (ParsedDistributionColumns == NIL)
 	{
 		return false;
 	}
@@ -4608,8 +4645,8 @@ TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
 	const char *schemaName = into->rel->schemaname;
 	const char *tableName = into->rel->relname;
 	const char *qualifiedName = schemaName ?
-		quote_qualified_identifier(schemaName, tableName) :
-		quote_identifier(tableName);
+								quote_qualified_identifier(schemaName, tableName) :
+								quote_identifier(tableName);
 
 	/*
 	 * If IF NOT EXISTS is set and the table already exists, skip.

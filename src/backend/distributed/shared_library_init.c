@@ -1260,11 +1260,11 @@ RegisterCitusConfigVariables(void)
 					 "the table by the first column name that exists in the table. "
 					 "Applies to CREATE TABLE and CREATE TABLE AS SELECT. "
 					 "Set to empty string to disable."),
-		&DistributionColumnsGUC,
+		&DistributionColumns,
 		"",
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		CheckDistributionColumns, AssignDistributionColumns, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_alter_database_owner",
