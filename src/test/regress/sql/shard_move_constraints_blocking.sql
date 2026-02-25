@@ -243,9 +243,29 @@ SELECT 1 FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
 -- allow the reload to take effect
 SELECT pg_sleep(0.5);
 
+-- Helper that sleeps for the given number of seconds and returns TRUE.
+-- Used in a NOT VALID check constraint below so that COPY (which fires
+-- check constraints) introduces a per-row delay during the shard move,
+-- making the data-copy phase reliably exceed the 1s timeout.
+CREATE FUNCTION sleep_and_true(float8) RETURNS boolean LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM pg_sleep($1);
+    RETURN true;
+END;
+$$;
+
 CREATE TABLE test_move(id int PRIMARY KEY, val text);
 SELECT create_distributed_table('test_move', 'id');
 INSERT INTO test_move SELECT i, 'val_' || i FROM generate_series(1, 100) i;
+
+-- Add a per-row delay constraint after inserting data (NOT VALID skips
+-- checking existing rows). COPY during the shard move fires check constraints,
+-- so each copied row will sleep for 0.1 s, ensuring the copy takes > 1 s and
+-- the idle timeout would kill uninvolved metadata workers without the fix.
+-- Use the schema-qualified function name so the constraint propagates to
+-- workers correctly regardless of their search_path.
+ALTER TABLE test_move ADD CONSTRAINT slow_copy
+    CHECK (blocking_move_idle_timeout.sleep_and_true(0.1)) NOT VALID;
 
 -- move a shard using block_writes; should succeed despite the 1s timeout
 SELECT citus_move_shard_placement(8980000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
