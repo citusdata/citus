@@ -372,5 +372,29 @@ ROLLBACK;
 DROP EXTENSION isn CASCADE;
 CREATE EXTENSION isn WITH SCHEMA pg_temp;
 
+-- Test that CREATE EXTENSION IF NOT EXISTS works for non-owner users
+-- when extension already exists
+RESET search_path;
+CREATE USER non_owner_user;
+
+-- Create extension as superuser
+CREATE EXTENSION seg SCHEMA public;
+-- Verify it's distributed
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
+
+-- Switch to non-owner user and try CREATE EXTENSION IF NOT EXISTS
+-- This should succeed without "must be owner of extension" error
+SET ROLE non_owner_user;
+SET client_min_messages TO NOTICE;
+CREATE EXTENSION IF NOT EXISTS seg SCHEMA public;
+SET client_min_messages TO WARNING;
+
+-- Clean up
+RESET ROLE;
+DROP EXTENSION seg;
+DROP USER non_owner_user;
+
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;
+DROP TEXT SEARCH TEMPLATE intdict_template CASCADE;
+DROP FUNCTION dintdict_init(internal), dintdict_lexize(internal, internal, internal, internal) CASCADE;

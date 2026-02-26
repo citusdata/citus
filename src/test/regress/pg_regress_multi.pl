@@ -91,6 +91,7 @@ my $publicWorker2Host = "localhost";
 my $workerCount = 2;
 my $citusversion = "";
 my $citusLibdir = "";
+my $n1Mode = "";
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -127,7 +128,14 @@ GetOptions(
     'worker-count=i' => \$workerCount,
     'citus-version=s' => \$citusversion,
     'citus-libdir=s' => \$citusLibdir,
+    'n-1-mode=s' => \$n1Mode,
     'help' => sub { Usage() });
+
+# Validate n-1-mode option
+if ($n1Mode ne "" && $n1Mode ne "workeronly" && $n1Mode ne "coordinatoronly" && $n1Mode ne "all")
+{
+    die "Invalid --n-1-mode value: $n1Mode. Must be 'workeronly', 'coordinatoronly', or 'all'.";
+}
 
 my $fixopen = "$bindir/postgres.fixopen";
 my @pg_ctl_args = ();
@@ -190,6 +198,10 @@ else
 		$isolationRegress = "$pgxsdir/src/test/isolation/pg_isolation_regress";
 	}
 }
+
+# Store pkglibdir for later use
+my $psqlLibdir =`$pgConfig --pkglibdir`;
+chomp $psqlLibdir;
 
 if ($isolationtester && ! -f "$isolationRegress")
 {
@@ -286,6 +298,48 @@ sub write_settings_to_postgres_conf
     close $fd;
 }
 
+my $host = "localhost";
+my $user = "postgres";
+my $dbname = "postgres";
+
+# n.b. previously this was on port 57640, which caused issues because that's in the
+# ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
+# binding to it. 9060 is now used because it will never be used for client connections,
+# and there don't appear to be any other applications on this port that developers are
+# likely to be running.
+my $mitmPort = 9060;
+
+# Set some default configuration options
+my $masterPort = 57636;
+
+sub create_coordinator_database_and_extensions
+{
+    my $databaseName = "regression";
+
+    system(catfile($bindir, "psql"),
+            ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", "postgres",
+        '-c', "CREATE DATABASE regression;")) == 0
+        or die "Could not create regression database on coordinator.";
+
+    for my $extension (@extensions)
+    {
+        if ($extension eq "citus" && $citusversion ne "")
+        {
+            system(catfile($bindir, "psql"),
+                   ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $databaseName,
+                    '-c', "CREATE EXTENSION IF NOT EXISTS $extension VERSION '$citusversion';")) == 0
+                or die "Could not create extension $extension VERSION $citusversion on coordinator";
+        }
+        else
+        {
+            system(catfile($bindir, "psql"),
+                   ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $databaseName,
+                    '-c', "CREATE EXTENSION IF NOT EXISTS $extension;")) == 0
+                or die "Could not create extension $extension on coordinator";
+        }
+    }
+}
+
 # revert changes replace_postgres() performed
 sub revert_replace_postgres
 {
@@ -346,23 +400,50 @@ sub restore_original
     rename($backup, $originalfile) or die "Failed to restore original file from $backup to $originalfile: $!";
 }
 
+# Helper to check if a node matches the n-1-mode criteria
+sub node_matches_n1_mode
+{
+    my ($nodeType, $workerIndex) = @_;
+
+    return 0 if $n1Mode eq "";
+
+    if ($n1Mode eq "all")
+    {
+        return 1;
+    }
+    elsif ($n1Mode eq "coordinatoronly")
+    {
+        return $nodeType eq "coordinator";
+    }
+    elsif ($n1Mode eq "workeronly")
+    {
+        return $nodeType eq "worker" && (defined $workerIndex && $workerIndex == 0);
+    }
+
+    return 0;
+}
+
+# Helper function to determine if a node should use alternative libdir
+sub should_use_alternative_libdir
+{
+    my ($nodeType, $workerIndex) = @_;
+
+    return 0 if $citusLibdir eq "";
+    return node_matches_n1_mode($nodeType, $workerIndex);
+}
+
+# Helper function to determine if a node should use specific version
+sub should_use_specific_version
+{
+    my ($nodeType, $workerIndex) = @_;
+
+    return 0 if $citusversion eq "";
+    return node_matches_n1_mode($nodeType, $workerIndex);
+}
+
 # always want to call initdb under normal postgres, so revert from a
 # partial run, even if we're now not using valgrind.
 revert_replace_postgres();
-
-my $host = "localhost";
-my $user = "postgres";
-my $dbname = "postgres";
-
-# n.b. previously this was on port 57640, which caused issues because that's in the
-# ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
-# binding to it. 9060 is now used because it will never be used for client connections,
-# and there don't appear to be any other applications on this port that developers are
-# likely to be running.
-my $mitmPort = 9060;
-
-# Set some default configuration options
-my $masterPort = 57636;
 
 my @workerHosts = ();
 my @workerPorts = ();
@@ -820,12 +901,7 @@ sub ShutdownServers()
 {
     my $saved_status = $?;
 
-    # Determine the actual PostgreSQL library directory for cleanup
-    my $psqlLibdir =`$pgConfig --pkglibdir`;
-    chomp $psqlLibdir;
-
     restore_original(catfile($psqlLibdir, "citus.so")) if defined $psqlLibdir;
-    restore_original(catfile($psqlLibdir, "citus_columnar.so")) if defined $psqlLibdir;
 
     if (!$conninfo && $serversAreShutdown eq "FALSE")
     {
@@ -960,22 +1036,17 @@ if ($followercluster && $backupnodetest == 0)
     $synchronousReplication = "-c synchronous_standby_names='FIRST 1 (*)' -c synchronous_commit=remote_apply";
 }
 
-# Ensure citus.so points to alternative library if provided
-if ($citusLibdir)
-{
-    print "Setting up symlinks to load citus extension libraries from alternative directory: $citusLibdir\n";
-    # Determine the actual PostgreSQL library directory
-    my $psqlLibdir =`$pgConfig --pkglibdir`;
-    chomp $psqlLibdir;
-
-    setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
-    setup_symlink(catfile($psqlLibdir, "citus_columnar.so"), catfile($citusLibdir, "citus_columnar.so"));
-}
-
 # Start servers
 if (!$conninfo)
 {
     write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, $MASTERDIR, "data/postgresql.conf"));
+
+    # Setup citus.so symlink for coordinator if needed
+    if (should_use_alternative_libdir("coordinator"))
+    {
+        print "Setting up citus.so symlink for coordinator from alternative directory: $citusLibdir\n";
+        setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
+    }
     if(system(catfile("$bindir", "pg_ctl"),
         (@pg_ctl_args, 'start', '-w',
             '-o', " -c port=$masterPort $synchronousReplication",
@@ -985,9 +1056,24 @@ if (!$conninfo)
     die "Could not start master server";
     }
 
-    for my $port (@workerPorts)
+    # Restore original library for coordinator if we set up symlink
+    if (should_use_alternative_libdir("coordinator"))
     {
+        restore_original(catfile($psqlLibdir, "citus.so"));
+    }
+
+    for my $workeroff (0 .. $#workerPorts)
+    {
+        my $port = $workerPorts[$workeroff];
+
         write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, "worker.$port", "data/postgresql.conf"));
+
+        # Setup citus.so symlink for this worker if needed
+        if (should_use_alternative_libdir("worker", $workeroff))
+        {
+            print "Setting up citus.so symlink for worker $port from alternative directory: $citusLibdir\n";
+            setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
+        }
         if(system(catfile("$bindir", "pg_ctl"),
             (@pg_ctl_args, 'start', '-w',
                 '-o', " -c port=$port $synchronousReplication",
@@ -996,6 +1082,12 @@ if (!$conninfo)
         {
         system("tail", ("-n20", catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log")));
         die "Could not start worker server";
+        }
+
+        # Restore original library for this worker if we set up symlink
+        if (should_use_alternative_libdir("worker", $workeroff))
+        {
+            restore_original(catfile($psqlLibdir, "citus.so"));
         }
     }
 }
@@ -1049,8 +1141,10 @@ if ($followercluster)
 ###
 if (!$conninfo)
 {
-    for my $port (@workerPorts)
+    for my $workeroff (0 .. $#workerPorts)
     {
+        my $port = $workerPorts[$workeroff];
+
         system(catfile($bindir, "psql"),
             ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "postgres",
                 '-c', "CREATE DATABASE regression;")) == 0
@@ -1063,12 +1157,12 @@ if (!$conninfo)
 
         for my $extension (@extensions)
         {
-            if ($extension eq "citus" && $citusversion ne "")
+            if ($extension eq "citus" && should_use_specific_version("worker", $workeroff))
             {
                 system(catfile($bindir, "psql"),
                     ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
                         '-c', "CREATE EXTENSION IF NOT EXISTS $extension VERSION '$citusversion';")) == 0
-                    or die "Could not create extension $extension on worker port $port.";
+                    or die "Could not create extension $extension VERSION $citusversion on worker port $port.";
             }
             else
             {
@@ -1128,6 +1222,7 @@ else
     }
 }
 
+
 # Prepare pg_regress arguments
 my @arguments = (
     "--host", $host,
@@ -1144,6 +1239,15 @@ for my $extension (@extensions)
 
 # Append remaining ARGV arguments to pg_regress arguments
 push(@arguments, @ARGV);
+
+# If a Citus version is specified and coordinator should use it, make sure the coordinator uses it too.
+# Otherwise pg_regress will create the database and install the extension without an
+# explicit VERSION.
+if (!$conninfo && should_use_specific_version("coordinator"))
+{
+    create_coordinator_database_and_extensions();
+    push(@arguments, "--use-existing");
+}
 
 my $startTime = time();
 
