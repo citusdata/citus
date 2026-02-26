@@ -1354,6 +1354,7 @@ CreateTableConversion(TableConversionParameters *params)
 	}
 
 
+	Oid relam = relation->rd_rel->relam;
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(con->relationId, con->distributionColumn,
@@ -1363,11 +1364,11 @@ CreateTableConversion(TableConversionParameters *params)
 	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))
 	{
 		HeapTuple amTuple = SearchSysCache1(AMOID, ObjectIdGetDatum(
-												relation->rd_rel->relam));
+												relam));
 		if (!HeapTupleIsValid(amTuple))
 		{
 			ereport(ERROR, (errmsg("cache lookup failed for access method %d",
-								   relation->rd_rel->relam)));
+								   relam)));
 		}
 		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
 		con->originalAccessMethod = NameStr(amForm->amname);
@@ -2111,7 +2112,7 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s and change distribution "
 								   "column to %s because data type of column %s is "
-								   "different then the distribution column of the %s",
+								   "different than the distribution column of the %s",
 								   con->colocateWith, con->distributionColumn,
 								   con->distributionColumn, con->colocateWith)));
 		}
@@ -2119,6 +2120,23 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 				 colocateWithPartKey->vartype != con->originalDistributionKey->vartype)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s because data type of its "
+								   "distribution column is different than %s",
+								   con->colocateWith, con->relationName)));
+		}
+		else if (con->distributionColumn &&
+				 colocateWithPartKey->varcollid != con->distributionKey->varcollid)
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s and change distribution "
+								   "column to %s because collation of column %s is "
+								   "different than the distribution column of the %s",
+								   con->colocateWith, con->distributionColumn,
+								   con->distributionColumn, con->colocateWith)));
+		}
+		else if (!con->distributionColumn &&
+				 colocateWithPartKey->varcollid != con->originalDistributionKey->varcollid
+				 )
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s because collation of its "
 								   "distribution column is different than %s",
 								   con->colocateWith, con->relationName)));
 		}

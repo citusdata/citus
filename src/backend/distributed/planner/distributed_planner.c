@@ -37,6 +37,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 
 #include "pg_version_constants.h"
 
@@ -82,6 +83,7 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
+static bool PlanContainsDistributedSubPlanRTE(List *subPlanList);
 static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
 												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -424,6 +426,49 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 				*maybeHasForeignDistributedTable = true;
 			}
 
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the given
+ * subPlanList is a Read Intermediate Result function scan.
+ *
+ * It is used by the check after standard_planner() to determine whether the plan
+ * still requires distributed planning; in addition to checking the range table for
+ * distributed tables, we also need to check whether there are any subplans that
+ * read intermediate results, which indicates a distributed subplan and therefore
+ * that distributed planning is required.
+ */
+static bool
+PlanContainsDistributedSubPlanRTE(List *subPlanList)
+{
+	ListCell *subPlanCell = NULL;
+
+	foreach(subPlanCell, subPlanList)
+	{
+		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (!IsA(planRoot, FunctionScan))
+		{
+			continue;
+		}
+
+		List *functionList = ((FunctionScan *) planRoot)->functions;
+
+		if (functionList == NIL)
+		{
+			continue;
+		}
+
+		RangeTblFunction *rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+
+		if (IsReadIntermediateResultFunction(rangeTblfunction->funcexpr))
+		{
 			return true;
 		}
 	}
@@ -1723,6 +1768,57 @@ BlessRecordExpression(Expr *expr)
 
 		typeMod = rowTupleDesc->tdtypmod;
 	}
+
+	/*
+	 * Record aggregates need blessed typmods to parse worker results.
+	 * For PG18, AGG_MATCH_RECORD allows MIN/MAX on composite types.
+	 *
+	 * Limitation: For multi-argument aggregates returning RECORD, we only
+	 * bless the first argument's type. This works for MIN/MAX (single-argument)
+	 * but may not handle custom multi-argument aggregates correctly.
+	 */
+	else if (IsA(expr, Aggref))
+	{
+		Aggref *aggref = (Aggref *) expr;
+
+		if (aggref->aggtype == RECORDOID && list_length(aggref->args) > 0)
+		{
+			if (list_length(aggref->args) > 1)
+			{
+				ereport(DEBUG2,
+						(errmsg(
+							 "blessing record aggregate with %d arguments, using first",
+							 list_length(aggref->args))));
+			}
+
+			TargetEntry *argTle = (TargetEntry *) linitial(aggref->args);
+			Oid argTypeId = exprType((Node *) argTle->expr);
+			int32 argTypeMod = exprTypmod((Node *) argTle->expr);
+
+			if (argTypeId == RECORDOID)
+			{
+				argTypeMod = BlessRecordExpression((Expr *) argTle->expr);
+			}
+
+			/* Use a RECORD TupleDesc derived from a named rowtype argument. */
+			if (type_is_rowtype(argTypeId))
+			{
+				TupleDesc argTupleDesc =
+					lookup_rowtype_tupdesc_copy(argTypeId, argTypeMod);
+
+				argTupleDesc->tdtypeid = RECORDOID;
+				argTupleDesc->tdtypmod = -1;
+				BlessTupleDesc(argTupleDesc);
+				typeMod = argTupleDesc->tdtypmod;
+			}
+
+			/*
+			 * If argTypeId is not a rowtype, we leave typeMod as -1.
+			 * This should not happen in practice since AGG_MATCH_RECORD
+			 * only matches rowtypes, but it's safe to fall through.
+			 */
+		}
+	}
 	else if (IsA(expr, ArrayExpr))
 	{
 		/*
@@ -2807,20 +2903,26 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 		#endif
 
 		/*
-		 * The WHERE quals have been eliminated by the Postgres planner, possibly by
-		 * an OR clause that was simplified to TRUE. In such cases, we need to check
-		 * if the planned query still requires distributed planning.
+		 * If the WHERE quals have been eliminated by the Postgres planner, possibly
+		 * by an OR clause that was simplified to TRUE, we need to check if the
+		 * planned query still requires distributed planning.
 		 */
 		if (origQuals != NULL && plannedQuals == NULL)
 		{
-			bool planHasDistTable = ListContainsDistributedTableRTE(
+			/* First check if the plan has a distributed table */
+			bool planHasDistribution = ListContainsDistributedTableRTE(
 				planContext->plan->rtable, NULL);
 
+			/* ..or a distributed subplan */
+			planHasDistribution = planHasDistribution ||
+								  PlanContainsDistributedSubPlanRTE(
+				planContext->plan->subplans);
+
 			/*
-			 * If the Postgres plan has a distributed table, we know for sure that
+			 * The plan has a distributed relation, so we know for sure that
 			 * the query requires distributed planning.
 			 */
-			if (planHasDistTable)
+			if (planHasDistribution)
 			{
 				return true;
 			}
@@ -2833,8 +2935,16 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 			List *rtesPostPlan = ExtractRangeTableEntryList(plannedQuery);
 			if (list_length(rtesPostPlan) < list_length(rangeTableList))
 			{
-				isDistributedQuery = ListContainsDistributedTableRTE(
+				bool hasDistTable = ListContainsDistributedTableRTE(
 					rtesPostPlan, NULL);
+				if (hasDistTable != isDistributedQuery)
+				{
+					ereport(DEBUG4, (errmsg(
+										 "Plan has flipped from distributed to local "
+										 "after Postgres planning, updating distributed to %u",
+										 hasDistTable)));
+					isDistributedQuery = hasDistTable;
+				}
 			}
 		}
 	}

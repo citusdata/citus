@@ -57,7 +57,6 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
-#include "distributed/statistics_collection.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
@@ -461,9 +460,6 @@ void
 CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
-	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY =
-		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), 60 * 1000);
-	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	TimestampTz lastRecoveryTime = 0;
 	TimestampTz lastShardCleanTime = 0;
 	TimestampTz lastStatStatementsPurgeTime = 0;
@@ -517,59 +513,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * timeout indicates, it's ok to lower it to that value. Expensive
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
-
-#ifdef HAVE_LIBCURL
-		if (EnableStatisticsCollection &&
-			GetCurrentTimestamp() >= nextStatsCollectionTime)
-		{
-			bool statsCollectionSuccess = false;
-			InvalidateMetadataSystemCache();
-			StartTransactionCommand();
-
-			/*
-			 * Lock the extension such that it cannot be dropped or created
-			 * concurrently. Skip statistics collection if citus extension is
-			 * not accessible.
-			 *
-			 * Similarly, we skip statistics collection if there exists any
-			 * version mismatch or the extension is not fully created yet.
-			 */
-			if (!LockCitusExtension())
-			{
-				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
-										"skipping statistics collection")));
-			}
-			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
-			{
-				FlushDistTableCache();
-				WarnIfSyncDNS();
-				statsCollectionSuccess = CollectBasicUsageStatistics();
-			}
-
-			/*
-			 * If statistics collection was successful the next collection is
-			 * 24-hours later. Also, if this was a retry attempt we don't do
-			 * any more retries until 24-hours later, so we limit number of
-			 * retries to one.
-			 */
-			if (statsCollectionSuccess || retryStatsCollection)
-			{
-				nextStatsCollectionTime =
-					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
-												STATS_COLLECTION_TIMEOUT_MILLIS);
-				retryStatsCollection = false;
-			}
-			else
-			{
-				nextStatsCollectionTime =
-					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
-												STATS_COLLECTION_RETRY_TIMEOUT_MILLIS);
-				retryStatsCollection = true;
-			}
-
-			CommitTransactionCommand();
-		}
-#endif
 
 		pid_t metadataSyncBgwPid = 0;
 		BgwHandleStatus metadataSyncStatus =

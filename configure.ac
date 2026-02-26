@@ -5,7 +5,7 @@
 # everyone needing autoconf installed, the resulting files are checked
 # into the SCM.
 
-AC_INIT([Citus], [14.0devel])
+AC_INIT([Citus], [15.0devel])
 AC_COPYRIGHT([Copyright (c) Citus Data, Inc.])
 
 # we'll need sed and awk for some of the version commands
@@ -194,33 +194,6 @@ if test "$enable_coverage" = yes; then
     CITUS_CPPFLAGS="$CITUS_CPPFLAGS -DNDEBUG"
     CITUS_LDFLAGS="$CITUS_LDFLAGS --coverage"
 fi
-
-#
-# libcurl
-#
-PGAC_ARG_BOOL(with, libcurl, yes,
-              [do not use libcurl for anonymous statistics collection],
-              [AC_DEFINE([HAVE_LIBCURL], 1, [Define to 1 to build with libcurl support. (--with-libcurl)])])
-
-if test "$with_libcurl" = yes; then
-  AC_CHECK_LIB(curl, curl_global_init, [],
-              [AC_MSG_ERROR([libcurl not found
-If you have libcurl already installed, see config.log for details on the
-failure. It is possible the compiler isn't looking in the proper directory.
-Use --without-libcurl to disable anonymous statistics collection.])])
-  AC_CHECK_HEADER(curl/curl.h, [], [AC_MSG_ERROR([libcurl header not found
-If you have libcurl already installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory.
-Use --without-libcurl to disable libcurl support.])])
-fi
-
-# REPORTS_BASE_URL definition
-PGAC_ARG_REQ(with, reports-hostname, [HOSTNAME],
-             [Use HOSTNAME as hostname for statistics collection and update checks],
-             [REPORTS_BASE_URL="https://${withval}"],
-             [REPORTS_BASE_URL="https://reports.citusdata.com"])
-AC_DEFINE_UNQUOTED(REPORTS_BASE_URL, "$REPORTS_BASE_URL",
-                   [Base URL for statistics collection and update checks])
 
 #
 # LZ4

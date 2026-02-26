@@ -878,6 +878,10 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 
+-- Remove the secondary nodes added during the test
+SELECT 1 FROM master_remove_node('localhost', 8888);
+SELECT 1 FROM master_remove_node('localhost', 8889);
+
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;

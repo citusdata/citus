@@ -546,7 +546,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
 \d alt_test_pt_1;
 \d alt_test_pt_2;
 
@@ -558,7 +559,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
 \d alt_test_pt_1;
 \d alt_test_pt_2;
 
@@ -585,7 +587,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
 \d alt_test_pt_1;
 \d alt_test_pt_2;
 
@@ -597,7 +600,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
 \d alt_test_pt_1;
 \d alt_test_pt_2
 

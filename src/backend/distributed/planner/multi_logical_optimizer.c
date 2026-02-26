@@ -279,6 +279,9 @@ static Expr * FirstAggregateArgument(Aggref *aggregate);
 static bool AggregateEnabledCustom(Aggref *aggregateExpression);
 static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes);
 static Oid WorkerPartialAggOid(void);
+static Oid WorkerBinaryPartialAggOid(void);
+static Oid CoordBinaryCombineAggOid(void);
+static bool IsTypeBinarySerializable(Oid transitionType);
 static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
@@ -2115,6 +2118,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
+		bool useBinaryCoordinatorCombine = false;
 
 		if (!HeapTupleIsValid(aggTuple))
 		{
@@ -2126,13 +2130,17 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
+			useBinaryCoordinatorCombine = aggform->aggtranstype != InvalidOid &&
+										  IsTypeBinarySerializable(aggform->aggtranstype);
 			ReleaseSysCache(aggTuple);
 		}
 
 		if (combine != InvalidOid)
 		{
-			Oid coordCombineId = CoordCombineAggOid();
-			Oid workerReturnType = CSTRINGOID;
+			Oid coordCombineId =
+				useBinaryCoordinatorCombine ? CoordBinaryCombineAggOid()
+											: CoordCombineAggOid();
+			Oid workerReturnType = useBinaryCoordinatorCombine ? BYTEAOID : CSTRINGOID;
 			int32 workerReturnTypeMod = -1;
 			Oid workerCollationId = InvalidOid;
 			Oid resultType = exprType((Node *) originalAggregate);
@@ -2159,7 +2167,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			newMasterAggregate->aggkind = AGGKIND_NORMAL;
 			newMasterAggregate->aggfilter = NULL;
 			newMasterAggregate->aggtranstype = INTERNALOID;
-			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, CSTRINGOID,
+			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, workerReturnType,
 															 resultType);
 			newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
@@ -2193,11 +2201,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggfilter = NULL;
 
 		/*
-		 * If return type aggregate is anyelement, its actual return type is
-		 * determined on the type of its argument. So we replace it with the
-		 * argument type in that case.
+		 * Polymorphic aggregates determine their actual return type based on
+		 * their argument type, so replace it with the worker return type.
 		 */
-		if (masterReturnType == ANYELEMENTOID)
+		if (IsPolymorphicTypeFamily1(masterReturnType))
 		{
 			newMasterAggregate->aggtype = workerReturnType;
 
@@ -3276,6 +3283,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
+		bool useBinaryWorkerAggregate = false;
 
 		if (!HeapTupleIsValid(aggTuple))
 		{
@@ -3287,13 +3295,14 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
+			useBinaryWorkerAggregate = (OidIsValid(aggform->aggtranstype) &&
+										IsTypeBinarySerializable(aggform->aggtranstype));
+
 			ReleaseSysCache(aggTuple);
 		}
 
 		if (combine != InvalidOid)
 		{
-			Oid workerPartialId = WorkerPartialAggOid();
-
 			Const *aggOidParam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
 										   ObjectIdGetDatum(originalAggregate->aggfnoid),
 										   false, true);
@@ -3341,8 +3350,18 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 			/* worker_partial_agg(agg, arg) or worker_partial_agg(agg, ROW(...args)) */
 			Aggref *newWorkerAggregate = copyObject(originalAggregate);
-			newWorkerAggregate->aggfnoid = workerPartialId;
-			newWorkerAggregate->aggtype = CSTRINGOID;
+
+			if (useBinaryWorkerAggregate)
+			{
+				newWorkerAggregate->aggfnoid = WorkerBinaryPartialAggOid();
+				newWorkerAggregate->aggtype = BYTEAOID;
+			}
+			else
+			{
+				newWorkerAggregate->aggfnoid = WorkerPartialAggOid();
+				newWorkerAggregate->aggtype = CSTRINGOID;
+			}
+
 			newWorkerAggregate->args = newWorkerAggregateArgs;
 			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 			newWorkerAggregate->aggtranstype = INTERNALOID;
@@ -3557,6 +3576,111 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
 
 
 /*
+ * AggregateArgMatchLevel and AggregateArgumentMatchLevel()
+ *
+ * Citus needs to resolve an aggregate function OID by (name, argument type)
+ * when planning distributed aggregates. In the multi-shard path we run the
+ * aggregate on each shard (worker tasks) and then build a coordinator-side
+ * “combine” aggregate over the per-shard results. To construct that master
+ * aggregate expression, we must find the correct underlying Postgres aggregate
+ * implementation (OID).
+ *
+ * Postgres defines many aggregates using polymorphic pseudo-types rather than
+ * concrete types. For example, min/max are defined for:
+ *   - anyarray       	               (e.g., int[], text[])
+ *   - anyenum                         (e.g., a user-defined enum type)
+ *   - anyelement                      (e.g., int4, text, numeric)
+ *   - record                          (e.g., a named composite/row type)
+ * so an “exact type only” lookup can miss the right candidate and fail with
+ * "no matching oid for function".
+ *
+ * AggregateArgMatchLevel is a ranking of how well a candidate aggregate
+ * declaration matches the input type. AggregateArgumentMatchLevel() computes
+ * that rank for a pair of types:
+ *
+ *   declaredArgType: the aggregate's declared argument type taken from a
+ *     pg_proc candidate (e.g., ANYARRAYOID, ANYELEMENTOID, RECORDOID, or a
+ *     concrete type OID).
+ *
+ *   inputType: the actual argument type of the user query expression for which
+ *     we are resolving the aggregate (e.g., INT4OID for int, the array type OID
+ *     for int[], or a rowtype OID for a composite type column).
+ *
+ * The OID resolution logic scans candidate aggregates and selects the best
+ * match (highest rank), preferring:
+ *   1) AGG_MATCH_EXACT:
+ *        declaredArgType == inputType
+ *        Example: min(int4) with inputType = INT4OID.
+ *
+ *   2) AGG_MATCH_ARRAY_POLY:
+ *        declaredArgType is ANYARRAY and inputType is an
+ *        array type.
+ *        Example: min(int[]) matches min(anyarray).
+ *
+ *   3) AGG_MATCH_GENERAL_POLY:
+ *        declaredArgType is ANYELEMENT/ANYENUM and is compatible
+ *        with inputType.
+ *        Example: min(mood_enum) matches min(anyenum), or min(text) matches a
+ *        polymorphic min(anyelement).
+ *
+ *   4) AGG_MATCH_RECORD:
+ *        declaredArgType is RECORD and inputType is a rowtype/composite.
+ *        Example: min(product_rating) matches min(record).
+ *
+ * This makes aggregate OID resolution robust across PG versions and additional
+ * polymorphic signatures introduced in PG18 (notably for min/max).
+ */
+typedef enum AggregateArgMatchLevel
+{
+	AGG_MATCH_NONE = 0,
+	AGG_MATCH_RECORD = 1,
+	AGG_MATCH_GENERAL_POLY = 2,
+	AGG_MATCH_ARRAY_POLY = 3,
+	AGG_MATCH_EXACT = 4
+} AggregateArgMatchLevel;
+
+static AggregateArgMatchLevel
+AggregateArgumentMatchLevel(Oid declaredArgType, Oid inputType)
+{
+	if (declaredArgType == inputType)
+	{
+		return AGG_MATCH_EXACT;
+	}
+
+	bool inputIsArray = (inputType == ANYARRAYOID) || type_is_array(inputType);
+	bool inputIsEnum = (inputType == ANYENUMOID) || type_is_enum(inputType);
+
+	switch (declaredArgType)
+	{
+		case ANYARRAYOID:
+		{
+			return inputIsArray ? AGG_MATCH_ARRAY_POLY : AGG_MATCH_NONE;
+		}
+
+		case ANYELEMENTOID:
+		{
+			return AGG_MATCH_GENERAL_POLY;
+		}
+
+		case ANYENUMOID:
+		{
+			return inputIsEnum ? AGG_MATCH_GENERAL_POLY : AGG_MATCH_NONE;
+		}
+
+		case RECORDOID:
+		{
+			return type_is_rowtype(inputType) ? AGG_MATCH_RECORD : AGG_MATCH_NONE;
+		}
+
+		default:
+		{
+			return AGG_MATCH_NONE;
+		}
+	}
+}
+
+
+/*
  * AggregateFunctionOid performs a reverse lookup on aggregate function name,
  * and returns the corresponding aggregate function oid for the given function
  * name and input type.
@@ -3565,6 +3689,7 @@ static Oid
 AggregateFunctionOid(const char *functionName, Oid inputType)
 {
 	Oid functionOid = InvalidOid;
+	AggregateArgMatchLevel bestMatch = AGG_MATCH_NONE;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
@@ -3586,12 +3711,19 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 
 		if (argumentCount == 1)
 		{
-			/* check if input type and found value type match */
-			if (procForm->proargtypes.values[0] == inputType ||
-				procForm->proargtypes.values[0] == ANYELEMENTOID)
+			Oid declaredArgType = procForm->proargtypes.values[0];
+			AggregateArgMatchLevel matchLevel =
+				AggregateArgumentMatchLevel(declaredArgType, inputType);
+
+			if (matchLevel > bestMatch)
 			{
+				bestMatch = matchLevel;
 				functionOid = procForm->oid;
-				break;
+
+				if (bestMatch == AGG_MATCH_EXACT)
+				{
+					break;
+				}
 			}
 		}
 		Assert(argumentCount <= 1);
@@ -3668,6 +3800,39 @@ CoordCombineAggOid()
 
 
 /*
+ * WorkerBinaryPartialAggOid looks up oid of pg_catalog.worker_binary_partial_agg
+ */
+static Oid
+WorkerBinaryPartialAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(WORKER_BINARY_PARTIAL_AGGREGATE_NAME, 2, argtypes
+										 );
+}
+
+
+/*
+ * CoordBinaryCombineAggOid looks up oid of pg_catalog.coord_binary_combine_agg
+ */
+static Oid
+CoordBinaryCombineAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		BYTEAOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(COORD_BINARY_COMBINE_AGGREGATE_NAME, 3, argtypes)
+	;
+}
+
+
+/*
  * TypeOid looks for a type that has the given name and schema, and returns the
  * corresponding type's oid.
  */
@@ -3679,6 +3844,25 @@ TypeOid(Oid schemaId, const char *typeName)
 								  ObjectIdGetDatum(schemaId));
 
 	return typeOid;
+}
+
+
+static bool
+IsTypeBinarySerializable(Oid transitionType)
+{
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(transitionType));
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		elog(ERROR, "citus cache lookup failed for transition type %u", transitionType);
+	}
+
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	bool isBinaryCoercible = typeForm->typsend != InvalidOid &&
+							 typeForm->typreceive != InvalidOid;
+
+	ReleaseSysCache(typeTuple);
+
+	return isBinaryCoercible;
 }
 
 

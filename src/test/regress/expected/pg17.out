@@ -918,7 +918,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
  partition_name |        partition_bound
 ---------------------------------------------------------------------
  alt_test_pt_1  | FOR VALUES FROM (1) TO (50)
@@ -950,7 +951,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
  partition_name |        partition_bound
 ---------------------------------------------------------------------
  alt_test_pt_1  | FOR VALUES FROM (1) TO (50)
@@ -1001,7 +1003,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
  partition_name |        partition_bound
 ---------------------------------------------------------------------
  alt_test_pt_1  | FOR VALUES FROM (1) TO (50)
@@ -1033,7 +1036,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'alt_test';
+WHERE parent.relname = 'alt_test'
+ORDER BY partition_name;
  partition_name |        partition_bound
 ---------------------------------------------------------------------
  alt_test_pt_1  | FOR VALUES FROM (1) TO (50)

@@ -74,6 +74,9 @@ def capture(command, *args, **kwargs):
 
 
 PG_CONFIG = os.environ.get("PG_CONFIG", "pg_config")
+PG_CONFIG_ARGS = capture([PG_CONFIG, "--configure"], shell=False).rstrip()
+PG_SUPPORTS_SSL = "--with-ssl" in PG_CONFIG_ARGS or "--with-openssl" in PG_CONFIG_ARGS
+
 PG_BINDIR = capture([PG_CONFIG, "--bindir"], shell=False).rstrip()
 os.environ["PATH"] = PG_BINDIR + os.pathsep + os.environ["PATH"]
 
@@ -94,7 +97,7 @@ OLDEST_SUPPORTED_CITUS_VERSION_MATRIX = {
     15: "11.1.5",
     16: "12.1.5",
     17: "13.0.1",
-    18: "14.0devel",
+    18: "15.0devel",
 }
 
 OLDEST_SUPPORTED_CITUS_VERSION = OLDEST_SUPPORTED_CITUS_VERSION_MATRIX[PG_MAJOR_VERSION]
@@ -850,7 +853,8 @@ class Postgres(QueryRunner):
             pgconf.write("restart_after_crash = off\n")
 
         os.truncate(self.hba_path, 0)
-        self.ssl_access("all", "trust")
+        if PG_SUPPORTS_SSL:
+            self.ssl_access("all", "trust")
         self.nossl_access("all", "trust")
         self.commit_hba()
 
@@ -859,11 +863,12 @@ class Postgres(QueryRunner):
         self.start()
         self.sql("CREATE EXTENSION citus")
 
-        # Manually turn on ssl, so that we can safely truncate
-        # postgresql.auto.conf later. We can only do this after creating the
-        # citus extension because that creates the self signed certificates.
-        with self.conf_path.open(mode="a") as pgconf:
-            pgconf.write("ssl = on\n")
+        if PG_SUPPORTS_SSL:
+            # Manually turn on ssl, so that we can safely truncate
+            # postgresql.auto.conf later. We can only do this after creating the
+            # citus extension because that creates the self signed certificates.
+            with self.conf_path.open(mode="a") as pgconf:
+                pgconf.write("ssl = on\n")
 
     def pgctl(self, command, **kwargs):
         run(f"pg_ctl -w --pgdata {self.pgdata} {command}", **kwargs)
