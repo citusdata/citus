@@ -13,6 +13,7 @@ extern bool EnableBinaryProtocol;
 extern int ExecutorSlowStartInterval;
 extern bool EnableCostBasedConnectionEstablishment;
 extern bool PreventIncompleteConnectionEstablishment;
+extern bool EnableSingleTaskFastPath;
 
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList);
 extern uint64 ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported);

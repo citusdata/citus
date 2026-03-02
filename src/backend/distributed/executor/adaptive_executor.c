@@ -119,6 +119,7 @@
  */
 
 #include <math.h>
+#include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -158,6 +159,7 @@
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -502,6 +504,7 @@ bool EnableBinaryProtocol = true;
 int ExecutorSlowStartInterval = 10;
 bool EnableCostBasedConnectionEstablishment = true;
 bool PreventIncompleteConnectionEstablishment = true;
+bool EnableSingleTaskFastPath = true;
 
 
 /*
@@ -649,6 +652,8 @@ static TransactionProperties DecideTaskListTransactionProperties(RowModifyLevel
 																 excludeFromTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
+static bool CanUseSingleTaskFastPath(DistributedExecution *execution);
+static void RunSingleTaskExecution(DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
 static void FinishDistributedExecution(DistributedExecution *execution);
@@ -873,7 +878,11 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 */
 	StartDistributedExecution(execution);
 
-	if (ShouldRunTasksSequentially(execution->remoteTaskList))
+	if (CanUseSingleTaskFastPath(execution))
+	{
+		RunSingleTaskExecution(execution);
+	}
+	else if (ShouldRunTasksSequentially(execution->remoteTaskList))
 	{
 		SequentialRunDistributedExecution(execution);
 	}
@@ -1117,7 +1126,16 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 
 	/* run the remote execution */
 	StartDistributedExecution(execution);
-	RunDistributedExecution(execution);
+
+	if (CanUseSingleTaskFastPath(execution))
+	{
+		RunSingleTaskExecution(execution);
+	}
+	else
+	{
+		RunDistributedExecution(execution);
+	}
+
 	FinishDistributedExecution(execution);
 
 	/* now, switch back to the local execution */
@@ -1842,6 +1860,433 @@ RemoteSocketClosedForAnySession(DistributedExecution *execution)
 	int eventCount = WaitEventSetWait(execution->waitEventSet, timeout, execution->events,
 									  execution->eventSetSize, WAIT_EVENT_CLIENT_READ);
 	ProcessWaitEventsForSocketClosed(execution->events, eventCount);
+}
+
+
+/*
+ * CanUseSingleTaskFastPath checks whether a distributed execution can use
+ * the optimized single-task path that bypasses pool management, task
+ * queuing, and WaitEventSet construction.
+ */
+static bool
+CanUseSingleTaskFastPath(DistributedExecution *execution)
+{
+	if (!EnableSingleTaskFastPath)
+	{
+		return false;
+	}
+
+	if (list_length(execution->remoteTaskList) != 1 ||
+		list_length(execution->localTaskList) != 0)
+	{
+		return false;
+	}
+
+	Task *task = linitial(execution->remoteTaskList);
+
+	if (task->taskPlacementList == NIL)
+	{
+		return false;
+	}
+
+	if (task->queryCount > 1)
+	{
+		return false;
+	}
+
+	/*
+	 * Replicated writes need sequential or parallel placement execution
+	 * coordination across placements. Only allow the fast path for:
+	 * - read-only queries (any single placement suffices)
+	 * - single-placement writes (no coordination needed)
+	 */
+	if (execution->modLevel > ROW_MODIFY_READONLY &&
+		list_length(task->taskPlacementList) > 1)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * RunSingleTaskExecution is the fast path for executing a single task on
+ * a single placement. It bypasses WorkerPool/WorkerSession/WaitEventSet
+ * overhead. Falls back to RunDistributedExecution on any issue during
+ * connection establishment.
+ */
+static void
+RunSingleTaskExecution(DistributedExecution *execution)
+{
+	Task *task = linitial(execution->remoteTaskList);
+	ShardPlacement *placement = linitial(task->taskPlacementList);
+	TupleDestination *tupleDest = task->tupleDest ?
+								  task->tupleDest :
+								  execution->defaultTupleDest;
+
+	/*
+	 * Build the placement access list for transactional bookkeeping.
+	 */
+	List *placementAccessList = PlacementAccessListForTask(task, placement);
+
+	/*
+	 * Try to reuse a connection that already accessed this placement in the
+	 * current transaction, which is needed for read-your-own-writes.
+	 */
+	MultiConnection *connection = NULL;
+	if (execution->transactionProperties->useRemoteTransactionBlocks !=
+		TRANSACTION_BLOCKS_DISALLOWED)
+	{
+		connection = GetConnectionIfPlacementAccessedInXact(
+			0, placementAccessList, NULL);
+	}
+
+	if (connection == NULL)
+	{
+		/*
+		 * No existing connection — open a new one. Use OPTIONAL_CONNECTION so
+		 * that we can fall back to the full executor if the connection pool is
+		 * exhausted rather than waiting or erroring.
+		 */
+		int connectionFlags = OPTIONAL_CONNECTION;
+		if (execution->transactionProperties->useRemoteTransactionBlocks ==
+			TRANSACTION_BLOCKS_DISALLOWED)
+		{
+			connectionFlags |= OUTSIDE_TRANSACTION;
+		}
+
+		connection = StartNodeUserDatabaseConnection(connectionFlags,
+													 placement->nodeName,
+													 placement->nodePort,
+													 NULL, NULL);
+		if (connection == NULL)
+		{
+			/* pool exhausted, fall back to the full adaptive executor */
+			RunDistributedExecution(execution);
+			return;
+		}
+
+		FinishConnectionEstablishment(connection);
+
+		if (connection->pgConn == NULL ||
+			PQstatus(connection->pgConn) != CONNECTION_OK)
+		{
+			/* connection failed, fall back to the full adaptive executor */
+			RunDistributedExecution(execution);
+			return;
+		}
+	}
+
+	/*
+	 * Verify the connection is still alive. A cached connection (whether
+	 * from the transaction-scoped tracking or the connection pool) may have
+	 * been terminated server-side (e.g. by pg_terminate_backend or a worker
+	 * restart). An idle connection should have no pending data; if poll()
+	 * indicates data is available before we send anything, the server has
+	 * sent an asynchronous error (FATAL) or closed the socket. In that
+	 * case, fall back to the full executor which has RestartConnection
+	 * retry logic.
+	 */
+	{
+		int sock = PQsocket(connection->pgConn);
+		if (sock >= 0)
+		{
+			struct pollfd pfd = {.fd = sock, .events = POLLIN, .revents = 0};
+			if (poll(&pfd, 1, 0) > 0)
+			{
+				/*
+				 * Unexpected data on an idle connection. Consume it so
+				 * libpq updates connection status, then fall back.
+				 */
+				PQconsumeInput(connection->pgConn);
+				RunDistributedExecution(execution);
+				return;
+			}
+		}
+	}
+
+	ClaimConnectionExclusively(connection);
+
+	/*
+	 * From this point on we must unclaim the connection before returning,
+	 * even on error. Use PG_TRY/PG_CATCH to guarantee cleanup.
+	 */
+	PG_TRY();
+	{
+		/*
+		 * Register the placement with this connection so that future commands
+		 * in the same transaction use the same connection.
+		 */
+		if (execution->transactionProperties->useRemoteTransactionBlocks !=
+			TRANSACTION_BLOCKS_DISALLOWED)
+		{
+			AssignPlacementListToConnection(placementAccessList, connection);
+		}
+
+		/*
+		 * Inline 2PC activation: if this transaction already modified a
+		 * distributed table and we're about to modify via a connection that
+		 * hasn't modified any placement yet, we're expanding to a new node
+		 * and need 2PC.
+		 */
+		if (TransactionModifiedDistributedTable(execution) &&
+			DistributedExecutionModifiesDatabase(execution) &&
+			!ConnectionModifiedPlacement(connection))
+		{
+			Use2PCForCoordinatedTransaction();
+		}
+
+		RemoteTransactionBeginIfNecessary(connection);
+
+		/*
+		 * Determine binary vs text result format and build attInMetadata.
+		 */
+		AttInMetadata *attInMetadata = NULL;
+		bool binaryResults = false;
+		TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest, 0);
+		if (tupleDescriptor != NULL)
+		{
+			if (EnableBinaryProtocol && CanUseBinaryCopyFormat(tupleDescriptor))
+			{
+				attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
+				binaryResults = true;
+			}
+			else
+			{
+				attInMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
+			}
+		}
+
+		/*
+		 * Send the query.
+		 */
+		char *queryString = TaskQueryStringAtIndex(task, 0);
+		ParamListInfo paramListInfo = execution->paramListInfo;
+		int querySent = 0;
+
+		if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
+		{
+			int parameterCount = paramListInfo->numParams;
+			Oid *parameterTypes = NULL;
+			const char **parameterValues = NULL;
+
+			paramListInfo = copyParamList(paramListInfo);
+			ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+												&parameterValues);
+			querySent = SendRemoteCommandParams(connection, queryString,
+												parameterCount, parameterTypes,
+												parameterValues, binaryResults);
+		}
+		else if (!binaryResults)
+		{
+			querySent = SendRemoteCommand(connection, queryString);
+		}
+		else
+		{
+			querySent = SendRemoteCommandParams(connection, queryString,
+												0, NULL, NULL, binaryResults);
+		}
+
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+
+		if (PQsetSingleRowMode(connection->pgConn) == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+
+		/*
+		 * Disable local execution if the target is the local node, since we
+		 * are now executing over a remote connection and switching back to
+		 * local execution could cause self-deadlocks and break
+		 * read-your-own-writes consistency.
+		 */
+		WorkerNode *workerNode = FindWorkerNode(placement->nodeName,
+												placement->nodePort);
+		if (workerNode != NULL && workerNode->groupId == GetLocalGroupId())
+		{
+			SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
+		}
+
+		ereport(DEBUG4, (errmsg("using single-task fast path for task on %s:%d",
+								placement->nodeName, placement->nodePort)));
+
+		/*
+		 * Receive results synchronously. GetRemoteCommandResult handles
+		 * blocking I/O and CHECK_FOR_INTERRUPTS internally.
+		 */
+		bool storeRows = (tupleDescriptor != NULL);
+		MemoryContext rowContext = AllocSetContextCreate(CurrentMemoryContext,
+														"SingleTaskRowContext",
+														ALLOCSET_DEFAULT_MINSIZE,
+														ALLOCSET_DEFAULT_INITSIZE,
+														ALLOCSET_DEFAULT_MAXSIZE);
+
+		while (true)
+		{
+			PGresult *result = GetRemoteCommandResult(connection,
+													  execution->raiseInterrupts);
+			if (result == NULL)
+			{
+				break;
+			}
+
+			ExecStatusType status = PQresultStatus(result);
+
+			if (status == PGRES_COMMAND_OK)
+			{
+				char *affectedTupleString = PQcmdTuples(result);
+				if (storeRows && *affectedTupleString != '\0')
+				{
+					execution->rowsProcessed += pg_strtoint64(affectedTupleString);
+				}
+				PQclear(result);
+				continue;
+			}
+			else if (status == PGRES_TUPLES_OK)
+			{
+				/* end of tuples, no rows in this result */
+				PQclear(result);
+				continue;
+			}
+			else if (status != PGRES_SINGLE_TUPLE)
+			{
+				ReportResultError(connection, result, ERROR);
+			}
+
+			if (!storeRows || tupleDescriptor == NULL)
+			{
+				PQclear(result);
+				continue;
+			}
+
+			uint32 rowsProcessed = PQntuples(result);
+			uint32 columnCount = PQnfields(result);
+			uint32 expectedColumnCount = tupleDescriptor->natts;
+
+			if (columnCount != expectedColumnCount)
+			{
+				ereport(ERROR,
+						(errmsg("unexpected number of columns from worker: %d, "
+								"expected %d", columnCount, expectedColumnCount)));
+			}
+
+			/*
+			 * Grow execution->columnArray if needed, reusing the shared
+			 * allocation from CreateDistributedExecution.
+			 */
+			if (columnCount > execution->allocatedColumnCount)
+			{
+				pfree(execution->columnArray);
+				int oldColumnCount = execution->allocatedColumnCount;
+				execution->allocatedColumnCount = columnCount;
+				execution->columnArray = palloc0(columnCount * sizeof(void *));
+				if (EnableBinaryProtocol)
+				{
+					execution->stringInfoDataArray = repalloc(
+						execution->stringInfoDataArray,
+						columnCount * sizeof(StringInfoData));
+					for (int i = oldColumnCount; i < (int) columnCount; i++)
+					{
+						initStringInfo(&execution->stringInfoDataArray[i]);
+					}
+				}
+			}
+
+			void **columnArray = execution->columnArray;
+			StringInfoData *stringInfoDataArray = execution->stringInfoDataArray;
+
+			for (uint32 rowIndex = 0; rowIndex < rowsProcessed; rowIndex++)
+			{
+				uint64 tupleLibpqSize = 0;
+				MemoryContext oldContext = MemoryContextSwitchTo(rowContext);
+
+				memset(columnArray, 0, columnCount * sizeof(void *));
+
+				for (uint32 colIndex = 0; colIndex < columnCount; colIndex++)
+				{
+					if (PQgetisnull(result, rowIndex, colIndex))
+					{
+						columnArray[colIndex] = NULL;
+					}
+					else
+					{
+						int valueLength = PQgetlength(result, rowIndex, colIndex);
+						char *value = PQgetvalue(result, rowIndex, colIndex);
+						if (binaryResults)
+						{
+							if (PQfformat(result, colIndex) == 0)
+							{
+								ereport(ERROR, (errmsg("unexpected text result")));
+							}
+							resetStringInfo(&stringInfoDataArray[colIndex]);
+							appendBinaryStringInfo(&stringInfoDataArray[colIndex],
+												   value, valueLength);
+							columnArray[colIndex] = &stringInfoDataArray[colIndex];
+						}
+						else
+						{
+							if (PQfformat(result, colIndex) == 1)
+							{
+								ereport(ERROR, (errmsg("unexpected binary result")));
+							}
+							columnArray[colIndex] = value;
+						}
+						tupleLibpqSize += valueLength;
+					}
+				}
+
+				HeapTuple heapTuple;
+				if (binaryResults)
+				{
+					heapTuple = BuildTupleFromBytes(attInMetadata,
+													(fmStringInfo *) columnArray);
+				}
+				else
+				{
+					heapTuple = BuildTupleFromCStrings(attInMetadata,
+													   (char **) columnArray);
+				}
+
+				MemoryContextSwitchTo(oldContext);
+
+				tupleDest->putTuple(tupleDest, task, 0, 0, heapTuple,
+									tupleLibpqSize);
+
+				MemoryContextReset(rowContext);
+
+				execution->rowsProcessed++;
+			}
+
+			PQclear(result);
+		}
+
+		MemoryContextDelete(rowContext);
+
+		/* mark execution as complete */
+		execution->unfinishedTaskCount = 0;
+
+		/*
+		 * Once we successfully finish a task on a connection, mark the
+		 * remote transaction as critical. This matches the behavior of
+		 * the full executor's TransactionStateMachine, ensuring that
+		 * any subsequent failure on this connection (e.g. during SET
+		 * propagation) is reported as "failure on connection marked as
+		 * essential" rather than propagating the raw worker error.
+		 */
+		MarkRemoteTransactionCritical(connection);
+
+		UnclaimConnection(connection);
+	}
+	PG_CATCH();
+	{
+		UnclaimConnection(connection);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 
