@@ -962,6 +962,11 @@ CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.int_col_bigint
 CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.int_col_int_sequence AS int;
 CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence AS smallint;
 
+-- also create some sequences with custom settings
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.custom_bigint_col_bigint_sequence AS bigint MINVALUE 1000 MAXVALUE 1000000 START WITH 5000 INCREMENT 100;
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.custom_int_col_int_sequence AS int MINVALUE 100 MAXVALUE 2000000 START WITH 1000 INCREMENT 5;
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.custom_smallint_col_smallint_sequence AS smallint MINVALUE 10 MAXVALUE 1000 START WITH 50 INCREMENT 15;
+
 CREATE TABLE initially_local_schema_seq_test_with_initial_data.nextval_test (
     id int,
     column_to_drop_8 text,
@@ -976,7 +981,10 @@ CREATE TABLE initially_local_schema_seq_test_with_initial_data.nextval_test (
     int_col_with_int_sequence int DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass),
     column_to_drop_4 text,
     column_to_drop_7 text,
-    smallint_col_with_smallint_sequence smallint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass)
+    smallint_col_with_smallint_sequence smallint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass),
+    bigint_col_with_custom_bigint_sequence bigint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.custom_bigint_col_bigint_sequence'::regclass),
+    int_col_with_custom_int_sequence int DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.custom_int_col_int_sequence'::regclass),
+    smallint_col_with_custom_smallint_sequence smallint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.custom_smallint_col_smallint_sequence'::regclass)
 );
 
 -- Mark some of the sequences as owned by the columns.
@@ -1002,6 +1010,11 @@ CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequ
 CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence AS bigint;
 CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_int_col_int_sequence AS int;
 CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence AS smallint;
+
+-- also create some sequences with custom settings
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_custom_bigint_col_bigint_sequence AS bigint MINVALUE 1050 MAXVALUE 1000050 START WITH 5050 INCREMENT 150;
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_custom_int_col_int_sequence AS int MINVALUE 150 MAXVALUE 2000050 START WITH 1000 INCREMENT 55;
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_custom_smallint_col_smallint_sequence AS smallint MINVALUE 60 MAXVALUE 1050 START WITH 100 INCREMENT 65;
 
 -- all fails because the table is not not empty
 ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence'::regclass);
@@ -1037,6 +1050,15 @@ ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test DROP COLUMN colu
 ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_smallint_col_with_smallint_sequence smallint;
 ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_smallint_col_with_smallint_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'::regclass);
 
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_bigint_col_with_custom_bigint_sequence bigint;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_bigint_col_with_custom_bigint_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_custom_bigint_col_bigint_sequence'::regclass);
+
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_int_col_with_custom_int_sequence int;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_int_col_with_custom_int_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_custom_int_col_int_sequence'::regclass);
+
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_smallint_col_with_custom_smallint_sequence smallint;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_smallint_col_with_custom_smallint_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_custom_smallint_col_smallint_sequence'::regclass);
+
 -- Check nextval sequences.
 -- bigint_col_int_sequence and added_bigint_col_int_sequence should become bigint sequences, see EnsureDistributedSequencesHaveOneType()
 SELECT result FROM run_command_on_all_nodes(
@@ -1053,7 +1075,13 @@ WITH sequence_info AS (
         'dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence',
         'dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence',
         'dist_schema_seq_test_with_initial_data.added_int_col_int_sequence',
-        'dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'
+        'dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence',
+        'initially_local_schema_seq_test_with_initial_data.custom_bigint_col_bigint_sequence',
+        'initially_local_schema_seq_test_with_initial_data.custom_int_col_int_sequence',
+        'initially_local_schema_seq_test_with_initial_data.custom_smallint_col_smallint_sequence',
+        'dist_schema_seq_test_with_initial_data.added_custom_bigint_col_bigint_sequence',
+        'dist_schema_seq_test_with_initial_data.added_custom_int_col_int_sequence',
+        'dist_schema_seq_test_with_initial_data.added_custom_smallint_col_smallint_sequence'
     ]) AS qualified_sequence_name(name)
 )
 SELECT jsonb_agg(
@@ -1084,7 +1112,7 @@ $$
 SELECT result FROM run_command_on_all_nodes(
     $$
     WITH ins AS (
-    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1, DEFAULT, DEFAULT, 1, 1, 1) RETURNING *
+    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1, DEFAULT, 1, 1, DEFAULT, DEFAULT, 1, 1, 1, DEFAULT, 1, 1) RETURNING *
     )
     SELECT to_jsonb(ins) FROM ins;
     $$,
@@ -1095,18 +1123,18 @@ SELECT result FROM run_command_on_all_nodes(
 SELECT result FROM run_command_on_coordinator(
     $$
     WITH ins AS (
-    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
+    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
     )
     SELECT to_jsonb(ins) FROM ins;
     $$
 );
 
 -- all fail on workers
-SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1, 1)$$, parallel => false);
-SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1)$$, parallel => false);
-SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)$$, parallel => false);
 
-SELECT * FROM dist_schema_seq_test_with_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11;
+SELECT * FROM dist_schema_seq_test_with_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17;
 
 DROP TABLE dist_schema_seq_test_with_initial_data.nextval_test;
 
@@ -1131,7 +1159,13 @@ WHERE
         'added_bigint_col_int_sequence',
         'added_int_col_bigint_sequence',
         'added_int_col_int_sequence',
-        'added_smallint_col_smallint_sequence'
+        'added_smallint_col_smallint_sequence',
+        'custom_bigint_col_bigint_sequence',
+        'custom_int_col_int_sequence',
+        'custom_smallint_col_smallint_sequence',
+        'added_custom_bigint_col_bigint_sequence',
+        'added_custom_int_col_int_sequence',
+        'added_custom_smallint_col_smallint_sequence'
     );
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
@@ -1152,7 +1186,7 @@ CREATE TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test
     column_to_drop_6 text,
     column_to_drop_7 text,
     generated_int_col int GENERATED BY DEFAULT AS IDENTITY,
-    generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY
+    generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY (START WITH 178 INCREMENT BY 17 MINVALUE 100 MAXVALUE 1500600)
 );
 
 INSERT INTO initially_local_schema_seq_test_with_initial_data.built_in_seq_test (id) SELECT i FROM generate_series(1, 5) AS i;
@@ -1263,7 +1297,7 @@ SELECT * FROM dist_schema_seq_test_with_initial_data.built_in_seq_test ORDER BY 
 
 -- create sequences and a table under dist_schema_seq_test_without_initial_data
 
-CREATE SEQUENCE dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence AS bigint MINVALUE 1000 MAXVALUE 1000000 START WITH 5000 INCREMENT 100;
 CREATE SEQUENCE dist_schema_seq_test_without_initial_data.bigint_col_int_sequence AS int;
 CREATE SEQUENCE dist_schema_seq_test_without_initial_data.int_col_bigint_sequence AS bigint;
 CREATE SEQUENCE dist_schema_seq_test_without_initial_data.int_col_int_sequence AS int;
@@ -1397,7 +1431,7 @@ CREATE TABLE dist_schema_seq_test_without_initial_data.built_in_seq_test (
     bigserial_col bigserial,
     generated_smallint_col smallint GENERATED BY DEFAULT AS IDENTITY,
     generated_int_col int GENERATED BY DEFAULT AS IDENTITY,
-    generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY
+    generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY (START WITH 178 INCREMENT BY 17 MINVALUE 100 MAXVALUE 1500600)
 );
 
 -- check built-in sequences
