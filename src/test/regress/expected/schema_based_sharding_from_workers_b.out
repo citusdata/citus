@@ -1238,10 +1238,18 @@ CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.int_col_int_se
 CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence AS smallint;
 CREATE TABLE initially_local_schema_seq_test_with_initial_data.nextval_test (
     id int,
+    column_to_drop_8 text,
     bigint_col_with_bigint_sequence bigint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass),
+    column_to_drop_1 text,
     bigint_col_with_int_sequence bigint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass),
+    column_to_drop_6 text,
     int_col_with_bigint_sequence int DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass),
+    column_to_drop_2 text,
+    column_to_drop_3 text,
+    column_to_drop_5 text,
     int_col_with_int_sequence int DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass),
+    column_to_drop_4 text,
+    column_to_drop_7 text,
     smallint_col_with_smallint_sequence smallint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass)
 );
 -- Mark some of the sequences as owned by the columns.
@@ -1252,14 +1260,61 @@ ALTER SEQUENCE initially_local_schema_seq_test_with_initial_data.bigint_col_bigi
 ALTER SEQUENCE initially_local_schema_seq_test_with_initial_data.bigint_col_int_sequence OWNED BY initially_local_schema_seq_test_with_initial_data.nextval_test.bigint_col_with_int_sequence;
 ALTER SEQUENCE initially_local_schema_seq_test_with_initial_data.int_col_bigint_sequence OWNED BY initially_local_schema_seq_test_with_initial_data.nextval_test.int_col_with_bigint_sequence;
 INSERT INTO initially_local_schema_seq_test_with_initial_data.nextval_test (id) SELECT i FROM generate_series(1, 5) AS i;
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_1;
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_2;
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_3;
 ALTER TABLE initially_local_schema_seq_test_with_initial_data.nextval_test SET SCHEMA dist_schema_seq_test_with_initial_data;
 NOTICE:  Moving nextval_test into distributed schema dist_schema_seq_test_with_initial_data
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$dist_schema_seq_test_with_initial_data.nextval_test$$)
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_4;
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_int_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence AS smallint;
+-- all fails because the table is not not empty
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence'::regclass);
+ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence'::regclass);
+ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_int_col_with_bigint_sequence int DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence'::regclass);
+ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_int_col_with_int_sequence int DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_int_col_int_sequence'::regclass);
+ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'::regclass);
+ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+-- so let's add the columns first, then alter their column default expressions
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_bigint_col_with_bigint_sequence bigint;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_bigint_col_with_bigint_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_5;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_bigint_col_with_int_sequence bigint;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_bigint_col_with_int_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_6;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_int_col_with_bigint_sequence int;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_int_col_with_bigint_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_7;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_int_col_with_int_sequence int;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_int_col_with_int_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_int_col_int_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_8;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN column_to_drop_9 text;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test DROP COLUMN column_to_drop_9;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ADD COLUMN added_smallint_col_with_smallint_sequence smallint;
+ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test ALTER COLUMN added_smallint_col_with_smallint_sequence SET DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'::regclass);
 -- Check nextval sequences.
--- bigint_col_int_sequence should become a bigint sequence, see EnsureDistributedSequencesHaveOneType()
+-- bigint_col_int_sequence and added_bigint_col_int_sequence should become bigint sequences, see EnsureDistributedSequencesHaveOneType()
 SELECT result FROM run_command_on_all_nodes(
 $$
 WITH sequence_info AS (
@@ -1269,7 +1324,12 @@ WITH sequence_info AS (
         'dist_schema_seq_test_with_initial_data.bigint_col_int_sequence',
         'dist_schema_seq_test_with_initial_data.int_col_bigint_sequence',
         'initially_local_schema_seq_test_with_initial_data.int_col_int_sequence',
-        'initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'
+        'initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence',
+        'dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence',
+        'dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence',
+        'dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence',
+        'dist_schema_seq_test_with_initial_data.added_int_col_int_sequence',
+        'dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'
     ]) AS qualified_sequence_name(name)
 )
 SELECT jsonb_agg(
@@ -1286,11 +1346,11 @@ SELECT jsonb_agg(
 FROM sequence_info;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   result
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             result
 ---------------------------------------------------------------------
- [{"name": "dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 5, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_int_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 5, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 5, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 5, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 5, "start_value": 1}]
- [{"name": "dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_int_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_with_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
- [{"name": "dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_int_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_with_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
+ [{"name": "dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 5, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_int_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 5, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 5, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 5, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 5, "start_value": 1}]
+ [{"name": "dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_int_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_with_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
+ [{"name": "dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_with_initial_data.bigint_col_int_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_with_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
 (3 rows)
 
 -- check nextval calls used in table definition
@@ -1299,11 +1359,11 @@ $$
 SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('dist_schema_seq_test_with_initial_data.nextval_test') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                    result
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        result
 ---------------------------------------------------------------------
- CREATE TABLE dist_schema_seq_test_with_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT nextval('dist_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test OWNER TO postgres
- CREATE TABLE dist_schema_seq_test_with_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test OWNER TO postgres
- CREATE TABLE dist_schema_seq_test_with_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test OWNER TO postgres
+ CREATE TABLE dist_schema_seq_test_with_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT nextval('dist_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass), added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence'::regclass), added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence'::regclass), added_int_col_with_bigint_sequence integer DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence'::regclass), added_int_col_with_int_sequence integer DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_int_col_int_sequence'::regclass), added_smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test OWNER TO postgres
+ CREATE TABLE dist_schema_seq_test_with_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass), added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence'::regclass), added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence'::regclass), added_int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence'::regclass), added_int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.added_int_col_int_sequence'::regclass), added_smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test OWNER TO postgres
+ CREATE TABLE dist_schema_seq_test_with_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass), added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_bigint_sequence'::regclass), added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_with_initial_data.added_bigint_col_int_sequence'::regclass), added_int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.added_int_col_bigint_sequence'::regclass), added_int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.added_int_col_int_sequence'::regclass), added_smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_with_initial_data.added_smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_with_initial_data.nextval_test OWNER TO postgres
 (3 rows)
 
 -- Should succeed on all nodes as we don't try inserting column default values
@@ -1312,67 +1372,67 @@ $$
 SELECT result FROM run_command_on_all_nodes(
     $$
     WITH ins AS (
-    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1) RETURNING *
+    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1, DEFAULT, DEFAULT, 1, 1, 1) RETURNING *
     )
     SELECT to_jsonb(ins) FROM ins;
     $$,
     parallel => false
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                              result
+                                                                                                                                                                                                                                        result
 ---------------------------------------------------------------------
- {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 6, "int_col_with_bigint_sequence": 1, "bigint_col_with_bigint_sequence": 6, "smallint_col_with_smallint_sequence": 1}
- {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 9288674231451649, "int_col_with_bigint_sequence": 1, "bigint_col_with_bigint_sequence": 9288674231451649, "smallint_col_with_smallint_sequence": 1}
- {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 13229323905400833, "int_col_with_bigint_sequence": 1, "bigint_col_with_bigint_sequence": 13229323905400833, "smallint_col_with_smallint_sequence": 1}
+ {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 6, "int_col_with_bigint_sequence": 1, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 6, "added_bigint_col_with_int_sequence": 1, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1, "added_bigint_col_with_bigint_sequence": 1, "added_smallint_col_with_smallint_sequence": 1}
+ {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 9288674231451649, "int_col_with_bigint_sequence": 1, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 9288674231451649, "added_bigint_col_with_int_sequence": 9288674231451649, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1, "added_bigint_col_with_bigint_sequence": 9288674231451649, "added_smallint_col_with_smallint_sequence": 1}
+ {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 13229323905400833, "int_col_with_bigint_sequence": 1, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 13229323905400833, "added_bigint_col_with_int_sequence": 13229323905400833, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1, "added_bigint_col_with_bigint_sequence": 13229323905400833, "added_smallint_col_with_smallint_sequence": 1}
 (3 rows)
 
 -- succeeds on the coordinator
 SELECT result FROM run_command_on_coordinator(
     $$
     WITH ins AS (
-    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
+    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
     )
     SELECT to_jsonb(ins) FROM ins;
     $$
 );
-                                                                                              result
+                                                                                                                                                                                                        result
 ---------------------------------------------------------------------
- {"id": 11, "int_col_with_int_sequence": 6, "bigint_col_with_int_sequence": 7, "int_col_with_bigint_sequence": 6, "bigint_col_with_bigint_sequence": 7, "smallint_col_with_smallint_sequence": 6}
+ {"id": 11, "int_col_with_int_sequence": 6, "bigint_col_with_int_sequence": 7, "int_col_with_bigint_sequence": 6, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 7, "added_bigint_col_with_int_sequence": 2, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 6, "added_bigint_col_with_bigint_sequence": 2, "added_smallint_col_with_smallint_sequence": 1}
 (1 row)
 
 -- all fail on workers
-SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, DEFAULT, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1, 1)$$, parallel => false);
                                                     result
 ---------------------------------------------------------------------
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 (2 rows)
 
-SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, DEFAULT, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1)$$, parallel => false);
                                                     result
 ---------------------------------------------------------------------
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 (2 rows)
 
-SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, DEFAULT)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1)$$, parallel => false);
                                                     result
 ---------------------------------------------------------------------
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 (2 rows)
 
-SELECT * FROM dist_schema_seq_test_with_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6;
- id | bigint_col_with_bigint_sequence | bigint_col_with_int_sequence | int_col_with_bigint_sequence | int_col_with_int_sequence | smallint_col_with_smallint_sequence
+SELECT * FROM dist_schema_seq_test_with_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11;
+ id | bigint_col_with_bigint_sequence | bigint_col_with_int_sequence | int_col_with_bigint_sequence | int_col_with_int_sequence | smallint_col_with_smallint_sequence | added_bigint_col_with_bigint_sequence | added_bigint_col_with_int_sequence | added_int_col_with_bigint_sequence | added_int_col_with_int_sequence | added_smallint_col_with_smallint_sequence
 ---------------------------------------------------------------------
-  1 |                               1 |                            1 |                            1 |                         1 |                                   1
-  2 |                               2 |                            2 |                            2 |                         2 |                                   2
-  3 |                               3 |                            3 |                            3 |                         3 |                                   3
-  4 |                               4 |                            4 |                            4 |                         4 |                                   4
-  5 |                               5 |                            5 |                            5 |                         5 |                                   5
- 10 |                               6 |                            6 |                            1 |                         1 |                                   1
- 10 |                9288674231451649 |             9288674231451649 |                            1 |                         1 |                                   1
- 10 |               13229323905400833 |            13229323905400833 |                            1 |                         1 |                                   1
- 11 |                               7 |                            7 |                            6 |                         6 |                                   6
+  1 |                               1 |                            1 |                            1 |                         1 |                                   1 |                                       |                                    |                                    |                                 |
+  2 |                               2 |                            2 |                            2 |                         2 |                                   2 |                                       |                                    |                                    |                                 |
+  3 |                               3 |                            3 |                            3 |                         3 |                                   3 |                                       |                                    |                                    |                                 |
+  4 |                               4 |                            4 |                            4 |                         4 |                                   4 |                                       |                                    |                                    |                                 |
+  5 |                               5 |                            5 |                            5 |                         5 |                                   5 |                                       |                                    |                                    |                                 |
+ 10 |                               6 |                            6 |                            1 |                         1 |                                   1 |                                     1 |                                  1 |                                  1 |                               1 |                                         1
+ 10 |                9288674231451649 |             9288674231451649 |                            1 |                         1 |                                   1 |                      9288674231451649 |                   9288674231451649 |                                  1 |                               1 |                                         1
+ 10 |               13229323905400833 |            13229323905400833 |                            1 |                         1 |                                   1 |                     13229323905400833 |                  13229323905400833 |                                  1 |                               1 |                                         1
+ 11 |                               7 |                            7 |                            6 |                         6 |                                   6 |                                     2 |                                  2 |                                  1 |                               1 |                                         1
 (9 rows)
 
 DROP TABLE dist_schema_seq_test_with_initial_data.nextval_test;
@@ -1392,34 +1452,89 @@ WHERE
         'bigint_col_int_sequence',
         'int_col_bigint_sequence',
         'int_col_int_sequence',
-        'smallint_col_smallint_sequence'
+        'smallint_col_smallint_sequence',
+        'added_bigint_col_bigint_sequence',
+        'added_bigint_col_int_sequence',
+        'added_int_col_bigint_sequence',
+        'added_int_col_int_sequence',
+        'added_smallint_col_smallint_sequence'
     );
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                        result
+                                                                                                       result
 ---------------------------------------------------------------------
- {int_col_int_sequence,smallint_col_smallint_sequence}
- {int_col_int_sequence,smallint_col_smallint_sequence}
- {int_col_int_sequence,smallint_col_smallint_sequence}
+ {added_bigint_col_bigint_sequence,added_bigint_col_int_sequence,added_int_col_bigint_sequence,added_int_col_int_sequence,added_smallint_col_smallint_sequence,int_col_int_sequence,smallint_col_smallint_sequence}
+ {added_bigint_col_bigint_sequence,added_bigint_col_int_sequence,added_int_col_bigint_sequence,added_int_col_int_sequence,added_smallint_col_smallint_sequence,int_col_int_sequence,smallint_col_smallint_sequence}
+ {added_bigint_col_bigint_sequence,added_bigint_col_int_sequence,added_int_col_bigint_sequence,added_int_col_int_sequence,added_smallint_col_smallint_sequence,int_col_int_sequence,smallint_col_smallint_sequence}
 (3 rows)
 
 -- create a table with built-in sequences under initially_local_schema_seq_test_with_initial_data, and move the table to dist_schema_seq_test_with_initial_data
 CREATE TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test (
     id int,
+    column_to_drop_1 text,
     smallserial_col smallserial,
+    column_to_drop_2 text,
+    column_to_drop_3 text,
     serial_col serial,
+    column_to_drop_4 text,
     bigserial_col bigserial,
+    column_to_drop_5 text,
     generated_smallint_col smallint GENERATED BY DEFAULT AS IDENTITY,
+    column_to_drop_6 text,
+    column_to_drop_7 text,
     generated_int_col int GENERATED BY DEFAULT AS IDENTITY,
     generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY
 );
 INSERT INTO initially_local_schema_seq_test_with_initial_data.built_in_seq_test (id) SELECT i FROM generate_series(1, 5) AS i;
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN column_to_drop_1;
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN column_to_drop_2;
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN column_to_drop_4;
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN column_to_drop_6;
 ALTER TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test SET SCHEMA dist_schema_seq_test_with_initial_data;
 NOTICE:  Moving built_in_seq_test into distributed schema dist_schema_seq_test_with_initial_data
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$dist_schema_seq_test_with_initial_data.built_in_seq_test$$)
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN column_to_drop_3;
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN column_to_drop_5;
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN column_to_drop_7;
+-- all fails we cannot add serial-based columns as well as identity columns
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_smallserial_col smallserial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_serial_col serial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_bigserial_col bigserial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_smallint_col smallint GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  cannot execute ADD COLUMN commands involving identity columns when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_int_col int GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  cannot execute ADD COLUMN commands involving identity columns when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  cannot execute ADD COLUMN commands involving identity columns when metadata is synchronized to workers
+-- also, we cannot add a column and just alter its type to a serial-based one later, but normally Postgres allows altering the columns to identity columns later, but we don't
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_smallint_col smallint GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  cannot execute ADD COLUMN commands involving identity columns when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_int_col int GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  cannot execute ADD COLUMN commands involving identity columns when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  cannot execute ADD COLUMN commands involving identity columns when metadata is synchronized to workers
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_smallint_col smallint;
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ALTER COLUMN added_generated_smallint_col ADD GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_int_col int;
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ALTER COLUMN added_generated_int_col ADD GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ADD COLUMN added_generated_bigint_col bigint;
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test ALTER COLUMN added_generated_bigint_col ADD GENERATED BY DEFAULT AS IDENTITY;
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+-- let's drop them to as they're not useful now
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN added_generated_smallint_col;
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN added_generated_int_col;
+ALTER TABLE dist_schema_seq_test_with_initial_data.built_in_seq_test DROP COLUMN added_generated_bigint_col;
 -- check built-in sequences
 SELECT result FROM run_command_on_all_nodes(
 $$
@@ -1557,8 +1672,33 @@ CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (
     int_col_with_int_sequence int DEFAULT nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass),
     smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass)
 );
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_int_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence AS smallint;
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_int_col_with_bigint_sequence int DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_int_col_with_int_sequence int DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_int_col_int_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence'::regclass);
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence AS smallint;
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_altered_bigint_col_with_bigint_sequence bigint;
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ALTER COLUMN added_altered_bigint_col_with_bigint_sequence SET DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_altered_bigint_col_with_int_sequence bigint;
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ALTER COLUMN added_altered_bigint_col_with_int_sequence SET DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_altered_int_col_with_bigint_sequence int;
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ALTER COLUMN added_altered_int_col_with_bigint_sequence SET DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_altered_int_col_with_int_sequence int;
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ALTER COLUMN added_altered_int_col_with_int_sequence SET DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence'::regclass);
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ADD COLUMN added_altered_smallint_col_with_smallint_sequence smallint;
+ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test ALTER COLUMN added_altered_smallint_col_with_smallint_sequence SET DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence'::regclass);
 -- Check nextval sequences.
--- bigint_col_int_sequence should become a bigint sequence, see EnsureDistributedSequencesHaveOneType()
+-- bigint_col_int_sequence, added_bigint_col_int_sequence and added_altered_bigint_col_int_sequence should become bigint sequences, see EnsureDistributedSequencesHaveOneType()
 SELECT result FROM run_command_on_all_nodes(
 $$
 WITH sequence_info AS (
@@ -1568,7 +1708,17 @@ WITH sequence_info AS (
         'dist_schema_seq_test_without_initial_data.bigint_col_int_sequence',
         'dist_schema_seq_test_without_initial_data.int_col_bigint_sequence',
         'dist_schema_seq_test_without_initial_data.int_col_int_sequence',
-        'dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'
+        'dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence',
+        'dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence',
+        'dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence',
+        'dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence',
+        'dist_schema_seq_test_without_initial_data.added_int_col_int_sequence',
+        'dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence',
+        'dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence',
+        'dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence',
+        'dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence',
+        'dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence',
+        'dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence'
     ]) AS qualified_sequence_name(name)
 )
 SELECT jsonb_agg(
@@ -1585,11 +1735,11 @@ SELECT jsonb_agg(
 FROM sequence_info;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                result
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      result
 ---------------------------------------------------------------------
- [{"name": "dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_int_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 1, "start_value": 1}]
- [{"name": "dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_int_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
- [{"name": "dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_int_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
+ [{"name": "dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_int_sequence", "max_value": 9223372036854775807, "min_value": 1, "type_name": "bigint", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 1, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 1, "start_value": 1}]
+ [{"name": "dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_int_sequence", "max_value": 9570149208162305, "min_value": 9288674231451649, "type_name": "bigint", "last_value": 9288674231451649, "start_value": 9288674231451649}, {"name": "dist_schema_seq_test_without_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
+ [{"name": "dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.bigint_col_int_sequence", "max_value": 13510798882111489, "min_value": 13229323905400833, "type_name": "bigint", "last_value": 13229323905400833, "start_value": 13229323905400833}, {"name": "dist_schema_seq_test_without_initial_data.int_col_bigint_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.int_col_int_sequence", "max_value": 2147483647, "min_value": 1, "type_name": "integer", "last_value": 2147483647, "start_value": 1}, {"name": "dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence", "max_value": 32767, "min_value": 1, "type_name": "smallint", "last_value": 32767, "start_value": 1}]
 (3 rows)
 
 -- check nextval calls used in table definition
@@ -1598,11 +1748,11 @@ $$
 SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('dist_schema_seq_test_without_initial_data.nextval_test') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                    result
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   result
 ---------------------------------------------------------------------
- CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test OWNER TO postgres
- CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test OWNER TO postgres
- CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test OWNER TO postgres
+ CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass), added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence'::regclass), added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence'::regclass), added_int_col_with_bigint_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence'::regclass), added_int_col_with_int_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_int_col_int_sequence'::regclass), added_smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence'::regclass), added_altered_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence'::regclass), added_altered_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence'::regclass), added_altered_int_col_with_bigint_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence'::regclass), added_altered_int_col_with_int_sequence integer DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence'::regclass), added_altered_smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test OWNER TO postgres
+ CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass), added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence'::regclass), added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence'::regclass), added_int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence'::regclass), added_int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_int_col_int_sequence'::regclass), added_smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence'::regclass), added_altered_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence'::regclass), added_altered_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence'::regclass), added_altered_int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence'::regclass), added_altered_int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence'::regclass), added_altered_smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test OWNER TO postgres
+ CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (id integer, bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence'::regclass), bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_int_sequence'::regclass), int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_bigint_sequence'::regclass), int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass), smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass), added_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_bigint_sequence'::regclass), added_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_bigint_col_int_sequence'::regclass), added_int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_int_col_bigint_sequence'::regclass), added_int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_int_col_int_sequence'::regclass), added_smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_smallint_col_smallint_sequence'::regclass), added_altered_bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_bigint_sequence'::regclass), added_altered_bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.added_altered_bigint_col_int_sequence'::regclass), added_altered_int_col_with_bigint_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_bigint_sequence'::regclass), added_altered_int_col_with_int_sequence integer DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_altered_int_col_int_sequence'::regclass), added_altered_smallint_col_with_smallint_sequence smallint DEFAULT worker_nextval('dist_schema_seq_test_without_initial_data.added_altered_smallint_col_smallint_sequence'::regclass)) USING heap; ALTER TABLE dist_schema_seq_test_without_initial_data.nextval_test OWNER TO postgres
 (3 rows)
 
 -- Should succeed on all nodes as we don't try inserting column default values
@@ -1611,43 +1761,65 @@ $$
 SELECT result FROM run_command_on_all_nodes(
     $$
     WITH ins AS (
-    INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1) RETURNING *
+    INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1, DEFAULT, DEFAULT, 1, 1, 1, DEFAULT, DEFAULT, 1, 1, 1) RETURNING *
     )
     SELECT to_jsonb(ins) FROM ins;
     $$,
     parallel => false
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                                              result
+                                                                                                                                                                                                                                                                                                                                                                                      result
 ---------------------------------------------------------------------
- {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 1, "int_col_with_bigint_sequence": 1, "bigint_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1}
- {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 9288674231451649, "int_col_with_bigint_sequence": 1, "bigint_col_with_bigint_sequence": 9288674231451649, "smallint_col_with_smallint_sequence": 1}
- {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 13229323905400833, "int_col_with_bigint_sequence": 1, "bigint_col_with_bigint_sequence": 13229323905400833, "smallint_col_with_smallint_sequence": 1}
+ {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 1, "int_col_with_bigint_sequence": 1, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 1, "added_bigint_col_with_int_sequence": 1, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1, "added_bigint_col_with_bigint_sequence": 1, "added_altered_int_col_with_int_sequence": 1, "added_smallint_col_with_smallint_sequence": 1, "added_altered_bigint_col_with_int_sequence": 1, "added_altered_int_col_with_bigint_sequence": 1, "added_altered_bigint_col_with_bigint_sequence": 1, "added_altered_smallint_col_with_smallint_sequence": 1}
+ {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 9288674231451649, "int_col_with_bigint_sequence": 1, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 9288674231451649, "added_bigint_col_with_int_sequence": 9288674231451649, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1, "added_bigint_col_with_bigint_sequence": 9288674231451649, "added_altered_int_col_with_int_sequence": 1, "added_smallint_col_with_smallint_sequence": 1, "added_altered_bigint_col_with_int_sequence": 9288674231451649, "added_altered_int_col_with_bigint_sequence": 1, "added_altered_bigint_col_with_bigint_sequence": 9288674231451649, "added_altered_smallint_col_with_smallint_sequence": 1}
+ {"id": 10, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 13229323905400833, "int_col_with_bigint_sequence": 1, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 13229323905400833, "added_bigint_col_with_int_sequence": 13229323905400833, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1, "added_bigint_col_with_bigint_sequence": 13229323905400833, "added_altered_int_col_with_int_sequence": 1, "added_smallint_col_with_smallint_sequence": 1, "added_altered_bigint_col_with_int_sequence": 13229323905400833, "added_altered_int_col_with_bigint_sequence": 1, "added_altered_bigint_col_with_bigint_sequence": 13229323905400833, "added_altered_smallint_col_with_smallint_sequence": 1}
 (3 rows)
 
 -- will fail on workers but should still succeed on the coordinator
 SELECT result FROM run_command_on_all_nodes(
     $$
     WITH ins AS (
-    INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
+    INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
     )
     SELECT to_jsonb(ins) FROM ins;
     $$,
     parallel => false
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
-                                                                                              result
+                                                                                                                                                                                                                                                                                                                                      result
 ---------------------------------------------------------------------
- {"id": 11, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 2, "int_col_with_bigint_sequence": 1, "bigint_col_with_bigint_sequence": 2, "smallint_col_with_smallint_sequence": 1}
+ {"id": 11, "int_col_with_int_sequence": 1, "bigint_col_with_int_sequence": 2, "int_col_with_bigint_sequence": 1, "added_int_col_with_int_sequence": 1, "bigint_col_with_bigint_sequence": 2, "added_bigint_col_with_int_sequence": 2, "added_int_col_with_bigint_sequence": 1, "smallint_col_with_smallint_sequence": 1, "added_bigint_col_with_bigint_sequence": 2, "added_altered_int_col_with_int_sequence": 1, "added_smallint_col_with_smallint_sequence": 1, "added_altered_bigint_col_with_int_sequence": 2, "added_altered_int_col_with_bigint_sequence": 1, "added_altered_bigint_col_with_bigint_sequence": 2, "added_altered_smallint_col_with_smallint_sequence": 1}
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
  ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 (3 rows)
 
-SELECT * FROM dist_schema_seq_test_without_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6;
- id | bigint_col_with_bigint_sequence | bigint_col_with_int_sequence | int_col_with_bigint_sequence | int_col_with_int_sequence | smallint_col_with_smallint_sequence
+-- all fail on workers, specifically test int / smallint columns added later
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1)$$, parallel => false);
+                                                    result
 ---------------------------------------------------------------------
- 10 |                               1 |                            1 |                            1 |                         1 |                                   1
- 10 |                9288674231451649 |             9288674231451649 |                            1 |                         1 |                                   1
- 10 |               13229323905400833 |            13229323905400833 |                            1 |                         1 |                                   1
- 11 |                               2 |                            2 |                            1 |                         1 |                                   1
+ ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+ ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+(2 rows)
+
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, 1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1)$$, parallel => false);
+                                                    result
+---------------------------------------------------------------------
+ ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+ ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+(2 rows)
+
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, 1, 1, 1, DEFAULT, 1, 1, 1, 1, 1, 1, 1)$$, parallel => false);
+                                                    result
+---------------------------------------------------------------------
+ ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+ ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+(2 rows)
+
+SELECT * FROM dist_schema_seq_test_without_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16;
+ id | bigint_col_with_bigint_sequence | bigint_col_with_int_sequence | int_col_with_bigint_sequence | int_col_with_int_sequence | smallint_col_with_smallint_sequence | added_bigint_col_with_bigint_sequence | added_bigint_col_with_int_sequence | added_int_col_with_bigint_sequence | added_int_col_with_int_sequence | added_smallint_col_with_smallint_sequence | added_altered_bigint_col_with_bigint_sequence | added_altered_bigint_col_with_int_sequence | added_altered_int_col_with_bigint_sequence | added_altered_int_col_with_int_sequence | added_altered_smallint_col_with_smallint_sequence
+---------------------------------------------------------------------
+ 10 |                               1 |                            1 |                            1 |                         1 |                                   1 |                                     1 |                                  1 |                                  1 |                               1 |                                         1 |                                             1 |                                          1 |                                          1 |                                       1 |                                                 1
+ 10 |                9288674231451649 |             9288674231451649 |                            1 |                         1 |                                   1 |                      9288674231451649 |                   9288674231451649 |                                  1 |                               1 |                                         1 |                              9288674231451649 |                           9288674231451649 |                                          1 |                                       1 |                                                 1
+ 10 |               13229323905400833 |            13229323905400833 |                            1 |                         1 |                                   1 |                     13229323905400833 |                  13229323905400833 |                                  1 |                               1 |                                         1 |                             13229323905400833 |                          13229323905400833 |                                          1 |                                       1 |                                                 1
+ 11 |                               2 |                            2 |                            1 |                         1 |                                   1 |                                     2 |                                  2 |                                  1 |                               1 |                                         1 |                                             2 |                                          2 |                                          1 |                                       1 |                                                 1
 (4 rows)
 
 -- create a table with built-in sequences under dist_schema_seq_test_without_initial_data
