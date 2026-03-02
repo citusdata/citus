@@ -72,6 +72,7 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 extern uint32 ActivePrimaryNonCoordinatorNodeCount(void);
 extern uint32 ActiveReadableNodeCount(void);
 extern List * ActivePrimaryNonCoordinatorNodeList(LOCKMODE lockMode);
+extern List * ActivePrimaryRemoteNonCoordinatorNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryRemoteNodeList(LOCKMODE lockMode);
 extern bool CoordinatorAddedAsWorkerNode(void);

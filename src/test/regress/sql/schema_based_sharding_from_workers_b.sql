@@ -2,6 +2,15 @@ SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
+-- Remove the workers and add them with the groupids that we would assign at this point
+-- of multi_1_schedule so when we run this test file individually, we still produce
+-- the same sequence values when inserting into distributed tables using sequences from
+-- workers.
+SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port, groupid => 33);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port, groupid => 47);
+
 SET citus.next_shard_id TO 2090000;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
@@ -143,6 +152,27 @@ SELECT create_reference_table('regular_schema.reference_table');
 CREATE TABLE regular_schema.distributed_table (id int, text_col text);
 SELECT create_distributed_table('regular_schema.distributed_table', 'id');
 INSERT INTO regular_schema.distributed_table SELECT i, 'text_' || i FROM generate_series(1, 1000) AS i;
+
+CREATE OR REPLACE FUNCTION get_sequence_info(seq regclass)
+RETURNS TABLE (
+    type_name text,
+    min_value bigint,
+    max_value bigint,
+    start_value bigint,
+    last_value bigint
+)
+AS $func$
+DECLARE
+    v_last_value bigint;
+BEGIN
+    EXECUTE format('SELECT last_value FROM %s', seq::regclass) INTO v_last_value;
+
+    RETURN QUERY
+    SELECT seqtypid::regtype::text, seqmin, seqmax, seqstart, v_last_value
+    FROM pg_sequence
+    WHERE seqrelid = seq;
+END;
+$func$ LANGUAGE plpgsql;
 
 \c - - - :worker_1_port
 
@@ -300,7 +330,7 @@ BEGIN;
     SELECT * FROM tenant_8.table_1 ORDER BY c;
 
     -- cleanup the rows that were added to test the default behavior
-    DELETE FROM tenant_8.table_1 WHERE "b" = 'test' AND a > 1;
+    DELETE FROM tenant_8.table_1 WHERE "b" = 'test' AND a > 9288674231451649;
 COMMIT;
 
 -- alter column type
@@ -353,7 +383,7 @@ ALTER TABLE tenant_8.table_1 SET (autovacuum_enabled = false);
 
 BEGIN;
     -- test multiple subcommands
-    ALTER TABLE tenant_8.table_1 ADD COLUMN int_column1 INTEGER, DROP COLUMN d, ADD COLUMN e int;
+    ALTER TABLE tenant_8.table_1 ADD COLUMN int_column1 INTEGER, DROP COLUMN d, ADD COLUMN e bigint;
 
     UPDATE tenant_8.table_1 SET e = c * 10;
 
@@ -380,12 +410,7 @@ COMMIT;
 -- make sure that the shell table definition is same on all nodes
 SELECT result FROM run_command_on_all_nodes(
 $$
-SELECT regexp_replace(
-    string_agg(ddl_events, '; '),
-    -- TODOTASK: suppress sequence ranges for now, until we fix the code to properly assign them on all nodes when creating a distributed-schema table from a worker
-    'INCREMENT BY (\d+) MINVALUE (\d+) MAXVALUE (\d+) START WITH (\d+) CACHE (\d+) ',
-    'INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB '
-) FROM master_get_table_ddl_events('tenant_8.table_2') AS ddl_events;
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_8.table_2') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 
@@ -492,7 +517,6 @@ SELECT result FROM run_command_on_all_nodes($$
 $$);
 
 BEGIN;
-
     CREATE SCHEMA tenant_9;
 
     CREATE SEQUENCE tenant_9.seq_1 START 5000 INCREMENT 5;
@@ -519,12 +543,7 @@ COMMIT;
 
 SELECT result FROM run_command_on_all_nodes(
 $$
-SELECT regexp_replace(
-    string_agg(ddl_events, '; '),
-    -- TODOTASK: suppress sequence ranges for now, until we fix the code to properly assign them on all nodes when creating a distributed-schema table from a worker
-    'INCREMENT BY (\d+) MINVALUE (\d+) MAXVALUE (\d+) START WITH (\d+) CACHE (\d+) ',
-    'INCREMENT BY XXX MINVALUE YYY MAXVALUE ZZZ START WITH AAA CACHE BBB '
-) FROM master_get_table_ddl_events('tenant_9.table_1') AS ddl_events;
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.table_1') AS ddl_events;
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 
@@ -920,13 +939,380 @@ SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('tenant_9.t
 $$
 ) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
 
+-- Considering the various ways a table can use sequences, test if we
+-- properly adjust sequence min / max values on all worker nodes,
+-- including the current one, as well as testing if we sync last_value
+-- to the coordinator.
+
+SET citus.enable_schema_based_sharding TO OFF;
+CREATE SCHEMA initially_local_schema_seq_test_with_initial_data;
+
+SET citus.enable_schema_based_sharding TO ON;
+
+-- schema to move tables under initially_local_schema_seq_test_with_initial_data into
+CREATE SCHEMA dist_schema_seq_test_with_initial_data;
+
+CREATE SCHEMA dist_schema_seq_test_without_initial_data;
+
+-- create sequences and a table under initially_local_schema_seq_test_with_initial_data, and move the table to dist_schema_seq_test_with_initial_data
+
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.bigint_col_bigint_sequence AS bigint;
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.bigint_col_int_sequence AS int;
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.int_col_bigint_sequence AS bigint;
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.int_col_int_sequence AS int;
+CREATE SEQUENCE initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence AS smallint;
+
+CREATE TABLE initially_local_schema_seq_test_with_initial_data.nextval_test (
+    id int,
+    bigint_col_with_bigint_sequence bigint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.bigint_col_bigint_sequence'::regclass),
+    bigint_col_with_int_sequence bigint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.bigint_col_int_sequence'::regclass),
+    int_col_with_bigint_sequence int DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.int_col_bigint_sequence'::regclass),
+    int_col_with_int_sequence int DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.int_col_int_sequence'::regclass),
+    smallint_col_with_smallint_sequence smallint DEFAULT nextval('initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'::regclass)
+);
+
+-- Mark some of the sequences as owned by the columns.
+-- Note that, marking a sequence as owned by a table column will cause
+-- automatically moving the sequence to the same schema with the table
+-- when moving the table to another schema.
+ALTER SEQUENCE initially_local_schema_seq_test_with_initial_data.bigint_col_bigint_sequence OWNED BY initially_local_schema_seq_test_with_initial_data.nextval_test.bigint_col_with_bigint_sequence;
+ALTER SEQUENCE initially_local_schema_seq_test_with_initial_data.bigint_col_int_sequence OWNED BY initially_local_schema_seq_test_with_initial_data.nextval_test.bigint_col_with_int_sequence;
+ALTER SEQUENCE initially_local_schema_seq_test_with_initial_data.int_col_bigint_sequence OWNED BY initially_local_schema_seq_test_with_initial_data.nextval_test.int_col_with_bigint_sequence;
+
+INSERT INTO initially_local_schema_seq_test_with_initial_data.nextval_test (id) SELECT i FROM generate_series(1, 5) AS i;
+
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.nextval_test SET SCHEMA dist_schema_seq_test_with_initial_data;
+
+-- Check nextval sequences.
+-- bigint_col_int_sequence should become a bigint sequence, see EnsureDistributedSequencesHaveOneType()
+SELECT result FROM run_command_on_all_nodes(
+$$
+WITH sequence_info AS (
+    SELECT name::regclass::text, (get_sequence_info(name::regclass)).*
+    FROM UNNEST(ARRAY[
+        'dist_schema_seq_test_with_initial_data.bigint_col_bigint_sequence',
+        'dist_schema_seq_test_with_initial_data.bigint_col_int_sequence',
+        'dist_schema_seq_test_with_initial_data.int_col_bigint_sequence',
+        'initially_local_schema_seq_test_with_initial_data.int_col_int_sequence',
+        'initially_local_schema_seq_test_with_initial_data.smallint_col_smallint_sequence'
+    ]) AS qualified_sequence_name(name)
+)
+SELECT jsonb_agg(
+    jsonb_build_object(
+        'name', name,
+        'type_name', type_name,
+        'start_value', start_value,
+        'last_value', last_value,
+        'min_value', min_value,
+        'max_value', max_value
+    )
+    ORDER BY name
+)
+FROM sequence_info;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- check nextval calls used in table definition
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('dist_schema_seq_test_with_initial_data.nextval_test') AS ddl_events;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- Should succeed on all nodes as we don't try inserting column default values
+-- for the columns that are using int / smallint based sequences.
+-- Doing so is okay from the coordinator but would cause an error on workers.
+SELECT result FROM run_command_on_all_nodes(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$,
+    parallel => false
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- succeeds on the coordinator
+SELECT result FROM run_command_on_coordinator(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$
+);
+
+-- all fail on workers
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, DEFAULT, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, DEFAULT, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.nextval_test VALUES (1, 1, 1, 1, 1, DEFAULT)$$, parallel => false);
+
+SELECT * FROM dist_schema_seq_test_with_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6;
+
+DROP TABLE dist_schema_seq_test_with_initial_data.nextval_test;
+
+-- After dropping the table, make sure that only the sequences for which
+-- we didn't execute "alter sequence ... owned by column" are left.
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT array_agg(sequencename ORDER BY sequencename) AS sequences
+FROM pg_sequences
+WHERE
+    schemaname IN (
+        'initially_local_schema_seq_test_with_initial_data',
+        'dist_schema_seq_test_with_initial_data'
+    ) AND
+    sequencename IN (
+        'bigint_col_bigint_sequence',
+        'bigint_col_int_sequence',
+        'int_col_bigint_sequence',
+        'int_col_int_sequence',
+        'smallint_col_smallint_sequence'
+    );
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- create a table with built-in sequences under initially_local_schema_seq_test_with_initial_data, and move the table to dist_schema_seq_test_with_initial_data
+
+CREATE TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test (
+    id int,
+    smallserial_col smallserial,
+    serial_col serial,
+    bigserial_col bigserial,
+    generated_smallint_col smallint GENERATED BY DEFAULT AS IDENTITY,
+    generated_int_col int GENERATED BY DEFAULT AS IDENTITY,
+    generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY
+);
+
+INSERT INTO initially_local_schema_seq_test_with_initial_data.built_in_seq_test (id) SELECT i FROM generate_series(1, 5) AS i;
+
+ALTER TABLE initially_local_schema_seq_test_with_initial_data.built_in_seq_test SET SCHEMA dist_schema_seq_test_with_initial_data;
+
+-- check built-in sequences
+SELECT result FROM run_command_on_all_nodes(
+$$
+WITH sequence_info AS (
+    SELECT oid::regclass::text AS name, (get_sequence_info(oid)).*
+    FROM (
+        SELECT objid
+        FROM pg_depend d
+        JOIN pg_class c ON c.oid = d.objid
+        WHERE d.refobjid = 'dist_schema_seq_test_with_initial_data.built_in_seq_test'::regclass AND
+              c.relkind = 'S'
+    ) sequence(oid)
+)
+SELECT jsonb_agg(
+    jsonb_build_object(
+        'name', name,
+        'type_name', type_name,
+        'start_value', start_value,
+        'last_value', last_value,
+        'min_value', min_value,
+        'max_value', max_value
+    )
+    ORDER BY name
+)
+FROM sequence_info;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- check nextval calls used in table definition
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('dist_schema_seq_test_with_initial_data.built_in_seq_test') AS ddl_events;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- Should succeed on all nodes as we don't try inserting column default values
+-- for the columns that are using int / smallint based sequences.
+-- Doing so is okay from the coordinator but would cause an error on workers.
+SELECT result FROM run_command_on_all_nodes(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_with_initial_data.built_in_seq_test VALUES (10, 1, 1, 1, 1, 1, DEFAULT) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$,
+    parallel => false
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- succeeds on the coordinator
+SELECT result FROM run_command_on_coordinator(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_with_initial_data.built_in_seq_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$
+);
+
+-- all fail on workers
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.built_in_seq_test VALUES (1, DEFAULT, 1, 1, 1, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.built_in_seq_test VALUES (1, 1, DEFAULT, 1, 1, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.built_in_seq_test VALUES (1, 1, 1, 1, DEFAULT, 1, 1)$$, parallel => false);
+SELECT result FROM run_command_on_workers($$INSERT INTO dist_schema_seq_test_with_initial_data.built_in_seq_test VALUES (1, 1, 1, 1, 1, DEFAULT, 1)$$, parallel => false);
+
+SELECT * FROM dist_schema_seq_test_with_initial_data.built_in_seq_test ORDER BY 1, 2, 3, 4, 5, 6, 7;
+
+-- create sequences and a table under dist_schema_seq_test_without_initial_data
+
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.bigint_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.int_col_bigint_sequence AS bigint;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.int_col_int_sequence AS int;
+CREATE SEQUENCE dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence AS smallint;
+
+CREATE TABLE dist_schema_seq_test_without_initial_data.nextval_test (
+    id int,
+    bigint_col_with_bigint_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence'::regclass),
+    bigint_col_with_int_sequence bigint DEFAULT nextval('dist_schema_seq_test_without_initial_data.bigint_col_int_sequence'::regclass),
+    int_col_with_bigint_sequence int DEFAULT nextval('dist_schema_seq_test_without_initial_data.int_col_bigint_sequence'::regclass),
+    int_col_with_int_sequence int DEFAULT nextval('dist_schema_seq_test_without_initial_data.int_col_int_sequence'::regclass),
+    smallint_col_with_smallint_sequence smallint DEFAULT nextval('dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'::regclass)
+);
+
+-- Check nextval sequences.
+-- bigint_col_int_sequence should become a bigint sequence, see EnsureDistributedSequencesHaveOneType()
+SELECT result FROM run_command_on_all_nodes(
+$$
+WITH sequence_info AS (
+    SELECT name::regclass::text, (get_sequence_info(name::regclass)).*
+    FROM UNNEST(ARRAY[
+        'dist_schema_seq_test_without_initial_data.bigint_col_bigint_sequence',
+        'dist_schema_seq_test_without_initial_data.bigint_col_int_sequence',
+        'dist_schema_seq_test_without_initial_data.int_col_bigint_sequence',
+        'dist_schema_seq_test_without_initial_data.int_col_int_sequence',
+        'dist_schema_seq_test_without_initial_data.smallint_col_smallint_sequence'
+    ]) AS qualified_sequence_name(name)
+)
+SELECT jsonb_agg(
+    jsonb_build_object(
+        'name', name,
+        'type_name', type_name,
+        'start_value', start_value,
+        'last_value', last_value,
+        'min_value', min_value,
+        'max_value', max_value
+    )
+    ORDER BY name
+)
+FROM sequence_info;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- check nextval calls used in table definition
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('dist_schema_seq_test_without_initial_data.nextval_test') AS ddl_events;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- Should succeed on all nodes as we don't try inserting column default values
+-- for the columns that are using int / smallint based sequences.
+-- Doing so is okay from the coordinator but would cause an error on workers.
+SELECT result FROM run_command_on_all_nodes(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (10, DEFAULT, DEFAULT, 1, 1, 1) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$,
+    parallel => false
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- will fail on workers but should still succeed on the coordinator
+SELECT result FROM run_command_on_all_nodes(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_without_initial_data.nextval_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$,
+    parallel => false
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+SELECT * FROM dist_schema_seq_test_without_initial_data.nextval_test ORDER BY 1, 2, 3, 4, 5, 6;
+
+-- create a table with built-in sequences under dist_schema_seq_test_without_initial_data
+
+CREATE TABLE dist_schema_seq_test_without_initial_data.built_in_seq_test (
+    id int,
+    smallserial_col smallserial,
+    serial_col serial,
+    bigserial_col bigserial,
+    generated_smallint_col smallint GENERATED BY DEFAULT AS IDENTITY,
+    generated_int_col int GENERATED BY DEFAULT AS IDENTITY,
+    generated_bigint_col bigint GENERATED BY DEFAULT AS IDENTITY
+);
+
+-- check built-in sequences
+SELECT result FROM run_command_on_all_nodes(
+$$
+WITH sequence_info AS (
+    SELECT oid::regclass::text AS name, (get_sequence_info(oid)).*
+    FROM (
+        SELECT objid
+        FROM pg_depend d
+        JOIN pg_class c ON c.oid = d.objid
+        WHERE d.refobjid = 'dist_schema_seq_test_without_initial_data.built_in_seq_test'::regclass AND
+              c.relkind = 'S'
+    ) sequence(oid)
+)
+SELECT jsonb_agg(
+    jsonb_build_object(
+        'name', name,
+        'type_name', type_name,
+        'start_value', start_value,
+        'last_value', last_value,
+        'min_value', min_value,
+        'max_value', max_value
+    )
+    ORDER BY name
+)
+FROM sequence_info;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- check nextval calls used in table definition
+SELECT result FROM run_command_on_all_nodes(
+$$
+SELECT string_agg(ddl_events, '; ') FROM master_get_table_ddl_events('dist_schema_seq_test_without_initial_data.built_in_seq_test') AS ddl_events;
+$$
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- Should succeed on all nodes as we don't try inserting column default values
+-- for the columns that are using int / smallint based sequences.
+-- Doing so is okay from the coordinator but would cause an error on workers.
+SELECT result FROM run_command_on_all_nodes(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_without_initial_data.built_in_seq_test VALUES (10, 1, 1, DEFAULT, 1, 1, DEFAULT) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$,
+    parallel => false
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+-- will fail on workers but should still succeed on the coordinator
+SELECT result FROM run_command_on_all_nodes(
+    $$
+    WITH ins AS (
+    INSERT INTO dist_schema_seq_test_without_initial_data.built_in_seq_test VALUES (11, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT) RETURNING *
+    )
+    SELECT to_jsonb(ins) FROM ins;
+    $$,
+    parallel => false
+) JOIN pg_dist_node USING (nodeid) ORDER BY nodeport;
+
+SELECT * FROM dist_schema_seq_test_without_initial_data.built_in_seq_test ORDER BY 1, 2, 3, 4, 5, 6, 7;
+
 -- cleanup
 \c - - - :master_port
 
 SET client_min_messages TO WARNING;
-DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8, tenant_9, alter_table_add_column CASCADE;
+DROP SCHEMA tenant_1, tenant_2, tenant_3, tenant_4, tenant_5, tenant_6, tenant_7, tenant_8, tenant_9, alter_table_add_column, initially_local_schema_seq_test_with_initial_data, dist_schema_seq_test_with_initial_data, initially_local_schema_seq_test_with_initial_data, dist_schema_seq_test_without_initial_data CASCADE;
 DROP SCHEMA regular_schema, alter_table_add_column_other_schema, regular_schema_worker_1, regular_schema_worker_2, regular_schema_worker_3, regular_schema_worker_4, regular_schema_worker_5 CASCADE;
-DROP FUNCTION create_citus_local_with_data(text);
+DROP FUNCTION create_citus_local_with_data(text), get_sequence_info(regclass);
 DROP SEQUENCE dist_seq;
 DROP ROLE tenant_9_owner;
 ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
