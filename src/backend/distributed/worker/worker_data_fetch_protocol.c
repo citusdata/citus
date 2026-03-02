@@ -65,9 +65,6 @@
 
 /* Local functions forward declarations */
 static bool check_log_statement(List *stmt_list);
-static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
-								Oid sequenceTypeId);
-static void SetLocalEnableDDLPropagation(bool state);
 
 
 /* exports for SQL callable functions */
@@ -438,29 +435,16 @@ AdjustNextValColumnDefaultsOnLocalWorker(Oid relationId)
 		 * https://github.com/citusdata/citus/issues/5126
 		 */
 		bool missingOk = false;
+		bool forceUseNextVal = false;
 		char *command =
 			GetAlterColumnWithNextvalDefaultCmd(seqOid, relationId,
 												NameStr(attributeForm->attname),
-												missingOk);
+												missingOk, forceUseNextVal);
 
 		ExecuteAndLogUtilityCommand(command);
 	}
 
 	SetLocalEnableDDLPropagation(oldEnableDDLPropagation);
-}
-
-
-/*
- * SetLocalEnableDDLPropagation is simply a C interface for setting
- * the following:
- *      SET LOCAL citus.enable_ddl_propagation = 'on'|'off';
- */
-static void
-SetLocalEnableDDLPropagation(bool state)
-{
-	set_config_option("citus.enable_ddl_propagation", state == true ? "on" : "off",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
 
@@ -725,7 +709,7 @@ check_log_statement(List *statementList)
  * This is to ensure every group of workers passes out values from a unique range,
  * and therefore that all values generated for the sequence are globally unique.
  */
-static void
+void
 AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 					Oid sequenceTypeId)
 {

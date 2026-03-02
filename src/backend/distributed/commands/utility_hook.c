@@ -1586,6 +1586,20 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 
 
 /*
+ * SetLocalEnableDDLPropagation is simply a C interface for setting
+ * the following:
+ *      SET LOCAL citus.enable_ddl_propagation = 'on'|'off';
+ */
+void
+SetLocalEnableDDLPropagation(bool state)
+{
+	set_config_option("citus.enable_ddl_propagation", state == true ? "on" : "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
+/*
  * AlterTableInProgress returns true if we're processing an ALTER TABLE command
  * right now.
  */

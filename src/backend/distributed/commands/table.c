@@ -54,6 +54,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 
 
@@ -124,7 +125,7 @@ static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
 
 static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												char *colname, TypeName *typeName,
-												bool ifNotExists);
+												bool ifNotExists, bool forceUseNextVal);
 static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 														  relationId);
 
@@ -2636,10 +2637,47 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 	}
 
-	/* for the new sequences coming with this ALTER TABLE statement */
-	bool needMetadataSyncForNewSequences = false;
-
-	char *alterTableDefaultNextvalCmd = NULL;
+	/*
+	 * If this is an ALTER TABLE ADD COLUMN .. DEFAULT nextval('..') or
+	 * an ALTER TABLE ALTER COLUMN .. SET DEFAULT nextval('..') command,
+	 * we need to adjust the sequence ranges on all workers, and since
+	 * EnsureAllObjectDependenciesExistOnAllNodes() already does so for
+	 * all remote nodes when propagating the sequence, there is nothing
+	 * that needs to be additionally done from this perspective when we
+	 * are on the coordinator because in that case all remote nodes are
+	 * workers anyways.
+	 *
+	 * For this reason, we also we want to do the same for the local node
+	 * if it's not the coordinator. So sequenceOidToAdjustRangesForLocalWorker
+	 * is set only when we're on a worker so that we can adjust sequence
+	 * ranges for the local worker as well.
+	 *
+	 * For such commands, we also need to adjust nextval default command
+	 * for the column that uses the sequence on all workers.
+	 * defaultNextvalCmdForRemoteWorkers already does all the work for
+	 * remote workers, i.e., alters the column or adds it in a way that
+	 * uses appropriate function call as column default expression, so
+	 * it's sufficient when we're on the coordinator.
+	 *
+	 * However, when we're on a worker, we also need to take such actions
+	 * on coordinator as well, so it's when defaultNextvalCmdForCoordinator
+	 * becomes useful, which alters the column or adds it in a way that
+	 * uses appropriate function call as column default expression. And for
+	 * the local worker, we also need to take such actions as well, but in
+	 * that case, the original DDL has already been executed on the local
+	 * node, so this means that the column is either just added or is an
+	 * existing column that's being altered now. So, in any case, we only
+	 * need to alter the column default to use appropriate function call
+	 * for both types of DDLs, so it's when defaultNextvalCmdForLocalWorker
+	 * becomes useful.
+	 *
+	 * Note that for any of these commands, we don't allow issuing them
+	 * together with other subcommands, see ErrorIfUnsupportedAlterTableStmt().
+	 */
+	char *defaultNextvalCmdForRemoteWorkers = NULL;
+	char *defaultNextvalCmdForCoordinator = NULL;
+	char *defaultNextvalCmdForLocalWorker = NULL;
+	Oid sequenceOidToAdjustRangesForLocalWorker = InvalidOid;
 
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
@@ -2722,8 +2760,11 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 							{
 								if (ShouldSyncTableMetadata(relationId))
 								{
-									needMetadataSyncForNewSequences = true;
-									alterTableDefaultNextvalCmd =
+									Assert(list_length(commandList) == 1 &&
+										   list_length(columnConstraints) == 1);
+
+									bool forceUseNextVal = false;
+									defaultNextvalCmdForRemoteWorkers =
 										GetAddColumnWithNextvalDefaultCmd(seqOid,
 																		  relationId,
 																		  columnDefinition
@@ -2731,7 +2772,33 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 																		  columnDefinition
 																		  ->typeName,
 																		  command->
-																		  missing_ok);
+																		  missing_ok,
+																		  forceUseNextVal)
+									;
+
+									if (!IsCoordinator())
+									{
+										forceUseNextVal = true;
+										defaultNextvalCmdForCoordinator =
+											GetAddColumnWithNextvalDefaultCmd(seqOid,
+																			  relationId,
+																			  columnDefinition
+																			  ->colname,
+																			  columnDefinition
+																			  ->typeName,
+																			  command->
+																			  missing_ok,
+																			  forceUseNextVal);
+
+										forceUseNextVal = false;
+										defaultNextvalCmdForLocalWorker =
+											GetAlterColumnWithNextvalDefaultCmd(
+												seqOid, relationId, columnDefinition->
+												colname,
+												command->missing_ok, forceUseNextVal);
+
+										sequenceOidToAdjustRangesForLocalWorker = seqOid;
+									}
 								}
 							}
 						}
@@ -2759,33 +2826,90 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				{
 					if (ShouldSyncTableMetadata(relationId))
 					{
-						needMetadataSyncForNewSequences = true;
+						Assert(list_length(commandList) == 1);
+
 						bool missingTableOk = false;
-						alterTableDefaultNextvalCmd = GetAlterColumnWithNextvalDefaultCmd(
-							seqOid, relationId, command->name, missingTableOk);
+						bool forceUseNextVal = false;
+						defaultNextvalCmdForRemoteWorkers =
+							GetAlterColumnWithNextvalDefaultCmd(
+								seqOid, relationId, command->name,
+								missingTableOk, forceUseNextVal);
+
+						if (!IsCoordinator())
+						{
+							forceUseNextVal = true;
+							defaultNextvalCmdForCoordinator =
+								GetAlterColumnWithNextvalDefaultCmd(
+									seqOid, relationId, command->name,
+									missingTableOk, forceUseNextVal);
+
+							forceUseNextVal = false;
+							defaultNextvalCmdForLocalWorker =
+								GetAlterColumnWithNextvalDefaultCmd(
+									seqOid, relationId, command->name,
+									missingTableOk, forceUseNextVal);
+
+							sequenceOidToAdjustRangesForLocalWorker = seqOid;
+						}
 					}
 				}
 			}
 		}
 	}
 
-	if (needMetadataSyncForNewSequences)
+	/*
+	 * It's easy to retrieve the sequence id to create the proper commands
+	 * in postprocess, after the dependency between the sequence and the table
+	 * has been created. We already return ddlJobs in PreprocessAlterTableStmt,
+	 * hence we can't return ddlJobs in PostprocessAlterTableStmt.
+	 * That's why we execute defaultNextvalCmdForRemoteWorkers and
+	 * defaultNextvalCmdForCoordinator here instead of in ExecuteDistributedDDLJob().
+	 */
+
+	if (defaultNextvalCmdForRemoteWorkers)
 	{
 		/* prevent recursive propagation */
-		SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToRemoteWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
-		/*
-		 * It's easy to retrieve the sequence id to create the proper commands
-		 * in postprocess, after the dependency between the sequence and the table
-		 * has been created. We already return ddlJobs in PreprocessAlterTableStmt,
-		 * hence we can't return ddlJobs in PostprocessAlterTableStmt.
-		 * That's why we execute the following here instead of
-		 * in ExecuteDistributedDDLJob
-		 */
-		SendCommandToRemoteNodesWithMetadata(alterTableDefaultNextvalCmd);
+		SendCommandToRemoteWorkersWithMetadata(defaultNextvalCmdForRemoteWorkers);
 
-		SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
+		SendCommandToRemoteWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
+
+	if (defaultNextvalCmdForCoordinator)
+	{
+		/* prevent recursive propagation */
+		SendCommandToCoordinator(DISABLE_DDL_PROPAGATION);
+
+		SendCommandToCoordinator(defaultNextvalCmdForCoordinator);
+
+		SendCommandToCoordinator(ENABLE_DDL_PROPAGATION);
+	}
+
+	/* before executing commands for the local node, make sure to prevent recursive propagation */
+	bool oldEnableDDLPropagation = EnableDDLPropagation;
+	SetLocalEnableDDLPropagation(false);
+
+	if (OidIsValid(sequenceOidToAdjustRangesForLocalWorker))
+	{
+		Oid sequenceSchemaOid =
+			get_rel_namespace(sequenceOidToAdjustRangesForLocalWorker);
+		char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
+		char *sequenceName = get_rel_name(sequenceOidToAdjustRangesForLocalWorker);
+		Oid sequenceTypeId = pg_get_sequencedef(sequenceOidToAdjustRangesForLocalWorker)->
+							 seqtypid;
+
+		AlterSequenceMinMax(sequenceOidToAdjustRangesForLocalWorker, sequenceSchemaName,
+							sequenceName,
+							sequenceTypeId);
+	}
+
+	if (defaultNextvalCmdForLocalWorker)
+	{
+		ExecuteAndLogUtilityCommand(defaultNextvalCmdForLocalWorker);
+	}
+
+	SetLocalEnableDDLPropagation(oldEnableDDLPropagation);
 }
 
 
@@ -2949,17 +3073,22 @@ get_attrdef_oid(Oid relationId, AttrNumber attnum)
 /*
  * GetAlterColumnWithNextvalDefaultCmd returns a string representing:
  * ALTER TABLE ALTER COLUMN .. SET DEFAULT nextval()
- * If sequence type is not bigint, we use worker_nextval() instead of nextval().
+ *
+ * If sequence type is not bigint, we use worker_nextval() instead of nextval(),
+ * unless forceUseNextVal is set to true; otherwise, we always use nextval()
+ * for the default expression.
+ *
  */
 char *
-GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname, bool
-									missingTableOk)
+GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname,
+									bool missingTableOk, bool forceUseNextVal)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	char *nextvalFunctionName = "nextval";
-	bool useWorkerNextval = (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
+	bool useWorkerNextval =
+		!forceUseNextVal && (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
 	if (useWorkerNextval)
 	{
 		/*
@@ -2994,17 +3123,22 @@ GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colna
 /*
  * GetAddColumnWithNextvalDefaultCmd returns a string representing:
  * ALTER TABLE ADD COLUMN .. DEFAULT nextval()
- * If sequence type is not bigint, we use worker_nextval() instead of nextval().
+ *
+ * If sequence type is not bigint, we use worker_nextval() instead of nextval(),
+ * unless forceUseNextVal is set to true; otherwise, we always use nextval()
+ * for the default expression.
  */
 static char *
 GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname,
-								  TypeName *typeName, bool ifNotExists)
+								  TypeName *typeName, bool ifNotExists,
+								  bool forceUseNextVal)
 {
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	char *nextvalFunctionName = "nextval";
-	bool useWorkerNextval = (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
+	bool useWorkerNextval =
+		!forceUseNextVal && (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
 	if (useWorkerNextval)
 	{
 		/*
@@ -3351,7 +3485,13 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						{
 							/*
 							 * We currently don't support adding a serial column for an MX table
-							 * TODO: record the dependency in the workers
+							 * Note: Once this is allowed;
+							 *       i) Record the dependency in the remote nodes.
+							 *       ii) Similar to what we do at the end of CreateCitusTable()
+							 *           when creating a distributed table from a worker, once
+							 *           this is allowed, we should adjust sequence ranges and
+							 *           nextval calls on the local node when executing on a
+							 *           worker.
 							 */
 							if (ShouldSyncTableMetadata(relationId))
 							{
@@ -3402,6 +3542,10 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						{
 							/*
 							 * We currently don't support adding an identity column for an MX table
+							 * Note: Similar to what we do at the end of CreateCitusTable() when
+							 *       creating a distributed table from a worker, once this is allowed,
+							 *       we should adjust sequence ranges and nextval calls on the local
+							 *       node when executing on a worker.
 							 */
 							if (ShouldSyncTableMetadata(relationId))
 							{
