@@ -673,7 +673,8 @@ extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
 extern bool ConstrTypeCitusCanDefaultName(ConstrType constrType);
 extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
-												  char *colname, bool missingTableOk);
+												  char *colname, bool missingTableOk,
+												  bool forceUseNextVal);
 
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
 extern void ConvertNewTableIfNecessary(Node *createStmt);
