@@ -1318,6 +1318,43 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	}
 
 	/*
+	 * We need to adjust sequence ranges and the function calls
+	 * used it column default expressions using nextval() on
+	 * all workers, and we don't need to do that on the
+	 * coordinator because it can always use the full range for
+	 * the sequences and can use the user-provided column default
+	 * expressions -that typically use nextval()-. And at this
+	 * point all such work is already done for remote workers.
+	 *
+	 * Specifically, SyncCitusTableMetadata() handles
+	 * the sequence ranges for identity column sequences and
+	 * PropagatePrerequisiteObjectsForDistributedTable() handles
+	 * the same for dependent sequences, i.e., sequences backing
+	 * the serial based columns or the ones backing the columns
+	 * that look like ".. DEFAULT nextval('..') ...".
+	 * SyncCitusTableMetadata() also adjusts the function calls
+	 * for the columns using dependent sequences - note that we
+	 * don't adjust the function calls for identity columns.
+	 *
+	 * For this reason, here we do the same on the local node
+	 * only if it's not the coordinator, as we're only interested
+	 * in doing this on workers.
+	 */
+	if (!IsCoordinator())
+	{
+		AdjustDependentSeqRangesOnLocalWorker(relationId);
+
+		/*
+		 * Note that AdjustDependentSeqRangesOnLocalWorker() doesn't adjust
+		 * sequence ranges for identity columns, so we need to adjust them
+		 * separately here.
+		 */
+		AdjustIdentityColumnSeqRangesOnLocalWorker(relationId);
+
+		AdjustNextValColumnDefaultsOnLocalWorker(relationId);
+	}
+
+	/*
 	 * We've a custom way of foreign key graph invalidation,
 	 * see InvalidateForeignKeyGraph().
 	 */
@@ -1813,7 +1850,7 @@ EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 		EnsureSequenceTypeSupported(sequenceOid, attributeTypeId, relationId);
 
 		/*
-		 * Alter the sequence's data type in the coordinator if needed.
+		 * Alter the sequence's data type in the current node if needed.
 		 *
 		 * First, we should only change the sequence type if the column
 		 * is a supported sequence type. For example, if a sequence is used
