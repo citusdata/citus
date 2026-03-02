@@ -38,6 +38,9 @@
 
 
 /* Function declarations local to the worker module */
+extern void AdjustDependentSeqRangesOnLocalWorker(Oid relationId);
+extern void AdjustIdentityColumnSeqRangesOnLocalWorker(Oid relationId);
+extern void AdjustNextValColumnDefaultsOnLocalWorker(Oid relationId);
 extern uint64 ExtractShardIdFromTableName(const char *tableName, bool missingOk);
 extern void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
