@@ -114,6 +114,8 @@ static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
+static List * IdentitySequenceDependencyCommandListLegacy(Oid targetRelationId);
+static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
@@ -1490,11 +1492,57 @@ DDLCommandsForSequence(Oid sequenceOid, char *ownerName)
 	Oid sequenceTypeOid = sequenceData->seqtypid;
 	char *typeName = format_type_be(sequenceTypeOid);
 
-	/* create schema if needed */
-	appendStringInfo(wrappedSequenceDef,
-					 WORKER_APPLY_SEQUENCE_COMMAND,
-					 escapedSequenceDef,
-					 quote_literal_cstr(typeName));
+	/*
+	 * WORKER_APPLY_SEQUENCE_COMMAND_LEGACY differs from
+	 * WORKER_APPLY_SEQUENCE_COMMAND in that it does not
+	 * accept last_value and is_called params, and does
+	 * not set the initial sequence value when called on
+	 * the coordinator.
+	 *
+	 * The initial value must be set only when creating
+	 * sequence dependencies on the coordinator for
+	 * operations initiated from a worker. In that case, on
+	 * the coordinator, we  need to continue after the last
+	 * value used on the worker so the coordinator can safely
+	 * assume the full sequence range.
+	 *
+	 * For operations initiated from the coordinator, this is
+	 * unnecessary since all remote nodes are workers. While
+	 * it would be safe to always use
+	 * WORKER_APPLY_SEQUENCE_COMMAND (the underlying UDF skips
+	 * setting the value when the target node is a worker), we
+	 * use the legacy variant to preserve compatibility with
+	 * mixed-version clusters.
+	 *
+	 * Therefore, for now we use
+	 * WORKER_APPLY_SEQUENCE_COMMAND_LEGACY when the operation
+	 * is initiated from the coordinator. In Citus 15.0, we
+	 * will remove WORKER_APPLY_SEQUENCE_COMMAND_LEGACY and will
+	 * delete the legacy code path, the first branch of the if
+	 * statement below.
+	 */
+	if (IsCoordinator())
+	{
+		appendStringInfo(wrappedSequenceDef,
+						 WORKER_APPLY_SEQUENCE_COMMAND_LEGACY,
+						 escapedSequenceDef,
+						 quote_literal_cstr(typeName));
+	}
+	else
+	{
+		/* prevent concurrent updates to the sequence until the end of the transaction */
+		LockRelationOid(sequenceOid, RowExclusiveLock);
+
+		int64 lastValue = 0;
+		bool isCalled = false;
+		FetchSequenceState(sequenceOid, &lastValue, &isCalled);
+
+		appendStringInfo(wrappedSequenceDef,
+						 WORKER_APPLY_SEQUENCE_COMMAND,
+						 escapedSequenceDef,
+						 quote_literal_cstr(typeName),
+						 lastValue, isCalled ? "true" : "false");
+	}
 
 	appendStringInfo(sequenceGrantStmt,
 					 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
@@ -1967,12 +2015,103 @@ SequenceDependencyCommandList(Oid relationId)
 
 
 /*
- * IdentitySequenceDependencyCommandList generate a command to execute
- * a UDF (WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES) on workers to modify the identity
- * columns min/max values to produce unique values on workers.
+ * IdentitySequenceDependencyCommandList, when called from the coordinator,
+ * generates a list of commands to execute
+ * WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS for each identity sequence of
+ * the given relation on remote nodes to i) set identity column min/max
+ * values to produce unique values on workers and ii) set the sequence
+ * last_value and is_called on the coordinator to continue after the maximum
+ * value used so far.
+ *
+ * When called from the coordinator, we directly use
+ * IdentitySequenceDependencyCommandListLegacy() and exit. The most
+ * significant difference between IdentitySequenceDependencyCommandListLegacy()
+ * and the rest of this function is that the legacy implementation discovers
+ * identity column sequences on the worker and only sets their min/max
+ * values, whereas the rest of the function discovers identity column
+ * sequences on the local node and sends separate commands for each one so
+ * it can also set last_value and is_called for each sequence when run on the
+ * coordinator.
+ *
+ * The initial value must be set only when creating identity column
+ * dependencies on the coordinator for operations initiated from a worker.
+ * In that case, on the coordinator, we need to continue after the value last
+ * used on the worker so the coordinator can safely assume the full sequence
+ * range.
+ *
+ * For operations initiated from the coordinator, this is unnecessary
+ * since all remote nodes are workers. While it would be safe to never use
+ * the legacy code path (the underlying UDF skips setting the value when
+ * the target node is a worker), we use the legacy variant to preserve
+ * compatibility with mixed-version clusters.
+ *
+ * Therefore, for now we use IdentitySequenceDependencyCommandListLegacy()
+ * when the operation is initiated from the coordinator. In Citus 15.0, we
+ * will remove IdentitySequenceDependencyCommandListLegacy() and delete the
+ * legacy code path, i.e. the first if-statement below.
  */
 List *
 IdentitySequenceDependencyCommandList(Oid targetRelationId)
+{
+	if (IsCoordinator())
+	{
+		return IdentitySequenceDependencyCommandListLegacy(targetRelationId);
+	}
+
+	List *commandList = NIL;
+
+	Relation relation = relation_open(targetRelationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor,
+														attributeIndex);
+
+		if (attributeForm->attisdropped || !attributeForm->attidentity)
+		{
+			continue;
+		}
+
+		bool missingOk = false;
+		Oid sequenceId = getIdentitySequence(
+			identitySequenceRelation_compat(relation),
+			attributeForm->attnum,
+			missingOk
+			);
+
+		char *qualifiedSequenceName = generate_qualified_relation_name(sequenceId);
+
+		/* prevent concurrent updates to the sequence until the end of the transaction */
+		LockRelationOid(sequenceId, RowExclusiveLock);
+
+		int64 lastValue = 0;
+		bool isCalled = false;
+		FetchSequenceState(sequenceId, &lastValue, &isCalled);
+
+		StringInfo stringInfo = makeStringInfo();
+		appendStringInfo(stringInfo,
+						 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS,
+						 quote_literal_cstr(qualifiedSequenceName),
+						 lastValue, isCalled ? "true" : "false");
+
+		commandList = lappend(commandList,
+							  makeTableDDLCommandString(stringInfo->data));
+	}
+
+	relation_close(relation, NoLock);
+
+	return commandList;
+}
+
+
+/*
+ * IdentitySequenceDependencyCommandListLegacy is the legacy way to update
+ * identity sequence ranges on workers, see IdentitySequenceDependencyCommandList().
+ */
+static List *
+IdentitySequenceDependencyCommandListLegacy(Oid targetRelationId)
 {
 	List *commandList = NIL;
 
@@ -2000,7 +2139,7 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 		char *tableName = generate_qualified_relation_name(targetRelationId);
 
 		appendStringInfo(stringInfo,
-						 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES,
+						 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES_LEGACY,
 						 quote_literal_cstr(tableName));
 
 
@@ -2010,6 +2149,82 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 	}
 
 	return commandList;
+}
+
+
+/*
+ * FetchSequenceState fetches the last_value and is_called for the sequence with
+ * given oid.
+ */
+static void
+FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled)
+{
+	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceId);
+
+	StringInfo query = makeStringInfo();
+	appendStringInfo(query, "SELECT last_value, is_called FROM %s",
+					 qualifiedSequenceName);
+
+	bool spiConnected = false;
+
+	PG_TRY();
+	{
+		int spiStatus = SPI_connect();
+		if (spiStatus != SPI_OK_CONNECT)
+		{
+			elog(ERROR, "SPI_connect failed: %d", spiStatus);
+		}
+
+		spiConnected = true;
+
+		spiStatus = SPI_execute(query->data, true, 1);
+		if (spiStatus != SPI_OK_SELECT)
+		{
+			elog(ERROR, "SPI_execute failed: %d", spiStatus);
+		}
+
+		if (SPI_processed != 1 || SPI_tuptable == NULL ||
+			SPI_tuptable->tupdesc == NULL ||
+			SPI_tuptable->tupdesc->natts != 2)
+		{
+			elog(ERROR, "could not properly fetch last_value for sequence %s",
+				 qualifiedSequenceName);
+		}
+
+		bool isNull = false;
+
+		Datum lastValueDatum = SPI_getbinval(SPI_tuptable->vals[0],
+											 SPI_tuptable->tupdesc,
+											 1, &isNull);
+		if (isNull)
+		{
+			elog(ERROR, "last_value for sequence %s is NULL", qualifiedSequenceName);
+		}
+
+		*lastValue = DatumGetInt64(lastValueDatum);
+
+		Datum isCalledDatum = SPI_getbinval(SPI_tuptable->vals[0],
+											SPI_tuptable->tupdesc,
+											2, &isNull);
+		if (isNull)
+		{
+			elog(ERROR, "is_called for sequence %s is NULL", qualifiedSequenceName);
+		}
+
+		*isCalled = DatumGetBool(isCalledDatum);
+
+		SPI_finish();
+		spiConnected = false;
+	}
+	PG_CATCH();
+	{
+		if (spiConnected)
+		{
+			SPI_finish();
+		}
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 
@@ -2823,28 +3038,50 @@ CreateShellTableOnRemoteNodes(Oid relationId)
 		return;
 	}
 
-	List *commandList = list_make1(DISABLE_DDL_PROPAGATION);
-
+	/* 1 - collect commands to be executed on remote workers and execute them */
 	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 	IncludeIdentities includeIdentityDefaults = INCLUDE_IDENTITY;
-
 	bool creatingShellTableOnRemoteNode = true;
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 														  includeSequenceDefaults,
 														  includeIdentityDefaults,
 														  creatingShellTableOnRemoteNode);
 
+	SendCommandToRemoteWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
 	TableDDLCommand *tableDDLCommand = NULL;
 	foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
 	{
 		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+		SendCommandToRemoteWorkersWithMetadata(GetTableDDLCommand(tableDDLCommand));
 	}
 
-	const char *command = NULL;
-	foreach_declared_ptr(command, commandList)
+	/*
+	 * 2 - if this is not the coordinator, need to create the shell table on
+	 * the coordinator as well.
+	 *
+	 * The only difference in the commands to be executed on coordinator vs
+	 * remote workers is that while we use WORKER_NEXTVAL_SEQUENCE_DEFAULTS
+	 * for remote workers to set int / smallint sequence defaults, we use
+	 * NEXTVAL_SEQUENCE_DEFAULTS for coordinator to set the defaults to
+	 * nextval(..).
+	 */
+	if (!IsCoordinator())
 	{
-		SendCommandToRemoteNodesWithMetadata(command);
+		includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
+		tableDDLCommands = GetFullTableCreationCommands(relationId,
+														includeSequenceDefaults,
+														includeIdentityDefaults,
+														creatingShellTableOnRemoteNode);
+
+		SendCommandToCoordinator(DISABLE_DDL_PROPAGATION);
+
+		tableDDLCommand = NULL;
+		foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
+		{
+			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+			SendCommandToCoordinator(GetTableDDLCommand(tableDDLCommand));
+		}
 	}
 }
 
