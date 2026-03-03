@@ -144,7 +144,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus One-Task Adaptive)
    citus.explain_distributed_queries: false
 (2 rows)
 
@@ -153,7 +153,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus One-Task Adaptive)
    citus.explain_distributed_queries: false
 (2 rows)
 
@@ -163,7 +163,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus One-Task Adaptive)
    citus.explain_distributed_queries: false
 (2 rows)
 
@@ -172,7 +172,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus One-Task Adaptive)
    citus.explain_distributed_queries: false
 (2 rows)
 

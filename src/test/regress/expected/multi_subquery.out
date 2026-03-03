@@ -981,7 +981,7 @@ $Q$) as "QUERY PLAN";
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    ->  Distributed Subplan XXX_1
-         ->  Custom Scan (Citus Adaptive)
+         ->  Custom Scan (Citus One-Task Adaptive)
                Task Count: 1
                Tasks Shown: All
                ->  Task
@@ -1010,7 +1010,7 @@ $Q$) as "QUERY PLAN";
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    ->  Distributed Subplan XXX_1
-         ->  Custom Scan (Citus Adaptive)
+         ->  Custom Scan (Citus One-Task Adaptive)
                Task Count: 1
                Tasks Shown: All
                ->  Task

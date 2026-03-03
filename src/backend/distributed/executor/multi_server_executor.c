@@ -36,6 +36,7 @@
 int RemoteTaskCheckInterval = 10; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool EnableRepartitionJoins = false;
+bool EnableSingleTaskFastPath = true;
 
 
 /*
@@ -97,6 +98,14 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			ereport(DEBUG2, (errmsg("query has a single distribution column value: "
 									"%s", partitionColumnString)));
 		}
+	}
+
+	if (EnableSingleTaskFastPath &&
+		distributedPlan->fastPathRouterPlan &&
+		list_length(job->dependentJobList) == 0 &&
+		!IsMultiRowInsert(job->jobQuery))
+	{
+		return MULTI_EXECUTOR_ONE_TASK_ADAPTIVE;
 	}
 
 	return MULTI_EXECUTOR_ADAPTIVE;

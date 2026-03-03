@@ -1,6 +1,7 @@
 #ifndef ADAPTIVE_EXECUTOR_H
 #define ADAPTIVE_EXECUTOR_H
 
+#include "distributed/citus_custom_scan.h"
 #include "distributed/multi_physical_planner.h"
 
 /* GUC, determining whether Citus opens 1 connection per task */
@@ -21,5 +22,6 @@ extern uint64 ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize
 extern uint64 ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 												int targetPoolSize, List *jobIdList);
 
+extern void OneTaskAdaptiveExecutor(CitusScanState *scanState);
 
 #endif /* ADAPTIVE_EXECUTOR_H */

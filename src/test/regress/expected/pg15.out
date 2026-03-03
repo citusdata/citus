@@ -1371,7 +1371,7 @@ EXPLAIN (VERBOSE, COSTS OFF)
 SELECT * FROM foreign_table WHERE c1 = 'foo' LIMIT 1;
                                                            QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus One-Task Adaptive)
    Output: remote_scan.c0, remote_scan.c1
    Task Count: 1
    Tasks Shown: All
@@ -1394,7 +1394,7 @@ EXPLAIN (VERBOSE, COSTS OFF)
 SELECT * FROM foreign_table WHERE 'foo' = c1 LIMIT 1;
                                                            QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus One-Task Adaptive)
    Output: remote_scan.c0, remote_scan.c1
    Task Count: 1
    Tasks Shown: All

@@ -119,6 +119,7 @@
  */
 
 #include <math.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -168,6 +169,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/remote_transaction.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
@@ -178,6 +180,7 @@
 #include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_log_messages.h"
 
 #define SLOW_START_DISABLED 0
 
@@ -905,6 +908,537 @@ AdaptiveExecutor(CitusScanState *scanState)
 	MemoryContextSwitchTo(oldContext);
 
 	return resultSlot;
+}
+
+
+/*
+ * OneTaskNoOpNoticeReceiver is a PQnoticeReceiver that silently discards all
+ * messages.  It is installed temporarily on a cached connection while the
+ * OneTaskAdaptiveExecutor probes for a dead connection (e.g. one whose
+ * worker backend was terminated).  Without this, a buffered FATAL error
+ * would be forwarded through Citus's DefaultCitusNoticeReceiver which
+ * calls ereport(FATAL) and kills the coordinator backend.
+ */
+static void
+OneTaskNoOpNoticeReceiver(void *arg, const PGresult *result)
+{
+	/* intentionally blank */
+}
+
+
+/*
+ * OneTaskAdaptiveExecutor is a streamlined executor for single-shard fast-path
+ * queries. It bypasses the adaptive executor's pool management, slow-start,
+ * WaitEventSet machinery, and multi-connection state machines.
+ *
+ * Prerequisites (enforced by the planner):
+ *   - distributedPlan->fastPathRouterPlan == true
+ *   - No dependent jobs
+ *   - Not a multi-row INSERT
+ *
+ * The function handles 0-task (no-op) and 1-task cases directly, supports
+ * local execution, and uses simple WaitLatchOrSocket polling for remote
+ * execution on a single connection.
+ */
+void
+OneTaskAdaptiveExecutor(CitusScanState *scanState)
+{
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
+	Job *job = distributedPlan->workerJob;
+	List *taskList = job->taskList;
+
+	MemoryContext localContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "OneTaskAdaptiveExecutor",
+							  ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
+	/* set up the tuplestore for results */
+	bool randomAccess = true;
+	bool interTransactions = false;
+	scanState->tuplestorestate =
+		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	TupleDestination *defaultTupleDest =
+		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
+
+	/* decide transaction properties */
+	bool excludeFromXact = false;
+	TransactionProperties xactProperties =
+		DecideTaskListTransactionProperties(distributedPlan->modLevel,
+											taskList, excludeFromXact);
+
+	/* copy and mark unreferenced params (skip for dynamic param fetch) */
+	if (paramListInfo != NULL && !paramListInfo->paramFetch)
+	{
+		paramListInfo = copyParamList(paramListInfo);
+		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
+	}
+
+	/* set up coordinated transaction / 2PC if needed */
+	if (xactProperties.useRemoteTransactionBlocks == TRANSACTION_BLOCKS_REQUIRED)
+	{
+		UseCoordinatedTransaction();
+	}
+
+	if (xactProperties.requires2PC)
+	{
+		Use2PCForCoordinatedTransaction();
+	}
+
+	/* acquire shard locks */
+	AcquireExecutorShardLocksForExecution(distributedPlan->modLevel, taskList);
+
+	/* handle 0-task case (e.g., DELETE with non-existent dist key) */
+	if (taskList == NIL)
+	{
+		goto finish;
+	}
+
+	/* split into local and remote tasks */
+	List *localTaskList = NIL;
+	List *remoteTaskList = NIL;
+	bool localExecutionSupported = true;
+
+	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
+	{
+		bool readOnlyPlan = !TaskListModifiesDatabase(distributedPlan->modLevel,
+													  taskList);
+		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList,
+								   &localTaskList, &remoteTaskList);
+	}
+	else
+	{
+		remoteTaskList = taskList;
+	}
+
+	/* execute local tasks if any */
+	if (localTaskList != NIL)
+	{
+		uint64 localRowsProcessed =
+			ExecuteLocalTaskListExtended(localTaskList, paramListInfo,
+										 distributedPlan, defaultTupleDest,
+										 false);
+
+		CmdType commandType = job->jobQuery->commandType;
+		if (commandType != CMD_SELECT)
+		{
+			executorState->es_processed += localRowsProcessed;
+		}
+	}
+
+	/* execute remote task if any */
+	if (remoteTaskList != NIL)
+	{
+		Task *task = (Task *) linitial(remoteTaskList);
+		ShardPlacement *taskPlacement = (ShardPlacement *) linitial(
+			task->taskPlacementList);
+
+		/* ensure we're allowed to do remote execution */
+		bool isRemote = true;
+		EnsureTaskExecutionAllowed(isRemote);
+
+		/* look up the target node */
+		char *nodeName = NULL;
+		int nodePort = 0;
+		LookupTaskPlacementHostAndPort(taskPlacement, &nodeName, &nodePort);
+
+		/* build placement access list for connection reuse tracking */
+		List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
+
+		/* try to reuse a connection from the current transaction */
+		int connectionFlags = 0;
+		MultiConnection *connection = NULL;
+
+		if (xactProperties.useRemoteTransactionBlocks != TRANSACTION_BLOCKS_DISALLOWED)
+		{
+			connection = GetConnectionIfPlacementAccessedInXact(
+				connectionFlags, placementAccessList, NULL);
+		}
+
+		if (connection == NULL)
+		{
+			/* no existing connection, establish a new one (synchronous) */
+			connection = GetNodeUserDatabaseConnection(
+				connectionFlags, nodeName, nodePort, NULL, NULL);
+
+			if (PQstatus(connection->pgConn) != CONNECTION_OK)
+			{
+				ereport(ERROR,
+						(errmsg("could not establish connection to %s:%d",
+								nodeName, nodePort)));
+			}
+		}
+
+		/*
+		 * Detect remotely closed/terminated cached connections before
+		 * attempting to use them, matching the regular executor's
+		 * WL_SOCKET_CLOSED + MULTI_CONNECTION_LOST retry handling.
+		 *
+		 * When a worker backend is terminated (e.g. by pg_terminate_backend),
+		 * it sends a FATAL error and closes the socket. For an idle
+		 * connection (no query in progress), the raw socket should have no
+		 * data.  If recv(MSG_PEEK) finds data (the buffered FATAL) or EOF
+		 * (remote close), the connection is dead.
+		 *
+		 * We also suppress the Citus notice receiver during PQconsumeInput
+		 * so that libpq doesn't forward a FATAL through ereport(FATAL)
+		 * which would kill the coordinator backend.
+		 */
+		if (connection->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED)
+		{
+			bool connectionDead = false;
+			int sock = PQsocket(connection->pgConn);
+
+			if (sock >= 0)
+			{
+				char peekBuf;
+				ssize_t peekRc = recv(sock, &peekBuf, 1,
+									  MSG_PEEK | MSG_DONTWAIT);
+
+				if (peekRc == 0)
+				{
+					/* EOF — remote end closed the connection */
+					connectionDead = true;
+				}
+				else if (peekRc > 0)
+				{
+					/*
+					 * Unexpected data on an idle connection (no query was
+					 * sent). This is typically a FATAL error from a
+					 * terminated worker backend. We must consume and
+					 * discard it before closing the connection.
+					 */
+					PQsetNoticeReceiver(connection->pgConn,
+										OneTaskNoOpNoticeReceiver, NULL);
+					PQconsumeInput(connection->pgConn);
+					SetCitusNoticeReceiver(connection);
+					connectionDead = true;
+				}
+				else if (errno != EAGAIN && errno != EWOULDBLOCK)
+				{
+					/* socket error */
+					connectionDead = true;
+				}
+			}
+
+			if (connectionDead)
+			{
+				/* close the dead connection and get a fresh one */
+				CloseConnection(connection);
+
+				connection = GetNodeUserDatabaseConnection(
+					connectionFlags, nodeName, nodePort, NULL, NULL);
+
+				if (PQstatus(connection->pgConn) != CONNECTION_OK)
+				{
+					ereport(ERROR,
+							(errmsg("could not establish connection to %s:%d",
+									nodeName, nodePort)));
+				}
+
+				placementAccessList = PlacementAccessListForTask(task, taskPlacement);
+			}
+		}
+
+		ClaimConnectionExclusively(connection);
+		AssignPlacementListToConnection(placementAccessList, connection);
+
+		/*
+		 * Activate 2PC if this modifying transaction expands to a new node.
+		 * This mirrors the logic in Activate2PCIfModifyingTransactionExpandsToNewNode.
+		 */
+		if (xactProperties.useRemoteTransactionBlocks == TRANSACTION_BLOCKS_REQUIRED &&
+			XactModificationLevel == XACT_MODIFICATION_DATA &&
+			TaskListModifiesDatabase(distributedPlan->modLevel, taskList) &&
+			!ConnectionModifiedPlacement(connection))
+		{
+			Use2PCForCoordinatedTransaction();
+		}
+
+		/*
+		 * Start a remote transaction block if required. This sends BEGIN
+		 * synchronously before we send the actual query, matching the
+		 * behavior of the regular adaptive executor's TransactionStateMachine.
+		 */
+		if (xactProperties.useRemoteTransactionBlocks == TRANSACTION_BLOCKS_REQUIRED)
+		{
+			RemoteTransactionBeginIfNecessary(connection);
+		}
+
+		/* send the query */
+		char *queryString = TaskQueryStringAtIndex(task, 0);
+		int querySent = 0;
+		bool binaryResults = false;
+
+		/* determine if we can use binary results */
+		if (EnableBinaryProtocol && tupleDescriptor != NULL &&
+			CanUseBinaryCopyFormat(tupleDescriptor))
+		{
+			binaryResults = true;
+		}
+
+		if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
+		{
+			int parameterCount = paramListInfo->numParams;
+			Oid *parameterTypes = NULL;
+			const char **parameterValues = NULL;
+
+			ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+												&parameterValues);
+			querySent = SendRemoteCommandParams(connection, queryString,
+												parameterCount, parameterTypes,
+												parameterValues, binaryResults);
+		}
+		else
+		{
+			if (!binaryResults)
+			{
+				querySent = SendRemoteCommand(connection, queryString);
+			}
+			else
+			{
+				querySent = SendRemoteCommandParams(connection, queryString,
+													0, NULL, NULL, binaryResults);
+			}
+		}
+
+		if (querySent == 0)
+		{
+			UnclaimConnection(connection);
+			ereport(ERROR,
+					(errmsg("failed to send query to %s:%d",
+							nodeName, nodePort)));
+		}
+
+		/* enable single-row mode for streaming results */
+		if (PQsetSingleRowMode(connection->pgConn) == 0)
+		{
+			UnclaimConnection(connection);
+			ereport(ERROR,
+					(errmsg("failed to set single-row mode for %s:%d",
+							nodeName, nodePort)));
+		}
+
+		/* determine attInMetadata for result tuple construction */
+		AttInMetadata *attInMetadata = NULL;
+		if (tupleDescriptor != NULL)
+		{
+			if (binaryResults)
+			{
+				attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
+			}
+			else
+			{
+				attInMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
+			}
+		}
+
+		/* allocate column arrays for result processing */
+		uint32 allocatedColumnCount = (tupleDescriptor != NULL) ?
+									  tupleDescriptor->natts : 16;
+		void **columnArray = palloc0(allocatedColumnCount * sizeof(void *));
+		StringInfoData *stringInfoDataArray = NULL;
+
+		if (EnableBinaryProtocol && binaryResults)
+		{
+			stringInfoDataArray = palloc0(allocatedColumnCount *
+										  sizeof(StringInfoData));
+			for (uint32 i = 0; i < allocatedColumnCount; i++)
+			{
+				initStringInfo(&stringInfoDataArray[i]);
+			}
+		}
+
+		/* receive results using simple WaitLatchOrSocket polling */
+		uint64 rowsProcessed = 0;
+
+		/*
+		 * For replicated tables (e.g., reference tables), modifications go to
+		 * both local and remote placements.  When a local task already ran and
+		 * stored the RETURNING rows, the remote execution still needs to
+		 * happen (for replication) but must NOT duplicate the rows.
+		 */
+		bool storeRows = (localTaskList == NIL);
+
+		MemoryContext rowContext =
+			AllocSetContextCreate(CurrentMemoryContext,
+								  "RowContext",
+								  ALLOCSET_DEFAULT_MINSIZE,
+								  ALLOCSET_DEFAULT_INITSIZE,
+								  ALLOCSET_DEFAULT_MAXSIZE);
+
+		bool fetchDone = false;
+		while (!fetchDone)
+		{
+			/* wait for the socket to be readable if busy */
+			if (PQisBusy(connection->pgConn))
+			{
+				int sock = PQsocket(connection->pgConn);
+				int rc = WaitLatchOrSocket(MyLatch,
+										   WL_SOCKET_READABLE | WL_LATCH_SET |
+										   WL_EXIT_ON_PM_DEATH,
+										   sock, 0, PG_WAIT_EXTENSION);
+
+				ResetLatch(MyLatch);
+				CHECK_FOR_INTERRUPTS();
+
+				if (rc & WL_SOCKET_READABLE)
+				{
+					if (!PQconsumeInput(connection->pgConn))
+					{
+						UnclaimConnection(connection);
+						ereport(ERROR,
+								(errmsg("failed to receive data from %s:%d",
+										nodeName, nodePort)));
+					}
+				}
+
+				/* check again if still busy */
+				continue;
+			}
+
+			PGresult *result = PQgetResult(connection->pgConn);
+			if (result == NULL)
+			{
+				/* no more results */
+				fetchDone = true;
+				break;
+			}
+
+			ExecStatusType resultStatus = PQresultStatus(result);
+
+			if (resultStatus == PGRES_COMMAND_OK)
+			{
+				char *currentAffectedTupleString = PQcmdTuples(result);
+				if (storeRows && *currentAffectedTupleString != '\0')
+				{
+					rowsProcessed += pg_strtoint64(currentAffectedTupleString);
+				}
+				PQclear(result);
+				continue;
+			}
+			else if (resultStatus == PGRES_TUPLES_OK)
+			{
+				/* all tuples consumed (PQntuples == 0 after single-row mode) */
+				PQclear(result);
+				continue;
+			}
+			else if (resultStatus != PGRES_SINGLE_TUPLE)
+			{
+				ReportResultError(connection, result, ERROR);
+			}
+
+			if (!storeRows || tupleDescriptor == NULL)
+			{
+				PQclear(result);
+				continue;
+			}
+
+			/* process rows from this result */
+			uint32 ntuples = PQntuples(result);
+			uint32 columnCount = PQnfields(result);
+
+			if (columnCount != (uint32) tupleDescriptor->natts)
+			{
+				ereport(ERROR,
+						(errmsg("unexpected number of columns from worker: %d, "
+								"expected %d",
+								columnCount, tupleDescriptor->natts)));
+			}
+
+			for (uint32 rowIndex = 0; rowIndex < ntuples; rowIndex++)
+			{
+				MemoryContext prevContext = MemoryContextSwitchTo(rowContext);
+
+				memset(columnArray, 0, columnCount * sizeof(void *));
+
+				for (uint32 colIndex = 0; colIndex < columnCount; colIndex++)
+				{
+					if (PQgetisnull(result, rowIndex, colIndex))
+					{
+						columnArray[colIndex] = NULL;
+					}
+					else
+					{
+						int valueLength = PQgetlength(result, rowIndex, colIndex);
+						char *value = PQgetvalue(result, rowIndex, colIndex);
+
+						if (binaryResults)
+						{
+							resetStringInfo(&stringInfoDataArray[colIndex]);
+							appendBinaryStringInfo(&stringInfoDataArray[colIndex],
+												   value, valueLength);
+							columnArray[colIndex] = &stringInfoDataArray[colIndex];
+						}
+						else
+						{
+							columnArray[colIndex] = value;
+						}
+					}
+				}
+
+				HeapTuple heapTuple;
+				if (binaryResults)
+				{
+					heapTuple = BuildTupleFromBytes(attInMetadata,
+													(fmStringInfo *) columnArray);
+				}
+				else
+				{
+					heapTuple = BuildTupleFromCStrings(attInMetadata,
+													   (char **) columnArray);
+				}
+
+				MemoryContextSwitchTo(prevContext);
+
+				TupleDestination *tupleDest = task->tupleDest ?
+											  task->tupleDest : defaultTupleDest;
+				tupleDest->putTuple(tupleDest, task, 0, 0, heapTuple, 0);
+
+				MemoryContextReset(rowContext);
+
+				rowsProcessed++;
+			}
+
+			PQclear(result);
+		}
+
+		MemoryContextDelete(rowContext);
+
+		/* release connection back to pool */
+		UnclaimConnection(connection);
+
+		/* set the rows processed count for DML (skip if local execution already counted) */
+		if (localTaskList == NIL)
+		{
+			CmdType commandType = job->jobQuery->commandType;
+			if (commandType != CMD_SELECT)
+			{
+				executorState->es_processed += rowsProcessed;
+			}
+		}
+	}
+
+finish:
+
+	/* mark the transaction as having modified data if applicable */
+	if (TaskListModifiesDatabase(distributedPlan->modLevel, taskList))
+	{
+		XactModificationLevel = XACT_MODIFICATION_DATA;
+	}
+
+	/* sort RETURNING results if needed */
+	CmdType commandType = job->jobQuery->commandType;
+	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
+	{
+		SortTupleStore(scanState);
+	}
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
