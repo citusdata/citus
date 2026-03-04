@@ -1269,8 +1269,19 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	 * mutations happen on the colocation group with regards to its placements. It is
 	 * important that we have already copied any reference tables before acquiring this
 	 * lock as these are competing operations.
+	 *
+	 * If we're on a worker, we acquire the lock on the coordinator via the remote
+	 * metadata connection to the coordinator.
 	 */
-	LockColocationId(colocationId, ShareLock);
+	if (IsCoordinator())
+	{
+		LockColocationId(colocationId, ShareLock);
+	}
+	else
+	{
+		char *command = LockColocationIdCommand(colocationId, ShareLock);
+		SendCommandToCoordinator(command);
+	}
 
 	/* we need to calculate these variables before creating distributed metadata */
 	bool localTableEmpty = TableEmpty(relationId);
@@ -1519,7 +1530,24 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 
 	EnsureReferenceTablesExistOnAllNodes();
 
-	LockColocationId(colocationId, ShareLock);
+	/*
+	 * While adding tables to a colocation group we need to make sure no concurrent
+	 * mutations happen on the colocation group with regards to its placements. It is
+	 * important that we have already copied any reference tables before acquiring this
+	 * lock as these are competing operations.
+	 *
+	 * If we're on a worker, we acquire the lock on the coordinator via the remote
+	 * metadata connection to the coordinator.
+	 */
+	if (IsCoordinator())
+	{
+		LockColocationId(colocationId, ShareLock);
+	}
+	else
+	{
+		char *command = LockColocationIdCommand(colocationId, ShareLock);
+		SendCommandToCoordinator(command);
+	}
 
 	/*
 	 * When converting to a single shard table, we want to drop the placement
