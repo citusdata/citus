@@ -184,7 +184,20 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (cacheEntry->colocationId != INVALID_COLOCATION_ID)
 		{
-			LockColocationId(cacheEntry->colocationId, ShareLock);
+			/*
+			 * If we're on a worker, we acquire the lock on the coordinator via the
+			 * remote metadata connection to the coordinator.
+			 */
+			if (IsCoordinator())
+			{
+				LockColocationId(cacheEntry->colocationId, ShareLock);
+			}
+			else
+			{
+				char *command = LockColocationIdCommand(cacheEntry->colocationId,
+														ShareLock);
+				SendCommandToCoordinator(command);
+			}
 		}
 
 		/* invalidate foreign key cache if the table involved in any foreign key */
