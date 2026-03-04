@@ -998,8 +998,9 @@ IsTaskExecutionAllowed(bool isRemote)
 			 *   checks yet.
 			 * - Users need to explicitly set enable_unsafe_triggers in order to create
 			 *   triggers on distributed tables.
-			 * - Triggers on Citus local tables should be able to access other Citus local
-			 *   tables.
+			 * - Triggers on Citus local tables and distributed schema tables should be able
+			 *   to access other Citus local tables and colocated distributed schema tables
+			 *   respectively.
 			 */
 			return true;
 		}
