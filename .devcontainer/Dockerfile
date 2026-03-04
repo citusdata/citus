@@ -97,7 +97,7 @@ RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
 FROM base AS pg18
-RUN MAKEFLAGS="-j $(nproc)" pgenv build 18.1
+RUN MAKEFLAGS="-j $(nproc)" pgenv build 18.3
 RUN rm .pgenv/src/*.tar*
 RUN make -C .pgenv/src/postgresql-*/ clean
 RUN make -C .pgenv/src/postgresql-*/src/include install
@@ -216,7 +216,7 @@ COPY --chown=citus:citus .psqlrc .
 RUN sudo chown --from=root:root citus:citus -R ~
 
 # sets default pg version
-RUN pgenv switch 18.1
+RUN pgenv switch 18.3
 
 # make connecting to the coordinator easy
 ENV PGPORT=9700
