@@ -202,7 +202,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 
 	/*
 	 * citus_copy_shard_placement triggers metadata sync-up, which tries to
-	 * acquire a ShareLock on pg_dist_node. We do master_copy_shad_placement
+	 * acquire a ShareLock on pg_dist_node. We do citus_copy_shard_placement
 	 * in a separate connection. If we have modified pg_dist_node in the
 	 * current backend, this will cause a deadlock.
 	 */
@@ -420,7 +420,7 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 
 	/*
 	 * citus_copy_shard_placement triggers metadata sync-up, which tries to
-	 * acquire a ShareLock on pg_dist_node. We do master_copy_shad_placement
+	 * acquire a ShareLock on pg_dist_node. We do citus_copy_shard_placement
 	 * in a separate connection. If we have modified pg_dist_node in the
 	 * current backend, this will cause a deadlock.
 	 */
