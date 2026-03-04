@@ -101,6 +101,7 @@ ORDER BY 1;
  function citus_internal.global_blocked_processes()
  function citus_internal.is_replication_origin_tracking_active()
  function citus_internal.local_blocked_processes()
+ function citus_internal.lock_colocation_id(integer,integer)
  function citus_internal.mark_node_not_synced(integer,integer)
  function citus_internal.pg_dist_node_trigger_func()
  function citus_internal.pg_dist_rebalance_strategy_trigger_func()
@@ -411,6 +412,6 @@ ORDER BY 1;
  view citus_tables
  view pg_dist_shard_placement
  view time_partitions
-(379 rows)
+(380 rows)
 
 DROP TABLE extension_basic_types;
