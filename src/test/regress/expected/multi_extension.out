@@ -1691,8 +1691,9 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
                  | function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void
                  | function citus_internal.get_next_colocation_id() bigint
+                 | function citus_internal.lock_colocation_id(integer,integer) void
                  | function worker_apply_sequence_command(text,regtype,bigint,boolean) void
-(3 rows)
+(4 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
