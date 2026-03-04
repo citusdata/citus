@@ -10,18 +10,24 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_type.h"
+#include "commands/defrem.h"
 #include "commands/tablecmds.h"
+#include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_type.h"
@@ -29,10 +35,13 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
 #include "utils/syscache.h"
+#include "utils/varlena.h"
 
 #include "pg_version_constants.h"
 
+#include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -65,6 +74,87 @@ bool EnableLocalReferenceForeignKeys = true;
  * distribution column.
  */
 bool AllowUnsafeConstraints = false;
+
+/*
+ * GUC citus.distribution_columns: a comma-separated priority list of column
+ * names (e.g. 'tenant_id,customer_id,department'). When a new table is created,
+ * Citus walks the list in order and distributes by the first column that exists
+ * in the table. Applies to CREATE TABLE and CREATE TABLE AS SELECT.
+ */
+char *DistributionColumns = "";
+
+/* Pre-parsed list of distribution column names (List of String nodes).
+ * Updated by AssignDistributionColumns whenever the GUC changes. */
+List *ParsedDistributionColumns = NIL;
+
+
+/*
+ * CheckDistributionColumns is the GUC check hook for
+ * citus.distribution_columns. It validates the comma-separated identifier
+ * list using SplitIdentifierString and rejects invalid input (e.g. empty
+ * tokens from double commas) before the assign hook runs.
+ */
+bool
+CheckDistributionColumns(char **newval, void **extra, GucSource source)
+{
+	if (*newval == NULL || (*newval)[0] == '\0')
+	{
+		return true;
+	}
+
+	char *rawCopy = pstrdup(*newval);
+	List *parsed = NIL;
+	bool valid = SplitIdentifierString(rawCopy, ',', &parsed);
+
+	list_free(parsed);
+	pfree(rawCopy);
+
+	return valid;
+}
+
+
+/*
+ * AssignDistributionColumns is the GUC assign hook for
+ * citus.distribution_columns. It parses the comma-separated string into
+ * a list of char* pointers (via SplitIdentifierString) so that callers
+ * don't re-tokenize on every use. The check hook has already validated
+ * the input, so SplitIdentifierString will always succeed here.
+ */
+void
+AssignDistributionColumns(const char *newval, void *extra)
+{
+	/*
+	 * SplitIdentifierString modifies the input string in-place and returns
+	 * a list of char* pointers into that string. We must keep the backing
+	 * string alive as long as ParsedDistributionColumns references it, and
+	 * free it on the next call. Everything must live in TopMemoryContext
+	 * so it survives transaction boundaries.
+	 */
+	static char *previousRawList = NULL;
+
+	list_free(ParsedDistributionColumns);
+	ParsedDistributionColumns = NIL;
+
+	if (previousRawList != NULL)
+	{
+		pfree(previousRawList);
+		previousRawList = NULL;
+	}
+
+	if (!newval || newval[0] == '\0')
+	{
+		return;
+	}
+
+	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
+
+	previousRawList = pstrdup(newval);
+
+	SplitIdentifierString(previousRawList, ',', &ParsedDistributionColumns);
+
+	MemoryContextSwitchTo(oldContext);
+}
+
 
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
@@ -127,6 +217,11 @@ static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
 												bool ifNotExists);
 static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
 														  relationId);
+static char * FindMatchingDistributionColumnFromTargetList(List *targetList,
+														   List *colNames);
+static char * FindMatchingDistributionColumn(Oid relationId);
+static bool ShouldAutoDistributeNewTable(Oid relationId);
+static void AutoDistributeNewTable(Oid relationId);
 
 
 /*
@@ -4233,10 +4328,649 @@ ErrorIfTableHasIdentityColumn(Oid relationId)
 
 
 /*
+ * FindMatchingDistributionColumnFromTargetList walks the GUC priority list
+ * and returns the first column name that appears in the given Query's
+ * targetList. This is used to determine the distribution column before
+ * the table exists (for CTAS optimization). colNames, if non-NULL,
+ * overrides the column names from the targetList (as used by IntoClause).
+ */
+static char *
+FindMatchingDistributionColumnFromTargetList(List *targetList, List *colNames)
+{
+	if (ParsedDistributionColumns == NIL)
+	{
+		return NULL;
+	}
+
+	/* Build list of available column names from colNames or targetList */
+	List *availableCols = NIL;
+	bool freeAvailableCols = false;
+
+	if (colNames != NIL)
+	{
+		/* colNames is a List of String nodes; extract raw char* */
+		ListCell *cnCell = NULL;
+		foreach(cnCell, colNames)
+		{
+			availableCols = lappend(availableCols, strVal(lfirst(cnCell)));
+		}
+		freeAvailableCols = true;
+	}
+	else
+	{
+		ListCell *tlCell = NULL;
+		foreach(tlCell, targetList)
+		{
+			TargetEntry *tle = lfirst_node(TargetEntry, tlCell);
+			if (!tle->resjunk && tle->resname)
+			{
+				availableCols = lappend(availableCols, tle->resname);
+			}
+		}
+		freeAvailableCols = true;
+	}
+
+	/* Walk priority list, return the first match */
+	ListCell *tokenCell = NULL;
+	foreach(tokenCell, ParsedDistributionColumns)
+	{
+		const char *candidate = (const char *) lfirst(tokenCell);
+
+		ListCell *colCell = NULL;
+		foreach(colCell, availableCols)
+		{
+			const char *colName = (const char *) lfirst(colCell);
+			if (pg_strcasecmp(candidate, colName) == 0)
+			{
+				if (freeAvailableCols)
+				{
+					list_free(availableCols);
+				}
+				return pstrdup(candidate);
+			}
+		}
+	}
+
+	if (freeAvailableCols)
+	{
+		list_free(availableCols);
+	}
+
+	return NULL;
+}
+
+/*
+ * FindMatchingDistributionColumn walks the comma-separated priority list in
+ * citus.distribution_columns and returns a palloc'd copy of the first column
+ * name that exists in the given relation. Returns NULL if none match or if
+ * the GUC is empty.
+ */
+static char *
+FindMatchingDistributionColumn(Oid relationId)
+{
+	if (ParsedDistributionColumns == NIL)
+	{
+		return NULL;
+	}
+
+	ListCell *cell = NULL;
+	foreach(cell, ParsedDistributionColumns)
+	{
+		const char *colName = (const char *) lfirst(cell);
+		AttrNumber attNum = get_attnum(relationId, colName);
+		if (attNum != InvalidAttrNumber)
+		{
+			return pstrdup(colName);
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * ShouldAutoDistributeNewTable returns true if citus.distribution_columns is
+ * set and the given relation has a column matching one of the names in the
+ * priority list.
+ */
+static bool
+ShouldAutoDistributeNewTable(Oid relationId)
+{
+	if (ParsedDistributionColumns == NIL)
+	{
+		return false;
+	}
+
+	if (IsBinaryUpgrade)
+	{
+		return false;
+	}
+
+	/* internal backends (metadata sync, rebalancer) should not auto-distribute */
+	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
+	{
+		return false;
+	}
+
+	/* skip temp tables */
+	if (get_rel_persistence(relationId) == RELPERSISTENCE_TEMP)
+	{
+		return false;
+	}
+
+	/*
+	 * Skip tables that are already Citus tables (e.g. partitions that were
+	 * already distributed by PostprocessCreateTableStmtPartitionOf).
+	 */
+	if (IsCitusTable(relationId))
+	{
+		return false;
+	}
+
+	/*
+	 * Skip partitions of tables that are already distributed. They will be
+	 * distributed automatically by Citus when attached to their parent.
+	 * For partitions of local parents, the parent itself will be auto-
+	 * distributed (if it matches the GUC) and the partition will follow.
+	 */
+	if (PartitionTable(relationId))
+	{
+		return false;
+	}
+
+	/*
+	 * Skip foreign tables, materialized views, and bare inherited tables —
+	 * Citus cannot hash-distribute these relation kinds.
+	 */
+	char relkind = get_rel_relkind(relationId);
+	if (relkind == RELKIND_FOREIGN_TABLE ||
+		relkind == RELKIND_MATVIEW)
+	{
+		return false;
+	}
+
+	/* Citus does not support distributing tables with inheritance parents */
+	if (IsChildTable(relationId) || IsParentTable(relationId))
+	{
+		return false;
+	}
+
+	/* check whether any column in the priority list exists in this table */
+	char *matchedCol = FindMatchingDistributionColumn(relationId);
+	if (matchedCol == NULL)
+	{
+		return false;
+	}
+
+	pfree(matchedCol);
+	return true;
+}
+
+
+/*
+ * AutoDistributeNewTable distributes the given relation using the first
+ * matching column from the citus.distribution_columns priority list as
+ * the hash distribution column.
+ */
+static void
+AutoDistributeNewTable(Oid relationId)
+{
+	char *distributionColumn = FindMatchingDistributionColumn(relationId);
+	Assert(distributionColumn != NULL);
+
+	char *colocateWith = "default";
+	bool shardCountIsStrict = false;
+
+	ereport(NOTICE, (errmsg("auto-distributing table \"%s\" by column \"%s\" "
+							"(from citus.distribution_columns)",
+							get_rel_name(relationId), distributionColumn)));
+
+	CreateDistributedTable(relationId, distributionColumn,
+						   DISTRIBUTE_BY_HASH, ShardCount,
+						   shardCountIsStrict, colocateWith);
+
+	pfree(distributionColumn);
+}
+
+
+/*
+ * TryOptimizeCTASForAutoDistribution intercepts CREATE TABLE AS SELECT
+ * and converts it into CREATE TABLE + INSERT INTO ... SELECT to avoid
+ * pulling all data through the coordinator. When the auto-distribution
+ * GUC is set and the output columns match, we:
+ *   1. Create the empty target table
+ *   2. Distribute it (auto-distribution)
+ *   3. Execute INSERT INTO target SELECT ... (Citus pushes this down)
+ *
+ * Returns true if the CTAS was handled via the optimized path.
+ * Returns false if the normal (unoptimized) path should be used.
+ */
+bool
+TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
+								   const char *queryString)
+{
+	/* Quick bail-out if the GUC is not set */
+	if (ParsedDistributionColumns == NIL)
+	{
+		return false;
+	}
+
+	if (IsBinaryUpgrade)
+	{
+		return false;
+	}
+
+	/* internal backends should not auto-distribute */
+	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
+	{
+		return false;
+	}
+
+	/* only handle regular tables, not materialized views */
+	if (ctasStmt->objtype != OBJECT_TABLE)
+	{
+		return false;
+	}
+
+	/* skip temp tables */
+	IntoClause *into = ctasStmt->into;
+	if (into->rel->relpersistence == RELPERSISTENCE_TEMP)
+	{
+		return false;
+	}
+
+	/*
+	 * If schema-based sharding is enabled and the target table would go
+	 * into a tenant schema, fall back to the normal path so that
+	 * ConvertNewTableIfNecessary can create a single-shard tenant table
+	 * (tenant schema takes precedence over auto-distribution).
+	 */
+	if (EnableSchemaBasedSharding)
+	{
+		Oid schemaOid = InvalidOid;
+		if (into->rel->schemaname != NULL)
+		{
+			schemaOid = get_namespace_oid(into->rel->schemaname, true);
+		}
+		else
+		{
+			List *searchPath = fetch_search_path(false);
+			if (searchPath != NIL)
+			{
+				schemaOid = linitial_oid(searchPath);
+				list_free(searchPath);
+			}
+		}
+		if (OidIsValid(schemaOid) && IsTenantSchema(schemaOid))
+		{
+			return false;
+		}
+	}
+
+	/*
+	 * Skip SELECT INTO syntax — it doesn't use "AS" so we can't easily
+	 * extract the SELECT part from the query string. Fall back to the
+	 * normal post-creation path for these.
+	 */
+	if (ctasStmt->is_select_into)
+	{
+		return false;
+	}
+
+	/*
+	 * The query must be an analyzed Query node by the time we get here.
+	 * If it's not (e.g. it's an EXECUTE), fall through to the normal path.
+	 */
+	if (!IsA(ctasStmt->query, Query))
+	{
+		return false;
+	}
+
+	Query *selectQuery = (Query *) ctasStmt->query;
+
+	/*
+	 * Check if any output column matches the distribution_columns GUC.
+	 * colNames from IntoClause override the target list column names.
+	 */
+	char *distColumn = FindMatchingDistributionColumnFromTargetList(
+		selectQuery->targetList, into->colNames);
+	if (distColumn == NULL)
+	{
+		return false;
+	}
+
+	/*
+	 * Build qualified table name for the target.
+	 */
+	const char *schemaName = into->rel->schemaname;
+	const char *tableName = into->rel->relname;
+	const char *qualifiedName = schemaName ?
+								quote_qualified_identifier(schemaName, tableName) :
+								quote_identifier(tableName);
+
+	/*
+	 * If IF NOT EXISTS is set and the table already exists, skip.
+	 */
+	if (ctasStmt->if_not_exists)
+	{
+		bool missingOk = true;
+		Oid existingOid = RangeVarGetRelid(into->rel, NoLock, missingOk);
+		if (OidIsValid(existingOid))
+		{
+			pfree(distColumn);
+			return false;
+		}
+	}
+
+	/*
+	 * Step 1: Build and execute CREATE TABLE with column definitions
+	 * derived from the SELECT's target list.
+	 */
+	StringInfoData createBuf;
+	initStringInfo(&createBuf);
+	appendStringInfo(&createBuf, "CREATE TABLE %s (", qualifiedName);
+
+	int colIdx = 0;
+	ListCell *colNameCell = list_head(into->colNames);
+	TargetEntry *tle = NULL;
+	foreach_declared_ptr(tle, selectQuery->targetList)
+	{
+		if (tle->resjunk)
+		{
+			continue;
+		}
+
+		const char *colName = NULL;
+		if (colNameCell != NULL)
+		{
+			colName = strVal(lfirst(colNameCell));
+			colNameCell = lnext(into->colNames, colNameCell);
+		}
+		else
+		{
+			colName = tle->resname;
+		}
+
+		if (colName == NULL)
+		{
+			/* Cannot determine column name, fall back to normal path */
+			pfree(createBuf.data);
+			pfree(distColumn);
+			return false;
+		}
+
+		Oid colType = exprType((Node *) tle->expr);
+		int32 colTypmod = exprTypmod((Node *) tle->expr);
+		Oid colCollation = exprCollation((Node *) tle->expr);
+
+		if (colIdx > 0)
+		{
+			appendStringInfoString(&createBuf, ", ");
+		}
+
+		bits16 formatFlags = FORMAT_TYPE_TYPEMOD_GIVEN | FORMAT_TYPE_FORCE_QUALIFY;
+		appendStringInfo(&createBuf, "%s %s",
+						 quote_identifier(colName),
+						 format_type_extended(colType, colTypmod, formatFlags));
+
+		/* Add COLLATE clause if non-default collation */
+		if (OidIsValid(colCollation) && colCollation != DEFAULT_COLLATION_OID)
+		{
+			appendStringInfo(&createBuf, " COLLATE %s",
+							 generate_collation_name(colCollation));
+		}
+
+		colIdx++;
+	}
+
+	if (colIdx == 0)
+	{
+		/* No columns — fall back */
+		pfree(createBuf.data);
+		pfree(distColumn);
+		return false;
+	}
+
+	appendStringInfoChar(&createBuf, ')');
+
+	/* Add WITH clause options if present */
+	if (into->options != NIL)
+	{
+		appendStringInfoString(&createBuf, " WITH (");
+		int optIdx = 0;
+		DefElem *opt = NULL;
+		foreach_declared_ptr(opt, into->options)
+		{
+			if (optIdx > 0)
+			{
+				appendStringInfoString(&createBuf, ", ");
+			}
+
+			if (opt->arg != NULL)
+			{
+				appendStringInfo(&createBuf, "%s = %s",
+								 opt->defname,
+								 defGetString(opt));
+			}
+			else
+			{
+				appendStringInfoString(&createBuf, opt->defname);
+			}
+			optIdx++;
+		}
+		appendStringInfoChar(&createBuf, ')');
+	}
+
+	/* Add tablespace if specified */
+	if (into->tableSpaceName != NULL)
+	{
+		appendStringInfo(&createBuf, " TABLESPACE %s",
+						 quote_identifier(into->tableSpaceName));
+	}
+
+	/* Add access method if specified (e.g. USING columnar) */
+	if (into->accessMethod != NULL)
+	{
+		appendStringInfo(&createBuf, " USING %s",
+						 quote_identifier(into->accessMethod));
+	}
+
+	/*
+	 * Execute the CREATE TABLE via SPI (utility commands can't go through
+	 * ExecuteQueryStringIntoDestReceiver). This will trigger
+	 * ConvertNewTableIfNecessary for the CREATE TABLE path,
+	 * which will auto-distribute the empty table.
+	 */
+	ereport(DEBUG1, (errmsg("optimized CTAS: creating empty distributed table "
+							"before INSERT...SELECT")));
+
+	int spiResult = SPI_connect();
+	if (spiResult != SPI_OK_CONNECT)
+	{
+		ereport(ERROR, (errmsg("could not connect to SPI manager")));
+	}
+
+	spiResult = SPI_execute(createBuf.data, false, 0);
+	if (spiResult != SPI_OK_UTILITY)
+	{
+		ereport(ERROR, (errmsg("failed to execute CREATE TABLE via SPI: %s",
+							   createBuf.data)));
+	}
+
+	/*
+	 * Need to increment command counter so that subsequent commands
+	 * can see the new table.
+	 */
+	CommandCounterIncrement();
+
+	/*
+	 * The table was created by SPI as a sub-command, so the utility hook
+	 * won't auto-distribute it (ConvertNewTableIfNecessary only runs for
+	 * top-level commands). We must explicitly distribute it here.
+	 */
+	bool missingOk = false;
+	Oid createdRelationId = RangeVarGetRelid(into->rel, NoLock, missingOk);
+
+	if (ShouldAutoDistributeNewTable(createdRelationId))
+	{
+		AutoDistributeNewTable(createdRelationId);
+	}
+
+	if (!IsCitusTable(createdRelationId))
+	{
+		/*
+		 * Table was created but not distributed. Execute INSERT ... SELECT
+		 * to populate it, but this won't benefit from pushdown.
+		 */
+		ereport(DEBUG1, (errmsg("optimized CTAS: table was not auto-distributed, "
+								"falling back to coordinator INSERT")));
+	}
+	else
+	{
+		ereport(NOTICE, (errmsg("optimized CTAS: table \"%s\" auto-distributed by "
+								"column \"%s\", using INSERT...SELECT for data",
+								tableName, distColumn)));
+	}
+
+	/*
+	 * Step 2: Build INSERT INTO target SELECT ... to populate the table.
+	 * We extract the SELECT portion from the original queryString by
+	 * scanning for the AS keyword that separates CREATE TABLE ... from
+	 * the query body.
+	 */
+	StringInfoData insertBuf;
+	initStringInfo(&insertBuf);
+
+	/*
+	 * Find the SELECT part of the CTAS statement. We look for AS followed
+	 * by SELECT, (, or WITH (for CTEs). We need to handle:
+	 *   CREATE TABLE t AS SELECT ...
+	 *   CREATE TABLE t AS (SELECT ...)
+	 *   CREATE TABLE t (col1, col2) AS SELECT ...
+	 *   CREATE TABLE t AS WITH cte AS (...) SELECT ...
+	 */
+	const char *selectStart = NULL;
+	const char *ptr = queryString;
+
+	/*
+	 * Scan for the AS keyword that precedes the SELECT query.
+	 * We need to skip past the table name and any column list.
+	 * Look for pattern: AS followed by SELECT, (, or WITH.
+	 */
+	while (*ptr != '\0')
+	{
+		/* skip string literals (handling '' escape sequences) */
+		if (*ptr == '\'')
+		{
+			ptr++;
+			while (*ptr != '\0')
+			{
+				if (*ptr == '\'')
+				{
+					if (*(ptr + 1) == '\'')
+					{
+						ptr += 2; /* skip escaped quote */
+					}
+					else
+					{
+						break; /* end of string literal */
+					}
+				}
+				else
+				{
+					ptr++;
+				}
+			}
+			if (*ptr != '\0')
+			{
+				ptr++;
+			}
+			continue;
+		}
+
+		/* skip quoted identifiers */
+		if (*ptr == '\"')
+		{
+			ptr++;
+			while (*ptr != '\0' && *ptr != '\"')
+			{
+				ptr++;
+			}
+			if (*ptr != '\0')
+			{
+				ptr++;
+			}
+			continue;
+		}
+
+		/* Check for AS keyword (case-insensitive) */
+		if ((ptr[0] == 'A' || ptr[0] == 'a') &&
+			(ptr[1] == 'S' || ptr[1] == 's') &&
+			(ptr == queryString || !isalnum((unsigned char) ptr[-1])) &&
+			!isalnum((unsigned char) ptr[2]) && ptr[2] != '_')
+		{
+			const char *afterAs = ptr + 2;
+
+			/* skip whitespace after AS */
+			while (*afterAs == ' ' || *afterAs == '\t' || *afterAs == '\n' ||
+				   *afterAs == '\r')
+			{
+				afterAs++;
+			}
+
+			/* Check if what follows is a SELECT query indicator */
+			if (pg_strncasecmp(afterAs, "SELECT", 6) == 0 ||
+				pg_strncasecmp(afterAs, "WITH", 4) == 0 ||
+				pg_strncasecmp(afterAs, "TABLE", 5) == 0 ||
+				pg_strncasecmp(afterAs, "VALUES", 6) == 0 ||
+				*afterAs == '(')
+			{
+				selectStart = afterAs;
+				break;
+			}
+		}
+
+		ptr++;
+	}
+
+	if (selectStart == NULL)
+	{
+		/*
+		 * Could not find the SELECT part — this shouldn't happen for
+		 * valid CTAS, but fall back gracefully. The table is already
+		 * created (empty), so just let the caller know we handled it.
+		 */
+		ereport(WARNING, (errmsg("optimized CTAS: could not extract SELECT "
+								 "from query string, table is empty")));
+		SPI_finish();
+		return true;
+	}
+
+	appendStringInfo(&insertBuf, "INSERT INTO %s %s",
+					 qualifiedName, selectStart);
+
+	spiResult = SPI_execute(insertBuf.data, false, 0);
+	if (spiResult != SPI_OK_INSERT)
+	{
+		ereport(ERROR, (errmsg("failed to execute INSERT...SELECT via SPI")));
+	}
+
+	SPI_finish();
+
+	return true;
+}
+
+
+/*
  * ConvertNewTableIfNecessary converts the given table to a tenant schema
- * table or a Citus managed table if necessary.
+ * table, an auto-distributed table, or a Citus managed table if necessary.
  *
  * Input node is expected to be a CreateStmt or a CreateTableAsStmt.
+ *
+ * The precedence is:
+ *  1. Tenant schema tables (citus.enable_schema_based_sharding)
+ *  2. Auto-distributed tables (citus.distribution_columns)
+ *  3. Citus managed tables (citus.use_citus_managed_tables)
  */
 void
 ConvertNewTableIfNecessary(Node *createStmt)
@@ -4274,6 +5008,16 @@ ConvertNewTableIfNecessary(Node *createStmt)
 
 			CreateTenantSchemaTable(createdRelationId);
 		}
+		else if (ShouldAutoDistributeNewTable(createdRelationId))
+		{
+			/*
+			 * citus.distribution_columns is set and the table has a matching column.
+			 * Distribute the table by that column. Because CREATE TABLE AS SELECT
+			 * already loaded data into the local table, CreateDistributedTable will
+			 * move the data to the shards automatically.
+			 */
+			AutoDistributeNewTable(createdRelationId);
+		}
 
 		/*
 		 * We simply ignore the tables created by using that syntax when using
@@ -4295,9 +5039,10 @@ ConvertNewTableIfNecessary(Node *createStmt)
 	}
 
 	/*
-	 * Check ShouldCreateTenantSchemaTable() before ShouldAddNewTableToMetadata()
-	 * because we don't want to unnecessarily add the table into metadata
-	 * (as a Citus managed table) before distributing it as a tenant table.
+	 * Check ShouldCreateTenantSchemaTable() before ShouldAutoDistributeNewTable()
+	 * and ShouldAddNewTableToMetadata() because we don't want to unnecessarily
+	 * add the table into metadata (as a Citus managed table) before distributing
+	 * it as a tenant table.
 	 */
 	if (ShouldCreateTenantSchemaTable(createdRelationId))
 	{
@@ -4310,6 +5055,15 @@ ConvertNewTableIfNecessary(Node *createStmt)
 		{
 			CreateTenantSchemaTable(createdRelationId);
 		}
+	}
+	else if (ShouldAutoDistributeNewTable(createdRelationId))
+	{
+		/*
+		 * citus.distribution_columns is set and the table has a matching column.
+		 * For CREATE TABLE (without AS SELECT), the table is empty so this is
+		 * very fast — no data movement needed.
+		 */
+		AutoDistributeNewTable(createdRelationId);
 	}
 	else if (ShouldAddNewTableToMetadata(createdRelationId))
 	{

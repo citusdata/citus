@@ -26,6 +26,11 @@
 
 extern bool AddAllLocalTablesToMetadata;
 extern bool EnableSchemaBasedSharding;
+extern char *DistributionColumns;
+extern List *ParsedDistributionColumns;
+
+extern bool CheckDistributionColumns(char **newval, void **extra, GucSource source);
+extern void AssignDistributionColumns(const char *newval, void *extra);
 
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
@@ -669,6 +674,8 @@ extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationI
 												  char *colname, bool missingTableOk);
 
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
+extern bool TryOptimizeCTASForAutoDistribution(CreateTableAsStmt *ctasStmt,
+												const char *queryString);
 extern void ConvertNewTableIfNecessary(Node *createStmt);
 extern void ConvertToTenantTableIfNecessary(AlterObjectSchemaStmt *alterObjectSchemaStmt);
 
