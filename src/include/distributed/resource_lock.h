@@ -248,6 +248,7 @@ extern void LockShardResource(uint64 shardId, LOCKMODE lockmode);
 /* Lock a co-location group */
 extern void LockColocationId(int colocationId, LOCKMODE lockMode);
 extern void UnlockColocationId(int colocationId, LOCKMODE lockMode);
+extern char * LockColocationIdCommand(int colocationId, LOCKMODE lockMode);
 
 /* Lock multiple shards for safe modification */
 extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);

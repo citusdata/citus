@@ -26,6 +26,7 @@
 #include "utils/lsyscache.h"
 #include "utils/varlena.h"
 
+#include "distributed/argutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/coordinator_protocol.h"
@@ -108,6 +109,7 @@ static void SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag);
 PG_FUNCTION_INFO_V1(lock_shard_metadata);
 PG_FUNCTION_INFO_V1(lock_shard_resources);
 PG_FUNCTION_INFO_V1(lock_relation_if_exists);
+PG_FUNCTION_INFO_V1(citus_internal_lock_colocation_id);
 
 /* Config variable managed via guc.c */
 bool EnableAcquiringUnsafeLockFromWorkers = false;
@@ -261,6 +263,26 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 
 		LockShardResource(shardId, lockMode);
 	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_lock_colocation_id calls LockColocationId.
+ */
+Datum
+citus_internal_lock_colocation_id(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "colocation_id");
+	int32 colocationId = PG_GETARG_INT32(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "lock_mode");
+	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(1));
+
+	LockColocationId(colocationId, lockMode);
 
 	PG_RETURN_VOID();
 }
@@ -476,6 +498,19 @@ UnlockColocationId(int colocationId, LOCKMODE lockMode)
 
 	SET_LOCKTAG_REBALANCE_COLOCATION(tag, (int64) colocationId);
 	LockRelease(&tag, lockMode, sessionLock);
+}
+
+
+/*
+ * LockColocationIdCommand returns a command to acquire a co-location id lock.
+ */
+char *
+LockColocationIdCommand(int colocationId, LOCKMODE lockMode)
+{
+	StringInfo lockCommand = makeStringInfo();
+	appendStringInfo(lockCommand, "SELECT citus_internal.lock_colocation_id(%d, %d)",
+					 colocationId, lockMode);
+	return lockCommand->data;
 }
 
 
