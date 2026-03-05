@@ -320,4 +320,48 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%existing%' ORDER BY 1;
 \c - - - :master_port
 
+-- test interdependent roles with grantor dependencies
+-- This test recreates the issue where role1 is used as a grantor for role2's grants,
+-- but role1 hasn't been granted admin option on the parent role yet.
+
+SELECT master_remove_node('localhost', :worker_2_port);
+
+CREATE ROLE read_only_role;
+CREATE ROLE interdep_role1;
+CREATE ROLE interdep_role2;
+
+-- Grant read_only_role to interdep_role1 WITH ADMIN OPTION
+-- This allows interdep_role1 to grant read_only_role to other roles
+GRANT read_only_role TO interdep_role1 WITH ADMIN OPTION;
+
+-- Grant read_only_role to interdep_role2, using interdep_role1 as the grantor
+-- Also make interdep_role1 a member of interdep_role2 with admin option
+GRANT read_only_role TO interdep_role2 GRANTED BY interdep_role1;
+GRANT interdep_role1 TO interdep_role2 WITH ADMIN OPTION;
+
+-- Verify the grant relationships on coordinator
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option 
+FROM pg_auth_members 
+WHERE roleid::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
+   OR member::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
+ORDER BY role, member;
+
+-- Add worker_2 back - this should succeed with our fix
+-- Before the fix, this would fail because interdep_role2 would be propagated before
+-- interdep_role1's admin option on read_only_role was set up
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+-- Verify the grants were properly propagated to worker_2
+\c - - - :worker_2_port
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option 
+FROM pg_auth_members 
+WHERE roleid::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
+   OR member::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
+ORDER BY role, member;
+
+\c - - - :master_port
+
+-- Clean up interdependent roles
+DROP ROLE interdep_role2, interdep_role1, read_only_role;
+
 DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
