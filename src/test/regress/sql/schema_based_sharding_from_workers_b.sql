@@ -174,16 +174,23 @@ BEGIN
 END;
 $func$ LANGUAGE plpgsql;
 
-\c - - - :worker_1_port
-
 -- When creating a tenant table from workers, we always fetch the next shard id
 -- and placement id from the coordinator because we never sync those sequences to
 -- workers. For this reason, along this test file, we always set the next shard id
 -- on the coordinator when needed, rather than setting it on the current worker node.
--- At the end of the test file, we reset it back fwiw.
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2091000;$$);
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
-SELECT pg_sleep(0.1); -- make sure that the GUC change is applied
+--
+-- Note that setting citus.next_shard_id on the coordinator would not work if the
+-- citus internal connection we use to execute master_get_new_shardid() on the
+-- coordinator changes because the underlying function, GetNextShardIdInternal(),
+-- just increments NextShardId for the current session. For this reason, we instead
+-- set pg_dist_shardid_seq on the coordinator in the tests where we test creating
+-- distributed tables from a worker and where we want to use consistent shard ids.
+--
+-- At the end of the test file, we reset pg_dist_shardid_seq.
+SELECT last_value::bigint INTO pg_dist_shardid_seq_prev_state FROM pg_catalog.pg_dist_shardid_seq;
+
+\c - - - :worker_1_port
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2091000;$$);
 
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
@@ -440,9 +447,7 @@ CREATE TYPE "simple_!\'custom_type" AS (a integer, b integer);
 
 \c - - - :worker_1_port
 
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2092000;$$);
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
-SELECT pg_sleep(0.1);
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2092000;$$);
 
 SET citus.shard_replication_factor TO 1;
 SET search_path TO alter_table_add_column;
@@ -602,9 +607,7 @@ GRANT USAGE ON SCHEMA tenant_9 TO rls_test_user_1, rls_test_user_2;
 
 \c - - - :worker_1_port
 
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2093000;$$);
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
-SELECT pg_sleep(0.1);
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2093000;$$);
 
 SET citus.shard_replication_factor TO 1;
 SET search_path TO alter_table_add_column;
@@ -714,9 +717,7 @@ $local_table_3_notice_value_tf$ LANGUAGE plpgsql;
 
 \c - - - :worker_1_port
 
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2093500;$$);
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
-SELECT pg_sleep(0.1);
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2093500;$$);
 
 SET citus.shard_replication_factor TO 1;
 SET search_path TO alter_table_add_column;
@@ -1512,7 +1513,13 @@ $Q$);
 
 DROP ROLE test_non_super_user, rls_test_user_1, rls_test_user_2;
 
--- reset it fwiw
-ALTER SYSTEM RESET citus.next_shard_id;
-SELECT pg_reload_conf();
-SELECT pg_sleep(0.1);
+-- reset pg_dist_shardid_seq on the coordinator
+DO $proc$
+DECLARE
+    v_last_value bigint;
+BEGIN
+    SELECT last_value INTO v_last_value FROM pg_dist_shardid_seq_prev_state;
+    EXECUTE format('ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH %s', v_last_value);
+END$proc$;
+
+DROP TABLE pg_dist_shardid_seq_prev_state;
