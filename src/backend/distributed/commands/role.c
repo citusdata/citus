@@ -1015,6 +1015,16 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 
 	EnsureSequentialModeForRoleDDL();
 
+	/*
+	 * If we're on a worker, first acquire the lock on the coordinator via
+	 * the remote metadata connection to the coordinator. Fwiw, we'll acquire
+	 * the lock on the local node as well.
+	 */
+	if (!IsCoordinator())
+	{
+		SendCommandToCoordinator(LockPgDistNodeCommand(RowShareLock));
+	}
+
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	CreateRoleStmt *createRoleStmt = castNode(CreateRoleStmt, node);

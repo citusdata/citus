@@ -189,7 +189,16 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	 * This guarantees that all active nodes will have the object, because they will
 	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
+	 *
+	 * If we're on a worker, first acquire the lock on the coordinator via the remote
+	 * metadata connection to the coordinator. Fwiw, we'll acquire the lock on the local
+	 * node as well via ActivePrimaryRemoteNodeList().
 	 */
+	if (!IsCoordinator())
+	{
+		SendCommandToCoordinator(LockPgDistNodeCommand(RowShareLock));
+	}
+
 	List *remoteNodeList = ActivePrimaryRemoteNodeList(RowShareLock);
 
 	/*

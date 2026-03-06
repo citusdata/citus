@@ -681,8 +681,21 @@ BlockDistributedQueriesOnMetadataNodes(void)
 	/* only superuser can disable node */
 	Assert(superuser());
 
-	SendCommandToWorkersWithMetadata(
-		"LOCK TABLE pg_catalog.pg_dist_node IN EXCLUSIVE MODE;");
+	SendCommandToWorkersWithMetadata(LockPgDistNodeCommand(ExclusiveLock));
+}
+
+
+/*
+ * LockPgDistNodeCommand returns the command to acquire the lock on pg_dist_node
+ * with the given lock mode.
+ */
+char *
+LockPgDistNodeCommand(LOCKMODE lockMode)
+{
+	StringInfo lockCommand = makeStringInfo();
+	appendStringInfo(lockCommand, "LOCK TABLE pg_catalog.pg_dist_node IN %s MODE;",
+					 LockModeToLockModeText(lockMode));
+	return lockCommand->data;
 }
 
 

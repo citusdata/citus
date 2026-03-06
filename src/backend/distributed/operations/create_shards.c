@@ -410,7 +410,16 @@ CreateSingleShardTableShardWithRoundRobinPolicy(Oid relationId, uint32 colocatio
 	 *
 	 * Also take a RowShareLock on pg_dist_node to disallow concurrent
 	 * node list changes that require an exclusive lock.
+	 *
+	 * If we're on a worker, first acquire the lock on the coordinator via
+	 * the remote metadata connection to the coordinator. Fwiw, we'll acquire
+	 * the lock on the local node as well via DistributedTablePlacementNodeList().
 	 */
+	if (!IsCoordinator())
+	{
+		SendCommandToCoordinator(LockPgDistNodeCommand(RowShareLock));
+	}
+
 	List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 

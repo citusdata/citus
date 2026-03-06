@@ -65,6 +65,7 @@ extern char *WorkerListFileName;
 extern char *CurrentCluster;
 
 /* Function declarations for finding worker nodes to place shards on */
+extern char * LockPgDistNodeCommand(LOCKMODE lockMode);
 extern WorkerNode * WorkerGetRandomCandidateNode(List *currentNodeList);
 extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 													 uint64 shardId,
