@@ -2126,18 +2126,7 @@ DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
 DROP TABLE mx_ref;
 DROP TABLE dist_table_1, dist_table_2;
-SET client_min_messages TO ERROR;
-SET citus.enable_ddl_propagation TO off; -- for enterprise
 CREATE USER non_super_metadata_user;
-SET citus.enable_ddl_propagation TO on;
-RESET client_min_messages;
-SELECT run_command_on_workers('CREATE USER non_super_metadata_user');
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
 GRANT EXECUTE ON FUNCTION start_metadata_sync_to_node(text,int) TO non_super_metadata_user;
 GRANT EXECUTE ON FUNCTION stop_metadata_sync_to_node(text,int,bool) TO non_super_metadata_user;
 GRANT ALL ON pg_dist_node TO non_super_metadata_user;
