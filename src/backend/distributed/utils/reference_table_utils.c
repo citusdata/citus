@@ -112,6 +112,23 @@ EnsureReferenceTablesExistOnAllNodes(void)
  *
  * The transferMode is passed on to the implementation of the copy to control the locks
  * and transferMode.
+ *
+ * When this function is called from the coordinator, it acquires and releases colocation
+ * id locks locally as needed. However, when this function is called from a worker, we
+ * still need to acquire the colocation locks on the coordinator, by using a remote
+ * connection to the coordinator in that case, but this would mean acquiring and releasing
+ * those locks via separate commands. However, as we cannot release a transactional
+ * advisory lock via a different command even in the same transaction (*), we commit the
+ * remote transaction that we used to acquire those locks on the coordinator, in order to
+ * release them. We achieve this by using a connection that's exclusively used for dealing
+ * with those locks, and that's initially outside of any transaction, so we can send BEGIN
+ * / COMMIT over that connection in the middle of the local transaction.
+ *
+ * (*): This is because the resource owner changes between commands even within the same
+ *      transcation, so today it's not possible to release a transactional advisory lock
+ *      in a different command. This is also the reason why Postgres provies
+ *      pg_advisory_xact_lock() but doesn't provide a UDF to release a transactional
+ *      advisory lock.
  */
 void
 EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
@@ -129,6 +146,38 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	}
 
 	/*
+	 * We always want to acquire colocation id locks on the coordinator, so we
+	 * need to open a connection to the coordinator when we're on a worker node.
+	 */
+	MultiConnection *coordinatorLockConn = NULL;
+	if (!IsCoordinator())
+	{
+		WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
+		char *coordinatorHostname = coordinator->workerName;
+		uint32 coordinatorPort = coordinator->workerPort;
+
+		coordinatorLockConn = GetNodeUserDatabaseConnection(
+			OUTSIDE_TRANSACTION, coordinatorHostname, coordinatorPort,
+			CurrentUserName(), NULL);
+		if (PQstatus(coordinatorLockConn->pgConn) != CONNECTION_OK)
+		{
+			ReportConnectionError(coordinatorLockConn, WARNING);
+			ereport(ERROR, (errmsg("could not open a connection to coordinator "
+								   "while checking if reference tables are "
+								   "replicated to all nodes, see the earlier "
+								   "warnings"),
+							errdetail("Checking reference table replication "
+									  "requires connectivity to coordinator.")));
+		}
+
+		UseCoordinatedTransaction();
+
+		ClaimConnectionExclusively(coordinatorLockConn);
+
+		RemoteTransactionBegin(coordinatorLockConn);
+	}
+
+	/*
 	 * Most of the time this function should result in a conclusion where we do not need
 	 * to copy any reference tables. To prevent excessive locking the majority of the time
 	 * we run our precondition checks first with a lower lock. If, after checking with the
@@ -142,7 +191,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	 * DROP TABLE and create_reference_table calls so that the list of reference tables we
 	 * operate on are stable.
 	 *
-	 * Since the changes to the reference table placements are made via loopback
+	 * Since the changes to the reference table placements are made via loopback or remote
 	 * connections we release the locks held at the end of this function. Due to Citus
 	 * only running transactions in READ COMMITTED mode we can be sure that other
 	 * transactions correctly find the metadata entries.
@@ -150,20 +199,39 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	LOCKMODE lockmodes[] = { AccessShareLock, ExclusiveLock };
 	for (int lockmodeIndex = 0; lockmodeIndex < lengthof(lockmodes); lockmodeIndex++)
 	{
-		LockColocationId(colocationId, lockmodes[lockmodeIndex]);
+		if (!coordinatorLockConn)
+		{
+			LockColocationId(colocationId,
+							 lockmodes[lockmodeIndex]);
+		}
+		else
+		{
+			char *command =
+				LockColocationIdCommand(colocationId,
+										lockmodes[lockmodeIndex]);
+			ExecuteCriticalRemoteCommand(coordinatorLockConn, command);
+		}
 
 		referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
 		if (referenceTableIdList == NIL)
 		{
-			/*
-			 * No reference tables exist, make sure that any locks obtained earlier are
-			 * released. It will probably not matter, but we release the locks in the
-			 * reverse order we obtained them in.
-			 */
-			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
-				 releaseLockmodeIndex--)
+			if (coordinatorLockConn)
 			{
-				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+				RemoteTransactionCommit(coordinatorLockConn);
+				CloseConnection(coordinatorLockConn);
+			}
+			else
+			{
+				/*
+				 * No reference tables exist, make sure that any locks obtained earlier are
+				 * released. It will probably not matter, but we release the locks in the
+				 * reverse order we obtained them in.
+				 */
+				for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+					 releaseLockmodeIndex--)
+				{
+					UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+				}
 			}
 			return;
 		}
@@ -189,15 +257,23 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		newWorkersList = WorkersWithoutReferenceTablePlacement(shardId, AccessShareLock);
 		if (list_length(newWorkersList) == 0)
 		{
-			/*
-			 * All workers already have a copy of the reference tables, make sure that
-			 * any locks obtained earlier are released. It will probably not matter, but
-			 * we release the locks in the reverse order we obtained them in.
-			 */
-			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
-				 releaseLockmodeIndex--)
+			if (coordinatorLockConn)
 			{
-				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+				RemoteTransactionCommit(coordinatorLockConn);
+				CloseConnection(coordinatorLockConn);
+			}
+			else
+			{
+				/*
+				 * All workers already have a copy of the reference tables, make sure that
+				 * any locks obtained earlier are released. It will probably not matter, but
+				 * we release the locks in the reverse order we obtained them in.
+				 */
+				for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+					 releaseLockmodeIndex--)
+				{
+					UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+				}
 			}
 			return;
 		}
@@ -252,8 +328,16 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		const char *userName = CitusExtensionOwnerName();
 		int connectionFlags = OUTSIDE_TRANSACTION;
 
+		char *coordinatorHostname = LocalHostName;
+		int32 coordinatorPort = PostPortNumber;
+		if (!IsCoordinator())
+		{
+			WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
+			coordinatorHostname = coordinator->workerName;
+			coordinatorPort = coordinator->workerPort;
+		}
 		MultiConnection *connection = GetNodeUserDatabaseConnection(
-			connectionFlags, LocalHostName, PostPortNumber,
+			connectionFlags, coordinatorHostname, coordinatorPort,
 			userName, NULL);
 
 		if (PQstatus(connection->pgConn) == CONNECTION_OK)
@@ -290,17 +374,25 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		CloseConnection(connection);
 	}
 
-	/*
-	 * Since reference tables have been copied via a loopback connection we do not have
-	 * to retain our locks. Since Citus only runs well in READ COMMITTED mode we can be
-	 * sure that other transactions will find the reference tables copied.
-	 * We have obtained and held multiple locks, here we unlock them all in the reverse
-	 * order we have obtained them in.
-	 */
-	for (int releaseLockmodeIndex = lengthof(lockmodes) - 1; releaseLockmodeIndex >= 0;
-		 releaseLockmodeIndex--)
+	if (coordinatorLockConn)
 	{
-		UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+		RemoteTransactionCommit(coordinatorLockConn);
+		CloseConnection(coordinatorLockConn);
+	}
+	else
+	{
+		/*
+		 * Since reference tables have been copied via a loopback or remote connection we do not have
+		 * to retain our locks. Since Citus only runs well in READ COMMITTED mode we can be
+		 * sure that other transactions will find the reference tables copied.
+		 * We have obtained and held multiple locks, here we unlock them all in the reverse
+		 * order we have obtained them in.
+		 */
+		for (int releaseLockmodeIndex = lengthof(lockmodes) - 1;
+			 releaseLockmodeIndex >= 0; releaseLockmodeIndex--)
+		{
+			UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+		}
 	}
 }
 
@@ -368,6 +460,8 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 	LOCKMODE lockmodes[] = { AccessShareLock, ExclusiveLock };
 	for (int lockmodeIndex = 0; lockmodeIndex < lengthof(lockmodes); lockmodeIndex++)
 	{
+		/* acquiring the lock locally should be okay as we're on the coordinator */
+		Assert(IsCoordinator());
 		LockColocationId(colocationId, lockmodes[lockmodeIndex]);
 
 		referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
@@ -705,6 +799,9 @@ HasNodesWithMissingReferenceTables(List **referenceTableList)
 		/* we have no reference table yet. */
 		return false;
 	}
+
+	/* acquiring the lock locally should be okay as we're on the coordinator */
+	Assert(IsCoordinator());
 	LockColocationId(colocationId, AccessShareLock);
 
 	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
@@ -769,6 +866,9 @@ AnyRelationsModifiedInTransaction(List *relationIdList)
  * WorkersWithoutReferenceTablePlacement returns a list of workers (WorkerNode) that
  * do not yet have a placement for the given reference table shard ID, but are
  * supposed to.
+ *
+ * Note that this acquires a lock on pg_dist_node with provided lock mode on the
+ * coordinator as well, and doesn't release it until the end of the transaction.
  */
 static List *
 WorkersWithoutReferenceTablePlacement(uint64 shardId, LOCKMODE lockMode)
@@ -776,6 +876,16 @@ WorkersWithoutReferenceTablePlacement(uint64 shardId, LOCKMODE lockMode)
 	List *workersWithoutPlacements = NIL;
 
 	List *shardPlacementList = ActiveShardPlacementList(shardId);
+
+	/*
+	 * If we're on a worker, first acquire the lock on the coordinator via the
+	 * remote metadata connection to the coordinator. Fwiw, we'll acquire the
+	 * lock on the local node as well via ReferenceTablePlacementNodeList().
+	 */
+	if (!IsCoordinator())
+	{
+		SendCommandToCoordinator(LockPgDistNodeCommand(lockMode));
+	}
 
 	List *workerNodeList = ReferenceTablePlacementNodeList(lockMode);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
