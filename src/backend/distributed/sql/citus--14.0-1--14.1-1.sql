@@ -7,3 +7,5 @@
 #include "udfs/worker_apply_sequence_command/14.1-1.sql"
 
 #include "udfs/citus_internal_lock_colocation_id/14.1-1.sql"
+
+#include "udfs/citus_internal_acquire_placement_colocation_lock/14.1-1.sql"
