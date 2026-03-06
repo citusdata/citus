@@ -181,6 +181,24 @@ SendCommandToRemoteWorkersWithMetadata(const char *command)
 
 
 /*
+ * SendCommandToCoordinator sends a command to coordinator by opening a super
+ * user connection. * Command is committed on the coordinator when the local
+ * transaction commits. The connection is made as the extension owner to ensure
+ * write access to the Citus metadata tables.
+ *
+ * Since we prevent to open superuser connections for metadata tables, it is
+ * discouraged to use it. Consider using it only for locking metadata tables
+ * on the coordinator before creating distributed tables or before propagating
+ * pg_dist_object tuples for dependent objects.
+ */
+void
+SendCommandToCoordinatorViaSuperUser(const char *command)
+{
+	SendCommandToCoordinatorParams(command, CitusExtensionOwnerName(), 0, NULL, NULL);
+}
+
+
+/*
  * SendCommandToCoordinator sends a command to coordinator.
  * Command is committed on the coordinator when the local transaction commits.
  */
