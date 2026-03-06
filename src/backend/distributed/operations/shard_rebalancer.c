@@ -296,6 +296,9 @@ static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
 											bool ParallelTransferReferenceTables,
 											bool ParallelTransferColocatedShards);
 static void AcquireRebalanceColocationLock(Oid relationId, const char *operationName);
+static char * AcquirePlacementColocationLockCommand(Oid relationId, int lockMode);
+static LockAcquireResult AcquirePlacementColocationLockLocally(Oid relationId,
+															   int lockMode);
 static void ExecutePlacementUpdates(List *placementUpdateList, Oid
 									shardReplicationModeOid, char *noticeOperation);
 static float4 CalculateUtilization(float4 totalCost, float4 capacity);
@@ -333,6 +336,7 @@ static void UpdateShardMoveDependencies(PlacementUpdateEvent *move, uint64 coloc
 										ShardMoveDependencies shardMoveDependencies);
 
 /* declarations for dynamic loading */
+PG_FUNCTION_INFO_V1(citus_internal_acquire_placement_colocation_lock);
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
 PG_FUNCTION_INFO_V1(replicate_table_shards);
 PG_FUNCTION_INFO_V1(get_rebalance_table_shards_plan);
@@ -809,11 +813,131 @@ AcquireRebalanceColocationLock(Oid relationId, const char *operationName)
  * AcquirePlacementColocationLock tries to acquire a lock for
  * rebalance/replication while moving/copying the placement. If this
  * is it not possible it fails instantly because this means
- * another move/copy is currently happening. This would really mess up planning.
+ * another move/copy is currently happening. This would really mess
+ * up planning.
+ *
+ * If we're on a worker, we acquire the lock on the coordinator via
+ * the remote metadata connection to the coordinator.
  */
 void
 AcquirePlacementColocationLock(Oid relationId, int lockMode,
 							   const char *operationName)
+{
+	LockAcquireResult result = LOCKACQUIRE_NOT_AVAIL;
+	if (IsCoordinator())
+	{
+		result = AcquirePlacementColocationLockLocally(relationId, lockMode);
+	}
+	else
+	{
+		UseCoordinatedTransaction();
+		Use2PCForCoordinatedTransaction();
+
+		WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
+		MultiConnection *connection =
+			GetNodeConnection(REQUIRE_METADATA_CONNECTION,
+							  coordinator->workerName,
+							  coordinator->workerPort);
+
+		if (PQstatus(connection->pgConn) != CONNECTION_OK)
+		{
+			ReportConnectionError(connection, WARNING);
+			ereport(ERROR, (errmsg("could not connect to coordinator to acquire "
+								   "placement colocation lock required to %s %s",
+								   operationName,
+								   generate_qualified_relation_name(relationId)),
+							errdetail("The operation requires connectivity to "
+									  "coordinator when running from a worker.")));
+		}
+
+		MarkRemoteTransactionCritical(connection);
+
+		RemoteTransactionBeginIfNecessary(connection);
+
+		char *command = AcquirePlacementColocationLockCommand(relationId, lockMode);
+		int querySent = SendRemoteCommand(connection, command);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+
+		bool raiseInterrupts = true;
+		PGresult *remoteResult = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (!IsResponseOK(remoteResult))
+		{
+			ReportResultError(connection, remoteResult, ERROR);
+		}
+
+		int64 rowCount = PQntuples(remoteResult);
+		int64 colCount = PQnfields(remoteResult);
+		if (rowCount != 1 || colCount != 1)
+		{
+			ereport(ERROR, (errmsg("unexpected result from the coordinator when "
+								   "acquiring placement colocation lock")));
+		}
+
+		result = ParseIntField(remoteResult, 0, 0);
+
+		PQclear(remoteResult);
+		ForgetResults(connection);
+	}
+
+	if (!result)
+	{
+		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
+							   operationName,
+							   generate_qualified_relation_name(relationId)),
+						errdetail("It means that either a concurrent shard move "
+								  "or colocated distributed table creation is "
+								  "happening."),
+						errhint("Make sure that the concurrent operation has "
+								"finished and re-run the command")));
+	}
+}
+
+
+/*
+ * AcquirePlacementColocationLockCommand returns a command to call
+ * citus_internal_acquire_placement_colocation_lock().
+ */
+static char *
+AcquirePlacementColocationLockCommand(Oid relationId, int lockMode)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT citus_internal.acquire_placement_colocation_lock(%u, %d)",
+					 relationId, lockMode);
+	return command->data;
+}
+
+
+/*
+ * citus_internal_acquire_placement_colocation_lock calls
+ * AcquirePlacementColocationLockLocally().
+ */
+Datum
+citus_internal_acquire_placement_colocation_lock(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "relation_id");
+	Oid relationId = PG_GETARG_OID(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "lock_mode");
+	int lockMode = PG_GETARG_INT32(1);
+
+	LockAcquireResult result =
+		AcquirePlacementColocationLockLocally(relationId, lockMode);
+	PG_RETURN_INT32(result);
+}
+
+
+/*
+ * AcquirePlacementColocationLockLocally tries to acquire a lock for
+ * rebalance/replication while moving/copying the placement.
+ */
+static LockAcquireResult
+AcquirePlacementColocationLockLocally(Oid relationId, int lockMode)
 {
 	uint32 lockId = relationId;
 	LOCKTAG tag;
@@ -826,18 +950,7 @@ AcquirePlacementColocationLock(Oid relationId, int lockMode,
 
 	SET_LOCKTAG_REBALANCE_PLACEMENT_COLOCATION(tag, (int64) lockId);
 
-	LockAcquireResult lockAcquired = LockAcquire(&tag, lockMode, false, true);
-	if (!lockAcquired)
-	{
-		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
-							   operationName,
-							   generate_qualified_relation_name(relationId)),
-						errdetail("It means that either a concurrent shard move "
-								  "or colocated distributed table creation is "
-								  "happening."),
-						errhint("Make sure that the concurrent operation has "
-								"finished and re-run the command")));
-	}
+	return LockAcquire(&tag, lockMode, false, true);
 }
 
 
