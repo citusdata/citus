@@ -1336,6 +1336,17 @@ SingleShardTableColocationNodeId(uint32 colocationId)
 	List *tablesInColocationGroup = ColocationGroupTableList(colocationId, 0);
 	if (list_length(tablesInColocationGroup) == 0)
 	{
+		/*
+		 * If we're on a worker, first acquire the lock on the coordinator via
+		 * the remote metadata connection to the coordinator as superuser. Fwiw,
+		 * we'll acquire the lock on the local node as well via
+		 * DistributedTablePlacementNodeList().
+		 */
+		if (!IsCoordinator())
+		{
+			LockPgDistNodeOnCoordinatorViaSuperUser(RowShareLock);
+		}
+
 		int workerNodeIndex =
 			EmptySingleShardTableColocationDecideNodeId(colocationId);
 		List *workerNodeList = DistributedTablePlacementNodeList(RowShareLock);

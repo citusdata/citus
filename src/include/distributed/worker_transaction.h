@@ -116,6 +116,7 @@ extern void SendCommandToWorkersWithMetadataViaSuperUser(const char *command);
 extern void SendCommandListToWorkersWithMetadata(List *commands);
 extern void SendCommandToRemoteNodesWithMetadata(const char *command);
 extern void SendCommandToRemoteWorkersWithMetadata(const char *command);
+extern void SendCommandToCoordinatorViaSuperUser(const char *command);
 extern void SendCommandToCoordinator(const char *command);
 extern void SendCommandToRemoteNodesWithMetadataViaSuperUser(const char *command);
 extern void SendCommandListToRemoteNodesWithMetadata(List *commands);

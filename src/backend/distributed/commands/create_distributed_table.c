@@ -1561,6 +1561,11 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 	List *targetNodeList = NIL;
 	if (tableType == SINGLE_SHARD_DISTRIBUTED)
 	{
+		/*
+		 * Note that when run from a worker, SingleShardTableColocationNodeId()
+		 * will acquire the lock on pg_dist_node via the coordinator as well,
+		 * if needed.
+		 */
 		uint32 targetNodeId = SingleShardTableColocationNodeId(colocationId);
 		if (targetNodeId != CoordinatorNodeIfAddedAsWorkerOrError()->nodeId)
 		{
@@ -1573,6 +1578,17 @@ ConvertCitusLocalTableToTableType(Oid relationId, CitusTableType tableType,
 	}
 	else if (tableType == REFERENCE_TABLE)
 	{
+		/*
+		 * If we're on a worker, first acquire the lock on the coordinator via
+		 * the remote metadata connection to the coordinator as superuser. Fwiw,
+		 * we'll acquire the lock on the local node as well via
+		 * ActivePrimaryNonCoordinatorNodeList().
+		 */
+		if (!IsCoordinator())
+		{
+			LockPgDistNodeOnCoordinatorViaSuperUser(ShareLock);
+		}
+
 		targetNodeList = ActivePrimaryNonCoordinatorNodeList(ShareLock);
 		targetNodeList = SortList(targetNodeList, CompareWorkerNodes);
 	}
