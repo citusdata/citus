@@ -22,7 +22,7 @@ Planning Review Mode: multi-model
 Planning Review Interactive: smart
 Planning Review Models: latest GPT, latest Gemini, latest Claude Opus
 Custom Workflow Instructions: none
-Initial Prompt: none
+Initial Prompt: Prepared statements in Citus currently re-parse and re-plan queries on remote shards every time, so the benefit of prepared statements degrades as cluster size increases. The POC should demonstrate that prepared statements on distributed tables are equally effective locally and remotely — remote shard queries should have their plans cached just like local ones. Priority is a working prototype that can be benchmarked. Constraints: (1) Fast-path queries only (single-shard). (2) Ignore DDL invalidation. (3) Ignore node additions/removals/rebalance. (4) Rely on Postgres' per-connection prepared statement lifecycle. Goal is to measure whether the performance improvement justifies pursuing the more complex aspects.
 Issue URL: none
 Remote: origin
 Artifact Lifecycle: commit-and-clean
