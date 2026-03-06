@@ -319,29 +319,7 @@ CitusExecOneTaskScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		bool useFullExecutor = RequestedForExplainAnalyze(scanState);
-
-		/*
-		 * Fall back to the full executor for tasks with multiple placements
-		 * (e.g., reference table writes). The one-task executor only handles a
-		 * single connection, but multi-placement writes need to replicate to
-		 * all placements.
-		 */
-		if (!useFullExecutor)
-		{
-			Job *job = scanState->distributedPlan->workerJob;
-			List *taskList = job->taskList;
-			if (list_length(taskList) == 1)
-			{
-				Task *task = linitial(taskList);
-				if (list_length(task->taskPlacementList) > 1)
-				{
-					useFullExecutor = true;
-				}
-			}
-		}
-
-		if (useFullExecutor)
+		if (RequestedForExplainAnalyze(scanState))
 		{
 			AdaptiveExecutor(scanState);
 		}

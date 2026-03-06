@@ -1256,14 +1256,6 @@ OneTaskAdaptiveExecutor(CitusScanState *scanState)
 		/* receive results using simple WaitLatchOrSocket polling */
 		uint64 rowsProcessed = 0;
 
-		/*
-		 * For replicated tables (e.g., reference tables), modifications go to
-		 * both local and remote placements.  When a local task already ran and
-		 * stored the RETURNING rows, the remote execution still needs to
-		 * happen (for replication) but must NOT duplicate the rows.
-		 */
-		bool storeRows = (localTaskList == NIL);
-
 		MemoryContext rowContext =
 			AllocSetContextCreate(CurrentMemoryContext,
 								  "RowContext",
@@ -1314,7 +1306,7 @@ OneTaskAdaptiveExecutor(CitusScanState *scanState)
 			if (resultStatus == PGRES_COMMAND_OK)
 			{
 				char *currentAffectedTupleString = PQcmdTuples(result);
-				if (storeRows && *currentAffectedTupleString != '\0')
+				if (*currentAffectedTupleString != '\0')
 				{
 					rowsProcessed += pg_strtoint64(currentAffectedTupleString);
 				}
@@ -1332,7 +1324,7 @@ OneTaskAdaptiveExecutor(CitusScanState *scanState)
 				ReportResultError(connection, result, ERROR);
 			}
 
-			if (!storeRows || tupleDescriptor == NULL)
+			if (tupleDescriptor == NULL)
 			{
 				PQclear(result);
 				continue;
@@ -1412,8 +1404,7 @@ OneTaskAdaptiveExecutor(CitusScanState *scanState)
 		/* release connection back to pool */
 		UnclaimConnection(connection);
 
-		/* set the rows processed count for DML (skip if local execution already counted) */
-		if (localTaskList == NIL)
+		/* set the rows processed count for DML */
 		{
 			CmdType commandType = job->jobQuery->commandType;
 			if (commandType != CMD_SELECT)
@@ -1429,13 +1420,6 @@ finish:
 	if (TaskListModifiesDatabase(distributedPlan->modLevel, taskList))
 	{
 		XactModificationLevel = XACT_MODIFICATION_DATA;
-	}
-
-	/* sort RETURNING results if needed */
-	CmdType commandType = job->jobQuery->commandType;
-	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
-	{
-		SortTupleStore(scanState);
 	}
 
 	MemoryContextSwitchTo(oldContext);
