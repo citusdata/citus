@@ -241,6 +241,8 @@ jobs:
       citus_libdir: "/opt/citus-versions/v14.0.0"
       citus_libdir_label: "v14.0.0"
       n_1_mode: "workeronly"
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-coordinator-n-1:
     name: Test Citus Coordinator N-1
     uses: ./.github/workflows/run_tests.yml
