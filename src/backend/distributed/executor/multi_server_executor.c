@@ -24,6 +24,7 @@
 
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/log_utils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -103,7 +104,9 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	if (EnableSingleTaskFastPath &&
 		distributedPlan->fastPathRouterPlan &&
 		list_length(job->dependentJobList) == 0 &&
-		!IsMultiRowInsert(job->jobQuery))
+		!IsMultiRowInsert(job->jobQuery) &&
+		!(distributedPlan->modLevel > ROW_MODIFY_READONLY &&
+		  IsCitusTableType(distributedPlan->targetRelationId, REFERENCE_TABLE)))
 	{
 		return MULTI_EXECUTOR_ONE_TASK_ADAPTIVE;
 	}

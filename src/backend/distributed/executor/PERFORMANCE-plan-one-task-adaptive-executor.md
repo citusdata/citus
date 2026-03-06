@@ -35,13 +35,14 @@ psql -p 9700 -d citus -c "
   DROP TABLE IF EXISTS bench_kv;
   CREATE TABLE bench_kv (
       kid   bigint PRIMARY KEY,
-      val   bigint DEFAULT 0
+      val   bigint DEFAULT 0,
+      data text
   );
   SELECT create_distributed_table('bench_kv', 'kid');
 
   -- pre-load 1 000 000 rows so UPDATE/SELECT have data to hit
   INSERT INTO bench_kv
-    SELECT g, 0 FROM generate_series(1, 1000000) g;
+    SELECT g, random(1, 1000000000), md5(g::text) FROM generate_series(1, 1000000) g;
 "
 ```
 
