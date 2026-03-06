@@ -110,6 +110,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport,
 						  NodeMetadata *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void BlockDistributedQueriesOnMetadataNodes(void);
+static char * LockPgDistNodeCommand(LOCKMODE lockMode);
 static WorkerNode * TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor,
 									  HeapTuple heapTuple);
 static bool NodeIsLocal(WorkerNode *worker);
@@ -681,8 +682,49 @@ BlockDistributedQueriesOnMetadataNodes(void)
 	/* only superuser can disable node */
 	Assert(superuser());
 
-	SendCommandToWorkersWithMetadata(
-		"LOCK TABLE pg_catalog.pg_dist_node IN EXCLUSIVE MODE;");
+	SendCommandToWorkersWithMetadata(LockPgDistNodeCommand(ExclusiveLock));
+}
+
+
+/*
+ * LockPgDistNodeOnCoordinatorViaSuperUser locks pg_dist_node on coordinator via
+ * superuser connection. This is mostly useful when we're on a worker and need
+ * to acquire a lock pg_dist_node on coordinator.
+ *
+ * Note that only superuser can lock pg_dist_node, so we always send the command
+ * using a superuser connection.
+ *
+ * Also note that we should not have acquired a stronger lock on pg_dist_node
+ * earlier in the transaction, and we should not acquire one later using a
+ * non-superuser connection, because that would lead to a self-deadlock.
+ *
+ * Today, none of the operations that can be initiated from a worker can
+ * directly acquire such a strong lock on pg_dist_node on the coordinator and
+ * cannot also cause the coordinator to acquire one internally. However, if
+ * in the future allowing a new feature from workers causes such an issue, then
+ * we might want to consider introducing a UDF that executes such a LOCK command
+ * by temporarily escalating privileges to superuser. However, in practice it
+ * would be difficult to safely restrict the usage of such a UDF, so for now we
+ * choose to rely on a superuser connection instead.
+ */
+void
+LockPgDistNodeOnCoordinatorViaSuperUser(LOCKMODE lockMode)
+{
+	SendCommandToCoordinatorViaSuperUser(LockPgDistNodeCommand(lockMode));
+}
+
+
+/*
+ * LockPgDistNodeCommand returns the command to acquire the lock on pg_dist_node
+ * with the given lock mode.
+ */
+static char *
+LockPgDistNodeCommand(LOCKMODE lockMode)
+{
+	StringInfo lockCommand = makeStringInfo();
+	appendStringInfo(lockCommand, "LOCK TABLE pg_catalog.pg_dist_node IN %s MODE;",
+					 LockModeToLockModeText(lockMode));
+	return lockCommand->data;
 }
 
 
