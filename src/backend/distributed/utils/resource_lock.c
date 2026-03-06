@@ -91,7 +91,6 @@ typedef struct LockRelationRecord
 
 
 /* local function forward declarations */
-static LOCKMODE IntToLockMode(int mode);
 static void LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode);
 static bool AnyTableReplicated(List *shardIntervalList,
 							   List **replicatedShardIntervalList);
@@ -435,7 +434,7 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
  * IntToLockMode verifies whether the specified integer is an accepted lock mode
  * and returns it as a LOCKMODE enum.
  */
-static LOCKMODE
+LOCKMODE
 IntToLockMode(int mode)
 {
 	if (mode == ExclusiveLock)
