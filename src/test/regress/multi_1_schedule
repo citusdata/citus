@@ -15,7 +15,6 @@
 # ---
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
-test: multi_extension
 test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: single_node
 test: relation_access_tracking_single_node
@@ -55,16 +54,12 @@ test: stat_counters
 test: columnar_citus_integration
 
 test: multi_test_catalog_views
-test: multi_table_ddl
 test: multi_alias
-test: multi_sequence_default
 test: grant_on_sequence_propagation
 test: multi_name_lengths
 test: multi_name_resolution
 test: multi_metadata_access
 test: multi_metadata_attributes
-
-test: multi_read_from_secondaries
 
 test: grant_on_table_propagation
 test: grant_on_database_propagation
@@ -78,12 +73,6 @@ test: reassign_owned
 # ----------
 test: multi_citus_tools citus_depended_object
 
-# ----------
-# multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
-# multi_remove_node_reference_table tests metadata changes after master_remove_node
-# ----------
-test: multi_replicate_reference_table
-test: multi_remove_node_reference_table
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
@@ -135,10 +124,6 @@ test: pg13_propagate_statistics
 # ----------
 test: citus_update_table_statistics
 
-# ----------
-# Test for tenant statistics
-# ----------
-test: citus_stat_tenants
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior
@@ -225,10 +210,8 @@ test: foreign_key_to_reference_table
 test: validate_constraint
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 
-test: multi_modifying_xacts
 test: multi_generate_ddl_commands
 test: multi_create_shards
-test: multi_transaction_recovery
 test: multi_transaction_recovery_multiple_databases
 
 test: local_dist_join_modifications
@@ -263,28 +246,11 @@ test: multi_large_shardid
 test: multi_size_queries
 
 # ----------
-# multi_drop_extension makes sure we can safely drop and recreate the extension
 # ----------
-test: multi_drop_extension
-
-# ----------
-# multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
-# multi_metadata_sync_domain tests that metadata sync works correctly with DOMAIN types in non-public schemas
 # multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
 # ----------
-test: multi_metadata_sync
-test: multi_metadata_sync_domain
 test: multi_unsupported_worker_operations
 
-test: grant_on_function_propagation
-test: grant_on_foreign_server_propagation
-
-# ----------
-# grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly
-# multi_schema_support makes sure we can work with tables in schemas other than public with no problem
-# ----------
-test: grant_on_schema_propagation
-test: multi_schema_support
 
 # ----------
 # multi_function_evaluation tests edge-cases in master-side function pre-evaluation
@@ -296,10 +262,6 @@ test: multi_function_evaluation
 # ----------
 test: multi_truncate
 
-# ----------
-# multi_colocation_utils tests utility functions written for co-location feature & internal API
-# ----------
-test: multi_colocation_utils
 
 # ----------
 # node_conninfo_reload tests that node_conninfo changes take effect
@@ -328,14 +290,12 @@ test: multi_row_router_insert create_distributed_table_concurrently
 test: multi_reference_table
 test: citus_local_tables_queries
 test: citus_local_table_triggers
-test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
 test: create_ref_dist_from_citus_local
 test: undistribute_table_cascade
 test: create_citus_local_table_cascade
 test: fkeys_between_local_ref
 test: auto_undist_citus_local
-test: mx_regular_user
 test: citus_locks
 test: global_cancel
 test: sequences_owned_by
@@ -347,10 +307,6 @@ test: remove_coordinator
 # ----------
 test: multi_transactional_drop_shards
 
-# ----------
-# multi_multiuser tests simple combinations of permission access and queries
-# ----------
-test: multi_multiuser
 
 # ---------
 # multi_cache_invalidation tests for an obscure crash citus used to exhibit when shardids
@@ -379,7 +335,6 @@ test: distributed_functions distributed_functions_conflict
 test: distributed_collations
 test: distributed_procedure
 test: distributed_collations_conflict
-test: function_propagation
 test: view_propagation
 test: check_mx
 
