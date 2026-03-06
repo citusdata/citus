@@ -405,7 +405,17 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 
 	appendStringInfo(lockCommand, "])");
 
-	SendCommandToWorkersWithMetadata(lockCommand->data);
+	/*
+	 * Disable idle_in_transaction_session_timeout on metadata workers before
+	 * acquiring locks. In block_writes mode, these connections stay open for
+	 * the entire shard copy which can take hours for large shards. Without
+	 * this, the timeout would kill the connection and fail the move.
+	 * SET LOCAL scopes the change to this transaction only.
+	 */
+	List *commandList = list_make2(
+		"SET LOCAL idle_in_transaction_session_timeout = 0",
+		lockCommand->data);
+	SendCommandListToWorkersWithMetadata(commandList);
 }
 
 
