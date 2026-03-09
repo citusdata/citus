@@ -28,3 +28,18 @@ Remote: origin
 Artifact Lifecycle: commit-and-clean
 Artifact Paths: auto-derived
 Additional Inputs: none
+
+## Activity Log
+
+- [x] paw-init
+- [x] paw-spec
+- [x] paw-spec-review
+- [x] paw-code-research
+- [x] paw-planning
+- [x] paw-plan-review
+- [x] paw-transition (plan-review → planning-docs-review)
+- [x] paw-planning-docs-review
+- [x] paw-transition (planning-docs-review → implement Phase 1)
+- [ ] paw-implement (Phase 1: Statement Cache Infrastructure)
+- [ ] paw-impl-review (Phase 1)
+- [ ] paw-transition
