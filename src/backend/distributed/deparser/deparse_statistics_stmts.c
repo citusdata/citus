@@ -15,18 +15,18 @@
 #include "catalog/namespace.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
-#include "utils/builtins.h"
 #include "parser/parse_expr.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
 
 #include "pg_version_constants.h"
 
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
-#include "distributed/commands.h"
 
 static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);
