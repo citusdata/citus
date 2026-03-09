@@ -61,7 +61,7 @@ jobs:
         if: ${{ inputs.citus_libdir != '' }}
         run: chmod -R a+w /usr/lib/postgresql/${{ matrix.pg_version.major }}/lib/
       - name: Run Test
-        run: CITUSVERSION=${{ inputs.citus_version }} CITUSLIBDIR=${{ inputs.citus_libdir }} N_1_MODE=${{ inputs.n_1_mode }} gosu circleci make -C src/test/${{ inputs.suite }} ${{ matrix.make }}
+        run: CITUSVERSION=${{ inputs.citus_version }} CITUSLIBDIR=${{ inputs.citus_libdir }} N1MODE=${{ inputs.n_1_mode }} gosu circleci make -C src/test/${{ inputs.suite }} ${{ matrix.make }}
         timeout-minutes: 20
       - uses: "./.github/actions/save_logs_and_results"
         if: always()
