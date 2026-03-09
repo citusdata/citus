@@ -106,6 +106,7 @@ extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
 											  bool warnForPartialFailure);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
+extern void SetLocalEnableDDLPropagation(bool state);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);
 extern void UndistributeDisconnectedCitusLocalTables(void);
