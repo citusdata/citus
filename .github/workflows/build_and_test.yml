@@ -36,6 +36,7 @@ jobs:
       pg15_version: '{ "major": "15", "full": "15.14" }'
       pg16_version: '{ "major": "16", "full": "16.10" }'
       pg17_version: '{ "major": "17", "full": "17.6" }'
+      pg17_7_version: '{ "major": "17", "full": "17.7" }' # temprorary version to enable n-1 testing in release 13.2 branch
       upgrade_pg_versions: "15.14-16.10-17.6"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
@@ -195,7 +196,7 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg17_version }}
+          ${{ needs.params.outputs.pg17_7_version }}
         ]
       make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
       image_suffix: "-v181ce3c"
@@ -232,7 +233,7 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg17_version }}
+          ${{ needs.params.outputs.pg17_7_version }}
         ]
       make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
       image_suffix: "-v181ce3c"
@@ -252,7 +253,7 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg17_version }}
+          ${{ needs.params.outputs.pg17_7_version }}
         ]
       make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
       image_suffix: "-v181ce3c"
