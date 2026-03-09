@@ -1468,7 +1468,7 @@ SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_s
  ALTER SEQUENCE
 (1 row)
 
-\c - test_non_super_user
+\c - test_non_super_user - :worker_2_port
 SET search_path TO regular_schema;
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
@@ -1584,7 +1584,7 @@ $$);
  DROP TABLE
 (3 rows)
 
-\c - postgres
+\c - postgres - :master_port
 REVOKE CREATE ON DATABASE regression FROM test_non_super_user;
 REVOKE CREATE ON SCHEMA public FROM test_non_super_user;
 DROP ROLE test_non_super_user;
