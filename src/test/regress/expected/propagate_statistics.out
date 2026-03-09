@@ -53,6 +53,27 @@ SELECT create_distributed_table ('test_stats3','a');
 
 (1 row)
 
+-- test creating custom stats with expressions and distributing it.
+CREATE TABLE test_stats_expr (
+	a int,
+	b int
+);
+CREATE STATISTICS s_expr ON (a + b / 2) FROM test_stats_expr;
+-- succeeds since we replicate it into the shards.
+SELECT create_distributed_table('test_stats_expr', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- fails
+CREATE STATISTICS s_expr_post ON (a - (b * 2)) FROM test_stats_expr;
+ERROR:  only simple column references are allowed in CREATE STATISTICS
+-- succeeds.
+set citus.enable_unsafe_statistics_expressions TO on;
+-- add another expression stats on the distributed table should work.
+CREATE STATISTICS s_expr_post ON (a - (b * 2)) FROM test_stats_expr;
+reset citus.enable_unsafe_statistics_expressions;
 -- test dropping statistics
 CREATE TABLE test_stats4 (
     a int,
@@ -112,7 +133,7 @@ WHERE stxnamespace IN (
 )
 AND stxname SIMILAR TO '%\_\d+'
 ORDER BY stxname ASC;
-     stxname
+      stxname
 ---------------------------------------------------------------------
  neW'Stat_980096
  neW'Stat_980098
@@ -162,22 +183,54 @@ ORDER BY stxname ASC;
  s2_980058
  s2_980060
  s2_980062
- s9_980129
- s9_980131
- s9_980133
- s9_980135
- s9_980137
- s9_980139
- s9_980141
- s9_980143
- s9_980145
- s9_980147
- s9_980149
- s9_980151
- s9_980153
- s9_980155
- s9_980157
- s9_980159
+ s9_980161
+ s9_980163
+ s9_980165
+ s9_980167
+ s9_980169
+ s9_980171
+ s9_980173
+ s9_980175
+ s9_980177
+ s9_980179
+ s9_980181
+ s9_980183
+ s9_980185
+ s9_980187
+ s9_980189
+ s9_980191
+ s_expr_980128
+ s_expr_980130
+ s_expr_980132
+ s_expr_980134
+ s_expr_980136
+ s_expr_980138
+ s_expr_980140
+ s_expr_980142
+ s_expr_980144
+ s_expr_980146
+ s_expr_980148
+ s_expr_980150
+ s_expr_980152
+ s_expr_980154
+ s_expr_980156
+ s_expr_980158
+ s_expr_post_980128
+ s_expr_post_980130
+ s_expr_post_980132
+ s_expr_post_980134
+ s_expr_post_980136
+ s_expr_post_980138
+ s_expr_post_980140
+ s_expr_post_980142
+ s_expr_post_980144
+ s_expr_post_980146
+ s_expr_post_980148
+ s_expr_post_980150
+ s_expr_post_980152
+ s_expr_post_980154
+ s_expr_post_980156
+ s_expr_post_980158
  st1_new_980064
  st1_new_980066
  st1_new_980068
@@ -194,23 +247,23 @@ ORDER BY stxname ASC;
  st1_new_980090
  st1_new_980092
  st1_new_980094
- stats_xy_980161
- stats_xy_980163
- stats_xy_980165
- stats_xy_980167
- stats_xy_980169
- stats_xy_980171
- stats_xy_980173
- stats_xy_980175
- stats_xy_980177
- stats_xy_980179
- stats_xy_980181
- stats_xy_980183
- stats_xy_980185
- stats_xy_980187
- stats_xy_980189
- stats_xy_980191
-(96 rows)
+ stats_xy_980193
+ stats_xy_980195
+ stats_xy_980197
+ stats_xy_980199
+ stats_xy_980201
+ stats_xy_980203
+ stats_xy_980205
+ stats_xy_980207
+ stats_xy_980209
+ stats_xy_980211
+ stats_xy_980213
+ stats_xy_980215
+ stats_xy_980217
+ stats_xy_980219
+ stats_xy_980221
+ stats_xy_980223
+(128 rows)
 
 SELECT count(DISTINCT stxnamespace)
 FROM pg_statistic_ext

@@ -16,6 +16,9 @@
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 #include "utils/builtins.h"
+#include "parser/parse_expr.h"
+#include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
 
 #include "pg_version_constants.h"
 
@@ -23,6 +26,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
+#include "distributed/commands.h"
 
 static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);
@@ -34,6 +38,8 @@ static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendTableName(StringInfo buf, CreateStatsStmt *stmt);
+
+bool EnableUnsafeStatisticsExpressions = false;
 
 char *
 DeparseCreateStatisticsStmt(Node *node)
@@ -240,15 +246,55 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 	{
 		if (!column->name)
 		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("only simple column references are allowed "
-							"in CREATE STATISTICS")));
+			if (EnableUnsafeStatisticsExpressions)
+			{
+				/*
+				 * Since these expressions are parser statements, we first call
+				 * transform to get the transformed Expr tree, and then deparse
+				 * the transformed tree. This is similar to the logic found in
+				 * deparse_table_stmts for check constraints.
+				 */
+				if (list_length(stmt->relations) != 1)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg(
+										"cannot use expressions in CREATE STATISTICS with multiple relations")));
+				}
+
+				RangeVar *rel = (RangeVar *) linitial(stmt->relations);
+				bool missingOk = false;
+				Oid relOid = RangeVarGetRelid(rel, AccessShareLock, missingOk);
+
+				/* Add table name to the name space in  parse state. Otherwise column names
+				 * cannot be found.
+				 */
+				Relation relation = table_open(relOid, AccessShareLock);
+				ParseState *pstate = make_parsestate(NULL);
+				AddRangeTableEntryToQueryCompat(pstate, relation);
+				Node *exprCooked = transformExpr(pstate, column->expr,
+												 EXPR_KIND_FUNCTION_DEFAULT);
+
+				char *relationName = get_rel_name(relOid);
+				List *relationCtx = deparse_context_for(relationName, relOid);
+
+				char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
+				relation_close(relation, NoLock);
+				appendStringInfoString(buf, exprSql);
+			}
+			else
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("only simple column references are allowed "
+								"in CREATE STATISTICS")));
+			}
 		}
+		else
+		{
+			const char *columnName = quote_identifier(column->name);
 
-		const char *columnName = quote_identifier(column->name);
-
-		appendStringInfoString(buf, columnName);
+			appendStringInfoString(buf, columnName);
+		}
 
 		if (column != llast(stmt->exprs))
 		{

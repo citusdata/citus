@@ -178,6 +178,11 @@ static GucStringAssignHook OldApplicationNameAssignHook = NULL;
  */
 static bool FinishedStartupCitusBackend = false;
 
+/*
+ * GUC definition for statistics expressions.
+ */
+extern bool EnableUnsafeStatisticsExpressions;
+
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
@@ -2779,6 +2784,20 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_unsafe_statistics_expressions",
+		gettext_noop("Enables the use of expressions in CREATE STATISTICS calls"),
+		gettext_noop(
+			"CREATE STATISTICS in citus currently only supports column name references."
+			"Enabling this GUC allows the use of expressions (introduced in PG14),"
+			"but the additional constraint validation on the expression to fail invalid expressions"
+			"is not validated, and so it is advised to use with caution."),
+		&EnableUnsafeStatisticsExpressions,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/* warn about config items in the citus namespace that are not registered above */
