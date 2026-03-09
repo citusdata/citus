@@ -996,7 +996,7 @@ GRANT CREATE ON SCHEMA public TO test_non_super_user ;
 
 SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2070000;$$);
 
-\c - test_non_super_user
+\c - test_non_super_user - :worker_2_port
 
 SET search_path TO regular_schema;
 
@@ -1066,7 +1066,7 @@ SELECT result FROM run_command_on_all_nodes($$
     DROP TABLE tenant_10_schemaid, tenant_11_schemaid, tenant_10_colocationid, tenant_11_colocationid
 $$);
 
-\c - postgres
+\c - postgres - :master_port
 
 REVOKE CREATE ON DATABASE regression FROM test_non_super_user;
 
