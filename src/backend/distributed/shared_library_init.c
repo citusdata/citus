@@ -178,11 +178,6 @@ static GucStringAssignHook OldApplicationNameAssignHook = NULL;
  */
 static bool FinishedStartupCitusBackend = false;
 
-/*
- * GUC definition for statistics expressions.
- */
-extern bool EnableUnsafeStatisticsExpressions;
-
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
@@ -1621,7 +1616,7 @@ RegisterCitusConfigVariables(void)
 		&EnableUnsafeStatisticsExpressions,
 		false,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
