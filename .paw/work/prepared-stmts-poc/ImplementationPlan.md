@@ -48,8 +48,8 @@ Verification: A benchmark of 10,000 prepared fast-path query executions on a 3-n
 
 ## Phase Candidates
 
-- [ ] Async prepare integration: Replace synchronous `PQprepare()` with `PQsendPrepare()` + state machine changes for fully non-blocking first-execution path
-- [ ] Prepare-after-N heuristic: Only prepare on worker after N executions (e.g., 3) to amortize prepare overhead for low-repeat queries
+- [x] [deferred] Async prepare integration: Replace synchronous `PQprepare()` with `PQsendPrepare()` + state machine changes for fully non-blocking first-execution path
+- [x] [deferred] Prepare-after-N heuristic: Only prepare on worker after N executions (e.g., 3) to amortize prepare overhead for low-repeat queries
 
 ---
 
