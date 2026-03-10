@@ -106,8 +106,9 @@ PreparedStatementCacheInsert(HTAB *cache, uint32 planId, uint64 shardId)
 		return entry;
 	}
 
-	/* initialize the new entry (caller fills in stmtName etc.) */
-	memset(entry->stmtName, 0, MAX_STMT_NAME_LENGTH);
+	/* initialize the new entry with auto-generated statement name */
+	snprintf(entry->stmtName, MAX_STMT_NAME_LENGTH,
+			 "__citus_stmt_%ld", (long) hash_get_num_entries(cache));
 	entry->paramTypes = NULL;
 	entry->paramCount = 0;
 	entry->parameterizedQueryString = NULL;
