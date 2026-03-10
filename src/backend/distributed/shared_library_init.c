@@ -87,6 +87,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/priority.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
@@ -1497,6 +1498,18 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_prepared_statement_caching",
+		gettext_noop("Enables caching prepared statement plans on worker connections."),
+		gettext_noop("When enabled, Citus uses PQprepare/PQsendQueryPrepared on "
+					 "worker connections for fast-path prepared statement executions, "
+					 "eliminating redundant parse/plan cycles on workers."),
+		&EnablePreparedStatementCaching,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

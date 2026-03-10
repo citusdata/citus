@@ -224,6 +224,9 @@ typedef struct MultiConnection
 	bool requiresReplication;
 
 	MultiConnectionStructInitializationState initializationState;
+
+	/* per-connection cache of prepared statements on this worker connection */
+	HTAB *preparedStatementCache;
 } MultiConnection;
 
 

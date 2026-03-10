@@ -40,6 +40,6 @@ Additional Inputs: none
 - [x] paw-transition (plan-review → planning-docs-review)
 - [x] paw-planning-docs-review
 - [x] paw-transition (planning-docs-review → implement Phase 1)
-- [ ] paw-implement (Phase 1: Statement Cache Infrastructure)
+- [x] paw-implement (Phase 1: Statement Cache Infrastructure)
 - [ ] paw-impl-review (Phase 1)
 - [ ] paw-transition

@@ -28,6 +28,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/error_codes.h"
 #include "distributed/errormessage.h"
 #include "distributed/hash_helpers.h"
@@ -794,6 +795,10 @@ ShutdownConnection(MultiConnection *connection)
 	{
 		SendCancelationRequest(connection);
 	}
+
+	PreparedStatementCacheDestroy(connection->preparedStatementCache);
+	connection->preparedStatementCache = NULL;
+
 	CitusPQFinish(connection);
 }
 
@@ -1232,6 +1237,9 @@ CloseNotReadyMultiConnectionStates(List *connectionStates)
 static void
 CitusPQFinish(MultiConnection *connection)
 {
+	PreparedStatementCacheDestroy(connection->preparedStatementCache);
+	connection->preparedStatementCache = NULL;
+
 	if (connection->pgConn != NULL)
 	{
 		PQfinish(connection->pgConn);
