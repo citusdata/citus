@@ -1,0 +1,553 @@
+--
+-- PREPARED_STATEMENT_CACHING
+--
+-- Tests for citus.enable_prepared_statement_caching, which enables
+-- worker-side prepared statement plan caching for fast-path queries.
+--
+CREATE SCHEMA prepared_stmt_caching;
+SET search_path TO prepared_stmt_caching;
+-- Create test tables
+CREATE TABLE dist_table (
+    key int PRIMARY KEY,
+    value int,
+    label text
+);
+SELECT create_distributed_table('dist_table', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Insert base data
+INSERT INTO dist_table SELECT i, i * 10, 'label-' || i FROM generate_series(1, 20) i;
+CREATE TABLE dist_table_ts (
+    key int PRIMARY KEY,
+    value int,
+    created_at timestamptz DEFAULT now()
+);
+SELECT create_distributed_table('dist_table_ts', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- ============================================================
+-- Test 1: GUC toggle — verify default is OFF, SET to ON succeeds
+-- ============================================================
+SHOW citus.enable_prepared_statement_caching;
+ citus.enable_prepared_statement_caching
+---------------------------------------------------------------------
+ off
+(1 row)
+
+SET citus.enable_prepared_statement_caching = on;
+SHOW citus.enable_prepared_statement_caching;
+ citus.enable_prepared_statement_caching
+---------------------------------------------------------------------
+ on
+(1 row)
+
+SET citus.enable_prepared_statement_caching = off;
+SHOW citus.enable_prepared_statement_caching;
+ citus.enable_prepared_statement_caching
+---------------------------------------------------------------------
+ off
+(1 row)
+
+-- ============================================================
+-- Test 2: Basic caching — PREPARE a single-shard SELECT, EXECUTE
+--         10 times with GUC ON, verify correct results
+-- ============================================================
+SET citus.enable_prepared_statement_caching = on;
+PREPARE cached_select(int) AS
+    SELECT key, value FROM dist_table WHERE key = $1;
+-- Execute 10 times to ensure generic plan path and cache hit path
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+DEALLOCATE cached_select;
+-- ============================================================
+-- Test 3: Multi-shard-value — EXECUTE with different partition
+--         key values routing to different shards
+-- ============================================================
+PREPARE cached_multi_shard(int) AS
+    SELECT key, value FROM dist_table WHERE key = $1;
+-- Different keys likely route to different shards
+EXECUTE cached_multi_shard(1);
+ key | value
+---------------------------------------------------------------------
+   1 |    10
+(1 row)
+
+EXECUTE cached_multi_shard(2);
+ key | value
+---------------------------------------------------------------------
+   2 |    20
+(1 row)
+
+EXECUTE cached_multi_shard(3);
+ key | value
+---------------------------------------------------------------------
+   3 |    30
+(1 row)
+
+EXECUTE cached_multi_shard(4);
+ key | value
+---------------------------------------------------------------------
+   4 |    40
+(1 row)
+
+EXECUTE cached_multi_shard(5);
+ key | value
+---------------------------------------------------------------------
+   5 |    50
+(1 row)
+
+EXECUTE cached_multi_shard(6);
+ key | value
+---------------------------------------------------------------------
+   6 |    60
+(1 row)
+
+EXECUTE cached_multi_shard(7);
+ key | value
+---------------------------------------------------------------------
+   7 |    70
+(1 row)
+
+EXECUTE cached_multi_shard(8);
+ key | value
+---------------------------------------------------------------------
+   8 |    80
+(1 row)
+
+EXECUTE cached_multi_shard(9);
+ key | value
+---------------------------------------------------------------------
+   9 |    90
+(1 row)
+
+EXECUTE cached_multi_shard(10);
+ key | value
+---------------------------------------------------------------------
+  10 |   100
+(1 row)
+
+DEALLOCATE cached_multi_shard;
+-- ============================================================
+-- Test 4: INSERT/UPDATE/DELETE with caching ON
+--         Include now() to verify coordinator-side function
+--         evaluation still works
+-- ============================================================
+-- INSERT with function evaluation
+PREPARE cached_insert(int, int) AS
+    INSERT INTO dist_table_ts (key, value) VALUES ($1, $2);
+EXECUTE cached_insert(100, 1000);
+EXECUTE cached_insert(101, 1010);
+EXECUTE cached_insert(102, 1020);
+EXECUTE cached_insert(103, 1030);
+EXECUTE cached_insert(104, 1040);
+EXECUTE cached_insert(105, 1050);
+EXECUTE cached_insert(106, 1060);
+-- Verify inserts
+SELECT key, value FROM dist_table_ts WHERE key >= 100 ORDER BY key;
+ key | value
+---------------------------------------------------------------------
+ 100 |  1000
+ 101 |  1010
+ 102 |  1020
+ 103 |  1030
+ 104 |  1040
+ 105 |  1050
+ 106 |  1060
+(7 rows)
+
+DEALLOCATE cached_insert;
+-- UPDATE
+PREPARE cached_update(int, int) AS
+    UPDATE dist_table SET value = $2 WHERE key = $1;
+EXECUTE cached_update(1, 100);
+EXECUTE cached_update(2, 200);
+EXECUTE cached_update(3, 300);
+EXECUTE cached_update(4, 400);
+EXECUTE cached_update(5, 500);
+EXECUTE cached_update(6, 600);
+EXECUTE cached_update(7, 700);
+SELECT key, value FROM dist_table WHERE key <= 7 ORDER BY key;
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+   2 |   200
+   3 |   300
+   4 |   400
+   5 |   500
+   6 |   600
+   7 |   700
+(7 rows)
+
+DEALLOCATE cached_update;
+-- DELETE
+PREPARE cached_delete(int) AS
+    DELETE FROM dist_table WHERE key = $1;
+EXECUTE cached_delete(18);
+EXECUTE cached_delete(19);
+EXECUTE cached_delete(20);
+EXECUTE cached_delete(18);
+EXECUTE cached_delete(19);
+EXECUTE cached_delete(20);
+EXECUTE cached_delete(18);
+-- Verify deletes
+SELECT count(*) FROM dist_table WHERE key >= 18;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+DEALLOCATE cached_delete;
+-- INSERT with now() function evaluation
+PREPARE cached_insert_ts(int) AS
+    INSERT INTO dist_table_ts (key, value, created_at) VALUES ($1, $1 * 10, now());
+EXECUTE cached_insert_ts(200);
+EXECUTE cached_insert_ts(201);
+EXECUTE cached_insert_ts(202);
+EXECUTE cached_insert_ts(203);
+EXECUTE cached_insert_ts(204);
+EXECUTE cached_insert_ts(205);
+EXECUTE cached_insert_ts(206);
+-- Verify that each row has created_at populated (functions were evaluated)
+SELECT key, value, created_at IS NOT NULL AS has_ts FROM dist_table_ts
+    WHERE key >= 200 ORDER BY key;
+ key | value | has_ts
+---------------------------------------------------------------------
+ 200 |  2000 | t
+ 201 |  2010 | t
+ 202 |  2020 | t
+ 203 |  2030 | t
+ 204 |  2040 | t
+ 205 |  2050 | t
+ 206 |  2060 | t
+(7 rows)
+
+DEALLOCATE cached_insert_ts;
+-- ============================================================
+-- Test 5: GUC OFF baseline — same queries produce identical results
+-- ============================================================
+SET citus.enable_prepared_statement_caching = off;
+PREPARE uncached_select(int) AS
+    SELECT key, value FROM dist_table WHERE key = $1;
+EXECUTE uncached_select(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE uncached_select(2);
+ key | value
+---------------------------------------------------------------------
+   2 |   200
+(1 row)
+
+EXECUTE uncached_select(3);
+ key | value
+---------------------------------------------------------------------
+   3 |   300
+(1 row)
+
+EXECUTE uncached_select(4);
+ key | value
+---------------------------------------------------------------------
+   4 |   400
+(1 row)
+
+EXECUTE uncached_select(5);
+ key | value
+---------------------------------------------------------------------
+   5 |   500
+(1 row)
+
+EXECUTE uncached_select(6);
+ key | value
+---------------------------------------------------------------------
+   6 |   600
+(1 row)
+
+EXECUTE uncached_select(7);
+ key | value
+---------------------------------------------------------------------
+   7 |   700
+(1 row)
+
+EXECUTE uncached_select(8);
+ key | value
+---------------------------------------------------------------------
+   8 |    80
+(1 row)
+
+EXECUTE uncached_select(9);
+ key | value
+---------------------------------------------------------------------
+   9 |    90
+(1 row)
+
+EXECUTE uncached_select(10);
+ key | value
+---------------------------------------------------------------------
+  10 |   100
+(1 row)
+
+DEALLOCATE uncached_select;
+-- ============================================================
+-- Test 6: Multiple prepared statements in same session
+-- ============================================================
+SET citus.enable_prepared_statement_caching = on;
+PREPARE stmt_a(int) AS SELECT key, value FROM dist_table WHERE key = $1;
+PREPARE stmt_b(int) AS SELECT key, label FROM dist_table WHERE key = $1;
+PREPARE stmt_c(int, int) AS
+    INSERT INTO dist_table_ts (key, value) VALUES ($1, $2);
+-- Interleave executions to verify independent caching
+EXECUTE stmt_a(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE stmt_b(1);
+ key |  label
+---------------------------------------------------------------------
+   1 | label-1
+(1 row)
+
+EXECUTE stmt_a(2);
+ key | value
+---------------------------------------------------------------------
+   2 |   200
+(1 row)
+
+EXECUTE stmt_b(2);
+ key |  label
+---------------------------------------------------------------------
+   2 | label-2
+(1 row)
+
+EXECUTE stmt_a(3);
+ key | value
+---------------------------------------------------------------------
+   3 |   300
+(1 row)
+
+EXECUTE stmt_b(3);
+ key |  label
+---------------------------------------------------------------------
+   3 | label-3
+(1 row)
+
+EXECUTE stmt_a(4);
+ key | value
+---------------------------------------------------------------------
+   4 |   400
+(1 row)
+
+EXECUTE stmt_b(4);
+ key |  label
+---------------------------------------------------------------------
+   4 | label-4
+(1 row)
+
+EXECUTE stmt_a(5);
+ key | value
+---------------------------------------------------------------------
+   5 |   500
+(1 row)
+
+EXECUTE stmt_b(5);
+ key |  label
+---------------------------------------------------------------------
+   5 | label-5
+(1 row)
+
+EXECUTE stmt_a(6);
+ key | value
+---------------------------------------------------------------------
+   6 |   600
+(1 row)
+
+EXECUTE stmt_b(6);
+ key |  label
+---------------------------------------------------------------------
+   6 | label-6
+(1 row)
+
+EXECUTE stmt_a(7);
+ key | value
+---------------------------------------------------------------------
+   7 |   700
+(1 row)
+
+EXECUTE stmt_b(7);
+ key |  label
+---------------------------------------------------------------------
+   7 | label-7
+(1 row)
+
+EXECUTE stmt_c(300, 3000);
+EXECUTE stmt_c(301, 3010);
+EXECUTE stmt_c(302, 3020);
+EXECUTE stmt_c(303, 3030);
+EXECUTE stmt_c(304, 3040);
+EXECUTE stmt_c(305, 3050);
+EXECUTE stmt_c(306, 3060);
+-- Verify inserts from stmt_c
+SELECT key, value FROM dist_table_ts WHERE key >= 300 ORDER BY key;
+ key | value
+---------------------------------------------------------------------
+ 300 |  3000
+ 301 |  3010
+ 302 |  3020
+ 303 |  3030
+ 304 |  3040
+ 305 |  3050
+ 306 |  3060
+(7 rows)
+
+DEALLOCATE stmt_a;
+DEALLOCATE stmt_b;
+DEALLOCATE stmt_c;
+-- ============================================================
+-- Test 7: Connection loss re-prepare — force worker connection
+--         close, verify subsequent EXECUTE still works
+-- ============================================================
+SET citus.enable_prepared_statement_caching = on;
+PREPARE reconnect_test(int) AS
+    SELECT key, value FROM dist_table WHERE key = $1;
+-- Execute enough times to get into generic plan + cache hit
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+-- Force all cached connections to be dropped by setting lifetime to 0
+SET citus.max_cached_connection_lifetime TO '0s';
+-- The next execution should get a new connection, re-prepare, and succeed
+EXECUTE reconnect_test(1);
+ key | value
+---------------------------------------------------------------------
+   1 |   100
+(1 row)
+
+EXECUTE reconnect_test(2);
+ key | value
+---------------------------------------------------------------------
+   2 |   200
+(1 row)
+
+EXECUTE reconnect_test(3);
+ key | value
+---------------------------------------------------------------------
+   3 |   300
+(1 row)
+
+-- Restore default
+RESET citus.max_cached_connection_lifetime;
+DEALLOCATE reconnect_test;
+-- ============================================================
+-- Cleanup
+-- ============================================================
+SET citus.enable_prepared_statement_caching = off;
+DROP SCHEMA prepared_stmt_caching CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table dist_table
+drop cascades to table dist_table_ts

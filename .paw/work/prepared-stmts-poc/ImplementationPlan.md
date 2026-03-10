@@ -43,8 +43,8 @@ Verification: A benchmark of 10,000 prepared fast-path query executions on a 3-n
 ## Phase Status
 
 - [x] **Phase 1: Statement Cache Infrastructure** — GUC toggle, per-connection cache data structure, MultiConnection integration, cleanup on connection close
-- [ ] **Phase 2: Core Integration** — Parameterized query template preservation, `SendNextQuery()` prepare-or-execute logic, libpq wrapper functions
-- [ ] **Phase 3: Tests & Documentation** — Regression tests, Docs.md, CHANGELOG
+- [x] **Phase 2: Core Integration** — Parameterized query template preservation, `SendNextQuery()` prepare-or-execute logic, libpq wrapper functions
+- [x] **Phase 3: Tests & Documentation** — Regression tests, Docs.md, CHANGELOG
 
 ## Phase Candidates
 
