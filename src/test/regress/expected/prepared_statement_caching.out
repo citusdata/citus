@@ -194,9 +194,13 @@ DEALLOCATE cached_multi_shard;
 -- ============================================================
 -- Test 4: INSERT/UPDATE/DELETE with caching ON
 --         Include now() to verify coordinator-side function
---         evaluation still works
+--         evaluation still works.
+--         Note: INSERT uses the plain SQL fallback path (not
+--         cached) because INSERT query trees contain special
+--         RTEs that pg_get_query_def cannot deparse. UPDATE
+--         and DELETE use the cached prepared statement path.
 -- ============================================================
--- INSERT with function evaluation
+-- INSERT (uses plain SQL fallback — not cached, but must produce correct results)
 PREPARE cached_insert(int, int) AS
     INSERT INTO dist_table_ts (key, value) VALUES ($1, $2);
 EXECUTE cached_insert(100, 1000);

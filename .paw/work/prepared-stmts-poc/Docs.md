@@ -60,7 +60,7 @@ EXECUTE my_query(6);  -- PQprepare + PQsendQueryPrepared (cache miss)
 EXECUTE my_query(7);  -- PQsendQueryPrepared only (cache hit)
 ```
 
-Works with SELECT, INSERT, UPDATE, and DELETE on distributed tables with fast-path (single-shard) routing.
+Works with SELECT, UPDATE, and DELETE on distributed tables with fast-path (single-shard) routing. INSERT commands currently fall back to the plain SQL path (not cached) because INSERT query trees contain special RTEs that `pg_get_query_def` cannot deparse — this is a known POC limitation.
 
 ### Important Notes
 
@@ -98,6 +98,7 @@ The test covers: GUC toggle, basic SELECT caching, multi-shard-value routing, IN
 
 ### Current Limitations (POC)
 - Fast-path (single-shard) queries only — multi-shard queries are unaffected
+- INSERT commands use plain SQL fallback (not cached) due to special RTEs in INSERT query trees
 - No DDL invalidation of cached prepared statements
 - No invalidation on node addition/removal/rebalance
 - Synchronous `PQprepare()` blocks the event loop on first-time prepare per shard
