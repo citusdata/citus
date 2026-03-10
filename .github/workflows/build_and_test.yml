@@ -32,7 +32,7 @@ jobs:
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.33"
       sql_snapshot_pg_version: "17.9"
-      image_suffix: "-dev-8a1d45e"
+      image_suffix: "-v3ce13e3"
       pg15_version: '{ "major": "15", "full": "15.17" }'
       pg16_version: '{ "major": "16", "full": "16.13" }'
       pg17_version: '{ "major": "17", "full": "17.9" }'
