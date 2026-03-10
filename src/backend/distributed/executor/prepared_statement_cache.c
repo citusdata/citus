@@ -57,7 +57,7 @@ PreparedStatementCacheCreate(void)
  * Returns the entry if found, NULL otherwise.
  */
 PreparedStatementCacheEntry *
-PreparedStatementCacheLookup(HTAB *cache, uint32 planId, uint64 shardId)
+PreparedStatementCacheLookup(HTAB *cache, uint64 planId, uint64 shardId)
 {
 	PreparedStatementCacheKey key;
 
@@ -82,7 +82,7 @@ PreparedStatementCacheLookup(HTAB *cache, uint32 planId, uint64 shardId)
  * (stmtName, paramTypes, paramCount, parameterizedQueryString).
  */
 PreparedStatementCacheEntry *
-PreparedStatementCacheInsert(HTAB *cache, uint32 planId, uint64 shardId)
+PreparedStatementCacheInsert(HTAB *cache, uint64 planId, uint64 shardId)
 {
 	if (hash_get_num_entries(cache) >= MAX_CACHED_STMTS_PER_CONNECTION)
 	{

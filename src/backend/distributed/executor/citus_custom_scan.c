@@ -45,6 +45,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/shard_utils.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/stats/stat_counters.h"
@@ -327,6 +328,17 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	Assert(currentPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner);
 
 	/*
+	 * If prepared statement caching is enabled, save a deep copy of the job
+	 * query before parameter evaluation. This preserves $1, $2, etc. for
+	 * constructing the parameterized query template on cache miss.
+	 */
+	Query *savedJobQuery = NULL;
+	if (EnablePreparedStatementCaching)
+	{
+		savedJobQuery = copyObject(jobQuery);
+	}
+
+	/*
 	 * Evaluate parameters, because the parameters are only available on the
 	 * coordinator and are required for pruning.
 	 *
@@ -343,6 +355,19 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 
 	/* parameters are filled in, so we can generate a task for this execution */
 	RegenerateTaskForFasthPathQuery(workerJob);
+
+	/*
+	 * Attach prepared statement metadata to each task for cache lookup
+	 * in SendNextQuery().
+	 */
+	if (EnablePreparedStatementCaching && savedJobQuery != NULL)
+	{
+		foreach_ptr(Task, task, workerJob->taskList)
+		{
+			task->preparedStatementPlanId = currentPlan->planId;
+			task->jobQueryForPrepare = savedJobQuery;
+		}
+	}
 
 	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
 	{
@@ -391,9 +416,37 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 	Query *jobQuery = workerJob->jobQuery;
 
+	/*
+	 * For prepared statement caching on DML, we use two-phase evaluation:
+	 * 1. Evaluate functions (now(), nextval()) but preserve Param nodes
+	 * 2. Save the query with Params intact for the prepared stmt template
+	 * 3. Then evaluate Params as normal for shard pruning and execution
+	 */
+	Query *savedJobQuery = NULL;
+
 	if (ModifyJobNeedsEvaluation(workerJob))
 	{
-		ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
+		if (EnablePreparedStatementCaching && workerJob->deferredPruning)
+		{
+			/* step 1: evaluate functions but keep Params for template */
+			ExecuteCoordinatorEvaluableFunctions(jobQuery, planState);
+
+			/* step 2: save query with evaluated functions but Params intact */
+			MemoryContext executorContext = estate->es_query_cxt;
+			MemoryContext saveContext = MemoryContextSwitchTo(executorContext);
+			savedJobQuery = copyObject(jobQuery);
+			MemoryContextSwitchTo(saveContext);
+
+			/* step 3: now evaluate Params for pruning */
+			CoordinatorEvaluationContext evalContext;
+			evalContext.planState = planState;
+			evalContext.evaluationMode = EVALUATE_PARAMS;
+			PartiallyEvaluateExpression((Node *) jobQuery, &evalContext);
+		}
+		else
+		{
+			ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
+		}
 
 		/* job query no longer has parameters, so we should not send any */
 		workerJob->parametersInJobQueryResolved = true;
@@ -422,6 +475,21 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		else
 		{
 			RegenerateTaskForFasthPathQuery(workerJob);
+		}
+
+		/*
+		 * Attach prepared statement metadata to each task for cache lookup
+		 * in SendNextQuery(). Skip for INSERT commands since their query
+		 * trees contain special RTEs that pg_get_query_def cannot deparse.
+		 */
+		if (EnablePreparedStatementCaching && savedJobQuery != NULL &&
+			jobQuery->commandType != CMD_INSERT)
+		{
+			foreach_ptr(Task, task, workerJob->taskList)
+			{
+				task->preparedStatementPlanId = currentPlan->planId;
+				task->jobQueryForPrepare = savedJobQuery;
+			}
 		}
 	}
 	else if (workerJob->requiresCoordinatorEvaluation)

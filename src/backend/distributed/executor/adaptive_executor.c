@@ -149,6 +149,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
@@ -166,6 +167,7 @@
 #include "distributed/param_utils.h"
 #include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/repartition_join_execution.h"
@@ -850,8 +852,13 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 * and never used in the query, mark such parameters' type as Invalid(0),
 	 * which will be used later in ExtractParametersFromParamList() to map them
 	 * to a generic datatype. Skip for dynamic parameters.
+	 *
+	 * When prepared statement caching is enabled, skip this step entirely:
+	 * the params appear "unreferenced" in job->jobQuery because they were
+	 * resolved to constants there, but they are still needed with their
+	 * original types for the parameterized query sent via PQprepare.
 	 */
-	if (paramListInfo && !paramListInfo->paramFetch)
+	if (paramListInfo && !paramListInfo->paramFetch && !EnablePreparedStatementCaching)
 	{
 		paramListInfo = copyParamList(paramListInfo);
 		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
@@ -3898,6 +3905,119 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	Assert(queryIndex < task->queryCount);
 	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
 
+	/*
+	 * Prepared statement caching path: if enabled and the task carries a
+	 * pre-evaluation job query, use PREPARE/EXECUTE on the worker connection.
+	 * This must be checked BEFORE the existing paramListInfo path because
+	 * parametersInQueryStringResolved is still true (params were resolved
+	 * into the plain SQL query string), meaning the existing code would
+	 * skip parameter extraction and send plain SQL.
+	 */
+	if (EnablePreparedStatementCaching && task->jobQueryForPrepare != NULL &&
+		paramListInfo != NULL)
+	{
+		Oid *parameterTypes = NULL;
+		const char **parameterValues = NULL;
+
+		/* force evaluation of bound params */
+		paramListInfo = copyParamList(paramListInfo);
+		int parameterCount = paramListInfo->numParams;
+
+		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+											&parameterValues);
+
+		/* lazy-create the per-connection cache */
+		if (connection->preparedStatementCache == NULL)
+		{
+			connection->preparedStatementCache = PreparedStatementCacheCreate();
+		}
+
+		PreparedStatementCacheEntry *cacheEntry =
+			PreparedStatementCacheLookup(connection->preparedStatementCache,
+										 task->preparedStatementPlanId,
+										 task->anchorShardId);
+
+		if (cacheEntry != NULL)
+		{
+			/* cache hit — execute the already-prepared statement */
+			querySent = SendRemotePreparedQuery(connection, cacheEntry->stmtName,
+												parameterCount, parameterValues,
+												binaryResults);
+		}
+		else
+		{
+			/*
+			 * Cache miss — construct the parameterized query template,
+			 * prepare it on the worker, then execute.
+			 */
+			cacheEntry =
+				PreparedStatementCacheInsert(connection->preparedStatementCache,
+											 task->preparedStatementPlanId,
+											 task->anchorShardId);
+
+			if (cacheEntry == NULL)
+			{
+				/* cache full, fall through to plain SQL path */
+				goto plain_sql;
+			}
+
+			/*
+			 * Substitute table names with shard names in the query tree.
+			 * Safe because jobQueryForPrepare is a per-execution copy.
+			 */
+			UpdateRelationToShardNames((Node *) task->jobQueryForPrepare,
+									   task->relationShardList);
+
+			/* deparse the query tree to get the parameterized SQL string */
+			StringInfoData queryBuf;
+			initStringInfo(&queryBuf);
+			pg_get_query_def(task->jobQueryForPrepare, &queryBuf);
+
+			/* synchronously prepare the statement on the worker */
+			int prepared = SendRemotePrepare(connection, cacheEntry->stmtName,
+											 queryBuf.data, parameterCount,
+											 parameterTypes);
+			if (prepared == 0)
+			{
+				connection->connectionState = MULTI_CONNECTION_LOST;
+				return false;
+			}
+
+			/* store the template in the cache entry */
+			cacheEntry->paramTypes = MemoryContextAlloc(TopMemoryContext,
+														parameterCount *
+														sizeof(Oid));
+			memcpy(cacheEntry->paramTypes, parameterTypes,
+				   parameterCount * sizeof(Oid));
+			cacheEntry->paramCount = parameterCount;
+			cacheEntry->parameterizedQueryString =
+				MemoryContextStrdup(TopMemoryContext, queryBuf.data);
+
+			pfree(queryBuf.data);
+
+			/* asynchronously execute the prepared statement */
+			querySent = SendRemotePreparedQuery(connection, cacheEntry->stmtName,
+												parameterCount, parameterValues,
+												binaryResults);
+		}
+
+		if (querySent == 0)
+		{
+			connection->connectionState = MULTI_CONNECTION_LOST;
+			return false;
+		}
+
+		int singleRowMode = PQsetSingleRowMode(connection->pgConn);
+		if (singleRowMode == 0)
+		{
+			connection->connectionState = MULTI_CONNECTION_LOST;
+			return false;
+		}
+
+		return true;
+	}
+
+plain_sql:
 	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
 		int parameterCount = paramListInfo->numParams;

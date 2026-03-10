@@ -311,6 +311,12 @@ typedef struct Task
 	 */
 	bool parametersInQueryStringResolved;
 
+	/* prepared statement cache key: plan ID from DistributedPlan */
+	uint64 preparedStatementPlanId;
+
+	/* pre-evaluation job query with Param nodes intact, for PQprepare on cache miss */
+	Query *jobQueryForPrepare;
+
 	/*
 	 * Destination of tuples generated as a result of executing this task. Can be
 	 * NULL, in which case executor might use a default destination.
