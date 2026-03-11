@@ -328,14 +328,24 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	Assert(currentPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner);
 
 	/*
-	 * If prepared statement caching is enabled, save a deep copy of the job
-	 * query before parameter evaluation. This preserves $1, $2, etc. for
-	 * constructing the parameterized query template on cache miss.
+	 * If prepared statement caching is enabled, we need the job query with
+	 * Param nodes ($1, $2, ...) intact for constructing parameterized
+	 * query templates on cache miss. On the first execution we save a
+	 * copy on originalDistributedPlan; subsequent executions reuse it,
+	 * avoiding a per-execution copyObject.
 	 */
 	Query *savedJobQuery = NULL;
 	if (EnablePreparedStatementCaching)
 	{
-		savedJobQuery = copyObject(jobQuery);
+		Job *origJob = originalDistributedPlan->workerJob;
+		if (origJob->savedJobQueryForCaching == NULL)
+		{
+			MemoryContext oldCtx = MemoryContextSwitchTo(
+				GetMemoryChunkContext(originalDistributedPlan));
+			origJob->savedJobQueryForCaching = copyObject(jobQuery);
+			MemoryContextSwitchTo(oldCtx);
+		}
+		savedJobQuery = origJob->savedJobQueryForCaching;
 	}
 
 	/*
@@ -431,11 +441,21 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 			/* step 1: evaluate functions but keep Params for template */
 			ExecuteCoordinatorEvaluableFunctions(jobQuery, planState);
 
-			/* step 2: save query with evaluated functions but Params intact */
-			MemoryContext executorContext = estate->es_query_cxt;
-			MemoryContext saveContext = MemoryContextSwitchTo(executorContext);
+			/*
+			 * step 2: save query with evaluated functions but Params
+			 * intact.  Cache on originalDistributedPlan so subsequent
+			 * executions skip the copyObject entirely.
+			 *
+			 * NOTE: for DML containing volatile functions (e.g. now()),
+			 * the evaluated result changes per execution, so we must
+			 * refresh the cached copy each time.
+			 */
+			Job *origJob = originalDistributedPlan->workerJob;
+			MemoryContext origCtx = MemoryContextSwitchTo(
+				GetMemoryChunkContext(originalDistributedPlan));
 			savedJobQuery = copyObject(jobQuery);
-			MemoryContextSwitchTo(saveContext);
+			origJob->savedJobQueryForCaching = savedJobQuery;
+			MemoryContextSwitchTo(origCtx);
 
 			/* step 3: now evaluate Params for pruning */
 			CoordinatorEvaluationContext evalContext;
@@ -667,13 +687,17 @@ CopyDistributedPlanWithoutCache(DistributedPlan *originalDistributedPlan)
 {
 	List *localPlannedStatements =
 		originalDistributedPlan->workerJob->localPlannedStatements;
+	Query *savedJobQueryForCaching =
+		originalDistributedPlan->workerJob->savedJobQueryForCaching;
 	originalDistributedPlan->workerJob->localPlannedStatements = NIL;
+	originalDistributedPlan->workerJob->savedJobQueryForCaching = NULL;
 
 	DistributedPlan *distributedPlan = copyObject(originalDistributedPlan);
 
-	/* set back the immutable field */
+	/* set back the immutable/cached fields */
 	originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
 	distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+	originalDistributedPlan->workerJob->savedJobQueryForCaching = savedJobQueryForCaching;
 
 	return distributedPlan;
 }

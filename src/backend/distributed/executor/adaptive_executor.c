@@ -3962,16 +3962,17 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 			}
 
 			/*
-			 * Substitute table names with shard names in the query tree.
-			 * Safe because jobQueryForPrepare is a per-execution copy.
+			 * Make a working copy for shard-name substitution so that the
+			 * cached template (shared across executions) stays unmodified.
 			 */
-			UpdateRelationToShardNames((Node *) task->jobQueryForPrepare,
+			Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
+			UpdateRelationToShardNames((Node *) queryForDeparse,
 									   task->relationShardList);
 
 			/* deparse the query tree to get the parameterized SQL string */
 			StringInfoData queryBuf;
 			initStringInfo(&queryBuf);
-			pg_get_query_def(task->jobQueryForPrepare, &queryBuf);
+			pg_get_query_def(queryForDeparse, &queryBuf);
 
 			/* synchronously prepare the statement on the worker */
 			int prepared = SendRemotePrepare(connection, cacheEntry->stmtName,
