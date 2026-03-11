@@ -15,11 +15,15 @@
 #include "catalog/namespace.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
+#include "parser/parse_expr.h"
 #include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
 
 #include "pg_version_constants.h"
 
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
@@ -34,6 +38,8 @@ static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendTableName(StringInfo buf, CreateStatsStmt *stmt);
+
+bool EnableUnsafeStatisticsExpressions = false;
 
 char *
 DeparseCreateStatisticsStmt(Node *node)
@@ -231,6 +237,42 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 }
 
 
+/* See ruleutils.c in postgres for the logic here. */
+static bool
+looks_like_function(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;           /* probably shouldn't happen */
+	}
+	switch (nodeTag(node))
+	{
+		case T_FuncExpr:
+		{
+			/* OK, unless it's going to deparse as a cast */
+			return (((FuncExpr *) node)->funcformat == COERCE_EXPLICIT_CALL ||
+					((FuncExpr *) node)->funcformat == COERCE_SQL_SYNTAX);
+		}
+
+		case T_NullIfExpr:
+		case T_CoalesceExpr:
+		case T_MinMaxExpr:
+		case T_SQLValueFunction:
+		case T_XmlExpr:
+		{
+			/* these are all accepted by func_expr_common_subexpr */
+			return true;
+		}
+
+		default:
+		{
+			break;
+		}
+	}
+	return false;
+}
+
+
 static void
 AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 {
@@ -240,15 +282,64 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 	{
 		if (!column->name)
 		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("only simple column references are allowed "
-							"in CREATE STATISTICS")));
+			if (EnableUnsafeStatisticsExpressions)
+			{
+				/*
+				 * Since these expressions are parser statements, we first call
+				 * transform to get the transformed Expr tree, and then deparse
+				 * the transformed tree. This is similar to the logic found in
+				 * deparse_table_stmts for check constraints.
+				 */
+				if (list_length(stmt->relations) != 1)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg(
+										"cannot use expressions in CREATE STATISTICS with multiple relations")));
+				}
+
+				RangeVar *rel = (RangeVar *) linitial(stmt->relations);
+				bool missingOk = false;
+				Oid relOid = RangeVarGetRelid(rel, AccessShareLock, missingOk);
+
+				/* Add table name to the name space in  parse state. Otherwise column names
+				 * cannot be found.
+				 */
+				Relation relation = table_open(relOid, AccessShareLock);
+				ParseState *pstate = make_parsestate(NULL);
+				AddRangeTableEntryToQueryCompat(pstate, relation);
+				Node *exprCooked = transformExpr(pstate, column->expr,
+												 EXPR_KIND_STATS_EXPRESSION);
+
+				char *relationName = get_rel_name(relOid);
+				List *relationCtx = deparse_context_for(relationName, relOid);
+
+				char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
+				relation_close(relation, NoLock);
+
+				/* Need parens if it's not a bare function call */
+				if (looks_like_function(exprCooked))
+				{
+					appendStringInfoString(buf, exprSql);
+				}
+				else
+				{
+					appendStringInfo(buf, "(%s)", exprSql);
+				}
+			}
+			else
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("only simple column references are allowed "
+								"in CREATE STATISTICS")));
+			}
 		}
+		else
+		{
+			const char *columnName = quote_identifier(column->name);
 
-		const char *columnName = quote_identifier(column->name);
-
-		appendStringInfoString(buf, columnName);
+			appendStringInfoString(buf, columnName);
+		}
 
 		if (column != llast(stmt->exprs))
 		{
