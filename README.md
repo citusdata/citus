@@ -22,7 +22,7 @@ Citus is a [PostgreSQL extension](https://www.citusdata.com/blog/2017/10/25/what
 With Citus, you extend your PostgreSQL database with new superpowers:
 
 - **Distributed tables** are sharded across a cluster of PostgreSQL nodes to combine their CPU, memory, storage and I/O capacity.
-- **References tables** are replicated to all nodes for joins and foreign keys from distributed tables and maximum read performance.
+- **Reference tables** are replicated to all nodes for joins and foreign keys from distributed tables and to maximize read performance.
 - **Distributed query engine** routes and parallelizes SELECT, DML, and other operations on distributed tables across the cluster.
 - **Columnar storage** compresses data, speeds up scans, and supports fast projections, both on regular and distributed tables.
 - **Query from any node** enables you to utilize the full capacity of your cluster for distributed queries
@@ -69,7 +69,7 @@ The quickest way to get started with Citus is to use the [Azure Cosmos DB for Po
 
 ### Citus Managed Service on Azure
 
-You can get a fully-managed Citus cluster in minutes through the [Azure Cosmos DB for PostgreSQL portal](https://azure.microsoft.com/products/cosmos-db/). Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started Citus on Azure, use the [Azure Cosmos DB for PostgreSQL Quickstart](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal).
+You can get a fully-managed Citus cluster in minutes through the [Azure Cosmos DB for PostgreSQL portal](https://azure.microsoft.com/products/cosmos-db/). Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started with Citus on Azure, use the [Azure Cosmos DB for PostgreSQL Quickstart](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal).
 
 ### Running Citus using Docker
 
@@ -239,7 +239,7 @@ Co-location also helps you scale [INSERT..SELECT](https://docs.citusdata.com/en/
 ### Distributing Tables without interrupting the application
 
 
-Some of you already start with Postgres, and decide to distribute tables later on while your application using the tables. In that case, you want to avoid downtime for both reads and writes. `create_distributed_table` command block writes (e.g., DML commands) on the table until the command is finished. Instead, with `create_distributed_table_concurrently` command, your application can continue to read and write the data even during the command.
+Some of you may start with Postgres and decide to distribute tables later while your application is already using the tables. In that case, you want to avoid downtime for both reads and writes. `create_distributed_table` command block writes (e.g., DML commands) on the table until the command is finished. Instead, with `create_distributed_table_concurrently` command, your application can continue to read and write the data even during the command.
 
 
 ```sql
@@ -350,7 +350,7 @@ To learn more about columnar storage, check out the [columnar storage README](ht
 
 ## Schema-based sharding
 
-Available since Citus 12.0, [schema-based sharding](https://docs.citusdata.com/en/stable/get_started/concepts.html#schema-based-sharding) is the shared database, separate schema model, the schema becomes the logical shard within the database. Multi-tenant apps can a use a schema per tenant to easily shard along the tenant dimension. Query changes are not required and the application usually only needs a small modification to set the proper search_path when switching tenants. Schema-based sharding is an ideal solution for microservices, and for ISVs deploying applications that cannot undergo the changes required to onboard row-based sharding.
+Available since Citus 12.0, [schema-based sharding](https://docs.citusdata.com/en/stable/get_started/concepts.html#schema-based-sharding) is the shared database, separate schema model, the schema becomes a logical shard within the database. Multi-tenant apps can use a schema per tenant to easily shard along the tenant dimension. Query changes are not required and the application usually only needs a small modification to set the proper search_path when switching tenants. Schema-based sharding is an ideal solution for microservices, and for ISVs deploying applications that cannot undergo the changes required to onboard row-based sharding.
 
 ### Creating distributed schemas
 
