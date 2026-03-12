@@ -18,28 +18,25 @@ SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
         1
 (1 row)
 
-\c - - - :worker_1_port
 -- When creating a tenant table from workers, we always fetch the next shard id
 -- and placement id from the coordinator because we never sync those sequences to
 -- workers. For this reason, along this test file, we always set the next shard id
 -- on the coordinator when needed, rather than setting it on the current worker node.
--- At the end of the test file, we reset it back fwiw.
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2050000;$$);
- ?column?
+--
+-- Note that setting citus.next_shard_id on the coordinator would not work if the
+-- citus internal connection we use to execute master_get_new_shardid() on the
+-- coordinator changes because the underlying function, GetNextShardIdInternal(),
+-- just increments NextShardId for the current session. For this reason, we instead
+-- set pg_dist_shardid_seq on the coordinator in the tests where we test creating
+-- distributed tables from a worker and where we want to use consistent shard ids.
+--
+-- At the end of the test file, we reset pg_dist_shardid_seq.
+SELECT last_value::bigint INTO pg_dist_shardid_seq_prev_state FROM pg_catalog.pg_dist_shardid_seq;
+\c - - - :worker_1_port
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2050000;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1); -- make sure that the GUC change is applied
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -64,22 +61,10 @@ SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2050100;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2050100;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -217,22 +202,10 @@ SELECT create_distributed_table('regular_schema_1.dist_table', 'a', shard_count 
 \c - - - :worker_1_port
 SET citus.enable_schema_based_sharding TO ON;
 SET client_min_messages TO NOTICE;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2050300;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2050300;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -933,22 +906,10 @@ $$);
 
 \c - - - :master_port
 SET client_min_messages TO NOTICE;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2050400;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2050400;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -973,22 +934,10 @@ SELECT create_distributed_table('regular_schema.null_shard_key_table_2', null);
 \c - - - :worker_2_port
 SET citus.enable_schema_based_sharding TO ON;
 SET client_min_messages TO NOTICE;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2050500;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2050500;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -1094,22 +1043,10 @@ $$);
 
 \c - - - :master_port
 SET client_min_messages TO WARNING;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2050600;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2050600;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -1118,22 +1055,10 @@ DROP OWNED BY test_non_super_user CASCADE;
 \c - - - :worker_2_port
 SET citus.enable_schema_based_sharding TO ON;
 SET client_min_messages TO NOTICE;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2050700;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2050700;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -1450,22 +1375,10 @@ SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_9;
 \c - postgres
 SET search_path TO regular_schema;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2060000;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2060000;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -1498,22 +1411,10 @@ $$);
 SET client_min_messages TO WARNING;
 DROP OWNED BY test_other_super_user;
 \c - - - :worker_2_port
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2060100;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2060100;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -1561,26 +1462,14 @@ ALTER ROLE test_non_super_user NOSUPERUSER;
 \c - - - :master_port
 GRANT CREATE ON DATABASE regression TO test_non_super_user;
 GRANT CREATE ON SCHEMA public TO test_non_super_user ;
-\c - test_non_super_user
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2070000;$$);
+     result
+---------------------------------------------------------------------
+ ALTER SEQUENCE
+(1 row)
+
+\c - test_non_super_user - :worker_2_port
 SET search_path TO regular_schema;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2070000;$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 SET citus.shard_count TO 32;
 SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO NOTICE;
@@ -1695,7 +1584,7 @@ $$);
  DROP TABLE
 (3 rows)
 
-\c - postgres
+\c - postgres - :master_port
 REVOKE CREATE ON DATABASE regression FROM test_non_super_user;
 REVOKE CREATE ON SCHEMA public FROM test_non_super_user;
 DROP ROLE test_non_super_user;
@@ -1732,22 +1621,10 @@ SELECT pg_reload_conf();
 SELECT citus_internal.unregister_tenant_schema_globally('tenant_3'::regnamespace, 'tenant_3');
 ERROR:  schema is expected to be already dropped because this function is only expected to be called from Citus drop hook
 SET search_path TO regular_schema;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2080000;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2080000;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -1790,22 +1667,10 @@ SELECT pg_reload_conf();
 SET search_path TO regular_schema;
 SET citus.enable_schema_based_sharding TO ON;
 SET search_path TO regular_schema;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2080200;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2080200;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 SET citus.shard_count TO 32;
@@ -1855,44 +1720,20 @@ RESET citus.enable_schema_based_sharding;
 SET citus.enable_schema_based_sharding TO ON;
 CREATE USER citus_schema_role SUPERUSER;
 SET ROLE citus_schema_role;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2080400;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2080400;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 CREATE SCHEMA citus_sch1;
 CREATE TABLE citus_sch1.tbl1(a INT);
 CREATE TABLE citus_sch1.tbl2(a INT);
 RESET ROLE;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2080500;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2080500;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 CREATE SCHEMA citus_sch2;
@@ -1981,22 +1822,10 @@ $$);
 
 RESET client_min_messages;
 RESET ROLE;
-SELECT 1 FROM run_command_on_coordinator($$ALTER SYSTEM SET citus.next_shard_id TO 2080600;$$);
- ?column?
+SELECT result FROM run_command_on_coordinator($$ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH 2080600;$$);
+     result
 ---------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM run_command_on_coordinator($$SELECT pg_reload_conf();$$);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
+ ALTER SEQUENCE
 (1 row)
 
 -- test we handle create schema with authorization properly for distributed schema
@@ -2143,17 +1972,12 @@ SELECT citus_remove_node('localhost', :master_port);
 
 (1 row)
 
--- reset it fwiw
-ALTER SYSTEM RESET citus.next_shard_id;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT pg_sleep(0.1);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
+-- reset pg_dist_shardid_seq on the coordinator
+DO $proc$
+DECLARE
+    v_last_value bigint;
+BEGIN
+    SELECT last_value INTO v_last_value FROM pg_dist_shardid_seq_prev_state;
+    EXECUTE format('ALTER SEQUENCE pg_dist_shardid_seq RESTART WITH %s', v_last_value);
+END$proc$;
+DROP TABLE pg_dist_shardid_seq_prev_state;
