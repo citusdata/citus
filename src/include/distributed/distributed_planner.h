@@ -115,7 +115,8 @@ typedef struct FastPathRestrictionContext
 	/*
 	 * When distributionKeyHasParam is true, stores the Param's paramid
 	 * so the executor can extract the distribution key value directly
-	 * from ParamListInfo without walking the query tree. -1 when not set.
+	 * from ParamListInfo without walking the query tree. 0 when not set
+	 * (paramid is 1-based in PostgreSQL).
 	 */
 	int distributionKeyParamId;
 
