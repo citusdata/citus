@@ -6,7 +6,8 @@ repository: citusdata/citus
 topic: "Prepared Statement Caching on Worker Connections"
 tags: [research, codebase, adaptive-executor, connection-management, prepared-statements, fast-path]
 status: complete
-last_updated: 2026-03-09
+last_updated: 2026-03-12
+last_updated_note: "Added Phase 4 Cache-Hit Fast Path research (Q1-Q10)"
 ---
 
 # Research: Prepared Statement Caching on Worker Connections
@@ -529,3 +530,455 @@ Transaction end:
 2. **Async prepare**: `PQsendPrepare()` is async; `PQprepare()` is sync. The adaptive executor is async throughout. The POC should use `PQsendPrepare()` to avoid blocking, but this means the prepare+execute sequence requires two round trips on first execution. Need to verify this works within the existing `TransactionStateMachine` flow.
 
 3. **Statement name generation**: Needs a scheme that avoids collisions across multiple prepared statements within the same connection. A simple monotonic counter per connection (e.g., `citus_ps_%lu` with `connectionId * 1000000 + seqno`) would work.
+
+---
+
+## Phase 4: Cache-Hit Fast Path
+
+> **Date**: 2026-03-12 | **Commit**: a71df7c0431422c4b2fa92c6e1332629005065d6 | **Branch**: colm/prepared-stmts-poc
+
+### Q1: CitusBeginReadOnlyScan — Current fast-path flow
+
+Entry point: [CitusBeginReadOnlyScan](src/backend/distributed/executor/citus_custom_scan.c#L294) is called from `CitusBeginScan()` at [citus_custom_scan.c:221](src/backend/distributed/executor/citus_custom_scan.c#L221) for `CMD_SELECT` queries.
+
+The full execution flow for a fast-path SELECT with caching enabled and `deferredPruning = true`:
+
+```
+CitusBeginReadOnlyScan()                          [citus_custom_scan.c:294]
+  │
+  ├─ (1) CopyDistributedPlanWithoutCache()        [citus_custom_scan.c:317]
+  │      Deep-copies entire DistributedPlan + Job + jobQuery tree.
+  │      COST: copyObject() on the full plan tree — the single most
+  │      expensive operation in this path. Allocates new memory for
+  │      every node in the plan tree.
+  │
+  ├─ (2) Save savedJobQueryForCaching              [citus_custom_scan.c:339-348]
+  │      On first execution: copyObject(jobQuery) saved on original plan.
+  │      Subsequent executions: reuse saved copy. One-time cost.
+  │
+  ├─ (3) ExecuteCoordinatorEvaluableExpressions()  [citus_custom_scan.c:361]
+  │      Walks the jobQuery tree replacing Param nodes ($1,$2...) with
+  │      Const nodes (resolved values from ParamListInfo).
+  │      For SELECTs: evaluationMode = EVALUATE_PARAMS (params only).
+  │      Defined at [citus_clauses.c:69](src/backend/distributed/utils/citus_clauses.c#L69).
+  │      COST: full expression_tree_walker over jobQuery. Moderate.
+  │
+  ├─ (4) workerJob->parametersInJobQueryResolved = true  [citus_custom_scan.c:365]
+  │
+  ├─ (5) RegenerateTaskForFasthPathQuery()         [citus_custom_scan.c:368]
+  │      Resolves distribution key → shard, rewrites table names to shard
+  │      names in the query tree, builds task and placement list.
+  │      COST: Several function calls (see Q3). This is the second most
+  │      expensive step due to UpdateRelationToShardNames (tree walk)
+  │      and GenerateSingleShardRouterTaskList (task allocation + setup).
+  │
+  └─ (6) Attach prepared stmt metadata to tasks     [citus_custom_scan.c:374-379]
+         Sets task->preparedStatementPlanId and task->jobQueryForPrepare.
+         COST: Negligible (pointer assignment per task).
+```
+
+**Steps skippable on cache hit**: Steps (1), (2), (3), and most of (5) can be skipped entirely. The minimum work needed on a cache hit is: resolve the distribution key value from `ParamListInfo` → find the shard interval → build a minimal Task with `anchorShardId`, `taskPlacementList`, `relationShardList`, and the prepared-statement metadata fields. Steps (4) and (6) are trivially cheap.
+
+### Q2: CopyDistributedPlanWithoutCache — What does it deep-copy?
+
+Defined at [citus_custom_scan.c:686](src/backend/distributed/executor/citus_custom_scan.c#L686).
+
+```c
+static DistributedPlan *
+CopyDistributedPlanWithoutCache(DistributedPlan *originalDistributedPlan)
+{
+    List *localPlannedStatements =
+        originalDistributedPlan->workerJob->localPlannedStatements;
+    Query *savedJobQueryForCaching =
+        originalDistributedPlan->workerJob->savedJobQueryForCaching;
+    originalDistributedPlan->workerJob->localPlannedStatements = NIL;
+    originalDistributedPlan->workerJob->savedJobQueryForCaching = NULL;
+
+    DistributedPlan *distributedPlan = copyObject(originalDistributedPlan);
+
+    /* set back the immutable/cached fields */
+    originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+    distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+    originalDistributedPlan->workerJob->savedJobQueryForCaching = savedJobQueryForCaching;
+
+    return distributedPlan;
+}
+```
+
+The `copyObject()` call deep-copies the entire `DistributedPlan` struct ([multi_physical_planner.h:415-513](src/include/distributed/multi_physical_planner.h#L415-L513)), which includes:
+
+- All `DistributedPlan` fields: `planId`, `modLevel`, `expectResults`, `combineQuery`, `queryId`, `relationIdList`, `targetRelationId`, `subPlanList`, `usedSubPlanNodeList`, `fastPathRouterPlan`, `numberOfTimesExecuted`, `planningError`, etc.
+- The entire `Job` struct ([multi_physical_planner.h:134-166](src/include/distributed/multi_physical_planner.h#L134-L166)): `jobId`, `jobQuery` (full Query tree), `taskList`, `dependentJobList`, `deferredPruning`, `partitionKeyValue`, `parametersInJobQueryResolved`, `colocationId`.
+- The `jobQuery` is the most expensive part: it is a full PostgreSQL `Query` tree including `rtable`, `jointree`, `targetList`, and all quals.
+
+**Excluded from deep copy** (set to NIL/NULL before `copyObject`, restored after):
+- `localPlannedStatements` — shared across executions (immutable plans)
+- `savedJobQueryForCaching` — lives on the original plan only
+
+**Fields accessed by the adaptive executor from `DistributedPlan`**:
+- `distributedPlan->modLevel` — at [adaptive_executor.c:867](src/backend/distributed/executor/adaptive_executor.c#L867) for `CreateDistributedExecution()`
+- `distributedPlan->workerJob->taskList` — at [adaptive_executor.c:789](src/backend/distributed/executor/adaptive_executor.c#L789)
+- `job->jobQuery->commandType` — at [adaptive_executor.c:899](src/backend/distributed/executor/adaptive_executor.c#L899) for `es_processed` check
+- `job->jobQuery` — at [adaptive_executor.c:864](src/backend/distributed/executor/adaptive_executor.c#L864) for `MarkUnreferencedExternParams` (skipped when caching enabled)
+- `job->dependentJobList` — at [adaptive_executor.c:830](src/backend/distributed/executor/adaptive_executor.c#L830)
+- `distributedPlan->expectResults` — at [adaptive_executor.c:903](src/backend/distributed/executor/adaptive_executor.c#L903) for `SortReturning`
+
+**Conclusion**: On a cache hit, we can avoid the deep copy entirely if we construct a minimal `DistributedPlan`/`Job` stub or re-use a lightweight execution path. The critical fields needed by the executor are `modLevel`, `taskList`, `job->jobQuery->commandType`, and `job->dependentJobList` (NIL for fast-path). The most expensive thing being deep-copied — the full `jobQuery` tree — is not needed on cache hits if we have a pre-built Task.
+
+### Q3: RegenerateTaskForFasthPathQuery — Full dissection
+
+Defined at [citus_custom_scan.c:746](src/backend/distributed/executor/citus_custom_scan.c#L746).
+
+```c
+static void
+RegenerateTaskForFasthPathQuery(Job *workerJob)
+{
+    bool isMultiShardQuery = false;
+    List *shardIntervalList =
+        TargetShardIntervalForFastPathQuery(workerJob->jobQuery,
+                                            &isMultiShardQuery, NULL,
+                                            &workerJob->partitionKeyValue);
+    // ... error check for multi-shard ...
+
+    bool shardsPresent = false;
+    List *relationShardList =
+        RelationShardListForShardIntervalList(shardIntervalList, &shardsPresent);
+
+    UpdateRelationToShardNames((Node *) workerJob->jobQuery, relationShardList);
+
+    bool hasLocalRelation = false;
+    List *placementList =
+        CreateTaskPlacementListForShardIntervals(shardIntervalList, shardsPresent,
+                                                 true, hasLocalRelation);
+    uint64 shardId = INVALID_SHARD_ID;
+    if (shardsPresent) { shardId = GetAnchorShardId(shardIntervalList); }
+
+    bool isLocalTableModification = false;
+    bool delayedFastPath = false;
+    GenerateSingleShardRouterTaskList(workerJob, relationShardList, placementList,
+                                      shardId, isLocalTableModification,
+                                      delayedFastPath);
+}
+```
+
+Step-by-step breakdown:
+
+1. **`TargetShardIntervalForFastPathQuery()`** ([multi_router_planner.c:3107](src/backend/distributed/planner/multi_router_planner.c#L3107)): Called with `inputDistributionKeyValue = NULL` (third arg). Since parameters were already resolved to Consts by `ExecuteCoordinatorEvaluableExpressions`, it falls through to the `quals`-based path at [multi_router_planner.c:3163](src/backend/distributed/planner/multi_router_planner.c#L3163): calls `PruneShards()` to scan the WHERE clause for `dist_col = <Const>`. Internally calls `ExtractFirstCitusTableId(query)` at [multi_router_planner.c:3112](src/backend/distributed/planner/multi_router_planner.c#L3112) to get the relation OID from the query's rtable, then `GetCitusTableCacheEntry()` + `FindShardInterval()` for the hash lookup.
+
+2. **`RelationShardListForShardIntervalList()`**: Builds a `List` of `RelationShard` structs mapping relation OID → shard ID. Lightweight allocation.
+
+3. **`UpdateRelationToShardNames()`** ([deparse_shard_query.c:467](src/backend/distributed/planner/deparse_shard_query.c#L467)): Walks the *entire* query tree via `query_tree_walker`/`expression_tree_walker`, modifying `RangeTblEntry` names to include shard IDs (e.g., `dist_table` → `dist_table_102001`). This modifies the `jobQuery` in-place. **This is expensive** — full tree walk mutating RTEs.
+
+4. **`CreateTaskPlacementListForShardIntervals()`**: Builds the placement list (which worker nodes hold the shard). Involves metadata lookups but is relatively cheap.
+
+5. **`GenerateSingleShardRouterTaskList()`** ([multi_router_planner.c:2279](src/backend/distributed/planner/multi_router_planner.c#L2279)): Calls `SingleShardTaskList()` ([multi_router_planner.c:2418](src/backend/distributed/planner/multi_router_planner.c#L2418)) which:
+   - Calls `CreateTask(READ_TASK)` — allocates a `Task` node
+   - Calls `SetTaskQueryIfShouldLazyDeparse(task, query)` — stores the query reference for lazy deparsing (the query string is NOT generated yet)
+   - Sets `task->anchorShardId`, `task->taskPlacementList`, `task->relationShardList`, `task->parametersInQueryStringResolved`, `task->partitionKeyValue`, `task->colocationId`
+   - The actual query string deparse happens lazily in `TaskQueryStringAtIndex()` during `SendNextQuery()`
+
+**What can be called cheaply on the fast path**: `TargetShardIntervalForFastPathQuery` CAN be called with an `inputDistributionKeyValue` Const (see Q4), which avoids the quals-based `PruneShards()` walk entirely. However it still needs `ExtractFirstCitusTableId(query)` — which requires the query's rtable. The entire `UpdateRelationToShardNames` tree walk and query deparsing can be skipped on a cache hit.
+
+### Q4: TargetShardIntervalForFastPathQuery — Cheap shard lookup
+
+Defined at [multi_router_planner.c:3107](src/backend/distributed/planner/multi_router_planner.c#L3107):
+
+```c
+List *
+TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
+                                    Const *inputDistributionKeyValue,
+                                    Const **outputPartitionValueConst)
+{
+    Oid relationId = ExtractFirstCitusTableId(query);
+
+    if (!HasDistributionKey(relationId)) { ... }
+
+    if (inputDistributionKeyValue && !inputDistributionKeyValue->constisnull)
+    {
+        CitusTableCacheEntry *cache = GetCitusTableCacheEntry(relationId);
+        // ... type coercion check ...
+        ShardInterval *cachedShardInterval =
+            FindShardInterval(inputDistributionKeyValue->constvalue, cache);
+        // ... return shard interval ...
+    }
+
+    // ... fallback: quals-based PruneShards() ...
+```
+
+**When given a non-NULL `inputDistributionKeyValue`**, the function takes the fast path at [multi_router_planner.c:3122-3148](src/backend/distributed/planner/multi_router_planner.c#L3122-L3148):
+1. `GetCitusTableCacheEntry(relationId)` — hash table lookup, very cheap (cached)
+2. Optional type coercion via `TransformPartitionRestrictionValue()` — only if types mismatch (rare for prepared stmts)
+3. `FindShardInterval(constvalue, cache)` at [shardinterval_utils.c:260](src/backend/distributed/utils/shardinterval_utils.c#L260) — hash function call + binary search. Very cheap.
+4. `CopyShardInterval()` — small struct copy
+
+**The problem**: The function always calls `ExtractFirstCitusTableId(query)` at line 3112, which requires the `Query` tree to extract the relation OID from `query->rtable`.
+
+**For the fast path bypass**, we don't need `TargetShardIntervalForFastPathQuery` at all. We can directly call: 
+1. `GetCitusTableCacheEntry(relationId)` — using a stored relation OID from the `DistributedPlan` (e.g., `distributedPlan->targetRelationId` for DML, or `linitial_oid(distributedPlan->relationIdList)` for SELECTs)
+2. `FindShardInterval(constvalue, cache)` — with the resolved Const datum
+
+**Going from ParamListInfo → shard interval**:
+- Extract the distribution key parameter value from `ParamListInfo` (we know which param index corresponds to the distribution key)
+- Create a Const node with the value
+- Call `FindShardInterval(const->constvalue, cache)` directly
+
+The `FastPathRestrictionContext` contains `distributionKeyHasParam = true` for parameterized fast-path queries, but does NOT record which param index holds the distribution key. However, the distribution key type info is available via `GetCitusTableCacheEntry(relationId)->partitionColumn`.
+
+### Q5: AdaptiveExecutor and CreateDistributedExecution — Minimum state needed
+
+#### AdaptiveExecutor() at [adaptive_executor.c:775](src/backend/distributed/executor/adaptive_executor.c#L775)
+
+Reads from `DistributedPlan`/`Job`:
+- `distributedPlan->workerJob` → `job`
+- `job->taskList` — the primary input at [adaptive_executor.c:789](src/backend/distributed/executor/adaptive_executor.c#L789)
+- `job->dependentJobList` — checked at [adaptive_executor.c:830](src/backend/distributed/executor/adaptive_executor.c#L830); NIL for fast-path queries
+- `job->jobQuery` — used for:
+  - `MarkUnreferencedExternParams()` at [line 864](src/backend/distributed/executor/adaptive_executor.c#L864) — **skipped when `EnablePreparedStatementCaching`** (guard at line 861)
+  - `job->jobQuery->commandType` at [line 899](src/backend/distributed/executor/adaptive_executor.c#L899) — only to check `CMD_SELECT` for `es_processed`
+- `distributedPlan->modLevel` — at [line 867](src/backend/distributed/executor/adaptive_executor.c#L867) for `CreateDistributedExecution()` and `DecideTaskListTransactionProperties()`
+- `distributedPlan->expectResults` — at [line 903](src/backend/distributed/executor/adaptive_executor.c#L903) for `SortReturning` check
+
+#### CreateDistributedExecution() at [adaptive_executor.c:1176](src/backend/distributed/executor/adaptive_executor.c#L1176)
+
+Parameters: `modLevel`, `taskList`, `paramListInfo`, `targetPoolSize`, `defaultTupleDest`, `xactProperties`, `jobIdList`, `localExecutionSupported`.
+
+Does NOT directly access `Job` or `DistributedPlan` — it only uses the passed-in values. The `taskList` is the critical input.
+
+#### Task fields actually READ by the executor
+
+In `AssignTasksToConnectionsOrWorkerPool()` at [adaptive_executor.c:1433](src/backend/distributed/executor/adaptive_executor.c#L1433):
+- `task->taskPlacementList` — at [line 1443](src/backend/distributed/executor/adaptive_executor.c#L1443) for `placementExecutionCount` and iteration at [line 1462](src/backend/distributed/executor/adaptive_executor.c#L1462)
+- `task->tupleDest` — at [line 1641](src/backend/distributed/executor/adaptive_executor.c#L1641) for `SetAttributeInputMetadata`
+- `task->queryCount` — at [line 1644](src/backend/distributed/executor/adaptive_executor.c#L1644) for `SetAttributeInputMetadata`
+- `task->taskType` — at [line 1678](src/backend/distributed/executor/adaptive_executor.c#L1678) for `ExecutionOrderForTask`
+
+In `SendNextQuery()` at [adaptive_executor.c:3891](src/backend/distributed/executor/adaptive_executor.c#L3891):
+- `task->queryCount` — at [line 3905](src/backend/distributed/executor/adaptive_executor.c#L3905) for Assert
+- `task->preparedStatementPlanId` — at [line 3937](src/backend/distributed/executor/adaptive_executor.c#L3937) for cache lookup key
+- `task->anchorShardId` — at [line 3938](src/backend/distributed/executor/adaptive_executor.c#L3938) for cache lookup key
+- `task->jobQueryForPrepare` — at [line 3916](src/backend/distributed/executor/adaptive_executor.c#L3916) for cache-miss deparse, and at [line 3968](src/backend/distributed/executor/adaptive_executor.c#L3968) for `copyObject`
+- `task->relationShardList` — at [line 3970](src/backend/distributed/executor/adaptive_executor.c#L3970) for `UpdateRelationToShardNames` on cache miss
+- `task->parametersInQueryStringResolved` — at [line 4022](src/backend/distributed/executor/adaptive_executor.c#L4022) for plain SQL fallback path
+
+In `ReceiveResults()`:
+- `task->tupleDest` — at [line 4095](src/backend/distributed/executor/adaptive_executor.c#L4095)
+- `task->totalReceivedTupleData` — accumulated during result processing
+
+Post-execution:
+- `task->anchorShardId` — at [line 4474](src/backend/distributed/executor/adaptive_executor.c#L4474)
+
+#### Minimal "cache-hit Task" fields
+
+A Task built from scratch via `CreateTask(READ_TASK)` needs these populated:
+| Field | Value | Why |
+|-------|-------|-----|
+| `taskType` | `READ_TASK` | `ExecutionOrderForTask` |
+| `anchorShardId` | resolved shard ID | cache lookup key, post-execution |
+| `taskPlacementList` | placement list for shard | connection assignment |
+| `queryCount` | `1` | `SetAttributeInputMetadata`, `SendNextQuery` |
+| `preparedStatementPlanId` | from `distributedPlan->planId` | cache lookup key |
+| `jobQueryForPrepare` | `savedJobQueryForCaching` | cache-miss deparse (fallback) |
+| `relationShardList` | relation→shard mapping | cache-miss `UpdateRelationToShardNames` |
+| `parametersInQueryStringResolved` | `true` | plain SQL fallback |
+| `taskQuery` | lazy-deparse reference or NULL | only for cache-miss/plain-SQL fallback |
+| `tupleDest` | `NULL` (uses default) | result routing |
+
+**Conclusion**: Yes, we can build a Task from scratch with `CreateTask()` and populate only these fields. The `taskQuery` field is only needed for the non-caching fallback path.
+
+### Q6: SendNextQuery — Current caching path
+
+Defined at [adaptive_executor.c:3891](src/backend/distributed/executor/adaptive_executor.c#L3891).
+
+#### Query string resolution
+
+At [line 3906](src/backend/distributed/executor/adaptive_executor.c#L3906):
+```c
+char *queryString = TaskQueryStringAtIndex(task, queryIndex);
+```
+This is called **BEFORE** the caching check. `TaskQueryStringAtIndex()` at [deparse_shard_query.c:756](src/backend/distributed/planner/deparse_shard_query.c#L756) may trigger lazy deparsing via `TaskQueryString()` — meaning it can call `pg_get_query_def()` on the query tree if the query string hasn't been materialized yet. This is a **wasted deparse** when the caching path is taken.
+
+#### Cache hit path (lines 3912-4011)
+
+```
+if (EnablePreparedStatementCaching && task->jobQueryForPrepare != NULL && paramListInfo != NULL)
+{
+    1. copyParamList(paramListInfo)                    — force param evaluation
+    2. ExtractParametersForRemoteExecution()            — convert to text values
+    3. Lazy-create preparedStatementCache if NULL
+    4. PreparedStatementCacheLookup(planId, shardId)
+    
+    IF cache hit:
+        5. SendRemotePreparedQuery(stmtName, params)   — PQsendQueryPrepared
+    
+    IF cache miss:
+        6. PreparedStatementCacheInsert()
+        7. copyObject(task->jobQueryForPrepare)         — copy query tree
+        8. UpdateRelationToShardNames()                 — rewrite to shard names
+        9. pg_get_query_def()                           — deparse to SQL
+       10. SendRemotePrepare()                          — PQprepare (synchronous)
+       11. Store template in cache entry
+       12. SendRemotePreparedQuery(stmtName, params)    — PQsendQueryPrepared
+}
+```
+
+#### Cache miss path
+
+Falls through to `plain_sql:` label at [line 4019](src/backend/distributed/executor/adaptive_executor.c#L4019-L4060):
+- If `paramListInfo != NULL && !task->parametersInQueryStringResolved`: sends via `SendRemoteCommandParams` with parameters
+- Otherwise: sends via `SendRemoteCommand` (plain text) or `SendRemoteCommandParams` (for binary results)
+
+#### Can we skip TaskQueryStringAtIndex?
+
+**Yes.** The `queryString` variable is only used after the `plain_sql:` label. On the caching path, it is never referenced — the query string comes from the cache entry's `parameterizedQueryString` or is generated from `jobQueryForPrepare`. The call at line 3906 is **unconditionally evaluated before the caching check**, making it a wasted lazy-deparse on every cache hit.
+
+**Proposed fix**: Move the `TaskQueryStringAtIndex` call to after the caching check, or guard it with `if (!EnablePreparedStatementCaching || task->jobQueryForPrepare == NULL)`.
+
+#### jobQueryForPrepare handling
+
+At [citus_custom_scan.c:377](src/backend/distributed/executor/citus_custom_scan.c#L377): `task->jobQueryForPrepare = savedJobQuery` — this is a pointer to `origJob->savedJobQueryForCaching`, which lives on the `originalDistributedPlan` (long-lived memory context). It is **not** copied per-execution; it is the original saved query with Param nodes intact.
+
+On cache miss in `SendNextQuery()` at [line 3968](src/backend/distributed/executor/adaptive_executor.c#L3968): `copyObject(task->jobQueryForPrepare)` creates a working copy for shard-name substitution so the shared template stays unmodified.
+
+### Q7: Task struct fields — What's needed for executor
+
+Complete list of Task fields READ during `RunDistributedExecution` → `ManageWorkerPool` → `SendNextQuery` with file:line references:
+
+| Field | Read at | Purpose |
+|-------|---------|---------|
+| `taskPlacementList` | [adaptive_executor.c:1443](src/backend/distributed/executor/adaptive_executor.c#L1443), [1462](src/backend/distributed/executor/adaptive_executor.c#L1462) | Connection assignment, placement execution count |
+| `taskType` | [adaptive_executor.c:1678](src/backend/distributed/executor/adaptive_executor.c#L1678) | Execution order (sequential vs parallel) |
+| `tupleDest` | [adaptive_executor.c:1641](src/backend/distributed/executor/adaptive_executor.c#L1641), [4095](src/backend/distributed/executor/adaptive_executor.c#L4095) | Tuple routing; NULL uses default |
+| `queryCount` | [adaptive_executor.c:1644](src/backend/distributed/executor/adaptive_executor.c#L1644), [3605](src/backend/distributed/executor/adaptive_executor.c#L3605), [3905](src/backend/distributed/executor/adaptive_executor.c#L3905), [4172](src/backend/distributed/executor/adaptive_executor.c#L4172) | Query iteration, attribute metadata |
+| `anchorShardId` | [adaptive_executor.c:3938](src/backend/distributed/executor/adaptive_executor.c#L3938), [4474](src/backend/distributed/executor/adaptive_executor.c#L4474) | Cache key, post-execution logging |
+| `preparedStatementPlanId` | [adaptive_executor.c:3937](src/backend/distributed/executor/adaptive_executor.c#L3937) | Cache lookup key |
+| `jobQueryForPrepare` | [adaptive_executor.c:3916](src/backend/distributed/executor/adaptive_executor.c#L3916), [3968](src/backend/distributed/executor/adaptive_executor.c#L3968) | Cache miss: deparse for PQprepare |
+| `relationShardList` | [adaptive_executor.c:3970](src/backend/distributed/executor/adaptive_executor.c#L3970) | Cache miss: UpdateRelationToShardNames |
+| `parametersInQueryStringResolved` | [adaptive_executor.c:4022](src/backend/distributed/executor/adaptive_executor.c#L4022) | Plain SQL path: determines param handling |
+| `taskQuery` (.data) | [adaptive_executor.c:3906](src/backend/distributed/executor/adaptive_executor.c#L3906) via `TaskQueryStringAtIndex` | Plain SQL path: query string retrieval |
+| `totalReceivedTupleData` | accumulated in `ReceiveResults()` | EXPLAIN ANALYZE stats |
+| `partitionKeyValue` | not directly by executor, set by `SingleShardTaskList` | Passed through for metadata |
+| `replicationModel` | not read by executor for READ_TASK | Only matters for `MODIFY_TASK` |
+
+**Minimum for a cache-hit Task**: `taskType`, `anchorShardId`, `taskPlacementList`, `queryCount=1`, `preparedStatementPlanId`, `jobQueryForPrepare` (for fallback), `relationShardList` (for fallback), `parametersInQueryStringResolved=true`. The `taskQuery` field can be set to a lazy reference or left as `TASK_QUERY_NULL` if we ensure the caching path is always taken.
+
+### Q8: FastPathRestrictionContext and plan-time data preservation
+
+#### Definition at [distributed_planner.h:98-120](src/include/distributed/distributed_planner.h#L98-L120):
+
+```c
+typedef struct FastPathRestrictionContext
+{
+    bool fastPathRouterQuery;
+    Const *distributionKeyValue;       // NULL when key is a Param
+    bool distributionKeyHasParam;      // true when distKey = $N
+    bool delayFastPathPlanning;
+} FastPathRestrictionContext;
+```
+
+#### Where stored
+
+Part of `PlannerRestrictionContext` at [distributed_planner.h:134](src/include/distributed/distributed_planner.h#L134):
+```c
+FastPathRestrictionContext *fastPathRestrictionContext;
+```
+
+This is a planner-time structure. It is allocated in the planner's `PlannerRestrictionContext` and is **NOT stored on the `DistributedPlan`**. It does not survive into execution time.
+
+#### What IS available at execution time on DistributedPlan
+
+- `distributedPlan->fastPathRouterPlan` (bool) — at [multi_physical_planner.h:496](src/include/distributed/multi_physical_planner.h#L496)
+- `distributedPlan->targetRelationId` (Oid) — at [multi_physical_planner.h:444](src/include/distributed/multi_physical_planner.h#L444): set for DML targets
+- `distributedPlan->relationIdList` (List of Oid) — at [multi_physical_planner.h:441](src/include/distributed/multi_physical_planner.h#L441): all accessed relations
+- `workerJob->deferredPruning` (bool) — indicates params need resolving
+- `workerJob->partitionKeyValue` (Const *) — NULL when deferred
+
+#### Fields we need to preserve for the fast path
+
+For the cache-hit bypass, we need to go from `ParamListInfo` → shard interval without the full query tree. Required plan-time data:
+
+1. **Relation OID**: Available as `linitial_oid(distributedPlan->relationIdList)` for SELECT, or `distributedPlan->targetRelationId` for DML. From this we can get `GetCitusTableCacheEntry(relationId)`.
+2. **Distribution column type info**: Available from `GetCitusTableCacheEntry(relationId)->partitionColumn` — this is cached metadata, not per-plan.
+3. **Which Param index holds the distribution key**: **NOT currently stored**. The `FastPathRestrictionContext` knows `distributionKeyHasParam=true` but doesn't record the param index. At plan time, the code in `FastPathRouterQuery()` finds the distribution key restriction but doesn't preserve which `Param->paramid` it corresponds to.
+
+**What needs to be added**: A new field on `DistributedPlan` or `Job` to store the distribution key's parameter index (e.g., `int distributionKeyParamId`). This would be set during planning when `FastPathRouterQuery()` identifies the `Param` node, and would allow the fast path to extract the correct value from `ParamListInfo` at execution time.
+
+### Q9: savedJobQueryForCaching — Current optimization
+
+#### Where set
+
+**For SELECTs** — in `CitusBeginReadOnlyScan()` at [citus_custom_scan.c:341-348](src/backend/distributed/executor/citus_custom_scan.c#L341-L348):
+```c
+if (EnablePreparedStatementCaching)
+{
+    Job *origJob = originalDistributedPlan->workerJob;
+    if (origJob->savedJobQueryForCaching == NULL)
+    {
+        MemoryContext oldCtx = MemoryContextSwitchTo(
+            GetMemoryChunkContext(originalDistributedPlan));
+        origJob->savedJobQueryForCaching = copyObject(jobQuery);
+        MemoryContextSwitchTo(oldCtx);
+    }
+    savedJobQuery = origJob->savedJobQueryForCaching;
+}
+```
+
+This is executed BEFORE `ExecuteCoordinatorEvaluableExpressions()` — so the saved query has **unevaluated Param nodes** (`$1`, `$2`, ...) still intact. Functions (for SELECT, no function evaluation happens anyway since `evaluationMode = EVALUATE_PARAMS` only). The copy is allocated in the original plan's memory context (long-lived, survives across executions).
+
+**For DML** — in `CitusBeginModifyScan()` at [citus_custom_scan.c:453-457](src/backend/distributed/executor/citus_custom_scan.c#L453-L457):
+```c
+savedJobQuery = copyObject(jobQuery);
+origJob->savedJobQueryForCaching = savedJobQuery;
+```
+Here, `ExecuteCoordinatorEvaluableFunctions()` has already been called — so the saved query has **evaluated functions** (e.g., `now()` resolved to a constant) but **unevaluated Param nodes** still intact. Note: for DML, this is refreshed every execution because volatile functions may produce different results.
+
+#### Where used
+
+At [citus_custom_scan.c:377](src/backend/distributed/executor/citus_custom_scan.c#L377) (SELECT) and [citus_custom_scan.c:497](src/backend/distributed/executor/citus_custom_scan.c#L497) (DML): assigned to `task->jobQueryForPrepare`.
+
+#### Excluded from CopyDistributedPlanWithoutCache
+
+At [citus_custom_scan.c:690-700](src/backend/distributed/executor/citus_custom_scan.c#L690-L700): set to NULL before `copyObject()`, then restored only on the original plan. The per-execution copy gets `savedJobQueryForCaching = NULL`. This avoids deep-copying the saved query on every execution.
+
+#### Interaction with proposed fast path
+
+The saved query is the **template for PQprepare** on cache miss. On a cache hit, `task->jobQueryForPrepare` is still set (as a fallback) but is never accessed — `SendNextQuery()` takes the cache-hit path directly to `SendRemotePreparedQuery()` without touching `jobQueryForPrepare`.
+
+For the Phase 4 fast path, the `savedJobQueryForCaching` on the original plan is still needed for cache-miss fallback. But on a cache hit, we can set `task->jobQueryForPrepare` to the saved query pointer without any per-execution copy cost (it's already a pointer to the long-lived saved copy).
+
+### Q10: Connection-level cache lookup feasibility
+
+#### When is the connection assigned?
+
+The connection is assigned inside `AssignTasksToConnectionsOrWorkerPool()` at [adaptive_executor.c:1433](src/backend/distributed/executor/adaptive_executor.c#L1433), which is called from `RunDistributedExecution()` at [adaptive_executor.c:1907](src/backend/distributed/executor/adaptive_executor.c#L1907). Specifically:
+
+1. For tasks with prior transaction affinity: `GetConnectionIfPlacementAccessedInXact()` at [adaptive_executor.c:1519](src/backend/distributed/executor/adaptive_executor.c#L1519)
+2. For regular tasks: connections are assigned lazily in `ManageWorkerPool()` → `OpenNewConnections()` → sessions pick up tasks from the `pendingTaskQueue`
+
+The actual connection (`MultiConnection *`) is only known when `StartPlacementExecutionOnSession()` is called at [adaptive_executor.c:3821](src/backend/distributed/executor/adaptive_executor.c#L3821), which immediately calls `SendNextQuery()`.
+
+#### Can we check the cache before entering the executor?
+
+**No.** We cannot determine which specific `MultiConnection` will be used for a task until the connection is assigned inside the executor. For fast-path queries, there is typically one shard → one placement → one worker pool, but the specific cached connection from the `ConnectionHash` is selected by the connection management layer (`StartNodeUserDatabaseConnection` or `GetConnectionIfPlacementAccessedInXact`).
+
+One theoretical approach: if we could predict the target connection (same worker, same session, likely same cached connection), we could look up the cache. But this requires reimplementing connection selection logic outside the executor, which is fragile and duplicative.
+
+#### Minimum work from CitusBeginReadOnlyScan on cache hit
+
+Even though we can't check the connection cache before the executor, we can still eliminate most of `CitusBeginReadOnlyScan`'s work. The minimum execution path is:
+
+1. **Resolve distribution key param** → Const value (extract from `ParamListInfo` using stored param index)
+2. **Find shard interval**: `GetCitusTableCacheEntry(relationId)` + `FindShardInterval(constvalue, cache)` — two hash lookups
+3. **Get placement list**: `CreateTaskPlacementListForShardIntervals()` — metadata lookup
+4. **Build relation-shard mapping**: `RelationShardListForShardIntervalList()` — lightweight list construction
+5. **Build minimal Task**: `CreateTask(READ_TASK)` + populate the ~10 fields listed in Q5/Q7
+6. **Set task on workerJob**: `workerJob->taskList = list_make1(task)`
+
+**Skipped entirely**: `CopyDistributedPlanWithoutCache()`, `ExecuteCoordinatorEvaluableExpressions()`, `UpdateRelationToShardNames()`, `GenerateSingleShardRouterTaskList()`, lazy query string deparse.
+
+The cache hit/miss determination still happens in `SendNextQuery()` inside the executor — but by then, all the expensive coordinator-side work has already been eliminated. On a true cache hit, `SendNextQuery()` goes directly to `SendRemotePreparedQuery()` (one libpq call). On a cache miss (first execution for this shard on this connection), the fallback path uses `task->jobQueryForPrepare` + `task->relationShardList` to construct the parameterized query template.
+
+**Additional optimization for TaskQueryStringAtIndex**: The current code calls `TaskQueryStringAtIndex()` unconditionally at [adaptive_executor.c:3906](src/backend/distributed/executor/adaptive_executor.c#L3906) before checking the cache. For the fast path, if we don't set a `taskQuery` on the Task (or set it to `TASK_QUERY_NULL`), this would error. The fix is to either:
+(a) Guard the call: skip `TaskQueryStringAtIndex` when `EnablePreparedStatementCaching && task->jobQueryForPrepare != NULL`, or
+(b) Set a lazy-deparse reference so it only materializes if the plain SQL fallback is taken.
+
+Option (a) is simpler and avoids the lazy deparse overhead entirely on cache hits.

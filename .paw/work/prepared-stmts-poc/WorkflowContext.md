@@ -6,7 +6,7 @@ Base Branch: main
 Target Branch: colm/prepared-stmts-poc
 Workflow Mode: full
 Review Strategy: local
-Review Policy: every-stage
+Review Policy: milestones
 Session Policy: per-stage
 Final Agent Review: enabled
 Final Review Mode: single-model
@@ -47,3 +47,15 @@ Additional Inputs: none
 - [x] paw-impl-review (Phase 2)
 - [x] paw-transition (Phase 2 complete → Phase 3)
 - [x] paw-implement (Phase 3: Tests & Documentation)
+- [x] paw-impl-review (Phase 3)
+- [x] paw-transition (Phase 3 complete → add Phase 4)
+- [x] paw-code-research (Phase 4: cache-hit fast path optimization)
+- [x] paw-planning (Phase 4 update)
+- [x] paw-plan-review (Phase 4)
+- [x] paw-transition (plan-review → implement Phase 4)
+- [x] paw-implement (Phase 4: Cache-Hit Fast Path)
+- [x] paw-impl-review (Phase 4)
+- [x] paw-transition (all phases complete → paw-final-review)
+- [x] paw-final-review (PASS — 0 must-fix, 1 already-resolved, 3 consider/no-action)
+- [x] paw-transition (paw-final-review → paw-pr)
+- [ ] paw-pr

@@ -45,6 +45,7 @@ Verification: A benchmark of 10,000 prepared fast-path query executions on a 3-n
 - [x] **Phase 1: Statement Cache Infrastructure** — GUC toggle, per-connection cache data structure, MultiConnection integration, cleanup on connection close
 - [x] **Phase 2: Core Integration** — Parameterized query template preservation, `SendNextQuery()` prepare-or-execute logic, libpq wrapper functions
 - [x] **Phase 3: Tests & Documentation** — Regression tests, Docs.md, CHANGELOG
+- [ ] **Phase 4: Cache-Hit Fast Path** — Eliminate coordinator-side overhead (deep copy, param evaluation, tree walks, deparse) on prepared statement cache hits
 
 ## Phase Candidates
 
@@ -214,6 +215,108 @@ Note: Benchmark execution for SC-001 and SC-002 (spec success criteria) is perfo
 #### Manual Verification:
 - [ ] CHANGELOG entry follows project conventions
 - [ ] Docs.md accurately describes the feature, its limitations, and verification approach
+
+---
+
+## Phase 4: Cache-Hit Fast Path
+
+### Motivation
+
+Phases 1–3 implemented the core prepared statement caching mechanism: on cache miss, `PQprepare` + `PQsendQueryPrepared`; on cache hit, `PQsendQueryPrepared`. This saves worker-side parse+plan cost. However, benchmarking showed only ~2.5% improvement on SELECT workloads because the coordinator still performs expensive per-execution work on every execution — including cache hits:
+
+1. `CopyDistributedPlanWithoutCache()` — deep-copies the entire `DistributedPlan` including the full `Query` tree ([citus_custom_scan.c:317](src/backend/distributed/executor/citus_custom_scan.c#L317))
+2. `ExecuteCoordinatorEvaluableExpressions()` — walks the full query tree replacing `Param` nodes with `Const` values ([citus_custom_scan.c:361](src/backend/distributed/executor/citus_custom_scan.c#L361))
+3. `RegenerateTaskForFasthPathQuery()` — calls `TargetShardIntervalForFastPathQuery` (walks quals), `UpdateRelationToShardNames` (full tree walk mutating RTEs), and `GenerateSingleShardRouterTaskList` (task allocation + lazy deparse setup) ([citus_custom_scan.c:368](src/backend/distributed/executor/citus_custom_scan.c#L368))
+4. `TaskQueryStringAtIndex()` — called unconditionally in `SendNextQuery()` before the caching check, may trigger lazy deparse via `pg_get_query_def()` ([adaptive_executor.c:3906](src/backend/distributed/executor/adaptive_executor.c#L3906))
+
+The cache-hit fast path eliminates all of this. On a cache hit, the minimum work is: extract distribution key value from `ParamListInfo` → hash lookup for shard interval → build minimal Task → enter executor → `PQsendQueryPrepared`. Target: ≥10% improvement on SELECT workloads at concurrency 32.
+
+### Changes Required
+
+#### 1. Preserve distribution key param index at plan time
+
+- **`src/include/distributed/distributed_planner.h`**: Add `int distributionKeyParamId` to `FastPathRestrictionContext` (after `distributionKeyHasParam`). Default to `-1` when not a param.
+
+- **`src/backend/distributed/planner/fast_path_router_planner.c`**: In `InitializeFastPathContext()`, when `distributionKeyValue` is a `Param`, store `fastPathContext->distributionKeyParamId = ((Param *) distributionKeyValue)->paramid` ([fast_path_router_planner.c:182-183](src/backend/distributed/planner/fast_path_router_planner.c#L182-L183)).
+
+- **`src/backend/distributed/planner/distributed_planner.c`**: At [distributed_planner.c:2552-2553](src/backend/distributed/planner/distributed_planner.c#L2552-L2553) where `FastPathRestrictionContext` fields are copied field-by-field to the planner context, add the copy of `distributionKeyParamId`.
+
+- **`src/include/distributed/multi_physical_planner.h`**: Add `int distributionKeyParamId` to the `Job` struct (near `deferredPruning`). This preserves the param index across the planning → execution boundary.
+
+- **`src/backend/distributed/planner/multi_router_planner.c`**: At [multi_router_planner.c:1922](src/backend/distributed/planner/multi_router_planner.c#L1922) in the deferred-pruning branch where `fastPathRestrictionContext->distributionKeyHasParam` is checked, copy `distributionKeyParamId` to `job->distributionKeyParamId`.
+
+#### 2. Cache-hit fast path in CitusBeginReadOnlyScan
+
+- **`src/backend/distributed/executor/citus_custom_scan.c`**: Two changes to `CitusBeginReadOnlyScan()`:
+
+  **First (safety)**: At the very beginning of the function, after `originalDistributedPlan` is read, always clear stale task pointers: `originalDistributedPlan->workerJob->taskList = NIL`. This prevents dangling pointers from a previous fast-path execution if the GUC is subsequently disabled (where `CopyDistributedPlanWithoutCache` would deep-copy a freed taskList). This is safe because in the normal path, `originalDistributedPlan->workerJob->taskList` was always NIL for deferred-pruning plans (only the per-execution copy gets a taskList from `RegenerateTaskForFasthPathQuery`). We also clear `workerJob->parametersInJobQueryResolved = false` to reset mutable state.
+
+  **Second (fast path)**: After the `if (!deferredPruning) return;` guard and before `CopyDistributedPlanWithoutCache()`, add a new fast-path block:
+
+  ```
+  if (EnablePreparedStatementCaching &&
+      originalDistributedPlan->numberOfTimesExecuted > 0 &&
+      workerJob->savedJobQueryForCaching != NULL)
+  ```
+
+  The condition `numberOfTimesExecuted > 0` ensures first execution takes the normal path (populates `savedJobQueryForCaching`, exercises cache-miss in `SendNextQuery`). `numberOfTimesExecuted` is incremented at [citus_custom_scan.c:242](src/backend/distributed/executor/citus_custom_scan.c#L242) AFTER `CitusBeginReadOnlyScan` returns, so execution 1 has `numberOfTimesExecuted == 0`.
+
+  The fast-path block:
+  1. Extract distribution key value from `estate->es_param_list_info` using `workerJob->distributionKeyParamId`. If the param is NULL (`isnull == true`), fall through to the normal path (where `PruneShards` handles NULLs gracefully).
+  2. Get relation OID from `linitial_oid(originalDistributedPlan->relationIdList)`
+  3. Call `GetCitusTableCacheEntry(relationId)` + `FindShardInterval(constvalue, cache)` directly — two hash lookups, no query tree needed
+  4. Build `relationShardList` via `RelationShardListForShardIntervalList()`
+  5. Build `placementList` via `CreateTaskPlacementListForShardIntervals()`
+  6. Create minimal Task via `CitusMakeNode(Task)` (since `CreateTask` is static in `multi_router_planner.c`) and initialize required fields manually: `taskType = READ_TASK`, `anchorShardId`, `taskPlacementList`, `queryCount = 1`, `parametersInQueryStringResolved = true`, `preparedStatementPlanId = originalDistributedPlan->planId`, `jobQueryForPrepare = workerJob->savedJobQueryForCaching`, `relationShardList`, `partitionKeyValue`, `colocationId = workerJob->colocationId`
+  7. Set `workerJob->taskList = list_make1(task)` and `workerJob->parametersInJobQueryResolved = true`
+  8. `return` — skipping `CopyDistributedPlanWithoutCache`, `ExecuteCoordinatorEvaluableExpressions`, `RegenerateTaskForFasthPathQuery`, and the lazy deparse setup entirely.
+
+  **Critical**: The fast path does NOT call `CopyDistributedPlanWithoutCache` and does NOT replace `scanState->distributedPlan`. The executor reads `distributedPlan->modLevel`, `job->jobQuery->commandType`, `job->dependentJobList`, and `distributedPlan->expectResults` from the plan. Since we're not copying, these are read from `originalDistributedPlan` directly. This is safe for `READ_TASK` (SELECT) because:
+  - `modLevel` is `ROW_MODIFY_READONLY` (immutable)
+  - `jobQuery->commandType` is `CMD_SELECT` (immutable)
+  - `dependentJobList` is `NIL` for fast-path queries (immutable)
+  - `expectResults` is `true` for SELECTs (immutable)
+  
+  The mutable fields are `taskList` and `parametersInJobQueryResolved`, both of which we set explicitly. The safety reset at the top of the function ensures stale fast-path data doesn't cause use-after-free if the code path changes.
+
+#### 3. Guard TaskQueryStringAtIndex in SendNextQuery and handle cache-full fallback
+
+- **`src/backend/distributed/executor/adaptive_executor.c`**: Two changes to `SendNextQuery()`:
+
+  **First**: Move the `TaskQueryStringAtIndex(task, queryIndex)` call ([adaptive_executor.c:3906](src/backend/distributed/executor/adaptive_executor.c#L3906)) to after the caching check. Declare `char *queryString = NULL;` at the top. Only resolve it in the `plain_sql:` block before its first use. This eliminates the wasted lazy deparse on every cache-hit execution.
+
+  **Second (cache-full fallback)**: When `PreparedStatementCacheInsert()` returns NULL (cache full), the current code does `goto plain_sql`. But with the deferred `TaskQueryStringAtIndex` and a fast-path task that has no `taskQuery` set, `TaskQueryStringAtIndex` would fail. Fix: before `goto plain_sql` in the cache-full case, construct the query string inline from `task->jobQueryForPrepare` + `task->relationShardList`, and set `task->parametersInQueryStringResolved = false` so the `plain_sql` block routes through `SendRemoteCommandParams` (which sends the `$1`-parameterized query with extracted parameter values via `PQsendQueryParams`):
+  ```c
+  Query *fallbackQuery = copyObject(task->jobQueryForPrepare);
+  UpdateRelationToShardNames((Node *) fallbackQuery, task->relationShardList);
+  StringInfoData buf;
+  initStringInfo(&buf);
+  pg_get_query_def(fallbackQuery, &buf);
+  queryString = buf.data;
+  task->parametersInQueryStringResolved = false;
+  goto plain_sql;
+  ```
+  Without the `parametersInQueryStringResolved = false`, the `plain_sql` block would send the `$1`-parameterized string as plain text (invalid SQL) because the fast-path task has `parametersInQueryStringResolved = true`.
+
+#### 4. DML fast path (deferred)
+
+The DML fast path for UPDATE/DELETE is deferred to a future phase. DML requires volatile function re-evaluation each execution, making the fast path more complex with smaller performance gains (DML is typically lower-QPS than SELECT). The SELECT-only fast path in this phase targets the primary benchmark workload.
+
+#### 5. Verify numberOfTimesExecuted increment
+
+- **`src/backend/distributed/executor/citus_custom_scan.c`**: Verify that `originalDistributedPlan->numberOfTimesExecuted` is incremented after `CitusBeginReadOnlyScan` returns. Currently incremented at [citus_custom_scan.c:242](src/backend/distributed/executor/citus_custom_scan.c#L242). This ensures the first execution (count 0) takes the normal path, and subsequent executions take the fast path.
+
+### Success Criteria
+
+#### Automated Verification:
+- [ ] `make -j$(nproc)` compiles without errors
+- [ ] Existing `prepared_statement_caching` regression test passes unchanged
+- [ ] All existing regression tests pass: `make -C src/test/regress check`
+- [ ] New test exercises the fast path: EXECUTE 10+ times in a session with caching ON, verify correct results and that the fast path is taken (via DEBUG logging or `numberOfTimesExecuted` observation)
+
+#### Manual Verification:
+- [ ] `pgbench` benchmark shows ≥10% improvement on SELECT workload at concurrency 32 with caching ON vs OFF (10M rows, 300s runs, 5+ iterations)
+- [ ] Cache-miss fallback still works: first execution to a new shard correctly prepares and executes
 
 ---
 

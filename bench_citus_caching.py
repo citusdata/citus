@@ -377,6 +377,9 @@ ANALYZE bench_dist;
                 results[key] = {"tps": [], "lat": []}
 
                 for iteration in range(1, iterations + 1):
+                    # Vacuum before each iteration to ensure consistent state
+                    run_psql(port, database, "VACUUM ANALYZE bench_dist;")
+
                     current_run += 1
                     sys.stdout.write(
                         f"    [{current_run}/{total_runs}] {wl_name:<8s} "
