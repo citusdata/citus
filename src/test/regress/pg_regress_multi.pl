@@ -710,12 +710,6 @@ if($isolationtester)
    push(@pgOptions, "citus.background_task_queue_interval=-1");
 }
 
-if($citusversion || $citusLibdir)
-{
-    push(@pgOptions, "citus.enable_version_checks=off");
-    push(@pgOptions, "columnar.enable_version_checks=off");
-}
-
 # Add externally added options last, so they overwrite the default ones above
 for my $option (@userPgOptions)
 {

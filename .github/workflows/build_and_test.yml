@@ -30,13 +30,13 @@ jobs:
       fail_test_image_name: "ghcr.io/citusdata/failtester"
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
-      style_checker_tools_version: "0.8.18"
-      sql_snapshot_pg_version: "17.6"
-      image_suffix: "-va20872f"
-      pg15_version: '{ "major": "15", "full": "15.14" }'
-      pg16_version: '{ "major": "16", "full": "16.10" }'
-      pg17_version: '{ "major": "17", "full": "17.6" }'
-      upgrade_pg_versions: "15.14-16.10-17.6"
+      style_checker_tools_version: "0.8.33"
+      sql_snapshot_pg_version: "17.9"
+      image_suffix: "-v3ce13e3"
+      pg15_version: '{ "major": "15", "full": "15.17" }'
+      pg16_version: '{ "major": "16", "full": "16.13" }'
+      pg17_version: '{ "major": "17", "full": "17.9" }'
+      upgrade_pg_versions: "15.17-16.13-17.9"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -184,6 +184,83 @@ jobs:
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
       suite: cdc
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus-lib-n-1:
+    name: Test Citus Lib N-1
+    uses: ./.github/workflows/run_tests.yml
+    needs:
+      - params
+      - build
+    with:
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg17_version }}
+        ]
+      make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.test_image_name }}
+      citus_libdir: "/opt/citus-versions/v13.2.0"
+      citus_libdir_label: "v13.2.0"
+      n_1_mode: "all"
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus-sql-n-1:
+    name: Test Citus SQL N-1
+    uses: ./.github/workflows/run_tests.yml
+    needs:
+      - params
+      - build
+    with:
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg17_version }}
+        ]
+      make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.test_image_name }}
+      citus_version: "13.2-1"
+      n_1_mode: "all"
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus-worker-n-1:
+    name: Test Citus Worker N-1
+    uses: ./.github/workflows/run_tests.yml
+    needs:
+      - params
+      - build
+    with:
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg17_version }}
+        ]
+      make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.test_image_name }}
+      citus_version: "13.2-1"
+      citus_libdir: "/opt/citus-versions/v13.2.0"
+      citus_libdir_label: "v13.2.0"
+      n_1_mode: "workeronly"
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+  test-citus-coordinator-n-1:
+    name: Test Citus Coordinator N-1
+    uses: ./.github/workflows/run_tests.yml
+    needs:
+      - params
+      - build
+    with:
+      pg_versions: >
+        [
+          ${{ needs.params.outputs.pg17_version }}
+        ]
+      make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
+      image_suffix: ${{ needs.params.outputs.image_suffix }}
+      image_name: ${{ needs.params.outputs.test_image_name }}
+      citus_version: "13.2-1"
+      citus_libdir: "/opt/citus-versions/v13.2.0"
+      citus_libdir_label: "v13.2.0"
+      n_1_mode: "coordinatoronly"
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
