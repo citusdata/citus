@@ -45,8 +45,10 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/prepared_statement_cache.h"
 #include "distributed/shard_utils.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
@@ -307,6 +309,89 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		return;
 	}
 
+	Job *workerJob = originalDistributedPlan->workerJob;
+
+	/*
+	 * Always clear stale task pointers from the previous fast-path execution.
+	 * For deferred-pruning plans, workerJob->taskList is NIL until populated
+	 * per-execution by RegenerateTaskForFasthPathQuery (or the fast path below).
+	 * Without this reset, if a previous execution took the fast path and then the
+	 * GUC is disabled, CopyDistributedPlanWithoutCache would deep-copy a stale
+	 * taskList pointing into freed memory.
+	 */
+	workerJob->taskList = NIL;
+	workerJob->parametersInJobQueryResolved = false;
+
+	/*
+	 * Cache-hit fast path: skip the expensive CopyDistributedPlanWithoutCache,
+	 * ExecuteCoordinatorEvaluableExpressions, and RegenerateTaskForFasthPathQuery.
+	 * Instead, extract the distribution key value from ParamListInfo, look up the
+	 * shard interval directly, and build a minimal Task.
+	 *
+	 * Conditions:
+	 *  - caching is enabled
+	 *  - this is at least the second execution (first execution populates the cache)
+	 *  - the saved job query template exists (set on first execution)
+	 */
+	if (EnablePreparedStatementCaching &&
+		originalDistributedPlan->numberOfTimesExecuted > 0 &&
+		workerJob->savedJobQueryForCaching != NULL)
+	{
+		int paramId = workerJob->distributionKeyParamId;
+		ParamListInfo paramListInfo = estate->es_param_list_info;
+
+		if (paramId >= 1 && paramListInfo != NULL && paramId <= paramListInfo->numParams)
+		{
+			ParamExternData *prm = &paramListInfo->params[paramId - 1];
+			if (OidIsValid(prm->ptype) && !prm->isnull)
+			{
+				Oid relationId = linitial_oid(originalDistributedPlan->relationIdList);
+				CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+				ShardInterval *shardInterval = FindShardInterval(prm->value, cacheEntry);
+
+				if (shardInterval != NULL)
+				{
+					List *shardIntervalList = list_make1(shardInterval);
+					bool shardsPresent = false;
+					List *relationShardList =
+						RelationShardListForShardIntervalList(shardIntervalList,
+															 &shardsPresent);
+					List *placementList =
+						CreateTaskPlacementListForShardIntervals(shardIntervalList,
+																shardsPresent, true,
+																false);
+
+					Task *task = CitusMakeNode(Task);
+					task->taskType = READ_TASK;
+					task->anchorShardId = shardInterval->shardId;
+					task->taskPlacementList = placementList;
+					task->queryCount = 1;
+					task->parametersInQueryStringResolved = true;
+					task->preparedStatementPlanId = originalDistributedPlan->planId;
+					task->jobQueryForPrepare = workerJob->savedJobQueryForCaching;
+					task->relationShardList = relationShardList;
+
+					int16 typLen;
+					bool typByVal;
+					get_typlenbyval(prm->ptype, &typLen, &typByVal);
+					task->partitionKeyValue = makeConst(prm->ptype, -1,
+														InvalidOid, (int) typLen,
+														prm->value, false,
+														typByVal);
+					task->colocationId = workerJob->colocationId;
+
+					workerJob->taskList = list_make1(task);
+					workerJob->parametersInJobQueryResolved = true;
+
+					/* executor reads from scanState->distributedPlan */
+					scanState->distributedPlan = originalDistributedPlan;
+
+					return;
+				}
+			}
+		}
+	}
+
 	/*
 	 * Create a copy of the generic plan for the current execution, but make a shallow
 	 * copy of the plan cache. That means we'll be able to access the plan cache via
@@ -317,8 +402,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		CopyDistributedPlanWithoutCache(originalDistributedPlan);
 	scanState->distributedPlan = currentPlan;
 
-	Job *workerJob = currentPlan->workerJob;
-	Query *jobQuery = workerJob->jobQuery;
+	Job *currentJob = currentPlan->workerJob;
+	Query *jobQuery = currentJob->jobQuery;
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 
 	/*
@@ -361,10 +446,10 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
 
 	/* job query no longer has parameters, so we should not send any */
-	workerJob->parametersInJobQueryResolved = true;
+	currentJob->parametersInJobQueryResolved = true;
 
 	/* parameters are filled in, so we can generate a task for this execution */
-	RegenerateTaskForFasthPathQuery(workerJob);
+	RegenerateTaskForFasthPathQuery(currentJob);
 
 	/*
 	 * Attach prepared statement metadata to each task for cache lookup
@@ -372,16 +457,16 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	 */
 	if (EnablePreparedStatementCaching && savedJobQuery != NULL)
 	{
-		foreach_ptr(Task, task, workerJob->taskList)
+		foreach_ptr(Task, task, currentJob->taskList)
 		{
 			task->preparedStatementPlanId = currentPlan->planId;
 			task->jobQueryForPrepare = savedJobQuery;
 		}
 	}
 
-	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
+	if (IsLocalPlanCachingSupported(currentJob, originalDistributedPlan))
 	{
-		Task *task = linitial(workerJob->taskList);
+		Task *task = linitial(currentJob->taskList);
 
 		/*
 		 * We are going to execute this task locally. If it's not already in

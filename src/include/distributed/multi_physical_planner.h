@@ -141,6 +141,7 @@ typedef struct Job
 	bool subqueryPushdown;
 	bool requiresCoordinatorEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
+	int distributionKeyParamId;
 	Const *partitionKeyValue;
 
 	/* for local shard queries, we may save the local plan here */

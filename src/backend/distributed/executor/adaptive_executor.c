@@ -3903,7 +3903,7 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	uint32 queryIndex = placementExecution->queryIndex;
 
 	Assert(queryIndex < task->queryCount);
-	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
+	char *queryString = NULL;
 
 	/*
 	 * Prepared statement caching path: if enabled and the task carries a
@@ -3957,7 +3957,21 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 
 			if (cacheEntry == NULL)
 			{
-				/* cache full, fall through to plain SQL path */
+				/*
+				 * Cache full — construct query string for the plain SQL path.
+				 * The fast-path task has no taskQuery, so we must deparse from
+				 * the saved job query template. Set parametersInQueryStringResolved
+				 * to false so plain_sql routes through SendRemoteCommandParams
+				 * (which sends $1-parameterized SQL with extracted param values).
+				 */
+				Query *fallbackQuery = copyObject(task->jobQueryForPrepare);
+				UpdateRelationToShardNames((Node *) fallbackQuery,
+										   task->relationShardList);
+				StringInfoData fallbackBuf;
+				initStringInfo(&fallbackBuf);
+				pg_get_query_def(fallbackQuery, &fallbackBuf);
+				queryString = fallbackBuf.data;
+				task->parametersInQueryStringResolved = false;
 				goto plain_sql;
 			}
 
@@ -4019,6 +4033,12 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	}
 
 plain_sql:
+	/* resolve queryString if not already set (e.g. from cache-full fallback) */
+	if (queryString == NULL)
+	{
+		queryString = TaskQueryStringAtIndex(task, queryIndex);
+	}
+
 	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
 		int parameterCount = paramListInfo->numParams;
