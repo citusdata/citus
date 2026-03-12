@@ -162,6 +162,8 @@ static bool CitusColumnarHasBeenLoadedInternal(void);
 static bool CitusColumnarHasBeenLoaded(void);
 static bool CheckCitusColumnarVersion(int elevel);
 static bool MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion);
+static bool MinorVersionsCompatibleRelaxedColumnar(char *leftVersion, char *rightVersion);
+static int ParseVersionComponent(const char *version, char **endPtr);
 
 /* global variables for CheckCitusColumnarVersion */
 static bool extensionLoadedColumnar = false;
@@ -872,7 +874,7 @@ columnar_relation_set_new_filelocator(Relation rel,
 									 RelationPhysicalIdentifier_compat(rel)),
 								 GetCurrentSubTransactionId());
 
-		DeleteMetadataRows(RelationPhysicalIdentifier_compat(rel));
+		DeleteMetadataRows(rel);
 	}
 
 	*freezeXid = RecentXmin;
@@ -897,7 +899,7 @@ columnar_relation_nontransactional_truncate(Relation rel)
 	NonTransactionDropWriteState(RelationPhysicalIdentifierNumber_compat(relfilelocator));
 
 	/* Delete old relfilenode metadata */
-	DeleteMetadataRows(relfilelocator);
+	DeleteMetadataRows(rel);
 
 	/*
 	 * No need to set new relfilenode, since the table was created in this
@@ -960,8 +962,7 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	ColumnarOptions columnarOptions = { 0 };
 	ReadColumnarOptions(OldHeap->rd_id, &columnarOptions);
 
-	ColumnarWriteState *writeState = ColumnarBeginWrite(RelationPhysicalIdentifier_compat(
-															NewHeap),
+	ColumnarWriteState *writeState = ColumnarBeginWrite(NewHeap,
 														columnarOptions,
 														targetDesc);
 
@@ -1036,8 +1037,7 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 static uint64
 ColumnarTableTupleCount(Relation relation)
 {
-	List *stripeList = StripesForRelfilelocator(RelationPhysicalIdentifier_compat(
-													relation));
+	List *stripeList = StripesForRelfilelocator(relation);
 	uint64 tupleCount = 0;
 
 	ListCell *lc = NULL;
@@ -1228,7 +1228,6 @@ static void
 LogRelationStats(Relation rel, int elevel)
 {
 	ListCell *stripeMetadataCell = NULL;
-	RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
 	StringInfo infoBuf = makeStringInfo();
 
 	int compressionStats[COMPRESSION_COUNT] = { 0 };
@@ -1239,16 +1238,20 @@ LogRelationStats(Relation rel, int elevel)
 	uint64 droppedChunksWithData = 0;
 	uint64 totalDecompressedLength = 0;
 
-	List *stripeList = StripesForRelfilelocator(relfilelocator);
+	List *stripeList = StripesForRelfilelocator(rel);
 	int stripeCount = list_length(stripeList);
 
 	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
-		StripeSkipList *skiplist = ReadStripeSkipList(relfilelocator, stripe->id,
+
+		Snapshot snapshot = RegisterSnapshot(GetTransactionSnapshot());
+		StripeSkipList *skiplist = ReadStripeSkipList(rel, stripe->id,
 													  RelationGetDescr(rel),
 													  stripe->chunkCount,
-													  GetTransactionSnapshot());
+													  snapshot);
+		UnregisterSnapshot(snapshot);
+
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
 			bool attrDropped = Attr(tupdesc, column)->attisdropped;
@@ -1381,8 +1384,7 @@ TruncateColumnar(Relation rel, int elevel)
 	 * new stripes be added beyond highestPhysicalAddress while
 	 * we're truncating.
 	 */
-	uint64 newDataReservation = Max(GetHighestUsedAddress(
-										RelationPhysicalIdentifier_compat(rel)) + 1,
+	uint64 newDataReservation = Max(GetHighestUsedAddress(rel) + 1,
 									ColumnarFirstLogicalOffset);
 
 	BlockNumber old_rel_pages = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
@@ -2150,7 +2152,7 @@ ColumnarTableDropHook(Oid relid)
 		Relation rel = table_open(relid, AccessExclusiveLock);
 		RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
 
-		DeleteMetadataRows(relfilelocator);
+		DeleteMetadataRows(rel);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
 		MarkRelfilenumberDropped(RelationPhysicalIdentifierNumber_compat(relfilelocator),
@@ -2939,7 +2941,7 @@ CheckInstalledVersionColumnar(int elevel)
 
 	char *installedVersion = InstalledExtensionVersionColumnar();
 
-	if (!MajorVersionsCompatibleColumnar(installedVersion, CITUS_EXTENSIONVERSION))
+	if (!MinorVersionsCompatibleRelaxedColumnar(installedVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(elevel, (errmsg("loaded Citus library version differs from installed "
 								"extension version"),
@@ -2995,6 +2997,55 @@ MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion)
 	}
 
 	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
+}
+
+
+/*
+ * ParseVersionComponent parses the integer at the current position and
+ * advances endPtr past the parsed digits to the next character.
+ */
+static int
+ParseVersionComponent(const char *version, char **endPtr)
+{
+	errno = 0;
+	long int val = strtol(version, endPtr, 10);
+
+	if (errno == ERANGE || val > INT_MAX || val < INT_MIN)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						errmsg("Invalid integer in version string")));
+	}
+	return (int) val;
+}
+
+
+/*
+ * MinorVersionsCompatibleRelaxedColumnar checks if two versions have the same major
+ * version and their minor versions differ by at most 1. The schema version
+ * (after '-') is ignored. Returns true if compatible, false otherwise.
+ *
+ * Version format expected: "major.minor-schema" (e.g., "13.1-2")
+ */
+bool
+MinorVersionsCompatibleRelaxedColumnar(char *leftVersion, char *rightVersion)
+{
+	char *leftSep;
+	char *rightSep;
+
+	int leftMajor = ParseVersionComponent(leftVersion, &leftSep);
+	int rightMajor = ParseVersionComponent(rightVersion, &rightSep);
+
+	if (leftMajor != rightMajor)
+	{
+		return false;
+	}
+
+	int leftMinor = (*leftSep == '.') ? ParseVersionComponent(leftSep + 1, &leftSep) : 0;
+	int rightMinor = (*rightSep == '.') ? ParseVersionComponent(rightSep + 1, &rightSep) :
+					 0;
+
+	int diff = leftMinor - rightMinor;
+	return diff >= -1 && diff <= 1;
 }
 
 
