@@ -30,7 +30,7 @@ werkzeug = "==3.1.5"
 pyperclip = "==1.9.0"
 
 [dev-packages]
-black = "==24.10.0"
+black = "==26.3.1"
 isort = "*"
 flake8 = "*"
 flake8-bugbear = "*"
