@@ -144,6 +144,21 @@ select covar_pop(valf,val)::numeric(10,5), covar_samp(valf,val)::numeric(10,5) f
 set citus.explain_analyze_sort_method to 'taskId';
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, sum2_strict(val) from aggdata group by key order by key;
 
+
+-- aggregates with internal stype works.
+CREATE AGGREGATE internalsum(int8) (
+    sfunc = int8_avg_accum,
+    stype = internal,
+    finalfunc = numeric_poly_sum,
+    combinefunc = int8_avg_combine,
+    serialfunc = int8_avg_serialize,
+    deserialfunc = int8_avg_deserialize
+);
+
+SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+
+DROP AGGREGATE internalsum(int8);
+
 -- binary string aggregation
 create function binstragg_sfunc(s text, e1 text, e2 text)
 returns text immutable language plpgsql as $$
