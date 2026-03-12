@@ -1,3 +1,33 @@
+### citus v13.2.1 (March 12, 2026) ###
+
+* Adds support for latest PG minors: 15.17, 16.13, 17.9 (#8499)
+
+* Fixes a crash while creating statistics for non-RangeVar relation types
+  (#8504)
+
+* Fixes an unregistered snapshot crash and preserves temporary relation OIDs
+  for columnar tables (#8503)
+
+* Fixes shard move failures in `block_writes` mode when metadata workers hit
+  `idle_in_transaction_session_timeout` (#8491)
+
+* Fixes metadata sync failure with domain types in non-public schemas
+  (#8363)
+
+* Does not ignore reference or schema-sharded tables in worker subquery task
+  construction when there are no distributed tables involved (#8440)
+
+* Tightens distributed plan checks to cover distributed subplans (#8388)
+
+* Does not use local plan cache for multi-shard queries (#8371)
+
+* Updates GUC setting to avoid crashing with ASAN (#8301)
+
+* Fixes a bug that allowed UPDATE / MERGE queries that may change the
+  distribution column value (#8214)
+
+* Fixes an unexpected column index error for repartitioned merge (#8201)
+
 ### citus v13.2.0 (August 18, 2025) ###
 
 * Adds `citus_add_clone_node()`, `citus_add_clone_node_with_nodeid()`,
