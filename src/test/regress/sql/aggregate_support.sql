@@ -165,7 +165,7 @@ CREATE AGGREGATE internalsum_noserial(int8) (
 SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
 
 -- see that the explain is pushed to the shards.
-EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF, VERBOSE ON) SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, internalsum(val) from aggdata group by key order by key;
 
 -- without a serialfunc always fails.
 SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;

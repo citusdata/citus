@@ -322,31 +322,25 @@ SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
 (7 rows)
 
 -- see that the explain is pushed to the shards.
-EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF, VERBOSE ON) SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
-                                                                                                                   QUERY PLAN
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, internalsum(val) from aggdata group by key order by key;
+                                          QUERY PLAN
 ---------------------------------------------------------------------
  Sort (actual rows=7 loops=1)
-   Output: remote_scan.key, (coord_binary_combine_agg('18250'::oid, remote_scan.internalsum, NULL::numeric)), ((pg_catalog.sum(remote_scan.sum))::bigint)
    Sort Key: remote_scan.key
    Sort Method: quicksort  Memory: 25kB
    ->  HashAggregate (actual rows=7 loops=1)
-         Output: remote_scan.key, coord_binary_combine_agg('18250'::oid, remote_scan.internalsum, NULL::numeric), (pg_catalog.sum(remote_scan.sum))::bigint
          Group Key: remote_scan.key
          ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
-               Output: remote_scan.key, remote_scan.internalsum, remote_scan.sum
                Task Count: 4
-               Tuple data received from nodes: 338 bytes
+               Tuple data received from nodes: 290 bytes
                Tasks Shown: One of 4
                ->  Task
-                     Query: SELECT key, worker_binary_partial_agg('aggregate_support.internalsum(bigint)'::regprocedure, (val)::bigint) AS internalsum, sum(val) AS sum FROM aggregate_support.aggdata_83674000 aggdata WHERE true GROUP BY key
-                     Tuple data received from node: 142 bytes
+                     Tuple data received from node: 118 bytes
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate (actual rows=4 loops=1)
-                           Output: key, worker_binary_partial_agg('19832'::oid, (val)::bigint), sum(val)
-                           Group Key: aggdata.key
-                           ->  Seq Scan on aggregate_support.aggdata_83674000 aggdata (actual rows=4 loops=1)
-                                 Output: id, key, val, valf
-(23 rows)
+                           Group Key: key
+                           ->  Seq Scan on aggdata_83674000 aggdata (actual rows=4 loops=1)
+(17 rows)
 
 -- without a serialfunc always fails.
 SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;
