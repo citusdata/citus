@@ -666,7 +666,7 @@ WorkerPartialAggregateApplyFFunc(PG_FUNCTION_ARGS)
  * then use the DESERIALFUNC to deserialize the value.
  */
 static Datum
-CheckAndCallSerialFunc(StypeBox *box, bool *outputIsNull, PG_FUNCTION_ARGS)
+CheckAndCallSerialFunc(PG_FUNCTION_ARGS, StypeBox *box, bool *outputIsNull)
 {
 	LOCAL_FCINFO(serialFcInfo, 1);
 	FmgrInfo serialInfo;
@@ -725,7 +725,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 		/* Call and store the output of the SERIALFUNC - the output type
 		 * then is always BYTEAOID.
 		 */
-		boxValue = CheckAndCallSerialFunc(box, &boxValueNull, fcinfo);
+		boxValue = CheckAndCallSerialFunc(fcinfo, box, &boxValueNull);
 		transtype = BYTEAOID;
 	}
 
@@ -776,7 +776,7 @@ worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	{
 		/* Call and store the output of the SERIALFUNC - the output type
 		 * then is always BYTEAOID. */
-		boxValue = CheckAndCallSerialFunc(box, &boxValueNull, fcinfo);
+		boxValue = CheckAndCallSerialFunc(fcinfo, box, &boxValueNull);
 		transtype = BYTEAOID;
 	}
 
