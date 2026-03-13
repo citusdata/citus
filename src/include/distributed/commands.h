@@ -37,7 +37,6 @@ extern bool EnableLocalReferenceForeignKeys;
 extern bool AllowUnsafeConstraints;
 
 extern bool EnableUnsafeTriggers;
-extern bool EnableUnsafeStatisticsExpressions;
 
 extern int MaxMatViewSizeToAutoRecreate;
 
