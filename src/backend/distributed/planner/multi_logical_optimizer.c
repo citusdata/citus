@@ -64,6 +64,7 @@
 int LimitClauseRowFetchCount = -1; /* number of rows to fetch from each task */
 double CountDistinctErrorRate = 0.0; /* precision of count(distinct) approximate */
 int CoordinatorAggregationStrategy = COORDINATOR_AGGREGATION_ROW_GATHER;
+bool AllowAggregateWorkerCombineOnInternalTypes = true;
 
 /* Constant used throughout file */
 static const uint32 masterTableId = 1; /* first range table reference on the master node */
@@ -3568,7 +3569,8 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
 
 	bool supportsSafeCombine = typeform->typtype != TYPTYPE_PSEUDO;
 
-	if (typeform->oid == INTERNALOID && !supportsSafeCombine)
+	if (AllowAggregateWorkerCombineOnInternalTypes &&
+		typeform->oid == INTERNALOID && !supportsSafeCombine)
 	{
 		/* check if the type supports a SERIALFUNC/DESERIALFUNC - if it does
 		 * then we can leverage that for safe transfer of the state across the wire.
@@ -3863,7 +3865,8 @@ IsAggTransTypeBinarySerializable(Form_pg_aggregate aggForm)
 {
 	Oid transitionType = aggForm->aggtranstype;
 
-	if (transitionType == INTERNALOID)
+	if (AllowAggregateWorkerCombineOnInternalTypes &&
+		transitionType == INTERNALOID)
 	{
 		/* For aggregates with internal transition types, we apply the binary serialization
 		 * check on the output value of the SERIALFUNC. If a serialfunc exists, Postgres requires

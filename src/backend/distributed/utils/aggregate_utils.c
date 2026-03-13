@@ -666,7 +666,7 @@ WorkerPartialAggregateApplyFFunc(PG_FUNCTION_ARGS)
  * then use the DESERIALFUNC to deserialize the value.
  */
 static Datum
-CheckAndCallSerialFunc(StypeBox *box, PG_FUNCTION_ARGS, Oid *outputType)
+CheckAndCallSerialFunc(StypeBox *box, bool *outputIsNull, PG_FUNCTION_ARGS)
 {
 	LOCAL_FCINFO(serialFcInfo, 1);
 	FmgrInfo serialInfo;
@@ -681,7 +681,7 @@ CheckAndCallSerialFunc(StypeBox *box, PG_FUNCTION_ARGS, Oid *outputType)
 	}
 
 	/* Otherwise, first invoke the serialfunc to ensure that we produce a serialiable value from the boxValue */
-	*outputType = get_func_rettype(aggform->aggserialfn);
+	Assert(get_func_rettype(aggform->aggserialfn) == BYTEAOID);
 	fmgr_info(aggform->aggserialfn, &serialInfo);
 
 	InitFunctionCallInfoData(*serialFcInfo, &serialInfo, 1, fcinfo->fncollation,
@@ -689,6 +689,7 @@ CheckAndCallSerialFunc(StypeBox *box, PG_FUNCTION_ARGS, Oid *outputType)
 	fcSetArgExt(serialFcInfo, 0, box->value, box->valueNull);
 
 	Datum result = FunctionCallInvoke(serialFcInfo);
+	*outputIsNull = serialFcInfo->isnull;
 	ReleaseSysCache(aggtuple);
 	return result;
 }
@@ -718,9 +719,14 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	Oid transtype = GetAggregateTransitionType(box);
 
 	Datum boxValue = box->value;
+	bool boxValueNull = box->valueNull;
 	if (transtype == INTERNALOID)
 	{
-		boxValue = CheckAndCallSerialFunc(box, fcinfo, &transtype);
+		/* Call and store the output of the SERIALFUNC - the output type
+		 * then is always BYTEAOID.
+		 */
+		boxValue = CheckAndCallSerialFunc(box, &boxValueNull, fcinfo);
+		transtype = BYTEAOID;
 	}
 
 	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
@@ -728,7 +734,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	fcSetArgExt(innerFcinfo, 0, boxValue, box->valueNull);
+	fcSetArgExt(innerFcinfo, 0, boxValue, boxValueNull);
 
 	Datum result = FunctionCallInvoke(innerFcinfo);
 
@@ -765,9 +771,13 @@ worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 
 	Datum boxValue = box->value;
+	bool boxValueNull = box->valueNull;
 	if (transtype == INTERNALOID)
 	{
-		boxValue = CheckAndCallSerialFunc(box, fcinfo, &transtype);
+		/* Call and store the output of the SERIALFUNC - the output type
+		 * then is always BYTEAOID. */
+		boxValue = CheckAndCallSerialFunc(box, &boxValueNull, fcinfo);
+		transtype = BYTEAOID;
 	}
 
 	getTypeBinaryOutputInfo(transtype, &typoutput, &typIsVarlena);
@@ -775,7 +785,7 @@ worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	fcSetArgExt(innerFcinfo, 0, boxValue, box->valueNull);
+	fcSetArgExt(innerFcinfo, 0, boxValue, boxValueNull);
 
 	Datum result = FunctionCallInvoke(innerFcinfo);
 
@@ -788,8 +798,8 @@ worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 
 static Datum
-DeserializeBoxValue(Oid deserialFunc, Datum value, bool valueNull, FunctionCallInfo fcinfo
-																						  ,
+DeserializeBoxValue(Oid deserialFunc, Datum value, bool valueNull,
+					FunctionCallInfo fcinfo,
 					bool *outputIsNull)
 {
 	LOCAL_FCINFO(deserialFcInfo, 3);

@@ -303,6 +303,12 @@ CREATE AGGREGATE internalsum(int8) (
     serialfunc = int8_avg_serialize,
     deserialfunc = int8_avg_deserialize
 );
+CREATE AGGREGATE internalsum_noserial(int8) (
+    sfunc = int8_avg_accum,
+    stype = internal,
+    finalfunc = numeric_poly_sum,
+    combinefunc = int8_avg_combine
+);
 SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
  key | internalsum | sum
 ---------------------------------------------------------------------
@@ -315,7 +321,58 @@ SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
    9 |           0 |   0
 (7 rows)
 
+-- see that the explain is pushed to the shards.
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF, VERBOSE ON) SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+                                                                                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=7 loops=1)
+   Output: remote_scan.key, (coord_binary_combine_agg('18250'::oid, remote_scan.internalsum, NULL::numeric)), ((pg_catalog.sum(remote_scan.sum))::bigint)
+   Sort Key: remote_scan.key
+   Sort Method: quicksort  Memory: 25kB
+   ->  HashAggregate (actual rows=7 loops=1)
+         Output: remote_scan.key, coord_binary_combine_agg('18250'::oid, remote_scan.internalsum, NULL::numeric), (pg_catalog.sum(remote_scan.sum))::bigint
+         Group Key: remote_scan.key
+         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+               Output: remote_scan.key, remote_scan.internalsum, remote_scan.sum
+               Task Count: 4
+               Tuple data received from nodes: 338 bytes
+               Tasks Shown: One of 4
+               ->  Task
+                     Query: SELECT key, worker_binary_partial_agg('aggregate_support.internalsum(bigint)'::regprocedure, (val)::bigint) AS internalsum, sum(val) AS sum FROM aggregate_support.aggdata_83674000 aggdata WHERE true GROUP BY key
+                     Tuple data received from node: 142 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate (actual rows=4 loops=1)
+                           Output: key, worker_binary_partial_agg('19832'::oid, (val)::bigint), sum(val)
+                           Group Key: aggdata.key
+                           ->  Seq Scan on aggregate_support.aggdata_83674000 aggdata (actual rows=4 loops=1)
+                                 Output: id, key, val, valf
+(23 rows)
+
+-- without a serialfunc always fails.
+SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;
+ERROR:  unsupported aggregate function internalsum_noserial
+-- but this works if we allow coordinator combine
+set citus.coordinator_aggregation_strategy to 'row-gather';
+SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;
+ key | internalsum_noserial | sum
+---------------------------------------------------------------------
+   1 |                    2 |   2
+   2 |                   10 |  10
+   3 |                    4 |   4
+   5 |                      |
+   6 |                      |
+   7 |                    8 |   8
+   9 |                    0 |   0
+(7 rows)
+
+set citus.coordinator_aggregation_strategy to 'disabled';
+-- if the GUC is unset, do not allow pushdown.
+set citus.allow_aggregate_worker_combine_on_internal_types to off;
+SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+ERROR:  unsupported aggregate function internalsum
+reset citus.allow_aggregate_worker_combine_on_internal_types;
 DROP AGGREGATE internalsum(int8);
+DROP AGGREGATE internalsum_noserial(int8);
 -- binary string aggregation
 create function binstragg_sfunc(s text, e1 text, e2 text)
 returns text immutable language plpgsql as $$
