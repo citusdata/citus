@@ -349,8 +349,24 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		citus_ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
-									 completionTag);
+		/*
+		 * For CREATE TABLE AS SELECT with auto-distribution enabled,
+		 * try the optimized path that avoids pulling data through the
+		 * coordinator. If successful, skip normal CTAS processing.
+		 */
+		bool ctasHandled = false;
+		if (context == PROCESS_UTILITY_TOPLEVEL &&
+			IsA(parsetree, CreateTableAsStmt))
+		{
+			ctasHandled = TryOptimizeCTASForAutoDistribution(
+				(CreateTableAsStmt *) parsetree, queryString);
+		}
+
+		if (!ctasHandled)
+		{
+			citus_ProcessUtilityInternal(pstmt, queryString, context, params,
+										 queryEnv, dest, completionTag);
+		}
 
 		if (UtilityHookLevel == 1)
 		{
@@ -370,6 +386,7 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 			 * to create a tenant schema table or a Citus managed table.
 			 */
 			if (context == PROCESS_UTILITY_TOPLEVEL &&
+				!ctasHandled &&
 				(IsA(parsetree, CreateStmt) ||
 				 IsA(parsetree, CreateForeignTableStmt) ||
 				 IsA(parsetree, CreateTableAsStmt)))
