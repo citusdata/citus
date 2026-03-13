@@ -1,0 +1,88 @@
+--
+-- ISSUE_8468_NUM_NULLS
+--
+-- Test for GitHub issue #8468: TLP test fail on sqlancer due to
+-- num_nulls interpreted differently on workers.
+-- Root cause: when wrapping local tables into subqueries during
+-- recursive planning, restriction-referenced columns were projected
+-- as NULL in the outer subquery, causing wrong WHERE clause results.
+--
+
+CREATE SCHEMA issue_8468;
+SET search_path TO issue_8468;
+SET citus.shard_count TO 4;
+SET citus.next_shard_id TO 9468000;
+
+CREATE TABLE t5(c0 FLOAT);
+SELECT create_distributed_table('t5', 'c0');
+
+INSERT INTO t5(c0) VALUES(0.009452163), (1.4691802E9), (0.005109378), (0.6941109),
+                          (0.7013781), (0.8670044), (-1.6739732E9), (-4.5730365E8);
+
+CREATE TABLE t1_parent(c0 FLOAT);
+CREATE TABLE t2_child(c0 FLOAT, c1 CHAR(20), c2 DECIMAL) INHERITS(t1_parent);
+
+INSERT INTO t1_parent(c0) VALUES(-1.6739732E9), (0), (0.32921866), ('-Infinity');
+INSERT INTO t2_child(c1, c2, c0) VALUES('', 0.19, 0), ('test', 0.33, 0.89),
+    ('abc', 0.58, 0.68), ('', 0.18, 0.74), ('', 0.22, 0.71);
+
+CREATE TEMP TABLE t0(c0 FLOAT);
+INSERT INTO t0(c0) VALUES(-1.9619044E9), (0.18373421), (6.175733E8), (0.58579546);
+
+-- t1_parent* = 9 rows (4 from parent + 5 from child)
+SELECT count(*) AS parent_star_count FROM t1_parent;
+
+-- Original: 9 * (4*8) = 288
+SELECT count(*) AS original FROM (
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+) sub;
+
+-- TLP branches should sum to original
+SELECT count(*) AS branch_true FROM (
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE (0::double precision IS DISTINCT FROM t1_parent.c0)
+) sub;
+
+SELECT count(*) AS branch_false FROM (
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE NOT (0::double precision IS DISTINCT FROM t1_parent.c0)
+) sub;
+
+SELECT count(*) AS branch_null FROM (
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE (0::double precision IS DISTINCT FROM t1_parent.c0) IS NULL
+) sub;
+
+-- TLP combined must equal original
+SELECT count(*) AS tlp_total FROM (
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE (0::double precision IS DISTINCT FROM t1_parent.c0)
+    UNION ALL
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE NOT (0::double precision IS DISTINCT FROM t1_parent.c0)
+    UNION ALL
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE (0::double precision IS DISTINCT FROM t1_parent.c0) IS NULL
+) sub;
+
+-- Verify with num_nulls (the original condition from the bug report)
+SELECT count(*) AS num_nulls_tlp FROM (
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE (num_nulls(t1_parent.c0) IS DISTINCT FROM t1_parent.c0)
+    UNION ALL
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE NOT (num_nulls(t1_parent.c0) IS DISTINCT FROM t1_parent.c0)
+    UNION ALL
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE (num_nulls(t1_parent.c0) IS DISTINCT FROM t1_parent.c0) IS NULL
+) sub;
+
+-- Also test the plain equality condition
+SELECT count(*) AS equals_zero FROM (
+    SELECT t5.c0 FROM t1_parent, t0 LEFT OUTER JOIN t5 ON (True)
+    WHERE t1_parent.c0 = 0
+) sub;
+
+-- Clean up
+SET client_min_messages TO ERROR;
+DROP SCHEMA issue_8468 CASCADE;

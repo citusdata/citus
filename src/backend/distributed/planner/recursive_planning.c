@@ -1843,14 +1843,23 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  RecursivePlanningContext *context,
 								  RTEPermissionInfo *perminfo)
 {
+	List *restrictionList =
+		GetRestrictInfoListForRelation(rangeTableEntry,
+									   context->plannerRestrictionContext);
+
+	List *restrictionVars = pull_var_clause_default((Node *) restrictionList);
+	Var *restrictionVar = NULL;
+	foreach_declared_ptr(restrictionVar, restrictionVars)
+	{
+		requiredAttrNumbers = list_append_unique_int(requiredAttrNumbers,
+													 restrictionVar->varattno);
+	}
+
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
 												  perminfo);
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
 																requiredAttrNumbers);
 
-	List *restrictionList =
-		GetRestrictInfoListForRelation(rangeTableEntry,
-									   context->plannerRestrictionContext);
 	List *copyRestrictionList = copyObject(restrictionList);
 	Expr *andedBoundExpressions = make_ands_explicit(copyRestrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
