@@ -242,7 +242,7 @@ static bool QueryTreeHasImproperForDeparseNodes(Node *inputNode, void *context);
 static Node * AdjustImproperForDeparseNodes(Node *inputNode, void *context);
 static bool IsImproperForDeparseRelabelTypeNode(Node *inputNode);
 static bool IsImproperForDeparseCoerceViaIONode(Node *inputNode);
-static CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
+static Node * RelabelTypeToCollateExpr(RelabelType *relabelType);
 
 
 /*
@@ -2878,7 +2878,7 @@ SqlTaskList(Job *job)
  * RelabelTypeToCollateExpr converts RelabelType's into CollationExpr's.
  * With that, we will be able to pushdown COLLATE's.
  */
-static CollateExpr *
+static Node *
 RelabelTypeToCollateExpr(RelabelType *relabelType)
 {
 	Assert(OidIsValid(relabelType->resultcollid));
@@ -2888,7 +2888,21 @@ RelabelTypeToCollateExpr(RelabelType *relabelType)
 	collateExpr->collOid = relabelType->resultcollid;
 	collateExpr->location = relabelType->location;
 
-	return collateExpr;
+	Oid argType = exprType((Node *) relabelType->arg);
+	if (relabelType->resulttype != argType)
+	{
+		RelabelType *castRelabel = makeNode(RelabelType);
+		castRelabel->arg = (Expr *) collateExpr;
+		castRelabel->resulttype = relabelType->resulttype;
+		castRelabel->resulttypmod = relabelType->resulttypmod;
+		castRelabel->resultcollid = DEFAULT_COLLATION_OID;
+		castRelabel->relabelformat = relabelType->relabelformat;
+		castRelabel->location = relabelType->location;
+
+		return (Node *) castRelabel;
+	}
+
+	return (Node *) collateExpr;
 }
 
 
