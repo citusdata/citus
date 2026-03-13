@@ -3869,8 +3869,8 @@ IsAggTransTypeBinarySerializable(Form_pg_aggregate aggForm)
 		transitionType == INTERNALOID)
 	{
 		/* For aggregates with internal transition types, we apply the binary serialization
-		 * check on the output value of the SERIALFUNC. If a serialfunc exists, Postgres requires
-		 * that the serialfunc return a bytea - which will be binary serializable
+		 * check on the output value of the SERIALFUNC. If a serialfunc exists, Postgres
+		 * requires that the serialfunc return a bytea - which will be binary serializable
 		 */
 		return (aggForm->aggserialfn != InvalidOid);
 	}
