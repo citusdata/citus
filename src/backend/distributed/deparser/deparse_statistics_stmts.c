@@ -39,8 +39,6 @@ static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendTableName(StringInfo buf, CreateStatsStmt *stmt);
 
-bool EnableUnsafeStatisticsExpressions = false;
-
 char *
 DeparseCreateStatisticsStmt(Node *node)
 {
@@ -281,56 +279,46 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 	{
 		if (!column->name)
 		{
-			if (EnableUnsafeStatisticsExpressions)
+			/*
+			 * Since these expressions are parser statements, we first call
+			 * transform to get the transformed Expr tree, and then deparse
+			 * the transformed tree. This is similar to the logic found in
+			 * deparse_table_stmts for check constraints.
+			 */
+			if (list_length(stmt->relations) != 1)
 			{
-				/*
-				 * Since these expressions are parser statements, we first call
-				 * transform to get the transformed Expr tree, and then deparse
-				 * the transformed tree. This is similar to the logic found in
-				 * deparse_table_stmts for check constraints.
-				 */
-				if (list_length(stmt->relations) != 1)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg(
-										"cannot use expressions in CREATE STATISTICS with multiple relations")));
-				}
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg(
+									"cannot use expressions in CREATE STATISTICS with multiple relations")));
+			}
 
-				RangeVar *rel = (RangeVar *) linitial(stmt->relations);
-				bool missingOk = false;
-				Oid relOid = RangeVarGetRelid(rel, AccessShareLock, missingOk);
+			RangeVar *rel = (RangeVar *) linitial(stmt->relations);
+			bool missingOk = false;
+			Oid relOid = RangeVarGetRelid(rel, AccessShareLock, missingOk);
 
-				/* Add table name to the name space in  parse state. Otherwise column names
-				 * cannot be found.
-				 */
-				Relation relation = table_open(relOid, AccessShareLock);
-				ParseState *pstate = make_parsestate(NULL);
-				AddRangeTableEntryToQueryCompat(pstate, relation);
-				Node *exprCooked = transformExpr(pstate, column->expr,
-												 EXPR_KIND_STATS_EXPRESSION);
+			/* Add table name to the name space in parse state. Otherwise column names
+			 * cannot be found.
+			 */
+			Relation relation = table_open(relOid, AccessShareLock);
+			ParseState *pstate = make_parsestate(NULL);
+			AddRangeTableEntryToQueryCompat(pstate, relation);
+			Node *exprCooked = transformExpr(pstate, column->expr,
+											 EXPR_KIND_STATS_EXPRESSION);
 
-				char *relationName = get_rel_name(relOid);
-				List *relationCtx = deparse_context_for(relationName, relOid);
+			char *relationName = get_rel_name(relOid);
+			List *relationCtx = deparse_context_for(relationName, relOid);
 
-				char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
-				relation_close(relation, NoLock);
+			char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
+			relation_close(relation, NoLock);
 
-				/* Need parens if it's not a bare function call */
-				if (looks_like_function(exprCooked))
-				{
-					appendStringInfoString(buf, exprSql);
-				}
-				else
-				{
-					appendStringInfo(buf, "(%s)", exprSql);
-				}
+			/* Need parens if it's not a bare function call */
+			if (looks_like_function(exprCooked))
+			{
+				appendStringInfoString(buf, exprSql);
 			}
 			else
 			{
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("only simple column references are allowed "
-								"in CREATE STATISTICS")));
+				appendStringInfo(buf, "(%s)", exprSql);
 			}
 		}
 		else
