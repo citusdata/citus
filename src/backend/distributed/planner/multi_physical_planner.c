@@ -2214,14 +2214,14 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		if (prevShardCount > 0 && prevShardCount != cacheEntry->shardIntervalArrayLength)
 		{
 			*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									   "shard counts of co-located tables do not "
-									   "match",
-									   NULL, NULL);
+										   "shard counts of co-located tables do not "
+										   "match",
+										   NULL, NULL);
 			return NIL;
 		}
 		prevShardCount = cacheEntry->shardIntervalArrayLength;
 		distributedTableIndex = bms_add_member(distributedTableIndex,
-									   relationRestriction->index);
+											   relationRestriction->index);
 	}
 
 	bool noDistTables = bms_is_empty(distributedTableIndex);
@@ -2257,17 +2257,18 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 				 */
 				CitusTableType currentTableType = GetCitusTableType(cacheEntry);
 				hasRefOrSchemaShardedTable = currentTableType == REFERENCE_TABLE ||
-									 currentTableType == SINGLE_SHARD_DISTRIBUTED;
+											 currentTableType == SINGLE_SHARD_DISTRIBUTED;
 				if (hasRefOrSchemaShardedTable)
 				{
 					taskRequiredForShardIndex = bms_add_member(taskRequiredForShardIndex,
-											   0);
+															   0);
 					minShardOffset = 0;
 				}
 			}
 
 			continue;
 		}
+
 		/*
 		 * For left joins we don't care about the shards pruned for the right hand side.
 		 * If the right hand side would prune to a smaller set we should still send it to
