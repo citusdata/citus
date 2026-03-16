@@ -722,11 +722,8 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	bool boxValueNull = box->valueNull;
 	if (transtype == INTERNALOID)
 	{
-		/* Call and store the output of the SERIALFUNC - the output type
-		 * then is always BYTEAOID.
-		 */
-		boxValue = CheckAndCallSerialFunc(fcinfo, box, &boxValueNull);
-		transtype = BYTEAOID;
+		ereport(ERROR, (errmsg("worker_partial_agg_ffunc does not support output"
+							   " of aggregates with INTERNAL transition state")));
 	}
 
 	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
