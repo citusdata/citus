@@ -142,6 +142,7 @@ AllowedDistributionColumn AllowedDistributionColumnValue;
 
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
+bool ProcedureOpensTransactionBlock = true;
 
 /* if true, we should trigger node metadata sync on commit */
 bool NodeMetadataSyncOnCommit = false;
@@ -917,7 +918,7 @@ IsMultiStatementTransaction(void)
 		/* in (a transaction within) a do block */
 		return true;
 	}
-	else if (StoredProcedureLevel > 0)
+	else if (StoredProcedureLevel > 0 && ProcedureOpensTransactionBlock)
 	{
 		/* in (a transaction within) a stored procedure */
 		return true;

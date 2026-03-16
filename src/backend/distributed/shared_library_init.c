@@ -1763,6 +1763,19 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
+		DefineCustomBoolVariable(
+		"citus.procedure_opens_transaction_block",
+		gettext_noop("Open transaction blocks for procedures calls"),
+		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
+					 "running distributed queres in a function. When disabled, the "
+					 "queries may be committed immediately after the statemnent "
+					 "completes. Disabling this flag is dangerous"),
+		&ProcedureOpensTransactionBlock,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
 	DefineCustomStringVariable(
 		"citus.grep_remote_commands",
 		gettext_noop(

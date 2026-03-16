@@ -117,6 +117,7 @@ extern bool SelectOpensTransactionBlock;
  * block.
  */
 extern bool FunctionOpensTransactionBlock;
+extern bool ProcedureOpensTransactionBlock;
 
 /* state needed to prevent new connections during modifying transactions */
 extern XactModificationType XactModificationLevel;
