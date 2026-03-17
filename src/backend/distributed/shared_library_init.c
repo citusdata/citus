@@ -985,6 +985,22 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.allow_aggregate_worker_combine_on_internal_types",
+		gettext_noop("Enables aggregate worker partial aggregates on aggregates that "
+					 "have internal type for the aggregate partial state storage."),
+		gettext_noop(
+			"This setting allows the use of pushdown of custom aggregates that have "
+			"an STYPE that is internal. This is typically okay to do, but if a custom aggregate "
+			"persists OID information or any node specific data into the state, this can cause "
+			"weirdness when combining in the coordinator, so this is left as an option to turn off "
+			"in those cases worker combine functions on internal types."),
+		&AllowAggregateWorkerCombineOnInternalTypes,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.allow_modifications_from_workers_to_replicated_tables",
 		gettext_noop("Enables modifications from workers to replicated "
 					 "tables such as reference tables or hash "

@@ -175,6 +175,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 														   namespaceName);
 	}
 
+	Oid relationOid = relation->rd_id;
 	table_close(relation, NoLock);
 
 	Oid relationId = CreateIndexStmtGetRelationId(createIndexStatement);
@@ -199,7 +200,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 		 * it on a copy not to interfere with standard process utility.
 		 */
 		IndexStmt *copyCreateIndexStatement =
-			transformIndexStmt(relation->rd_id, copyObject(createIndexStatement),
+			transformIndexStmt(relationOid, copyObject(createIndexStatement),
 							   createIndexCommand);
 
 		/* ensure we copy string into proper context */
