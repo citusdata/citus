@@ -144,6 +144,45 @@ select covar_pop(valf,val)::numeric(10,5), covar_samp(valf,val)::numeric(10,5) f
 set citus.explain_analyze_sort_method to 'taskId';
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, sum2_strict(val) from aggdata group by key order by key;
 
+
+-- aggregates with internal stype works.
+CREATE AGGREGATE internalsum(int8) (
+    sfunc = int8_avg_accum,
+    stype = internal,
+    finalfunc = numeric_poly_sum,
+    combinefunc = int8_avg_combine,
+    serialfunc = int8_avg_serialize,
+    deserialfunc = int8_avg_deserialize
+);
+
+CREATE AGGREGATE internalsum_noserial(int8) (
+    sfunc = int8_avg_accum,
+    stype = internal,
+    finalfunc = numeric_poly_sum,
+    combinefunc = int8_avg_combine
+);
+
+SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+
+-- see that the explain is pushed to the shards.
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, internalsum(val) from aggdata group by key order by key;
+
+-- without a serialfunc always fails.
+SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;
+
+-- but this works if we allow coordinator combine
+set citus.coordinator_aggregation_strategy to 'row-gather';
+SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;
+set citus.coordinator_aggregation_strategy to 'disabled';
+
+-- if the GUC is unset, do not allow pushdown.
+set citus.allow_aggregate_worker_combine_on_internal_types to off;
+SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+reset citus.allow_aggregate_worker_combine_on_internal_types;
+
+DROP AGGREGATE internalsum(int8);
+DROP AGGREGATE internalsum_noserial(int8);
+
 -- binary string aggregation
 create function binstragg_sfunc(s text, e1 text, e2 text)
 returns text immutable language plpgsql as $$

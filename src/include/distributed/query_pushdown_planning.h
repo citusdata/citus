@@ -22,6 +22,7 @@
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
 extern int ValuesMaterializationThreshold;
+extern bool AllowAggregateWorkerCombineOnInternalTypes;
 
 
 extern bool CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit);
