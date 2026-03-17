@@ -186,6 +186,7 @@ typedef struct MultiExtendedOp
 	bool hasDistinctOn;
 	bool hasWindowFuncs;
 	bool onlyPushableWindowFunctions;
+	bool sortedMergeEligible;
 } MultiExtendedOp;
 
 

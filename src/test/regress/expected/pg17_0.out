@@ -65,13 +65,13 @@ FROM test a JOIN LATERAL (SELECT x FROM test b UNION SELECT y FROM test c WHERE 
 ORDER BY 1,2;
                               QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.x, remote_scan.y
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 2
-         Tasks Shown: One of 2
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+ Custom Scan (Citus Sorted Merge Adaptive)
+   Task Count: 2
+   Tasks Shown: One of 2
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: a.x, a.y
                ->  Nested Loop
                      ->  Seq Scan on test_20240017 a
                      ->  Subquery Scan on dt1
@@ -89,6 +89,7 @@ SELECT a.*
 FROM test a JOIN LATERAL (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x) dt1 ON a.x = dt1.x
 ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 2048 kB × 2 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -320,6 +321,7 @@ DEBUG:  no shard pruning constraints on users found
 DEBUG:  shard count after pruning for users: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  sorted merge: per-task work_mem 2048 kB × 2 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id
 ---------------------------------------------------------------------
        1

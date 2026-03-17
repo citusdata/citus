@@ -622,6 +622,7 @@ DEBUG:  pruning merge fetch taskId 16
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 17
 DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  sorted merge: per-task work_mem 682 kB × 6 tasks (aggregate floor 4092 kB), session work_mem 4096 kB
  first_author | second_word_count
 ---------------------------------------------------------------------
            10 |             19519

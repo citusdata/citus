@@ -492,6 +492,16 @@ typedef struct DistributedPlan
 	 * Disables tracking query stat counters if true.
 	 */
 	bool disableTrackingQueryCounters;
+
+	/*
+	 * Sorted merge: when true, the coordinator performs a k-way merge
+	 * of pre-sorted worker results instead of relying on an upper Sort node.
+	 * This is a plan-time decision — the executor reads only this flag,
+	 * never the GUC. The SortSupport metadata used by the coordinator merge
+	 * is built lazily at executor time from workerJob->jobQuery (see
+	 * CreatePerTaskDispatchDests in sorted_merge.c).
+	 */
+	bool useSortedMerge;
 } DistributedPlan;
 
 

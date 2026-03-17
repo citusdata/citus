@@ -50,6 +50,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
+#include "distributed/sorted_merge.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
@@ -84,6 +85,9 @@ ParamListInfo executorBoundParams = NULL;
 
 /* sort the returning to get consistent outputs, used only for testing */
 bool SortReturning = false;
+
+/* when true at planning time, enables coordinator sorted merge for ORDER BY */
+bool EnableSortedMerge = true;
 
 /*
  * How many nested executors have we started? This can happen for SQL
@@ -408,6 +412,94 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 			{
 				return slot;
 			}
+		}
+
+		/* place the current tuple into the expr context */
+		econtext->ecxt_scantuple = slot;
+
+		if (!ExecQual(qual, econtext))
+		{
+			/* skip nodes that do not satisfy the qual (filter) */
+			InstrCountFiltered1(scanState, 1);
+			continue;
+		}
+
+		/* found a satisfactory scan tuple */
+		if (projInfo)
+		{
+			/*
+			 * Form a projection tuple, store it in the result tuple slot and return it.
+			 * ExecProj works on the ecxt_scantuple on the context stored earlier.
+			 */
+			return ExecProject(projInfo);
+		}
+		else
+		{
+			/* Here, we aren't projecting, so just return scan tuple */
+			return slot;
+		}
+	}
+}
+
+
+/*
+ * ReturnTupleFromSortedMerge reads the next globally-sorted tuple from the
+ * scan's streaming merge adapter and returns it. The adapter is forward-only
+ * — sorted-merge plans drop CUSTOMPATH_SUPPORT_BACKWARD_SCAN at plan time and
+ * insert a Material absorber for SCROLL cursors, so a backward scan request
+ * here is a planner-invariant violation.
+ *
+ * The adapter owns the returned slot. Sorted-merge ExecCustomScan dispatches
+ * directly here.
+ */
+TupleTableSlot *
+ReturnTupleFromSortedMerge(CitusScanState *scanState)
+{
+	Assert(ScanDirectionIsForward(
+			   ScanStateGetExecutorState(scanState)->es_direction));
+
+	ExprState *qual = scanState->customScanState.ss.ps.qual;
+	ProjectionInfo *projInfo = scanState->customScanState.ss.ps.ps_ProjInfo;
+	ExprContext *econtext = scanState->customScanState.ss.ps.ps_ExprContext;
+
+	if (!qual && !projInfo)
+	{
+		/* fast path: no quals, no projection — return adapter slot directly */
+		TupleTableSlot *slot = SortedMergeAdapterNext(scanState->mergeAdapter);
+		if (slot == NULL)
+		{
+			return ExecClearTuple(scanState->customScanState.ss.ss_ScanTupleSlot);
+		}
+		return slot;
+	}
+
+	for (;;)
+	{
+		/*
+		 * If there is a very selective qual on the Citus Scan node we might block
+		 * interrupts for a longer time if we would not check for interrupts in this loop
+		 */
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * Reset per-tuple memory context to free any expression evaluation
+		 * storage allocated in the previous tuple cycle.
+		 */
+		ResetExprContext(econtext);
+
+		TupleTableSlot *slot = SortedMergeAdapterNext(scanState->mergeAdapter);
+		if (slot == NULL)
+		{
+			/*
+			 * When the tuple is null we have reached the end of the tuplestore. We will
+			 * return a null tuple, however, depending on the existence of a projection we
+			 * need to either return the scan tuple or the projected tuple.
+			 */
+			if (projInfo)
+			{
+				return ExecClearTuple(projInfo->pi_state.resultslot);
+			}
+			return ExecClearTuple(scanState->customScanState.ss.ss_ScanTupleSlot);
 		}
 
 		/* place the current tuple into the expr context */

@@ -460,6 +460,7 @@ DEBUG:  Creating router plan
 SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2 ORDER BY 4 DESC, 1 DESC, 2 DESC LIMIT 5;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
+DEBUG:  sorted merge: per-task work_mem 2048 kB × 2 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  id | author_id |   title    | word_count | position
 ---------------------------------------------------------------------
  12 |         2 | archiblast |      18185 |        3
@@ -479,6 +480,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT id, word_count FROM public.
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash_mx.id, test.word_count FROM public.articles_hash_mx, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash_mx.id) ORDER BY test.word_count DESC, articles_hash_mx.id LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
+DEBUG:  sorted merge: per-task work_mem 2048 kB × 2 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  id | word_count
 ---------------------------------------------------------------------
  50 |      19519
