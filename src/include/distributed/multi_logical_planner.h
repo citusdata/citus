@@ -186,12 +186,6 @@ typedef struct MultiExtendedOp
 	bool hasDistinctOn;
 	bool hasWindowFuncs;
 	bool onlyPushableWindowFunctions;
-
-	/*
-	 * Set by the logical optimizer when the worker sort clause can support
-	 * a coordinator-side sorted merge. The physical planner reads this to
-	 * populate DistributedPlan.useSortedMerge.
-	 */
 	bool sortedMergeEligible;
 } MultiExtendedOp;
 

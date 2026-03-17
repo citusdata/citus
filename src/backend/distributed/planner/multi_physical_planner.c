@@ -162,6 +162,10 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependentJobList,
 									  Var *partitionKey, PartitionType partitionType,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
+static SortedMergeKey * BuildSortedMergeKeys(List *sortClauseList,
+											 List *targetList, int *nkeys);
+static void SetSortedMergeFields(MultiTreeRoot *multiTree, Job *workerJob,
+								 DistributedPlan *distributedPlan);
 static uint32 HashPartitionCount(void);
 
 /* Local functions forward declarations for task list creation and helper functions */
@@ -269,6 +273,9 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 	distributedPlan->combineQuery = combineQuery;
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
 	distributedPlan->expectResults = true;
+
+	/* check sorted merge eligibility and populate merge-key metadata */
+	SetSortedMergeFields(multiTree, workerJob, distributedPlan);
 
 	return distributedPlan;
 }
@@ -2032,6 +2039,97 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	}
 
 	return mapMergeJob;
+}
+
+
+/*
+ * SetSortedMergeFields checks whether the logical optimizer tagged the
+ * worker extended op node as eligible for a coordinator-side sorted merge.
+ * If so, the function builds merge-key metadata from the worker job query's
+ * sort clause and target list, and sets useSortedMerge on the plan.
+ *
+ * This is a plan-time decision: the executor reads only the plan fields,
+ * never the GUC.
+ *
+ * We directly walk the tree structure rather than using FindNodesOfType,
+ * which would traverse into subquery subtrees and could find unrelated
+ * MultiExtendedOp nodes. After MultiLogicalPlanOptimize the tree is:
+ *   MultiTreeRoot -> MasterExtendedOp -> MultiCollect -> WorkerExtendedOp
+ */
+static void
+SetSortedMergeFields(MultiTreeRoot *multiTree, Job *workerJob,
+					 DistributedPlan *distributedPlan)
+{
+	MultiNode *masterChild = ChildNode((MultiUnaryNode *) multiTree);
+	if (!CitusIsA(masterChild, MultiExtendedOp))
+	{
+		return;
+	}
+
+	MultiNode *collectNode = ChildNode((MultiUnaryNode *) masterChild);
+	if (!CitusIsA(collectNode, MultiCollect))
+	{
+		return;
+	}
+
+	MultiNode *workerNode = ChildNode((MultiUnaryNode *) collectNode);
+	if (!CitusIsA(workerNode, MultiExtendedOp))
+	{
+		return;
+	}
+
+	MultiExtendedOp *workerExtOp = (MultiExtendedOp *) workerNode;
+	if (!workerExtOp->sortedMergeEligible)
+	{
+		return;
+	}
+
+	Query *jobQuery = workerJob->jobQuery;
+	int nkeys = 0;
+	SortedMergeKey *keys = BuildSortedMergeKeys(jobQuery->sortClause,
+												jobQuery->targetList,
+												&nkeys);
+	if (nkeys > 0)
+	{
+		distributedPlan->useSortedMerge = true;
+		distributedPlan->sortedMergeKeyCount = nkeys;
+		distributedPlan->sortedMergeKeys = keys;
+	}
+}
+
+
+/*
+ * BuildSortedMergeKeys constructs an array of SortedMergeKey from a sort clause
+ * list and its corresponding target list. The resulting keys are used by the
+ * executor to set up SortSupport structures for the k-way merge.
+ *
+ * The attribute numbers in the keys correspond to worker output column positions,
+ * which align with the 1-based non-junk ordering of the worker target list.
+ */
+static SortedMergeKey *
+BuildSortedMergeKeys(List *sortClauseList, List *targetList, int *nkeys)
+{
+	*nkeys = list_length(sortClauseList);
+	if (*nkeys == 0)
+	{
+		return NULL;
+	}
+
+	SortedMergeKey *keys = palloc(*nkeys * sizeof(SortedMergeKey));
+
+	int i = 0;
+	SortGroupClause *sgc = NULL;
+	foreach_declared_ptr(sgc, sortClauseList)
+	{
+		TargetEntry *tle = get_sortgroupclause_tle(sgc, targetList);
+		keys[i].attno = tle->resno;
+		keys[i].sortop = sgc->sortop;
+		keys[i].collation = exprCollation((Node *) tle->expr);
+		keys[i].nullsFirst = sgc->nulls_first;
+		i++;
+	}
+
+	return keys;
 }
 
 

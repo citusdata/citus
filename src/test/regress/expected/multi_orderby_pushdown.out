@@ -1,0 +1,856 @@
+SET citus.next_shard_id TO 960000;
+SET
+CREATE TABLE sorted_merge_test (
+    id int,
+    val text,
+    num numeric,
+    ts timestamptz DEFAULT now()
+);
+CREATE TABLE
+SELECT create_distributed_table('sorted_merge_test', 'id');
+ create_distributed_table
+--------------------------
+
+(1 row)
+
+INSERT INTO sorted_merge_test (id, val, num)
+SELECT i, 'val_' || i, (i * 1.5)::numeric
+FROM generate_series(1, 100) i;
+INSERT 0 100
+INSERT INTO sorted_merge_test (id, val, num) VALUES (101, NULL, NULL);
+INSERT 0 1
+INSERT INTO sorted_merge_test (id, val, num) VALUES (102, NULL, NULL);
+INSERT 0 1
+INSERT INTO sorted_merge_test (id, val, num) VALUES (200, 'dup_a', 10.5);
+INSERT 0 1
+INSERT INTO sorted_merge_test (id, val, num) VALUES (201, 'dup_b', 10.5);
+INSERT 0 1
+INSERT INTO sorted_merge_test (id, val, num) VALUES (202, 'dup_c', 10.5);
+INSERT 0 1
+CREATE TABLE sorted_merge_events (
+    id int,
+    event_type text,
+    event_val int
+);
+CREATE TABLE
+SELECT create_distributed_table('sorted_merge_events', 'id');
+ create_distributed_table
+--------------------------
+
+(1 row)
+
+INSERT INTO sorted_merge_events
+SELECT i % 50 + 1, CASE WHEN i % 3 = 0 THEN 'click' WHEN i % 3 = 1 THEN 'view' ELSE 'buy' END, i
+FROM generate_series(1, 200) i;
+INSERT 0 200
+SHOW citus.enable_sorted_merge;
+ citus.enable_sorted_merge
+---------------------------
+ off
+(1 row)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SHOW citus.enable_sorted_merge;
+ citus.enable_sorted_merge
+---------------------------
+ on
+(1 row)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SET citus.enable_sorted_merge TO on;
+SET
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test ORDER BY id;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.id
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: id
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id FROM sorted_merge_test ORDER BY id DESC;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.id DESC
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: id DESC
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS LAST;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.num DESC NULLS LAST
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: num DESC NULLS LAST
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test ORDER BY val;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.val
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: val
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test ORDER BY id, val;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.id, remote_scan.val
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: id, val
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, val, num FROM sorted_merge_test ORDER BY id ASC, num DESC;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.id, remote_scan.num DESC
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: id, num DESC
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id;
+                                      QUERY PLAN
+--------------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.id
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: id
+                     ->  HashAggregate
+                           Group Key: id
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test WHERE num > 50 ORDER BY id;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.id
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: id
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                           Filter: (num > '50'::numeric)
+(11 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, num FROM sorted_merge_test ORDER BY id + 1;
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.worker_column_3
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Sort
+                     Sort Key: ((id + 1))
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+                                         QUERY PLAN
+--------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: id
+                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+EXPLAIN (COSTS OFF)
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*);
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.count
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Group Key: id
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id, avg(num) FROM sorted_merge_test GROUP BY id ORDER BY avg(num);
+                                   QUERY PLAN
+--------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.avg
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Group Key: id
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY val;
+                                      QUERY PLAN
+--------------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.val
+   ->  HashAggregate
+         Group Key: remote_scan.val
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate
+                           Group Key: val
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY count(*);
+                                      QUERY PLAN
+--------------------------------------------------------------------------------------
+ Sort
+   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
+   ->  HashAggregate
+         Group Key: remote_scan.val
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate
+                           Group Key: val
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
+ id |  val
+----+--------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
+ id |  val
+----+--------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id FROM sorted_merge_test ORDER BY id DESC LIMIT 5;
+ id
+-----
+ 202
+ 201
+ 200
+ 102
+ 101
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id FROM sorted_merge_test ORDER BY id DESC LIMIT 5;
+ id
+-----
+ 202
+ 201
+ 200
+ 102
+ 101
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, num FROM sorted_merge_test ORDER BY num, id LIMIT 5;
+ id | num
+----+-----
+  1 | 1.5
+  2 | 3.0
+  3 | 4.5
+  4 | 6.0
+  5 | 7.5
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, num FROM sorted_merge_test ORDER BY num, id LIMIT 5;
+ id | num
+----+-----
+  1 | 1.5
+  2 | 3.0
+  3 | 4.5
+  4 | 6.0
+  5 | 7.5
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, val FROM sorted_merge_test WHERE val IS NOT NULL ORDER BY val LIMIT 5;
+ id  |  val
+-----+--------
+ 200 | dup_a
+ 201 | dup_b
+ 202 | dup_c
+   1 | val_1
+  10 | val_10
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, val FROM sorted_merge_test WHERE val IS NOT NULL ORDER BY val LIMIT 5;
+ id  |  val
+-----+--------
+ 200 | dup_a
+ 201 | dup_b
+ 202 | dup_c
+   1 | val_1
+  10 | val_10
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+ id | count
+----+-------
+  1 |     1
+  2 |     1
+  3 |     1
+  4 |     1
+  5 |     1
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+ id | count
+----+-------
+  1 |     1
+  2 |     1
+  3 |     1
+  4 |     1
+  5 |     1
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, num FROM sorted_merge_test WHERE num IS NOT NULL ORDER BY id ASC, num DESC LIMIT 5;
+ id | num
+----+-----
+  1 | 1.5
+  2 | 3.0
+  3 | 4.5
+  4 | 6.0
+  5 | 7.5
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, num FROM sorted_merge_test WHERE num IS NOT NULL ORDER BY id ASC, num DESC LIMIT 5;
+ id | num
+----+-----
+  1 | 1.5
+  2 | 3.0
+  3 | 4.5
+  4 | 6.0
+  5 | 7.5
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, val FROM sorted_merge_test WHERE num > 100 ORDER BY id LIMIT 5;
+ id |  val
+----+--------
+ 67 | val_67
+ 68 | val_68
+ 69 | val_69
+ 70 | val_70
+ 71 | val_71
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, val FROM sorted_merge_test WHERE num > 100 ORDER BY id LIMIT 5;
+ id |  val
+----+--------
+ 67 | val_67
+ 68 | val_68
+ 69 | val_69
+ 70 | val_70
+ 71 | val_71
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, count(*), sum(num), avg(num) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+ id | count | sum |          avg
+----+-------+-----+------------------------
+  1 |     1 | 1.5 | 1.50000000000000000000
+  2 |     1 | 3.0 |     3.0000000000000000
+  3 |     1 | 4.5 |     4.5000000000000000
+  4 |     1 | 6.0 |     6.0000000000000000
+  5 |     1 | 7.5 |     7.5000000000000000
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, count(*), sum(num), avg(num) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+ id | count | sum |          avg
+----+-------+-----+------------------------
+  1 |     1 | 1.5 | 1.50000000000000000000
+  2 |     1 | 3.0 |     3.0000000000000000
+  3 |     1 | 4.5 |     4.5000000000000000
+  4 |     1 | 6.0 |     6.0000000000000000
+  5 |     1 | 7.5 |     7.5000000000000000
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT * FROM (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 5
+) sub ORDER BY id;
+ id |  val
+----+-------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+(5 rows)
+
+WITH top5 AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 5
+)
+SELECT * FROM top5 ORDER BY id;
+ id |  val
+----+-------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+(5 rows)
+
+SELECT t.id, t.val, e.event_type
+FROM sorted_merge_test t
+JOIN sorted_merge_events e ON t.id = e.id
+WHERE t.id <= 5
+ORDER BY t.id, e.event_type
+LIMIT 10;
+ id |  val  | event_type
+----+-------+------------
+  1 | val_1 | buy
+  1 | val_1 | buy
+  1 | val_1 | click
+  1 | val_1 | view
+  2 | val_2 | buy
+  2 | val_2 | click
+  2 | val_2 | view
+  2 | val_2 | view
+  3 | val_3 | buy
+  3 | val_3 | buy
+(10 rows)
+
+SELECT id, val FROM sorted_merge_test WHERE id <= 3
+UNION ALL
+SELECT id, val FROM sorted_merge_test WHERE id BETWEEN 98 AND 100
+ORDER BY id;
+ id  |   val
+-----+---------
+   1 | val_1
+   2 | val_2
+   3 | val_3
+  98 | val_98
+  99 | val_99
+ 100 | val_100
+(6 rows)
+
+SELECT DISTINCT id FROM sorted_merge_test WHERE id <= 10 ORDER BY id;
+ id
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+SELECT DISTINCT ON (id) id, val, num
+FROM sorted_merge_test
+WHERE id <= 5
+ORDER BY id, num DESC;
+ id |  val  | num
+----+-------+-----
+  1 | val_1 | 1.5
+  2 | val_2 | 3.0
+  3 | val_3 | 4.5
+  4 | val_4 | 6.0
+  5 | val_5 | 7.5
+(5 rows)
+
+SELECT id, val FROM sorted_merge_test t
+WHERE EXISTS (SELECT 1 FROM sorted_merge_events e WHERE e.id = t.id)
+ORDER BY id LIMIT 5;
+ id |  val
+----+-------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+(5 rows)
+
+SELECT id, val FROM sorted_merge_test
+WHERE id IN (SELECT id FROM sorted_merge_events WHERE event_type = 'click')
+ORDER BY id LIMIT 5;
+ id |  val
+----+-------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+(5 rows)
+
+SELECT id, count(*), sum(num), avg(num), min(val), max(val)
+FROM sorted_merge_test
+GROUP BY id
+ORDER BY id
+LIMIT 5;
+ id | count | sum |          avg           |  min  |  max
+----+-------+-----+------------------------+-------+-------
+  1 |     1 | 1.5 | 1.50000000000000000000 | val_1 | val_1
+  2 |     1 | 3.0 |     3.0000000000000000 | val_2 | val_2
+  3 |     1 | 4.5 |     4.5000000000000000 | val_3 | val_3
+  4 |     1 | 6.0 |     6.0000000000000000 | val_4 | val_4
+  5 |     1 | 7.5 |     7.5000000000000000 | val_5 | val_5
+(5 rows)
+
+SELECT id,
+       CASE WHEN num > 75 THEN 'high' WHEN num > 25 THEN 'mid' ELSE 'low' END as bucket
+FROM sorted_merge_test
+WHERE num IS NOT NULL
+ORDER BY id
+LIMIT 10;
+ id | bucket
+----+--------
+  1 | low
+  2 | low
+  3 | low
+  4 | low
+  5 | low
+  6 | low
+  7 | low
+  8 | low
+  9 | low
+ 10 | low
+(10 rows)
+
+SELECT id, num FROM sorted_merge_test ORDER BY num NULLS FIRST, id LIMIT 5;
+ id  | num
+-----+-----
+ 101 |
+ 102 |
+   1 | 1.5
+   2 | 3.0
+   3 | 4.5
+(5 rows)
+
+SELECT id, num FROM sorted_merge_test ORDER BY num NULLS LAST, id LIMIT 5;
+ id | num
+----+-----
+  1 | 1.5
+  2 | 3.0
+  3 | 4.5
+  4 | 6.0
+  5 | 7.5
+(5 rows)
+
+SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS FIRST, id LIMIT 5;
+ id  |  num
+-----+-------
+ 101 |
+ 102 |
+ 100 | 150.0
+  99 | 148.5
+  98 | 147.0
+(5 rows)
+
+SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS LAST, id DESC LIMIT 5;
+ id  |  num
+-----+-------
+ 100 | 150.0
+  99 | 148.5
+  98 | 147.0
+  97 | 145.5
+  96 | 144.0
+(5 rows)
+
+SELECT id FROM sorted_merge_test ORDER BY id OFFSET 100 LIMIT 5;
+ id
+-----
+ 101
+ 102
+ 200
+ 201
+ 202
+(5 rows)
+
+SELECT id, val FROM sorted_merge_test ORDER BY 2, 1 LIMIT 5;
+ id  |  val
+-----+--------
+ 200 | dup_a
+ 201 | dup_b
+ 202 | dup_c
+   1 | val_1
+  10 | val_10
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id FROM sorted_merge_test WHERE id < 0 ORDER BY id;
+ id
+----
+(0 rows)
+
+SELECT id, val FROM sorted_merge_test WHERE id = 42 ORDER BY id;
+ id |  val
+----+--------
+ 42 | val_42
+(1 row)
+
+SELECT id, num FROM sorted_merge_test WHERE num = 10.5 ORDER BY num, id;
+ id  | num
+-----+------
+   7 | 10.5
+ 200 | 10.5
+ 201 | 10.5
+ 202 | 10.5
+(4 rows)
+
+SELECT id, val, num FROM sorted_merge_test
+WHERE id <= 5
+ORDER BY num, val, id
+LIMIT 5;
+ id |  val  | num
+----+-------+-----
+  1 | val_1 | 1.5
+  2 | val_2 | 3.0
+  3 | val_3 | 4.5
+  4 | val_4 | 6.0
+  5 | val_5 | 7.5
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+EXPLAIN (COSTS OFF)
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+                                         QUERY PLAN
+--------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: id
+                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+EXPLAIN (COSTS OFF)
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+                                         QUERY PLAN
+--------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: id
+                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+EXPLAIN (COSTS OFF)
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+                                            QUERY PLAN
+--------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: id
+                                 ->  HashAggregate
+                                       Group Key: id
+                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(14 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+EXPLAIN (COSTS OFF)
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+                                            QUERY PLAN
+--------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: id
+                                 ->  HashAggregate
+                                       Group Key: id
+                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(14 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 5;
+ id | count
+----+-------
+ 20 |     1
+  8 |     1
+ 82 |     1
+ 15 |     1
+ 60 |     1
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+SET
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 5;
+ id | count
+----+-------
+ 20 |     1
+  8 |     1
+ 82 |     1
+ 15 |     1
+ 60 |     1
+(5 rows)
+
+SET citus.enable_sorted_merge TO off;
+SET
+DROP TABLE sorted_merge_test;
+DROP TABLE
+DROP TABLE sorted_merge_events;
+DROP TABLE

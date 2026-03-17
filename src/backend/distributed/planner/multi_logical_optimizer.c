@@ -53,6 +53,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/string_utils.h"
@@ -341,6 +342,7 @@ static bool ShouldProcessDistinctOrderAndLimitForWorker(ExtendedOpNodeProperties
 														bool pushingDownOriginalGrouping,
 														Node *havingQual);
 static bool IsIndexInRange(const List *list, int index);
+static bool SortClauseListsMatch(List *workerClauses, List *originalClauses);
 
 /*
  * MultiLogicalPlanOptimize applies multi-relational algebra optimizations on
@@ -2548,6 +2550,22 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	 * ignore the limitOption.
 	 */
 	workerExtendedOpNode->limitOption = originalOpNode->limitOption;
+
+	/*
+	 * Determine sorted-merge eligibility. This is a plan-time-only decision.
+	 * The worker sort clause list is the output of the existing safety analysis
+	 * in WorkerSortClauseList(). If it matches the original sort clause, workers
+	 * will produce identically-sorted output suitable for a coordinator merge.
+	 */
+	if (EnableSortedMerge &&
+		queryOrderByLimit.workerSortClauseList != NIL &&
+		originalSortClauseList != NIL &&
+		!extendedOpNodeProperties->pullUpIntermediateRows &&
+		SortClauseListsMatch(queryOrderByLimit.workerSortClauseList,
+							 originalSortClauseList))
+	{
+		workerExtendedOpNode->sortedMergeEligible = true;
+	}
 
 	return workerExtendedOpNode;
 }
@@ -5158,12 +5176,34 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
  * checks if we need to add any sorting and grouping clauses to the sort list we
  * push down for the limit. If we do, the function adds these clauses and
  * returns them. Otherwise, the function returns null.
+ *
+ * When citus.enable_sorted_merge is enabled, we also push down the sort
+ * clause to workers even without a LIMIT, for queries where the sort
+ * is safe to push (no aggregates in ORDER BY, no non-pushable window
+ * functions, and either no GROUP BY or GROUP BY on partition column).
+ * This enables the coordinator to merge pre-sorted worker results.
  */
 static List *
 WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseList,
 					 OrderByLimitReference orderByLimitReference)
 {
 	List *workerSortClauseList = NIL;
+
+	/*
+	 * When sorted merge is enabled, push the sort clause to workers even
+	 * without a LIMIT. The coordinator will merge the sorted streams
+	 * instead of doing a full re-sort.
+	 */
+	if (EnableSortedMerge && sortClauseList != NIL &&
+		orderByLimitReference.onlyPushableWindowFunctions &&
+		!orderByLimitReference.hasOrderByAggregate)
+	{
+		if (orderByLimitReference.groupClauseIsEmpty ||
+			orderByLimitReference.groupedByDisjointPartitionColumn)
+		{
+			return copyObject(sortClauseList);
+		}
+	}
 
 	/* if no limit node and no hasDistinctOn, no need to push down sort clauses */
 	if (limitCount == NULL && !orderByLimitReference.hasDistinctOn)
@@ -5466,6 +5506,48 @@ IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses)
 		 * that means group clause is not a subset of distinct clause.
 		 */
 		if (!isFound)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * SortClauseListsMatch checks whether two SortGroupClause lists represent
+ * semantically identical sort orderings. Compares tleSortGroupRef, sortop,
+ * nulls_first, and eqop for each corresponding entry.
+ */
+static bool
+SortClauseListsMatch(List *workerClauses, List *originalClauses)
+{
+	if (list_length(workerClauses) != list_length(originalClauses))
+	{
+		return false;
+	}
+
+	ListCell *wc;
+	ListCell *oc;
+	forboth(wc, workerClauses, oc, originalClauses)
+	{
+		SortGroupClause *w = lfirst_node(SortGroupClause, wc);
+		SortGroupClause *o = lfirst_node(SortGroupClause, oc);
+
+		if (w->tleSortGroupRef != o->tleSortGroupRef)
+		{
+			return false;
+		}
+		if (w->sortop != o->sortop)
+		{
+			return false;
+		}
+		if (w->nulls_first != o->nulls_first)
+		{
+			return false;
+		}
+		if (w->eqop != o->eqop)
 		{
 			return false;
 		}
