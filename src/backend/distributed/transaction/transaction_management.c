@@ -150,7 +150,6 @@ AllowedDistributionColumn AllowedDistributionColumnValue;
 
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
-bool ProcedureOpensTransactionBlock = true;
 
 /*
  * When enabled, CALL statements that execute a single task on a single shard
@@ -935,7 +934,7 @@ IsMultiStatementTransaction(void)
 		/* in (a transaction within) a do block */
 		return true;
 	}
-	else if (StoredProcedureLevel > 0 && ProcedureOpensTransactionBlock)
+	else if (StoredProcedureLevel > 0)
 	{
 		/* in (a transaction within) a stored procedure */
 		return true;

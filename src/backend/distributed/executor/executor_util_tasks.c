@@ -58,9 +58,17 @@ TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList)
  *   5. That task has exactly 1 placement (no replication)
  *   6. No coordinated transaction has been started yet (no prior distributed
  *      work in this procedure call)
+ *   7. No prior non-coordinated execution has occurred in this procedure call
  *
  * When any check fails, we return false and the caller falls through to the
  * normal coordinated transaction path.
+ *
+ * IMPORTANT: because the first statement executes without a coordinated
+ * transaction, it auto-commits on the worker.  If the procedure contains a
+ * second distributed statement, we raise an ERROR to prevent silent data
+ * inconsistency — but the first statement's effects have already been
+ * committed and cannot be rolled back.  This is acceptable because the GUC
+ * is explicitly documented for single-statement procedures only.
  */
 static bool
 CanSkipCoordinatedTransactionForProcedure(List *taskList)
@@ -121,6 +129,10 @@ CanSkipCoordinatedTransactionForProcedure(List *taskList)
 	 * executed one non-coordinated statement, a second would cause a partial
 	 * commit scenario: the first auto-committed on the worker and cannot be
 	 * rolled back if the second fails.
+	 *
+	 * We raise an ERROR here to prevent silently continuing with an
+	 * inconsistent state.  Note that the first statement's effects are
+	 * already committed on the worker at this point.
 	 */
 	if (ProcedureNonCoordinatedExecutionCount > 0)
 	{
@@ -128,6 +140,8 @@ CanSkipCoordinatedTransactionForProcedure(List *taskList)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("multi-statement procedures are not supported with "
 						"citus.enable_single_shard_procedure_optimization"),
+				 errdetail("The first statement has already been committed "
+						   "on the worker and cannot be rolled back."),
 				 errhint("Use this optimization only for single-statement "
 						 "procedures, or disable the GUC.")));
 	}

@@ -117,7 +117,6 @@ extern bool SelectOpensTransactionBlock;
  * block.
  */
 extern bool FunctionOpensTransactionBlock;
-extern bool ProcedureOpensTransactionBlock;
 extern bool EnableSingleShardProcedureOptimization;
 
 /* state needed to prevent new connections during modifying transactions */

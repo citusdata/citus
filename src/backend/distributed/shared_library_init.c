@@ -1763,26 +1763,21 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
-	DefineCustomBoolVariable(
-		"citus.procedure_opens_transaction_block",
-		gettext_noop("Open transaction blocks for procedures calls"),
-		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
-					 "running distributed queres in a function. When disabled, the "
-					 "queries may be committed immediately after the statemnent "
-					 "completes. Disabling this flag is dangerous"),
-		&ProcedureOpensTransactionBlock,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_single_shard_procedure_optimization",
-		gettext_noop("Skip coordinated transactions for single-shard procedure calls."),
-		gettext_noop("When enabled, CALL statements that execute a single task "
-					 "on a single shard with a single placement skip coordinated "
-					 "(2PC) transactions. Only applies to non-nested procedure "
-					 "calls outside of explicit transaction blocks."),
+		gettext_noop("Skip coordinated transactions for single-statement, "
+					 "single-shard procedure calls."),
+		gettext_noop("When enabled, CALL statements that execute exactly one "
+					 "distributed write targeting a single task on a single "
+					 "shard with a single placement skip coordinated (2PC) "
+					 "transactions. Only applies to non-nested procedure calls "
+					 "outside of explicit transaction blocks. "
+					 "WARNING: this is intended for single-statement procedures "
+					 "only. If a procedure issues a second distributed statement, "
+					 "it will raise an ERROR, but the first statement will have "
+					 "already been committed on the worker and cannot be rolled "
+					 "back."),
 		&EnableSingleShardProcedureOptimization,
 		false,
 		PGC_USERSET,
