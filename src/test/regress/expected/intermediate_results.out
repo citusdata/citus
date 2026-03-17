@@ -94,6 +94,7 @@ FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares',
 WHERE user_id = 'jon' OR true
 ORDER BY x;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
 ERROR:  Query could not find the intermediate result file "squares", it was mostly likely deleted due to an error in a parallel process within the same distributed transaction
 SET client_min_messages TO DEBUG;
 SELECT x, x2

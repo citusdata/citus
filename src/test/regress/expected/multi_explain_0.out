@@ -476,22 +476,20 @@ EXPLAIN (COSTS FALSE)
 	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5.0
 	ORDER BY l_quantity LIMIT 10;
 Limit
-  ->  Sort
-        Sort Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Adaptive)
-              Task Count: 2
-              Tasks Shown: One of 2
-              ->  Task
-                    Node: host=localhost port=xxxxx dbname=regression
-                    ->  Limit
-                          ->  Sort
-                                Sort Key: lineitem.l_quantity
-                                ->  Hash Join
-                                      Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
-                                      ->  Seq Scan on lineitem_360000 lineitem
-                                            Filter: (l_quantity < 5.0)
-                                      ->  Hash
-                                            ->  Seq Scan on orders_360002 orders
+  ->  Custom Scan (Citus Sorted Merge Adaptive)
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit
+                    ->  Sort
+                          Sort Key: lineitem.l_quantity
+                          ->  Hash Join
+                                Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
+                                ->  Seq Scan on lineitem_360000 lineitem
+                                      Filter: (l_quantity < 5.0)
+                                ->  Hash
+                                      ->  Seq Scan on orders_360002 orders
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
@@ -961,31 +959,29 @@ ORDER BY
 LIMIT
 	10;
 Limit
-  ->  Sort
-        Sort Key: remote_scan.user_lastseen DESC
-        ->  Custom Scan (Citus Adaptive)
-              Task Count: 4
-              Tasks Shown: One of 4
-              ->  Task
-                    Node: host=localhost port=xxxxx dbname=regression
-                    ->  Limit
-                          ->  Sort
-                                Sort Key: (max(users.lastseen)) DESC
-                                ->  GroupAggregate
-                                      Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                                      ->  Sort
-                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
-                                            ->  Nested Loop Left Join
-                                                  ->  Limit
-                                                        ->  Sort
-                                                              Sort Key: users.lastseen DESC
-                                                              ->  Seq Scan on users_1400289 users
-                                                                    Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                                  ->  Limit
-                                                        ->  Sort
-                                                              Sort Key: events.event_time DESC
-                                                              ->  Seq Scan on events_1400285 events
-                                                                    Filter: (composite_id = users.composite_id)
+  ->  Custom Scan (Citus Sorted Merge Adaptive)
+        Task Count: 4
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit
+                    ->  Sort
+                          Sort Key: (max(users.lastseen)) DESC
+                          ->  GroupAggregate
+                                Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                ->  Sort
+                                      Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
+                                      ->  Nested Loop Left Join
+                                            ->  Limit
+                                                  ->  Sort
+                                                        Sort Key: users.lastseen DESC
+                                                        ->  Seq Scan on users_1400289 users
+                                                              Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                            ->  Limit
+                                                  ->  Sort
+                                                        Sort Key: events.event_time DESC
+                                                        ->  Seq Scan on events_1400285 events
+                                                              Filter: (composite_id = users.composite_id)
 RESET citus.subquery_pushdown;
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
