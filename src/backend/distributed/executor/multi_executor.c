@@ -85,6 +85,9 @@ ParamListInfo executorBoundParams = NULL;
 /* sort the returning to get consistent outputs, used only for testing */
 bool SortReturning = false;
 
+/* when true at planning time, enables coordinator sorted merge for ORDER BY */
+bool EnableSortedMerge = false;
+
 /*
  * How many nested executors have we started? This can happen for SQL
  * UDF calls. The outer query starts an executor, then postgres opens

@@ -70,6 +70,7 @@ extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
 extern bool SortReturning;
+extern bool EnableSortedMerge;
 extern int ExecutorLevel;
 
 

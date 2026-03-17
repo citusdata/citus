@@ -2613,6 +2613,19 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enable_sorted_merge",
+		gettext_noop("Enables sorted merge of worker results for ORDER BY queries."),
+		gettext_noop("When enabled during planning, Citus pushes ORDER BY to workers "
+					 "and merges the pre-sorted results on the coordinator using a "
+					 "binary heap, eliminating the Sort node in the combine query. "
+					 "This is an experimental feature."),
+		&EnableSortedMerge,
+		false,
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
 	/*
 	 * It takes about 140 bytes of shared memory to store one row, therefore
 	 * this setting should be used responsibly. setting it to 10M will require
