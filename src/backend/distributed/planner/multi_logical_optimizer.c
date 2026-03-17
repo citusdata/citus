@@ -64,6 +64,7 @@
 int LimitClauseRowFetchCount = -1; /* number of rows to fetch from each task */
 double CountDistinctErrorRate = 0.0; /* precision of count(distinct) approximate */
 int CoordinatorAggregationStrategy = COORDINATOR_AGGREGATION_ROW_GATHER;
+bool AllowAggregateWorkerCombineOnInternalTypes = true;
 
 /* Constant used throughout file */
 static const uint32 masterTableId = 1; /* first range table reference on the master node */
@@ -281,7 +282,7 @@ static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *a
 static Oid WorkerPartialAggOid(void);
 static Oid WorkerBinaryPartialAggOid(void);
 static Oid CoordBinaryCombineAggOid(void);
-static bool IsTypeBinarySerializable(Oid transitionType);
+static bool IsAggTransTypeBinarySerializable(Form_pg_aggregate aggForm);
 static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
@@ -2131,7 +2132,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
 			useBinaryCoordinatorCombine = aggform->aggtranstype != InvalidOid &&
-										  IsTypeBinarySerializable(aggform->aggtranstype);
+										  IsAggTransTypeBinarySerializable(aggform);
 			ReleaseSysCache(aggTuple);
 		}
 
@@ -3296,7 +3297,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
 			useBinaryWorkerAggregate = (OidIsValid(aggform->aggtranstype) &&
-										IsTypeBinarySerializable(aggform->aggtranstype));
+										IsAggTransTypeBinarySerializable(aggform));
 
 			ReleaseSysCache(aggTuple);
 		}
@@ -3567,6 +3568,18 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
 	Form_pg_type typeform = (Form_pg_type) GETSTRUCT(typeTuple);
 
 	bool supportsSafeCombine = typeform->typtype != TYPTYPE_PSEUDO;
+
+	if (AllowAggregateWorkerCombineOnInternalTypes &&
+		typeform->oid == INTERNALOID && !supportsSafeCombine)
+	{
+		/* check if the type supports a SERIALFUNC/DESERIALFUNC - if it does
+		 * then we can leverage that for safe transfer of the state across the wire.
+		 */
+		if (aggform->aggserialfn != InvalidOid && aggform->aggdeserialfn != InvalidOid)
+		{
+			supportsSafeCombine = true;
+		}
+	}
 
 	ReleaseSysCache(aggTuple);
 	ReleaseSysCache(typeTuple);
@@ -3848,8 +3861,20 @@ TypeOid(Oid schemaId, const char *typeName)
 
 
 static bool
-IsTypeBinarySerializable(Oid transitionType)
+IsAggTransTypeBinarySerializable(Form_pg_aggregate aggForm)
 {
+	Oid transitionType = aggForm->aggtranstype;
+
+	if (AllowAggregateWorkerCombineOnInternalTypes &&
+		transitionType == INTERNALOID)
+	{
+		/* For aggregates with internal transition types, we apply the binary serialization
+		 * check on the output value of the SERIALFUNC. If a serialfunc exists, Postgres
+		 * requires that the serialfunc return a bytea - which will be binary serializable
+		 */
+		return (aggForm->aggserialfn != InvalidOid);
+	}
+
 	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(transitionType));
 	if (!HeapTupleIsValid(typeTuple))
 	{
