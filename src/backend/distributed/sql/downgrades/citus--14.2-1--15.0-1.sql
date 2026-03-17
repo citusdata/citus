@@ -1,0 +1,2 @@
+-- citus--14.2-1--15.0-1
+-- this is an empty downgrade path since citus--15.0-1--14.2-1.sql is empty for now
