@@ -70,6 +70,7 @@ extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
 extern bool SortReturning;
+extern bool EnableSortedMerge;
 extern int ExecutorLevel;
 
 
@@ -136,6 +137,7 @@ extern uint64 ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskLi
 extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
+extern TupleTableSlot * ReturnTupleFromSortedMerge(CitusScanState *scanState);
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc
 								   tupleDescriptor, Tuplestorestate *tupstore);
 extern Query * ParseQueryString(const char *queryString, Oid *paramOids, int numParams);
