@@ -2235,9 +2235,15 @@ RegisterCitusConfigVariables(void)
 					 "connects to the coordinator to get the next value, if the "
 					 "session is not connected to the coordinator. So this GUC "
 					 "is only effective on the coordinator when creating new "
-					 "shards. For this reason, when testing a command that "
-					 "creates shards via a worker node, this GUC must be set on "
-					 "the coordinator node."),
+					 "shards."
+					 "And also note that if the citus internal connection that "
+					 "is used to connect to coordinator to retrieve the next "
+					 "placement id changes, then the value this GUC was set to "
+					 "would be ineffective too. For this reason, when testing a "
+					 "command that creates shards via a worker node, it's "
+					 "recommended to directly alter "
+					 "pg_dist_placement_placementid_seq at the system level on "
+					 "the coordinator."),
 		&NextPlacementId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
@@ -2257,9 +2263,14 @@ RegisterCitusConfigVariables(void)
 					 "connects to the coordinator to get the next value, if the "
 					 "session is not connected to the coordinator. So this GUC "
 					 "is only effective on the coordinator when creating new "
-					 "shards. For this reason, when testing a command that "
-					 "creates shards via a worker node, this GUC must be set on "
-					 "the coordinator node."),
+					 "shards."
+					 "And also note that if the citus internal connection that "
+					 "is used to connect to coordinator to retrieve the next "
+					 "shard id changes, then the value this GUC was set to "
+					 "would be ineffective too. For this reason, when testing a "
+					 "command that creates shards via a worker node, it's "
+					 "recommended to directly alter pg_dist_shardid_seq at the "
+					 "system level on the coordinator."),
 		&NextShardId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
