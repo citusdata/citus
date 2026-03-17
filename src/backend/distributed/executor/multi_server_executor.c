@@ -99,5 +99,6 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		}
 	}
 
-	return MULTI_EXECUTOR_ADAPTIVE;
+	return distributedPlan->useSortedMerge ? MULTI_EXECUTOR_SORTED_MERGE :
+		   MULTI_EXECUTOR_ADAPTIVE;
 }
