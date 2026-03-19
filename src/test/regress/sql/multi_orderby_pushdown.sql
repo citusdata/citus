@@ -280,6 +280,13 @@ WHERE id <= 5
 ORDER BY num, val, id
 LIMIT 5;
 
+-- E5: Zero-task defensive path
+-- CreatePerTaskDispatchDest handles taskCount=0 gracefully (returns a no-op
+-- destination). This cannot be triggered via normal SQL because distributed
+-- tables always have at least one shard. The closest we can test is an
+-- empty-result query through the sorted merge path to verify no crash.
+SELECT id FROM sorted_merge_test WHERE false ORDER BY id;
+
 -- =================================================================
 -- Category F: Existing LIMIT pushdown stability
 -- =================================================================
@@ -304,10 +311,10 @@ SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
 
 -- F3: ORDER BY aggregate + LIMIT (not eligible for merge)
 SET citus.enable_sorted_merge TO off;
-SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 5;
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, id LIMIT 5;
 
 SET citus.enable_sorted_merge TO on;
-SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 5;
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, id LIMIT 5;
 
 -- =================================================================
 -- Cleanup

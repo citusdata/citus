@@ -176,6 +176,7 @@
 #include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"
 #include "distributed/tuple_destination.h"
+#include "distributed/sorted_merge.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 
@@ -315,6 +316,15 @@ typedef struct DistributedExecution
 	 * fail, such as CREATE INDEX CONCURRENTLY.
 	 */
 	bool localExecutionSupported;
+
+	/*
+	 * Sorted merge: when useSortedMerge is true, worker results are routed
+	 * to per-task tuple stores. After execution completes, these stores are
+	 * k-way merged into the final scanState->tuplestorestate.
+	 */
+	bool useSortedMerge;
+	Tuplestorestate **perTaskStores;
+	int perTaskStoreCount;
 } DistributedExecution;
 
 
@@ -799,12 +809,36 @@ AdaptiveExecutor(CitusScanState *scanState)
 	/* Reset Task fields that are only valid for a single execution */
 	ResetExplainAnalyzeData(taskList);
 
-	scanState->tuplestorestate =
-		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
 	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-	TupleDestination *defaultTupleDest =
-		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
+	TupleDestination *defaultTupleDest = NULL;
+
+	/*
+	 * When sorted merge is active and we're not doing EXPLAIN ANALYZE,
+	 * route worker results into per-task tuple stores. The final tuplestore
+	 * will be created later after the k-way merge.
+	 */
+	bool useSortedMerge = distributedPlan->useSortedMerge &&
+						  !RequestedForExplainAnalyze(scanState);
+	Tuplestorestate **perTaskStores = NULL;
+	int perTaskStoreCount = 0;
+
+	if (useSortedMerge)
+	{
+		TupleDestinationStats *sharedStats = palloc0(sizeof(TupleDestinationStats));
+		defaultTupleDest = CreatePerTaskDispatchDest(taskList, tupleDescriptor,
+													sharedStats,
+													&perTaskStores,
+													&perTaskStoreCount);
+		/* final tuplestore created after merge */
+		scanState->tuplestorestate = NULL;
+	}
+	else
+	{
+		scanState->tuplestorestate =
+			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+		defaultTupleDest =
+			CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
+	}
 
 	bool localExecutionSupported = true;
 
@@ -867,6 +901,11 @@ AdaptiveExecutor(CitusScanState *scanState)
 		jobIdList,
 		localExecutionSupported);
 
+	/* save sorted merge state on execution for post-merge */
+	execution->useSortedMerge = useSortedMerge;
+	execution->perTaskStores = perTaskStores;
+	execution->perTaskStoreCount = perTaskStoreCount;
+
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
 	 * are going to be executed with local execution.
@@ -896,6 +935,30 @@ AdaptiveExecutor(CitusScanState *scanState)
 	}
 
 	FinishDistributedExecution(execution);
+
+	/*
+	 * When sorted merge is active, k-way merge the per-task stores into
+	 * the final tuplestore. This produces globally sorted output that the
+	 * existing ReturnTupleFromTuplestore() path can read unchanged.
+	 */
+	if (execution->useSortedMerge && execution->perTaskStoreCount > 0)
+	{
+		scanState->tuplestorestate =
+			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+		MergePerTaskStoresIntoFinalStore(scanState->tuplestorestate,
+										 execution->perTaskStores,
+										 execution->perTaskStoreCount,
+										 distributedPlan->sortedMergeKeys,
+										 distributedPlan->sortedMergeKeyCount,
+										 tupleDescriptor);
+
+		/* free per-task stores — they are no longer needed */
+		for (int i = 0; i < execution->perTaskStoreCount; i++)
+		{
+			tuplestore_end(execution->perTaskStores[i]);
+		}
+	}
 
 	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
 	{

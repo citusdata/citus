@@ -49,8 +49,6 @@ typedef struct TupleDestDestReceiver
 static void TupleStoreTupleDestPutTuple(TupleDestination *self, Task *task,
 										int placementIndex, int queryNumber,
 										HeapTuple heapTuple, uint64 tupleLibpqSize);
-static void EnsureIntermediateSizeLimitNotExceeded(TupleDestinationStats *
-												   tupleDestinationStats);
 static TupleDesc TupleStoreTupleDestTupleDescForQuery(TupleDestination *self, int
 													  queryNumber);
 static void TupleDestNonePutTuple(TupleDestination *self, Task *task,
@@ -135,7 +133,7 @@ TupleStoreTupleDestPutTuple(TupleDestination *self, Task *task,
  * EnsureIntermediateSizeLimitNotExceeded is a helper function for checking the current
  * state of the tupleDestinationStats and throws error if necessary.
  */
-static void
+void
 EnsureIntermediateSizeLimitNotExceeded(TupleDestinationStats *tupleDestinationStats)
 {
 	if (!tupleDestinationStats)
