@@ -47,11 +47,11 @@ TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList)
 
 
 /*
- * CanSkipCoordinatedTransactionForProcedure determines whether we can safely
- * skip coordinated (2PC) transactions for the current procedure execution.
+ * SkipProcedureTransactionBlock determines whether we can safely skip
+ * coordinated (2PC) transactions for the current procedure execution.
  *
  * This is safe only when ALL of the following are true:
- *   1. The GUC citus.enable_single_shard_procedure_optimization is enabled
+ *   1. The GUC citus.enable_procedure_transaction_skip is enabled
  *   2. We are inside a stored procedure (StoredProcedureLevel == 1, not nested)
  *   3. We are NOT inside an explicit BEGIN block or DO $$ block
  *   4. There is exactly 1 task in the task list
@@ -64,17 +64,22 @@ TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList)
  * normal coordinated transaction path.
  *
  * IMPORTANT: because the first statement executes without a coordinated
- * transaction, it auto-commits on the worker.  If the procedure contains a
- * second distributed statement, we raise an ERROR to prevent silent data
- * inconsistency — but the first statement's effects have already been
- * committed and cannot be rolled back.  This is acceptable because the GUC
- * is explicitly documented for single-statement procedures only.
+ * transaction, it auto-commits on the worker (or locally).  If the procedure
+ * contains a second distributed statement, we raise an ERROR to prevent
+ * silent data inconsistency — but the first statement's effects have already
+ * been committed and cannot be rolled back.  This is acceptable because the
+ * GUC is explicitly documented for single-statement procedures only.
+ *
+ * NOTE: we are being conservative in the case of local execution.  When the
+ * first statement is executed locally (not on a remote worker), it still
+ * auto-commits and we still raise an ERROR on a second statement.  This is a
+ * deliberate limitation to keep the logic simple and consistent.
  */
 static bool
-CanSkipCoordinatedTransactionForProcedure(List *taskList)
+SkipProcedureTransactionBlock(List *taskList)
 {
 	/* GUC gate - must be explicitly opted in */
-	if (!EnableSingleShardProcedureOptimization)
+	if (!EnableProcedureTransactionSkip)
 	{
 		return false;
 	}
@@ -114,6 +119,12 @@ CanSkipCoordinatedTransactionForProcedure(List *taskList)
 		return false;
 	}
 
+	/* Additionally check for multi-query tasks */
+	if (task->queryCount > 1)
+	{
+		return false;
+	}
+
 	/*
 	 * If we already started a coordinated transaction (e.g., a prior statement
 	 * in the procedure touched a different shard), we cannot downgrade to
@@ -127,21 +138,27 @@ CanSkipCoordinatedTransactionForProcedure(List *taskList)
 	/*
 	 * Only single-statement procedures may skip coordination. If we already
 	 * executed one non-coordinated statement, a second would cause a partial
-	 * commit scenario: the first auto-committed on the worker and cannot be
-	 * rolled back if the second fails.
+	 * commit scenario: the first auto-committed on the worker (or locally)
+	 * and cannot be rolled back if the second fails.
 	 *
 	 * We raise an ERROR here to prevent silently continuing with an
 	 * inconsistent state.  Note that the first statement's effects are
-	 * already committed on the worker at this point.
+	 * already committed at this point (whether executed remotely or locally).
+	 *
+	 * NOTE: we are being conservative in the case of local execution — even
+	 * though a local statement does not go to a remote worker, we still
+	 * disallow a second statement.  This is a deliberate limitation to keep
+	 * the logic simple and consistent.
 	 */
 	if (ProcedureNonCoordinatedExecutionCount > 0)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("multi-statement procedures are not supported with "
-						"citus.enable_single_shard_procedure_optimization"),
+						"citus.enable_procedure_transaction_skip"),
 				 errdetail("The first statement has already been committed "
-						   "on the worker and cannot be rolled back."),
+						   "and cannot be rolled back. This applies to both "
+						   "remote and local execution."),
 				 errhint("Use this optimization only for single-statement "
 						 "procedures, or disable the GUC.")));
 	}
@@ -207,7 +224,7 @@ TaskListRequiresRollback(List *taskList)
 		 * COMMIT PREPARED for single-shard single-placement writes
 		 * inside stored procedures.
 		 */
-		if (!CanSkipCoordinatedTransactionForProcedure(taskList))
+		if (!SkipProcedureTransactionBlock(taskList))
 		{
 			return true;
 		}

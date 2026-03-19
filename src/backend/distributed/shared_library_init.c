@@ -135,15 +135,15 @@ ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
  * module.
  */
 #define DEFINE_COLUMNAR_PASSTHROUGH_FUNC(funcname) \
-		static PGFunction CppConcat(extern_, funcname); \
-		PG_FUNCTION_INFO_V1(funcname); \
-		Datum funcname(PG_FUNCTION_ARGS) \
-		{ \
-			return CppConcat(extern_, funcname)(fcinfo); \
-		}
+	static PGFunction CppConcat(extern_, funcname); \
+	PG_FUNCTION_INFO_V1(funcname); \
+	Datum funcname(PG_FUNCTION_ARGS) \
+	{ \
+		return CppConcat(extern_, funcname)(fcinfo); \
+	}
 #define INIT_COLUMNAR_SYMBOL(typename, funcname) \
-		CppConcat(extern_, funcname) = \
-			(typename) (void *) lookup_external_function(handle, # funcname)
+	CppConcat(extern_, funcname) = \
+		(typename) (void *) lookup_external_function(handle, # funcname)
 
 #define CDC_DECODER_DYNAMIC_LIB_PATH "$libdir/citus_decoders:$libdir"
 
@@ -1763,9 +1763,8 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
-
 	DefineCustomBoolVariable(
-		"citus.enable_single_shard_procedure_optimization",
+		"citus.enable_procedure_transaction_skip",
 		gettext_noop("Skip coordinated transactions for single-statement, "
 					 "single-shard procedure calls."),
 		gettext_noop("When enabled, CALL statements that execute exactly one "
@@ -1776,9 +1775,8 @@ RegisterCitusConfigVariables(void)
 					 "WARNING: this is intended for single-statement procedures "
 					 "only. If a procedure issues a second distributed statement, "
 					 "it will raise an ERROR, but the first statement will have "
-					 "already been committed on the worker and cannot be rolled "
-					 "back."),
-		&EnableSingleShardProcedureOptimization,
+					 "already been committed and cannot be rolled back."),
+		&EnableProcedureTransactionSkip,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,

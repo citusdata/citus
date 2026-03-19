@@ -59,7 +59,7 @@
 #include "distributed/worker_log_messages.h"
 
 #define COMMIT_MANAGEMENT_COMMAND_2PC \
-		"SELECT citus_internal.commit_management_command_2pc()"
+	"SELECT citus_internal.commit_management_command_2pc()"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -158,7 +158,7 @@ bool FunctionOpensTransactionBlock = true;
  * to do so (i.e., there is only one participant and no cross-shard coordination
  * is needed).
  */
-bool EnableSingleShardProcedureOptimization = false;
+bool EnableProcedureTransactionSkip = false;
 
 /* if true, we should trigger node metadata sync on commit */
 bool NodeMetadataSyncOnCommit = false;

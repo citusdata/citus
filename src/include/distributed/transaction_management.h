@@ -117,7 +117,7 @@ extern bool SelectOpensTransactionBlock;
  * block.
  */
 extern bool FunctionOpensTransactionBlock;
-extern bool EnableSingleShardProcedureOptimization;
+extern bool EnableProcedureTransactionSkip;
 
 /* state needed to prevent new connections during modifying transactions */
 extern XactModificationType XactModificationLevel;

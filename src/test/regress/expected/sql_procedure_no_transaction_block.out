@@ -1,0 +1,977 @@
+--
+-- SQL_PROCEDURE_NO_TRANSACTION_BLOCK
+--
+-- Tests for citus.enable_procedure_transaction_skip GUC.
+-- This optimization allows single-statement procedures that execute
+-- a single task on a single shard to skip coordinated (2PC) transactions.
+--
+SET citus.next_shard_id TO 109000;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+CREATE SCHEMA sql_proc_no_txn_block;
+SET search_path TO sql_proc_no_txn_block;
+CREATE TABLE test_dist (shard_key int PRIMARY KEY, other_key int);
+SELECT create_distributed_table('test_dist', 'shard_key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Disable local execution so all commands go through the distributed path.
+SET citus.enable_local_execution TO off;
+-- Create all procedures upfront (before enabling log_remote_commands)
+-- to avoid non-deterministic DDL propagation output.
+CREATE OR REPLACE PROCEDURE single_insert(val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO test_dist VALUES (val, val * 10);
+END;
+$$;
+CREATE OR REPLACE PROCEDURE two_single_inserts(val1 int, val2 int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO test_dist VALUES (val1, val1 * 10);
+    INSERT INTO test_dist VALUES (val2, val2 * 10);
+END;
+$$;
+CREATE OR REPLACE PROCEDURE multi_then_single(input int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO test_dist VALUES (input + 1, (input + 1) * 10), (input + 2, (input + 2) * 10);
+    INSERT INTO test_dist VALUES (input + 3, (input + 3) * 10);
+END;
+$$;
+CREATE OR REPLACE PROCEDURE outer_proc(val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    CALL single_insert(val);
+END;
+$$;
+CREATE OR REPLACE PROCEDURE update_by_shard_key(key_val int, new_other int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE test_dist SET other_key = new_other WHERE shard_key = key_val;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE update_by_other_key(other_val int, new_other int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE test_dist SET other_key = new_other WHERE other_key = other_val;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE two_updates_by_shard_key(k1 int, v1 int, k2 int, v2 int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE test_dist SET other_key = v1 WHERE shard_key = k1;
+    UPDATE test_dist SET other_key = v2 WHERE shard_key = k2;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE insert_then_update(val int, upd_key int, new_other int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO test_dist VALUES (val, val * 10);
+    UPDATE test_dist SET other_key = new_other WHERE shard_key = upd_key;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE update_shard_key_value(old_key int, new_key int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE test_dist SET shard_key = new_key WHERE shard_key = old_key;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE delete_by_shard_key(key_val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM test_dist WHERE shard_key = key_val;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE two_deletes(k1 int, k2 int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM test_dist WHERE shard_key = k1;
+    DELETE FROM test_dist WHERE shard_key = k2;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE delete_by_other_key(other_val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM test_dist WHERE other_key = other_val;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE reads_then_write(val int)
+LANGUAGE plpgsql AS $$
+DECLARE cnt int;
+BEGIN
+    SELECT count(*) INTO cnt FROM test_dist WHERE shard_key = val;
+    INSERT INTO test_dist VALUES (val + 100, val * 10);
+END;
+$$;
+-- Enable remote command logging for the actual CALL tests.
+SET citus.log_remote_commands TO on;
+---------------------------------------------------------------------
+-- TEST 1: Single-statement INSERT with optimization ON
+-- Should succeed without error — note: no BEGIN/PREPARE/COMMIT
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL single_insert(1);
+NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109000 (shard_key, other_key) VALUES (1, 10)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function single_insert(integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+(1 row)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 2: Single-statement INSERT with optimization OFF
+-- Should use coordinated transaction (BEGIN + COMMIT)
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO off;
+CALL single_insert(2);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function single_insert(integer) line XX at SQL statement
+NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109003 (shard_key, other_key) VALUES (2, 20)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function single_insert(integer) line XX at SQL statement
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         2 |        20
+(1 row)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 3: Two single-shard inserts in procedure
+-- Should ERROR on second statement with optimization ON
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL two_single_inserts(10, 20);
+NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109000 (shard_key, other_key) VALUES (10, 100)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val1, val1 * 10)"
+PL/pgSQL function two_single_inserts(integer,integer) line XX at SQL statement
+ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
+DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
+HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val2, val2 * 10)"
+PL/pgSQL function two_single_inserts(integer,integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+        10 |       100
+(1 row)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 4: Multi-row insert + single insert in procedure
+-- First statement is multi-task, so coordination kicks in
+-- for both statements. No error expected.
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+SET citus.enable_procedure_transaction_skip TO on;
+CALL multi_then_single(100);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+       101 |      1010
+       102 |      1020
+       103 |      1030
+(3 rows)
+
+TRUNCATE test_dist;
+SET citus.log_remote_commands TO on;
+---------------------------------------------------------------------
+-- TEST 5: Explicit BEGIN block should NOT use optimization
+-- (IsTransactionBlock() returns true, so optimization is skipped)
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+BEGIN;
+CALL single_insert(50);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function single_insert(integer) line XX at SQL statement
+NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109000 (shard_key, other_key) VALUES (50, 500)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function single_insert(integer) line XX at SQL statement
+COMMIT;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+        50 |       500
+(1 row)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 6: Nested CALL should NOT use optimization
+-- (StoredProcedureLevel > 1, so optimization is skipped)
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL outer_proc(60);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function single_insert(integer) line XX at SQL statement
+SQL statement "CALL single_insert(val)"
+PL/pgSQL function outer_proc(integer) line XX at CALL
+NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109000 (shard_key, other_key) VALUES (60, 600)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function single_insert(integer) line XX at SQL statement
+SQL statement "CALL single_insert(val)"
+PL/pgSQL function outer_proc(integer) line XX at CALL
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+        60 |       600
+(1 row)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 7: Multi-row insert + single insert with optimization OFF
+-- Should work fine (normal coordinated transaction)
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+SET citus.enable_procedure_transaction_skip TO off;
+CALL multi_then_single(200);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+       201 |      2010
+       202 |      2020
+       203 |      2030
+(3 rows)
+
+TRUNCATE test_dist;
+SET citus.log_remote_commands TO on;
+---------------------------------------------------------------------
+-- TEST 8: Single UPDATE by shard_key with optimization ON
+-- WHERE clause targets a single shard, should skip 2PC
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.log_remote_commands TO on;
+SET citus.enable_procedure_transaction_skip TO on;
+CALL update_by_shard_key(2, 999);
+NOTICE:  issuing UPDATE sql_proc_no_txn_block.test_dist_109003 test_dist SET other_key = 999 WHERE (shard_key OPERATOR(pg_catalog.=) 2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "UPDATE test_dist SET other_key = new_other WHERE shard_key = key_val"
+PL/pgSQL function update_by_shard_key(integer,integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         2 |       999
+         3 |        30
+(3 rows)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 9: Single UPDATE by other_key with optimization ON
+-- WHERE clause on non-distribution column => multi-shard query
+-- Coordination kicks in normally (optimization does not apply
+-- because the planner generates multiple tasks).
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.enable_procedure_transaction_skip TO on;
+CALL update_by_other_key(20, 888);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         2 |       888
+         3 |        30
+(3 rows)
+
+TRUNCATE test_dist;
+SET citus.log_remote_commands TO on;
+---------------------------------------------------------------------
+-- TEST 10: Two UPDATEs by shard_key in one procedure
+-- Should ERROR on second statement with optimization ON
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.log_remote_commands TO on;
+SET citus.enable_procedure_transaction_skip TO on;
+CALL two_updates_by_shard_key(1, 111, 2, 222);
+NOTICE:  issuing UPDATE sql_proc_no_txn_block.test_dist_109000 test_dist SET other_key = 111 WHERE (shard_key OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "UPDATE test_dist SET other_key = v1 WHERE shard_key = k1"
+PL/pgSQL function two_updates_by_shard_key(integer,integer,integer,integer) line XX at SQL statement
+ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
+DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
+HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
+CONTEXT:  SQL statement "UPDATE test_dist SET other_key = v2 WHERE shard_key = k2"
+PL/pgSQL function two_updates_by_shard_key(integer,integer,integer,integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+-- Second UPDATE triggers ERROR; the first UPDATE (row 1 -> 111) was already
+-- committed on the worker and is NOT rolled back, so it remains visible.
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |       111
+         2 |        20
+         3 |        30
+(3 rows)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 11: Single UPDATE by shard_key with optimization OFF
+-- Normal coordinated transaction path
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.log_remote_commands TO on;
+SET citus.enable_procedure_transaction_skip TO off;
+CALL update_by_shard_key(3, 777);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "UPDATE test_dist SET other_key = new_other WHERE shard_key = key_val"
+PL/pgSQL function update_by_shard_key(integer,integer) line XX at SQL statement
+NOTICE:  issuing UPDATE sql_proc_no_txn_block.test_dist_109001 test_dist SET other_key = 777 WHERE (shard_key OPERATOR(pg_catalog.=) 3)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "UPDATE test_dist SET other_key = new_other WHERE shard_key = key_val"
+PL/pgSQL function update_by_shard_key(integer,integer) line XX at SQL statement
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         2 |        20
+         3 |       777
+(3 rows)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 12: INSERT + UPDATE in same procedure with optimization ON
+-- Should ERROR on the second statement (UPDATE)
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL insert_then_update(5, 5, 555);
+NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109000 (shard_key, other_key) VALUES (5, 50)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
+PL/pgSQL function insert_then_update(integer,integer,integer) line XX at SQL statement
+ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
+DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
+HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
+CONTEXT:  SQL statement "UPDATE test_dist SET other_key = new_other WHERE shard_key = upd_key"
+PL/pgSQL function insert_then_update(integer,integer,integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         5 |        50
+(1 row)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 13: UPDATE modifying the shard_key itself with optimization ON
+-- Citus does not allow modifying the distribution column, so this
+-- should ERROR regardless of the optimization setting.
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.log_remote_commands TO on;
+SET citus.enable_procedure_transaction_skip TO on;
+CALL update_shard_key_value(2, 200);
+ERROR:  modifying the partition value of rows is not allowed
+CONTEXT:  SQL statement "UPDATE test_dist SET shard_key = new_key WHERE shard_key = old_key"
+PL/pgSQL function update_shard_key_value(integer,integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         2 |        20
+         3 |        30
+(3 rows)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 14: Single-shard DELETE with optimization ON
+-- Should succeed without error (skip 2PC)
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.log_remote_commands TO on;
+SET citus.enable_procedure_transaction_skip TO on;
+CALL delete_by_shard_key(2);
+NOTICE:  issuing DELETE FROM sql_proc_no_txn_block.test_dist_109003 test_dist WHERE (shard_key OPERATOR(pg_catalog.=) 2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "DELETE FROM test_dist WHERE shard_key = key_val"
+PL/pgSQL function delete_by_shard_key(integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         3 |        30
+(2 rows)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 15: Two single-shard DELETEs in one procedure
+-- Should ERROR on second statement with optimization ON
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.log_remote_commands TO on;
+SET citus.enable_procedure_transaction_skip TO on;
+CALL two_deletes(1, 2);
+NOTICE:  issuing DELETE FROM sql_proc_no_txn_block.test_dist_109000 test_dist WHERE (shard_key OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "DELETE FROM test_dist WHERE shard_key = k1"
+PL/pgSQL function two_deletes(integer,integer) line XX at SQL statement
+ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
+DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
+HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
+CONTEXT:  SQL statement "DELETE FROM test_dist WHERE shard_key = k2"
+PL/pgSQL function two_deletes(integer,integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+-- Second DELETE triggers ERROR; first DELETE (row 1) was already committed
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         2 |        20
+         3 |        30
+(2 rows)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- TEST 16: Multi-shard DELETE with optimization ON
+-- WHERE clause on non-distribution column => multi-shard query
+-- Coordination kicks in normally (optimization does not apply)
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.enable_procedure_transaction_skip TO on;
+CALL delete_by_other_key(20);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         3 |        30
+(2 rows)
+
+TRUNCATE test_dist;
+SET citus.log_remote_commands TO on;
+---------------------------------------------------------------------
+-- TEST 17: Read(s) then write should NOT error
+-- A SELECT (read-only task) does not count toward the
+-- non-coordinated execution counter, so a subsequent single-
+-- shard write should still be able to skip coordination.
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.log_remote_commands TO on;
+SET citus.enable_procedure_transaction_skip TO on;
+CALL reads_then_write(1);
+NOTICE:  issuing SELECT count(*) AS count FROM sql_proc_no_txn_block.test_dist_109000 test_dist WHERE (shard_key OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT count(*)          FROM test_dist WHERE shard_key = val"
+PL/pgSQL function reads_then_write(integer) line XX at SQL statement
+NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109001 (shard_key, other_key) VALUES (101, 10)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val + 100, val * 10)"
+PL/pgSQL function reads_then_write(integer) line XX at SQL statement
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         2 |        20
+         3 |        30
+       101 |        10
+(4 rows)
+
+SET citus.log_remote_commands TO on;
+TRUNCATE test_dist;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off';
+LOCK sql_proc_no_txn_block.test_dist IN ACCESS EXCLUSIVE MODE;
+SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing TRUNCATE TABLE sql_proc_no_txn_block.test_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+---------------------------------------------------------------------
+-- Now switch to local execution for Tests 18-21
+-- (log_remote_commands is not relevant for local execution)
+---------------------------------------------------------------------
+SET citus.log_remote_commands TO off;
+SET citus.enable_local_execution TO on;
+---------------------------------------------------------------------
+-- TEST 18: Single-statement INSERT with local execution ON
+-- Verify the optimization works correctly with local execution
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL single_insert(1);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+(1 row)
+
+TRUNCATE test_dist;
+---------------------------------------------------------------------
+-- TEST 19: Two single-shard inserts with local execution ON
+-- Should ERROR on second statement just like the remote case
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL two_single_inserts(10, 20);
+ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
+DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
+HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
+CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val2, val2 * 10)"
+PL/pgSQL function two_single_inserts(integer,integer) line XX at SQL statement
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+        10 |       100
+(1 row)
+
+TRUNCATE test_dist;
+---------------------------------------------------------------------
+-- TEST 20: Single-shard DELETE with local execution ON
+-- Should succeed without error
+---------------------------------------------------------------------
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.enable_procedure_transaction_skip TO on;
+CALL delete_by_shard_key(2);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         3 |        30
+(2 rows)
+
+TRUNCATE test_dist;
+---------------------------------------------------------------------
+-- TEST 21: Reads then write with local execution ON
+-- Should succeed without error
+---------------------------------------------------------------------
+INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
+SET citus.enable_procedure_transaction_skip TO on;
+CALL reads_then_write(1);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         2 |        20
+         3 |        30
+       101 |        10
+(4 rows)
+
+TRUNCATE test_dist;
+-- Cleanup
+DROP TABLE test_dist;
+DROP PROCEDURE single_insert;
+DROP PROCEDURE two_single_inserts;
+DROP PROCEDURE multi_then_single;
+DROP PROCEDURE outer_proc;
+DROP PROCEDURE update_by_shard_key;
+DROP PROCEDURE update_by_other_key;
+DROP PROCEDURE two_updates_by_shard_key;
+DROP PROCEDURE insert_then_update;
+DROP PROCEDURE update_shard_key_value;
+DROP PROCEDURE delete_by_shard_key;
+DROP PROCEDURE two_deletes;
+DROP PROCEDURE delete_by_other_key;
+DROP PROCEDURE reads_then_write;
+DROP SCHEMA sql_proc_no_txn_block;
+RESET citus.enable_procedure_transaction_skip;
+RESET citus.enable_local_execution;
+RESET citus.log_remote_commands;
+RESET citus.shard_count;
+RESET citus.shard_replication_factor;
