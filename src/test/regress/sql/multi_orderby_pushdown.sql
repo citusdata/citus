@@ -317,6 +317,71 @@ SET citus.enable_sorted_merge TO on;
 SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, id LIMIT 5;
 
 -- =================================================================
+-- Category G: Phase 4 — Sort elision and advanced scenarios
+-- =================================================================
+
+-- G1: Sort elision verification — coordinator Sort node absent
+SET citus.enable_sorted_merge TO off;
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test ORDER BY id;
+
+SET citus.enable_sorted_merge TO on;
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test ORDER BY id;
+
+-- G2a: PREPARE with merge ON, EXECUTE after turning OFF
+-- Plan-time decision is baked in — cached plan must still merge correctly
+SET citus.enable_sorted_merge TO on;
+PREPARE merge_on_stmt AS SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
+EXECUTE merge_on_stmt;
+SET citus.enable_sorted_merge TO off;
+EXECUTE merge_on_stmt;
+DEALLOCATE merge_on_stmt;
+
+-- G2b: PREPARE with merge OFF, EXECUTE after turning ON
+-- Cached plan has Sort node — must still return sorted results
+SET citus.enable_sorted_merge TO off;
+PREPARE merge_off_stmt AS SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
+EXECUTE merge_off_stmt;
+SET citus.enable_sorted_merge TO on;
+EXECUTE merge_off_stmt;
+DEALLOCATE merge_off_stmt;
+
+-- G3: Cursor with backward scan
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+DECLARE sorted_cursor CURSOR FOR SELECT id FROM sorted_merge_test ORDER BY id;
+FETCH 3 FROM sorted_cursor;
+FETCH BACKWARD 1 FROM sorted_cursor;
+FETCH 2 FROM sorted_cursor;
+CLOSE sorted_cursor;
+COMMIT;
+
+-- G4: EXPLAIN ANALYZE (sorted merge skipped for EXPLAIN ANALYZE)
+SET citus.enable_sorted_merge TO on;
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+
+-- G5: ORDER BY aggregate + LIMIT — crash regression test
+-- Previously caused SIGSEGV when sorted merge was enabled because
+-- aggregate ORDER BY was erroneously tagged as merge-eligible.
+SET citus.enable_sorted_merge TO on;
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, id LIMIT 3;
+
+-- G6: Small work_mem with many tasks (32 shards)
+SET citus.enable_sorted_merge TO on;
+SET work_mem TO '64kB';
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 10;
+RESET work_mem;
+
+-- G7: max_intermediate_result_size with CTE subplan
+SET citus.enable_sorted_merge TO on;
+SET citus.max_intermediate_result_size TO '4kB';
+WITH cte AS (SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 50)
+SELECT * FROM cte ORDER BY id LIMIT 5;
+RESET citus.max_intermediate_result_size;
+
+-- =================================================================
 -- Cleanup
 -- =================================================================
 
