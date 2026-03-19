@@ -813,9 +813,14 @@ AdaptiveExecutor(CitusScanState *scanState)
 	TupleDestination *defaultTupleDest = NULL;
 
 	/*
-	 * When sorted merge is active and we're not doing EXPLAIN ANALYZE,
-	 * route worker results into per-task tuple stores. The final tuplestore
-	 * will be created later after the k-way merge.
+	 * When sorted merge is active, route worker results into per-task tuple
+	 * stores. Skip sorted merge for EXPLAIN ANALYZE (which modifies task
+	 * lists in incompatible ways).
+	 *
+	 * Note: useSortedMerge is a plan-time decision — if the plan says merge,
+	 * the executor must merge, because the combine query plan has no Sort
+	 * node above us. Skipping the merge here would produce silently unsorted
+	 * output. All eligibility checks belong in the planner, not here.
 	 */
 	bool useSortedMerge = distributedPlan->useSortedMerge &&
 						  !RequestedForExplainAnalyze(scanState);

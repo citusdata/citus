@@ -69,177 +69,157 @@ SET citus.enable_sorted_merge TO on;
 -- A1: ORDER BY distribution column
 EXPLAIN (COSTS OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY id;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.id
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: id
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: id
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(8 rows)
 
 -- A2: ORDER BY DESC
 EXPLAIN (COSTS OFF)
 SELECT id FROM sorted_merge_test ORDER BY id DESC;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.id DESC
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: id DESC
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: id DESC
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(8 rows)
 
 -- A3: ORDER BY DESC NULLS LAST
 EXPLAIN (COSTS OFF)
 SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS LAST;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.num DESC NULLS LAST
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: num DESC NULLS LAST
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: num DESC NULLS LAST
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(8 rows)
 
 -- A4: ORDER BY non-distribution column
 EXPLAIN (COSTS OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY val;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.val
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: val
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: val
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(8 rows)
 
 -- A5: Multi-column ORDER BY
 EXPLAIN (COSTS OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY id, val;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.id, remote_scan.val
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: id, val
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: id, val
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(8 rows)
 
 -- A6: Mixed directions
 EXPLAIN (COSTS OFF)
 SELECT id, val, num FROM sorted_merge_test ORDER BY id ASC, num DESC;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.id, remote_scan.num DESC
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: id, num DESC
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: id, num DESC
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(8 rows)
 
 -- A7: GROUP BY dist_col ORDER BY dist_col
 EXPLAIN (COSTS OFF)
 SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id;
-                                      QUERY PLAN
+                                   QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.id
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: id
-                     ->  HashAggregate
-                           Group Key: id
-                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(12 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: id
+               ->  HashAggregate
+                     Group Key: id
+                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
 
 -- A8: WHERE clause + ORDER BY
 EXPLAIN (COSTS OFF)
 SELECT id, val FROM sorted_merge_test WHERE num > 50 ORDER BY id;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.id
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: id
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-                           Filter: (num > '50'::numeric)
-(11 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: id
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                     Filter: (num > '50'::numeric)
+(9 rows)
 
 -- A9: Expression in ORDER BY (non-aggregate)
 EXPLAIN (COSTS OFF)
 SELECT id, num FROM sorted_merge_test ORDER BY id + 1;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.worker_column_3
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: ((id + 1))
+               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(8 rows)
+
+-- A10: ORDER BY with LIMIT (existing pushdown, verify no regression)
+EXPLAIN (COSTS OFF)
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+                                      QUERY PLAN
+---------------------------------------------------------------------
+ Limit
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Sort
-                     Sort Key: ((id + 1))
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+               ->  Limit
+                     ->  Sort
+                           Sort Key: id
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
 (10 rows)
-
--- A10: ORDER BY with LIMIT (existing pushdown, verify no regression)
-EXPLAIN (COSTS OFF)
-SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
-                                         QUERY PLAN
----------------------------------------------------------------------
- Limit
-   ->  Sort
-         Sort Key: remote_scan.id
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: id
-                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(12 rows)
 
 -- =================================================================
 -- Category B: Ineligibility — sort NOT pushed for merge
@@ -813,21 +793,19 @@ SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
 SET citus.enable_sorted_merge TO on;
 EXPLAIN (COSTS OFF)
 SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
-                                         QUERY PLAN
+                                      QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: remote_scan.id
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: id
-                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(12 rows)
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: id
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
 
 -- F2: GROUP BY dist_col + ORDER BY + LIMIT
 SET citus.enable_sorted_merge TO off;
@@ -854,23 +832,21 @@ SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
 SET citus.enable_sorted_merge TO on;
 EXPLAIN (COSTS OFF)
 SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
-                                            QUERY PLAN
+                                         QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: remote_scan.id
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: id
-                                 ->  HashAggregate
-                                       Group Key: id
-                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(14 rows)
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: id
+                           ->  HashAggregate
+                                 Group Key: id
+                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
 
 -- F3: ORDER BY aggregate + LIMIT (not eligible for merge)
 SET citus.enable_sorted_merge TO off;

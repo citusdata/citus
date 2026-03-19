@@ -2556,11 +2556,20 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	 * The worker sort clause list is the output of the existing safety analysis
 	 * in WorkerSortClauseList(). If it matches the original sort clause, workers
 	 * will produce identically-sorted output suitable for a coordinator merge.
+	 *
+	 * We must also exclude queries where ORDER BY references aggregates,
+	 * because aggregate expressions are rewritten between worker and coordinator
+	 * (e.g. avg → sum/count). The worker's sort order on partial aggregates
+	 * does not match the coordinator's final aggregate sort order, so the
+	 * merge would produce incorrectly ordered output. This check is needed
+	 * because the existing LIMIT pushdown path may have already pushed the
+	 * sort clause to workers for its own purposes.
 	 */
 	if (EnableSortedMerge &&
 		queryOrderByLimit.workerSortClauseList != NIL &&
 		originalSortClauseList != NIL &&
 		!extendedOpNodeProperties->pullUpIntermediateRows &&
+		!HasOrderByAggregate(originalSortClauseList, originalTargetEntryList) &&
 		SortClauseListsMatch(queryOrderByLimit.workerSortClauseList,
 							 originalSortClauseList))
 	{
