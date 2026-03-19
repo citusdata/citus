@@ -1516,6 +1516,25 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_procedure_transaction_skip",
+		gettext_noop("Skip coordinated transactions for single-statement, "
+					 "single-shard procedure calls."),
+		gettext_noop("When enabled, CALL statements that execute exactly one "
+					 "distributed write targeting a single task on a single "
+					 "shard with a single placement skip coordinated (2PC) "
+					 "transactions. Only applies to non-nested procedure calls "
+					 "outside of explicit transaction blocks. "
+					 "WARNING: this is intended for single-statement procedures "
+					 "only. If a procedure issues a second distributed statement, "
+					 "it will raise an ERROR, but the first statement will have "
+					 "already been committed and cannot be rolled back."),
+		&EnableProcedureTransactionSkip,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_recurring_outer_join_pushdown",
 		gettext_noop("Enables outer join pushdown for recurring relations."),
 		gettext_noop("When enabled, Citus will try to push down outer joins "
@@ -1759,26 +1778,6 @@ RegisterCitusConfigVariables(void)
 					 "for backwards compatibility with pre-8.2 behaviour."),
 		&FunctionOpensTransactionBlock,
 		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
-
-
-	DefineCustomBoolVariable(
-		"citus.enable_procedure_transaction_skip",
-		gettext_noop("Skip coordinated transactions for single-statement, "
-					 "single-shard procedure calls."),
-		gettext_noop("When enabled, CALL statements that execute exactly one "
-					 "distributed write targeting a single task on a single "
-					 "shard with a single placement skip coordinated (2PC) "
-					 "transactions. Only applies to non-nested procedure calls "
-					 "outside of explicit transaction blocks. "
-					 "WARNING: this is intended for single-statement procedures "
-					 "only. If a procedure issues a second distributed statement, "
-					 "it will raise an ERROR, but the first statement will have "
-					 "already been committed and cannot be rolled back."),
-		&EnableProcedureTransactionSkip,
-		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
