@@ -119,18 +119,21 @@ BEGIN
 END;
 $$;
 
--- Enable remote command logging for the actual CALL tests.
-SET citus.log_remote_commands TO on;
+-- log_remote_commands is toggled ON only around single-shard CALL statements
+-- whose NOTICE output is deterministic (single connection, single shard).
+-- It is kept OFF for multi-shard operations (TRUNCATE, multi-shard CALL,
+-- SELECT ORDER BY, INSERT seeds) whose parallel NOTICE ordering is
+-- non-deterministic across connections.
 
 ------------------------------------------------------------
 -- TEST 1: Single-statement INSERT with optimization ON
 -- Should succeed without error — note: no BEGIN/PREPARE/COMMIT
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL single_insert(1);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
@@ -138,10 +141,10 @@ TRUNCATE test_dist;
 -- Should use coordinated transaction (BEGIN + COMMIT)
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO off;
+SET citus.log_remote_commands TO on;
 CALL single_insert(2);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
@@ -149,35 +152,34 @@ TRUNCATE test_dist;
 -- Should ERROR on second statement with optimization ON
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL two_single_inserts(10, 20);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 4: Multi-row insert + single insert in procedure
 -- First statement is multi-task, so coordination kicks in
 -- for both statements. No error expected.
+-- logging off: multi-shard output is non-deterministic
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 SET citus.enable_procedure_transaction_skip TO on;
 CALL multi_then_single(100);
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
-SET citus.log_remote_commands TO on;
 
 ------------------------------------------------------------
 -- TEST 5: Explicit BEGIN block should NOT use optimization
 -- (IsTransactionBlock() returns true, so optimization is skipped)
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 BEGIN;
 CALL single_insert(50);
 COMMIT;
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
@@ -185,35 +187,32 @@ TRUNCATE test_dist;
 -- (StoredProcedureLevel > 1, so optimization is skipped)
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL outer_proc(60);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 7: Multi-row insert + single insert with optimization OFF
 -- Should work fine (normal coordinated transaction)
+-- logging off: multi-shard output is non-deterministic
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 SET citus.enable_procedure_transaction_skip TO off;
 CALL multi_then_single(200);
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
-SET citus.log_remote_commands TO on;
 
 ------------------------------------------------------------
 -- TEST 8: Single UPDATE by shard_key with optimization ON
 -- WHERE clause targets a single shard, should skip 2PC
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
-SET citus.log_remote_commands TO on;
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL update_by_shard_key(2, 999);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
@@ -221,43 +220,38 @@ TRUNCATE test_dist;
 -- WHERE clause on non-distribution column => multi-shard query
 -- Coordination kicks in normally (optimization does not apply
 -- because the planner generates multiple tasks).
+-- logging off: multi-shard output is non-deterministic
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
 CALL update_by_other_key(20, 888);
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
-SET citus.log_remote_commands TO on;
 
 ------------------------------------------------------------
 -- TEST 10: Two UPDATEs by shard_key in one procedure
 -- Should ERROR on second statement with optimization ON
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
-SET citus.log_remote_commands TO on;
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL two_updates_by_shard_key(1, 111, 2, 222);
 SET citus.log_remote_commands TO off;
 -- Second UPDATE triggers ERROR; the first UPDATE (row 1 -> 111) was already
 -- committed on the worker and is NOT rolled back, so it remains visible.
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 11: Single UPDATE by shard_key with optimization OFF
 -- Normal coordinated transaction path
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
-SET citus.log_remote_commands TO on;
 SET citus.enable_procedure_transaction_skip TO off;
+SET citus.log_remote_commands TO on;
 CALL update_by_shard_key(3, 777);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
@@ -265,10 +259,10 @@ TRUNCATE test_dist;
 -- Should ERROR on the second statement (UPDATE)
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL insert_then_update(5, 5, 555);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
@@ -276,57 +270,50 @@ TRUNCATE test_dist;
 -- Citus does not allow modifying the distribution column, so this
 -- should ERROR regardless of the optimization setting.
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
-SET citus.log_remote_commands TO on;
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL update_shard_key_value(2, 200);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 14: Single-shard DELETE with optimization ON
 -- Should succeed without error (skip 2PC)
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
-SET citus.log_remote_commands TO on;
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL delete_by_shard_key(2);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 15: Two single-shard DELETEs in one procedure
 -- Should ERROR on second statement with optimization ON
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
-SET citus.log_remote_commands TO on;
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL two_deletes(1, 2);
 SET citus.log_remote_commands TO off;
 -- Second DELETE triggers ERROR; first DELETE (row 1) was already committed
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 16: Multi-shard DELETE with optimization ON
 -- WHERE clause on non-distribution column => multi-shard query
 -- Coordination kicks in normally (optimization does not apply)
+-- logging off: multi-shard output is non-deterministic
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
 CALL delete_by_other_key(20);
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
-SET citus.log_remote_commands TO on;
 
 ------------------------------------------------------------
 -- TEST 17: Read(s) then write should NOT error
@@ -334,21 +321,18 @@ SET citus.log_remote_commands TO on;
 -- non-coordinated execution counter, so a subsequent single-
 -- shard write should still be able to skip coordination.
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
-SET citus.log_remote_commands TO on;
 SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
 CALL reads_then_write(1);
 SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
-SET citus.log_remote_commands TO on;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- Now switch to local execution for Tests 18-21
 -- (log_remote_commands is not relevant for local execution)
 ------------------------------------------------------------
-SET citus.log_remote_commands TO off;
 SET citus.enable_local_execution TO on;
 
 ------------------------------------------------------------
