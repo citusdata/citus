@@ -171,12 +171,12 @@
 #include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/sorted_merge.h"
 #include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"
 #include "distributed/tuple_destination.h"
-#include "distributed/sorted_merge.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 
@@ -651,7 +651,10 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 TransactionProperties *
 														 xactProperties,
 														 List *jobIdList,
-														 bool localExecutionSupported);
+														 bool localExecutionSupported,
+														 bool useSortedMerge,
+														 Tuplestorestate **perTaskStores,
+														 int perTaskStoreCount);
 static TransactionProperties DecideTaskListTransactionProperties(RowModifyLevel
 																 modLevel,
 																 List *taskList,
@@ -831,9 +834,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 	{
 		TupleDestinationStats *sharedStats = palloc0(sizeof(TupleDestinationStats));
 		defaultTupleDest = CreatePerTaskDispatchDest(taskList, tupleDescriptor,
-													sharedStats,
-													&perTaskStores,
-													&perTaskStoreCount);
+													 sharedStats,
+													 &perTaskStores,
+													 &perTaskStoreCount);
+
 		/* final tuplestore created after merge */
 		scanState->tuplestorestate = NULL;
 	}
@@ -904,12 +908,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 		defaultTupleDest,
 		&xactProperties,
 		jobIdList,
-		localExecutionSupported);
-
-	/* save sorted merge state on execution for post-merge */
-	execution->useSortedMerge = useSortedMerge;
-	execution->perTaskStores = perTaskStores;
-	execution->perTaskStoreCount = perTaskStoreCount;
+		localExecutionSupported,
+		useSortedMerge,
+		perTaskStores,
+		perTaskStoreCount);
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -1173,7 +1175,8 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 			executionParams->modLevel, executionParams->taskList,
 			executionParams->paramListInfo, executionParams->targetPoolSize,
 			defaultTupleDest, &executionParams->xactProperties,
-			executionParams->jobIdList, executionParams->localExecutionSupported);
+			executionParams->jobIdList, executionParams->localExecutionSupported,
+			false, NULL, 0);
 
 	/*
 	 * If current transaction accessed local placements and task list includes
@@ -1238,7 +1241,10 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 						   ParamListInfo paramListInfo,
 						   int targetPoolSize, TupleDestination *defaultTupleDest,
 						   TransactionProperties *xactProperties,
-						   List *jobIdList, bool localExecutionSupported)
+						   List *jobIdList, bool localExecutionSupported,
+						   bool useSortedMerge,
+						   Tuplestorestate **perTaskStores,
+						   int perTaskStoreCount)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -1267,6 +1273,10 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	execution->jobIdList = jobIdList;
 
 	execution->localExecutionSupported = localExecutionSupported;
+
+	execution->useSortedMerge = useSortedMerge;
+	execution->perTaskStores = perTaskStores;
+	execution->perTaskStoreCount = perTaskStoreCount;
 
 	/*
 	 * Since task can have multiple queries, we are not sure how many columns we should

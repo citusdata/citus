@@ -65,7 +65,7 @@ extern TupleDestination * CreateTupleStoreTupleDest(Tuplestorestate *tupleStore,
 extern TupleDestination * CreateTupleDestNone(void);
 extern DestReceiver * CreateTupleDestDestReceiver(TupleDestination *tupleDest,
 												  Task *task, int placementIndex);
-extern void EnsureIntermediateSizeLimitNotExceeded(
-	TupleDestinationStats *tupleDestinationStats);
+extern void EnsureIntermediateSizeLimitNotExceeded(TupleDestinationStats *
+												   tupleDestinationStats);
 
 #endif
