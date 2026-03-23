@@ -1075,6 +1075,439 @@ SELECT * FROM cte ORDER BY id LIMIT 5;
 
 RESET citus.max_intermediate_result_size;
 -- =================================================================
+-- Category H: Subplan + Sorted Merge interactions
+-- =================================================================
+SET citus.enable_sorted_merge TO on;
+-- H1: CTE subplan with simple ORDER BY — eligible for sorted merge
+-- The CTE becomes a subplan; its DistributedPlan may have useSortedMerge=true
+WITH ordered_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id
+)
+SELECT * FROM ordered_cte LIMIT 5;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  5 | val_5
+  8 | val_8
+ 10 | val_10
+ 15 | val_15
+(5 rows)
+
+-- H2: Multiple CTEs — one eligible (ORDER BY col), one ineligible (ORDER BY agg)
+WITH eligible_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+),
+ineligible_cte AS (
+    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 15
+)
+SELECT e.id, e.val, i.cnt
+FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
+ORDER BY e.id;
+ id |  val   | cnt
+---------------------------------------------------------------------
+  5 | val_5  |   1
+ 10 | val_10 |   1
+ 15 | val_15 |   1
+(3 rows)
+
+-- H3: CTE subplan feeding outer ORDER BY — both levels may merge independently
+WITH top_ids AS (
+    SELECT id FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT t.id, t.val
+FROM sorted_merge_test t
+JOIN top_ids ON t.id = top_ids.id
+ORDER BY t.id
+LIMIT 10;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+-- H4: Subquery in WHERE with ORDER BY + LIMIT — becomes subplan with merge
+SELECT id, val FROM sorted_merge_test
+WHERE id IN (
+    SELECT id FROM sorted_merge_events ORDER BY id LIMIT 10
+)
+ORDER BY id
+LIMIT 5;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+(3 rows)
+
+-- H5: CTE subplan with max_intermediate_result_size enforcement
+-- Tests that EnsureIntermediateSizeLimitNotExceeded works through per-task dispatch
+SET citus.max_intermediate_result_size TO '4kB';
+WITH small_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM small_cte ORDER BY id LIMIT 5;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+(5 rows)
+
+RESET citus.max_intermediate_result_size;
+-- H6: Cross-join subplan with non-aggregate ORDER BY (crash regression variant)
+-- Similar pattern to subquery_complex_target_list but without aggregate ORDER BY
+SELECT foo.id, bar.id as bar_id
+FROM
+    (SELECT id FROM sorted_merge_test ORDER BY id LIMIT 3) as foo,
+    (SELECT id FROM sorted_merge_events ORDER BY id LIMIT 3) as bar
+ORDER BY foo.id, bar.id
+LIMIT 5;
+ id | bar_id
+---------------------------------------------------------------------
+  1 |      1
+  1 |      1
+  1 |      1
+  2 |      1
+  2 |      1
+(5 rows)
+
+-- H7: CTE correctness comparison — GUC off vs on must produce identical results
+SET citus.enable_sorted_merge TO off;
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+ id |  val   | num
+---------------------------------------------------------------------
+  7 | val_7  | 10.5
+  8 | val_8  | 12.0
+  9 | val_9  | 13.5
+ 10 | val_10 | 15.0
+ 11 | val_11 | 16.5
+(5 rows)
+
+SET citus.enable_sorted_merge TO on;
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+ id |  val   | num
+---------------------------------------------------------------------
+  7 | val_7  | 10.5
+  8 | val_8  | 12.0
+  9 | val_9  | 13.5
+ 10 | val_10 | 15.0
+ 11 | val_11 | 16.5
+(5 rows)
+
+-- =================================================================
+-- Category H EXPLAIN: Query plans for subplan + sorted merge
+-- =================================================================
+SET citus.enable_sorted_merge TO on;
+-- H1 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH ordered_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id
+)
+SELECT * FROM ordered_cte LIMIT 5;
+                                      QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: sorted_merge_test.id
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(10 rows)
+
+-- H2 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH eligible_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+),
+ineligible_cte AS (
+    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 15
+)
+SELECT e.id, e.val, i.cnt
+FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
+ORDER BY e.id;
+                                                  QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Limit
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: id
+                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+   ->  Distributed Subplan XXX_2
+         ->  Limit
+               ->  Sort
+                     Sort Key: remote_scan.cnt DESC
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+                           Tasks Shown: One of 4
+                           ->  Task
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  Limit
+                                       ->  Sort
+                                             Sort Key: (count(*)) DESC
+                                             ->  HashAggregate
+                                                   Group Key: id
+                                                   ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge Join
+               Merge Cond: (intermediate_result.id = intermediate_result_1.id)
+               ->  Sort
+                     Sort Key: intermediate_result.id
+                     ->  Function Scan on read_intermediate_result intermediate_result
+               ->  Sort
+                     Sort Key: intermediate_result_1.id
+                     ->  Function Scan on read_intermediate_result intermediate_result_1
+(39 rows)
+
+-- H3 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH top_ids AS (
+    SELECT id FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT t.id, t.val
+FROM sorted_merge_test t
+JOIN top_ids ON t.id = top_ids.id
+ORDER BY t.id
+LIMIT 10;
+                                               QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Limit
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+                           Tasks Shown: One of 4
+                           ->  Task
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  Limit
+                                       ->  Sort
+                                             Sort Key: id
+                                             ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Merge Join
+                           Merge Cond: (t.id = intermediate_result.id)
+                           ->  Sort
+                                 Sort Key: t.id
+                                 ->  Seq Scan on sorted_merge_test_960000 t
+                           ->  Sort
+                                 Sort Key: intermediate_result.id
+                                 ->  Function Scan on read_intermediate_result intermediate_result
+(26 rows)
+
+-- H4 EXPLAIN
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test
+WHERE id IN (
+    SELECT id FROM sorted_merge_events ORDER BY id LIMIT 10
+)
+ORDER BY id
+LIMIT 5;
+                                                  QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Limit
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+                           Tasks Shown: One of 4
+                           ->  Task
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  Limit
+                                       ->  Sort
+                                             Sort Key: id
+                                             ->  Seq Scan on sorted_merge_events_960004 sorted_merge_events
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: sorted_merge_test.id
+                           ->  Hash Join
+                                 Hash Cond: (sorted_merge_test.id = intermediate_result.id)
+                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                                 ->  Hash
+                                       ->  HashAggregate
+                                             Group Key: intermediate_result.id
+                                             ->  Function Scan on read_intermediate_result intermediate_result
+(27 rows)
+
+-- H5 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH small_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM small_cte ORDER BY id LIMIT 5;
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Limit
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: id
+                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Limit
+               ->  Sort
+                     Sort Key: intermediate_result.id
+                     ->  Function Scan on read_intermediate_result intermediate_result
+(20 rows)
+
+-- H6 EXPLAIN
+EXPLAIN (COSTS OFF)
+SELECT foo.id, bar.id as bar_id
+FROM
+    (SELECT id FROM sorted_merge_test ORDER BY id LIMIT 3) as foo,
+    (SELECT id FROM sorted_merge_events ORDER BY id LIMIT 3) as bar
+ORDER BY foo.id, bar.id
+LIMIT 5;
+                                              QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Limit
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: id
+                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+   ->  Distributed Subplan XXX_2
+         ->  Limit
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: id
+                                       ->  Seq Scan on sorted_merge_events_960004 sorted_merge_events
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Limit
+               ->  Sort
+                     Sort Key: intermediate_result.id, intermediate_result_1.id
+                     ->  Nested Loop
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                           ->  Function Scan on read_intermediate_result intermediate_result_1
+(33 rows)
+
+-- H7 EXPLAIN — GUC off vs on
+SET citus.enable_sorted_merge TO off;
+EXPLAIN (COSTS OFF)
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+                                               QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Limit
+               ->  Sort
+                     Sort Key: remote_scan.id
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+                           Tasks Shown: One of 4
+                           ->  Task
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  Limit
+                                       ->  Sort
+                                             Sort Key: id
+                                             ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Limit
+               ->  Sort
+                     Sort Key: intermediate_result.id
+                     ->  Function Scan on read_intermediate_result intermediate_result
+                           Filter: (num > '10'::numeric)
+(23 rows)
+
+SET citus.enable_sorted_merge TO on;
+EXPLAIN (COSTS OFF)
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Limit
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: id
+                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Limit
+               ->  Sort
+                     Sort Key: intermediate_result.id
+                     ->  Function Scan on read_intermediate_result intermediate_result
+                           Filter: (num > '10'::numeric)
+(21 rows)
+
+-- =================================================================
 -- Cleanup
 -- =================================================================
 SET citus.enable_sorted_merge TO off;

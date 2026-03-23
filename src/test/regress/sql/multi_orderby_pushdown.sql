@@ -382,6 +382,155 @@ SELECT * FROM cte ORDER BY id LIMIT 5;
 RESET citus.max_intermediate_result_size;
 
 -- =================================================================
+-- Category H: Subplan + Sorted Merge interactions
+-- =================================================================
+
+SET citus.enable_sorted_merge TO on;
+
+-- H1: CTE subplan with simple ORDER BY — eligible for sorted merge
+-- The CTE becomes a subplan; its DistributedPlan may have useSortedMerge=true
+WITH ordered_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id
+)
+SELECT * FROM ordered_cte LIMIT 5;
+
+-- H2: Multiple CTEs — one eligible (ORDER BY col), one ineligible (ORDER BY agg)
+WITH eligible_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+),
+ineligible_cte AS (
+    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 15
+)
+SELECT e.id, e.val, i.cnt
+FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
+ORDER BY e.id;
+
+-- H3: CTE subplan feeding outer ORDER BY — both levels may merge independently
+WITH top_ids AS (
+    SELECT id FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT t.id, t.val
+FROM sorted_merge_test t
+JOIN top_ids ON t.id = top_ids.id
+ORDER BY t.id
+LIMIT 10;
+
+-- H4: Subquery in WHERE with ORDER BY + LIMIT — becomes subplan with merge
+SELECT id, val FROM sorted_merge_test
+WHERE id IN (
+    SELECT id FROM sorted_merge_events ORDER BY id LIMIT 10
+)
+ORDER BY id
+LIMIT 5;
+
+-- H5: CTE subplan with max_intermediate_result_size enforcement
+-- Tests that EnsureIntermediateSizeLimitNotExceeded works through per-task dispatch
+SET citus.max_intermediate_result_size TO '4kB';
+WITH small_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM small_cte ORDER BY id LIMIT 5;
+RESET citus.max_intermediate_result_size;
+
+-- H6: Cross-join subplan with non-aggregate ORDER BY (crash regression variant)
+-- Similar pattern to subquery_complex_target_list but without aggregate ORDER BY
+SELECT foo.id, bar.id as bar_id
+FROM
+    (SELECT id FROM sorted_merge_test ORDER BY id LIMIT 3) as foo,
+    (SELECT id FROM sorted_merge_events ORDER BY id LIMIT 3) as bar
+ORDER BY foo.id, bar.id
+LIMIT 5;
+
+-- H7: CTE correctness comparison — GUC off vs on must produce identical results
+SET citus.enable_sorted_merge TO off;
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+
+SET citus.enable_sorted_merge TO on;
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+
+-- =================================================================
+-- Category H EXPLAIN: Query plans for subplan + sorted merge
+-- =================================================================
+
+SET citus.enable_sorted_merge TO on;
+
+-- H1 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH ordered_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id
+)
+SELECT * FROM ordered_cte LIMIT 5;
+
+-- H2 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH eligible_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+),
+ineligible_cte AS (
+    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 15
+)
+SELECT e.id, e.val, i.cnt
+FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
+ORDER BY e.id;
+
+-- H3 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH top_ids AS (
+    SELECT id FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT t.id, t.val
+FROM sorted_merge_test t
+JOIN top_ids ON t.id = top_ids.id
+ORDER BY t.id
+LIMIT 10;
+
+-- H4 EXPLAIN
+EXPLAIN (COSTS OFF)
+SELECT id, val FROM sorted_merge_test
+WHERE id IN (
+    SELECT id FROM sorted_merge_events ORDER BY id LIMIT 10
+)
+ORDER BY id
+LIMIT 5;
+
+-- H5 EXPLAIN
+EXPLAIN (COSTS OFF)
+WITH small_cte AS (
+    SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM small_cte ORDER BY id LIMIT 5;
+
+-- H6 EXPLAIN
+EXPLAIN (COSTS OFF)
+SELECT foo.id, bar.id as bar_id
+FROM
+    (SELECT id FROM sorted_merge_test ORDER BY id LIMIT 3) as foo,
+    (SELECT id FROM sorted_merge_events ORDER BY id LIMIT 3) as bar
+ORDER BY foo.id, bar.id
+LIMIT 5;
+
+-- H7 EXPLAIN — GUC off vs on
+SET citus.enable_sorted_merge TO off;
+EXPLAIN (COSTS OFF)
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+
+SET citus.enable_sorted_merge TO on;
+EXPLAIN (COSTS OFF)
+WITH cte AS (
+    SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
+)
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+
+-- =================================================================
 -- Cleanup
 -- =================================================================
 
