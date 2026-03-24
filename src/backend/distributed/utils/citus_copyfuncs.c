@@ -14,6 +14,7 @@
 #include "utils/datum.h"
 
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_server_executor.h"
 
@@ -147,7 +148,8 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	{
 		Size keySize = from->sortedMergeKeyCount * sizeof(SortedMergeKey);
 		newnode->sortedMergeKeys = (SortedMergeKey *) palloc(keySize);
-		memcpy(newnode->sortedMergeKeys, from->sortedMergeKeys, keySize);
+		memcpy_s(newnode->sortedMergeKeys, keySize,
+				 from->sortedMergeKeys, keySize);
 	}
 	else
 	{

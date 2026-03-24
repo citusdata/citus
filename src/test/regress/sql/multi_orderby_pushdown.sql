@@ -392,14 +392,14 @@ SET citus.enable_sorted_merge TO on;
 WITH ordered_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id
 )
-SELECT * FROM ordered_cte LIMIT 5;
+SELECT * FROM ordered_cte ORDER BY id LIMIT 5;
 
 -- H2: Multiple CTEs — one eligible (ORDER BY col), one ineligible (ORDER BY agg)
 WITH eligible_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
 ),
 ineligible_cte AS (
-    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 15
+    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, id LIMIT 15
 )
 SELECT e.id, e.val, i.cnt
 FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
@@ -465,7 +465,7 @@ EXPLAIN (COSTS OFF)
 WITH ordered_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id
 )
-SELECT * FROM ordered_cte LIMIT 5;
+SELECT * FROM ordered_cte ORDER BY id LIMIT 5;
 
 -- H2 EXPLAIN
 EXPLAIN (COSTS OFF)
@@ -473,7 +473,7 @@ WITH eligible_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
 ),
 ineligible_cte AS (
-    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC LIMIT 15
+    SELECT id, count(*) as cnt FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, id LIMIT 15
 )
 SELECT e.id, e.val, i.cnt
 FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
