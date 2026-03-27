@@ -67,235 +67,343 @@ SET citus.enable_sorted_merge TO off;
 -- =================================================================
 SET citus.enable_sorted_merge TO on;
 -- A1: ORDER BY distribution column
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY id;
-                                QUERY PLAN
+                                                 QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.val
    Task Count: 4
+   Tuple data received from nodes: 1027 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id
+         Tuple data received from node: 255 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: id
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, val
+               Sort Key: sorted_merge_test.id
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, val
+(15 rows)
 
 -- A2: ORDER BY DESC
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id FROM sorted_merge_test ORDER BY id DESC;
-                                QUERY PLAN
+                                                 QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id
    Task Count: 4
+   Tuple data received from nodes: 420 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id DESC
+         Tuple data received from node: 104 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: id DESC
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id
+               Sort Key: sorted_merge_test.id DESC
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id
+(15 rows)
 
 -- A3: ORDER BY DESC NULLS LAST
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS LAST;
-                                QUERY PLAN
+                                                          QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.num
    Task Count: 4
+   Tuple data received from nodes: 1556 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, num FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY num DESC NULLS LAST
+         Tuple data received from node: 392 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: num DESC NULLS LAST
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, num
+               Sort Key: sorted_merge_test.num DESC NULLS LAST
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, num
+(15 rows)
 
 -- A4: ORDER BY non-distribution column
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY val;
-                                QUERY PLAN
+                                                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.val
    Task Count: 4
+   Tuple data received from nodes: 1027 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY val
+         Tuple data received from node: 255 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: val
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, val
+               Sort Key: sorted_merge_test.val
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, val
+(15 rows)
 
 -- A5: Multi-column ORDER BY
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY id, val;
-                                QUERY PLAN
+                                                    QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.val
    Task Count: 4
+   Tuple data received from nodes: 1027 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id, val
+         Tuple data received from node: 255 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: id, val
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, val
+               Sort Key: sorted_merge_test.id, sorted_merge_test.val
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, val
+(15 rows)
 
 -- A6: Mixed directions
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val, num FROM sorted_merge_test ORDER BY id ASC, num DESC;
-                                QUERY PLAN
+                                                         QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.val, remote_scan.num
    Task Count: 4
+   Tuple data received from nodes: 2163 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, val, num FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id, num DESC
+         Tuple data received from node: 543 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: id, num DESC
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, val, num
+               Sort Key: sorted_merge_test.id, sorted_merge_test.num DESC
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, val, num
+(15 rows)
 
 -- A7: GROUP BY dist_col ORDER BY dist_col
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id;
-                                   QUERY PLAN
+                                                              QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.count
    Task Count: 4
+   Tuple data received from nodes: 1260 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, count(*) AS count FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY id ORDER BY id
+         Tuple data received from node: 312 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: id
-               ->  HashAggregate
-                     Group Key: id
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, (count(*))
+               Sort Key: sorted_merge_test.id
+               Sort Method: quicksort  Memory: 25kB
+               ->  HashAggregate (actual rows=26 loops=1)
+                     Output: id, count(*)
+                     Group Key: sorted_merge_test.id
+                     ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                           Output: id, val, num, ts
+(19 rows)
 
 -- A8: WHERE clause + ORDER BY
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val FROM sorted_merge_test WHERE num > 50 ORDER BY id;
-                                QUERY PLAN
+                                                                    QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=67 loops=1)
+   Output: remote_scan.id, remote_scan.val
    Task Count: 4
+   Tuple data received from nodes: 671 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE (num OPERATOR(pg_catalog.>) '50'::numeric) ORDER BY id
+         Tuple data received from node: 130 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: id
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-                     Filter: (num > '50'::numeric)
-(9 rows)
+         ->  Sort (actual rows=13 loops=1)
+               Output: id, val
+               Sort Key: sorted_merge_test.id
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=13 loops=1)
+                     Output: id, val
+                     Filter: (sorted_merge_test.num > '50'::numeric)
+                     Rows Removed by Filter: 13
+(17 rows)
 
 -- A9: Expression in ORDER BY (non-aggregate)
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, num FROM sorted_merge_test ORDER BY id + 1;
-                                QUERY PLAN
+                                                                                        QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.num, remote_scan.worker_column_3
    Task Count: 4
+   Tuple data received from nodes: 1976 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, num, (id OPERATOR(pg_catalog.+) 1) AS worker_column_3 FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY (id OPERATOR(pg_catalog.+) 1)
+         Tuple data received from node: 496 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: ((id + 1))
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, num, ((id + 1))
+               Sort Key: ((sorted_merge_test.id + 1))
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, num, (id + 1)
+(15 rows)
 
 -- A10: ORDER BY with LIMIT (existing pushdown, verify no regression)
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
-                                      QUERY PLAN
+                                                           QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Custom Scan (Citus Adaptive)
+ Limit (actual rows=5 loops=1)
+   Output: remote_scan.id
+   ->  Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+         Output: remote_scan.id
          Task Count: 4
+         Tuple data received from nodes: 80 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '5'::bigint
+               Tuple data received from node: 20 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Limit
-                     ->  Sort
-                           Sort Key: id
-                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+               ->  Limit (actual rows=5 loops=1)
+                     Output: id
+                     ->  Sort (actual rows=5 loops=1)
+                           Output: id
+                           Sort Key: sorted_merge_test.id
+                           Sort Method: top-N heapsort  Memory: 25kB
+                           ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                 Output: id
+(19 rows)
 
 -- =================================================================
 -- Category B: Ineligibility — sort NOT pushed for merge
 -- =================================================================
 SET citus.enable_sorted_merge TO on;
 -- B1: ORDER BY count(*)
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*);
-                                   QUERY PLAN
+                                                           QUERY PLAN
 ---------------------------------------------------------------------
- Sort
+ Sort (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.count
    Sort Key: remote_scan.count
-   ->  Custom Scan (Citus Adaptive)
+   Sort Method: quicksort  Memory: 28kB
+   ->  Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+         Output: remote_scan.id, remote_scan.count
          Task Count: 4
+         Tuple data received from nodes: 1260 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT id, count(*) AS count FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY id
+               Tuple data received from node: 312 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: id
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+               ->  HashAggregate (actual rows=26 loops=1)
+                     Output: id, count(*)
+                     Group Key: sorted_merge_test.id
+                     ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                           Output: id, val, num, ts
+(19 rows)
 
 -- B2: ORDER BY avg(col)
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, avg(num) FROM sorted_merge_test GROUP BY id ORDER BY avg(num);
-                                   QUERY PLAN
+                                                          QUERY PLAN
 ---------------------------------------------------------------------
- Sort
+ Sort (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.avg
    Sort Key: remote_scan.avg
-   ->  Custom Scan (Citus Adaptive)
+   Sort Method: quicksort  Memory: 28kB
+   ->  Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+         Output: remote_scan.id, remote_scan.avg
          Task Count: 4
+         Tuple data received from nodes: 1556 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT id, avg(num) AS avg FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY id
+               Tuple data received from node: 392 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: id
-                     ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+               ->  HashAggregate (actual rows=26 loops=1)
+                     Output: id, avg(num)
+                     Group Key: sorted_merge_test.id
+                     ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                           Output: id, val, num, ts
+(19 rows)
 
 -- B3: GROUP BY non-dist col, ORDER BY non-dist col
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY val;
-                                      QUERY PLAN
+                                                               QUERY PLAN
 ---------------------------------------------------------------------
- Sort
+ Sort (actual rows=104 loops=1)
+   Output: remote_scan.val, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
    Sort Key: remote_scan.val
-   ->  HashAggregate
+   Sort Method: quicksort  Memory: 28kB
+   ->  HashAggregate (actual rows=104 loops=1)
+         Output: remote_scan.val, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
          Group Key: remote_scan.val
-         ->  Custom Scan (Citus Adaptive)
+         ->  Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+               Output: remote_scan.val, remote_scan.count
                Task Count: 4
+               Tuple data received from nodes: 1447 bytes
                Tasks Shown: One of 4
                ->  Task
+                     Query: SELECT val, count(*) AS count FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY val
+                     Tuple data received from node: 359 bytes
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: val
-                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(12 rows)
+                     ->  HashAggregate (actual rows=26 loops=1)
+                           Output: val, count(*)
+                           Group Key: sorted_merge_test.val
+                           ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                 Output: id, val, num, ts
+(23 rows)
 
 -- B4: GROUP BY non-dist col, ORDER BY aggregate
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY count(*);
-                                      QUERY PLAN
+                                                               QUERY PLAN
 ---------------------------------------------------------------------
- Sort
+ Sort (actual rows=104 loops=1)
+   Output: remote_scan.val, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
    Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
-   ->  HashAggregate
+   Sort Method: quicksort  Memory: 28kB
+   ->  HashAggregate (actual rows=104 loops=1)
+         Output: remote_scan.val, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
          Group Key: remote_scan.val
-         ->  Custom Scan (Citus Adaptive)
+         ->  Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+               Output: remote_scan.val, remote_scan.count
                Task Count: 4
+               Tuple data received from nodes: 1447 bytes
                Tasks Shown: One of 4
                ->  Task
+                     Query: SELECT val, count(*) AS count FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY val
+                     Tuple data received from node: 359 bytes
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: val
-                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(12 rows)
+                     ->  HashAggregate (actual rows=26 loops=1)
+                           Output: val, count(*)
+                           Group Key: sorted_merge_test.val
+                           ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                 Output: id, val, num, ts
+(23 rows)
 
 -- =================================================================
 -- Category C: Correctness — results match GUC off vs on
@@ -772,81 +880,123 @@ SELECT id FROM sorted_merge_test WHERE false ORDER BY id;
 -- =================================================================
 -- F1: Simple LIMIT + ORDER BY: plan unchanged between GUC off and on
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
-                                         QUERY PLAN
+                                                              QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Sort
+ Limit (actual rows=5 loops=1)
+   Output: remote_scan.id
+   ->  Sort (actual rows=5 loops=1)
+         Output: remote_scan.id
          Sort Key: remote_scan.id
-         ->  Custom Scan (Citus Adaptive)
+         Sort Method: top-N heapsort  Memory: 25kB
+         ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
+               Output: remote_scan.id
                Task Count: 4
+               Tuple data received from nodes: 80 bytes
                Tasks Shown: One of 4
                ->  Task
+                     Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '5'::bigint
+                     Tuple data received from node: 20 bytes
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: id
-                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(12 rows)
+                     ->  Limit (actual rows=5 loops=1)
+                           Output: id
+                           ->  Sort (actual rows=5 loops=1)
+                                 Output: id
+                                 Sort Key: sorted_merge_test.id
+                                 Sort Method: top-N heapsort  Memory: 25kB
+                                 ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                       Output: id
+(23 rows)
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
-                                      QUERY PLAN
+                                                           QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Custom Scan (Citus Adaptive)
+ Limit (actual rows=5 loops=1)
+   Output: remote_scan.id
+   ->  Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+         Output: remote_scan.id
          Task Count: 4
+         Tuple data received from nodes: 80 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '5'::bigint
+               Tuple data received from node: 20 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Limit
-                     ->  Sort
-                           Sort Key: id
-                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+               ->  Limit (actual rows=5 loops=1)
+                     Output: id
+                     ->  Sort (actual rows=5 loops=1)
+                           Output: id
+                           Sort Key: sorted_merge_test.id
+                           Sort Method: top-N heapsort  Memory: 25kB
+                           ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                 Output: id
+(19 rows)
 
 -- F2: GROUP BY dist_col + ORDER BY + LIMIT
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
-                                            QUERY PLAN
+                                                                             QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Sort
+ Limit (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.count
+   ->  Sort (actual rows=5 loops=1)
+         Output: remote_scan.id, remote_scan.count
          Sort Key: remote_scan.id
-         ->  Custom Scan (Citus Adaptive)
+         Sort Method: top-N heapsort  Memory: 25kB
+         ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
+               Output: remote_scan.id, remote_scan.count
                Task Count: 4
+               Tuple data received from nodes: 240 bytes
                Tasks Shown: One of 4
                ->  Task
+                     Query: SELECT id, count(*) AS count FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY id ORDER BY id LIMIT '5'::bigint
+                     Tuple data received from node: 60 bytes
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: id
-                                 ->  HashAggregate
-                                       Group Key: id
-                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(14 rows)
+                     ->  Limit (actual rows=5 loops=1)
+                           Output: id, (count(*))
+                           ->  Sort (actual rows=5 loops=1)
+                                 Output: id, (count(*))
+                                 Sort Key: sorted_merge_test.id
+                                 Sort Method: top-N heapsort  Memory: 25kB
+                                 ->  HashAggregate (actual rows=26 loops=1)
+                                       Output: id, count(*)
+                                       Group Key: sorted_merge_test.id
+                                       ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                             Output: id, val, num, ts
+(27 rows)
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
-                                         QUERY PLAN
+                                                                          QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Custom Scan (Citus Adaptive)
+ Limit (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.count
+   ->  Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+         Output: remote_scan.id, remote_scan.count
          Task Count: 4
+         Tuple data received from nodes: 240 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT id, count(*) AS count FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY id ORDER BY id LIMIT '5'::bigint
+               Tuple data received from node: 60 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Limit
-                     ->  Sort
-                           Sort Key: id
-                           ->  HashAggregate
-                                 Group Key: id
-                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(12 rows)
+               ->  Limit (actual rows=5 loops=1)
+                     Output: id, (count(*))
+                     ->  Sort (actual rows=5 loops=1)
+                           Output: id, (count(*))
+                           Sort Key: sorted_merge_test.id
+                           Sort Method: top-N heapsort  Memory: 25kB
+                           ->  HashAggregate (actual rows=26 loops=1)
+                                 Output: id, count(*)
+                                 Group Key: sorted_merge_test.id
+                                 ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                       Output: id, val, num, ts
+(23 rows)
 
 -- F3: ORDER BY aggregate + LIMIT (not eligible for merge)
 SET citus.enable_sorted_merge TO off;
@@ -876,34 +1026,48 @@ SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, i
 -- =================================================================
 -- G1: Sort elision verification — coordinator Sort node absent
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY id;
-                                QUERY PLAN
+                                                 QUERY PLAN
 ---------------------------------------------------------------------
- Sort
+ Sort (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.val
    Sort Key: remote_scan.id
-   ->  Custom Scan (Citus Adaptive)
+   Sort Method: quicksort  Memory: 28kB
+   ->  Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+         Output: remote_scan.id, remote_scan.val
          Task Count: 4
+         Tuple data received from nodes: 1027 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true
+               Tuple data received from node: 255 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, val
+(15 rows)
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val FROM sorted_merge_test ORDER BY id;
-                                QUERY PLAN
+                                                 QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=105 loops=1)
+   Output: remote_scan.id, remote_scan.val
    Task Count: 4
+   Tuple data received from nodes: 1027 bytes
    Tasks Shown: One of 4
    ->  Task
+         Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id
+         Tuple data received from node: 255 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort
-               Sort Key: id
-               ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(8 rows)
+         ->  Sort (actual rows=26 loops=1)
+               Output: id, val
+               Sort Key: sorted_merge_test.id
+               Sort Method: quicksort  Memory: 25kB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                     Output: id, val
+(15 rows)
 
 -- G2a: PREPARE with merge ON, EXECUTE after turning OFF
 -- Plan-time decision is baked in — cached plan must still merge correctly
@@ -1006,27 +1170,30 @@ CLOSE sorted_cursor;
 COMMIT;
 -- G4: EXPLAIN ANALYZE (sorted merge skipped for EXPLAIN ANALYZE)
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
-                                                    QUERY PLAN
+                                                           QUERY PLAN
 ---------------------------------------------------------------------
  Limit (actual rows=5 loops=1)
+   Output: remote_scan.id
    ->  Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+         Output: remote_scan.id
          Task Count: 4
          Tuple data received from nodes: 80 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '5'::bigint
                Tuple data received from node: 20 bytes
                Node: host=localhost port=xxxxx dbname=regression
                ->  Limit (actual rows=5 loops=1)
-                     Buffers: shared hit=1
+                     Output: id
                      ->  Sort (actual rows=5 loops=1)
-                           Sort Key: id
+                           Output: id
+                           Sort Key: sorted_merge_test.id
                            Sort Method: top-N heapsort  Memory: 25kB
-                           Buffers: shared hit=1
-                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
-                                 Buffers: shared hit=1
-(16 rows)
+                           ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                 Output: id
+(19 rows)
 
 -- G5: ORDER BY aggregate + LIMIT — crash regression test
 -- Previously caused SIGSEGV when sorted merge was enabled because
@@ -1227,27 +1394,36 @@ SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
 -- =================================================================
 SET citus.enable_sorted_merge TO on;
 -- H1 EXPLAIN
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 WITH ordered_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id
 )
 SELECT * FROM ordered_cte ORDER BY id LIMIT 5;
-                                      QUERY PLAN
+                                                                                                                                                                                     QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Custom Scan (Citus Adaptive)
+ Limit (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.val
+   ->  Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+         Output: remote_scan.id, remote_scan.val
          Task Count: 4
+         Tuple data received from nodes: 191 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT worker_column_1 AS id, worker_column_2 AS val FROM (SELECT ordered_cte.id AS worker_column_1, ordered_cte.val AS worker_column_2 FROM (SELECT sorted_merge_test.id, sorted_merge_test.val FROM public.sorted_merge_test_960000 sorted_merge_test ORDER BY sorted_merge_test.id) ordered_cte) worker_subquery ORDER BY worker_column_1 LIMIT '5'::bigint
+               Tuple data received from node: 47 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Limit
-                     ->  Sort
+               ->  Limit (actual rows=5 loops=1)
+                     Output: sorted_merge_test.id, sorted_merge_test.val
+                     ->  Sort (actual rows=5 loops=1)
+                           Output: sorted_merge_test.id, sorted_merge_test.val
                            Sort Key: sorted_merge_test.id
-                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-(10 rows)
+                           Sort Method: top-N heapsort  Memory: 25kB
+                           ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                 Output: sorted_merge_test.id, sorted_merge_test.val
+(19 rows)
 
 -- H2 EXPLAIN
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 WITH eligible_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
 ),
@@ -1257,51 +1433,88 @@ ineligible_cte AS (
 SELECT e.id, e.val, i.cnt
 FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
 ORDER BY e.id;
-                                                  QUERY PLAN
+                                                                                                                                                                                                                                 QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.val, remote_scan.cnt
    ->  Distributed Subplan XXX_1
-         ->  Limit
-               ->  Custom Scan (Citus Adaptive)
+         Intermediate Data Size: 397 bytes
+         Result destination: Write locally
+         ->  Limit (actual rows=20 loops=1)
+               Output: remote_scan.id, remote_scan.val
+               ->  Custom Scan (Citus Adaptive) (actual rows=80 loops=1)
+                     Output: remote_scan.id, remote_scan.val
                      Task Count: 4
+                     Tuple data received from nodes: 791 bytes
                      Tasks Shown: One of 4
                      ->  Task
+                           Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '20'::bigint
+                           Tuple data received from node: 197 bytes
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: id
-                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                           ->  Limit (actual rows=20 loops=1)
+                                 Output: id, val
+                                 ->  Sort (actual rows=20 loops=1)
+                                       Output: id, val
+                                       Sort Key: sorted_merge_test.id
+                                       Sort Method: quicksort  Memory: 26kB
+                                       ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                             Output: id, val
    ->  Distributed Subplan XXX_2
-         ->  Limit
-               ->  Sort
+         Intermediate Data Size: 330 bytes
+         Result destination: Write locally
+         ->  Limit (actual rows=15 loops=1)
+               Output: remote_scan.id, remote_scan.cnt
+               ->  Sort (actual rows=15 loops=1)
+                     Output: remote_scan.id, remote_scan.cnt
                      Sort Key: remote_scan.cnt DESC, remote_scan.id
-                     ->  Custom Scan (Citus Adaptive)
+                     ->  Custom Scan (Citus Adaptive) (never executed)
+                           Output: remote_scan.id, remote_scan.cnt
                            Task Count: 4
+                           Tuple data received from nodes: 720 bytes
                            Tasks Shown: One of 4
                            ->  Task
+                                 Query: SELECT id, count(*) AS cnt FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true GROUP BY id ORDER BY (count(*)) DESC, id LIMIT '15'::bigint
+                                 Tuple data received from node: 180 bytes
                                  Node: host=localhost port=xxxxx dbname=regression
-                                 ->  Limit
-                                       ->  Sort
-                                             Sort Key: (count(*)) DESC, id
-                                             ->  HashAggregate
-                                                   Group Key: id
-                                                   ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                                 ->  Limit (actual rows=15 loops=1)
+                                       Output: id, (count(*))
+                                       ->  Sort (actual rows=15 loops=1)
+                                             Output: id, (count(*))
+                                             Sort Key: (count(*)) DESC, sorted_merge_test.id
+                                             Sort Method: quicksort  Memory: 26kB
+                                             ->  HashAggregate (actual rows=26 loops=1)
+                                                   Output: id, count(*)
+                                                   Group Key: sorted_merge_test.id
+                                                   ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                                         Output: id, val, num, ts
    Task Count: 1
+   Tuple data received from nodes: 87 bytes
    Tasks Shown: All
    ->  Task
+         Query: SELECT e.id, e.val, i.cnt FROM ((SELECT intermediate_result.id, intermediate_result.val FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, val text)) e JOIN (SELECT intermediate_result.id, intermediate_result.cnt FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer, cnt bigint)) i ON ((e.id OPERATOR(pg_catalog.=) i.id))) ORDER BY e.id
+         Tuple data received from node: 87 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Merge Join
+         ->  Merge Join (actual rows=5 loops=1)
+               Output: intermediate_result.id, intermediate_result.val, intermediate_result_1.cnt
                Merge Cond: (intermediate_result.id = intermediate_result_1.id)
-               ->  Sort
+               ->  Sort (actual rows=6 loops=1)
+                     Output: intermediate_result.id, intermediate_result.val
                      Sort Key: intermediate_result.id
-                     ->  Function Scan on read_intermediate_result intermediate_result
-               ->  Sort
+                     Sort Method: quicksort  Memory: 25kB
+                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=20 loops=1)
+                           Output: intermediate_result.id, intermediate_result.val
+                           Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+               ->  Sort (actual rows=15 loops=1)
+                     Output: intermediate_result_1.cnt, intermediate_result_1.id
                      Sort Key: intermediate_result_1.id
-                     ->  Function Scan on read_intermediate_result intermediate_result_1
-(39 rows)
+                     Sort Method: quicksort  Memory: 25kB
+                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1 (actual rows=15 loops=1)
+                           Output: intermediate_result_1.cnt, intermediate_result_1.id
+                           Function Call: read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format)
+(77 rows)
 
 -- H3 EXPLAIN
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 WITH top_ids AS (
     SELECT id FROM sorted_merge_test ORDER BY id LIMIT 20
 )
@@ -1310,214 +1523,358 @@ FROM sorted_merge_test t
 JOIN top_ids ON t.id = top_ids.id
 ORDER BY t.id
 LIMIT 10;
-                                               QUERY PLAN
+                                                                                                                                                                                                                     QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Custom Scan (Citus Adaptive)
+ Limit (actual rows=10 loops=1)
+   Output: remote_scan.id, remote_scan.val
+   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+         Output: remote_scan.id, remote_scan.val
          ->  Distributed Subplan XXX_1
-               ->  Limit
-                     ->  Custom Scan (Citus Adaptive)
+               Intermediate Data Size: 200 bytes
+               Result destination: Send to 2 nodes
+               ->  Limit (actual rows=20 loops=1)
+                     Output: remote_scan.id
+                     ->  Custom Scan (Citus Adaptive) (actual rows=80 loops=1)
+                           Output: remote_scan.id
                            Task Count: 4
+                           Tuple data received from nodes: 320 bytes
                            Tasks Shown: One of 4
                            ->  Task
+                                 Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '20'::bigint
+                                 Tuple data received from node: 80 bytes
                                  Node: host=localhost port=xxxxx dbname=regression
-                                 ->  Limit
-                                       ->  Sort
-                                             Sort Key: id
-                                             ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                                 ->  Limit (actual rows=20 loops=1)
+                                       Output: id
+                                       ->  Sort (actual rows=20 loops=1)
+                                             Output: id
+                                             Sort Key: sorted_merge_test.id
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                                   Output: id
          Task Count: 4
+         Tuple data received from nodes: 97 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT worker_column_1 AS id, worker_column_2 AS val FROM (SELECT t.id AS worker_column_1, t.val AS worker_column_2 FROM (public.sorted_merge_test_960000 t JOIN (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) top_ids ON ((t.id OPERATOR(pg_catalog.=) top_ids.id)))) worker_subquery ORDER BY worker_column_1 LIMIT '10'::bigint
+               Tuple data received from node: 97 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Limit
-                     ->  Merge Join
-                           Merge Cond: (t.id = intermediate_result.id)
-                           ->  Sort
-                                 Sort Key: t.id
-                                 ->  Seq Scan on sorted_merge_test_960000 t
-                           ->  Sort
+               ->  Limit (actual rows=10 loops=1)
+                     Output: t.id, t.val
+                     ->  Merge Join (actual rows=10 loops=1)
+                           Output: t.id, t.val
+                           Merge Cond: (intermediate_result.id = t.id)
+                           ->  Sort (actual rows=10 loops=1)
+                                 Output: intermediate_result.id
                                  Sort Key: intermediate_result.id
-                                 ->  Function Scan on read_intermediate_result intermediate_result
-(26 rows)
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=20 loops=1)
+                                       Output: intermediate_result.id
+                                       Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+                           ->  Sort (actual rows=10 loops=1)
+                                 Output: t.id, t.val
+                                 Sort Key: t.id
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Seq Scan on public.sorted_merge_test_960000 t (actual rows=26 loops=1)
+                                       Output: t.id, t.val
+(51 rows)
 
 -- H4 EXPLAIN
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT id, val FROM sorted_merge_test
 WHERE id IN (
     SELECT id FROM sorted_merge_events ORDER BY id LIMIT 10
 )
 ORDER BY id
 LIMIT 5;
-                                                  QUERY PLAN
+                                                                                                                                                                                                                                          QUERY PLAN
 ---------------------------------------------------------------------
- Limit
-   ->  Custom Scan (Citus Adaptive)
+ Limit (actual rows=3 loops=1)
+   Output: remote_scan.id, remote_scan.val
+   ->  Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
+         Output: remote_scan.id, remote_scan.val
          ->  Distributed Subplan XXX_1
-               ->  Limit
-                     ->  Custom Scan (Citus Adaptive)
+               Intermediate Data Size: 100 bytes
+               Result destination: Send to 2 nodes
+               ->  Limit (actual rows=10 loops=1)
+                     Output: remote_scan.id
+                     ->  Custom Scan (Citus Adaptive) (actual rows=40 loops=1)
+                           Output: remote_scan.id
                            Task Count: 4
+                           Tuple data received from nodes: 160 bytes
                            Tasks Shown: One of 4
                            ->  Task
+                                 Query: SELECT id FROM public.sorted_merge_events_960004 sorted_merge_events WHERE true ORDER BY id LIMIT '10'::bigint
+                                 Tuple data received from node: 40 bytes
                                  Node: host=localhost port=xxxxx dbname=regression
-                                 ->  Limit
-                                       ->  Sort
-                                             Sort Key: id
-                                             ->  Seq Scan on sorted_merge_events_960004 sorted_merge_events
+                                 ->  Limit (actual rows=10 loops=1)
+                                       Output: id
+                                       ->  Sort (actual rows=10 loops=1)
+                                             Output: id
+                                             Sort Key: sorted_merge_events.id
+                                             Sort Method: top-N heapsort  Memory: 25kB
+                                             ->  Seq Scan on public.sorted_merge_events_960004 sorted_merge_events (actual rows=56 loops=1)
+                                                   Output: id
          Task Count: 4
+         Tuple data received from nodes: 27 bytes
          Tasks Shown: One of 4
          ->  Task
+               Query: SELECT worker_column_1 AS id, worker_column_2 AS val FROM (SELECT sorted_merge_test.id AS worker_column_1, sorted_merge_test.val AS worker_column_2 FROM public.sorted_merge_test_960000 sorted_merge_test WHERE (sorted_merge_test.id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)))) worker_subquery ORDER BY worker_column_1 LIMIT '5'::bigint
+               Tuple data received from node: 27 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Limit
-                     ->  Sort
+               ->  Limit (actual rows=3 loops=1)
+                     Output: sorted_merge_test.id, sorted_merge_test.val
+                     ->  Sort (actual rows=3 loops=1)
+                           Output: sorted_merge_test.id, sorted_merge_test.val
                            Sort Key: sorted_merge_test.id
-                           ->  Hash Join
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Hash Semi Join (actual rows=3 loops=1)
+                                 Output: sorted_merge_test.id, sorted_merge_test.val
                                  Hash Cond: (sorted_merge_test.id = intermediate_result.id)
-                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
-                                 ->  Hash
-                                       ->  HashAggregate
-                                             Group Key: intermediate_result.id
-                                             ->  Function Scan on read_intermediate_result intermediate_result
-(27 rows)
+                                 ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                       Output: sorted_merge_test.id, sorted_merge_test.val, sorted_merge_test.num, sorted_merge_test.ts
+                                 ->  Hash (actual rows=10 loops=1)
+                                       Output: intermediate_result.id
+                                       ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=10 loops=1)
+                                             Output: intermediate_result.id
+                                             Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+(50 rows)
 
 -- H5 EXPLAIN
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 WITH small_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
 )
 SELECT * FROM small_cte ORDER BY id LIMIT 5;
-                                            QUERY PLAN
+                                                                                                                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.val
    ->  Distributed Subplan XXX_1
-         ->  Limit
-               ->  Custom Scan (Citus Adaptive)
+         Intermediate Data Size: 397 bytes
+         Result destination: Write locally
+         ->  Limit (actual rows=20 loops=1)
+               Output: remote_scan.id, remote_scan.val
+               ->  Custom Scan (Citus Adaptive) (actual rows=80 loops=1)
+                     Output: remote_scan.id, remote_scan.val
                      Task Count: 4
+                     Tuple data received from nodes: 791 bytes
                      Tasks Shown: One of 4
                      ->  Task
+                           Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '20'::bigint
+                           Tuple data received from node: 197 bytes
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: id
-                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                           ->  Limit (actual rows=20 loops=1)
+                                 Output: id, val
+                                 ->  Sort (actual rows=20 loops=1)
+                                       Output: id, val
+                                       Sort Key: sorted_merge_test.id
+                                       Sort Method: quicksort  Memory: 26kB
+                                       ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                             Output: id, val
    Task Count: 1
+   Tuple data received from nodes: 47 bytes
    Tasks Shown: All
    ->  Task
+         Query: SELECT id, val FROM (SELECT intermediate_result.id, intermediate_result.val FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, val text)) small_cte ORDER BY id LIMIT 5
+         Tuple data received from node: 47 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Limit
-               ->  Sort
+         ->  Limit (actual rows=5 loops=1)
+               Output: intermediate_result.id, intermediate_result.val
+               ->  Sort (actual rows=5 loops=1)
+                     Output: intermediate_result.id, intermediate_result.val
                      Sort Key: intermediate_result.id
-                     ->  Function Scan on read_intermediate_result intermediate_result
-(20 rows)
+                     Sort Method: top-N heapsort  Memory: 25kB
+                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=20 loops=1)
+                           Output: intermediate_result.id, intermediate_result.val
+                           Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+(40 rows)
 
 -- H6 EXPLAIN
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 SELECT foo.id, bar.id as bar_id
 FROM
     (SELECT id FROM sorted_merge_test ORDER BY id LIMIT 3) as foo,
     (SELECT id FROM sorted_merge_events ORDER BY id LIMIT 3) as bar
 ORDER BY foo.id, bar.id
 LIMIT 5;
-                                              QUERY PLAN
+                                                                                                                                                                                    QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.bar_id
    ->  Distributed Subplan XXX_1
-         ->  Limit
-               ->  Custom Scan (Citus Adaptive)
+         Intermediate Data Size: 30 bytes
+         Result destination: Write locally
+         ->  Limit (actual rows=3 loops=1)
+               Output: remote_scan.id
+               ->  Custom Scan (Citus Adaptive) (actual rows=12 loops=1)
+                     Output: remote_scan.id
                      Task Count: 4
+                     Tuple data received from nodes: 48 bytes
                      Tasks Shown: One of 4
                      ->  Task
+                           Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '3'::bigint
+                           Tuple data received from node: 12 bytes
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: id
-                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                           ->  Limit (actual rows=3 loops=1)
+                                 Output: id
+                                 ->  Sort (actual rows=3 loops=1)
+                                       Output: id
+                                       Sort Key: sorted_merge_test.id
+                                       Sort Method: top-N heapsort  Memory: 25kB
+                                       ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                             Output: id
    ->  Distributed Subplan XXX_2
-         ->  Limit
-               ->  Custom Scan (Citus Adaptive)
+         Intermediate Data Size: 30 bytes
+         Result destination: Write locally
+         ->  Limit (actual rows=3 loops=1)
+               Output: remote_scan.id
+               ->  Custom Scan (Citus Adaptive) (actual rows=12 loops=1)
+                     Output: remote_scan.id
                      Task Count: 4
+                     Tuple data received from nodes: 48 bytes
                      Tasks Shown: One of 4
                      ->  Task
+                           Query: SELECT id FROM public.sorted_merge_events_960004 sorted_merge_events WHERE true ORDER BY id LIMIT '3'::bigint
+                           Tuple data received from node: 12 bytes
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: id
-                                       ->  Seq Scan on sorted_merge_events_960004 sorted_merge_events
+                           ->  Limit (actual rows=3 loops=1)
+                                 Output: id
+                                 ->  Sort (actual rows=3 loops=1)
+                                       Output: id
+                                       Sort Key: sorted_merge_events.id
+                                       Sort Method: top-N heapsort  Memory: 25kB
+                                       ->  Seq Scan on public.sorted_merge_events_960004 sorted_merge_events (actual rows=56 loops=1)
+                                             Output: id
    Task Count: 1
+   Tuple data received from nodes: 40 bytes
    Tasks Shown: All
    ->  Task
+         Query: SELECT foo.id, bar.id AS bar_id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) foo, (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) bar ORDER BY foo.id, bar.id LIMIT 5
+         Tuple data received from node: 40 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Limit
-               ->  Sort
+         ->  Limit (actual rows=5 loops=1)
+               Output: intermediate_result.id, intermediate_result_1.id
+               ->  Sort (actual rows=5 loops=1)
+                     Output: intermediate_result.id, intermediate_result_1.id
                      Sort Key: intermediate_result.id, intermediate_result_1.id
-                     ->  Nested Loop
-                           ->  Function Scan on read_intermediate_result intermediate_result
-                           ->  Function Scan on read_intermediate_result intermediate_result_1
-(33 rows)
+                     Sort Method: quicksort  Memory: 25kB
+                     ->  Nested Loop (actual rows=9 loops=1)
+                           Output: intermediate_result.id, intermediate_result_1.id
+                           ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=3 loops=1)
+                                 Output: intermediate_result.id
+                                 Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+                           ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1 (actual rows=3 loops=3)
+                                 Output: intermediate_result_1.id
+                                 Function Call: read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format)
+(67 rows)
 
 -- H7 EXPLAIN — GUC off vs on
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 WITH cte AS (
     SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
 )
 SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
-                                               QUERY PLAN
+                                                                                                                                                             QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.val, remote_scan.num
    ->  Distributed Subplan XXX_1
-         ->  Limit
-               ->  Sort
+         Intermediate Data Size: 691 bytes
+         Result destination: Write locally
+         ->  Limit (actual rows=20 loops=1)
+               Output: remote_scan.id, remote_scan.val, remote_scan.num
+               ->  Sort (actual rows=20 loops=1)
+                     Output: remote_scan.id, remote_scan.val, remote_scan.num
                      Sort Key: remote_scan.id
-                     ->  Custom Scan (Citus Adaptive)
+                     ->  Custom Scan (Citus Adaptive) (never executed)
+                           Output: remote_scan.id, remote_scan.val, remote_scan.num
                            Task Count: 4
+                           Tuple data received from nodes: 1673 bytes
                            Tasks Shown: One of 4
                            ->  Task
+                                 Query: SELECT id, val, num FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '20'::bigint
+                                 Tuple data received from node: 419 bytes
                                  Node: host=localhost port=xxxxx dbname=regression
-                                 ->  Limit
-                                       ->  Sort
-                                             Sort Key: id
-                                             ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                                 ->  Limit (actual rows=20 loops=1)
+                                       Output: id, val, num
+                                       ->  Sort (actual rows=20 loops=1)
+                                             Output: id, val, num
+                                             Sort Key: sorted_merge_test.id
+                                             Sort Method: quicksort  Memory: 26kB
+                                             ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                                   Output: id, val, num
    Task Count: 1
+   Tuple data received from nodes: 103 bytes
    Tasks Shown: All
    ->  Task
+         Query: SELECT id, val, num FROM (SELECT intermediate_result.id, intermediate_result.val, intermediate_result.num FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, val text, num numeric)) cte WHERE (num OPERATOR(pg_catalog.>) (10)::numeric) ORDER BY id LIMIT 5
+         Tuple data received from node: 103 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Limit
-               ->  Sort
+         ->  Limit (actual rows=5 loops=1)
+               Output: intermediate_result.id, intermediate_result.val, intermediate_result.num
+               ->  Sort (actual rows=5 loops=1)
+                     Output: intermediate_result.id, intermediate_result.val, intermediate_result.num
                      Sort Key: intermediate_result.id
-                     ->  Function Scan on read_intermediate_result intermediate_result
-                           Filter: (num > '10'::numeric)
-(23 rows)
+                     Sort Method: top-N heapsort  Memory: 25kB
+                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=14 loops=1)
+                           Output: intermediate_result.id, intermediate_result.val, intermediate_result.num
+                           Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+                           Filter: (intermediate_result.num > '10'::numeric)
+                           Rows Removed by Filter: 6
+(45 rows)
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (COSTS OFF)
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
 WITH cte AS (
     SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
 )
 SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
-                                            QUERY PLAN
+                                                                                                                                                             QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Adaptive) (actual rows=5 loops=1)
+   Output: remote_scan.id, remote_scan.val, remote_scan.num
    ->  Distributed Subplan XXX_1
-         ->  Limit
-               ->  Custom Scan (Citus Adaptive)
+         Intermediate Data Size: 699 bytes
+         Result destination: Write locally
+         ->  Limit (actual rows=20 loops=1)
+               Output: remote_scan.id, remote_scan.val, remote_scan.num
+               ->  Custom Scan (Citus Adaptive) (actual rows=80 loops=1)
+                     Output: remote_scan.id, remote_scan.val, remote_scan.num
                      Task Count: 4
+                     Tuple data received from nodes: 1673 bytes
                      Tasks Shown: One of 4
                      ->  Task
+                           Query: SELECT id, val, num FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id LIMIT '20'::bigint
+                           Tuple data received from node: 419 bytes
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: id
-                                       ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+                           ->  Limit (actual rows=20 loops=1)
+                                 Output: id, val, num
+                                 ->  Sort (actual rows=20 loops=1)
+                                       Output: id, val, num
+                                       Sort Key: sorted_merge_test.id
+                                       Sort Method: quicksort  Memory: 26kB
+                                       ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=26 loops=1)
+                                             Output: id, val, num
    Task Count: 1
+   Tuple data received from nodes: 101 bytes
    Tasks Shown: All
    ->  Task
+         Query: SELECT id, val, num FROM (SELECT intermediate_result.id, intermediate_result.val, intermediate_result.num FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, val text, num numeric)) cte WHERE (num OPERATOR(pg_catalog.>) (10)::numeric) ORDER BY id LIMIT 5
+         Tuple data received from node: 101 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Limit
-               ->  Sort
+         ->  Limit (actual rows=5 loops=1)
+               Output: intermediate_result.id, intermediate_result.val, intermediate_result.num
+               ->  Sort (actual rows=5 loops=1)
+                     Output: intermediate_result.id, intermediate_result.val, intermediate_result.num
                      Sort Key: intermediate_result.id
-                     ->  Function Scan on read_intermediate_result intermediate_result
-                           Filter: (num > '10'::numeric)
-(21 rows)
+                     Sort Method: top-N heapsort  Memory: 25kB
+                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=18 loops=1)
+                           Output: intermediate_result.id, intermediate_result.val, intermediate_result.num
+                           Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+                           Filter: (intermediate_result.num > '10'::numeric)
+                           Rows Removed by Filter: 2
+(42 rows)
 
 -- =================================================================
 -- Cleanup

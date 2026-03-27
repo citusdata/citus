@@ -1605,6 +1605,19 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_sorted_merge",
+		gettext_noop("Enables sorted merge of worker results for ORDER BY queries."),
+		gettext_noop("When enabled during planning, Citus pushes ORDER BY to workers "
+					 "and merges the pre-sorted results on the coordinator using a "
+					 "binary heap, eliminating the Sort node in the combine query. "
+					 "This is an experimental feature."),
+		&EnableSortedMerge,
+		false,
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_stat_counters",
 		gettext_noop("Enables the collection of statistic counters for Citus."),
 		gettext_noop("When enabled, Citus maintains a set of statistic "
@@ -2608,19 +2621,6 @@ RegisterCitusConfigVariables(void)
 					 "is done for all the entries, starting from the first one. "
 					 "Finally, the sorting is done in ASC order."),
 		&SortReturning,
-		false,
-		PGC_SUSET,
-		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.enable_sorted_merge",
-		gettext_noop("Enables sorted merge of worker results for ORDER BY queries."),
-		gettext_noop("When enabled during planning, Citus pushes ORDER BY to workers "
-					 "and merges the pre-sorted results on the coordinator using a "
-					 "binary heap, eliminating the Sort node in the combine query. "
-					 "This is an experimental feature."),
-		&EnableSortedMerge,
 		false,
 		PGC_SUSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
