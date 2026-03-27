@@ -14,7 +14,6 @@
 
 #include "postgres.h"
 
-#include "nodes/pg_list.h"
 #include "utils/hsearch.h"
 
 /* compile-time limit for per-connection cached prepared statements */
@@ -31,7 +30,7 @@
  */
 typedef struct PreparedStatementCacheKey
 {
-	uint32 planId;
+	uint64 planId;
 	uint64 shardId;
 } PreparedStatementCacheKey;
 
@@ -59,9 +58,9 @@ extern HTAB * PreparedStatementCacheCreate(void);
 extern void PreparedStatementCacheDestroy(HTAB *cache);
 
 /* cache operations */
-extern PreparedStatementCacheEntry * PreparedStatementCacheLookup(
-	HTAB *cache, uint32 planId, uint64 shardId);
-extern PreparedStatementCacheEntry * PreparedStatementCacheInsert(
-	HTAB *cache, uint32 planId, uint64 shardId);
+extern PreparedStatementCacheEntry * PreparedStatementCacheLookup(HTAB *cache, uint64
+																  planId, uint64 shardId);
+extern PreparedStatementCacheEntry * PreparedStatementCacheInsert(HTAB *cache, uint64
+																  planId, uint64 shardId);
 
 #endif /* PREPARED_STATEMENT_CACHE_H */

@@ -1,3 +1,9 @@
+### citus v14.0.1 (UNRELEASED) ###
+
+* Adds worker-side prepared statement plan caching for fast-path queries
+  via citus.enable_prepared_statement_caching GUC, eliminating redundant
+  parse/plan cycles on workers for repeated prepared statement executions
+
 ### citus v14.0.0 (February 9, 2026) ###
 
 * Drops PG15 support (#8372)
