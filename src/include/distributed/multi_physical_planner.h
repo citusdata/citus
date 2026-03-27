@@ -141,6 +141,7 @@ typedef struct Job
 	bool subqueryPushdown;
 	bool requiresCoordinatorEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
+	int distributionKeyParamId;
 	Const *partitionKeyValue;
 
 	/* for local shard queries, we may save the local plan here */
@@ -153,6 +154,15 @@ typedef struct Job
 	 */
 	bool parametersInJobQueryResolved;
 	uint32 colocationId; /* common colocation group ID of the relations */
+
+	/*
+	 * Cached copy of jobQuery with Param nodes ($1, $2, ...) still intact,
+	 * used for prepared statement caching. Populated lazily on first
+	 * execution and reused across subsequent executions to avoid a
+	 * per-execution copyObject(jobQuery).  Lives on originalDistributedPlan
+	 * only; the per-execution copy (currentPlan) gets a NULL here.
+	 */
+	Query *savedJobQueryForCaching;
 } Job;
 
 

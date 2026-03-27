@@ -3903,7 +3903,7 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	uint32 queryIndex = placementExecution->queryIndex;
 
 	Assert(queryIndex < task->queryCount);
-	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
+	char *queryString = NULL;
 
 	/*
 	 * Prepared statement caching path: if enabled and the task carries a
@@ -3957,21 +3957,36 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 
 			if (cacheEntry == NULL)
 			{
-				/* cache full, fall through to plain SQL path */
+				/*
+				 * Cache full — construct query string for the plain SQL path.
+				 * The fast-path task has no taskQuery, so we must deparse from
+				 * the saved job query template. Set parametersInQueryStringResolved
+				 * to false so plain_sql routes through SendRemoteCommandParams
+				 * (which sends $1-parameterized SQL with extracted param values).
+				 */
+				Query *fallbackQuery = copyObject(task->jobQueryForPrepare);
+				UpdateRelationToShardNames((Node *) fallbackQuery,
+										   task->relationShardList);
+				StringInfoData fallbackBuf;
+				initStringInfo(&fallbackBuf);
+				pg_get_query_def(fallbackQuery, &fallbackBuf);
+				queryString = fallbackBuf.data;
+				task->parametersInQueryStringResolved = false;
 				goto plain_sql;
 			}
 
 			/*
-			 * Substitute table names with shard names in the query tree.
-			 * Safe because jobQueryForPrepare is a per-execution copy.
+			 * Make a working copy for shard-name substitution so that the
+			 * cached template (shared across executions) stays unmodified.
 			 */
-			UpdateRelationToShardNames((Node *) task->jobQueryForPrepare,
+			Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
+			UpdateRelationToShardNames((Node *) queryForDeparse,
 									   task->relationShardList);
 
 			/* deparse the query tree to get the parameterized SQL string */
 			StringInfoData queryBuf;
 			initStringInfo(&queryBuf);
-			pg_get_query_def(task->jobQueryForPrepare, &queryBuf);
+			pg_get_query_def(queryForDeparse, &queryBuf);
 
 			/* synchronously prepare the statement on the worker */
 			int prepared = SendRemotePrepare(connection, cacheEntry->stmtName,
@@ -4018,6 +4033,12 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	}
 
 plain_sql:
+	/* resolve queryString if not already set (e.g. from cache-full fallback) */
+	if (queryString == NULL)
+	{
+		queryString = TaskQueryStringAtIndex(task, queryIndex);
+	}
+
 	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
 		int parameterCount = paramListInfo->numParams;

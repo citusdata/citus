@@ -1923,6 +1923,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		Job *job = CreateJob(originalQuery);
 		job->deferredPruning = true;
+		job->distributionKeyParamId = fastPathRestrictionContext->distributionKeyParamId;
 
 		ereport(DEBUG2, (errmsg("Deferred pruning for a fast-path router "
 								"query")));

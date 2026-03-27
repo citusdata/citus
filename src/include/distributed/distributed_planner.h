@@ -113,6 +113,13 @@ typedef struct FastPathRestrictionContext
 	bool distributionKeyHasParam;
 
 	/*
+	 * When distributionKeyHasParam is true, stores the Param's paramid
+	 * so the executor can extract the distribution key value directly
+	 * from ParamListInfo without walking the query tree. -1 when not set.
+	 */
+	int distributionKeyParamId;
+
+	/*
 	 * Indicates to hold off calling the fast path planner until its
 	 * known if the shard is local or not.
 	 */
