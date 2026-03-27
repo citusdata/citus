@@ -3940,6 +3940,11 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 		if (cacheEntry != NULL)
 		{
 			/* cache hit — execute the already-prepared statement */
+			elog(DEBUG2, "prepared statement cache hit: plan " UINT64_FORMAT
+				 " shard " UINT64_FORMAT " stmt %s",
+				 task->preparedStatementPlanId,
+				 task->anchorShardId,
+				 cacheEntry->stmtName);
 			querySent = SendRemotePreparedQuery(connection, cacheEntry->stmtName,
 												parameterCount, parameterValues,
 												binaryResults);
@@ -3950,6 +3955,10 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 			 * Cache miss — construct the parameterized query template,
 			 * prepare it on the worker, then execute.
 			 */
+			elog(DEBUG2, "prepared statement cache miss: plan " UINT64_FORMAT
+				 " shard " UINT64_FORMAT,
+				 task->preparedStatementPlanId,
+				 task->anchorShardId);
 			cacheEntry =
 				PreparedStatementCacheInsert(connection->preparedStatementCache,
 											 task->preparedStatementPlanId,

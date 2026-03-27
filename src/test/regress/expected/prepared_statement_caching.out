@@ -59,6 +59,8 @@ SHOW citus.enable_prepared_statement_caching;
 --         10 times with GUC ON, verify correct results
 -- ============================================================
 SET citus.enable_prepared_statement_caching = on;
+set citus.max_cached_connection_lifetime to '60min';
+SET search_path TO prepared_stmt_caching;
 PREPARE cached_select(int) AS
     SELECT key, value FROM dist_table WHERE key = $1;
 -- Execute 10 times to ensure generic plan path and cache hit path
@@ -210,6 +212,10 @@ EXECUTE cached_insert(103, 1030);
 EXECUTE cached_insert(104, 1040);
 EXECUTE cached_insert(105, 1050);
 EXECUTE cached_insert(106, 1060);
+EXECUTE cached_insert(107, 1070);
+EXECUTE cached_insert(108, 1080);
+EXECUTE cached_insert(109, 1090);
+EXECUTE cached_insert(110, 1100);
 -- Verify inserts
 SELECT key, value FROM dist_table_ts WHERE key >= 100 ORDER BY key;
  key | value
@@ -221,7 +227,11 @@ SELECT key, value FROM dist_table_ts WHERE key >= 100 ORDER BY key;
  104 |  1040
  105 |  1050
  106 |  1060
-(7 rows)
+ 107 |  1070
+ 108 |  1080
+ 109 |  1090
+ 110 |  1100
+(11 rows)
 
 DEALLOCATE cached_insert;
 -- UPDATE

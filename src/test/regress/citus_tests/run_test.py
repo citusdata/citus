@@ -273,6 +273,9 @@ DEPS = {
     "multi_subquery_window_functions": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
+    "subquery_prepared_statements": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
 }
 
 

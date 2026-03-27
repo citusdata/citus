@@ -351,13 +351,13 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 
 				if (shardInterval != NULL)
 				{
-					List *shardIntervalList = list_make1(shardInterval);
+					List *shardIntervalListList = list_make1(list_make1(shardInterval));
 					bool shardsPresent = false;
 					List *relationShardList =
-						RelationShardListForShardIntervalList(shardIntervalList,
+						RelationShardListForShardIntervalList(shardIntervalListList,
 															 &shardsPresent);
 					List *placementList =
-						CreateTaskPlacementListForShardIntervals(shardIntervalList,
+						CreateTaskPlacementListForShardIntervals(shardIntervalListList,
 																shardsPresent, true,
 																false);
 
@@ -382,6 +382,11 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 
 					workerJob->taskList = list_make1(task);
 					workerJob->parametersInJobQueryResolved = true;
+
+					elog(DEBUG2, "prepared statement cache-hit fast path:"
+						 " plan " UINT64_FORMAT " shard " UINT64_FORMAT,
+						 originalDistributedPlan->planId,
+						 shardInterval->shardId);
 
 					/* executor reads from scanState->distributedPlan */
 					scanState->distributedPlan = originalDistributedPlan;
@@ -497,6 +502,116 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	CitusScanState *scanState = (CitusScanState *) node;
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
+	Job *origWorkerJob = originalDistributedPlan->workerJob;
+
+	/*
+	 * Safety: clear stale task pointers from a previous fast-path execution.
+	 * For deferred-pruning plans, workerJob->taskList is NIL until populated
+	 * per-execution.  Without this reset, CopyDistributedPlanWithoutCache
+	 * would deep-copy a stale taskList pointing into freed memory.
+	 */
+	if (origWorkerJob->deferredPruning)
+	{
+		origWorkerJob->taskList = NIL;
+		origWorkerJob->parametersInJobQueryResolved = false;
+	}
+
+	/*
+	 * DML cache-hit fast path for UPDATE/DELETE with deferred pruning.
+	 * Similar to the SELECT fast path in CitusBeginReadOnlyScan(), this
+	 * avoids the expensive CopyDistributedPlanWithoutCache, coordinator
+	 * expression evaluation, and RegenerateTaskForFasthPathQuery by
+	 * extracting the distribution key value directly from ParamListInfo
+	 * and building a minimal Task.
+	 *
+	 * Conditions:
+	 *  - prepared statement caching is enabled
+	 *  - this is at least the second execution (first populates the cache)
+	 *  - the saved job query template exists (set on first execution)
+	 *  - deferred pruning (parameterized distribution key)
+	 *  - no coordinator evaluation needed (no volatile functions)
+	 *  - not an INSERT (excluded from prepared statement caching)
+	 */
+	if (EnablePreparedStatementCaching &&
+		originalDistributedPlan->numberOfTimesExecuted > 0 &&
+		origWorkerJob->savedJobQueryForCaching != NULL &&
+		origWorkerJob->deferredPruning &&
+		!origWorkerJob->requiresCoordinatorEvaluation &&
+		origWorkerJob->jobQuery->commandType != CMD_INSERT)
+	{
+		int paramId = origWorkerJob->distributionKeyParamId;
+		ParamListInfo paramListInfo = estate->es_param_list_info;
+
+		if (paramId >= 1 && paramListInfo != NULL && paramId <= paramListInfo->numParams)
+		{
+			ParamExternData *prm = &paramListInfo->params[paramId - 1];
+			if (OidIsValid(prm->ptype) && !prm->isnull)
+			{
+				Oid relationId = linitial_oid(originalDistributedPlan->relationIdList);
+				CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+				ShardInterval *shardInterval = FindShardInterval(prm->value, cacheEntry);
+
+				if (shardInterval != NULL && ShardExists(shardInterval->shardId))
+				{
+					List *shardIntervalListList = list_make1(list_make1(shardInterval));
+					bool shardsPresent = false;
+					List *relationShardList =
+						RelationShardListForShardIntervalList(shardIntervalListList,
+															 &shardsPresent);
+					List *placementList =
+						CreateTaskPlacementListForShardIntervals(shardIntervalListList,
+																shardsPresent, true,
+																false);
+
+					Task *task = CitusMakeNode(Task);
+					task->taskType = MODIFY_TASK;
+					task->anchorShardId = shardInterval->shardId;
+					task->taskPlacementList = placementList;
+					task->queryCount = 1;
+					task->parametersInQueryStringResolved = true;
+					task->preparedStatementPlanId = originalDistributedPlan->planId;
+					task->jobQueryForPrepare = origWorkerJob->savedJobQueryForCaching;
+					task->relationShardList = relationShardList;
+
+					int16 typLen;
+					bool typByVal;
+					get_typlenbyval(prm->ptype, &typLen, &typByVal);
+					task->partitionKeyValue = makeConst(prm->ptype, -1,
+														InvalidOid, (int) typLen,
+														prm->value, false,
+														typByVal);
+					task->colocationId = origWorkerJob->colocationId;
+
+					origWorkerJob->taskList = list_make1(task);
+					origWorkerJob->parametersInJobQueryResolved = true;
+
+					elog(DEBUG2, "prepared statement cache-hit fast path (DML):"
+						 " plan " UINT64_FORMAT " shard " UINT64_FORMAT,
+						 originalDistributedPlan->planId,
+						 shardInterval->shardId);
+
+					scanState->distributedPlan = originalDistributedPlan;
+
+					/* DML still needs metadata locks and first-replica placement */
+					AcquireMetadataLocks(origWorkerJob->taskList);
+					EnsureAnchorShardsInJobExist(origWorkerJob);
+					origWorkerJob->taskList =
+						FirstReplicaAssignTaskList(origWorkerJob->taskList);
+
+					if (IsLocalPlanCachingSupported(origWorkerJob,
+													originalDistributedPlan))
+					{
+						Task *localTask = linitial(origWorkerJob->taskList);
+						CacheLocalPlanForShardQuery(localTask,
+													originalDistributedPlan,
+													estate->es_param_list_info);
+					}
+
+					return;
+				}
+			}
+		}
+	}
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CitusBeginModifyScan",
@@ -512,46 +627,43 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	Query *jobQuery = workerJob->jobQuery;
 
 	/*
-	 * For prepared statement caching on DML, we use two-phase evaluation:
-	 * 1. Evaluate functions (now(), nextval()) but preserve Param nodes
-	 * 2. Save the query with Params intact for the prepared stmt template
-	 * 3. Then evaluate Params as normal for shard pruning and execution
+	 * For prepared statement caching on DML, save the query template
+	 * with Param nodes intact before any evaluation.
+	 *
+	 * NOTE: PartiallyEvaluateExpression with EVALUATE_FUNCTIONS mode
+	 * switches to EVALUATE_FUNCTIONS_PARAMS for non-SELECT queries,
+	 * which would also resolve Params.  Therefore we must save the
+	 * template from the *original* plan's jobQuery (pre-copy, pre-eval)
+	 * rather than from the copy's jobQuery after partial evaluation.
+	 * Only save once (identical across generic-plan executions).
 	 */
 	Query *savedJobQuery = NULL;
 
-	if (ModifyJobNeedsEvaluation(workerJob))
+	if (EnablePreparedStatementCaching && workerJob->deferredPruning &&
+		jobQuery->commandType != CMD_INSERT)
 	{
-		if (EnablePreparedStatementCaching && workerJob->deferredPruning)
+		Job *origJob = originalDistributedPlan->workerJob;
+		if (origJob->savedJobQueryForCaching == NULL)
 		{
-			/* step 1: evaluate functions but keep Params for template */
-			ExecuteCoordinatorEvaluableFunctions(jobQuery, planState);
-
-			/*
-			 * step 2: save query with evaluated functions but Params
-			 * intact.  Cache on originalDistributedPlan so subsequent
-			 * executions skip the copyObject entirely.
-			 *
-			 * NOTE: for DML containing volatile functions (e.g. now()),
-			 * the evaluated result changes per execution, so we must
-			 * refresh the cached copy each time.
-			 */
-			Job *origJob = originalDistributedPlan->workerJob;
 			MemoryContext origCtx = MemoryContextSwitchTo(
 				GetMemoryChunkContext(originalDistributedPlan));
-			savedJobQuery = copyObject(jobQuery);
-			origJob->savedJobQueryForCaching = savedJobQuery;
+			origJob->savedJobQueryForCaching = copyObject(origJob->jobQuery);
 			MemoryContextSwitchTo(origCtx);
+		}
+		savedJobQuery = origJob->savedJobQueryForCaching;
+	}
 
-			/* step 3: now evaluate Params for pruning */
-			CoordinatorEvaluationContext evalContext;
-			evalContext.planState = planState;
-			evalContext.evaluationMode = EVALUATE_PARAMS;
-			PartiallyEvaluateExpression((Node *) jobQuery, &evalContext);
-		}
-		else
+	if (ModifyJobNeedsEvaluation(workerJob))
+	{
+		if (EnablePreparedStatementCaching && workerJob->deferredPruning &&
+			jobQuery->commandType != CMD_INSERT)
 		{
-			ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
+			elog(DEBUG2, "prepared statement caching: DML two-phase evaluation"
+				 " (plan " UINT64_FORMAT ")",
+				 currentPlan->planId);
 		}
+
+		ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
 
 		/* job query no longer has parameters, so we should not send any */
 		workerJob->parametersInJobQueryResolved = true;
@@ -1013,6 +1125,25 @@ CitusEndScan(CustomScanState *node)
 	{
 		tuplestore_end(scanState->tuplestorestate);
 		scanState->tuplestorestate = NULL;
+	}
+
+	/*
+	 * Clear mutable per-execution state so the cached plan is clean for
+	 * the next execution.  The cache-hit fast paths in CitusBeginReadOnlyScan()
+	 * and CitusBeginModifyScan() store a Task list directly on the original
+	 * plan's workerJob; those Tasks live in the per-execution memory context
+	 * and become dangling after EndScan.  In assert-checking builds the next
+	 * execution's GetDistributedPlan() → copyObject() would traverse freed
+	 * memory without this reset.
+	 *
+	 * Only deferred-pruning plans need this: their taskList is rebuilt
+	 * per-execution.  Non-deferred plans carry their real taskList from
+	 * planning and must not be touched.
+	 */
+	if (workerJob != NULL && workerJob->deferredPruning)
+	{
+		workerJob->taskList = NIL;
+		workerJob->parametersInJobQueryResolved = false;
 	}
 }
 

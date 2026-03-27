@@ -98,6 +98,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(subqueryPushdown);
 	COPY_SCALAR_FIELD(requiresCoordinatorEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
+	COPY_SCALAR_FIELD(distributionKeyParamId);
 	COPY_NODE_FIELD(partitionKeyValue);
 	COPY_NODE_FIELD(localPlannedStatements);
 	COPY_SCALAR_FIELD(parametersInJobQueryResolved);
@@ -355,6 +356,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(rowValuesLists);
 	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
 	COPY_SCALAR_FIELD(parametersInQueryStringResolved);
+	COPY_SCALAR_FIELD(preparedStatementPlanId);
 	COPY_SCALAR_FIELD(tupleDest);
 	COPY_SCALAR_FIELD(queryCount);
 	COPY_SCALAR_FIELD(totalReceivedTupleData);

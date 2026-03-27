@@ -42,6 +42,8 @@ SHOW citus.enable_prepared_statement_caching;
 -- ============================================================
 
 SET citus.enable_prepared_statement_caching = on;
+set citus.max_cached_connection_lifetime to '60min';
+SET search_path TO prepared_stmt_caching;
 
 PREPARE cached_select(int) AS
     SELECT key, value FROM dist_table WHERE key = $1;
@@ -103,6 +105,11 @@ EXECUTE cached_insert(103, 1030);
 EXECUTE cached_insert(104, 1040);
 EXECUTE cached_insert(105, 1050);
 EXECUTE cached_insert(106, 1060);
+
+EXECUTE cached_insert(107, 1070);
+EXECUTE cached_insert(108, 1080);
+EXECUTE cached_insert(109, 1090);
+EXECUTE cached_insert(110, 1100);
 
 -- Verify inserts
 SELECT key, value FROM dist_table_ts WHERE key >= 100 ORDER BY key;
