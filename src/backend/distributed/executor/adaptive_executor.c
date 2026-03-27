@@ -149,6 +149,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
@@ -166,6 +167,7 @@
 #include "distributed/param_utils.h"
 #include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/repartition_join_execution.h"
@@ -924,8 +926,13 @@ AdaptiveExecutorStart(CitusScanState *scanState)
 	 * and never used in the query, mark such parameters' type as Invalid(0),
 	 * which will be used later in ExtractParametersFromParamList() to map them
 	 * to a generic datatype. Skip for dynamic parameters.
+	 *
+	 * When prepared statement caching is enabled, skip this step entirely:
+	 * the params appear "unreferenced" in job->jobQuery because they were
+	 * resolved to constants there, but they are still needed with their
+	 * original types for the parameterized query sent via PQprepare.
 	 */
-	if (paramListInfo && !paramListInfo->paramFetch)
+	if (paramListInfo && !paramListInfo->paramFetch && !EnablePreparedStatementCaching)
 	{
 		paramListInfo = copyParamList(paramListInfo);
 		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
@@ -4256,7 +4263,29 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	uint32 queryIndex = placementExecution->queryIndex;
 
 	Assert(queryIndex < task->queryCount);
-	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
+	char *queryString = NULL;
+
+	/*
+	 * Must be attempted before the paramListInfo path below: a fast-path task
+	 * reports its parameters as resolved, so that path would send plain SQL.
+	 */
+	PreparedStatementSendStatus cacheStatus =
+		PreparedStatementCacheSendQuery(connection, task, paramListInfo,
+										binaryResults, &queryString);
+	if (cacheStatus == PREPARED_STMT_SENT)
+	{
+		return true;
+	}
+	else if (cacheStatus == PREPARED_STMT_FAILED)
+	{
+		return false;
+	}
+
+	/* resolve queryString if not already set (e.g. from cache-full fallback) */
+	if (queryString == NULL)
+	{
+		queryString = TaskQueryStringAtIndex(task, queryIndex);
+	}
 
 	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
