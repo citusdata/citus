@@ -1423,11 +1423,22 @@ GetDistributedPlan(CustomScan *customScan)
 	Node *node = (Node *) linitial(customScan->custom_private);
 	Assert(CitusIsA(node, DistributedPlan));
 
+	/*
+	 * Clear stale task pointers before CheckNodeCopyAndSerialization.
+	 * When prepared statement caching fast-path is active, the previous
+	 * execution may have set workerJob->taskList on the original plan.
+	 * That task's memory has been freed (portal context destroyed), so
+	 * serializing the plan now would dereference dangling pointers.
+	 */
+	DistributedPlan *plan = (DistributedPlan *) node;
+	if (plan->workerJob != NULL && plan->workerJob->deferredPruning)
+	{
+		plan->workerJob->taskList = NIL;
+	}
+
 	CheckNodeCopyAndSerialization(node);
 
-	DistributedPlan *distributedPlan = (DistributedPlan *) node;
-
-	return distributedPlan;
+	return plan;
 }
 
 

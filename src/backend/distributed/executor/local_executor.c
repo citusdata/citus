@@ -343,7 +343,39 @@ ExecuteLocalTaskListExtended(List *taskList,
 				continue;
 			}
 
-			if (taskType != TASK_QUERY_LOCAL_PLAN)
+			if (taskType == TASK_QUERY_NULL && task->jobQueryForPrepare != NULL)
+			{
+				/*
+				 * Fast-path task from prepared statement caching: the task
+				 * was built without a query string to avoid expensive
+				 * deparsing.  Deparse from the saved job query template now
+				 * so we can plan locally.
+				 */
+				Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
+				StringInfoData buf;
+				initStringInfo(&buf);
+
+				if (queryForDeparse->commandType == CMD_INSERT)
+				{
+					deparse_shard_query(queryForDeparse,
+										task->anchorDistributedTableId,
+										task->anchorShardId, &buf);
+				}
+				else
+				{
+					UpdateRelationToShardNames((Node *) queryForDeparse,
+											   task->relationShardList);
+					pg_get_query_def(queryForDeparse, &buf);
+				}
+
+				Query *shardQuery = ParseQueryString(buf.data,
+													 taskParameterTypes,
+													 taskNumParams);
+				localPlan = planner(shardQuery, NULL, CURSOR_OPT_PARALLEL_OK,
+									paramListInfo);
+				pfree(buf.data);
+			}
+			else if (taskType != TASK_QUERY_LOCAL_PLAN)
 			{
 				Query *shardQuery = ParseQueryString(TaskQueryString(task),
 													 taskParameterTypes,
