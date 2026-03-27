@@ -15,7 +15,7 @@ Options:
     -T DURATION    Duration in seconds for each pgbench run (default: 30)
     -r ROWS        Number of rows in benchmark table (default: 10000)
     -c CLIENTS     Comma-separated client counts (default: 1,4,8,32)
-    -w WORKLOADS   Comma-separated workload names (default: select,insert,update,mixed)
+    -w WORKLOADS   Comma-separated workload names (default: select,insert,insert_simple,update,mixed)
     -o OUTDIR      Output directory for results (default: bench_results/<timestamp>)
     -h             Show this help
 """
@@ -44,6 +44,12 @@ SELECT id, val, payload FROM bench_dist WHERE id = :id;
 \\set val random(1, 1000000)
 INSERT INTO bench_dist (id, val, payload) VALUES (:id, :val, md5(:id::text))
 ON CONFLICT (id) DO UPDATE SET val = EXCLUDED.val;
+""",
+    "insert_simple": """\
+\\set id random({rows_plus1}, {rows_times10})
+\\set val random(1, 1000000)
+INSERT INTO bench_dist (id, val, payload) VALUES (:id, :val, 'fixed-payload')
+ON CONFLICT (id) DO NOTHING;
 """,
     "update": """\
 \\set id random(1, {rows})
@@ -81,7 +87,7 @@ def parse_args():
     parser.add_argument(
         "-w",
         "--workloads",
-        default="select,insert,update,mixed",
+        default="select,insert,insert_simple,update,mixed",
         help="Comma-separated workload names",
     )
     parser.add_argument("-o", "--outdir", default=None, help="Output directory")
@@ -377,8 +383,19 @@ ANALYZE bench_dist;
                 results[key] = {"tps": [], "lat": []}
 
                 for iteration in range(1, iterations + 1):
-                    # Vacuum before each iteration to ensure consistent state
-                    run_psql(port, database, "VACUUM ANALYZE bench_dist;")
+                    # Reset table to base state before each INSERT iteration
+                    # to prevent table-growth bias across iterations/GUC settings
+                    if wl_name in ("insert", "insert_simple"):
+                        reset_sql = f"""\
+TRUNCATE bench_dist;
+INSERT INTO bench_dist
+SELECT s, (random() * 1000000)::bigint, md5(s::text)
+FROM generate_series(1, {rows}) s;
+ANALYZE bench_dist;
+"""
+                        run_psql(port, database, reset_sql)
+                    else:
+                        run_psql(port, database, "VACUUM ANALYZE bench_dist;")
 
                     current_run += 1
                     sys.stdout.write(

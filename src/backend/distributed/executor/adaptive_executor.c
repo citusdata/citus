@@ -3974,11 +3974,20 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 				 * (which sends $1-parameterized SQL with extracted param values).
 				 */
 				Query *fallbackQuery = copyObject(task->jobQueryForPrepare);
-				UpdateRelationToShardNames((Node *) fallbackQuery,
-										   task->relationShardList);
 				StringInfoData fallbackBuf;
 				initStringInfo(&fallbackBuf);
-				pg_get_query_def(fallbackQuery, &fallbackBuf);
+				if (fallbackQuery->commandType == CMD_INSERT)
+				{
+					deparse_shard_query(fallbackQuery,
+										task->anchorDistributedTableId,
+										task->anchorShardId, &fallbackBuf);
+				}
+				else
+				{
+					UpdateRelationToShardNames((Node *) fallbackQuery,
+											   task->relationShardList);
+					pg_get_query_def(fallbackQuery, &fallbackBuf);
+				}
 				queryString = fallbackBuf.data;
 				task->parametersInQueryStringResolved = false;
 				goto plain_sql;
@@ -3989,13 +3998,22 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 			 * cached template (shared across executions) stays unmodified.
 			 */
 			Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
-			UpdateRelationToShardNames((Node *) queryForDeparse,
-									   task->relationShardList);
 
 			/* deparse the query tree to get the parameterized SQL string */
 			StringInfoData queryBuf;
 			initStringInfo(&queryBuf);
-			pg_get_query_def(queryForDeparse, &queryBuf);
+			if (queryForDeparse->commandType == CMD_INSERT)
+			{
+				deparse_shard_query(queryForDeparse,
+									task->anchorDistributedTableId,
+									task->anchorShardId, &queryBuf);
+			}
+			else
+			{
+				UpdateRelationToShardNames((Node *) queryForDeparse,
+										   task->relationShardList);
+				pg_get_query_def(queryForDeparse, &queryBuf);
+			}
 
 			/* synchronously prepare the statement on the worker */
 			int prepared = SendRemotePrepare(connection, cacheEntry->stmtName,

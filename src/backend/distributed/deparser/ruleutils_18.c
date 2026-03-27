@@ -2310,6 +2310,33 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 
 	set_deparse_for_query(&dpns, query, parentnamespace);
 
+	/*
+	 * When deparsing for a specific shard, fix up the INSERT target
+	 * relation's rtable_names entry to use the shard name.  Without
+	 * this, qualified column references in ON CONFLICT DO UPDATE (e.g.
+	 * "tablename.col") would use the base table name instead of the
+	 * shard name, causing "missing FROM-clause entry" errors on workers.
+	 *
+	 * Only apply when the RTE has no user-defined alias (the normal
+	 * INSERT...SELECT path sets "citus_table_alias" which we must not
+	 * overwrite).
+	 */
+	if (OidIsValid(distrelid) && shardid > 0 &&
+		query->commandType == CMD_INSERT &&
+		query->resultRelation >= 1 &&
+		query->resultRelation <= list_length(dpns.rtable))
+	{
+		RangeTblEntry *targetRte = rt_fetch(query->resultRelation, dpns.rtable);
+		if (targetRte->rtekind == RTE_RELATION && targetRte->relid == distrelid &&
+			targetRte->alias == NULL)
+		{
+			char *shardName = get_rel_name(distrelid);
+			AppendShardIdToName(&shardName, shardid);
+			lfirst(list_nth_cell(dpns.rtable_names,
+								query->resultRelation - 1)) = shardName;
+		}
+	}
+
 	switch (query->commandType)
 	{
 		case CMD_SELECT:

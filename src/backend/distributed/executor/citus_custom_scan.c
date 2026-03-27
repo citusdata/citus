@@ -517,7 +517,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	/*
-	 * DML cache-hit fast path for UPDATE/DELETE with deferred pruning.
+	 * DML cache-hit fast path for UPDATE/DELETE/INSERT with deferred pruning.
 	 * Similar to the SELECT fast path in CitusBeginReadOnlyScan(), this
 	 * avoids the expensive CopyDistributedPlanWithoutCache, coordinator
 	 * expression evaluation, and RegenerateTaskForFasthPathQuery by
@@ -530,14 +530,12 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	 *  - the saved job query template exists (set on first execution)
 	 *  - deferred pruning (parameterized distribution key)
 	 *  - no coordinator evaluation needed (no volatile functions)
-	 *  - not an INSERT (excluded from prepared statement caching)
 	 */
 	if (EnablePreparedStatementCaching &&
 		originalDistributedPlan->numberOfTimesExecuted > 0 &&
 		origWorkerJob->savedJobQueryForCaching != NULL &&
 		origWorkerJob->deferredPruning &&
-		!origWorkerJob->requiresCoordinatorEvaluation &&
-		origWorkerJob->jobQuery->commandType != CMD_INSERT)
+		!origWorkerJob->requiresCoordinatorEvaluation)
 	{
 		int paramId = origWorkerJob->distributionKeyParamId;
 		ParamListInfo paramListInfo = estate->es_param_list_info;
@@ -566,6 +564,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 					Task *task = CitusMakeNode(Task);
 					task->taskType = MODIFY_TASK;
 					task->anchorShardId = shardInterval->shardId;
+					task->anchorDistributedTableId = relationId;
 					task->taskPlacementList = placementList;
 					task->queryCount = 1;
 					task->parametersInQueryStringResolved = true;
@@ -639,8 +638,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	 */
 	Query *savedJobQuery = NULL;
 
-	if (EnablePreparedStatementCaching && workerJob->deferredPruning &&
-		jobQuery->commandType != CMD_INSERT)
+	if (EnablePreparedStatementCaching && workerJob->deferredPruning)
 	{
 		Job *origJob = originalDistributedPlan->workerJob;
 		if (origJob->savedJobQueryForCaching == NULL)
@@ -655,8 +653,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 	if (ModifyJobNeedsEvaluation(workerJob))
 	{
-		if (EnablePreparedStatementCaching && workerJob->deferredPruning &&
-			jobQuery->commandType != CMD_INSERT)
+		if (EnablePreparedStatementCaching && workerJob->deferredPruning)
 		{
 			elog(DEBUG2, "prepared statement caching: DML two-phase evaluation"
 				 " (plan " UINT64_FORMAT ")",
@@ -696,16 +693,21 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 		/*
 		 * Attach prepared statement metadata to each task for cache lookup
-		 * in SendNextQuery(). Skip for INSERT commands since their query
-		 * trees contain special RTEs that pg_get_query_def cannot deparse.
+		 * in SendNextQuery(). For INSERT commands, also set
+		 * anchorDistributedTableId needed by deparse_shard_query.
 		 */
-		if (EnablePreparedStatementCaching && savedJobQuery != NULL &&
-			jobQuery->commandType != CMD_INSERT)
+		if (EnablePreparedStatementCaching && savedJobQuery != NULL)
 		{
 			foreach_ptr(Task, task, workerJob->taskList)
 			{
 				task->preparedStatementPlanId = currentPlan->planId;
 				task->jobQueryForPrepare = savedJobQuery;
+
+				if (jobQuery->commandType == CMD_INSERT)
+				{
+					task->anchorDistributedTableId =
+						linitial_oid(currentPlan->relationIdList);
+				}
 			}
 		}
 	}
