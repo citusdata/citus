@@ -36,6 +36,7 @@
 #include "distributed/memutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/placement_connection.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shared_connection_stats.h"
@@ -794,6 +795,9 @@ ShutdownConnection(MultiConnection *connection)
 	{
 		SendCancelationRequest(connection);
 	}
+
+	PreparedStatementCacheDestroy(&connection->preparedStatementCache);
+
 	CitusPQFinish(connection);
 }
 
@@ -1232,6 +1236,8 @@ CloseNotReadyMultiConnectionStates(List *connectionStates)
 static void
 CitusPQFinish(MultiConnection *connection)
 {
+	PreparedStatementCacheDestroy(&connection->preparedStatementCache);
+
 	if (connection->pgConn != NULL)
 	{
 		PQfinish(connection->pgConn);

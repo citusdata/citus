@@ -1768,6 +1768,33 @@ RouterInsertJob(Query *originalQuery)
 	job->deferredPruning = true;
 	job->partitionKeyValue = ExtractInsertPartitionKeyValue(originalQuery);
 
+	/*
+	 * For single-row INSERTs with a parameterized distribution key,
+	 * capture the Param index so the executor fast path can extract
+	 * the value from ParamListInfo at execution time.
+	 */
+	if (!isMultiRowInsert && job->partitionKeyValue == NULL &&
+		!job->requiresCoordinatorEvaluation)
+	{
+		Oid distributedTableId = ExtractFirstCitusTableId(originalQuery);
+		if (HasDistributionKey(distributedTableId))
+		{
+			Var *partitionColumn = PartitionColumn(distributedTableId, 1);
+			TargetEntry *targetEntry = get_tle_by_resno(originalQuery->targetList,
+														partitionColumn->varattno);
+			if (targetEntry != NULL)
+			{
+				Node *targetExpression = strip_implicit_coercions(
+					(Node *) targetEntry->expr);
+				if (IsA(targetExpression, Param))
+				{
+					job->distributionKeyParamId =
+						((Param *) targetExpression)->paramid;
+				}
+			}
+		}
+	}
+
 	return job;
 }
 
@@ -1955,6 +1982,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		Job *job = CreateJob(originalQuery);
 		job->deferredPruning = true;
+		job->distributionKeyParamId = fastPathRestrictionContext->distributionKeyParamId;
 
 		ereport(DEBUG2, (errmsg("Deferred pruning for a fast-path router "
 								"query")));

@@ -43,10 +43,13 @@
 #include "distributed/local_plan_cache.h"
 #include "distributed/merge_executor.h"
 #include "distributed/merge_planner.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/shard_utils.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/sorted_merge.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/stats/stat_counters.h"
@@ -82,7 +85,7 @@ static void SortedMergeReScan(CustomScanState *node);
 static void CitusEndScanCommon(CitusScanState *scanState);
 static void CitusReScanCommon(CustomScanState *node);
 static void EnsureForceDelegationDistributionKey(Job *job);
-static void EnsureAnchorShardsInJobExist(Job *job);
+
 static bool AnchorShardsInTaskListExist(List *taskList);
 static void TryToRerouteFastPathModifyQuery(Job *job);
 static void CheckQueryDeparseSafety(Query *query);
@@ -355,6 +358,28 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		return;
 	}
 
+	Job *workerJob = originalDistributedPlan->workerJob;
+
+	/*
+	 * Always clear stale task pointers from the previous fast-path execution.
+	 * For deferred-pruning plans, workerJob->taskList is NIL until populated
+	 * per-execution by RegenerateTaskForFasthPathQuery (or the fast path below).
+	 * Without this reset, if a previous execution took the fast path and then the
+	 * GUC is disabled, CopyDistributedPlanWithoutCache would deep-copy a stale
+	 * taskList pointing into freed memory.
+	 */
+	workerJob->taskList = NIL;
+	workerJob->parametersInJobQueryResolved = false;
+
+	/*
+	 * A cached plan can build its task straight from the bound parameters,
+	 * skipping the plan copy, coordinator evaluation and task regeneration.
+	 */
+	if (PreparedStatementCacheTryFastPath(scanState, estate, false))
+	{
+		return;
+	}
+
 	/*
 	 * Create a copy of the generic plan for the current execution, but make a shallow
 	 * copy of the plan cache. That means we'll be able to access the plan cache via
@@ -365,8 +390,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		CopyDistributedPlanWithoutCache(originalDistributedPlan);
 	scanState->distributedPlan = currentPlan;
 
-	Job *workerJob = currentPlan->workerJob;
-	Query *jobQuery = workerJob->jobQuery;
+	Job *currentJob = currentPlan->workerJob;
+	Query *jobQuery = currentJob->jobQuery;
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 
 	/*
@@ -374,6 +399,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	 * partition column value.
 	 */
 	Assert(currentPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner);
+
+	Query *savedJobQuery = PreparedStatementCacheSaveTemplate(originalDistributedPlan);
 
 	/*
 	 * Evaluate parameters, because the parameters are only available on the
@@ -388,13 +415,15 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
 
 	/* job query no longer has parameters, so we should not send any */
-	workerJob->parametersInJobQueryResolved = true;
+	currentJob->parametersInJobQueryResolved = true;
 
 	/* parameters are filled in, so we can generate a task for this execution */
-	RegenerateTaskForFasthPathQuery(workerJob);
+	RegenerateTaskForFasthPathQuery(currentJob);
+
+	PreparedStatementCacheAttachToTasks(currentPlan, currentJob, savedJobQuery);
 
 	bool planAddedToCache = false;
-	CacheLocalPlanForShardQuery(workerJob, originalDistributedPlan,
+	CacheLocalPlanForShardQuery(currentJob, originalDistributedPlan,
 								estate->es_param_list_info, &planAddedToCache);
 
 	/* Use a newly cached plan for the current execution as well. */
@@ -421,6 +450,28 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	CitusScanState *scanState = (CitusScanState *) node;
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
+	Job *origWorkerJob = originalDistributedPlan->workerJob;
+
+	/*
+	 * Safety: clear stale task pointers from a previous fast-path execution.
+	 * For deferred-pruning plans, workerJob->taskList is NIL until populated
+	 * per-execution.  Without this reset, CopyDistributedPlanWithoutCache
+	 * would deep-copy a stale taskList pointing into freed memory.
+	 */
+	if (origWorkerJob->deferredPruning)
+	{
+		origWorkerJob->taskList = NIL;
+		origWorkerJob->parametersInJobQueryResolved = false;
+	}
+
+	/*
+	 * A cached plan can build its task straight from the bound parameters,
+	 * skipping the plan copy, coordinator evaluation and task regeneration.
+	 */
+	if (PreparedStatementCacheTryFastPath(scanState, estate, true))
+	{
+		return;
+	}
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CitusBeginModifyScan",
@@ -434,6 +485,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	Job *workerJob = currentPlan->workerJob;
 
 	Query *jobQuery = workerJob->jobQuery;
+
+	Query *savedJobQuery = PreparedStatementCacheSaveTemplate(originalDistributedPlan);
 
 	if (ModifyJobNeedsEvaluation(workerJob))
 	{
@@ -467,6 +520,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		{
 			RegenerateTaskForFasthPathQuery(workerJob);
 		}
+
+		PreparedStatementCacheAttachToTasks(currentPlan, workerJob, savedJobQuery);
 	}
 	else if (workerJob->requiresCoordinatorEvaluation)
 	{
@@ -555,7 +610,7 @@ TryToRerouteFastPathModifyQuery(Job *job)
  * EnsureAnchorShardsInJobExist ensures all shards are valid in job.
  * If it finds a non-existent shard in given job, it throws an error.
  */
-static void
+void
 EnsureAnchorShardsInJobExist(Job *job)
 {
 	if (!AnchorShardsInTaskListExist(job->taskList))
@@ -629,13 +684,17 @@ CopyDistributedPlanWithoutCache(DistributedPlan *originalDistributedPlan)
 {
 	List *localPlannedStatements =
 		originalDistributedPlan->workerJob->localPlannedStatements;
+	Query *savedJobQueryForCaching =
+		originalDistributedPlan->workerJob->savedJobQueryForCaching;
 	originalDistributedPlan->workerJob->localPlannedStatements = NIL;
+	originalDistributedPlan->workerJob->savedJobQueryForCaching = NULL;
 
 	DistributedPlan *distributedPlan = copyObject(originalDistributedPlan);
 
-	/* set back the immutable field */
+	/* set back the immutable/cached fields */
 	originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
 	distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+	originalDistributedPlan->workerJob->savedJobQueryForCaching = savedJobQueryForCaching;
 
 	return distributedPlan;
 }
@@ -895,6 +954,25 @@ CitusEndScanCommon(CitusScanState *scanState)
 
 		/* queries without partition key are also recorded */
 		CitusQueryStatsExecutorsEntry(queryId, executorType, partitionKeyString);
+	}
+
+	/*
+	 * Clear mutable per-execution state so the cached plan is clean for
+	 * the next execution.  The cache-hit fast paths in CitusBeginReadOnlyScan()
+	 * and CitusBeginModifyScan() store a Task list directly on the original
+	 * plan's workerJob; those Tasks live in the per-execution memory context
+	 * and become dangling after EndScan.  In assert-checking builds the next
+	 * execution's GetDistributedPlan() → copyObject() would traverse freed
+	 * memory without this reset.
+	 *
+	 * Only deferred-pruning plans need this: their taskList is rebuilt
+	 * per-execution.  Non-deferred plans carry their real taskList from
+	 * planning and must not be touched.
+	 */
+	if (workerJob != NULL && workerJob->deferredPruning)
+	{
+		workerJob->taskList = NIL;
+		workerJob->parametersInJobQueryResolved = false;
 	}
 }
 
