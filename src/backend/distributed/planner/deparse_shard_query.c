@@ -780,6 +780,35 @@ TaskQueryString(Task *task)
 	int taskQueryType = GetTaskQueryType(task);
 	if (taskQueryType == TASK_QUERY_NULL)
 	{
+		if (task->jobQueryForPrepare != NULL)
+		{
+			/*
+			 * Fast-path task from prepared statement caching: deparse the
+			 * query from the saved template and cache the result on the task
+			 * so subsequent calls don't re-deparse.
+			 */
+			Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
+			StringInfoData buf;
+			initStringInfo(&buf);
+
+			if (queryForDeparse->commandType == CMD_INSERT)
+			{
+				deparse_shard_query(queryForDeparse,
+									task->anchorDistributedTableId,
+									task->anchorShardId, &buf);
+			}
+			else
+			{
+				UpdateRelationToShardNames((Node *) queryForDeparse,
+										   task->relationShardList);
+				pg_get_query_def(queryForDeparse, &buf);
+			}
+
+			SetTaskQueryString(task, buf.data);
+			pfree(buf.data);
+			return task->taskQuery.data.queryStringLazy;
+		}
+
 		/* if task query type is TASK_QUERY_NULL then the data will be NULL,
 		 * this is unexpected state */
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),

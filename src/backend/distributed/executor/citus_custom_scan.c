@@ -364,6 +364,7 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 					Task *task = CitusMakeNode(Task);
 					task->taskType = READ_TASK;
 					task->anchorShardId = shardInterval->shardId;
+					task->anchorDistributedTableId = relationId;
 					task->taskPlacementList = placementList;
 					task->queryCount = 1;
 					task->parametersInQueryStringResolved = true;
@@ -390,6 +391,19 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 
 					/* executor reads from scanState->distributedPlan */
 					scanState->distributedPlan = originalDistributedPlan;
+
+					/*
+					 * Cache a local plan for local execution so the local
+					 * executor can use it instead of trying to get a query
+					 * string from the task (which has TASK_QUERY_NULL).
+					 */
+					if (IsLocalPlanCachingSupported(workerJob,
+													originalDistributedPlan))
+					{
+						CacheLocalPlanForShardQuery(task,
+													originalDistributedPlan,
+													estate->es_param_list_info);
+					}
 
 					return;
 				}
@@ -462,7 +476,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	 */
 	if (EnablePreparedStatementCaching && savedJobQuery != NULL)
 	{
-		foreach_ptr(Task, task, currentJob->taskList)
+		Task *task = NULL;
+		foreach_declared_ptr(task, currentJob->taskList)
 		{
 			task->preparedStatementPlanId = currentPlan->planId;
 			task->jobQueryForPrepare = savedJobQuery;
@@ -698,7 +713,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 */
 		if (EnablePreparedStatementCaching && savedJobQuery != NULL)
 		{
-			foreach_ptr(Task, task, workerJob->taskList)
+			Task *task = NULL;
+			foreach_declared_ptr(task, workerJob->taskList)
 			{
 				task->preparedStatementPlanId = currentPlan->planId;
 				task->jobQueryForPrepare = savedJobQuery;
