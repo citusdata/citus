@@ -3771,8 +3771,6 @@ ActivateNode(WorkerNode *acivateNode)
 
 	if ( EnableMetadataSync)
 	{
-
-
 		/* send the delete command to all primary nodes with metadata */
 		char *nodeUpdateCommand = NodeStateUpdateCommand(acivateNode->nodeId, true);
 		SendCommandToWorkersWithMetadata(nodeUpdateCommand);
