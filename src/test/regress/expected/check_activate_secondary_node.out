@@ -78,3 +78,7 @@ SET citus.metadata_sync_mode TO 'nontransactional';
 SELECT 1 FROM citus_activate_node('localhost', :follower_worker_2_port);
 ERROR:  this operation cannot be completed in nontransactional metadata sync mode
 HINT:  SET citus.metadata_sync_mode to 'transactional'
+SET citus.metadata_sync_mode TO 'transactional';
+-- error because the node does not exist
+SELECT 1 FROM citus_activate_node('localhost', 7777);
+ERROR:  node at "localhost:xxxxx" does not exist
