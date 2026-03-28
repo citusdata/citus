@@ -147,6 +147,7 @@ static BackgroundWorkerHandle * LockPlacementsWithBackgroundWorkersInPrimaryNode
 static int32 CitusAddCloneNode(WorkerNode *primaryWorkerNode,
 							   char *cloneHostname, int32 clonePort);
 static void RemoveCloneNode(WorkerNode *cloneNode);
+static void ActivateNode(WorkerNode *acivateNode);
 
 /* Function definitions go here */
 
@@ -787,6 +788,11 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	if (NodeIsSecondary(workerNode))
 	{
 		EnsureTransactionalMetadataSyncMode();
+
+		ActivateNode(workerNode);
+		TransactionModifiedNodeMetadata = true;
+
+		PG_RETURN_INT32(workerNode->nodeId);
 	}
 
 	/*
@@ -3719,4 +3725,63 @@ SyncNodeMetadata(MetadataSyncContext *context)
 	 * metadata just for activated workers.
 	 */
 	SendOrCollectCommandListToActivatedNodes(context, recreateNodeSnapshotCommandList);
+}
+
+static void
+ActivateNode(WorkerNode *acivateNode)
+{
+	const bool indexOK = true;
+
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+
+	ScanKeyData scanKey[1];
+
+
+	Datum *values = palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isnull = palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = palloc0(tupleDescriptor->natts * sizeof(bool));
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodeid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(acivateNode->nodeId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, DistNodeNodeIdIndexId(),
+													indexOK,
+													NULL, 1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+							   acivateNode->workerName, acivateNode->workerPort)));
+	}
+
+	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(true);
+	isnull[Anum_pg_dist_node_isactive - 1] = false;
+	replace[Anum_pg_dist_node_isactive - 1] = true;
+
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistNode, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
+
+	CommandCounterIncrement();
+
+	if ( EnableMetadataSync)
+	{
+
+
+		/* send the delete command to all primary nodes with metadata */
+		char *nodeUpdateCommand = NodeStateUpdateCommand(acivateNode->nodeId, true);
+		SendCommandToWorkersWithMetadata(nodeUpdateCommand);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistNode, NoLock);
+
+	pfree(values);
+	pfree(isnull);
+	pfree(replace);
 }
