@@ -61,44 +61,34 @@ SET citus.enable_sorted_merge TO off;
 SET citus.enable_sorted_merge TO on;
 
 -- A1: ORDER BY distribution column
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val FROM sorted_merge_test ORDER BY id;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id');
 
 -- A2: ORDER BY DESC
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id FROM sorted_merge_test ORDER BY id DESC;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id DESC');
 
 -- A3: ORDER BY DESC NULLS LAST
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS LAST;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS LAST');
 
 -- A4: ORDER BY non-distribution column
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val FROM sorted_merge_test ORDER BY val;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY val');
 
 -- A5: Multi-column ORDER BY
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val FROM sorted_merge_test ORDER BY id, val;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id, val');
 
 -- A6: Mixed directions
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val, num FROM sorted_merge_test ORDER BY id ASC, num DESC;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val, num FROM sorted_merge_test ORDER BY id ASC, num DESC');
 
 -- A7: GROUP BY dist_col ORDER BY dist_col
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id');
 
 -- A8: WHERE clause + ORDER BY
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val FROM sorted_merge_test WHERE num > 50 ORDER BY id;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test WHERE num > 50 ORDER BY id');
 
 -- A9: Expression in ORDER BY (non-aggregate)
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, num FROM sorted_merge_test ORDER BY id + 1;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, num FROM sorted_merge_test ORDER BY id + 1');
 
 -- A10: ORDER BY with LIMIT (existing pushdown, verify no regression)
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5');
 
 -- =================================================================
 -- Category B: Ineligibility — sort NOT pushed for merge
@@ -107,20 +97,16 @@ SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
 SET citus.enable_sorted_merge TO on;
 
 -- B1: ORDER BY count(*)
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*);
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*)');
 
 -- B2: ORDER BY avg(col)
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, avg(num) FROM sorted_merge_test GROUP BY id ORDER BY avg(num);
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, avg(num) FROM sorted_merge_test GROUP BY id ORDER BY avg(num)');
 
 -- B3: GROUP BY non-dist col, ORDER BY non-dist col
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY val;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY val');
 
 -- B4: GROUP BY non-dist col, ORDER BY aggregate
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY count(*);
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT val, count(*) FROM sorted_merge_test GROUP BY val ORDER BY count(*)');
 
 -- =================================================================
 -- Category C: Correctness — results match GUC off vs on
@@ -293,21 +279,17 @@ SELECT id FROM sorted_merge_test WHERE false ORDER BY id;
 
 -- F1: Simple LIMIT + ORDER BY: plan unchanged between GUC off and on
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5');
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5');
 
 -- F2: GROUP BY dist_col + ORDER BY + LIMIT
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5');
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5');
 
 -- F3: ORDER BY aggregate + LIMIT (not eligible for merge)
 SET citus.enable_sorted_merge TO off;
@@ -322,12 +304,10 @@ SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY count(*) DESC, i
 
 -- G1: Sort elision verification — coordinator Sort node absent
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val FROM sorted_merge_test ORDER BY id;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id');
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val FROM sorted_merge_test ORDER BY id;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id');
 
 -- G2a: PREPARE with merge ON, EXECUTE after turning OFF
 -- Plan-time decision is baked in — cached plan must still merge correctly
@@ -359,8 +339,7 @@ COMMIT;
 
 -- G4: EXPLAIN ANALYZE (sorted merge skipped for EXPLAIN ANALYZE)
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5');
 
 -- G5: ORDER BY aggregate + LIMIT — crash regression test
 -- Previously caused SIGSEGV when sorted merge was enabled because
@@ -461,15 +440,13 @@ SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
 SET citus.enable_sorted_merge TO on;
 
 -- H1 EXPLAIN
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-WITH ordered_cte AS (
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH ordered_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id
 )
-SELECT * FROM ordered_cte ORDER BY id LIMIT 5;
+SELECT * FROM ordered_cte ORDER BY id LIMIT 5');
 
 -- H2 EXPLAIN
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-WITH eligible_cte AS (
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH eligible_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
 ),
 ineligible_cte AS (
@@ -477,58 +454,52 @@ ineligible_cte AS (
 )
 SELECT e.id, e.val, i.cnt
 FROM eligible_cte e JOIN ineligible_cte i ON e.id = i.id
-ORDER BY e.id;
+ORDER BY e.id');
 
 -- H3 EXPLAIN
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-WITH top_ids AS (
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH top_ids AS (
     SELECT id FROM sorted_merge_test ORDER BY id LIMIT 20
 )
 SELECT t.id, t.val
 FROM sorted_merge_test t
 JOIN top_ids ON t.id = top_ids.id
 ORDER BY t.id
-LIMIT 10;
+LIMIT 10');
 
 -- H4 EXPLAIN
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT id, val FROM sorted_merge_test
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test
 WHERE id IN (
     SELECT id FROM sorted_merge_events ORDER BY id LIMIT 10
 )
 ORDER BY id
-LIMIT 5;
+LIMIT 5');
 
 -- H5 EXPLAIN
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-WITH small_cte AS (
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH small_cte AS (
     SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 20
 )
-SELECT * FROM small_cte ORDER BY id LIMIT 5;
+SELECT * FROM small_cte ORDER BY id LIMIT 5');
 
 -- H6 EXPLAIN
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-SELECT foo.id, bar.id as bar_id
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT foo.id, bar.id as bar_id
 FROM
     (SELECT id FROM sorted_merge_test ORDER BY id LIMIT 3) as foo,
     (SELECT id FROM sorted_merge_events ORDER BY id LIMIT 3) as bar
 ORDER BY foo.id, bar.id
-LIMIT 5;
+LIMIT 5');
 
 -- H7 EXPLAIN — GUC off vs on
 SET citus.enable_sorted_merge TO off;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-WITH cte AS (
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH cte AS (
     SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
 )
-SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5');
 
 SET citus.enable_sorted_merge TO on;
-EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
-WITH cte AS (
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH cte AS (
     SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
 )
-SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5;
+SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5');
 
 -- =================================================================
 -- Cleanup
