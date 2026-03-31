@@ -81,6 +81,7 @@ test: hyperscale_tutorial partitioned_intermediate_results distributed_intermedi
 test: multi_basic_queries cross_join multi_complex_expressions multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
 test: sql_procedure multi_function_in_join row_types materialized_view
+test: sql_procedure_no_transaction_block
 test: multi_subquery_in_where_reference_clause adaptive_executor propagate_set_commands geqo
 test: forcedelegation_functions system_queries
 # this should be run alone as it gets too many clients
