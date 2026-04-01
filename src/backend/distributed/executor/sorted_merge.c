@@ -331,3 +331,207 @@ MergeHeapComparator(Datum a, Datum b, void *arg)
 
 	return 0;
 }
+
+
+/*
+ * SortedMergeAdapter streams tuples from K pre-sorted per-task stores
+ * via a binary heap, returning one globally-sorted tuple per call.
+ *
+ * This is the streaming replacement for MergePerTaskStoresIntoFinalStore().
+ * Instead of copying all tuples into a final tuplestore, the adapter holds
+ * the per-task stores and heap alive, producing tuples on demand.
+ *
+ * Modeled after PostgreSQL's MergeAppend (nodeMergeAppend.c), which uses
+ * the same binary-heap-over-sorted-inputs pattern.
+ */
+struct SortedMergeAdapter
+{
+	Tuplestorestate **perTaskStores;    /* K per-task stores (owned) */
+	int nstores;
+
+	binaryheap *heap;
+
+	MergeContext mergeCtx;              /* embedded — passed to heap as bh_arg */
+
+	TupleDesc tupleDesc;
+	bool exhausted;
+	bool initialized;
+};
+
+
+/*
+ * CreateSortedMergeAdapter builds a streaming merge adapter over K per-task
+ * stores. The adapter takes ownership of perTaskStores — the caller must
+ * not free them; FreeSortedMergeAdapter() handles cleanup.
+ *
+ * All memory is allocated in CurrentMemoryContext. The caller must ensure
+ * this context outlives the adapter (the AdaptiveExecutor local context
+ * already satisfies this — see adaptive_executor.c).
+ */
+SortedMergeAdapter *
+CreateSortedMergeAdapter(Tuplestorestate **perTaskStores,
+						 int nstores,
+						 SortedMergeKey *mergeKeys,
+						 int nkeys,
+						 TupleDesc tupleDesc)
+{
+	SortedMergeAdapter *adapter = palloc0(sizeof(SortedMergeAdapter));
+	adapter->perTaskStores = perTaskStores;
+	adapter->nstores = nstores;
+	adapter->tupleDesc = tupleDesc;
+
+	/* one comparison slot per store — owned via mergeCtx.slots */
+	TupleTableSlot **slots = palloc(nstores * sizeof(TupleTableSlot *));
+	for (int i = 0; i < nstores; i++)
+	{
+		slots[i] = MakeSingleTupleTableSlot(tupleDesc, &TTSOpsMinimalTuple);
+	}
+
+	/* build SortSupport (same logic as MergePerTaskStoresIntoFinalStore) */
+	SortSupportData *sortKeys = palloc0(nkeys * sizeof(SortSupportData));
+	for (int i = 0; i < nkeys; i++)
+	{
+		SortSupport sk = &sortKeys[i];
+		sk->ssup_cxt = CurrentMemoryContext;
+		sk->ssup_collation = mergeKeys[i].collation;
+		sk->ssup_nulls_first = mergeKeys[i].nullsFirst;
+		sk->ssup_attno = mergeKeys[i].attno;
+		PrepareSortSupportFromOrderingOp(mergeKeys[i].sortop, sk);
+	}
+
+	/* set up embedded merge context for heap comparisons */
+	adapter->mergeCtx.slots = slots;
+	adapter->mergeCtx.sortKeys = sortKeys;
+	adapter->mergeCtx.nkeys = nkeys;
+
+	/* allocate heap with embedded context as comparator arg */
+	adapter->heap = binaryheap_allocate(nstores, MergeHeapComparator,
+										&adapter->mergeCtx);
+
+	return adapter;
+}
+
+
+/*
+ * SortedMergeAdapterNext returns the next globally-sorted tuple from the
+ * adapter by copying it into the provided scanSlot. Returns true if a tuple
+ * was returned, false if all stores are exhausted.
+ *
+ * The heap uses per-store comparison slots (mergeCtx.slots). After
+ * identifying the winner, we ExecCopySlot from the winner's comparison
+ * slot into the scan slot. This is a MinimalTuple copy, comparable in
+ * cost to the tuplestore_puttupleslot write in the eager merge path.
+ *
+ * On each call after the first, we advance the previous winner's store
+ * and update the heap before selecting the new winner. This matches the
+ * MergeAppend pattern in nodeMergeAppend.c.
+ */
+bool
+SortedMergeAdapterNext(SortedMergeAdapter *adapter, TupleTableSlot *scanSlot)
+{
+	if (adapter->exhausted)
+	{
+		ExecClearTuple(scanSlot);
+		return false;
+	}
+
+	if (!adapter->initialized)
+	{
+		/* first call: seed the heap with the first tuple from each store */
+		for (int i = 0; i < adapter->nstores; i++)
+		{
+			tuplestore_rescan(adapter->perTaskStores[i]);
+			if (tuplestore_gettupleslot(adapter->perTaskStores[i], true, false,
+										adapter->mergeCtx.slots[i]))
+			{
+				binaryheap_add_unordered(adapter->heap, Int32GetDatum(i));
+			}
+		}
+		binaryheap_build(adapter->heap);
+		adapter->initialized = true;
+	}
+	else
+	{
+		/* advance the previous winner and update the heap */
+		int prevWinner = DatumGetInt32(binaryheap_first(adapter->heap));
+		if (tuplestore_gettupleslot(adapter->perTaskStores[prevWinner], true,
+									false, adapter->mergeCtx.slots[prevWinner]))
+		{
+			binaryheap_replace_first(adapter->heap, Int32GetDatum(prevWinner));
+		}
+		else
+		{
+			(void) binaryheap_remove_first(adapter->heap);
+		}
+	}
+
+	if (binaryheap_empty(adapter->heap))
+	{
+		adapter->exhausted = true;
+		ExecClearTuple(scanSlot);
+		return false;
+	}
+
+	int winner = DatumGetInt32(binaryheap_first(adapter->heap));
+	ExecCopySlot(scanSlot, adapter->mergeCtx.slots[winner]);
+
+	return true;
+}
+
+
+/*
+ * SortedMergeAdapterRescan resets the adapter to re-read from the beginning.
+ * Called from CitusReScan() for cursor WITH HOLD patterns.
+ *
+ * Cost is O(K log K) to rebuild the heap, which is negligible for typical
+ * shard counts (4-64). Both binaryheap_reset() and tuplestore_rescan()
+ * are proven APIs used by PostgreSQL's ExecReScanMergeAppend.
+ */
+void
+SortedMergeAdapterRescan(SortedMergeAdapter *adapter)
+{
+	binaryheap_reset(adapter->heap);
+
+	for (int i = 0; i < adapter->nstores; i++)
+	{
+		tuplestore_rescan(adapter->perTaskStores[i]);
+		if (tuplestore_gettupleslot(adapter->perTaskStores[i], true, false,
+									adapter->mergeCtx.slots[i]))
+		{
+			binaryheap_add_unordered(adapter->heap, Int32GetDatum(i));
+		}
+	}
+	binaryheap_build(adapter->heap);
+
+	adapter->exhausted = false;
+	adapter->initialized = true;
+}
+
+
+/*
+ * FreeSortedMergeAdapter releases all adapter resources including
+ * per-task stores, comparison slots, sort keys, and the heap.
+ * Called from CitusEndScan() for deterministic cleanup.
+ */
+void
+FreeSortedMergeAdapter(SortedMergeAdapter *adapter)
+{
+	if (adapter == NULL)
+	{
+		return;
+	}
+
+	for (int i = 0; i < adapter->nstores; i++)
+	{
+		tuplestore_end(adapter->perTaskStores[i]);
+		ExecDropSingleTupleTableSlot(adapter->mergeCtx.slots[i]);
+	}
+
+	binaryheap_free(adapter->heap);
+	pfree(adapter->mergeCtx.slots);
+	pfree(adapter->mergeCtx.sortKeys);
+	pfree(adapter->perTaskStores);
+
+	/* mergeCtx is embedded in adapter, freed with the adapter itself */
+	pfree(adapter);
+}

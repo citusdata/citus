@@ -28,6 +28,9 @@ typedef struct CitusScanState
 	MultiExecutorType executorType;   /* distributed executor type */
 	bool finishedRemoteScan;          /* flag to check if remote scan is finished */
 	Tuplestorestate *tuplestorestate; /* tuple store to store distributed results */
+
+	/* streaming sorted merge adapter (NULL when not using sorted merge) */
+	struct SortedMergeAdapter *mergeAdapter;
 } CitusScanState;
 
 

@@ -71,6 +71,7 @@ extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
 extern bool SortReturning;
 extern bool EnableSortedMerge;
+extern bool EnableStreamingSortedMerge;
 extern int ExecutorLevel;
 
 
