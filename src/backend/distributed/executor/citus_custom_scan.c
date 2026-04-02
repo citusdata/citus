@@ -476,7 +476,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	 */
 	if (EnablePreparedStatementCaching && savedJobQuery != NULL)
 	{
-		foreach_ptr(Task, task, currentJob->taskList)
+		Task *task = NULL;
+		foreach_declared_ptr(task, currentJob->taskList)
 		{
 			task->preparedStatementPlanId = currentPlan->planId;
 			task->jobQueryForPrepare = savedJobQuery;
@@ -712,7 +713,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 */
 		if (EnablePreparedStatementCaching && savedJobQuery != NULL)
 		{
-			foreach_ptr(Task, task, workerJob->taskList)
+			Task *task = NULL;
+			foreach_declared_ptr(task, workerJob->taskList)
 			{
 				task->preparedStatementPlanId = currentPlan->planId;
 				task->jobQueryForPrepare = savedJobQuery;
