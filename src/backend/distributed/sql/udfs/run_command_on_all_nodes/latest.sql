@@ -4,6 +4,7 @@ CREATE FUNCTION pg_catalog.run_command_on_all_nodes(command text, parallel bool 
 													OUT nodeid int, OUT success bool, OUT result text)
 	RETURNS SETOF record
 	LANGUAGE plpgsql
+	SET search_path = pg_catalog
 	AS $function$
 DECLARE
 	nodenames text[];

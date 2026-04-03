@@ -10,6 +10,7 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(enforce_version_check bool default true)
   RETURNS bool
   LANGUAGE plpgsql
+  SET search_path = pg_catalog
   AS $$
 BEGIN
 

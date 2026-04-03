@@ -1,4 +1,3 @@
-SET search_path = 'pg_catalog';
 DROP VIEW IF EXISTS pg_catalog.citus_stats;
 
 CREATE OR REPLACE VIEW citus.citus_stats AS
@@ -78,5 +77,3 @@ GROUP BY nsp.nspname, c.citus_table, p.relname, c.attname;
 
 ALTER VIEW citus.citus_stats SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_stats TO PUBLIC;
-
-RESET search_path;
