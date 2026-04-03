@@ -39,7 +39,8 @@ extern SortedMergeAdapter * CreateSortedMergeAdapter(Tuplestorestate **perTaskSt
 													 int nstores,
 													 SortedMergeKey *mergeKeys,
 													 int nkeys,
-													 TupleDesc tupleDesc);
+													 TupleDesc tupleDesc,
+													 bool ownsStores);
 extern bool SortedMergeAdapterNext(SortedMergeAdapter *adapter,
 								   TupleTableSlot *scanSlot);
 extern void SortedMergeAdapterRescan(SortedMergeAdapter *adapter);
