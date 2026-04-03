@@ -73,6 +73,8 @@ typedef struct MasterAggregateWalkerContext
 {
 	const ExtendedOpNodeProperties *extendedOpNodeProperties;
 	AttrNumber columnId;
+	List *groupByTargetEntryList;
+	bool haveNonVarGrouping;
 } MasterAggregateWalkerContext;
 
 typedef struct WorkerAggregateWalkerContext
@@ -80,6 +82,8 @@ typedef struct WorkerAggregateWalkerContext
 	const ExtendedOpNodeProperties *extendedOpNodeProperties;
 	List *expressionList;
 	bool createGroupByClause;
+	List *groupByTargetEntryList;
+	bool haveNonVarGrouping;
 } WorkerAggregateWalkerContext;
 
 
@@ -227,11 +231,14 @@ static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 static void ProcessTargetListForWorkerQuery(List *targetEntryList,
 											ExtendedOpNodeProperties *
 											extendedOpNodeProperties,
+											List *groupClauseList,
 											QueryTargetList *queryTargetList,
 											QueryGroupClause *queryGroupClause);
 static void ProcessHavingClauseForWorkerQuery(Node *havingQual,
 											  ExtendedOpNodeProperties *
 											  extendedOpNodeProperties,
+											  List *groupClauseList,
+											  List *targetEntryList,
 											  Node **workerHavingQual,
 											  QueryTargetList *queryTargetList,
 											  QueryGroupClause *queryGroupClause);
@@ -324,6 +331,7 @@ static List * WorkerSortClauseList(Node *limitCount,
 								   List *groupClauseList, List *sortClauseList,
 								   OrderByLimitReference orderByLimitReference);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
+static bool HaveNonVarGrouping(List *groupByTargetEntryList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByComplexExpression(List *sortClauseList, List *targetList);
@@ -1424,9 +1432,22 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	List *newGroupClauseList = NIL;
 	Node *originalHavingQual = originalOpNode->havingQual;
 	Node *newHavingQual = NULL;
+
+	/*
+	 * Build GROUP BY target entry list for the master-side mutator so it
+	 * can recognize GROUP BY subexpressions and map them to a single
+	 * worker output column instead of recursing into their children.
+	 * This must match what WorkerAggregateWalker does on the worker side.
+	 */
+	List *groupByTargetEntryList = GroupTargetEntryList(
+		originalOpNode->groupClauseList, targetEntryList);
+	bool haveNonVarGrouping = HaveNonVarGrouping(groupByTargetEntryList);
+
 	MasterAggregateWalkerContext walkerContext = {
 		.extendedOpNodeProperties = extendedOpNodeProperties,
 		.columnId = 1,
+		.groupByTargetEntryList = groupByTargetEntryList,
+		.haveNonVarGrouping = haveNonVarGrouping,
 	};
 
 	/* iterate over original target entries */
@@ -1573,6 +1594,34 @@ MasterAggregateMutator(Node *originalNode, MasterAggregateWalkerContext *walkerC
 	}
 	else
 	{
+		/*
+		 * If the current node matches a non-Var GROUP BY expression, map it
+		 * to a single worker output column reference.  The worker emits this
+		 * expression intact, so the master must consume exactly one column
+		 * for it rather than recursing into its children.
+		 */
+		if (walkerContext->haveNonVarGrouping)
+		{
+			TargetEntry *groupByTargetEntry = NULL;
+			foreach_declared_ptr(groupByTargetEntry,
+								 walkerContext->groupByTargetEntryList)
+			{
+				if (equal(originalNode, groupByTargetEntry->expr))
+				{
+					Oid nodeType = exprType(originalNode);
+					int32 nodeTypmod = exprTypmod(originalNode);
+					Oid nodeColl = exprCollation(originalNode);
+					Var *column = makeVar(masterTableId,
+										  walkerContext->columnId,
+										  nodeType, nodeTypmod,
+										  nodeColl, 0);
+					walkerContext->columnId++;
+					newNode = (Node *) column;
+					return newNode;
+				}
+			}
+		}
+
 		newNode = expression_tree_mutator(originalNode, MasterAggregateMutator,
 										  (void *) walkerContext);
 	}
@@ -2407,9 +2456,12 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 	/* process each part of the query in order to generate the worker query's parts */
 	ProcessTargetListForWorkerQuery(originalTargetEntryList, extendedOpNodeProperties,
+									originalGroupClauseList,
 									&queryTargetList, &queryGroupClause);
 
 	ProcessHavingClauseForWorkerQuery(originalHavingQual, extendedOpNodeProperties,
+									  originalGroupClauseList,
+									  originalTargetEntryList,
 									  &queryHavingQual, &queryTargetList,
 									  &queryGroupClause);
 
@@ -2522,17 +2574,30 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
  * list of worker extended operator. This approach guarantees the distinctness
  * in the worker queries.
  *
- *     inputs: targetEntryList, extendedOpNodeProperties
+ *     inputs: targetEntryList, extendedOpNodeProperties, groupClauseList
  *     outputs: queryTargetList, queryGroupClause
  */
 static void
 ProcessTargetListForWorkerQuery(List *targetEntryList,
 								ExtendedOpNodeProperties *extendedOpNodeProperties,
+								List *groupClauseList,
 								QueryTargetList *queryTargetList,
 								QueryGroupClause *queryGroupClause)
 {
+	/*
+	 * Build the list of GROUP BY target entries and check whether any are
+	 * non-Var expressions.  WorkerAggregateWalker needs this so it can
+	 * recognize GROUP BY subexpressions inside complex target entries and
+	 * emit them intact instead of decomposing them into bare Var references.
+	 */
+	List *groupByTargetEntryList = GroupTargetEntryList(
+		groupClauseList, targetEntryList);
+	bool haveNonVarGrouping = HaveNonVarGrouping(groupByTargetEntryList);
+
 	WorkerAggregateWalkerContext workerAggContext = {
 		.extendedOpNodeProperties = extendedOpNodeProperties,
+		.groupByTargetEntryList = groupByTargetEntryList,
+		.haveNonVarGrouping = haveNonVarGrouping,
 	};
 
 	/* iterate over original target entries */
@@ -2578,12 +2643,14 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
  * having clause is safe to pushdown to the workers, workerHavingQual is set to
  * be the original having clause.
  *
- *     inputs: originalHavingQual, extendedOpNodeProperties
+ *     inputs: originalHavingQual, extendedOpNodeProperties, groupClauseList, targetEntryList
  *     outputs: workerHavingQual, queryTargetList, queryGroupClause
  */
 static void
 ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 								  ExtendedOpNodeProperties *extendedOpNodeProperties,
+								  List *groupClauseList,
+								  List *targetEntryList,
 								  Node **workerHavingQual,
 								  QueryTargetList *queryTargetList,
 								  QueryGroupClause *queryGroupClause)
@@ -2619,8 +2686,12 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 		 * If the GROUP BY or PARTITION BY is not on the distribution column
 		 * then we need to combine the aggregates in the HAVING across shards.
 		 */
+		List *groupByTargetEntryList = GroupTargetEntryList(
+			groupClauseList, targetEntryList);
 		WorkerAggregateWalkerContext workerAggContext = {
 			.extendedOpNodeProperties = extendedOpNodeProperties,
+			.groupByTargetEntryList = groupByTargetEntryList,
+			.haveNonVarGrouping = HaveNonVarGrouping(groupByTargetEntryList),
 		};
 
 		WorkerAggregateWalker(originalHavingQual, &workerAggContext);
@@ -3047,6 +3118,29 @@ WorkerAggregateWalker(Node *node, WorkerAggregateWalkerContext *walkerContext)
 	}
 	else
 	{
+		/*
+		 * If the GROUP BY contains non-Var expressions, check whether the
+		 * current node matches one of them.  If so, emit it as-is rather
+		 * than descending into its children.  Without this, a GROUP BY
+		 * expression like f(col) would be decomposed into the bare col
+		 * Var, which then fails on the worker because col is not in the
+		 * GROUP BY clause.
+		 */
+		if (walkerContext->haveNonVarGrouping)
+		{
+			TargetEntry *groupByTargetEntry = NULL;
+			foreach_declared_ptr(groupByTargetEntry,
+								 walkerContext->groupByTargetEntryList)
+			{
+				if (equal(node, groupByTargetEntry->expr))
+				{
+					walkerContext->expressionList =
+						lappend(walkerContext->expressionList, node);
+					return false;
+				}
+			}
+		}
+
 		walkerResult = expression_tree_walker(node, WorkerAggregateWalker,
 											  (void *) walkerContext);
 	}
@@ -4582,6 +4676,25 @@ SubqueryMultiTableList(MultiNode *multiNode)
 	}
 
 	return subqueryMultiTableList;
+}
+
+
+/*
+ * HaveNonVarGrouping returns true if any GROUP BY expression in the given
+ * target entry list is not a simple Var (column reference).
+ */
+static bool
+HaveNonVarGrouping(List *groupByTargetEntryList)
+{
+	TargetEntry *gte = NULL;
+	foreach_declared_ptr(gte, groupByTargetEntryList)
+	{
+		if (!IsA(gte->expr, Var))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
