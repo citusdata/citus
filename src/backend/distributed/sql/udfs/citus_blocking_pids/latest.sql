@@ -29,6 +29,7 @@ RETURNS int4[] AS $$
 
     RETURN mRemoteBlockingPids;
   END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog;
 
 REVOKE ALL ON FUNCTION citus_blocking_pids(integer) FROM PUBLIC;

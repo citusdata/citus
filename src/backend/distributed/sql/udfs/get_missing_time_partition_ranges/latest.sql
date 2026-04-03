@@ -8,6 +8,7 @@ returns table(
     range_from_value text,
     range_to_value text)
 LANGUAGE plpgsql
+SET search_path = pg_catalog
 AS $$
 DECLARE
     -- properties of the partitioned table
