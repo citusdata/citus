@@ -1499,7 +1499,18 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	customScan->custom_private = list_make1(distributedPlanData);
 
 	/* necessary to avoid extra Result node in PG15 */
-	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN | CUSTOMPATH_SUPPORT_PROJECTION;
+	int customFlags = CUSTOMPATH_SUPPORT_PROJECTION;
+	if (!(distributedPlan->useSortedMerge && EnableStreamingSortedMerge))
+	{
+		/*
+		 * Advertise backward-scan support unless both sorted merge and
+		 * the streaming adapter are active. When streaming, the adapter
+		 * is forward-only; PostgreSQL's planner will insert a Material
+		 * node above us for scrollable cursors.
+		 */
+		customFlags |= CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
+	}
+	customScan->flags = customFlags;
 
 	/*
 	 * Fast path queries cannot have any subplans by definition, so skip

@@ -947,23 +947,45 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 * When sorted merge is active, k-way merge the per-task stores into
 	 * the final tuplestore. This produces globally sorted output that the
 	 * existing ReturnTupleFromTuplestore() path can read unchanged.
+	 *
+	 * When streaming sorted merge is enabled, create an adapter instead
+	 * that delivers tuples one at a time without a final tuplestore.
 	 */
 	if (execution->useSortedMerge && execution->perTaskStoreCount > 0)
 	{
-		scanState->tuplestorestate =
-			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-		MergePerTaskStoresIntoFinalStore(scanState->tuplestorestate,
-										 execution->perTaskStores,
-										 execution->perTaskStoreCount,
-										 distributedPlan->sortedMergeKeys,
-										 distributedPlan->sortedMergeKeyCount,
-										 tupleDescriptor);
-
-		/* free per-task stores — they are no longer needed */
-		for (int i = 0; i < execution->perTaskStoreCount; i++)
+		if (EnableStreamingSortedMerge)
 		{
-			tuplestore_end(execution->perTaskStores[i]);
+			/*
+			 * Streaming mode: create an adapter that delivers tuples one
+			 * at a time from the per-task stores via a binary heap. The
+			 * adapter takes ownership of the per-task stores.
+			 */
+			scanState->mergeAdapter = CreateSortedMergeAdapter(
+				execution->perTaskStores,
+				execution->perTaskStoreCount,
+				distributedPlan->sortedMergeKeys,
+				distributedPlan->sortedMergeKeyCount,
+				tupleDescriptor,
+				true);
+		}
+		else
+		{
+			/* Eager mode (default): merge all tuples into a final tuplestore */
+			scanState->tuplestorestate =
+				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+			MergePerTaskStoresIntoFinalStore(scanState->tuplestorestate,
+											 execution->perTaskStores,
+											 execution->perTaskStoreCount,
+											 distributedPlan->sortedMergeKeys,
+											 distributedPlan->sortedMergeKeyCount,
+											 tupleDescriptor);
+
+			/* free per-task stores — they are no longer needed */
+			for (int i = 0; i < execution->perTaskStoreCount; i++)
+			{
+				tuplestore_end(execution->perTaskStores[i]);
+			}
 		}
 	}
 
