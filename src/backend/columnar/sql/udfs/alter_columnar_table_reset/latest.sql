@@ -5,7 +5,9 @@ CREATE OR REPLACE FUNCTION pg_catalog.alter_columnar_table_reset(
     compression bool DEFAULT false,
     compression_level bool DEFAULT false)
     RETURNS void
-    LANGUAGE plpgsql AS
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog
+    AS
 $alter_columnar_table_reset$
 declare
   noop BOOLEAN := true;

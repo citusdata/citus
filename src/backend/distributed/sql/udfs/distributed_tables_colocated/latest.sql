@@ -6,6 +6,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.distributed_tables_colocated(table1 regcla
 																   table2 regclass)
 RETURNS bool
 LANGUAGE plpgsql
+SET search_path = pg_catalog
 AS $function$
 DECLARE
 	table1_colocationid int;

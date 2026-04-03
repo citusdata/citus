@@ -1,5 +1,3 @@
-SET search_path = 'pg_catalog';
-
 CREATE VIEW citus.citus_lock_waits AS
 WITH
 unique_global_wait_edges_with_calculated_gpids AS (
@@ -43,5 +41,3 @@ FROM
 
 ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
-
-RESET search_path;
