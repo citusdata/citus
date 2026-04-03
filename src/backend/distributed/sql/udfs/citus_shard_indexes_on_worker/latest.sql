@@ -6,6 +6,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_shard_indexes_on_worker(
      OUT shard_name name)
  RETURNS SETOF record
  LANGUAGE plpgsql
+ SET search_path = pg_catalog
  SET citus.show_shards_for_app_name_prefixes = '*'
  AS $$
 BEGIN

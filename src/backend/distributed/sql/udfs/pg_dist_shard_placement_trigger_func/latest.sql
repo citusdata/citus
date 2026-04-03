@@ -19,4 +19,5 @@ RETURNS TRIGGER AS $$
       RETURN NEW;
     END IF;
   END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog;

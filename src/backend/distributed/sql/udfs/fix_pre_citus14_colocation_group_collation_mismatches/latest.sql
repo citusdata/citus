@@ -78,6 +78,7 @@ BEGIN
     END LOOP;
 END;
 $func$
-LANGUAGE plpgsql;
+LANGUAGE plpgsql
+SET search_path = pg_catalog;
 COMMENT ON FUNCTION pg_catalog.fix_pre_citus14_colocation_group_collation_mismatches()
   IS 'Fix distributed tables whose colocation group collations do not match their distribution columns by moving them to new colocation groups';

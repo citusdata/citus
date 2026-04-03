@@ -12,6 +12,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_activity(OUT global_pid bigint,
                                                           OUT state text, OUT backend_xid xid, OUT backend_xmin xid, OUT query_id bigint, OUT query text, OUT backend_type text)
     RETURNS SETOF record
     LANGUAGE plpgsql
+    SET search_path = pg_catalog
     AS $function$
 BEGIN
     RETURN QUERY SELECT * FROM jsonb_to_recordset((

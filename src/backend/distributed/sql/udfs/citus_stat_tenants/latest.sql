@@ -14,6 +14,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_tenants (
 )
     RETURNS SETOF record
     LANGUAGE plpgsql
+    SET search_path = pg_catalog
     AS $function$
 BEGIN
     IF

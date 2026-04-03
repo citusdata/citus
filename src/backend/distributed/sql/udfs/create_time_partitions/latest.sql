@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.create_time_partitions(
     start_from timestamptz DEFAULT now())
 returns boolean
 LANGUAGE plpgsql
+SET search_path = pg_catalog
 AS $$
 DECLARE
     -- partitioned table name
