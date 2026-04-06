@@ -40,5 +40,6 @@ SET citus.metadata_sync_mode TO 'nontransactional';
 SELECT 1 FROM citus_activate_node('localhost', :follower_worker_2_port);
 
 SET citus.metadata_sync_mode TO 'transactional';
--- error because the node does not exist 
+
+-- error because the node does not exist
 SELECT 1 FROM citus_activate_node('localhost', 7777);
