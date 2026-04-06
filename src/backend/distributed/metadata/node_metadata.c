@@ -3776,7 +3776,7 @@ ActivateNode(WorkerNode *acivateNode)
 
 	if (EnableMetadataSync)
 	{
-		/* send the update command to all primary nodes with metadata */
+		/* Send the update command to all primary nodes with metadata */
 		char *nodeUpdateCommand = NodeStateUpdateCommand(acivateNode->nodeId, true);
 		SendCommandToWorkersWithMetadata(nodeUpdateCommand);
 	}
