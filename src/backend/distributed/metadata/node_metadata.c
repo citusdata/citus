@@ -3729,7 +3729,7 @@ SyncNodeMetadata(MetadataSyncContext *context)
 
 
 /*
- * ActivateNode  It sets the node's isactive value to active with transactional 
+ * ActivateNode It sets the node's isactive value to active with transactional
  * mode.
  */
 static void
