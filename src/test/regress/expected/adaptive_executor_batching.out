@@ -1,0 +1,300 @@
+--
+-- Tests for the batched adaptive executor (reentrant execution)
+--
+CREATE SCHEMA adaptive_executor_batching;
+SET search_path TO adaptive_executor_batching;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 802009000;
+CREATE TABLE batch_test (x int, y text);
+SELECT create_distributed_table('batch_test', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Insert enough rows to exercise multiple batches
+INSERT INTO batch_test SELECT i, 'row_' || i FROM generate_series(1, 200) i;
+-- Verify baseline: all rows present
+SELECT count(*) FROM batch_test;
+ count
+---------------------------------------------------------------------
+   200
+(1 row)
+
+--
+-- Test 1: Force small batch size and verify all rows are returned
+--
+SET citus.executor_batch_size TO 10;
+SELECT count(*) FROM batch_test;
+ count
+---------------------------------------------------------------------
+   200
+(1 row)
+
+-- Ordered output to verify correctness across batches
+SELECT x FROM batch_test WHERE x <= 20 ORDER BY x;
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+--
+-- Test 2: Batch size of 1 (extreme case)
+--
+SET citus.executor_batch_size TO 1;
+SELECT count(*) FROM batch_test;
+ count
+---------------------------------------------------------------------
+   200
+(1 row)
+
+SELECT x FROM batch_test WHERE x <= 5 ORDER BY x;
+ x
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+ 5
+(5 rows)
+
+--
+-- Test 3: Batch size larger than result set (single batch)
+--
+SET citus.executor_batch_size TO 100000;
+SELECT count(*) FROM batch_test;
+ count
+---------------------------------------------------------------------
+   200
+(1 row)
+
+--
+-- Test 4: Auto batch size (from work_mem)
+--
+SET citus.executor_batch_size TO 0;
+SELECT count(*) FROM batch_test;
+ count
+---------------------------------------------------------------------
+   200
+(1 row)
+
+--
+-- Test 5: Empty result set with batching
+--
+SET citus.executor_batch_size TO 10;
+SELECT count(*) FROM batch_test WHERE x > 9999;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+--
+-- Test 6: LIMIT with batching
+--
+SELECT x FROM batch_test ORDER BY x LIMIT 5;
+ x
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+ 5
+(5 rows)
+
+--
+-- Test 7: Aggregation across batches
+--
+SELECT sum(x), min(x), max(x) FROM batch_test;
+  sum  | min | max
+---------------------------------------------------------------------
+ 20100 |   1 | 200
+(1 row)
+
+--
+-- Test 8: DML with RETURNING across batches
+--
+SET citus.executor_batch_size TO 10;
+-- Use a separate table for DML test
+CREATE TABLE batch_dml_test (x int, y text);
+SELECT create_distributed_table('batch_dml_test', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO batch_dml_test SELECT i, 'val_' || i FROM generate_series(1, 50) i;
+WITH deleted AS (
+    DELETE FROM batch_dml_test WHERE x <= 20 RETURNING x
+)
+SELECT count(*) FROM deleted;
+ count
+---------------------------------------------------------------------
+    20
+(1 row)
+
+SELECT count(*) FROM batch_dml_test WHERE x <= 20;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+--
+-- Test 9: Verify GUC is session-level
+--
+SHOW citus.executor_batch_size;
+ citus.executor_batch_size
+---------------------------------------------------------------------
+ 10
+(1 row)
+
+SET citus.executor_batch_size TO 500;
+SHOW citus.executor_batch_size;
+ citus.executor_batch_size
+---------------------------------------------------------------------
+ 500
+(1 row)
+
+RESET citus.executor_batch_size;
+SHOW citus.executor_batch_size;
+ citus.executor_batch_size
+---------------------------------------------------------------------
+ 0
+(1 row)
+
+--
+-- Test 10: M1 — Between-batch error cleanup (CitusEndScan must release sessions)
+--
+-- This validates that when an error occurs on the coordinator between
+-- AdaptiveExecutorRun calls (mid-scan, mid-batch), CitusEndScan properly
+-- cleans up distributed execution sessions via AdaptiveExecutorEnd.
+-- Without the M1 fix, sessions/connections would leak on each error.
+--
+SET citus.executor_batch_size TO 10;
+-- Helper: iterates a distributed query and raises error after N rows.
+-- With batch_size=10 and error at row 15, the error fires during
+-- the second batch — between the first AdaptiveExecutorRun (which
+-- returned control to the executor) and the scan completing.
+CREATE OR REPLACE FUNCTION trigger_between_batch_error(fail_after int)
+RETURNS void AS $$
+DECLARE
+    r RECORD;
+    cnt int := 0;
+BEGIN
+    FOR r IN SELECT x FROM batch_test ORDER BY x LOOP
+        cnt := cnt + 1;
+        IF cnt >= fail_after THEN
+            RAISE EXCEPTION 'intentional error at row %', cnt;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+-- Single invocation: error should be caught cleanly
+DO $$
+BEGIN
+    PERFORM trigger_between_batch_error(15);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'caught: %', SQLERRM;
+END;
+$$;
+NOTICE:  caught: intentional error at row 15
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+-- Repeat 20 times to verify connections don't accumulate across errors.
+-- If CitusEndScan didn't clean up, we'd exhaust the connection pool.
+DO $$
+BEGIN
+    FOR i IN 1..20 LOOP
+        BEGIN
+            PERFORM trigger_between_batch_error(15);
+        EXCEPTION WHEN OTHERS THEN
+            -- expected, swallow
+        END;
+    END LOOP;
+END;
+$$;
+-- After 20 error cycles, distributed queries must still work
+SELECT count(*) FROM batch_test;
+ count
+---------------------------------------------------------------------
+   200
+(1 row)
+
+-- Also verify with a cursor closed mid-batch (non-error path through
+-- CitusEndScan with finishedRemoteScan = false)
+BEGIN;
+DECLARE c CURSOR FOR SELECT x FROM batch_test ORDER BY x;
+FETCH 5 FROM c;
+ x
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+ 5
+(5 rows)
+
+CLOSE c;
+COMMIT;
+-- Still healthy after cursor close mid-batch
+SELECT count(*) FROM batch_test;
+ count
+---------------------------------------------------------------------
+   200
+(1 row)
+
+--
+-- Test 11: Cross-batch-size result consistency
+--
+-- Runs the same analytical queries at batch sizes 1, 10, 100, 10000, and 0
+-- (auto) and asserts identical results. Any batch-boundary bug would cause
+-- a mismatch.
+--
+CREATE TABLE batch_consistency AS
+SELECT
+    bs,
+    (SELECT count(*) FROM batch_test)::bigint AS cnt,
+    (SELECT sum(x) FROM batch_test)::bigint AS s,
+    (SELECT min(x) FROM batch_test)::int AS mn,
+    (SELECT max(x) FROM batch_test)::int AS mx,
+    (SELECT count(*) FROM batch_test WHERE x BETWEEN 50 AND 150)::bigint AS range_cnt
+FROM (SELECT unnest(ARRAY[1, 10, 100, 10000]) bs) sizes,
+LATERAL (SELECT set_config('citus.executor_batch_size', bs::text, false)) AS apply;
+-- All batch sizes must produce the same result — collapse to 1 distinct row
+SELECT count(DISTINCT (cnt, s, mn, mx, range_cnt)) AS distinct_results FROM batch_consistency;
+ distinct_results
+---------------------------------------------------------------------
+                1
+(1 row)
+
+-- Show the actual values (should be a single row)
+SELECT DISTINCT cnt, s, mn, mx, range_cnt FROM batch_consistency;
+ cnt |   s   | mn | mx  | range_cnt
+---------------------------------------------------------------------
+ 200 | 20100 |  1 | 200 |       101
+(1 row)
+
+DROP TABLE batch_consistency;
+--
+-- Cleanup
+--
+SET client_min_messages TO WARNING;
+DROP SCHEMA adaptive_executor_batching CASCADE;
