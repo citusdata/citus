@@ -1697,6 +1697,31 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.executor_batch_size",
+		gettext_noop("Maximum number of rows per batch in the adaptive executor."),
+		gettext_noop("When set to 0 (the default), the batch size is automatically "
+					 "calculated from work_mem and the estimated tuple size. A positive "
+					 "value overrides the automatic calculation with a fixed row count."),
+		&ExecutorBatchSize,
+		0, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.executor_chunk_size",
+		gettext_noop("Chunk size in bytes for libpq chunked row mode."),
+		gettext_noop("Controls the chunk size passed to PQsetChunkedRowsMode when "
+					 "fetching rows from workers. Larger values reduce per-result "
+					 "overhead but increase memory usage per fetch. Only effective "
+					 "on PostgreSQL 17 and later."),
+		&ExecutorChunkSize,
+		8192, 1, INT_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.executor_slow_start_interval",
 		gettext_noop("Time to wait between opening connections to the same worker node"),
 		gettext_noop("When the individual tasks of a multi-shard query take very "

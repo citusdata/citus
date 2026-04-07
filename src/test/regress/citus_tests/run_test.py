@@ -273,6 +273,9 @@ DEPS = {
     "multi_subquery_in_where_reference_clause": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
+    "adaptive_executor_batching": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
     "subquery_in_where": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),

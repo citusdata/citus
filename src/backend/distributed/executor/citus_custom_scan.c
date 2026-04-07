@@ -853,6 +853,13 @@ CitusEndScan(CustomScanState *node)
 		tuplestore_end(scanState->tuplestorestate);
 		scanState->tuplestorestate = NULL;
 	}
+
+	/*
+	 * Clean up any in-flight distributed execution. This handles the case
+	 * where an error occurs between batches in the adaptive executor,
+	 * ensuring sessions and connections are properly released.
+	 */
+	AdaptiveExecutorEnd(scanState);
 }
 
 
