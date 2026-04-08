@@ -1,6 +1,7 @@
 \c - - - :master_port
 -- prepare testing
 SELECT citus_set_coordinator_host('localhost', :master_port);
+
 SET citus.metadata_sync_mode TO 'transactional';
 
 -- add inactive secondary node
