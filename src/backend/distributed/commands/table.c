@@ -976,6 +976,24 @@ SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId,
 		return;
 	}
 
+	/*
+	 * For non-index constraints (CHECK, FOREIGN KEY), PostgreSQL propagates
+	 * the exact same constraint name from the parent to all partition children
+	 * (see ATAddCheckConstraint and addFkConstraint in tablecmds.c). Since
+	 * user-provided identifiers are already bounded by NAMEDATALEN at parse
+	 * time, the inherited name can never be too long on partition shards.
+	 *
+	 * Only index-backed constraints (PRIMARY KEY, UNIQUE, EXCLUDE) need this
+	 * check because PostgreSQL auto-generates new names for partition child
+	 * indexes based on the partition table name (see generateClonedIndexStmt
+	 * in parse_utilcmd.c which sets idxname = NULL), and those generated
+	 * names can exceed NAMEDATALEN when the partition name is long.
+	 */
+	if (constraint->conname != NULL && !ConstrTypeUsesIndex(constraint->contype))
+	{
+		return;
+	}
+
 	char *longestPartitionShardName = get_rel_name(longestNamePartitionId);
 	ShardInterval *shardInterval = LoadShardIntervalWithLongestShardName(
 		longestNamePartitionId);
@@ -1351,6 +1369,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 															 leftRelationId,
 															 constraint);
 				}
+
+				SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(
+					leftRelationId, constraint);
 			}
 
 			/*
@@ -1372,6 +1393,17 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 															 leftRelationId,
 															 constraint);
 				}
+			}
+			else if (constraint->conname != NULL)
+			{
+				/*
+				 * When the user provides an explicit constraint name, we still
+				 * need to check if the resulting constraint name on the shards
+				 * of partitions would be too long, and if so, switch to
+				 * sequential execution to prevent self-deadlocks.
+				 */
+				SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(
+					leftRelationId, constraint);
 			}
 		}
 		else if (alterTableType == AT_DropConstraint)
