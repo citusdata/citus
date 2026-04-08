@@ -12,6 +12,9 @@ SELECT 1 FROM citus_disable_node('localhost', :follower_worker_2_port);
 SELECT count(*) FROM pg_dist_node WHERE nodeport=:follower_worker_2_port AND nodename='localhost' AND NOT isactive;
 SELECT start_metadata_sync_to_all_nodes();
 
+-- error because the node does not exist
+SELECT 1 FROM citus_activate_node('localhost', 7777);
+
 
 \c - - - :worker_2_port
 -- check inactive node on worker
@@ -40,8 +43,3 @@ SET citus.metadata_sync_mode TO 'nontransactional';
 -- error this operation cannot be completed in nontransactional metadata sync mode
 -- if the GUC citus.metadata_sync_mode set to 'nontransactional'
 SELECT 1 FROM citus_activate_node('localhost', :follower_worker_2_port);
-
-SET citus.metadata_sync_mode TO 'transactional';
-
--- error because the node does not exist
-SELECT 1 FROM citus_activate_node('localhost', 7777);
