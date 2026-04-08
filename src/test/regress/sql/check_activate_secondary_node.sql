@@ -37,7 +37,8 @@ SELECT count(*) FROM pg_dist_node WHERE nodeport=:follower_worker_2_port AND nod
 \c - - - :master_port
 SET citus.metadata_sync_mode TO 'nontransactional';
 
--- error this operation cannot be completed in nontransactional metadata sync mode if the GUC citus.metadata_sync_mode set to 'nontransactional'
+-- error this operation cannot be completed in nontransactional metadata sync mode
+-- if the GUC citus.metadata_sync_mode set to 'nontransactional'
 SELECT 1 FROM citus_activate_node('localhost', :follower_worker_2_port);
 
 SET citus.metadata_sync_mode TO 'transactional';
