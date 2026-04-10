@@ -106,6 +106,14 @@ BEGIN
     INSERT INTO test_dist VALUES (val + 100, val * 10);
 END;
 $$;
+CREATE OR REPLACE PROCEDURE loop_insert(start_val int, end_val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    FOR i IN start_val..end_val LOOP
+        INSERT INTO test_dist VALUES (i, i * 10);
+    END LOOP;
+END;
+$$;
 -- log_remote_commands is toggled ON only around single-shard CALL statements
 -- whose NOTICE output is deterministic (single connection, single shard).
 -- It is kept OFF for multi-shard operations (TRUNCATE, multi-shard CALL,
@@ -157,26 +165,20 @@ SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
 -- TEST 3: Two single-shard inserts in procedure
--- Should ERROR on second statement with optimization ON
+-- With static body analysis, this is detected as multi-statement
+-- before execution, so it falls back to coordinated transactions.
+-- No ERROR, both inserts succeed.
+-- logging off: multi-statement procedures use coordinated
+-- transactions with non-deterministic output.
 ---------------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_single_inserts(10, 20);
-NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109000 (shard_key, other_key) VALUES (10, 100)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val1, val1 * 10)"
-PL/pgSQL function two_single_inserts(integer,integer) line XX at SQL statement
-ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
-DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
-HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
-CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val2, val2 * 10)"
-PL/pgSQL function two_single_inserts(integer,integer) line XX at SQL statement
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
  shard_key | other_key
 ---------------------------------------------------------------------
         10 |       100
-(1 row)
+        20 |       200
+(2 rows)
 
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
@@ -311,29 +313,18 @@ SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
 -- TEST 10: Two UPDATEs by shard_key in one procedure
--- Should ERROR on second statement with optimization ON
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both updates succeed, no error.
+-- logging off: multi-shard coordinated output is non-deterministic
 ---------------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_updates_by_shard_key(1, 111, 2, 222);
-NOTICE:  issuing UPDATE sql_proc_no_txn_block.test_dist_109000 test_dist SET other_key = 111 WHERE (shard_key OPERATOR(pg_catalog.=) 1)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "UPDATE test_dist SET other_key = v1 WHERE shard_key = k1"
-PL/pgSQL function two_updates_by_shard_key(integer,integer,integer,integer) line XX at SQL statement
-ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
-DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
-HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
-CONTEXT:  SQL statement "UPDATE test_dist SET other_key = v2 WHERE shard_key = k2"
-PL/pgSQL function two_updates_by_shard_key(integer,integer,integer,integer) line XX at SQL statement
-SET citus.log_remote_commands TO off;
--- Second UPDATE triggers ERROR; the first UPDATE (row 1 -> 111) was already
--- committed on the worker and is NOT rolled back, so it remains visible.
 SELECT * FROM test_dist ORDER BY shard_key;
  shard_key | other_key
 ---------------------------------------------------------------------
          1 |       111
-         2 |        20
+         2 |       222
          3 |        30
 (3 rows)
 
@@ -368,25 +359,16 @@ SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
 -- TEST 12: INSERT + UPDATE in same procedure with optimization ON
--- Should ERROR on the second statement (UPDATE)
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both operations succeed, no error.
+-- logging off: coordinated output is non-deterministic
 ---------------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL insert_then_update(5, 5, 555);
-NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109000 (shard_key, other_key) VALUES (5, 50)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val, val * 10)"
-PL/pgSQL function insert_then_update(integer,integer,integer) line XX at SQL statement
-ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
-DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
-HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
-CONTEXT:  SQL statement "UPDATE test_dist SET other_key = new_other WHERE shard_key = upd_key"
-PL/pgSQL function insert_then_update(integer,integer,integer) line XX at SQL statement
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
  shard_key | other_key
 ---------------------------------------------------------------------
-         5 |        50
+         5 |       555
 (1 row)
 
 TRUNCATE test_dist;
@@ -435,29 +417,18 @@ SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
 -- TEST 15: Two single-shard DELETEs in one procedure
--- Should ERROR on second statement with optimization ON
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both deletes succeed, no error.
+-- logging off: multi-shard coordinated output is non-deterministic
 ---------------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_deletes(1, 2);
-NOTICE:  issuing DELETE FROM sql_proc_no_txn_block.test_dist_109000 test_dist WHERE (shard_key OPERATOR(pg_catalog.=) 1)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "DELETE FROM test_dist WHERE shard_key = k1"
-PL/pgSQL function two_deletes(integer,integer) line XX at SQL statement
-ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
-DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
-HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
-CONTEXT:  SQL statement "DELETE FROM test_dist WHERE shard_key = k2"
-PL/pgSQL function two_deletes(integer,integer) line XX at SQL statement
-SET citus.log_remote_commands TO off;
--- Second DELETE triggers ERROR; first DELETE (row 1) was already committed
 SELECT * FROM test_dist ORDER BY shard_key;
  shard_key | other_key
 ---------------------------------------------------------------------
-         2 |        20
          3 |        30
-(2 rows)
+(1 row)
 
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
@@ -478,24 +449,14 @@ SELECT * FROM test_dist ORDER BY shard_key;
 
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
--- TEST 17: Read(s) then write should NOT error
--- A SELECT (read-only task) does not count toward the
--- non-coordinated execution counter, so a subsequent single-
--- shard write should still be able to skip coordination.
+-- TEST 17: Read(s) then write
+-- Static analysis detects 2 SQL statements (SELECT + INSERT),
+-- so the procedure falls back to coordinated transactions.
+-- logging off: coordinated output is non-deterministic
 ---------------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL reads_then_write(1);
-NOTICE:  issuing SELECT count(*) AS count FROM sql_proc_no_txn_block.test_dist_109000 test_dist WHERE (shard_key OPERATOR(pg_catalog.=) 1)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "SELECT count(*)          FROM test_dist WHERE shard_key = val"
-PL/pgSQL function reads_then_write(integer) line XX at SQL statement
-NOTICE:  issuing INSERT INTO sql_proc_no_txn_block.test_dist_109001 (shard_key, other_key) VALUES (101, 10)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val + 100, val * 10)"
-PL/pgSQL function reads_then_write(integer) line XX at SQL statement
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
  shard_key | other_key
 ---------------------------------------------------------------------
@@ -526,20 +487,17 @@ SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
 -- TEST 19: Two single-shard inserts with local execution ON
--- Should ERROR on second statement just like the remote case
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both inserts succeed, no error.
 ---------------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
 CALL two_single_inserts(10, 20);
-ERROR:  multi-statement procedures are not supported with citus.enable_procedure_transaction_skip
-DETAIL:  The first statement has already been committed and cannot be rolled back. This applies to both remote and local execution.
-HINT:  Use this optimization only for single-statement procedures, or disable the GUC.
-CONTEXT:  SQL statement "INSERT INTO test_dist VALUES (val2, val2 * 10)"
-PL/pgSQL function two_single_inserts(integer,integer) line XX at SQL statement
 SELECT * FROM test_dist ORDER BY shard_key;
  shard_key | other_key
 ---------------------------------------------------------------------
         10 |       100
-(1 row)
+        20 |       200
+(2 rows)
 
 TRUNCATE test_dist;
 ---------------------------------------------------------------------
@@ -574,6 +532,24 @@ SELECT * FROM test_dist ORDER BY shard_key;
 (4 rows)
 
 TRUNCATE test_dist;
+---------------------------------------------------------------------
+-- TEST 22: Loop with single INSERT inside
+-- Static analysis detects the FOR loop and disqualifies the
+-- procedure to prevent partial commits if a mid-loop iteration
+-- fails. Uses coordinated transaction.
+---------------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+SET citus.enable_local_execution TO off;
+CALL loop_insert(1, 3);
+SELECT * FROM test_dist ORDER BY shard_key;
+ shard_key | other_key
+---------------------------------------------------------------------
+         1 |        10
+         2 |        20
+         3 |        30
+(3 rows)
+
+TRUNCATE test_dist;
 -- Cleanup
 DROP TABLE test_dist;
 DROP PROCEDURE single_insert;
@@ -589,6 +565,7 @@ DROP PROCEDURE delete_by_shard_key;
 DROP PROCEDURE two_deletes;
 DROP PROCEDURE delete_by_other_key;
 DROP PROCEDURE reads_then_write;
+DROP PROCEDURE loop_insert;
 DROP SCHEMA sql_proc_no_txn_block;
 RESET citus.enable_procedure_transaction_skip;
 RESET citus.enable_local_execution;

@@ -293,7 +293,6 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		 * stored procedures.
 		 */
 		StoredProcedureLevel += 1;
-		ProcedureNonCoordinatedExecutionCount = 0;
 
 		PG_TRY();
 		{
@@ -301,7 +300,6 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 							   params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
-			ProcedureNonCoordinatedExecutionCount = 0;
 
 			if (InDelegatedProcedureCall && StoredProcedureLevel == 0)
 			{
@@ -311,7 +309,6 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		PG_CATCH();
 		{
 			StoredProcedureLevel -= 1;
-			ProcedureNonCoordinatedExecutionCount = 0;
 
 			if (InDelegatedProcedureCall && StoredProcedureLevel == 0)
 			{

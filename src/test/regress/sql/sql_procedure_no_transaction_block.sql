@@ -119,6 +119,15 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE PROCEDURE loop_insert(start_val int, end_val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    FOR i IN start_val..end_val LOOP
+        INSERT INTO test_dist VALUES (i, i * 10);
+    END LOOP;
+END;
+$$;
+
 -- log_remote_commands is toggled ON only around single-shard CALL statements
 -- whose NOTICE output is deterministic (single connection, single shard).
 -- It is kept OFF for multi-shard operations (TRUNCATE, multi-shard CALL,
@@ -149,12 +158,14 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 3: Two single-shard inserts in procedure
--- Should ERROR on second statement with optimization ON
+-- With static body analysis, this is detected as multi-statement
+-- before execution, so it falls back to coordinated transactions.
+-- No ERROR, both inserts succeed.
+-- logging off: multi-statement procedures use coordinated
+-- transactions with non-deterministic output.
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_single_inserts(10, 20);
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -230,15 +241,13 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 10: Two UPDATEs by shard_key in one procedure
--- Should ERROR on second statement with optimization ON
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both updates succeed, no error.
+-- logging off: multi-shard coordinated output is non-deterministic
 ------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_updates_by_shard_key(1, 111, 2, 222);
-SET citus.log_remote_commands TO off;
--- Second UPDATE triggers ERROR; the first UPDATE (row 1 -> 111) was already
--- committed on the worker and is NOT rolled back, so it remains visible.
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -256,12 +265,12 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 12: INSERT + UPDATE in same procedure with optimization ON
--- Should ERROR on the second statement (UPDATE)
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both operations succeed, no error.
+-- logging off: coordinated output is non-deterministic
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL insert_then_update(5, 5, 555);
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -292,14 +301,13 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 15: Two single-shard DELETEs in one procedure
--- Should ERROR on second statement with optimization ON
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both deletes succeed, no error.
+-- logging off: multi-shard coordinated output is non-deterministic
 ------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_deletes(1, 2);
-SET citus.log_remote_commands TO off;
--- Second DELETE triggers ERROR; first DELETE (row 1) was already committed
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -316,16 +324,14 @@ SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
--- TEST 17: Read(s) then write should NOT error
--- A SELECT (read-only task) does not count toward the
--- non-coordinated execution counter, so a subsequent single-
--- shard write should still be able to skip coordination.
+-- TEST 17: Read(s) then write
+-- Static analysis detects 2 SQL statements (SELECT + INSERT),
+-- so the procedure falls back to coordinated transactions.
+-- logging off: coordinated output is non-deterministic
 ------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL reads_then_write(1);
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -346,7 +352,8 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 19: Two single-shard inserts with local execution ON
--- Should ERROR on second statement just like the remote case
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both inserts succeed, no error.
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
 CALL two_single_inserts(10, 20);
@@ -375,6 +382,18 @@ CALL reads_then_write(1);
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
+------------------------------------------------------------
+-- TEST 22: Loop with single INSERT inside
+-- Static analysis detects the FOR loop and disqualifies the
+-- procedure to prevent partial commits if a mid-loop iteration
+-- fails. Uses coordinated transaction.
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+SET citus.enable_local_execution TO off;
+CALL loop_insert(1, 3);
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
 -- Cleanup
 DROP TABLE test_dist;
 DROP PROCEDURE single_insert;
@@ -390,6 +409,7 @@ DROP PROCEDURE delete_by_shard_key;
 DROP PROCEDURE two_deletes;
 DROP PROCEDURE delete_by_other_key;
 DROP PROCEDURE reads_then_write;
+DROP PROCEDURE loop_insert;
 DROP SCHEMA sql_proc_no_txn_block;
 
 RESET citus.enable_procedure_transaction_skip;

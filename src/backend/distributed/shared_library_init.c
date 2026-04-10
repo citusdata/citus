@@ -88,6 +88,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/priority.h"
+#include "distributed/procedure_body_analysis.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
@@ -513,6 +514,9 @@ _PG_init(void)
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
+
+	/* install PLpgSQL plugin for procedure body analysis */
+	InstallProcedureBodyAnalysisPlugin();
 	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
@@ -1519,15 +1523,12 @@ RegisterCitusConfigVariables(void)
 		"citus.enable_procedure_transaction_skip",
 		gettext_noop("Skip coordinated transactions for single-statement, "
 					 "single-shard procedure calls."),
-		gettext_noop("When enabled, CALL statements that execute exactly one "
-					 "distributed write targeting a single task on a single "
-					 "shard with a single placement skip coordinated (2PC) "
-					 "transactions. Only applies to non-nested procedure calls "
-					 "outside of explicit transaction blocks. "
-					 "WARNING: this is intended for single-statement procedures "
-					 "only. If a procedure issues a second distributed statement, "
-					 "it will raise an ERROR, but the first statement will have "
-					 "already been committed and cannot be rolled back."),
+		gettext_noop("When enabled, CALL statements whose procedure body "
+					 "contains exactly one SQL statement (determined by static "
+					 "analysis before execution) and that target a single task "
+					 "on a single shard skip coordinated (2PC) transactions. "
+					 "Multi-statement procedures gracefully fall back to the "
+					 "normal coordinated transaction path."),
 		&EnableProcedureTransactionSkip,
 		false,
 		PGC_USERSET,
