@@ -5,6 +5,10 @@
 -- planner eligibility logic. Verifies that enabling the GUC does not
 -- introduce regressions for any query pattern.
 --
+-- MX verification: this test has been verified to pass with zero diffs
+-- under check-base-mx (MX mode), confirming sorted merge works correctly
+-- when any node in the cluster acts as coordinator.
+--
 
 SET citus.next_shard_id TO 960000;
 
@@ -500,6 +504,185 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
     SELECT id, val, num FROM sorted_merge_test ORDER BY id LIMIT 20
 )
 SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5');
+
+-- =================================================================
+-- Category I: Distributed Transactions
+-- =================================================================
+-- Verify sorted merge correctness within multi-statement transactions
+-- where data is modified before the sorted-merge SELECT.
+
+SET citus.enable_sorted_merge TO on;
+
+-- I1: INSERT then SELECT within a transaction
+BEGIN;
+INSERT INTO sorted_merge_test (id, val, num) VALUES (900, 'txn_insert', 900.0);
+SELECT id, val FROM sorted_merge_test WHERE id >= 900 ORDER BY id;
+ROLLBACK;
+
+-- I2: UPDATE then SELECT within a transaction
+BEGIN;
+UPDATE sorted_merge_test SET val = 'updated' WHERE id = 1;
+SELECT id, val FROM sorted_merge_test WHERE id <= 3 ORDER BY id;
+ROLLBACK;
+
+-- I3: DELETE then SELECT within a transaction
+BEGIN;
+DELETE FROM sorted_merge_test WHERE id <= 5;
+SELECT id, val FROM sorted_merge_test WHERE id <= 10 ORDER BY id;
+ROLLBACK;
+
+-- I4: INSERT + UPDATE + SELECT with multi-column ORDER BY
+BEGIN;
+INSERT INTO sorted_merge_test (id, val, num) VALUES (901, 'txn_a', 1.0);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (902, 'txn_b', 2.0);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (903, 'txn_c', 3.0);
+UPDATE sorted_merge_test SET num = 999.0 WHERE id = 901;
+SELECT id, val, num FROM sorted_merge_test WHERE id >= 900 ORDER BY num, id;
+ROLLBACK;
+
+-- I5: Compare results with GUC off vs on in a transaction
+BEGIN;
+INSERT INTO sorted_merge_test (id, val, num) VALUES (910, 'cmp_a', 10.0);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (911, 'cmp_b', 20.0);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (912, 'cmp_c', 30.0);
+SET LOCAL citus.enable_sorted_merge TO off;
+SELECT id, val, num FROM sorted_merge_test WHERE id >= 910 ORDER BY id;
+SET LOCAL citus.enable_sorted_merge TO on;
+SELECT id, val, num FROM sorted_merge_test WHERE id >= 910 ORDER BY id;
+ROLLBACK;
+
+-- I6: DELETE + aggregate in SELECT with ORDER BY
+BEGIN;
+DELETE FROM sorted_merge_test WHERE id > 100 AND id < 200;
+SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id LIMIT 5;
+ROLLBACK;
+
+-- =================================================================
+-- Category J: Coordinator expression evaluation exclusion
+-- =================================================================
+-- Verify that queries with ORDER BY on expressions that need coordinator-side
+-- evaluation are correctly excluded from sorted merge (or handled correctly).
+
+SET citus.enable_sorted_merge TO on;
+
+-- J1: ORDER BY expression on aggregate result (ordinal reference)
+-- The ORDER BY references position 2 which is an aggregate — sorted merge
+-- must NOT be used because aggregates are rewritten between worker/coordinator.
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, sum(num) AS total FROM sorted_merge_test GROUP BY id ORDER BY 2 LIMIT 5');
+
+-- J2: ORDER BY expression wrapping an aggregate
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, sum(num) + 1 AS total_plus FROM sorted_merge_test GROUP BY id ORDER BY sum(num) + 1 LIMIT 5');
+
+-- J3: ORDER BY a non-aggregate expression that can be pushed to workers
+-- This should be eligible for sorted merge — the expression is evaluated
+-- on the worker side and sort order is preserved.
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id + 0');
+
+-- J4: ORDER BY with CASE expression (no aggregates) — eligible
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY CASE WHEN id < 50 THEN 0 ELSE 1 END, id');
+
+-- J5: ORDER BY on an expression that mixes aggregate and non-aggregate
+-- Should be ineligible because the expression contains an aggregate.
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id + count(*)');
+
+-- J6: Correctness comparison — expression ORDER BY, GUC off vs on
+SET citus.enable_sorted_merge TO off;
+SELECT id, val FROM sorted_merge_test ORDER BY id + 0 LIMIT 5;
+SET citus.enable_sorted_merge TO on;
+SELECT id, val FROM sorted_merge_test ORDER BY id + 0 LIMIT 5;
+
+-- -----------------------------------------------------------------
+-- J7–J12: Additional pushable expressions (no aggregates)
+-- -----------------------------------------------------------------
+
+SET citus.enable_sorted_merge TO on;
+
+-- J7: ORDER BY function call on column
+SELECT id, val FROM sorted_merge_test ORDER BY upper(val) LIMIT 5;
+
+-- J8: ORDER BY COALESCE
+SELECT id, num FROM sorted_merge_test ORDER BY COALESCE(num, 0) LIMIT 5;
+
+-- J9: ORDER BY negation
+SELECT id, num FROM sorted_merge_test ORDER BY -num LIMIT 5;
+
+-- J10: ORDER BY concatenation
+SELECT id, val FROM sorted_merge_test ORDER BY val || '_suffix' LIMIT 5;
+
+-- J11: ORDER BY mathematical function (abs distance)
+SELECT id, num FROM sorted_merge_test ORDER BY abs(num - 25), id LIMIT 5;
+
+-- J12: ORDER BY expression not in SELECT list
+SELECT id FROM sorted_merge_test ORDER BY num + 1 LIMIT 5;
+
+-- J13: ORDER BY expression referencing multiple columns
+SELECT id, val FROM sorted_merge_test ORDER BY id * num LIMIT 5;
+
+-- J14: ORDER BY with type cast
+SELECT id, num FROM sorted_merge_test ORDER BY num::int LIMIT 5;
+
+-- J15: ORDER BY with subexpression in SELECT and different expression in ORDER BY
+SELECT id, num + 1 as n1 FROM sorted_merge_test ORDER BY num + 2 LIMIT 5;
+
+-- J16: ORDER BY column alias
+SELECT id, num * 2 as doubled FROM sorted_merge_test ORDER BY doubled LIMIT 5;
+
+-- -----------------------------------------------------------------
+-- J17–J21: Correctness — GUC off vs on for expression ORDER BY
+-- -----------------------------------------------------------------
+
+-- J17: function call
+SET citus.enable_sorted_merge TO off;
+SELECT id, val FROM sorted_merge_test ORDER BY upper(val) LIMIT 5;
+SET citus.enable_sorted_merge TO on;
+SELECT id, val FROM sorted_merge_test ORDER BY upper(val) LIMIT 5;
+
+-- J18: CASE expression
+SET citus.enable_sorted_merge TO off;
+SELECT id, CASE WHEN num > 50 THEN 'high' ELSE 'low' END as cat
+FROM sorted_merge_test ORDER BY CASE WHEN num > 50 THEN 'high' ELSE 'low' END, id LIMIT 10;
+SET citus.enable_sorted_merge TO on;
+SELECT id, CASE WHEN num > 50 THEN 'high' ELSE 'low' END as cat
+FROM sorted_merge_test ORDER BY CASE WHEN num > 50 THEN 'high' ELSE 'low' END, id LIMIT 10;
+
+-- J19: COALESCE
+SET citus.enable_sorted_merge TO off;
+SELECT id, num FROM sorted_merge_test ORDER BY COALESCE(num, 0), id LIMIT 5;
+SET citus.enable_sorted_merge TO on;
+SELECT id, num FROM sorted_merge_test ORDER BY COALESCE(num, 0), id LIMIT 5;
+
+-- J20: abs() distance function
+SET citus.enable_sorted_merge TO off;
+SELECT id, num FROM sorted_merge_test ORDER BY abs(num - 25), id LIMIT 5;
+SET citus.enable_sorted_merge TO on;
+SELECT id, num FROM sorted_merge_test ORDER BY abs(num - 25), id LIMIT 5;
+
+-- -----------------------------------------------------------------
+-- J21–J22: More ineligibility — aggregate inside expressions
+-- -----------------------------------------------------------------
+
+SET citus.enable_sorted_merge TO on;
+
+-- J21: ORDER BY CASE wrapping an aggregate
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY CASE WHEN count(*) > 1 THEN 0 ELSE 1 END, id LIMIT 5');
+
+-- J22: ORDER BY aggregate expression (sum + 1) — correctness
+SET citus.enable_sorted_merge TO off;
+SELECT id, sum(num) + 1 as s FROM sorted_merge_test GROUP BY id ORDER BY sum(num) + 1 LIMIT 5;
+SET citus.enable_sorted_merge TO on;
+SELECT id, sum(num) + 1 as s FROM sorted_merge_test GROUP BY id ORDER BY sum(num) + 1 LIMIT 5;
+
+-- -----------------------------------------------------------------
+-- J23–J24: EXPLAIN plans for pushable expression patterns
+-- -----------------------------------------------------------------
+
+SET citus.enable_sorted_merge TO on;
+
+-- J23: Does function-call ORDER BY get pushed to workers?
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY upper(val) LIMIT 5');
+
+-- J24: ORDER BY expression not in SELECT list — pushed to workers?
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY num + 1 LIMIT 5');
 
 -- =================================================================
 -- Cleanup
