@@ -359,12 +359,24 @@ FetchNextScanTuple(CitusScanState *scanState, bool forward, TupleTableSlot *slot
 	if (scanState->mergeAdapter != NULL)
 	{
 		/*
-		 * Adapter is forward-only. Backward scan should never reach here
-		 * because the planner removes CUSTOMPATH_SUPPORT_BACKWARD_SCAN
-		 * when sorted merge is active, causing PostgreSQL to insert a
-		 * Material node above us for scrollable cursors.
+		 * The streaming merge adapter is forward-only.
+		 *
+		 * Citus replaces the entire plan tree after standard_planner()
+		 * returns, so PostgreSQL's cursor-time materialize_finished_plan()
+		 * check does not see the Citus CustomScan. That means SCROLL
+		 * cursors can reach here with a backward scan request even though
+		 * the adapter cannot satisfy it. Report a user-facing error
+		 * rather than crashing.
 		 */
-		Assert(forward);
+		if (!forward)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("streaming sorted merge does not support "
+							"backward scan"),
+					 errhint("Use SET citus.enable_streaming_sorted_merge "
+							 "TO off to allow backward scan.")));
+		}
 		return SortedMergeAdapterNext(scanState->mergeAdapter, slot);
 	}
 

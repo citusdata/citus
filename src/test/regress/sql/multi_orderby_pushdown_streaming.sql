@@ -1,14 +1,24 @@
 --
--- MULTI_SORTED_MERGE_STREAMING
+-- MULTI_ORDERBY_PUSHDOWN_STREAMING
 --
--- Runs the same test cases as multi_orderby_pushdown.sql but with the
--- streaming sorted merge adapter enabled via the GUC. This validates
--- that the streaming code path produces identical results to the eager
--- merge path.
+-- Runs the sorted merge test suite (multi_orderby_pushdown.sql) twice:
+-- first with the default eager-merge path, then with the streaming
+-- adapter enabled via citus.enable_streaming_sorted_merge. Both runs
+-- share the same setup tables and must produce identical results
+-- (except for the G3 backward-scan test, where the streaming adapter's
+-- forward-only cursor correctly errors on FETCH BACKWARD).
 --
 
-SET citus.enable_streaming_sorted_merge TO on;
+\i sql/setup_multi_orderby_pushdown.sql
 
+-- Run 1: eager merge (default)
 \i sql/multi_orderby_pushdown.sql
 
+-- Run 2: streaming adapter
+SET citus.enable_streaming_sorted_merge TO on;
+\i sql/multi_orderby_pushdown.sql
 RESET citus.enable_streaming_sorted_merge;
+
+-- Cleanup
+DROP TABLE sorted_merge_test;
+DROP TABLE sorted_merge_events;

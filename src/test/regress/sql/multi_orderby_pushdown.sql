@@ -10,42 +10,6 @@
 -- when any node in the cluster acts as coordinator.
 --
 
-SET citus.next_shard_id TO 960000;
-
--- =================================================================
--- Setup: create test tables
--- =================================================================
-
-CREATE TABLE sorted_merge_test (
-    id int,
-    val text,
-    num numeric,
-    ts timestamptz DEFAULT now()
-);
-SELECT create_distributed_table('sorted_merge_test', 'id');
-
--- Insert 100 rows + NULLs + duplicates
-INSERT INTO sorted_merge_test (id, val, num)
-SELECT i, 'val_' || i, (i * 1.5)::numeric
-FROM generate_series(1, 100) i;
-
-INSERT INTO sorted_merge_test (id, val, num) VALUES (101, NULL, NULL);
-INSERT INTO sorted_merge_test (id, val, num) VALUES (102, NULL, NULL);
-INSERT INTO sorted_merge_test (id, val, num) VALUES (200, 'dup_a', 10.5);
-INSERT INTO sorted_merge_test (id, val, num) VALUES (201, 'dup_b', 10.5);
-INSERT INTO sorted_merge_test (id, val, num) VALUES (202, 'dup_c', 10.5);
-
--- Second table for join tests
-CREATE TABLE sorted_merge_events (
-    id int,
-    event_type text,
-    event_val int
-);
-SELECT create_distributed_table('sorted_merge_events', 'id');
-
-INSERT INTO sorted_merge_events
-SELECT i % 50 + 1, CASE WHEN i % 3 = 0 THEN 'click' WHEN i % 3 = 1 THEN 'view' ELSE 'buy' END, i
-FROM generate_series(1, 200) i;
 
 -- =================================================================
 -- 1. GUC basics
@@ -359,6 +323,16 @@ FETCH 3 FROM sorted_cursor;
 FETCH BACKWARD 1 FROM sorted_cursor;
 FETCH 2 FROM sorted_cursor;
 CLOSE sorted_cursor;
+COMMIT;
+
+-- G3b: SCROLL cursor with backward scan
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+DECLARE sorted_scroll_cursor SCROLL CURSOR FOR SELECT id FROM sorted_merge_test ORDER BY id;
+FETCH 3 FROM sorted_scroll_cursor;
+FETCH BACKWARD 1 FROM sorted_scroll_cursor;
+FETCH 2 FROM sorted_scroll_cursor;
+CLOSE sorted_scroll_cursor;
 COMMIT;
 
 -- G4: EXPLAIN ANALYZE (sorted merge skipped for EXPLAIN ANALYZE)
@@ -821,5 +795,3 @@ SET citus.enable_sorted_merge TO off;
 -- =================================================================
 
 SET citus.enable_sorted_merge TO off;
-DROP TABLE sorted_merge_test;
-DROP TABLE sorted_merge_events;
