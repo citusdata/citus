@@ -314,21 +314,41 @@ SET citus.enable_sorted_merge TO on;
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id');
 
 -- G2a: PREPARE with merge ON, EXECUTE after turning OFF
--- Plan-time decision is baked in — cached plan must still merge correctly
+-- Plan-time decision is baked in — cached plan must still merge correctly.
+-- Execute 6+ times to trigger PostgreSQL's generic plan caching, then
+-- verify the plan shape is preserved after toggling the GUC.
 SET citus.enable_sorted_merge TO on;
 PREPARE merge_on_stmt AS SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
 EXECUTE merge_on_stmt;
-SET citus.enable_sorted_merge TO off;
 EXECUTE merge_on_stmt;
+EXECUTE merge_on_stmt;
+EXECUTE merge_on_stmt;
+EXECUTE merge_on_stmt;
+EXECUTE merge_on_stmt;
+-- Verify plan shape after caching — no Sort above CustomScan
+EXPLAIN (COSTS OFF) EXECUTE merge_on_stmt;
+SET citus.enable_sorted_merge TO off;
+-- Cached plan retains the sorted merge decision from planning time
+EXECUTE merge_on_stmt;
+EXPLAIN (COSTS OFF) EXECUTE merge_on_stmt;
 DEALLOCATE merge_on_stmt;
 
 -- G2b: PREPARE with merge OFF, EXECUTE after turning ON
--- Cached plan has Sort node — must still return sorted results
+-- Cached plan has Sort node — must still return sorted results.
 SET citus.enable_sorted_merge TO off;
 PREPARE merge_off_stmt AS SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
 EXECUTE merge_off_stmt;
-SET citus.enable_sorted_merge TO on;
 EXECUTE merge_off_stmt;
+EXECUTE merge_off_stmt;
+EXECUTE merge_off_stmt;
+EXECUTE merge_off_stmt;
+EXECUTE merge_off_stmt;
+-- Verify plan shape after caching — Sort above CustomScan
+EXPLAIN (COSTS OFF) EXECUTE merge_off_stmt;
+SET citus.enable_sorted_merge TO on;
+-- Cached plan retains the non-merge decision from planning time
+EXECUTE merge_off_stmt;
+EXPLAIN (COSTS OFF) EXECUTE merge_off_stmt;
 DEALLOCATE merge_off_stmt;
 
 -- G3: Cursor with backward scan
@@ -683,6 +703,69 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
 
 -- J24: ORDER BY expression not in SELECT list — pushed to workers?
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY num + 1 LIMIT 5');
+
+-- =================================================================
+-- Category K: Index-based sort avoidance
+-- =================================================================
+-- When an index exists on the ORDER BY column, PostgreSQL's worker-side
+-- planner should choose an Index Scan instead of Sort + Seq Scan, making
+-- the worker-side sort essentially free. This is the best-case scenario
+-- for sorted merge: zero worker sort cost + zero coordinator sort cost.
+--
+-- We disable enable_seqscan to force the worker planner to prefer the
+-- index, since the test table is small enough that Seq Scan + Sort
+-- would otherwise be cheaper.
+
+CREATE INDEX sorted_merge_test_id_idx ON sorted_merge_test(id);
+
+-- Use a transaction with SET LOCAL to propagate enable_seqscan=off to workers,
+-- forcing the worker planner to use the index instead of Seq Scan + Sort.
+SET citus.propagate_set_commands TO 'local';
+
+-- K1: EXPLAIN with index — worker uses Index Scan, no Sort node
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id');
+COMMIT;
+
+-- K2: Correctness with index — GUC off vs on
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SET LOCAL citus.enable_sorted_merge TO off;
+SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 5;
+SET LOCAL citus.enable_sorted_merge TO on;
+SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 5;
+COMMIT;
+
+-- K3: Multi-column index
+CREATE INDEX sorted_merge_test_num_id_idx ON sorted_merge_test(num, id);
+
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, num FROM sorted_merge_test ORDER BY num, id');
+COMMIT;
+
+-- K4: Correctness with multi-column index — GUC off vs on
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SET LOCAL citus.enable_sorted_merge TO off;
+SELECT id, num FROM sorted_merge_test ORDER BY num, id LIMIT 5;
+SET LOCAL citus.enable_sorted_merge TO on;
+SELECT id, num FROM sorted_merge_test ORDER BY num, id LIMIT 5;
+COMMIT;
+
+-- K5: DESC ordering with index
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id DESC');
+COMMIT;
+
+RESET citus.propagate_set_commands;
+DROP INDEX sorted_merge_test_id_idx;
+DROP INDEX sorted_merge_test_num_id_idx;
 
 -- =================================================================
 -- Cleanup

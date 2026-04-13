@@ -77,6 +77,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -89,7 +90,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val
-(15 rows)
+(16 rows)
 
 -- A2: ORDER BY DESC
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id DESC');
@@ -98,6 +99,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -110,7 +112,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id
-(15 rows)
+(16 rows)
 
 -- A3: ORDER BY DESC NULLS LAST
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, num FROM sorted_merge_test ORDER BY num DESC NULLS LAST');
@@ -119,6 +121,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.num
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -131,7 +134,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, num
-(15 rows)
+(16 rows)
 
 -- A4: ORDER BY non-distribution column
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY val');
@@ -140,6 +143,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -152,7 +156,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val
-(15 rows)
+(16 rows)
 
 -- A5: Multi-column ORDER BY
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id, val');
@@ -161,6 +165,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -173,7 +178,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val
-(15 rows)
+(16 rows)
 
 -- A6: Mixed directions
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val, num FROM sorted_merge_test ORDER BY id ASC, num DESC');
@@ -182,6 +187,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val, remote_scan.num
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -194,7 +200,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val, num
-(15 rows)
+(16 rows)
 
 -- A7: GROUP BY dist_col ORDER BY dist_col
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, count(*) FROM sorted_merge_test GROUP BY id ORDER BY id');
@@ -203,6 +209,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.count
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -218,7 +225,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                      Group Key: sorted_merge_test.id
                      ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                            Output: id, val, num, ts
-(19 rows)
+(20 rows)
 
 -- A8: WHERE clause + ORDER BY
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test WHERE num > 50 ORDER BY id');
@@ -227,6 +234,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -241,7 +249,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                      Output: id, val
                      Filter: (sorted_merge_test.num > 'N'::numeric)
                      Rows Removed by Filter: N
-(17 rows)
+(18 rows)
 
 -- A9: Expression in ORDER BY (non-aggregate)
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, num FROM sorted_merge_test ORDER BY id + 1');
@@ -250,6 +258,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.num, remote_scan.worker_column_3
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -262,7 +271,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, num, (id + N)
-(15 rows)
+(16 rows)
 
 -- A10: ORDER BY with LIMIT (existing pushdown, verify no regression)
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id LIMIT 5');
@@ -273,6 +282,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
          Output: remote_scan.id
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -287,7 +297,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                            Sort Method: top-N heapsort  Memory: NkB
                            ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                  Output: id
-(19 rows)
+(20 rows)
 
 -- =================================================================
 -- Category B: Ineligibility — sort NOT pushed for merge
@@ -907,6 +917,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
          Output: remote_scan.id
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -921,7 +932,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                            Sort Method: top-N heapsort  Memory: NkB
                            ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                  Output: id
-(19 rows)
+(20 rows)
 
 -- F2: GROUP BY dist_col + ORDER BY + LIMIT
 SET citus.enable_sorted_merge TO off;
@@ -965,6 +976,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
          Output: remote_scan.id, remote_scan.count
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -982,7 +994,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                                  Group Key: sorted_merge_test.id
                                  ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                        Output: id, val, num, ts
-(23 rows)
+(24 rows)
 
 -- F3: ORDER BY aggregate + LIMIT (not eligible for merge)
 SET citus.enable_sorted_merge TO off;
@@ -1039,6 +1051,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -1051,10 +1064,12 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val
-(15 rows)
+(16 rows)
 
 -- G2a: PREPARE with merge ON, EXECUTE after turning OFF
--- Plan-time decision is baked in — cached plan must still merge correctly
+-- Plan-time decision is baked in — cached plan must still merge correctly.
+-- Execute 6+ times to trigger PostgreSQL's generic plan caching, then
+-- verify the plan shape is preserved after toggling the GUC.
 SET citus.enable_sorted_merge TO on;
 PREPARE merge_on_stmt AS SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
 EXECUTE merge_on_stmt;
@@ -1072,7 +1087,6 @@ EXECUTE merge_on_stmt;
  10 | val_10
 (10 rows)
 
-SET citus.enable_sorted_merge TO off;
 EXECUTE merge_on_stmt;
  id |  val
 ---------------------------------------------------------------------
@@ -1088,9 +1102,119 @@ EXECUTE merge_on_stmt;
  10 | val_10
 (10 rows)
 
+EXECUTE merge_on_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXECUTE merge_on_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXECUTE merge_on_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXECUTE merge_on_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+-- Verify plan shape after caching — no Sort above CustomScan
+EXPLAIN (COSTS OFF) EXECUTE merge_on_stmt;
+                                      QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Merge Method: sorted merge
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: id
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(11 rows)
+
+SET citus.enable_sorted_merge TO off;
+-- Cached plan retains the sorted merge decision from planning time
+EXECUTE merge_on_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXPLAIN (COSTS OFF) EXECUTE merge_on_stmt;
+                                      QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Merge Method: sorted merge
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: id
+                           ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(11 rows)
+
 DEALLOCATE merge_on_stmt;
 -- G2b: PREPARE with merge OFF, EXECUTE after turning ON
--- Cached plan has Sort node — must still return sorted results
+-- Cached plan has Sort node — must still return sorted results.
 SET citus.enable_sorted_merge TO off;
 PREPARE merge_off_stmt AS SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 10;
 EXECUTE merge_off_stmt;
@@ -1108,7 +1232,6 @@ EXECUTE merge_off_stmt;
  10 | val_10
 (10 rows)
 
-SET citus.enable_sorted_merge TO on;
 EXECUTE merge_off_stmt;
  id |  val
 ---------------------------------------------------------------------
@@ -1123,6 +1246,118 @@ EXECUTE merge_off_stmt;
   9 | val_9
  10 | val_10
 (10 rows)
+
+EXECUTE merge_off_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXECUTE merge_off_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXECUTE merge_off_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXECUTE merge_off_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+-- Verify plan shape after caching — Sort above CustomScan
+EXPLAIN (COSTS OFF) EXECUTE merge_off_stmt;
+                                         QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: id
+                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
+
+SET citus.enable_sorted_merge TO on;
+-- Cached plan retains the non-merge decision from planning time
+EXECUTE merge_off_stmt;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+EXPLAIN (COSTS OFF) EXECUTE merge_off_stmt;
+                                         QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: id
+                                 ->  Seq Scan on sorted_merge_test_960000 sorted_merge_test
+(12 rows)
 
 DEALLOCATE merge_off_stmt;
 -- G3: Cursor with backward scan
@@ -1162,6 +1397,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
          Output: remote_scan.id
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -1176,7 +1412,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                            Sort Method: top-N heapsort  Memory: NkB
                            ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                  Output: id
-(19 rows)
+(20 rows)
 
 -- G5: ORDER BY aggregate + LIMIT — crash regression test
 -- Previously caused SIGSEGV when sorted merge was enabled because
@@ -1388,6 +1624,7 @@ SELECT * FROM ordered_cte ORDER BY id LIMIT 5');
    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
          Output: remote_scan.id, remote_scan.val
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -1402,7 +1639,7 @@ SELECT * FROM ordered_cte ORDER BY id LIMIT 5');
                            Sort Method: top-N heapsort  Memory: NkB
                            ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                  Output: sorted_merge_test.id, sorted_merge_test.val
-(19 rows)
+(20 rows)
 
 -- H2 EXPLAIN
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH eligible_cte AS (
@@ -1426,6 +1663,7 @@ ORDER BY e.id');
                ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                      Output: remote_scan.id, remote_scan.val
                      Task Count: N
+                     Merge Method: sorted merge
                      Tuple data received from nodes: N bytes
                      Tasks Shown: One of N
                      ->  Task
@@ -1492,7 +1730,7 @@ ORDER BY e.id');
                      ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1 (actual rows=N loops=N)
                            Output: intermediate_result_1.cnt, intermediate_result_1.id
                            Function Call: read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format)
-(77 rows)
+(78 rows)
 
 -- H3 EXPLAIN
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH top_ids AS (
@@ -1517,6 +1755,7 @@ LIMIT 10');
                      ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                            Output: remote_scan.id
                            Task Count: N
+                           Merge Method: sorted merge
                            Tuple data received from nodes: N bytes
                            Tasks Shown: One of N
                            ->  Task
@@ -1532,6 +1771,7 @@ LIMIT 10');
                                              ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                                    Output: id
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -1556,7 +1796,7 @@ LIMIT 10');
                                  Sort Method: quicksort  Memory: NkB
                                  ->  Seq Scan on public.sorted_merge_test_960000 t (actual rows=N loops=N)
                                        Output: t.id, t.val
-(51 rows)
+(53 rows)
 
 -- H4 EXPLAIN
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test
@@ -1579,6 +1819,7 @@ LIMIT 5');
                      ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                            Output: remote_scan.id
                            Task Count: N
+                           Merge Method: sorted merge
                            Tuple data received from nodes: N bytes
                            Tasks Shown: One of N
                            ->  Task
@@ -1594,6 +1835,7 @@ LIMIT 5');
                                              ->  Seq Scan on public.sorted_merge_events_960004 sorted_merge_events (actual rows=N loops=N)
                                                    Output: id
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -1616,7 +1858,7 @@ LIMIT 5');
                                        ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=N loops=N)
                                              Output: intermediate_result.id
                                              Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
-(50 rows)
+(52 rows)
 
 -- H5 EXPLAIN
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH small_cte AS (
@@ -1635,6 +1877,7 @@ SELECT * FROM small_cte ORDER BY id LIMIT 5');
                ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                      Output: remote_scan.id, remote_scan.val
                      Task Count: N
+                     Merge Method: sorted merge
                      Tuple data received from nodes: N bytes
                      Tasks Shown: One of N
                      ->  Task
@@ -1665,7 +1908,7 @@ SELECT * FROM small_cte ORDER BY id LIMIT 5');
                      ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result (actual rows=N loops=N)
                            Output: intermediate_result.id, intermediate_result.val
                            Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
-(40 rows)
+(41 rows)
 
 -- H6 EXPLAIN
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT foo.id, bar.id as bar_id
@@ -1686,6 +1929,7 @@ LIMIT 5');
                ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                      Output: remote_scan.id
                      Task Count: N
+                     Merge Method: sorted merge
                      Tuple data received from nodes: N bytes
                      Tasks Shown: One of N
                      ->  Task
@@ -1708,6 +1952,7 @@ LIMIT 5');
                ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                      Output: remote_scan.id
                      Task Count: N
+                     Merge Method: sorted merge
                      Tuple data received from nodes: N bytes
                      Tasks Shown: One of N
                      ->  Task
@@ -1743,7 +1988,7 @@ LIMIT 5');
                            ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1 (actual rows=N loops=N)
                                  Output: intermediate_result_1.id
                                  Function Call: read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format)
-(67 rows)
+(69 rows)
 
 -- H7 EXPLAIN — GUC off vs on
 SET citus.enable_sorted_merge TO off;
@@ -1817,6 +2062,7 @@ SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5');
                ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                      Output: remote_scan.id, remote_scan.val, remote_scan.num
                      Task Count: N
+                     Merge Method: sorted merge
                      Tuple data received from nodes: N bytes
                      Tasks Shown: One of N
                      ->  Task
@@ -1849,7 +2095,7 @@ SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5');
                            Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
                            Filter: (intermediate_result.num > 'N'::numeric)
                            Rows Removed by Filter: N
-(42 rows)
+(43 rows)
 
 -- =================================================================
 -- Category I: Distributed Transactions
@@ -2027,6 +2273,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val, remote_scan.worker_column_3
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -2039,7 +2286,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val, (id + N)
-(15 rows)
+(16 rows)
 
 -- J4: ORDER BY with CASE expression (no aggregates) — eligible
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY CASE WHEN id < 50 THEN 0 ELSE 1 END, id');
@@ -2048,6 +2295,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
    Output: remote_scan.id, remote_scan.val, remote_scan.worker_column_3
    Task Count: N
+   Merge Method: sorted merge
    Tuple data received from nodes: N bytes
    Tasks Shown: One of N
    ->  Task
@@ -2060,7 +2308,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                Sort Method: quicksort  Memory: NkB
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val, CASE WHEN (id < N) THEN N ELSE N END
-(15 rows)
+(16 rows)
 
 -- J5: ORDER BY on an expression that mixes aggregate and non-aggregate
 -- Should be ineligible because the expression contains an aggregate.
@@ -2403,6 +2651,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
          Output: remote_scan.id, remote_scan.val, remote_scan.worker_column_3
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -2417,7 +2666,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                            Sort Method: top-N heapsort  Memory: NkB
                            ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                  Output: id, val, upper(val)
-(19 rows)
+(20 rows)
 
 -- J24: ORDER BY expression not in SELECT list — pushed to workers?
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY num + 1 LIMIT 5');
@@ -2428,6 +2677,7 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
    ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
          Output: remote_scan.id, remote_scan.worker_column_2
          Task Count: N
+         Merge Method: sorted merge
          Tuple data received from nodes: N bytes
          Tasks Shown: One of N
          ->  Task
@@ -2442,8 +2692,146 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                            Sort Method: top-N heapsort  Memory: NkB
                            ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                                  Output: id, (num + 'N'::numeric)
-(19 rows)
+(20 rows)
 
+-- =================================================================
+-- Category K: Index-based sort avoidance
+-- =================================================================
+-- When an index exists on the ORDER BY column, PostgreSQL's worker-side
+-- planner should choose an Index Scan instead of Sort + Seq Scan, making
+-- the worker-side sort essentially free. This is the best-case scenario
+-- for sorted merge: zero worker sort cost + zero coordinator sort cost.
+--
+-- We disable enable_seqscan to force the worker planner to prefer the
+-- index, since the test table is small enough that Seq Scan + Sort
+-- would otherwise be cheaper.
+CREATE INDEX sorted_merge_test_id_idx ON sorted_merge_test(id);
+-- Use a transaction with SET LOCAL to propagate enable_seqscan=off to workers,
+-- forcing the worker planner to use the index instead of Seq Scan + Sort.
+SET citus.propagate_set_commands TO 'local';
+-- K1: EXPLAIN with index — worker uses Index Scan, no Sort node
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id');
+                                                               explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Output: remote_scan.id, remote_scan.val
+   Task Count: N
+   Merge Method: sorted merge
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Index Scan using sorted_merge_test_id_idx_960000 on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+               Output: id, val
+(12 rows)
+
+COMMIT;
+-- K2: Correctness with index — GUC off vs on
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SET LOCAL citus.enable_sorted_merge TO off;
+SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 5;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+(5 rows)
+
+SET LOCAL citus.enable_sorted_merge TO on;
+SELECT id, val FROM sorted_merge_test ORDER BY id LIMIT 5;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+(5 rows)
+
+COMMIT;
+-- K3: Multi-column index
+CREATE INDEX sorted_merge_test_num_id_idx ON sorted_merge_test(num, id);
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, num FROM sorted_merge_test ORDER BY num, id');
+                                                                    explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Output: remote_scan.id, remote_scan.num
+   Task Count: N
+   Merge Method: sorted merge
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Query: SELECT id, num FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY num, id
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Index Only Scan using sorted_merge_test_num_id_idx_960000 on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+               Output: id, num
+               Heap Fetches: N
+(13 rows)
+
+COMMIT;
+-- K4: Correctness with multi-column index — GUC off vs on
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SET LOCAL citus.enable_sorted_merge TO off;
+SELECT id, num FROM sorted_merge_test ORDER BY num, id LIMIT 5;
+ id | num
+---------------------------------------------------------------------
+  1 | 1.5
+  2 | 3.0
+  3 | 4.5
+  4 | 6.0
+  5 | 7.5
+(5 rows)
+
+SET LOCAL citus.enable_sorted_merge TO on;
+SELECT id, num FROM sorted_merge_test ORDER BY num, id LIMIT 5;
+ id | num
+---------------------------------------------------------------------
+  1 | 1.5
+  2 | 3.0
+  3 | 4.5
+  4 | 6.0
+  5 | 7.5
+(5 rows)
+
+COMMIT;
+-- K5: DESC ordering with index
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+SET LOCAL enable_seqscan TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY id DESC');
+                                                                    explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Output: remote_scan.id, remote_scan.val
+   Task Count: N
+   Merge Method: sorted merge
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Query: SELECT id, val FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id DESC
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Index Scan Backward using sorted_merge_test_id_idx_960000 on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+               Output: id, val
+(12 rows)
+
+COMMIT;
+RESET citus.propagate_set_commands;
+DROP INDEX sorted_merge_test_id_idx;
+DROP INDEX sorted_merge_test_num_id_idx;
 -- =================================================================
 -- Cleanup
 -- =================================================================
