@@ -856,6 +856,22 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	resultPlan = FinalizePlan(planContext->plan, distributedPlan);
 
 	/*
+	 * When the streaming sorted merge adapter is active, the CustomScan
+	 * does not support backward scan. If the query is a SCROLL cursor,
+	 * insert a Material node above the plan tree so backward fetches work.
+	 *
+	 * Normally standard_planner() handles this (planner.c:447-451), but
+	 * Citus replaces the plan tree after standard_planner returns via
+	 * FinalizePlan(), losing any Material node it inserted.
+	 */
+	if ((planContext->cursorOptions & CURSOR_OPT_SCROLL) &&
+		distributedPlan->useSortedMerge && EnableStreamingSortedMerge &&
+		!ExecSupportsBackwardScan(resultPlan->planTree))
+	{
+		resultPlan->planTree = materialize_finished_plan(resultPlan->planTree);
+	}
+
+	/*
 	 * As explained above, force planning costs to be unrealistically high if
 	 * query planning failed (possibly) due to prepared statement parameters or
 	 * if it is planned as a multi shard modify query.
