@@ -716,7 +716,7 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 	{
 		ExplainPropertyText("Merge Method", "sorted merge", es);
 	}
-	
+
 	if (ShowReceivedTupleData(scanState, es))
 	{
 		Task *task = NULL;
