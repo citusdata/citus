@@ -319,7 +319,7 @@ END;
 
 -- cursor queries also works fine
 BEGIN;
-DECLARE test_cursor CURSOR FOR
+DECLARE test_cursor SCROLL CURSOR FOR
 	SELECT *
 		FROM reference_table_test
 		WHERE value_1 = 1 OR value_1 = 2
@@ -567,4 +567,4 @@ SELECT count(*) FROM numbers;
 RESET log_min_messages;
 
 -- clean up tables
-DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, numbers;
+DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, colocated_table_test, colocated_table_test_2, numbers;

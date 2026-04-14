@@ -537,7 +537,7 @@ bool PreventIncompleteConnectionEstablishment = true;
 /* GUC, number of rows per batch (0 = auto from work_mem) */
 int ExecutorBatchSize = 0;
 
-/* GUC, libpq chunk size in bytes for chunked row mode (PG17+) */
+/* GUC, max rows per PQgetResult() chunk in chunked row mode (PG17+) */
 int ExecutorChunkSize = 8192;
 
 
@@ -1613,6 +1613,9 @@ DistributedExecutionModifiesDatabase(DistributedExecution *execution)
 static void
 FinishDistributedExecution(DistributedExecution *execution)
 {
+	/* Free WaitEventSet that may have been preserved across batches */
+	FreeExecutionWaitEvents(execution);
+
 	if (!execution->sessionsCleanedUp)
 	{
 		CleanUpSessions(execution);
@@ -2132,8 +2135,11 @@ RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 
 		bool cancellationReceived = false;
 
-		/* always (re)build the wait event set the first time */
-		execution->rebuildWaitEventSet = true;
+		/* build the wait event set on first entry; reuse across batches */
+		if (execution->waitEventSet == NULL)
+		{
+			execution->rebuildWaitEventSet = true;
+		}
 		execution->rowsReceivedInCurrentRun = 0;
 
 		int maxBatchSize = execution->maxBatchSize > 0 ?
@@ -2219,10 +2225,14 @@ RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 			pfree(events);
 		}
 
-		if (execution->waitEventSet != NULL)
+		/*
+		 * Only free the WaitEventSet when running to completion.
+		 * For batched execution, preserve it across re-entries to
+		 * avoid expensive epoll_create/close syscalls per batch.
+		 */
+		if (toCompletion)
 		{
-			FreeWaitEventSet(execution->waitEventSet);
-			execution->waitEventSet = NULL;
+			FreeExecutionWaitEvents(execution);
 		}
 	}
 	PG_CATCH();

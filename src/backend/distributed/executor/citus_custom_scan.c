@@ -289,7 +289,6 @@ CitusExecScan(CustomScanState *node)
 	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
 	if (TupIsNull(resultSlot) && !scanState->finishedRemoteScan)
 	{
-		/* clear the tuple store for the next batch */
 		tuplestore_clear(scanState->tuplestorestate);
 
 		scanState->finishedRemoteScan = AdaptiveExecutorRun(scanState);
