@@ -768,6 +768,55 @@ DROP INDEX sorted_merge_test_id_idx;
 DROP INDEX sorted_merge_test_num_id_idx;
 
 -- =================================================================
+-- Category L: Volatile and stable functions in ORDER BY
+-- Tests that ORDER BY with functions works correctly with sorted merge.
+-- Volatile functions (random, clock_timestamp, timeofday) are pushed
+-- to workers as computed columns — sorted merge uses the materialized
+-- worker values, which is semantically equivalent to coordinator Sort.
+-- =================================================================
+
+-- L1: STABLE function — now() in expression with column
+-- now() returns the same value on all workers within a transaction,
+-- so the merge is globally consistent. Sorted merge should be used.
+SET citus.enable_sorted_merge TO on;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY now() - ts, id');
+
+-- L2: VOLATILE function — random() in ORDER BY
+-- random() is pushed to workers as worker_column_3; each worker sorts
+-- by its own random values. The merge interleaves using materialized
+-- values — semantically equivalent to coordinator Sort on worker_column_3.
+-- Test plan shape only (result is non-deterministic).
+SET citus.enable_sorted_merge TO on;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY random(), id');
+
+-- L3: VOLATILE function — clock_timestamp() in ORDER BY
+-- Same mechanics as random(): pushed to workers, sorted locally, merged.
+SET citus.enable_sorted_merge TO on;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY clock_timestamp(), id');
+
+-- L4: nextval() in ORDER BY with sorted merge ON — expected ERROR
+-- nextval() cannot be pushed to workers (CanPushDownExpression blocks it).
+-- The sort clause references a target entry missing from the worker target
+-- list, causing a plan-time error. This is a pre-existing Citus limitation.
+CREATE SEQUENCE sorted_merge_test_seq;
+SET citus.enable_sorted_merge TO on;
+SELECT id, val FROM sorted_merge_test ORDER BY nextval('sorted_merge_test_seq');
+
+-- L4b: nextval() in ORDER BY with sorted merge OFF but LIMIT present
+-- Same error — demonstrates this is NOT a sorted merge regression.
+SET citus.enable_sorted_merge TO off;
+SELECT id, val FROM sorted_merge_test ORDER BY nextval('sorted_merge_test_seq') LIMIT 5;
+DROP SEQUENCE sorted_merge_test_seq;
+
+-- L5: STABLE function alone (constant-fold case)
+-- current_timestamp is constant-folded by the planner; the sort key
+-- effectively becomes just 'id'. Sorted merge should be used.
+SET citus.enable_sorted_merge TO on;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test ORDER BY current_timestamp, id');
+
+SET citus.enable_sorted_merge TO off;
+
+-- =================================================================
 -- Cleanup
 -- =================================================================
 
