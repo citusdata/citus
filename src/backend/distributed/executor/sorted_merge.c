@@ -382,7 +382,7 @@ CreateSortedMergeAdapter(Tuplestorestate **perTaskStores,
  * On each call after the first, we advance the previous winner's store
  * and update the heap before selecting the new winner. This matches the
  * MergeAppend pattern in nodeMergeAppend.c.
- * 
+ *
  * Possible perf optimizations to explore in the future:
  * Avoid copying the winning tuple into the scan slot by returning a pointer to the winner's slot instead.
  * This would require changes to the caller to not modify the returned slot and to understand that it's owned by the adapter until the next call.
