@@ -94,7 +94,8 @@ static PlannedStmt * TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 													 Query *query, ParamListInfo
 													 boundParams,
 													 PlannerRestrictionContext *
-													 plannerRestrictionContext);
+													 plannerRestrictionContext,
+													 int cursorOptions);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -866,7 +867,8 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	distributedPlan->planId = planId;
 
 	/* create final plan by combining local plan with distributed plan */
-	resultPlan = FinalizePlan(planContext->plan, distributedPlan);
+	resultPlan = FinalizePlan(planContext->plan, distributedPlan,
+							  planContext->cursorOptions);
 
 	/*
 	 * The streaming sorted merge adapter does not support backward scan.
@@ -931,7 +933,9 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 														  planContext->query,
 														  planContext->boundParams,
 														  planContext->
-														  plannerRestrictionContext);
+														  plannerRestrictionContext,
+														  planContext->
+														  cursorOptions);
 
 	return result;
 }
@@ -947,7 +951,8 @@ static PlannedStmt *
 TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 								Query *originalQuery,
 								Query *query, ParamListInfo boundParams,
-								PlannerRestrictionContext *plannerRestrictionContext)
+								PlannerRestrictionContext *plannerRestrictionContext,
+								int cursorOptions)
 {
 	MemoryContext savedContext = CurrentMemoryContext;
 	PlannedStmt *result = NULL;
@@ -959,6 +964,7 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 	planContext->originalQuery = originalQuery;
 	planContext->query = query;
 	planContext->plannerRestrictionContext = plannerRestrictionContext;
+	planContext->cursorOptions = cursorOptions;
 
 
 	PG_TRY();
@@ -1466,7 +1472,8 @@ GetDistributedPlan(CustomScan *customScan)
  * which can be run by the PostgreSQL executor.
  */
 PlannedStmt *
-FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
+FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
+			 int cursorOptions)
 {
 	PlannedStmt *finalPlan = NULL;
 	CustomScan *customScan = makeNode(CustomScan);
@@ -1569,6 +1576,20 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	else
 	{
 		finalPlan = FinalizeRouterPlan(localPlan, customScan);
+	}
+
+	/*
+	 * For SCROLL cursors, wrap the plan in a Material node so that backward
+	 * scan works correctly with batched execution. PG's standard_planner()
+	 * already added a Material node, but Citus discarded the entire plan tree
+	 * above and replaced it with a CustomScan. Re-apply it here.
+	 *
+	 * Material is lazy (non-blocking): it fetches one tuple at a time from the
+	 * child and appends it to its own tuplestore, so batching is preserved.
+	 */
+	if (cursorOptions & CURSOR_OPT_SCROLL)
+	{
+		finalPlan->planTree = materialize_finished_plan(finalPlan->planTree);
 	}
 
 	return finalPlan;

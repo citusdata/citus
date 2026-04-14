@@ -499,7 +499,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	/* worker will take care of any necessary locking, treat query as read-only */
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
 
-	return FinalizePlan(planContext->plan, distributedPlan);
+	return FinalizePlan(planContext->plan, distributedPlan,
+						planContext->cursorOptions);
 }
 
 
