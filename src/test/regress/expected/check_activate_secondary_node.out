@@ -82,3 +82,17 @@ SET citus.metadata_sync_mode TO 'nontransactional';
 SELECT 1 FROM citus_activate_node('localhost', :follower_worker_2_port);
 ERROR:  this operation cannot be completed in nontransactional metadata sync mode
 HINT:  SET citus.metadata_sync_mode to 'transactional'
+-- remove checked nodes
+SET citus.metadata_sync_mode TO 'transactional';
+SELECT citus_remove_node('localhost', :follower_worker_2_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
