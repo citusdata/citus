@@ -196,11 +196,16 @@ PerTaskDispatchPutTuple(TupleDestination *self, Task *task,
 
 /*
  * PerTaskDispatchTupleDescForQuery returns the tuple descriptor.
+ *
+ * Only queryNumber == 0 (data tuples) is expected to reach the per-task
+ * dispatch directly. Under EXPLAIN ANALYZE, the ExplainAnalyzeDestination
+ * wrapper intercepts plan-fetch tuples (queryNumber == 1) before they
+ * reach us, but may call tupleDescForQuery with queryNumber == 0 or 1.
+ * We return the same data tuple descriptor in all cases.
  */
 static TupleDesc
 PerTaskDispatchTupleDescForQuery(TupleDestination *self, int queryNumber)
 {
-	Assert(queryNumber == 0);
 	PerTaskDispatchTupleDest *dispatch = (PerTaskDispatchTupleDest *) self;
 	return dispatch->tupleDesc;
 }

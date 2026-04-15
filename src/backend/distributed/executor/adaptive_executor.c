@@ -817,20 +817,23 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	/*
 	 * When sorted merge is active, route worker results into per-task tuple
-	 * stores. Skip sorted merge for EXPLAIN ANALYZE (which modifies task
-	 * lists in incompatible ways).
+	 * stores. After execution completes, these stores are k-way merged into
+	 * the final scanState->tuplestorestate.
 	 *
-	 * Note: useSortedMerge is a plan-time decision — if the plan says merge,
-	 * the executor must merge, because the combine query plan has no Sort
-	 * node above us. Skipping the merge here would produce silently unsorted
-	 * output. All eligibility checks belong in the planner, not here.
+	 * useSortedMerge is a plan-time decision — if the plan says merge, the
+	 * executor must merge, because the combine query plan has no Sort node
+	 * above us. Skipping the merge would produce silently unsorted output.
+	 *
+	 * This applies even under EXPLAIN ANALYZE: the ExplainAnalyzeDestination
+	 * wrapper forwards data tuples (queryNumber == 0) to the per-task
+	 * dispatch, which routes them to the correct per-task store. Plan-fetch
+	 * tuples (queryNumber == 1) are handled entirely within
+	 * ExplainAnalyzeDestPutTuple and never reach the per-task dispatch.
 	 */
-	bool useSortedMerge = distributedPlan->useSortedMerge &&
-						  !RequestedForExplainAnalyze(scanState);
 	Tuplestorestate **perTaskStores = NULL;
 	int perTaskStoreCount = 0;
 
-	if (useSortedMerge)
+	if (distributedPlan->useSortedMerge)
 	{
 		TupleDestinationStats *sharedStats = palloc0(sizeof(TupleDestinationStats));
 		defaultTupleDest = CreatePerTaskDispatchDest(taskList, tupleDescriptor,
@@ -909,7 +912,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 		&xactProperties,
 		jobIdList,
 		localExecutionSupported,
-		useSortedMerge,
+		distributedPlan->useSortedMerge,
 		perTaskStores,
 		perTaskStoreCount);
 
