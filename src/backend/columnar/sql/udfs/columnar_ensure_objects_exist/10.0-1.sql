@@ -9,7 +9,7 @@
 CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_objects_exist()
     RETURNS void
     LANGUAGE plpgsql
-    SET search_path = pg_catalog
+    SET search_path = pg_catalog, pg_temp
 AS $ceoe$
 BEGIN
 

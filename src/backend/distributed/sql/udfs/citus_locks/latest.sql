@@ -27,7 +27,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_locks (
 )
     RETURNS SETOF record
     LANGUAGE plpgsql
-    SET search_path = pg_catalog
+    SET search_path = pg_catalog, pg_temp
     AS $function$
 BEGIN
     RETURN QUERY
@@ -40,15 +40,15 @@ BEGIN
                 jsonb_array_elements(run_command_on_all_nodes.result::jsonb)::jsonb ||
                     ('{"nodeid":' || run_command_on_all_nodes.nodeid || '}')::jsonb AS citus_locks_row_as_jsonb
             FROM
-                run_command_on_all_nodes (
+                pg_catalog.run_command_on_all_nodes (
                     $$
                         SELECT
                             coalesce(to_jsonb (array_agg(citus_locks_from_one_node.*)), '[{}]'::jsonb)
                         FROM (
                             SELECT
                                 global_pid, pg_locks.relation::regclass::text AS relation_name, pg_locks.*
-                            FROM pg_locks
-                        LEFT JOIN get_all_active_transactions () ON process_id = pid) AS citus_locks_from_one_node;
+                            FROM pg_catalog.pg_locks
+                        LEFT JOIN pg_catalog.get_all_active_transactions () ON process_id = pid) AS citus_locks_from_one_node;
                     $$,
                     parallel:= TRUE,
                     give_warning_for_connection_errors:= TRUE)

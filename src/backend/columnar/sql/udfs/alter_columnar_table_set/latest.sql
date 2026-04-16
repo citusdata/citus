@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.alter_columnar_table_set(
     compression_level int DEFAULT NULL)
     RETURNS void
     LANGUAGE plpgsql
-    SET search_path = pg_catalog
+    SET search_path = pg_catalog, pg_temp
     AS
 $alter_columnar_table_set$
 declare

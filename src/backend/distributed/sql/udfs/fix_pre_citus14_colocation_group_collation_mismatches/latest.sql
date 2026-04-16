@@ -8,7 +8,7 @@ DECLARE
     v_table_to_move_out oid;
     v_first_table oid;
 BEGIN
-    SET LOCAL search_path TO pg_catalog;
+    SET LOCAL search_path TO pg_catalog, pg_temp;
 
     FOR v_colocationid, v_tables_to_move_out_grouped_by_collation
     IN
@@ -79,6 +79,6 @@ BEGIN
 END;
 $func$
 LANGUAGE plpgsql
-SET search_path = pg_catalog;
+SET search_path = pg_catalog, pg_temp;
 COMMENT ON FUNCTION pg_catalog.fix_pre_citus14_colocation_group_collation_mismatches()
   IS 'Fix distributed tables whose colocation group collations do not match their distribution columns by moving them to new colocation groups';
