@@ -14,11 +14,11 @@ RETURNS int4[] AS $$
 
     -- pg says we're not blocked locally; check whether we're blocked globally.
     SELECT global_pid INTO mLocalGlobalPid
-      FROM get_all_active_transactions() WHERE process_id = pBlockedPid;
+      FROM pg_catalog.get_all_active_transactions() WHERE process_id = pBlockedPid;
 
     SELECT array_agg(global_pid) INTO mRemoteBlockingPids FROM (
       WITH activeTransactions AS (
-        SELECT global_pid FROM get_all_active_transactions()
+        SELECT global_pid FROM pg_catalog.get_all_active_transactions()
       ), blockingTransactions AS (
         SELECT blocking_global_pid FROM citus_internal.global_blocked_processes()
         WHERE waiting_global_pid = mLocalGlobalPid
@@ -30,6 +30,6 @@ RETURNS int4[] AS $$
     RETURN mRemoteBlockingPids;
   END;
 $$ LANGUAGE plpgsql
-SET search_path = pg_catalog;
+SET search_path = pg_catalog, pg_temp;
 
 REVOKE ALL ON FUNCTION citus_blocking_pids(integer) FROM PUBLIC;
