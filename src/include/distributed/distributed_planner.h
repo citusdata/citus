@@ -280,6 +280,7 @@ extern int32 BlessRecordExpression(Expr *expr);
 extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
 extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  struct DistributedPlan *distributedPlan);
+extern void DisableTrackingQueryCountersForPlannedStmt(PlannedStmt *plannedStmt);
 extern bool ContainsSingleShardTable(Query *query);
 extern RTEListProperties * GetRTEListPropertiesForQuery(Query *query);
 
