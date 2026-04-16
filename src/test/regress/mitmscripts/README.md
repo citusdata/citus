@@ -18,7 +18,8 @@ Automated Failure Testing works by inserting a network proxy (mitmproxy) between
 ## Getting Started
 
 First off, to use this you'll need mitmproxy.
-The failure tests now use the upstream mitmproxy release pinned in the Pipfile and Pipfile.lock.
+The failure tests use the Citus mitmproxy fork pinned in the Pipfile and Pipfile.lock, with only the small
+TCP-layer patch we still need on top of upstream 12.2.2.
 We recommend using pipenv to set up your failure testing environment since that will install the tested
 version and the rest of the dependencies together.
 

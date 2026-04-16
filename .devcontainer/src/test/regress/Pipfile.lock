@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "9038b034d7892419fcb78c70acbad485d0a6ac1e2fac54f95ea6d98c26d5badd"
+            "sha256": "912f8e179377d7d34b800be62a5b10c0fa6ecdebc2413d7002f8340679b4c6be"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -665,11 +665,13 @@
             "version": "==3.0.3"
         },
         "mitmproxy": {
+            "git": "https://github.com/citusdata/mitmproxy.git",
             "hashes": [
                 "sha256:7b111ba3b83b34b0d9b653044685db7c3f5fbc63b39b8f06439642da83910713"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.12'",
+            "ref": "70bad9a3c098f605e5f8b25553e5db5334018ff1",
             "version": "==12.2.2"
         },
         "mitmproxy-linux": {
