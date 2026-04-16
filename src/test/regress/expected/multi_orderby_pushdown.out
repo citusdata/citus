@@ -3053,6 +3053,54 @@ SELECT id, val FROM sorted_merge_test ORDER BY id, val LIMIT 10;
  10 | val_10
 (10 rows)
 
+-- Single-column sort on num (non-distribution column, has NULLs)
+SELECT num FROM sorted_merge_test ORDER BY num LIMIT 10;
+ num
+---------------------------------------------------------------------
+  1.5
+  3.0
+  4.5
+  6.0
+  7.5
+  9.0
+ 10.5
+ 10.5
+ 10.5
+ 10.5
+(10 rows)
+
+-- Multi-column sort with num as first column
+SELECT num, id FROM sorted_merge_test ORDER BY num, id LIMIT 10;
+ num  | id
+---------------------------------------------------------------------
+  1.5 |   1
+  3.0 |   2
+  4.5 |   3
+  6.0 |   4
+  7.5 |   5
+  9.0 |   6
+ 10.5 |   7
+ 10.5 | 200
+ 10.5 | 201
+ 10.5 | 202
+(10 rows)
+
+-- Multi-column sort with num DESC as first column, id ASC
+SELECT num, id FROM sorted_merge_test ORDER BY num DESC, id LIMIT 10;
+  num  | id
+---------------------------------------------------------------------
+       | 101
+       | 102
+ 150.0 | 100
+ 148.5 |  99
+ 147.0 |  98
+ 145.5 |  97
+ 144.0 |  96
+ 142.5 |  95
+ 141.0 |  94
+ 139.5 |  93
+(10 rows)
+
 -- Disable auto_explain
 SET auto_explain.log_min_duration = -1;
 SET auto_explain.log_analyze TO false;

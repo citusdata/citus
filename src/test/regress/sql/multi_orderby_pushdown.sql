@@ -859,6 +859,15 @@ SELECT id FROM sorted_merge_test ORDER BY id DESC LIMIT 10;
 -- Multi-column sort under auto_explain
 SELECT id, val FROM sorted_merge_test ORDER BY id, val LIMIT 10;
 
+-- Single-column sort on num (non-distribution column, has NULLs)
+SELECT num FROM sorted_merge_test ORDER BY num LIMIT 10;
+
+-- Multi-column sort with num as first column
+SELECT num, id FROM sorted_merge_test ORDER BY num, id LIMIT 10;
+
+-- Multi-column sort with num DESC as first column, id ASC
+SELECT num, id FROM sorted_merge_test ORDER BY num DESC, id LIMIT 10;
+
 -- Disable auto_explain
 SET auto_explain.log_min_duration = -1;
 SET auto_explain.log_analyze TO false;
