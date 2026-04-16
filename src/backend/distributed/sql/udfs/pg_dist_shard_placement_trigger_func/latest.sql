@@ -20,4 +20,4 @@ RETURNS TRIGGER AS $$
     END IF;
   END;
 $$ LANGUAGE plpgsql
-SET search_path = pg_catalog;
+SET search_path = pg_catalog, pg_temp;

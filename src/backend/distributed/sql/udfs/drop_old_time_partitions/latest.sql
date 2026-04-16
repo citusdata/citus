@@ -2,7 +2,7 @@ CREATE OR REPLACE PROCEDURE pg_catalog.drop_old_time_partitions(
     table_name regclass,
     older_than timestamptz)
 LANGUAGE plpgsql
-SET search_path = pg_catalog
+SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
     -- properties of the partitioned table

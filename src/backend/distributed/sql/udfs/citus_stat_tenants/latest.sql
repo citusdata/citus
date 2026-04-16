@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_tenants (
 )
     RETURNS SETOF record
     LANGUAGE plpgsql
-    SET search_path = pg_catalog
+    SET search_path = pg_catalog, pg_temp
     AS $function$
 BEGIN
     IF
@@ -35,11 +35,11 @@ BEGIN
                 jsonb_array_elements(run_command_on_all_nodes.result::jsonb)::jsonb ||
                     ('{"nodeid":' || run_command_on_all_nodes.nodeid || '}')::jsonb AS cst_row_as_jsonb
             FROM
-                run_command_on_all_nodes (
+                pg_catalog.run_command_on_all_nodes (
                     $$
                         SELECT
                             coalesce(to_jsonb (array_agg(cstl.*)), '[]'::jsonb)
-                        FROM citus_stat_tenants_local($$||return_all_tenants||$$) cstl;
+                        FROM pg_catalog.citus_stat_tenants_local($$||return_all_tenants||$$) cstl;
                     $$,
                     parallel:= TRUE,
                     give_warning_for_connection_errors:= TRUE)

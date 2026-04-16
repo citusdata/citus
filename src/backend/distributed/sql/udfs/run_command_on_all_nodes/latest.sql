@@ -4,7 +4,7 @@ CREATE FUNCTION pg_catalog.run_command_on_all_nodes(command text, parallel bool 
 													OUT nodeid int, OUT success bool, OUT result text)
 	RETURNS SETOF record
 	LANGUAGE plpgsql
-	SET search_path = pg_catalog
+	SET search_path = pg_catalog, pg_temp
 	AS $function$
 DECLARE
 	nodenames text[];
@@ -14,7 +14,7 @@ DECLARE
 	command_result_of_current_node text;
 BEGIN
 	WITH citus_nodes AS (
-		SELECT * FROM pg_dist_node
+		SELECT * FROM pg_catalog.pg_dist_node
 		WHERE isactive = 't' AND nodecluster = current_setting('citus.cluster_name')
 		AND (
 			(current_setting('citus.use_secondary_nodes') = 'never' AND noderole = 'primary')
@@ -27,10 +27,10 @@ BEGIN
 	INTO nodenames, ports, commands
 	FROM citus_nodes;
 
-	SELECT count(*) > 0 FROM pg_dist_node
+	SELECT count(*) > 0 FROM pg_catalog.pg_dist_node
 	WHERE isactive = 't'
 	AND nodecluster = current_setting('citus.cluster_name')
-	AND groupid IN (SELECT groupid FROM pg_dist_local_group)
+	AND groupid IN (SELECT groupid FROM pg_catalog.pg_dist_local_group)
 	INTO current_node_is_in_metadata;
 
 	-- This will happen when we call this function on coordinator and
@@ -49,8 +49,8 @@ BEGIN
 
 	FOR nodeid, success, result IN
 		SELECT coalesce(pg_dist_node.nodeid, 0) AS nodeid, mrow.success, mrow.result
-		FROM master_run_on_worker(nodenames, ports, commands, parallel) mrow
-		LEFT JOIN pg_dist_node ON mrow.node_name = pg_dist_node.nodename AND mrow.node_port = pg_dist_node.nodeport
+		FROM pg_catalog.master_run_on_worker(nodenames, ports, commands, parallel) mrow
+		LEFT JOIN pg_catalog.pg_dist_node ON mrow.node_name = pg_dist_node.nodename AND mrow.node_port = pg_dist_node.nodeport
 	LOOP
 		IF give_warning_for_connection_errors AND NOT success THEN
 			RAISE WARNING 'Error on node with node id %: %', nodeid, result;

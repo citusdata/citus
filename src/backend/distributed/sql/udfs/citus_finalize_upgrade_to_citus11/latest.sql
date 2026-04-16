@@ -10,7 +10,7 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(enforce_version_check bool default true)
   RETURNS bool
   LANGUAGE plpgsql
-  SET search_path = pg_catalog
+  SET search_path = pg_catalog, pg_temp
   AS $$
 BEGIN
 
@@ -81,7 +81,7 @@ END;
 
         IF primary_disabled_worker_node_count != 0 THEN
                   RAISE EXCEPTION 'There are inactive primary worker nodes, you need to activate the nodes first.'
-                                  'Use SELECT citus_activate_node() to activate the disabled nodes';
+                                  'Use SELECT pg_catalog.citus_activate_node() to activate the disabled nodes';
         ELSE
                   RAISE DEBUG 'There are no disabled worker nodes, continue to sync metadata';
         END IF;
@@ -93,12 +93,12 @@ END;
   DECLARE
     all_nodes_can_connect_to_each_other boolean := False;
   BEGIN
-       SELECT bool_and(coalesce(result, false)) INTO all_nodes_can_connect_to_each_other FROM citus_check_cluster_node_health();
+       SELECT bool_and(coalesce(result, false)) INTO all_nodes_can_connect_to_each_other FROM pg_catalog.citus_check_cluster_node_health();
 
         IF all_nodes_can_connect_to_each_other != True THEN
                   RAISE EXCEPTION 'There are unhealth primary nodes, you need to ensure all '
                                   'nodes are up and running. Also, make sure that all nodes can connect '
-                                  'to each other. Use SELECT * FROM citus_check_cluster_node_health(); '
+                                  'to each other. Use SELECT * FROM pg_catalog.citus_check_cluster_node_health(); '
                                   'to check the cluster health';
         ELSE
                   RAISE DEBUG 'Cluster is healthy, all nodes can connect to each other';
@@ -120,7 +120,7 @@ END;
           SELECT
             count(distinct result) INTO worker_node_version_count
           FROM
-            run_command_on_workers('SELECT extversion from pg_extension WHERE extname = ''citus''');
+            pg_catalog.run_command_on_workers('SELECT extversion from pg_extension WHERE extname = ''citus''');
 
           IF enforce_version_check AND worker_node_version_count = 0 THEN
       RAISE DEBUG 'There are no worker nodes';
@@ -135,7 +135,7 @@ END;
          SELECT
             result INTO worker_node_version
          FROM
-            run_command_on_workers('SELECT extversion from pg_extension WHERE extname = ''citus'';')
+            pg_catalog.run_command_on_workers('SELECT extversion from pg_extension WHERE extname = ''citus'';')
           GROUP BY result;
 
           IF enforce_version_check AND coordinator_version != worker_node_version THEN
