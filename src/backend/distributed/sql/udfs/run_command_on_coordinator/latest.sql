@@ -42,7 +42,7 @@ BEGIN
 			INTO nodenames, ports, commands;
 		ELSE
 			RAISE EXCEPTION 'the coordinator is not added to the metadata'
-			USING HINT = 'Add the node as a coordinator by using: SELECT pg_catalog.citus_set_coordinator_host(''<hostname>'')';
+			USING HINT = 'Add the node as a coordinator by using: SELECT citus_set_coordinator_host(''<hostname>'')';
 		END IF;
 	END IF;
 
