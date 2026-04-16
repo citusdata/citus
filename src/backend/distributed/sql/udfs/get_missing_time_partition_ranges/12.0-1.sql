@@ -14,6 +14,7 @@ DECLARE
     -- properties of the partitioned table
     table_name_text text;
     table_schema_text text;
+    table_display_name text;
     number_of_partition_columns int;
     partition_column_index int;
     partition_column_type regtype;
@@ -26,6 +27,7 @@ DECLARE
 
     -- used to check whether there are misaligned (manually created) partitions
     manual_partition regclass;
+    manual_partition_name_text text;
     manual_partition_from_value_text text;
     manual_partition_to_value_text text;
 
@@ -43,14 +45,21 @@ DECLARE
     partition_covers_query text;
     partition_exist_query text;
 BEGIN
-    -- check whether the table is time partitioned table, if not error out
-    SELECT relname, nspname, partnatts, partattrs[0]
-    INTO table_name_text, table_schema_text, number_of_partition_columns, partition_column_index
-    FROM pg_catalog.pg_partitioned_table, pg_catalog.pg_class c, pg_catalog.pg_namespace n
-    WHERE partrelid = c.oid AND c.oid = table_name
+    SELECT c.relname, n.nspname
+    INTO table_name_text, table_schema_text
+    FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n
+    WHERE c.oid = table_name
     AND c.relnamespace = n.oid;
+
+    table_display_name := pg_catalog.quote_ident(table_name_text);
+
+    -- check whether the table is time partitioned table, if not error out
+    SELECT partnatts, partattrs[0]
+    INTO number_of_partition_columns, partition_column_index
+    FROM pg_catalog.pg_partitioned_table
+    WHERE partrelid = table_name;
     IF NOT FOUND THEN
-        RAISE '% is not partitioned', table_name;
+        RAISE '% is not partitioned', table_display_name;
     ELSIF number_of_partition_columns <> 1 THEN
         RAISE 'partitioned tables with multiple partition columns are not supported';
     END IF;
@@ -74,7 +83,7 @@ BEGIN
              EXISTS(SELECT OID FROM pg_cast WHERE castsource = 'timestamptz'::regtype AND casttarget = partition_column_type)
       INTO is_partition_column_castable;
       IF not is_partition_column_castable THEN
-        RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
+        RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_display_name;
       END IF;
       custom_cast = format('::%s', partition_column_type);
     END IF;
@@ -197,8 +206,13 @@ BEGIN
         using current_range_from_value, current_range_to_value, table_name;
 
         IF manual_partition is not NULL THEN
+            SELECT pg_catalog.quote_ident(relname)
+            INTO manual_partition_name_text
+            FROM pg_catalog.pg_class
+            WHERE oid = manual_partition::oid;
+
             RAISE 'partition % with the range from % to % does not align with the initial partition given the partition interval',
-            manual_partition::text,
+            manual_partition_name_text,
             manual_partition_from_value_text,
             manual_partition_to_value_text
             USING HINT = 'Only use partitions of the same size, without gaps between partitions.';
