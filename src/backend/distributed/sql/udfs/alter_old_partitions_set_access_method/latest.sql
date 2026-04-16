@@ -3,7 +3,7 @@ CREATE OR REPLACE PROCEDURE pg_catalog.alter_old_partitions_set_access_method(
 		older_than timestamptz,
 		new_access_method name)
 LANGUAGE plpgsql
-SET search_path = pg_catalog
+SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
     r record;

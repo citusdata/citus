@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION pg_catalog.fix_all_partition_shard_index_names()
   RETURNS SETOF regclass
   LANGUAGE plpgsql
-  SET search_path = pg_catalog
+  SET search_path = pg_catalog, pg_temp
   AS $$
 DECLARE
 	dist_partitioned_table_name regclass;

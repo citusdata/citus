@@ -12,17 +12,17 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_activity(OUT global_pid bigint,
                                                           OUT state text, OUT backend_xid xid, OUT backend_xmin xid, OUT query_id bigint, OUT query text, OUT backend_type text)
     RETURNS SETOF record
     LANGUAGE plpgsql
-    SET search_path = pg_catalog
+    SET search_path = pg_catalog, pg_temp
     AS $function$
 BEGIN
     RETURN QUERY SELECT * FROM jsonb_to_recordset((
         SELECT jsonb_agg(all_csa_rows_as_jsonb.csa_row_as_jsonb)::JSONB FROM (
             SELECT jsonb_array_elements(run_command_on_all_nodes.result::JSONB)::JSONB || ('{"nodeid":' || run_command_on_all_nodes.nodeid || '}')::JSONB AS csa_row_as_jsonb
-            FROM run_command_on_all_nodes($$
+            FROM pg_catalog.run_command_on_all_nodes($$
                 SELECT coalesce(to_jsonb(array_agg(csa_from_one_node.*)), '[{}]'::JSONB)
                 FROM (
                     SELECT global_pid, worker_query AS is_worker_query, pg_stat_activity.* FROM
-                    pg_stat_activity LEFT JOIN get_all_active_transactions() ON process_id = pid
+                    pg_catalog.pg_stat_activity LEFT JOIN pg_catalog.get_all_active_transactions() ON process_id = pid
                 ) AS csa_from_one_node;
             $$, parallel:=true, give_warning_for_connection_errors:=true)
             WHERE success = 't'

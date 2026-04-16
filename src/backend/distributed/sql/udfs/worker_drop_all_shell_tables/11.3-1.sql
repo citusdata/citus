@@ -4,6 +4,7 @@
 -- via https://github.com/citusdata/citus/pull/6728.
 CREATE OR REPLACE PROCEDURE pg_catalog.worker_drop_all_shell_tables(singleTransaction bool DEFAULT true)
 LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
     table_name text;
