@@ -2956,6 +2956,130 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
 
 SET citus.enable_sorted_merge TO off;
 -- =================================================================
+-- Category L6: EXPLAIN ANALYZE + sorted merge
+--
+-- Verify that sorted merge works correctly when the EXPLAIN ANALYZE
+-- code path is active.  We test two mechanisms:
+--
+-- 1. Plain EXPLAIN ANALYZE: verifies plan structure (no coordinator
+--    Sort node, "Merge Method: sorted merge" visible).
+--
+-- 2. auto_explain with log_analyze: triggers the same executor code
+--    path (es_instrument != 0 → RequestedForExplainAnalyze() = true)
+--    but returns actual data rows.  This directly validates that the
+--    k-way merge produces correctly sorted output under the EXPLAIN
+--    ANALYZE path — if the merge were skipped, the rows would be
+--    visibly unsorted.
+-- =================================================================
+SET citus.enable_sorted_merge TO on;
+-- Verify EXPLAIN ANALYZE plan structure: no Sort node at coordinator
+-- level, "Merge Method: sorted merge" visible, and "actual rows"
+-- confirms full execution through the merge path.
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+                                              explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Output: remote_scan.id
+   Task Count: N
+   Merge Method: sorted merge
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Sort (actual rows=N loops=N)
+               Output: id
+               Sort Key: sorted_merge_test.id
+               Sort Method: quicksort  Memory: NkB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+                     Output: id
+(16 rows)
+
+-- Load auto_explain to trigger the EXPLAIN ANALYZE executor path
+-- while returning real data rows.  auto_explain sets es_instrument,
+-- which makes RequestedForExplainAnalyze() return true — the same
+-- condition as a real EXPLAIN ANALYZE.
+LOAD 'auto_explain';
+SET auto_explain.log_min_duration = 0;
+SET auto_explain.log_analyze TO true;
+-- ASC sort under auto_explain: these SELECTs go through the EXPLAIN
+-- ANALYZE code path but return actual data.  If the merge were
+-- skipped, rows would arrive in arbitrary worker order.
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 10;
+ id
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+-- DESC sort under auto_explain
+SELECT id FROM sorted_merge_test ORDER BY id DESC LIMIT 10;
+ id
+---------------------------------------------------------------------
+ 202
+ 201
+ 200
+ 102
+ 101
+ 100
+  99
+  98
+  97
+  96
+(10 rows)
+
+-- Multi-column sort under auto_explain
+SELECT id, val FROM sorted_merge_test ORDER BY id, val LIMIT 10;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  2 | val_2
+  3 | val_3
+  4 | val_4
+  5 | val_5
+  6 | val_6
+  7 | val_7
+  8 | val_8
+  9 | val_9
+ 10 | val_10
+(10 rows)
+
+-- Disable auto_explain
+SET auto_explain.log_min_duration = -1;
+SET auto_explain.log_analyze TO false;
+-- Contrast: sorted merge OFF shows a Sort node at coordinator level.
+SET citus.enable_sorted_merge TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+                                              explain_filter
+---------------------------------------------------------------------
+ Sort (actual rows=N loops=N)
+   Output: remote_scan.id
+   Sort Key: remote_scan.id
+   Sort Method: quicksort  Memory: NkB
+   ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+         Output: remote_scan.id
+         Task Count: N
+         Tuple data received from nodes: N bytes
+         Tasks Shown: One of N
+         ->  Task
+               Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true
+               Tuple data received from node: N bytes
+               Node: host=localhost port=N dbname=regression
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+                     Output: id
+(15 rows)
+
+SET citus.enable_sorted_merge TO off;
+-- =================================================================
 -- Cleanup
 -- =================================================================
 SET citus.enable_sorted_merge TO off;

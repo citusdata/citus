@@ -817,6 +817,59 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
 SET citus.enable_sorted_merge TO off;
 
 -- =================================================================
+-- Category L6: EXPLAIN ANALYZE + sorted merge
+--
+-- Verify that sorted merge works correctly when the EXPLAIN ANALYZE
+-- code path is active.  We test two mechanisms:
+--
+-- 1. Plain EXPLAIN ANALYZE: verifies plan structure (no coordinator
+--    Sort node, "Merge Method: sorted merge" visible).
+--
+-- 2. auto_explain with log_analyze: triggers the same executor code
+--    path (es_instrument != 0 → RequestedForExplainAnalyze() = true)
+--    but returns actual data rows.  This directly validates that the
+--    k-way merge produces correctly sorted output under the EXPLAIN
+--    ANALYZE path — if the merge were skipped, the rows would be
+--    visibly unsorted.
+-- =================================================================
+
+SET citus.enable_sorted_merge TO on;
+
+-- Verify EXPLAIN ANALYZE plan structure: no Sort node at coordinator
+-- level, "Merge Method: sorted merge" visible, and "actual rows"
+-- confirms full execution through the merge path.
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+
+-- Load auto_explain to trigger the EXPLAIN ANALYZE executor path
+-- while returning real data rows.  auto_explain sets es_instrument,
+-- which makes RequestedForExplainAnalyze() return true — the same
+-- condition as a real EXPLAIN ANALYZE.
+LOAD 'auto_explain';
+SET auto_explain.log_min_duration = 0;
+SET auto_explain.log_analyze TO true;
+
+-- ASC sort under auto_explain: these SELECTs go through the EXPLAIN
+-- ANALYZE code path but return actual data.  If the merge were
+-- skipped, rows would arrive in arbitrary worker order.
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 10;
+
+-- DESC sort under auto_explain
+SELECT id FROM sorted_merge_test ORDER BY id DESC LIMIT 10;
+
+-- Multi-column sort under auto_explain
+SELECT id, val FROM sorted_merge_test ORDER BY id, val LIMIT 10;
+
+-- Disable auto_explain
+SET auto_explain.log_min_duration = -1;
+SET auto_explain.log_analyze TO false;
+
+-- Contrast: sorted merge OFF shows a Sort node at coordinator level.
+SET citus.enable_sorted_merge TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+
+SET citus.enable_sorted_merge TO off;
+
+-- =================================================================
 -- Cleanup
 -- =================================================================
 
