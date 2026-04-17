@@ -3,6 +3,10 @@ run-name: Build & Test - ${{ github.event.pull_request.title || github.ref_name 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+env:
+  # Opt JavaScript actions (e.g. actions/checkout@v5, actions/upload-artifact@v5)
+  # into Node.js 24 early to silence the Node 20 deprecation warning.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 on:
   workflow_dispatch:
     inputs:
@@ -357,11 +361,11 @@ jobs:
     - build
     steps:
     - uses: actions/checkout@v5
-    - uses: azure/login@v1
+    - uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     - name: install dependencies and run ch_benchmark tests
-      uses: azure/CLI@v1
+      uses: azure/cli@v2
       with:
         inlineScript: |
           cd ./src/test/hammerdb
@@ -375,11 +379,11 @@ jobs:
     - build
     steps:
     - uses: actions/checkout@v5
-    - uses: azure/login@v1
+    - uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     - name: install dependencies and run tpcc_benchmark tests
-      uses: azure/CLI@v1
+      uses: azure/cli@v2
       with:
         inlineScript: |
           cd ./src/test/hammerdb

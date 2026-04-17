@@ -1,5 +1,8 @@
 name: "CodeQL"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   schedule:
     - cron: '59 23 * * 6'

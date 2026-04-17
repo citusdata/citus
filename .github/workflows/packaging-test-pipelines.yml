@@ -1,5 +1,8 @@
 name: Build tests in packaging images
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   pull_request:
     types: [opened, reopened,synchronize]
