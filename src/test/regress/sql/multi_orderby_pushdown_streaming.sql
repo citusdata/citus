@@ -9,7 +9,7 @@
 -- forward-only cursor correctly errors on FETCH BACKWARD).
 --
 
-\i sql/setup_multi_orderby_pushdown.sql
+\i sql/setup_multi_orderby_pushdown.sql.include
 
 -- Run 1: eager merge (default)
 \i sql/multi_orderby_pushdown.sql.include
