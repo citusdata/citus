@@ -1,3 +1,21 @@
+### citus v14.0.1 (April 21, 2026) ###
+
+* Hardens extension SQL against `search_path` attacks by schema-qualifying
+  identifiers in view/upgrade scripts and setting
+  `SET search_path = pg_catalog, pg_temp` on Citus UDFs and procedures
+
+* Adds support for `CREATE STATISTICS` on expressions and enables it by
+  default (#8501, #8512)
+
+* Fixes shard move failures in `block_writes` mode when metadata workers
+  hit `idle_in_transaction_session_timeout` (#8495)
+
+* Fixes `IsTenantSchema` returning false when version checks are disabled
+  (#8480)
+
+* Relaxes the version check in `MajorVersionsCompatible` to tolerate minor
+  version skew between coordinator and workers (#8550)
+
 ### citus v14.0.0 (February 9, 2026) ###
 
 * Drops PG15 support (#8372)
