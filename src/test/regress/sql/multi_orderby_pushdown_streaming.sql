@@ -12,11 +12,11 @@
 \i sql/setup_multi_orderby_pushdown.sql
 
 -- Run 1: eager merge (default)
-\i sql/multi_orderby_pushdown.sql
+\i sql/multi_orderby_pushdown.sql.include
 
 -- Run 2: streaming adapter
 SET citus.enable_streaming_sorted_merge TO on;
-\i sql/multi_orderby_pushdown.sql
+\i sql/multi_orderby_pushdown.sql.include
 RESET citus.enable_streaming_sorted_merge;
 
 -- Cleanup

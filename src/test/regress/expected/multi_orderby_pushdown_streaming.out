@@ -58,7 +58,7 @@ INSERT INTO sorted_merge_events
 SELECT i % 50 + 1, CASE WHEN i % 3 = 0 THEN 'click' WHEN i % 3 = 1 THEN 'view' ELSE 'buy' END, i
 FROM generate_series(1, 200) i;
 -- Run 1: eager merge (default)
-\i sql/multi_orderby_pushdown.sql
+\i sql/multi_orderby_pushdown.sql.include
 --
 -- MULTI_SORTED_MERGE
 --
@@ -2970,12 +2970,12 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
 CREATE SEQUENCE sorted_merge_test_seq;
 SET citus.enable_sorted_merge TO on;
 SELECT id, val FROM sorted_merge_test ORDER BY nextval('sorted_merge_test_seq');
-psql:sql/multi_orderby_pushdown.sql:777: ERROR:  ORDER/GROUP BY expression not found in targetlist
+psql:sql/multi_orderby_pushdown.sql.include:777: ERROR:  ORDER/GROUP BY expression not found in targetlist
 -- L4b: nextval() in ORDER BY with sorted merge OFF but LIMIT present
 -- Same error — demonstrates this is NOT a sorted merge regression.
 SET citus.enable_sorted_merge TO off;
 SELECT id, val FROM sorted_merge_test ORDER BY nextval('sorted_merge_test_seq') LIMIT 5;
-psql:sql/multi_orderby_pushdown.sql:782: ERROR:  ORDER/GROUP BY expression not found in targetlist
+psql:sql/multi_orderby_pushdown.sql.include:782: ERROR:  ORDER/GROUP BY expression not found in targetlist
 DROP SEQUENCE sorted_merge_test_seq;
 -- L5: STABLE function alone (constant-fold case)
 -- current_timestamp is constant-folded by the planner; the sort key
@@ -3004,12 +3004,184 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
 
 SET citus.enable_sorted_merge TO off;
 -- =================================================================
+-- Category L6: EXPLAIN ANALYZE + sorted merge
+--
+-- Verify that sorted merge works correctly when the EXPLAIN ANALYZE
+-- code path is active.  We test two mechanisms:
+--
+-- 1. Plain EXPLAIN ANALYZE: verifies plan structure (no coordinator
+--    Sort node, "Merge Method: sorted merge" visible).
+--
+-- 2. auto_explain with log_analyze: triggers the same executor code
+--    path (es_instrument != 0 → RequestedForExplainAnalyze() = true)
+--    but returns actual data rows.  This directly validates that the
+--    k-way merge produces correctly sorted output under the EXPLAIN
+--    ANALYZE path — if the merge were skipped, the rows would be
+--    visibly unsorted.
+-- =================================================================
+SET citus.enable_sorted_merge TO on;
+-- Verify EXPLAIN ANALYZE plan structure: no Sort node at coordinator
+-- level, "Merge Method: sorted merge" visible, and "actual rows"
+-- confirms full execution through the merge path.
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+                                              explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Output: remote_scan.id
+   Task Count: N
+   Merge Method: sorted merge
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Sort (actual rows=N loops=N)
+               Output: id
+               Sort Key: sorted_merge_test.id
+               Sort Method: quicksort  Memory: NkB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+                     Output: id
+(16 rows)
+
+-- Load auto_explain to trigger the EXPLAIN ANALYZE executor path
+-- while returning real data rows.  auto_explain sets es_instrument,
+-- which makes RequestedForExplainAnalyze() return true — the same
+-- condition as a real EXPLAIN ANALYZE.
+LOAD 'auto_explain';
+SET auto_explain.log_min_duration = 0;
+SET auto_explain.log_analyze TO true;
+-- ASC sort under auto_explain: these SELECTs go through the EXPLAIN
+-- ANALYZE code path but return actual data.  If the merge were
+-- skipped, rows would arrive in arbitrary worker order.
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 10;
+ id
+---------------------------------------------------------------------
+  1
+  5
+  8
+ 10
+ 15
+ 20
+ 24
+ 25
+ 26
+ 31
+(10 rows)
+
+-- DESC sort under auto_explain
+SELECT id FROM sorted_merge_test ORDER BY id DESC LIMIT 10;
+ id
+---------------------------------------------------------------------
+ 201
+ 200
+  94
+  92
+  88
+  87
+  82
+  79
+  77
+  63
+(10 rows)
+
+-- Multi-column sort under auto_explain
+SELECT id, val FROM sorted_merge_test ORDER BY id, val LIMIT 10;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  5 | val_5
+  8 | val_8
+ 10 | val_10
+ 15 | val_15
+ 20 | val_20
+ 24 | val_24
+ 25 | val_25
+ 26 | val_26
+ 31 | val_31
+(10 rows)
+
+-- Single-column sort on num (non-distribution column, has NULLs)
+SELECT num FROM sorted_merge_test ORDER BY num LIMIT 10;
+ num
+---------------------------------------------------------------------
+  1.5
+  7.5
+ 10.5
+ 10.5
+ 12.0
+ 15.0
+ 22.5
+ 30.0
+ 36.0
+ 37.5
+(10 rows)
+
+-- Multi-column sort with num as first column
+SELECT num, id FROM sorted_merge_test ORDER BY num, id LIMIT 10;
+ num  | id
+---------------------------------------------------------------------
+  1.5 |   1
+  7.5 |   5
+ 10.5 | 200
+ 10.5 | 201
+ 12.0 |   8
+ 15.0 |  10
+ 22.5 |  15
+ 30.0 |  20
+ 36.0 |  24
+ 37.5 |  25
+(10 rows)
+
+-- Multi-column sort with num DESC as first column, id ASC
+SELECT num, id FROM sorted_merge_test ORDER BY num DESC, id LIMIT 10;
+  num  | id
+---------------------------------------------------------------------
+ 141.0 | 94
+ 138.0 | 92
+ 132.0 | 88
+ 130.5 | 87
+ 123.0 | 82
+ 118.5 | 79
+ 115.5 | 77
+  94.5 | 63
+  90.0 | 60
+  79.5 | 53
+(10 rows)
+
+-- Disable auto_explain
+SET auto_explain.log_min_duration = -1;
+SET auto_explain.log_analyze TO false;
+-- Contrast: sorted merge OFF shows a Sort node at coordinator level.
+SET citus.enable_sorted_merge TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+                                              explain_filter
+---------------------------------------------------------------------
+ Sort (actual rows=N loops=N)
+   Output: remote_scan.id
+   Sort Key: remote_scan.id
+   Sort Method: quicksort  Memory: NkB
+   ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+         Output: remote_scan.id
+         Task Count: N
+         Tuple data received from nodes: N bytes
+         Tasks Shown: One of N
+         ->  Task
+               Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true
+               Tuple data received from node: N bytes
+               Node: host=localhost port=N dbname=regression
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+                     Output: id
+(15 rows)
+
+SET citus.enable_sorted_merge TO off;
+-- =================================================================
 -- Cleanup
 -- =================================================================
 SET citus.enable_sorted_merge TO off;
 -- Run 2: streaming adapter
 SET citus.enable_streaming_sorted_merge TO on;
-\i sql/multi_orderby_pushdown.sql
+\i sql/multi_orderby_pushdown.sql.include
 --
 -- MULTI_SORTED_MERGE
 --
@@ -4345,12 +4517,12 @@ FETCH 3 FROM sorted_cursor;
 (3 rows)
 
 FETCH BACKWARD 1 FROM sorted_cursor;
-psql:sql/multi_orderby_pushdown.sql:323: ERROR:  cursor can only scan forward
+psql:sql/multi_orderby_pushdown.sql.include:323: ERROR:  cursor can only scan forward
 HINT:  Declare it with SCROLL option to enable backward scan.
 FETCH 2 FROM sorted_cursor;
-psql:sql/multi_orderby_pushdown.sql:324: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:sql/multi_orderby_pushdown.sql.include:324: ERROR:  current transaction is aborted, commands ignored until end of transaction block
 CLOSE sorted_cursor;
-psql:sql/multi_orderby_pushdown.sql:325: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:sql/multi_orderby_pushdown.sql.include:325: ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- G3b: SCROLL cursor with backward scan
 SET citus.enable_sorted_merge TO on;
@@ -5914,12 +6086,12 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
 CREATE SEQUENCE sorted_merge_test_seq;
 SET citus.enable_sorted_merge TO on;
 SELECT id, val FROM sorted_merge_test ORDER BY nextval('sorted_merge_test_seq');
-psql:sql/multi_orderby_pushdown.sql:777: ERROR:  ORDER/GROUP BY expression not found in targetlist
+psql:sql/multi_orderby_pushdown.sql.include:777: ERROR:  ORDER/GROUP BY expression not found in targetlist
 -- L4b: nextval() in ORDER BY with sorted merge OFF but LIMIT present
 -- Same error — demonstrates this is NOT a sorted merge regression.
 SET citus.enable_sorted_merge TO off;
 SELECT id, val FROM sorted_merge_test ORDER BY nextval('sorted_merge_test_seq') LIMIT 5;
-psql:sql/multi_orderby_pushdown.sql:782: ERROR:  ORDER/GROUP BY expression not found in targetlist
+psql:sql/multi_orderby_pushdown.sql.include:782: ERROR:  ORDER/GROUP BY expression not found in targetlist
 DROP SEQUENCE sorted_merge_test_seq;
 -- L5: STABLE function alone (constant-fold case)
 -- current_timestamp is constant-folded by the planner; the sort key
@@ -5945,6 +6117,178 @@ SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING
                ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
                      Output: id, val, CURRENT_TIMESTAMP
 (16 rows)
+
+SET citus.enable_sorted_merge TO off;
+-- =================================================================
+-- Category L6: EXPLAIN ANALYZE + sorted merge
+--
+-- Verify that sorted merge works correctly when the EXPLAIN ANALYZE
+-- code path is active.  We test two mechanisms:
+--
+-- 1. Plain EXPLAIN ANALYZE: verifies plan structure (no coordinator
+--    Sort node, "Merge Method: sorted merge" visible).
+--
+-- 2. auto_explain with log_analyze: triggers the same executor code
+--    path (es_instrument != 0 → RequestedForExplainAnalyze() = true)
+--    but returns actual data rows.  This directly validates that the
+--    k-way merge produces correctly sorted output under the EXPLAIN
+--    ANALYZE path — if the merge were skipped, the rows would be
+--    visibly unsorted.
+-- =================================================================
+SET citus.enable_sorted_merge TO on;
+-- Verify EXPLAIN ANALYZE plan structure: no Sort node at coordinator
+-- level, "Merge Method: sorted merge" visible, and "actual rows"
+-- confirms full execution through the merge path.
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+                                              explain_filter
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+   Output: remote_scan.id
+   Task Count: N
+   Merge Method: sorted merge
+   Tuple data received from nodes: N bytes
+   Tasks Shown: One of N
+   ->  Task
+         Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true ORDER BY id
+         Tuple data received from node: N bytes
+         Node: host=localhost port=N dbname=regression
+         ->  Sort (actual rows=N loops=N)
+               Output: id
+               Sort Key: sorted_merge_test.id
+               Sort Method: quicksort  Memory: NkB
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+                     Output: id
+(16 rows)
+
+-- Load auto_explain to trigger the EXPLAIN ANALYZE executor path
+-- while returning real data rows.  auto_explain sets es_instrument,
+-- which makes RequestedForExplainAnalyze() return true — the same
+-- condition as a real EXPLAIN ANALYZE.
+LOAD 'auto_explain';
+SET auto_explain.log_min_duration = 0;
+SET auto_explain.log_analyze TO true;
+-- ASC sort under auto_explain: these SELECTs go through the EXPLAIN
+-- ANALYZE code path but return actual data.  If the merge were
+-- skipped, rows would arrive in arbitrary worker order.
+SELECT id FROM sorted_merge_test ORDER BY id LIMIT 10;
+ id
+---------------------------------------------------------------------
+  1
+  5
+  8
+ 10
+ 15
+ 20
+ 24
+ 25
+ 26
+ 31
+(10 rows)
+
+-- DESC sort under auto_explain
+SELECT id FROM sorted_merge_test ORDER BY id DESC LIMIT 10;
+ id
+---------------------------------------------------------------------
+ 201
+ 200
+  94
+  92
+  88
+  87
+  82
+  79
+  77
+  63
+(10 rows)
+
+-- Multi-column sort under auto_explain
+SELECT id, val FROM sorted_merge_test ORDER BY id, val LIMIT 10;
+ id |  val
+---------------------------------------------------------------------
+  1 | val_1
+  5 | val_5
+  8 | val_8
+ 10 | val_10
+ 15 | val_15
+ 20 | val_20
+ 24 | val_24
+ 25 | val_25
+ 26 | val_26
+ 31 | val_31
+(10 rows)
+
+-- Single-column sort on num (non-distribution column, has NULLs)
+SELECT num FROM sorted_merge_test ORDER BY num LIMIT 10;
+ num
+---------------------------------------------------------------------
+  1.5
+  7.5
+ 10.5
+ 10.5
+ 12.0
+ 15.0
+ 22.5
+ 30.0
+ 36.0
+ 37.5
+(10 rows)
+
+-- Multi-column sort with num as first column
+SELECT num, id FROM sorted_merge_test ORDER BY num, id LIMIT 10;
+ num  | id
+---------------------------------------------------------------------
+  1.5 |   1
+  7.5 |   5
+ 10.5 | 200
+ 10.5 | 201
+ 12.0 |   8
+ 15.0 |  10
+ 22.5 |  15
+ 30.0 |  20
+ 36.0 |  24
+ 37.5 |  25
+(10 rows)
+
+-- Multi-column sort with num DESC as first column, id ASC
+SELECT num, id FROM sorted_merge_test ORDER BY num DESC, id LIMIT 10;
+  num  | id
+---------------------------------------------------------------------
+ 141.0 | 94
+ 138.0 | 92
+ 132.0 | 88
+ 130.5 | 87
+ 123.0 | 82
+ 118.5 | 79
+ 115.5 | 77
+  94.5 | 63
+  90.0 | 60
+  79.5 | 53
+(10 rows)
+
+-- Disable auto_explain
+SET auto_explain.log_min_duration = -1;
+SET auto_explain.log_analyze TO false;
+-- Contrast: sorted merge OFF shows a Sort node at coordinator level.
+SET citus.enable_sorted_merge TO off;
+SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id FROM sorted_merge_test ORDER BY id');
+                                              explain_filter
+---------------------------------------------------------------------
+ Sort (actual rows=N loops=N)
+   Output: remote_scan.id
+   Sort Key: remote_scan.id
+   Sort Method: quicksort  Memory: NkB
+   ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+         Output: remote_scan.id
+         Task Count: N
+         Tuple data received from nodes: N bytes
+         Tasks Shown: One of N
+         ->  Task
+               Query: SELECT id FROM public.sorted_merge_test_960000 sorted_merge_test WHERE true
+               Tuple data received from node: N bytes
+               Node: host=localhost port=N dbname=regression
+               ->  Seq Scan on public.sorted_merge_test_960000 sorted_merge_test (actual rows=N loops=N)
+                     Output: id
+(15 rows)
 
 SET citus.enable_sorted_merge TO off;
 -- =================================================================
