@@ -1,3 +1,15 @@
+### citus v13.2.2 (April 21, 2026) ###
+
+* Hardens extension SQL against `search_path` attacks by schema-qualifying
+  identifiers in view/upgrade scripts and setting
+  `SET search_path = pg_catalog, pg_temp` on Citus UDFs and procedures
+
+* Adds support for `CREATE STATISTICS` on expressions and enables it by
+  default (#8501, #8512)
+
+* Relaxes the version check in `MajorVersionsCompatible` to tolerate minor
+  version skew between coordinator and workers (#8550)
+
 ### citus v13.2.1 (March 12, 2026) ###
 
 * Adds support for latest PG minors: 15.17, 16.13, 17.9 (#8499)
