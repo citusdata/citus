@@ -30,7 +30,7 @@ jobs:
       fail_test_image_name: "ghcr.io/citusdata/failtester"
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
-      style_checker_tools_version: "0.8.33"
+      style_checker_tools_version: "0.8.18"
       sql_snapshot_pg_version: "17.9"
       image_suffix: "-v28f5e89"
       pg15_version: '{ "major": "15", "full": "15.17" }'
