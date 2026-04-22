@@ -639,6 +639,8 @@ SELECT count(*), count(*) FILTER (WHERE id < 3)
 	WHERE author_id = 1;
 
 -- prepare queries can be router plannable
+-- force custom plan to avoid flaky DEBUG output from generic plan transition
+SET plan_cache_mode TO force_custom_plan;
 PREPARE author_1_articles as
 	SELECT *
 	FROM articles_hash
@@ -650,6 +652,7 @@ EXECUTE author_1_articles;
 EXECUTE author_1_articles;
 EXECUTE author_1_articles;
 EXECUTE author_1_articles;
+RESET plan_cache_mode;
 
 -- parametric prepare queries can be router plannable
 PREPARE author_articles(int) as

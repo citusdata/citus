@@ -86,6 +86,7 @@ SET citus.max_cached_conns_per_worker TO 0; -- purge cache
 DROP TABLE select_test;
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 1;
+SET citus.enable_single_task_execution TO false; -- use adaptive executor for predictable error messages
 
 CREATE TABLE select_test (key int, value text);
 SELECT create_distributed_table('select_test', 'key');

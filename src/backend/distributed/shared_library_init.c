@@ -1608,6 +1608,19 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_single_task_execution",
+		gettext_noop("Enables the optimized single-task executor for "
+					 "fast-path router queries."),
+		gettext_noop("When enabled, single-shard fast-path queries use a "
+					 "streamlined executor that bypasses connection pool "
+					 "management and wait event set overhead."),
+		&EnableSingleTaskExecution,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_sorted_merge",
 		gettext_noop("Enables sorted merge of worker results for ORDER BY queries."),
 		gettext_noop("When enabled during planning, Citus pushes ORDER BY to workers "

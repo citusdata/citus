@@ -111,6 +111,7 @@ RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.shard_replication_factor TO 1;
+SET citus.enable_single_task_execution TO false; -- use adaptive executor for predictable error messages
 CREATE TABLE single_replicatated(key int);
 SELECT create_distributed_table('single_replicatated', 'key');
 

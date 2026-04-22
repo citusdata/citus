@@ -228,7 +228,7 @@ test: multi_router_planner
 # These 2 tests have prepared statements which sometimes get invalidated by concurrent tests,
 # changing the debug output. We should not run them in parallel with others
 test: null_parameters
-test: multi_router_planner_fast_path
+test: multi_router_planner_fast_path single_task_execution
 
 # ----------
 # multi_large_shardid loads more lineitem data using high shard identifiers

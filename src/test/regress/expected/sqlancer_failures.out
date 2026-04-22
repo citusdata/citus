@@ -67,7 +67,7 @@ EXPLAIN (COSTS FALSE) SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
 EXPLAIN (COSTS FALSE) SELECT FROM t4 WHERE c1 = true;
                         QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Single Task)
    Task Count: 1
    Tasks Shown: All
    ->  Task
@@ -87,7 +87,7 @@ INSERT INTO t5 VALUES (CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END);
 EXPLAIN (COSTS FALSE) SELECT FROM t5 WHERE c0 = 2;
                         QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Single Task)
    Task Count: 1
    Tasks Shown: All
    ->  Task

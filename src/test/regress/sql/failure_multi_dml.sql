@@ -2,6 +2,7 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 1; -- one shard per worker
+SET citus.enable_single_task_execution TO false; -- use adaptive executor for predictable error messages
 SET citus.next_shard_id TO 103400;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100;
 
@@ -114,6 +115,7 @@ SELECT master_run_on_worker(
     ARRAY['localhost']::text[],
     ARRAY[:master_port]::int[],
     ARRAY['
+SET citus.enable_single_task_execution TO false;
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;

@@ -46,6 +46,7 @@ extern CustomScanMethods SortedMergeCustomScanMethods;
 extern CustomScanMethods NonPushableInsertSelectCustomScanMethods;
 extern CustomScanMethods DelayedErrorCustomScanMethods;
 extern CustomScanMethods NonPushableMergeCommandCustomScanMethods;
+extern CustomScanMethods SingleTaskExecutorCustomScanMethods;
 
 
 extern void RegisterCitusCustomScanMethods(void);
