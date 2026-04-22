@@ -1605,6 +1605,19 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_single_task_fast_path",
+		gettext_noop("Enables the optimized single-task executor for "
+					 "fast-path router queries."),
+		gettext_noop("When enabled, single-shard fast-path queries use a "
+					 "streamlined executor that bypasses connection pool "
+					 "management and wait event set overhead."),
+		&EnableSingleTaskFastPath,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_stat_counters",
 		gettext_noop("Enables the collection of statistic counters for Citus."),
 		gettext_noop("When enabled, Citus maintains a set of statistic "

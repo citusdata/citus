@@ -36,6 +36,7 @@ extern CustomScanMethods AdaptiveExecutorCustomScanMethods;
 extern CustomScanMethods NonPushableInsertSelectCustomScanMethods;
 extern CustomScanMethods DelayedErrorCustomScanMethods;
 extern CustomScanMethods NonPushableMergeCommandCustomScanMethods;
+extern CustomScanMethods OneTaskAdaptiveExecutorCustomScanMethods;
 
 
 extern void RegisterCitusCustomScanMethods(void);

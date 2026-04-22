@@ -24,11 +24,13 @@
 
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/log_utils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/worker_protocol.h"
@@ -36,6 +38,7 @@
 int RemoteTaskCheckInterval = 10; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool EnableRepartitionJoins = false;
+bool EnableSingleTaskFastPath = true;
 
 
 /*
@@ -96,6 +99,31 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 			ereport(DEBUG2, (errmsg("query has a single distribution column value: "
 									"%s", partitionColumnString)));
+		}
+	}
+
+	if (EnableSingleTaskFastPath &&
+		distributedPlan->fastPathRouterPlan &&
+		list_length(job->dependentJobList) == 0 &&
+		!IsMultiRowInsert(job->jobQuery) &&
+		!(distributedPlan->modLevel > ROW_MODIFY_READONLY &&
+		  IsCitusTableType(distributedPlan->targetRelationId, REFERENCE_TABLE)))
+	{
+		/*
+		 * The one-task executor handles exactly one placement per task.
+		 * Tables with shard_replication_factor > 1 have multiple placements
+		 * and must use the full adaptive executor which writes to all replicas.
+		 */
+		Oid relationId = distributedPlan->targetRelationId;
+		if (!OidIsValid(relationId) && list_length(distributedPlan->relationIdList) > 0)
+		{
+			relationId = linitial_oid(distributedPlan->relationIdList);
+		}
+
+		if (!OidIsValid(relationId) ||
+			SingleReplicatedTable(relationId))
+		{
+			return MULTI_EXECUTOR_ONE_TASK_ADAPTIVE;
 		}
 	}
 

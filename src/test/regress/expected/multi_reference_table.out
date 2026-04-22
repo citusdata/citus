@@ -1395,7 +1395,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 (4 rows)
 
 \di reference_schema.reference_index_2*
-          List of relations
+           List of relations
  Schema | Name | Type | Owner | Table
 ---------------------------------------------------------------------
 (0 rows)
@@ -1585,7 +1585,7 @@ $Q$) as "QUERY PLAN";
    Sort Key: remote_scan.value_1
    ->  Custom Scan (Citus Adaptive)
          ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
+               ->  Custom Scan (Citus One-Task Adaptive)
                      Task Count: 1
                      Tasks Shown: All
                      ->  Task

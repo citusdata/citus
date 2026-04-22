@@ -512,7 +512,7 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Adaptive)
+Custom Scan (Citus One-Task Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -529,7 +529,7 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0
 	');
-Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+Custom Scan (Citus One-Task Adaptive) (actual rows=N loops=N)
   Task Count: N
   Tasks Shown: All
   ->  Task
@@ -544,7 +544,7 @@ ROLLBACk;
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Adaptive)
+Custom Scan (Citus One-Task Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -571,7 +571,7 @@ Custom Scan (Citus Adaptive)
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
-Custom Scan (Citus Adaptive)
+Custom Scan (Citus One-Task Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1365,7 +1365,7 @@ Aggregate
                           Index Cond: (l_orderkey > 9030)
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus One-Task Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1388,7 +1388,7 @@ Aggregate
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus One-Task Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1396,7 +1396,7 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
         ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
 select public.explain_filter('EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5)');
-Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+Custom Scan (Citus One-Task Adaptive) (actual rows=N loops=N)
   Task Count: N
   Tuple data received from nodes: N bytes
   Tasks Shown: All
@@ -1599,7 +1599,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a
 (1 row)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-     explain_analyze_output
+      explain_analyze_output
 ---------------------------------------------------------------------
  Result (actual rows=1 loops=1)+
 
@@ -1616,7 +1616,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (0 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                      explain_analyze_output
+                       explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=0 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1637,7 +1637,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze
 (4 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                  explain_analyze_output
+                   explain_analyze_output
 ---------------------------------------------------------------------
  Seq Scan on explain_analyze_test (actual rows=4 loops=1)+
 
@@ -1660,7 +1660,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (5 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                      explain_analyze_output
+                       explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=5 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1681,12 +1681,12 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (2 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                     explain_analyze_output
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=2 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
-         Filter: ((a % 2) = 0)                                 +
-         Rows Removed by Filter: 2                             +
+         Filter: ((a % 2) = 0)                                    +
+         Rows Removed by Filter: 2                                +
 
 (1 row)
 
@@ -1701,12 +1701,12 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (0 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                     explain_analyze_output
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=0 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
-         Filter: ((a % 2) = 0)                                 +
-         Rows Removed by Filter: 2                             +
+         Filter: ((a % 2) = 0)                                    +
+         Rows Removed by Filter: 2                                +
 
 (1 row)
 
@@ -1729,7 +1729,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", 
 (1 row)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-     explain_analyze_output
+      explain_analyze_output
 ---------------------------------------------------------------------
  Result (actual rows=1 loops=1)+
 
@@ -1775,7 +1775,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
        <Node-Type>Result</Node-Type>                     +
        <Parallel-Aware>false</Parallel-Aware>            +
        <Async-Capable>false</Async-Capable>              +
-       <Actual-Rows>1</Actual-Rows>                      +
+       <Actual-Rows>1</Actual-Rows>                   +
        <Actual-Loops>1</Actual-Loops>                    +
      </Plan>                                             +
      <Triggers>                                          +
@@ -1797,7 +1797,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
      Node Type: "Result"  +
      Parallel Aware: false+
      Async Capable: false +
-     Actual Rows: 1       +
+     Actual Rows: 1    +
      Actual Loops: 1      +
    Triggers:
 (1 row)
@@ -2006,7 +2006,7 @@ SELECT create_distributed_table('explain_analyze_test', 'a');
 \set default_explain_flags '(ANALYZE off, COSTS off, TIMING off, SUMMARY off)'
 -- router SELECT
 EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 11 bytes
   Tasks Shown: All
@@ -2029,7 +2029,7 @@ Aggregate (actual rows=1 loops=1)
                     ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
 -- empty router SELECT
 EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 10000;
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2054,7 +2054,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 -- router DML
 BEGIN;
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -2063,7 +2063,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
                     Filter: (a = 1)
 EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a = 2;
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -2099,7 +2099,7 @@ SELECT * FROM explain_analyze_test ORDER BY a;
 ROLLBACK;
 -- router DML with RETURNING with empty result
 EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE a = 10000 RETURNING *;
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2126,7 +2126,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 -- single-row insert
 BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5');
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -2498,7 +2498,7 @@ ROLLBACK;
 -- https://github.com/citusdata/citus/issues/4074
 prepare ref_select(int) AS select * from ref_table where 1 = $1;
 explain :default_analyze_flags execute ref_select(1);
-Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=10 loops=1)
   Task Count: 1
   Tuple data received from nodes: 40 bytes
   Tasks Shown: All
@@ -2615,7 +2615,7 @@ Custom Scan (Citus Adaptive) (actual rows=6 loops=1)
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=4 loops=1)
 prepare p2 AS SELECT * FROM dist_table_rep1 WHERE a = $1;
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2626,7 +2626,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2637,7 +2637,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2648,7 +2648,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2659,7 +2659,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2670,7 +2670,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2681,7 +2681,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(10);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2692,7 +2692,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 10)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(100);
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2704,7 +2704,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Rows Removed by Filter: 1
 prepare p3 AS SELECT * FROM dist_table_rep1 WHERE a = 1;
 EXPLAIN :default_analyze_flags EXECUTE p3;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2715,7 +2715,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p3;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2726,7 +2726,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p3;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2737,7 +2737,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p3;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2748,7 +2748,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p3;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2759,7 +2759,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               Filter: (a = 1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p3;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tuple data received from nodes: 4 bytes
   Tasks Shown: All
@@ -2776,7 +2776,7 @@ SELECT create_distributed_table('simple', 'id');
 
 PREPARE simple_router AS SELECT *, $1 FROM simple WHERE id = 1;
 EXPLAIN :default_explain_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive)
+Custom Scan (Citus One-Task Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -2784,7 +2784,7 @@ Custom Scan (Citus Adaptive)
         ->  Seq Scan on simple_570026 simple
               Filter: (id = 1)
 EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2794,7 +2794,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
               Filter: (id = 1)
 EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2804,7 +2804,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
               Filter: (id = 1)
 EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2814,7 +2814,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
               Filter: (id = 1)
 EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2824,7 +2824,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
               Filter: (id = 1)
 EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2834,7 +2834,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
               Filter: (id = 1)
 EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -2844,7 +2844,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
               Filter: (id = 1)
 EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -3024,7 +3024,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
               ->  Seq Scan on users_table_2_570028 users_table_2 (actual rows=0 loops=1)
 -- simple test to confirm we can fetch long (>4KB) plans
 EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT * FROM users_table_2 WHERE value_1::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X';
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
   Tasks Shown: All
@@ -3076,7 +3076,7 @@ SELECT create_reference_table('reference_table');
 
 INSERT INTO reference_table VALUES (1);
 EXPLAIN :default_analyze_flags SELECT FROM reference_table;
-Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -3214,7 +3214,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
         Intermediate Data Size: 18 bytes
         Result destination: Write locally
-        ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+        ->  Custom Scan (Citus One-Task Adaptive) (actual rows=1 loops=1)
               Task Count: 1
               Tuple data received from nodes: 16 bytes
               Tasks Shown: All
@@ -3264,7 +3264,7 @@ SELECT * FROM a;
               {
                 "Plan": {
                   "Node Type": "Custom Scan",
-                  "Custom Plan Provider": "Citus Adaptive",
+                  "Custom Plan Provider": "Citus One-Task Adaptive",
                   "Parallel Aware": false,
                   "Async Capable": false,
                   "Actual Rows": 1,

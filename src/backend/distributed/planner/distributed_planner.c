@@ -1459,6 +1459,12 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 			break;
 		}
 
+		case MULTI_EXECUTOR_ONE_TASK_ADAPTIVE:
+		{
+			customScan->methods = &OneTaskAdaptiveExecutorCustomScanMethods;
+			break;
+		}
+
 		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
 			customScan->methods = &NonPushableInsertSelectCustomScanMethods;
