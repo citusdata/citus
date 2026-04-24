@@ -1129,15 +1129,11 @@ class Postgres(QueryRunner):
 
         # Before release 12 walreceiver just set the application name to
         # "walreceiver"
-        self.poll_query_until(
-            sql.SQL(
-                """
+        self.poll_query_until(sql.SQL("""
             SELECT {} <= {} AND state = 'streaming'
             FROM pg_catalog.pg_stat_replication
             WHERE application_name IN ({}, 'walreceiver')
-            """
-            ).format(target_lsn, sql.Identifier(f"{mode}_lsn"), subscription_name)
-        )
+            """).format(target_lsn, sql.Identifier(f"{mode}_lsn"), subscription_name))
 
     @contextmanager
     def _enable_firewall(self):

@@ -236,7 +236,7 @@ def _genLimit(genCtx):
     # 'LIMIT' 'random()'
     query = ""
     query += " LIMIT "
-    (fromVal, toVal) = getConfig().limitRange
+    fromVal, toVal = getConfig().limitRange
     query += str(random.randint(fromVal, toVal))
     return query
 
@@ -282,7 +282,7 @@ def _genRestrictExpr(genCtx):
         or shouldSelectThatBranch()
     ):
         query += randomRestrictOp()
-        (fromVal, toVal) = getConfig().filterRange
+        fromVal, toVal = getConfig().filterRange
         query += str(random.randint(fromVal, toVal))
     else:
         if shouldSelectThatBranch():
@@ -429,6 +429,6 @@ def _genCteRte(genCtx):
 def _genValuesRte(genCtx):
     # '( VALUES(random()) )'
     query = ""
-    (fromVal, toVal) = getConfig().dataRange
+    fromVal, toVal = getConfig().dataRange
     query += " ( VALUES(" + str(random.randint(fromVal, toVal)) + " ) ) "
     return query
