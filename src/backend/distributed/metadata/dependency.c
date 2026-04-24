@@ -187,10 +187,12 @@ static void ApplyAddCitusDependedObjectsToDependencyList(ObjectAddressCollector 
 static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
+static List * ExpandCitusSupportedTypesForNodeActivation(
+	ObjectAddressCollector *collector, ObjectAddress target);
 static List * ExpandForPgVanilla(ObjectAddressCollector *collector,
 								 ObjectAddress target);
 static List * GetDependentRoleIdsFDW(Oid FDWOid);
-static List * ExpandRolesToGroups(Oid roleid);
+static List * ExpandRolesToGroups(Oid roleid, bool includeGrantors);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
 static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 											ObjectAddress *extensionAddress);
@@ -344,7 +346,7 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 		}
 
 		RecurseObjectDependencies(*objectAddress,
-								  &ExpandCitusSupportedTypes,
+								  &ExpandCitusSupportedTypesForNodeActivation,
 								  &FollowAllSupportedDependencies,
 								  &ApplyAddToDependencyList,
 								  &collector);
@@ -1545,9 +1547,15 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		{
 			/*
 			 * Roles are members of other roles. These relations are not recorded directly
-			 * but can be deduced from pg_auth_members
+			 * but can be deduced from pg_auth_members.
+			 *
+			 * Note: we intentionally do NOT include grantors here. Grantors are
+			 * only relevant for ordering role creation during node activation
+			 * (see ExpandCitusSupportedTypesForNodeActivation). Including them
+			 * in the generic dependency graph would produce false-positive
+			 * circular-dependency errors for legitimate mutual GRANTs.
 			 */
-			return ExpandRolesToGroups(target.objectId);
+			return ExpandRolesToGroups(target.objectId, false);
 		}
 
 		case ExtensionRelationId:
@@ -1738,6 +1746,32 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 
 /*
+ * ExpandCitusSupportedTypesForNodeActivation is a variant of
+ * ExpandCitusSupportedTypes used only when ordering distributed objects for
+ * propagation to a newly-activated node. For roles, it additionally treats
+ * grantors of membership tuples as dependencies so that a role used as a
+ * grantor is created on the new node before the grantee role. This is what
+ * fixes issue #8425.
+ *
+ * This expansion must NOT be used by the generic dependency-collection paths
+ * (creation, cycle-detection, DDL propagation) because mutually-granted roles
+ * would appear to form a cycle and be rejected by
+ * DeferErrorIfCircularDependencyExists.
+ */
+static List *
+ExpandCitusSupportedTypesForNodeActivation(ObjectAddressCollector *collector,
+										   ObjectAddress target)
+{
+	if (target.classId == AuthIdRelationId)
+	{
+		return ExpandRolesToGroups(target.objectId, true);
+	}
+
+	return ExpandCitusSupportedTypes(collector, target);
+}
+
+
+/*
  * ExpandForPgVanilla only expands only comosite types because other types
  * will find their dependencies in pg_depend. The method should only be called by
  * is_citus_depended_object udf.
@@ -1800,16 +1834,19 @@ GetDependentRoleIdsFDW(Oid FDWOid)
 
 /*
  * ExpandRolesToGroups returns a list of object addresses pointing to roles that roleid
- * depends on. This includes:
+ * depends on. This always includes:
  *   1. Roles that roleid is a member of (membership->roleid)
+ *
+ * When includeGrantors is true, it additionally includes:
  *   2. Roles that are used as grantors for roleid's memberships (membership->grantor)
  *
- * The second dependency is critical for proper role propagation order when adding nodes.
- * If role A is used as a grantor when granting role B to role C, then role A must be
- * propagated before role C to ensure role A has the necessary admin option on role B.
+ * The grantor dependency is only used for ordering role propagation during node
+ * activation (see ExpandCitusSupportedTypesForNodeActivation). It must NOT be used
+ * in the generic dependency graph because legitimate mutual GRANTs between roles
+ * would otherwise be reported as circular dependencies.
  */
 static List *
-ExpandRolesToGroups(Oid roleid)
+ExpandRolesToGroups(Oid roleid, bool includeGrantors)
 {
 	Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
 	HeapTuple tuple = NULL;
@@ -1843,7 +1880,8 @@ ExpandRolesToGroups(Oid roleid)
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
 		Oid candidates[2] = { membership->roleid, membership->grantor };
-		for (int i = 0; i < 2; i++)
+		int numCandidates = includeGrantors ? 2 : 1;
+		for (int i = 0; i < numCandidates; i++)
 		{
 			Oid candidateOid = candidates[i];
 
