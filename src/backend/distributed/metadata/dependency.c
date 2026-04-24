@@ -187,8 +187,9 @@ static void ApplyAddCitusDependedObjectsToDependencyList(ObjectAddressCollector 
 static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
-static List * ExpandCitusSupportedTypesForNodeActivation(
-	ObjectAddressCollector *collector, ObjectAddress target);
+static List * ExpandCitusSupportedTypesForNodeActivation(ObjectAddressCollector *
+														 collector,
+														 ObjectAddress target);
 static List * ExpandForPgVanilla(ObjectAddressCollector *collector,
 								 ObjectAddress target);
 static List * GetDependentRoleIdsFDW(Oid FDWOid);
