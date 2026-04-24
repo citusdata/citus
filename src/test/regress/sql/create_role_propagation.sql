@@ -340,8 +340,8 @@ GRANT read_only_role TO interdep_role2 GRANTED BY interdep_role1;
 GRANT interdep_role1 TO interdep_role2 WITH ADMIN OPTION;
 
 -- Verify the grant relationships on coordinator
-SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option 
-FROM pg_auth_members 
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option
+FROM pg_auth_members
 WHERE roleid::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
    OR member::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
 ORDER BY role, member;
@@ -353,8 +353,8 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- Verify the grants were properly propagated to worker_2
 \c - - - :worker_2_port
-SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option 
-FROM pg_auth_members 
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option
+FROM pg_auth_members
 WHERE roleid::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
    OR member::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
 ORDER BY role, member;
