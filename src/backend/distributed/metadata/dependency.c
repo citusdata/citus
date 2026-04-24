@@ -1825,33 +1825,45 @@ ExpandRolesToGroups(Oid roleid)
 													true, NULL, scanKeyCount, scanKey);
 
 	List *roles = NIL;
-	List *seenGrantors = NIL;
+
+	/*
+	 * Track all role OIDs we have already emitted as dependencies so that
+	 * parent roles and grantors are de-duplicated through a single set.
+	 * A role can appear multiple times in pg_auth_members for the same
+	 * member (different grantors), and the same OID may show up as both a
+	 * parent role and a grantor; one DependencyDefinition per OID is enough.
+	 *
+	 * Note: For roles with many memberships this O(n) membership check could
+	 * be replaced with a hash set, but in practice the number of memberships
+	 * per role is small.
+	 */
+	List *seenRoleIds = NIL;
 	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
-		/* Add the role being granted as a dependency */
-		DependencyDefinition *roleDefinition = palloc0(sizeof(DependencyDefinition));
-		roleDefinition->mode = DependencyObjectAddress;
-		ObjectAddressSet(roleDefinition->data.address, AuthIdRelationId, membership->roleid);
-		roles = lappend(roles, roleDefinition);
-
-		/*
-		 * Add the grantor as a dependency if it's not the same as the current role.
-		 * We track grantors separately to avoid adding duplicates.
-		 * Note: For roles with many memberships, this O(n) duplicate check could be
-		 * optimized with a hash table, but given that most roles have relatively few
-		 * memberships, the list-based approach is simpler and sufficient.
-		 */
-		if (membership->grantor != roleid &&
-			!list_member_oid(seenGrantors, membership->grantor))
+		Oid candidates[2] = { membership->roleid, membership->grantor };
+		for (int i = 0; i < 2; i++)
 		{
-			DependencyDefinition *grantorDefinition = palloc0(sizeof(DependencyDefinition));
-			grantorDefinition->mode = DependencyObjectAddress;
-			ObjectAddressSet(grantorDefinition->data.address, AuthIdRelationId,
-							membership->grantor);
-			roles = lappend(roles, grantorDefinition);
-			seenGrantors = lappend_oid(seenGrantors, membership->grantor);
+			Oid candidateOid = candidates[i];
+
+			/*
+			 * Skip self-references: a role cannot depend on itself (the
+			 * parent-role case cannot hit this because pg_auth_members does
+			 * not allow roleid == member, but the grantor case can).
+			 */
+			if (candidateOid == roleid ||
+				!OidIsValid(candidateOid) ||
+				list_member_oid(seenRoleIds, candidateOid))
+			{
+				continue;
+			}
+
+			DependencyDefinition *definition = palloc0(sizeof(DependencyDefinition));
+			definition->mode = DependencyObjectAddress;
+			ObjectAddressSet(definition->data.address, AuthIdRelationId, candidateOid);
+			roles = lappend(roles, definition);
+			seenRoleIds = lappend_oid(seenRoleIds, candidateOid);
 		}
 	}
 
