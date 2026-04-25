@@ -831,7 +831,7 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	{
 		EnsureTransactionalMetadataSyncMode();
 
-	    SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive, BoolGetDatum(true));
+		SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive, BoolGetDatum(true));
 
 		TransactionModifiedNodeMetadata = true;
 
