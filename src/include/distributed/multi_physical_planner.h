@@ -394,21 +394,6 @@ typedef enum ModifyWithSelectMethod
 
 
 /*
- * SortedMergeKey describes one sort key for the coordinator-side
- * k-way merge of pre-sorted worker results. These are serialized
- * on DistributedPlan at planning time so the executor can build
- * SortSupport structures without consulting the combine query.
- */
-typedef struct SortedMergeKey
-{
-	AttrNumber attno;       /* 1-based attribute in the worker output */
-	Oid sortop;             /* ordering operator OID */
-	Oid collation;          /* collation OID */
-	bool nullsFirst;        /* NULLS FIRST? */
-} SortedMergeKey;
-
-
-/*
  * DistributedPlan contains all information necessary to execute a
  * distribute query.
  */
@@ -622,8 +607,6 @@ extern Node *  WrapUngroupedVarsInAnyValueAggregate(Node *expression,
 													List *groupClauseList,
 													List *targetList,
 													bool checkExpressionEquality);
-extern SortedMergeKey * BuildSortedMergeKeys(List *sortClauseList,
-											 List *targetList, int *nkeys);
 
 /*
  * Function declarations for building, updating constraints and simple operator

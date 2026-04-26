@@ -22,6 +22,23 @@
 typedef struct SortedMergeAdapter SortedMergeAdapter;
 
 
+/*
+ * SortedMergeKey describes one sort key for the coordinator-side
+ * k-way merge of pre-sorted worker results. The executor uses these
+ * to build SortSupport structures for the merge.
+ */
+typedef struct SortedMergeKey
+{
+	AttrNumber attno;       /* 1-based attribute in the worker output */
+	Oid sortop;             /* ordering operator OID */
+	Oid collation;          /* collation OID */
+	bool nullsFirst;        /* NULLS FIRST? */
+} SortedMergeKey;
+
+
+extern SortedMergeKey * BuildSortedMergeKeys(List *sortClauseList,
+											 List *targetList, int *nkeys);
+
 extern TupleDestination * CreatePerTaskDispatchDest(List *taskList,
 													TupleDesc tupleDesc,
 													TupleDestinationStats *sharedStats,

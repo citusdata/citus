@@ -22,6 +22,8 @@
 
 #include "executor/tuptable.h"
 #include "lib/binaryheap.h"
+#include "nodes/nodeFuncs.h"
+#include "optimizer/optimizer.h"
 #include "utils/hsearch.h"
 #include "utils/sortsupport.h"
 
@@ -99,6 +101,41 @@ static void PerTaskDispatchPutTuple(TupleDestination *self, Task *task,
 static TupleDesc PerTaskDispatchTupleDescForQuery(TupleDestination *self,
 												  int queryNumber);
 static int MergeHeapComparator(Datum a, Datum b, void *arg);
+
+
+/*
+ * BuildSortedMergeKeys constructs an array of SortedMergeKey from a sort clause
+ * list and its corresponding target list. The resulting keys are used by the
+ * executor to set up SortSupport structures for the k-way merge.
+ *
+ * The attribute numbers in the keys correspond to worker output column positions,
+ * which align with the 1-based non-junk ordering of the worker target list.
+ */
+SortedMergeKey *
+BuildSortedMergeKeys(List *sortClauseList, List *targetList, int *nkeys)
+{
+	*nkeys = list_length(sortClauseList);
+	if (*nkeys == 0)
+	{
+		return NULL;
+	}
+
+	SortedMergeKey *keys = palloc(*nkeys * sizeof(SortedMergeKey));
+
+	int i = 0;
+	SortGroupClause *sgc = NULL;
+	foreach_declared_ptr(sgc, sortClauseList)
+	{
+		TargetEntry *tle = get_sortgroupclause_tle(sgc, targetList);
+		keys[i].attno = tle->resno;
+		keys[i].sortop = sgc->sortop;
+		keys[i].collation = exprCollation((Node *) tle->expr);
+		keys[i].nullsFirst = sgc->nulls_first;
+		i++;
+	}
+
+	return keys;
+}
 
 
 /*
