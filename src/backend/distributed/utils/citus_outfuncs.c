@@ -207,16 +207,6 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(disableTrackingQueryCounters);
 
 	WRITE_BOOL_FIELD(useSortedMerge);
-	WRITE_INT_FIELD(sortedMergeKeyCount);
-	for (int i = 0; i < node->sortedMergeKeyCount; i++)
-	{
-		appendStringInfoString(str, " :sortedMergeKey");
-		appendStringInfo(str, " :attno %d", node->sortedMergeKeys[i].attno);
-		appendStringInfo(str, " :sortop %u", node->sortedMergeKeys[i].sortop);
-		appendStringInfo(str, " :collation %u", node->sortedMergeKeys[i].collation);
-		appendStringInfo(str, " :nullsFirst %s",
-						 booltostr(node->sortedMergeKeys[i].nullsFirst));
-	}
 }
 
 

@@ -511,12 +511,11 @@ typedef struct DistributedPlan
 	/*
 	 * Sorted merge: when true, the coordinator performs a k-way merge
 	 * of pre-sorted worker results instead of relying on an upper Sort node.
-	 * This is a plan-time decision — the executor reads only this flag and
-	 * the associated merge keys, never the GUC.
+	 * This is a plan-time decision — the executor reads only this flag,
+	 * never the GUC. The merge-key metadata itself is recomputed lazily
+	 * at executor time from workerJob->jobQuery (see BuildSortedMergeKeys).
 	 */
 	bool useSortedMerge;
-	int sortedMergeKeyCount;
-	SortedMergeKey *sortedMergeKeys;
 } DistributedPlan;
 
 
@@ -623,6 +622,8 @@ extern Node *  WrapUngroupedVarsInAnyValueAggregate(Node *expression,
 													List *groupClauseList,
 													List *targetList,
 													bool checkExpressionEquality);
+extern SortedMergeKey * BuildSortedMergeKeys(List *sortClauseList,
+											 List *targetList, int *nkeys);
 
 /*
  * Function declarations for building, updating constraints and simple operator

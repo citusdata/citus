@@ -143,18 +143,6 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(disableTrackingQueryCounters);
 
 	COPY_SCALAR_FIELD(useSortedMerge);
-	COPY_SCALAR_FIELD(sortedMergeKeyCount);
-	if (from->sortedMergeKeyCount > 0 && from->sortedMergeKeys != NULL)
-	{
-		Size keySize = from->sortedMergeKeyCount * sizeof(SortedMergeKey);
-		newnode->sortedMergeKeys = (SortedMergeKey *) palloc(keySize);
-		memcpy_s(newnode->sortedMergeKeys, keySize,
-				 from->sortedMergeKeys, keySize);
-	}
-	else
-	{
-		newnode->sortedMergeKeys = NULL;
-	}
 }
 
 

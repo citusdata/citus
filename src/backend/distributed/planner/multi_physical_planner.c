@@ -162,8 +162,6 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependentJobList,
 									  Var *partitionKey, PartitionType partitionType,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
-static SortedMergeKey * BuildSortedMergeKeys(List *sortClauseList,
-											 List *targetList, int *nkeys);
 static void SetSortedMergeFields(MultiTreeRoot *multiTree, Job *workerJob,
 								 DistributedPlan *distributedPlan);
 static uint32 HashPartitionCount(void);
@@ -2045,10 +2043,12 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 /*
  * SetSortedMergeFields checks whether the logical optimizer tagged the
  * worker extended op node as eligible for a coordinator-side sorted merge.
- * If so, the function builds merge-key metadata from the worker job query's
- * sort clause and target list, and sets useSortedMerge on the plan.
+ * If so, the function sets useSortedMerge on the plan. The merge-key
+ * metadata itself is recomputed lazily at executor time from
+ * workerJob->jobQuery (see BuildSortedMergeKeys), so it does not need
+ * to be stored on the plan.
  *
- * This is a plan-time decision: the executor reads only the plan fields,
+ * This is a plan-time decision: the executor reads only the plan flag,
  * never the GUC.
  *
  * We directly walk the tree structure rather than using FindNodesOfType,
@@ -2084,17 +2084,17 @@ SetSortedMergeFields(MultiTreeRoot *multiTree, Job *workerJob,
 		return;
 	}
 
-	Query *jobQuery = workerJob->jobQuery;
-	int nkeys = 0;
-	SortedMergeKey *keys = BuildSortedMergeKeys(jobQuery->sortClause,
-												jobQuery->targetList,
-												&nkeys);
-	if (nkeys > 0)
+	/*
+	 * Sanity gate: if the job query has no sort clause, fall back to the
+	 * regular (non-merging) execution path. This preserves the previous
+	 * "nkeys > 0" guard without materializing the keys.
+	 */
+	if (workerJob->jobQuery->sortClause == NIL)
 	{
-		distributedPlan->useSortedMerge = true;
-		distributedPlan->sortedMergeKeyCount = nkeys;
-		distributedPlan->sortedMergeKeys = keys;
+		return;
 	}
+
+	distributedPlan->useSortedMerge = true;
 }
 
 
@@ -2106,7 +2106,7 @@ SetSortedMergeFields(MultiTreeRoot *multiTree, Job *workerJob,
  * The attribute numbers in the keys correspond to worker output column positions,
  * which align with the 1-based non-junk ordering of the worker target list.
  */
-static SortedMergeKey *
+SortedMergeKey *
 BuildSortedMergeKeys(List *sortClauseList, List *targetList, int *nkeys)
 {
 	*nkeys = list_length(sortClauseList);

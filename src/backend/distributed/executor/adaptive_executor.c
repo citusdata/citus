@@ -956,6 +956,22 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 */
 	if (execution->useSortedMerge && execution->perTaskStoreCount > 0)
 	{
+		/*
+		 * Recompute merge-key metadata from the (already-cached) job query
+		 * rather than carrying a duplicate copy on the DistributedPlan.
+		 * Both consumers below copy whatever they need into their own
+		 * SortSupport state, so this allocation can live in the surrounding
+		 * AdaptiveExecutor memory context.
+		 */
+		int sortedMergeKeyCount = 0;
+		SortedMergeKey *sortedMergeKeys =
+			BuildSortedMergeKeys(job->jobQuery->sortClause,
+								 job->jobQuery->targetList,
+								 &sortedMergeKeyCount);
+
+		/* Plan-time eligibility gate guarantees this; assert defensively. */
+		Assert(sortedMergeKeyCount > 0);
+
 		if (EnableStreamingSortedMerge)
 		{
 			/*
@@ -966,8 +982,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 			scanState->mergeAdapter = CreateSortedMergeAdapter(
 				execution->perTaskStores,
 				execution->perTaskStoreCount,
-				distributedPlan->sortedMergeKeys,
-				distributedPlan->sortedMergeKeyCount,
+				sortedMergeKeys,
+				sortedMergeKeyCount,
 				tupleDescriptor,
 				true);
 		}
@@ -980,8 +996,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 			MergePerTaskStoresIntoFinalStore(scanState->tuplestorestate,
 											 execution->perTaskStores,
 											 execution->perTaskStoreCount,
-											 distributedPlan->sortedMergeKeys,
-											 distributedPlan->sortedMergeKeyCount,
+											 sortedMergeKeys,
+											 sortedMergeKeyCount,
 											 tupleDescriptor);
 
 			/* free per-task stores — they are no longer needed */
