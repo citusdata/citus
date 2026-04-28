@@ -1,0 +1,370 @@
+--
+-- CITUS_CLUSTER_CHANGES_BLOCK
+--
+-- Functional tests for citus_cluster_changes_block(),
+-- citus_cluster_changes_unblock(), and citus_cluster_changes_block_status().
+--
+-- These tests exercise:
+--   * argument validation (timeout_ms range)
+--   * permission enforcement (REVOKE ALL ON FUNCTION ... FROM PUBLIC)
+--   * state-machine transitions (inactive -> starting -> active -> releasing
+--     -> inactive)
+--   * double-block rejection
+--   * idempotent unblock (false when no block is active)
+--   * status output shape and unstable-field masking
+--   * stress / repeated cycle stability (no leaked state)
+--   * stale-state auto-cleanup when the bgworker dies unexpectedly
+--
+
+CREATE SCHEMA citus_ccb_test;
+SET search_path TO citus_ccb_test;
+
+-- helper: print status, masking dynamic fields (PIDs, timestamps) so the
+-- expected output is stable across runs.
+CREATE OR REPLACE FUNCTION print_block_status()
+RETURNS TABLE (
+    state                text,
+    has_worker_pid       boolean,
+    has_requestor_pid    boolean,
+    has_block_start_time boolean,
+    timeout_ms           int,
+    node_count           int)
+LANGUAGE SQL AS $$
+    SELECT s.state,
+           (s.worker_pid IS NOT NULL AND s.worker_pid > 0),
+           (s.requestor_pid IS NOT NULL AND s.requestor_pid > 0),
+           (s.block_start_time IS NOT NULL),
+           s.timeout_ms,
+           s.node_count
+    FROM pg_catalog.citus_cluster_changes_block_status() s;
+$$;
+
+-- helper: poll status() until a target state is reached, with bounded waiting.
+-- Returns the state observed (or raises on timeout).  Used only after
+-- artificially terminating the worker; the normal block/unblock paths return
+-- synchronously and do not need polling.
+CREATE OR REPLACE FUNCTION wait_for_block_state(target_state text,
+                                                max_secs int DEFAULT 30)
+RETURNS text LANGUAGE plpgsql AS $$
+DECLARE
+    cur_state text;
+    iters     int := 0;
+    max_iters int := max_secs * 10;
+BEGIN
+    LOOP
+        SELECT state INTO cur_state
+        FROM pg_catalog.citus_cluster_changes_block_status();
+
+        IF cur_state = target_state THEN
+            RETURN cur_state;
+        END IF;
+
+        iters := iters + 1;
+        IF iters >= max_iters THEN
+            RAISE EXCEPTION
+                'state did not reach % within % seconds (last: %)',
+                target_state, max_secs, cur_state;
+        END IF;
+
+        PERFORM pg_sleep(0.1);
+    END LOOP;
+END;
+$$;
+
+-- ----------------------------------------------------------------
+-- 1. status() returns a single 'inactive' row with NULL dynamic fields
+--    when no block has ever been started.
+-- ----------------------------------------------------------------
+SELECT * FROM print_block_status();
+
+-- raw status: confirm dynamic fields are NULL initially
+SELECT state,
+       worker_pid IS NULL                AS worker_pid_is_null,
+       requestor_pid IS NULL             AS requestor_pid_is_null,
+       block_start_time IS NULL          AS start_time_is_null,
+       timeout_ms,
+       node_count
+FROM pg_catalog.citus_cluster_changes_block_status();
+
+-- ----------------------------------------------------------------
+-- 2. timeout_ms argument validation
+-- ----------------------------------------------------------------
+SELECT pg_catalog.citus_cluster_changes_block(0);
+SELECT pg_catalog.citus_cluster_changes_block(-1);
+SELECT pg_catalog.citus_cluster_changes_block(1800001);
+
+-- still inactive after rejected calls
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+
+-- ----------------------------------------------------------------
+-- 3. unblock() when nothing is active -> false (no error)
+-- ----------------------------------------------------------------
+SELECT pg_catalog.citus_cluster_changes_unblock();
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+
+-- ----------------------------------------------------------------
+-- 4. Basic block / status / unblock cycle
+-- ----------------------------------------------------------------
+SELECT pg_catalog.citus_cluster_changes_block(60000);
+
+-- block() returns synchronously after state transitions to ACTIVE,
+-- so this status read is race-free.
+SELECT * FROM print_block_status();
+
+-- functional check: the worker must be holding ExclusiveLock on
+-- pg_dist_node, pg_dist_partition, and pg_dist_transaction on the
+-- coordinator.  Verify by inspecting pg_locks for the worker PID.
+SELECT relname, mode, granted
+FROM pg_locks l
+JOIN pg_class c ON c.oid = l.relation
+WHERE l.pid = (SELECT worker_pid
+               FROM pg_catalog.citus_cluster_changes_block_status())
+  AND l.locktype = 'relation'
+  AND l.mode = 'ExclusiveLock'
+  AND c.relname IN ('pg_dist_node',
+                    'pg_dist_partition',
+                    'pg_dist_transaction')
+ORDER BY relname;
+
+-- behavioural check: while the block is held, any operation that
+-- requires a lock conflicting with ExclusiveLock on the locked
+-- catalogs must be blocked.  Use LOCK ... NOWAIT (RowExclusive,
+-- which is what any write/INSERT/UPDATE/DELETE on these catalogs
+-- takes) — it conflicts with ExclusiveLock and fails immediately
+-- when contended, giving a deterministic, non-flaky assertion.
+BEGIN;
+LOCK TABLE pg_catalog.pg_dist_partition IN ROW EXCLUSIVE MODE NOWAIT;
+ROLLBACK;
+
+BEGIN;
+LOCK TABLE pg_catalog.pg_dist_node IN ROW EXCLUSIVE MODE NOWAIT;
+ROLLBACK;
+
+BEGIN;
+LOCK TABLE pg_catalog.pg_dist_transaction IN ROW EXCLUSIVE MODE NOWAIT;
+ROLLBACK;
+
+-- worker-node check (structural): every metadata worker must have
+-- a backend holding ExclusiveLock on pg_dist_partition and
+-- pg_dist_transaction (the bgworker's remote connection on that
+-- node).  pg_dist_node is intentionally NOT locked on workers
+-- (node management is coordinator-only), so we expect exactly 2.
+SELECT nodename, nodeport, result
+FROM run_command_on_workers($cmd$
+    SELECT count(DISTINCT c.relname)::text
+    FROM pg_locks l
+    JOIN pg_class c ON c.oid = l.relation
+    WHERE l.locktype = 'relation'
+      AND l.mode = 'ExclusiveLock'
+      AND l.granted
+      AND c.relname IN ('pg_dist_partition',
+                        'pg_dist_transaction')
+$cmd$)
+ORDER BY nodename, nodeport;
+
+-- worker-node check (behavioural): a conflicting RowExclusive lock
+-- attempt on each worker must fail with NOWAIT, proving writes are
+-- actually blocked on workers (not just on the coordinator).  We use
+-- DO blocks because run_command_on_workers runs in autocommit mode
+-- and bare LOCK requires a transaction block.
+SELECT nodename, nodeport, success, result
+FROM run_command_on_workers($cmd$
+    DO $body$ BEGIN
+        LOCK TABLE pg_catalog.pg_dist_partition IN ROW EXCLUSIVE MODE NOWAIT;
+    END $body$;
+$cmd$)
+ORDER BY nodename, nodeport;
+
+SELECT nodename, nodeport, success, result
+FROM run_command_on_workers($cmd$
+    DO $body$ BEGIN
+        LOCK TABLE pg_catalog.pg_dist_transaction IN ROW EXCLUSIVE MODE NOWAIT;
+    END $body$;
+$cmd$)
+ORDER BY nodename, nodeport;
+
+-- pg_dist_node is NOT locked on workers, so a conflicting lock
+-- attempt there must succeed even while the block is held.
+SELECT nodename, nodeport, success
+FROM run_command_on_workers($cmd$
+    DO $body$ BEGIN
+        LOCK TABLE pg_catalog.pg_dist_node IN ROW EXCLUSIVE MODE NOWAIT;
+    END $body$;
+$cmd$)
+ORDER BY nodename, nodeport;
+
+SELECT pg_catalog.citus_cluster_changes_unblock();
+
+-- after unblock, the worker is gone so its locks are released.
+-- Confirm by counting any remaining ExclusiveLocks held by a dead PID
+-- (should be zero rows).
+SELECT count(*) AS leftover_locks
+FROM pg_locks l
+JOIN pg_class c ON c.oid = l.relation
+WHERE l.locktype = 'relation'
+  AND l.mode = 'ExclusiveLock'
+  AND c.relname IN ('pg_dist_node',
+                    'pg_dist_partition',
+                    'pg_dist_transaction')
+  AND l.pid <> pg_backend_pid();
+
+-- behavioural check: after unblock, the same LOCK ... NOWAIT
+-- statements that previously failed must now succeed because no
+-- conflicting lock is held.
+BEGIN;
+LOCK TABLE pg_catalog.pg_dist_partition IN ROW EXCLUSIVE MODE NOWAIT;
+LOCK TABLE pg_catalog.pg_dist_node IN ROW EXCLUSIVE MODE NOWAIT;
+LOCK TABLE pg_catalog.pg_dist_transaction IN ROW EXCLUSIVE MODE NOWAIT;
+ROLLBACK;
+
+-- worker-node check: same conflicting locks must now succeed on
+-- each worker after the bgworker has released its remote locks.
+SELECT nodename, nodeport, success
+FROM run_command_on_workers($cmd$
+    DO $body$ BEGIN
+        LOCK TABLE pg_catalog.pg_dist_partition IN ROW EXCLUSIVE MODE NOWAIT;
+    END $body$;
+$cmd$)
+ORDER BY nodename, nodeport;
+
+SELECT nodename, nodeport, success
+FROM run_command_on_workers($cmd$
+    DO $body$ BEGIN
+        LOCK TABLE pg_catalog.pg_dist_transaction IN ROW EXCLUSIVE MODE NOWAIT;
+    END $body$;
+$cmd$)
+ORDER BY nodename, nodeport;
+
+-- unblock() returns synchronously after the worker has set state back
+-- to INACTIVE (or after a 30s warning timeout that is not expected here).
+SELECT * FROM print_block_status();
+
+-- ----------------------------------------------------------------
+-- 5. Default timeout argument
+-- ----------------------------------------------------------------
+SELECT pg_catalog.citus_cluster_changes_block();
+SELECT state, timeout_ms
+FROM pg_catalog.citus_cluster_changes_block_status();
+SELECT pg_catalog.citus_cluster_changes_unblock();
+
+-- ----------------------------------------------------------------
+-- 6. Double-block while already ACTIVE -> ERROR (with hint)
+-- ----------------------------------------------------------------
+SELECT pg_catalog.citus_cluster_changes_block(60000);
+SELECT pg_catalog.citus_cluster_changes_block(60000);
+-- still active after the rejected second call
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+SELECT pg_catalog.citus_cluster_changes_unblock();
+
+-- ----------------------------------------------------------------
+-- 7. Repeated cycles - exercise the worker startup/shutdown path
+--    multiple times to detect any leaked state, stuck locks, or
+--    flaky synchronization.
+-- ----------------------------------------------------------------
+DO $$
+BEGIN
+    FOR i IN 1..5 LOOP
+        PERFORM pg_catalog.citus_cluster_changes_block(60000);
+        IF (SELECT state FROM pg_catalog.citus_cluster_changes_block_status())
+           <> 'active' THEN
+            RAISE EXCEPTION 'iteration %: expected active state', i;
+        END IF;
+        PERFORM pg_catalog.citus_cluster_changes_unblock();
+        IF (SELECT state FROM pg_catalog.citus_cluster_changes_block_status())
+           <> 'inactive' THEN
+            RAISE EXCEPTION 'iteration %: expected inactive state', i;
+        END IF;
+    END LOOP;
+END;
+$$;
+SELECT * FROM print_block_status();
+
+-- ----------------------------------------------------------------
+-- 8. SIGTERM-induced shutdown path: terminate the bgworker directly
+--    and verify the worker performs a clean shutdown that resets
+--    shared-memory state to INACTIVE.
+-- ----------------------------------------------------------------
+SELECT pg_catalog.citus_cluster_changes_block(60000);
+
+-- terminate the bgworker (SIGTERM) - hits the got_sigterm code path
+SELECT pg_terminate_backend(worker_pid)
+FROM pg_catalog.citus_cluster_changes_block_status();
+
+-- the SIGTERM handler exits the wait loop and the worker resets state
+-- to INACTIVE before exiting.  Wait for that to be observable.
+SELECT wait_for_block_state('inactive');
+SELECT * FROM print_block_status();
+
+-- after SIGTERM cleanup, normal block/unblock must still work
+SELECT pg_catalog.citus_cluster_changes_block(60000);
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+SELECT pg_catalog.citus_cluster_changes_unblock();
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+
+-- ----------------------------------------------------------------
+-- 9. Permission enforcement: REVOKE ALL FROM PUBLIC on block/unblock,
+--    but block_status() is readable by any user.
+-- ----------------------------------------------------------------
+CREATE USER citus_ccb_unprivileged;
+
+SET ROLE citus_ccb_unprivileged;
+SELECT pg_catalog.citus_cluster_changes_block(60000);
+SELECT pg_catalog.citus_cluster_changes_unblock();
+-- status() is readable
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+RESET ROLE;
+
+DROP USER citus_ccb_unprivileged;
+
+-- ----------------------------------------------------------------
+-- 10. Coordinator-only enforcement (EnsureCoordinator).
+--     Calling block/unblock from a worker node must error.
+--     We invoke via run_command_on_workers so the call executes
+--     directly on the worker.
+-- ----------------------------------------------------------------
+SELECT result FROM run_command_on_workers(
+    $cmd$ SELECT pg_catalog.citus_cluster_changes_block(60000) $cmd$);
+SELECT result FROM run_command_on_workers(
+    $cmd$ SELECT pg_catalog.citus_cluster_changes_unblock() $cmd$);
+
+-- ----------------------------------------------------------------
+-- 11. Timeout-driven auto-release: when timeout_ms elapses while the
+--     block is held, the worker logs a WARNING and auto-releases all
+--     locks without an explicit unblock() call.  We use a short
+--     timeout (2s) — long enough for block() to synchronously observe
+--     the ACTIVE state, short enough to keep the test fast.  The
+--     WARNING is emitted by the bgworker and goes to the server log
+--     (not the client), so it does not affect expected output.
+-- ----------------------------------------------------------------
+SELECT pg_catalog.citus_cluster_changes_block(2000);
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+
+-- wait for the worker to hit its own timeout, auto-release locks,
+-- and reset state to INACTIVE.  wait_for_block_state polls for up
+-- to 30s, so this is bounded and non-flaky regardless of host load.
+SELECT wait_for_block_state('inactive');
+
+SELECT * FROM print_block_status();
+
+-- locks must be released after auto-timeout, just like after an
+-- explicit unblock().
+SELECT count(*) AS leftover_locks
+FROM pg_locks l
+JOIN pg_class c ON c.oid = l.relation
+WHERE l.locktype = 'relation'
+  AND l.mode = 'ExclusiveLock'
+  AND c.relname IN ('pg_dist_node',
+                    'pg_dist_partition',
+                    'pg_dist_transaction')
+  AND l.pid <> pg_backend_pid();
+
+-- a fresh block/unblock cycle must still work after auto-timeout
+SELECT pg_catalog.citus_cluster_changes_block(60000);
+SELECT state FROM pg_catalog.citus_cluster_changes_block_status();
+SELECT pg_catalog.citus_cluster_changes_unblock();
+
+-- final sanity: cluster is fully unblocked at end of test
+SELECT * FROM print_block_status();
+
+-- cleanup
+DROP SCHEMA citus_ccb_test CASCADE;
