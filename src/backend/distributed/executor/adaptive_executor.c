@@ -3986,8 +3986,38 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 													 ALLOCSET_DEFAULT_INITSIZE,
 													 ALLOCSET_DEFAULT_MAXSIZE);
 
-	while (!PQisBusy(connection->pgConn))
+	while (1)
 	{
+		if (PQisBusy(connection->pgConn))
+		{
+			/*
+			 * libpq has no complete row to surface right now.  Before yielding
+			 * back to the wait-event loop in RunDistributedExecution(), make
+			 * one extra non-blocking PQconsumeInput() call.  While we were
+			 * processing the previous batch of rows, the worker may have
+			 * pushed more bytes into the kernel receive buffer; if so, this
+			 * lets us keep draining instead of paying a full event-loop cycle
+			 * (epoll wake + ConnectionStateMachine + CheckConnectionReady) to
+			 * pick up rows that were already on the socket.
+			 *
+			 * For wide-row distributed SELECTs (e.g. PostGIS geometries) this
+			 * collapses what would otherwise be O(rows / batch_size) wait-event
+			 * cycles into a small constant, with the biggest impact on
+			 * deployments where coordinator/worker RTT is non-trivial.
+			 */
+			if (PQconsumeInput(connection->pgConn) == 0)
+			{
+				connection->connectionState = MULTI_CONNECTION_LOST;
+				break;
+			}
+			if (PQisBusy(connection->pgConn))
+			{
+				/* really nothing to drain; yield to the wait-event loop */
+				break;
+			}
+			/* fall through: more rows are available, keep draining */
+		}
+
 		uint32 columnIndex = 0;
 		uint32 rowsProcessed = 0;
 
