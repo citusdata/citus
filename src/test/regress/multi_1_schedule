@@ -246,9 +246,11 @@ test: multi_drop_extension
 
 # ----------
 # multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
+# multi_metadata_sync_domain tests that metadata sync works correctly with DOMAIN types in non-public schemas
 # multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
 # ----------
 test: multi_metadata_sync
+test: multi_metadata_sync_domain
 test: multi_unsupported_worker_operations
 
 test: grant_on_function_propagation

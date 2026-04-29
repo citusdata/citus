@@ -184,6 +184,9 @@ DEPS = {
     "foreign_key_to_reference_shard_rebalance": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"]
     ),
+    "subquery_in_where": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
 }
 
 

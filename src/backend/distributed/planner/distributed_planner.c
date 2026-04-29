@@ -94,8 +94,9 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static PlannedStmt * CreateDistributedPlannedStmt(
-	DistributedPlanningContext *planContext);
+static bool PlanContainsDistributedSubPlanRTE(List *subPlanList);
+static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
+												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 															   DistributedPlanningContext
 															   *planContext);
@@ -151,7 +152,9 @@ static RouterPlanType GetRouterPlanType(Query *query,
 										bool hasUnresolvedParams);
 static void ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan,
 										   PlannedStmt *concatPlan);
-
+static bool CheckPostPlanDistribution(DistributedPlanningContext *planContext,
+									  bool isDistributedQuery,
+									  List *rangeTableList);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -272,6 +275,10 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
+			needsDistributedPlanning = CheckPostPlanDistribution(&planContext,
+																 needsDistributedPlanning,
+																 rangeTableList);
+
 			if (needsDistributedPlanning)
 			{
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
@@ -408,6 +415,49 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 				*maybeHasForeignDistributedTable = true;
 			}
 
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the given
+ * subPlanList is a Read Intermediate Result function scan.
+ *
+ * It is used by the check after standard_planner() to determine whether the plan
+ * still requires distributed planning; in addition to checking the range table for
+ * distributed tables, we also need to check whether there are any subplans that
+ * read intermediate results, which indicates a distributed subplan and therefore
+ * that distributed planning is required.
+ */
+static bool
+PlanContainsDistributedSubPlanRTE(List *subPlanList)
+{
+	ListCell *subPlanCell = NULL;
+
+	foreach(subPlanCell, subPlanList)
+	{
+		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (!IsA(planRoot, FunctionScan))
+		{
+			continue;
+		}
+
+		List *functionList = ((FunctionScan *) planRoot)->functions;
+
+		if (functionList == NIL)
+		{
+			continue;
+		}
+
+		RangeTblFunction *rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+
+		if (IsReadIntermediateResultFunction(rangeTblfunction->funcexpr))
+		{
 			return true;
 		}
 	}
@@ -2732,4 +2782,74 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 								   "citus_add_local_table_to_metadata()"))));
 		}
 	}
+}
+
+
+static bool
+CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
+						  isDistributedQuery, List *rangeTableList)
+{
+	if (isDistributedQuery)
+	{
+		Query *origQuery = planContext->originalQuery;
+		Query *plannedQuery = planContext->query;
+		Node *origQuals = origQuery->jointree->quals;
+		Node *plannedQuals = plannedQuery->jointree->quals;
+
+		#if PG_VERSION_NUM >= PG_VERSION_17
+		if (IsMergeQuery(origQuery))
+		{
+			origQuals = origQuery->mergeJoinCondition;
+			plannedQuals = plannedQuery->mergeJoinCondition;
+		}
+		#endif
+
+		/*
+		 * If the WHERE quals have been eliminated by the Postgres planner, possibly
+		 * by an OR clause that was simplified to TRUE, we need to check if the
+		 * planned query still requires distributed planning.
+		 */
+		if (origQuals != NULL && plannedQuals == NULL)
+		{
+			/* First check if the plan has a distributed table */
+			bool planHasDistribution = ListContainsDistributedTableRTE(
+				planContext->plan->rtable, NULL);
+
+			/* ..or a distributed subplan */
+			planHasDistribution = planHasDistribution ||
+								  PlanContainsDistributedSubPlanRTE(
+				planContext->plan->subplans);
+
+			/*
+			 * The plan has a distributed relation, so we know for sure that
+			 * the query requires distributed planning.
+			 */
+			if (planHasDistribution)
+			{
+				return true;
+			}
+
+			/*
+			 * Otherwise, if the query has less range table entries after Postgres,
+			 * planning, we should re-evaluate the distribution of the query. Postgres
+			 * may have optimized away all citus tables, per issues 7782, 7783.
+			 */
+			List *rtesPostPlan = ExtractRangeTableEntryList(plannedQuery);
+			if (list_length(rtesPostPlan) < list_length(rangeTableList))
+			{
+				bool hasDistTable = ListContainsDistributedTableRTE(
+					rtesPostPlan, NULL);
+				if (hasDistTable != isDistributedQuery)
+				{
+					ereport(DEBUG4, (errmsg(
+										 "Plan has flipped from distributed to local "
+										 "after Postgres planning, updating distributed to %u",
+										 hasDistTable)));
+					isDistributedQuery = hasDistTable;
+				}
+			}
+		}
+	}
+
+	return isDistributedQuery;
 }
