@@ -98,3 +98,15 @@ test: multi_transaction_recovery_multiple_databases
 # These tests are kept here to prevent N-1 test failures for the features that are
 # not present in the minor version.
 # ---------------------------------------------------------------------------------
+
+# ----------
+# ----------
+# multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
+# ----------
+test: multi_unsupported_worker_operations
+
+# Don't parallelize the following two tests as they directly alter pg_dist_shardid_seq
+# on the coordinator and restore it at the end.
+# Will be moved back to multi_1_schedule at Citus 15.
+test: schema_based_sharding_from_workers_a
+test: schema_based_sharding_from_workers_b
