@@ -7,7 +7,7 @@ def getTableData():
     dataGenerationSql = ""
 
     tableIdx = 1
-    (fromVal, toVal) = getConfig().dataRange
+    fromVal, toVal = getConfig().dataRange
     tables = getConfig().targetTables
     for table in tables:
         # generate base rows

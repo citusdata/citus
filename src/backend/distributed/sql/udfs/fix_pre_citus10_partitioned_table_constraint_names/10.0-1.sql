@@ -8,6 +8,7 @@ COMMENT ON FUNCTION pg_catalog.fix_pre_citus10_partitioned_table_constraint_name
 CREATE OR REPLACE FUNCTION pg_catalog.fix_pre_citus10_partitioned_table_constraint_names()
   RETURNS SETOF regclass
   LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
   AS $$
 DECLARE
 	oid regclass;
