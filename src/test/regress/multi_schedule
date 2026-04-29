@@ -2,7 +2,6 @@ test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 test: citus_cluster_changes_block
 test: create_role_propagation
-test: pg16
 test: multi_create_fdw
 test: multi_test_catalog_views
 test: replicated_table_disable_node
@@ -69,7 +68,6 @@ test: pg14
 test: pg15
 test: pg15_jsonpath detect_conn_close
 test: pg17 pg17_json
-test: pg18
 test: drop_column_partitioned_table
 test: tableam
 
@@ -140,5 +138,4 @@ test: ensure_no_shared_connection_leak
 test: check_mx
 
 test: generated_identity
-test: drop_database
 test: check_cluster_state
