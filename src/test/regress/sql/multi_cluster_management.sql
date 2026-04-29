@@ -535,8 +535,13 @@ BEGIN;
 	SET citus.enable_metadata_sync TO OFF;
 	SELECT start_metadata_sync_to_all_nodes();
 	DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+
+	-- we're not interested in what we send to the nodes we're removing
+	SET LOCAL citus.log_remote_commands TO OFF;
 	SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
 	SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+	SET LOCAL citus.log_remote_commands TO ON;
+
 	SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 	SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 ROLLBACK;
