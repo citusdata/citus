@@ -787,6 +787,16 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
 \gset
 \if :server_version_ge_17
+SET client_min_messages TO DEBUG1;
+ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_excl EXCLUDE USING btree (partition_col WITH =);
+RESET client_min_messages;
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+    INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+   WHERE rel.relname = 'dist_partitioned_table'
+     AND con.contype = 'x';
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_excl;
 \endif
 -- Check "ADD CONSTRAINT ... FOREIGN KEY" with explicit name does NOT switch to
 -- sequential because PG propagates the user-provided name to partitions as-is
