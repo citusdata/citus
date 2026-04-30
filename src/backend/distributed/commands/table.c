@@ -1007,6 +1007,10 @@ SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId,
 	 * user-provided identifiers are already bounded by NAMEDATALEN at parse
 	 * time, the inherited name can never be too long on partition shards.
 	 *
+	 * This also correctly handles unnamed non-index constraints whose
+	 * conname was assigned by PrepareAlterTableStmtForConstraint(), since
+	 * those generated names are also bounded by NAMEDATALEN.
+	 *
 	 * Only index-backed constraints (PRIMARY KEY, UNIQUE, EXCLUDE) need this
 	 * check because PostgreSQL auto-generates new names for partition child
 	 * indexes based on the partition table name (see generateClonedIndexStmt
