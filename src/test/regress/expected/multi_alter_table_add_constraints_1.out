@@ -3,159 +3,186 @@
 --
 -- Test checks whether constraints of distributed tables can be adjusted using
 -- the ALTER TABLE ... ADD CONSTRAINT ... command.
-
 SET citus.shard_count TO 32;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
-
 -- Check "PRIMARY KEY CONSTRAINT"
 CREATE TABLE products (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_distributed_table('products', 'product_no');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Can only add primary key constraint on distribution column (or group of columns
 -- including distribution column)
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(name);
+ERROR:  cannot create constraint on "products"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-
 INSERT INTO products VALUES(1, 'product_1', 1);
-
 -- Should error out, since we are trying to add a new row having a value on p_key column
 -- conflicting with the existing row.
 INSERT INTO products VALUES(1, 'product_1', 1);
-
+ERROR:  duplicate key value violates unique constraint "p_key_1450001"
+DETAIL:  Key (product_no)=(1) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 ALTER TABLE products DROP CONSTRAINT p_key;
 INSERT INTO products VALUES(1, 'product_1', 1);
-
 -- Can not create constraint since it conflicts with the existing data
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-
+ERROR:  could not create unique index "p_key_1450001"
+DETAIL:  Key (product_no)=(1) is duplicated.
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE products;
-
 -- Check "PRIMARY KEY CONSTRAINT" with reference table
 CREATE TABLE products_ref (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_reference_table('products_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Can add PRIMARY KEY to any column
 ALTER TABLE products_ref ADD CONSTRAINT p_key PRIMARY KEY(name);
 ALTER TABLE products_ref DROP CONSTRAINT p_key;
 ALTER TABLE products_ref ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-
 INSERT INTO products_ref VALUES(1, 'product_1', 1);
-
 -- Should error out, since we are trying to add new row having a value on p_key column
 -- conflicting with the existing row.
 INSERT INTO products_ref VALUES(1, 'product_1', 1);
-
+ERROR:  duplicate key value violates unique constraint "p_key_1450032"
+DETAIL:  Key (product_no)=(1) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE products_ref;
-
 -- Check "PRIMARY KEY CONSTRAINT" on append table
 CREATE TABLE products_append (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_distributed_table('products_append', 'product_no', 'append');
-SELECT master_create_empty_shard('products_append') AS shardid \gset
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 -- Can only add primary key constraint on distribution column (or group
 -- of columns including distribution column)
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE products_append ADD CONSTRAINT p_key_name PRIMARY KEY(name);
+WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
+HINT:  Consider using hash partitioning.
+ERROR:  cannot create constraint on "products_append"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE products_append ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-
+WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
+HINT:  Consider using hash partitioning.
 --- Error out since first and third rows have the same product_no
 COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
-1, Product_1, 10
-2, Product_2, 15
-1, Product_3, 8
-\.
-
+ERROR:  duplicate key value violates unique constraint "p_key_1450033"
+DETAIL:  Key (product_no)=(1) already exists.
 DROP TABLE products_append;
-
-
 -- Check "UNIQUE CONSTRAINT"
 CREATE TABLE unique_test_table(id int, name varchar(20));
 SELECT create_distributed_table('unique_test_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Can only add unique constraint on distribution column (or group
 -- of columns including distribution column)
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_name UNIQUE(name);
+ERROR:  cannot create constraint on "unique_test_table"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id UNIQUE(id);
-
 -- Error out, since table can not have two rows with same id.
 INSERT INTO unique_test_table VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
-
+ERROR:  duplicate key value violates unique constraint "unn_id_1450035"
+DETAIL:  Key (id)=(X) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 ALTER TABLE unique_test_table DROP CONSTRAINT unn_id;
-
 -- Insert row which will conflict with the next unique constraint command
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
-
 -- Can not create constraint since it conflicts with the existing data
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id UNIQUE(id);
-
+ERROR:  could not create unique index "unn_id_1450035"
+DETAIL:  Key (id)=(X) is duplicated.
+CONTEXT:  while executing command on localhost:xxxxx
 -- Can create unique constraint over multiple columns which must include
 -- distribution column
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id_name UNIQUE(id, name);
-
 -- Error out, since tables can not have two rows with same id and name.
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
+ERROR:  duplicate key value violates unique constraint "unn_id_name_1450035"
+DETAIL:  Key (id, name)=(1, Mehmet) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE unique_test_table;
-
 -- Check "UNIQUE CONSTRAINT" with reference table
 CREATE TABLE unique_test_table_ref(id int, name varchar(20));
 SELECT create_reference_table('unique_test_table_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- We can add unique constraint on any column with reference tables
 ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_name UNIQUE(name);
 ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_id UNIQUE(id);
-
 -- Error out. Since the table can not have two rows with the same id.
 INSERT INTO unique_test_table_ref VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table_ref VALUES(1, 'Mehmet');
-
+ERROR:  duplicate key value violates unique constraint "unn_id_1450066"
+DETAIL:  Key (id)=(X) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 -- We can add unique constraint with multiple columns
 ALTER TABLE unique_test_table_ref DROP CONSTRAINT unn_id;
 ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_id_name UNIQUE(id,name);
-
 -- Error out, since two rows can not have the same id or name.
 INSERT INTO unique_test_table_ref VALUES(1, 'Mehmet');
-
 DROP TABLE unique_test_table_ref;
-
 -- Check "UNIQUE CONSTRAINT" with append table
 CREATE TABLE unique_test_table_append(id int, name varchar(20));
 SELECT create_distributed_table('unique_test_table_append', 'id', 'append');
-SELECT master_create_empty_shard('unique_test_table_append') AS shardid \gset
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+SELECT master_create_empty_shard('unique_test_table_append') AS shardid \gset
 -- Can only add unique constraint on distribution column (or group
 -- of columns including distribution column)
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE unique_test_table_append ADD CONSTRAINT unn_name UNIQUE(name);
+WARNING:  table "unique_test_table_append" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
+HINT:  Consider using hash partitioning.
+ERROR:  cannot create constraint on "unique_test_table_append"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE unique_test_table_append ADD CONSTRAINT unn_id UNIQUE(id);
-
+WARNING:  table "unique_test_table_append" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
+HINT:  Consider using hash partitioning.
 -- Error out. Table can not have two rows with the same id.
 COPY unique_test_table_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
-1, Product_1
-2, Product_2
-1, Product_3
-\.
-
+ERROR:  duplicate key value violates unique constraint "unn_id_1450067"
+DETAIL:  Key (id)=(X) already exists.
 DROP TABLE unique_test_table_append;
-
 -- Check "CHECK CONSTRAINT"
 CREATE TABLE products (
     product_no integer,
@@ -163,21 +190,27 @@ CREATE TABLE products (
     price numeric,
     discounted_price numeric
 );
-
 SELECT create_distributed_table('products', 'product_no');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Can add column and table check constraints
 ALTER TABLE products ADD CONSTRAINT p_check CHECK(price > 0);
 ALTER TABLE products ADD CONSTRAINT p_multi_check CHECK(price > discounted_price);
-
 -- First and third queries will error out, because of conflicts with p_check and
 -- p_multi_check, respectively.
 INSERT INTO products VALUES(1, 'product_1', -1, -2);
+ERROR:  new row for relation "products_1450069" violates check constraint "p_check_1450069"
+DETAIL:  Failing row contains (1, product_1, -1, -2).
+CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO products VALUES(1, 'product_1', 5, 3);
 INSERT INTO products VALUES(1, 'product_1', 2, 3);
-
+ERROR:  new row for relation "products_1450069" violates check constraint "p_multi_check_1450069"
+DETAIL:  Failing row contains (1, product_1, 2, 3).
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE products;
-
 -- Check "CHECK CONSTRAINT" with reference table
 CREATE TABLE products_ref (
     product_no integer,
@@ -185,21 +218,27 @@ CREATE TABLE products_ref (
     price numeric,
     discounted_price numeric
 );
-
 SELECT create_reference_table('products_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Can add column and table check constraints
 ALTER TABLE products_ref ADD CONSTRAINT p_check CHECK(price > 0);
 ALTER TABLE products_ref ADD CONSTRAINT p_multi_check CHECK(price > discounted_price);
-
 -- First and third queries will error out, because of conflicts with p_check and
 -- p_multi_check, respectively.
 INSERT INTO products_ref VALUES(1, 'product_1', -1, -2);
+ERROR:  new row for relation "products_ref_1450100" violates check constraint "p_check_1450100"
+DETAIL:  Failing row contains (1, product_1, -1, -2).
+CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO products_ref VALUES(1, 'product_1', 5, 3);
 INSERT INTO products_ref VALUES(1, 'product_1', 2, 3);
-
+ERROR:  new row for relation "products_ref_1450100" violates check constraint "p_multi_check_1450100"
+DETAIL:  Failing row contains (1, product_1, 2, 3).
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE products_ref;
-
 -- Check "CHECK CONSTRAINT" with append table
 CREATE TABLE products_append (
     product_no int,
@@ -207,38 +246,39 @@ CREATE TABLE products_append (
     price int,
     discounted_price int
 );
-
 SELECT create_distributed_table('products_append', 'product_no', 'append');
-SELECT master_create_empty_shard('products_append') AS shardid \gset
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 -- Can add column and table check constraints
 ALTER TABLE products_append ADD CONSTRAINT p_check CHECK(price > 0);
 ALTER TABLE products_append ADD CONSTRAINT p_multi_check CHECK(price > discounted_price);
-
 -- Error out,since the third row conflicting with the p_multi_check
 COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
-1, Product_1, 10, 5
-2, Product_2, 15, 8
-1, Product_3, 8, 10
-\.
-
+ERROR:  new row for relation "products_append_1450101" violates check constraint "p_multi_check_1450101"
+DETAIL:  Failing row contains (1,  Product_3, 8, 10).
 DROP TABLE products_append;
-
-
 -- Check "EXCLUSION CONSTRAINT"
 CREATE TABLE products (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_distributed_table('products', 'product_no');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Can only add exclusion constraint on distribution column (or group of columns
 -- including distribution column)
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE products ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
-
+ERROR:  cannot create constraint on "products"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 -- check that we can disable the constraint check for EXCLUDE
 BEGIN;
 SET LOCAL citus.allow_unsafe_constraints TO on;
@@ -248,144 +288,156 @@ INSERT INTO products  VALUES (1,'boat',10.0);
 INSERT INTO products  VALUES (2,'boat',11.0);
 -- enforced within the shard
 INSERT INTO products  VALUES (1,'boat',12.0);
+ERROR:  conflicting key value violates exclusion constraint "exc_name_1450103"
+DETAIL:  Key (name)=(boat) conflicts with existing key (name)=(boat).
+CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
-
 -- We can add composite exclusion
 ALTER TABLE products ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
-
 -- 4th command will error out since it conflicts with exc_pno_name constraint
 INSERT INTO products VALUES(1,'product_1', 5);
 INSERT INTO products VALUES(1,'product_2', 10);
 INSERT INTO products VALUES(2,'product_2', 5);
 INSERT INTO products VALUES(2,'product_2', 5);
-
+ERROR:  conflicting key value violates exclusion constraint "exc_pno_name_1450126"
+DETAIL:  Key (product_no, name)=(2, product_2) conflicts with existing key (product_no, name)=(2, product_2).
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE products;
-
 -- Check "EXCLUSION CONSTRAINT" with reference table
 CREATE TABLE products_ref (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_reference_table('products_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- We can add exclusion constraint on any column
 ALTER TABLE products_ref ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
-
 -- We can add composite exclusion because none of pair of rows are conflicting
 ALTER TABLE products_ref ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
-
 -- Third insertion will error out, since it has the same name with second insertion
 INSERT INTO products_ref VALUES(1,'product_1', 5);
 INSERT INTO products_ref VALUES(1,'product_2', 10);
 INSERT INTO products_ref VALUES(2,'product_2', 5);
-
+ERROR:  conflicting key value violates exclusion constraint "exc_name_1450134"
+DETAIL:  Key (name)=(product_2) conflicts with existing key (name)=(product_2).
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE products_ref;
-
 -- Check "EXCLUSION CONSTRAINT" with append table
 CREATE TABLE products_append (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_distributed_table('products_append', 'product_no','append');
-SELECT master_create_empty_shard('products_append') AS shardid \gset
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 -- Can only add exclusion constraint on distribution column (or group of column
 -- including distribution column)
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE products_append ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
+WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
+HINT:  Consider using hash partitioning.
+ERROR:  cannot create constraint on "products_append"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE products_append ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
-
+WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
+HINT:  Consider using hash partitioning.
 -- Error out since first and third can not pass the exclusion check.
 COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
-1, Product_1, 10
-1, Product_2, 15
-1, Product_1, 8
-\.
-
+ERROR:  conflicting key value violates exclusion constraint "exc_pno_name_1450135"
+DETAIL:  Key (product_no, name)=(1,  Product_1) conflicts with existing key (product_no, name)=(1,  Product_1).
 DROP TABLE products_append;
-
 -- Check "NOT NULL"
 CREATE TABLE products (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_distributed_table('products', 'product_no');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 ALTER TABLE products ALTER COLUMN name SET NOT NULL;
-
 -- Insertions will error out since both product_no and name can not have NULL value
 INSERT INTO products VALUES(1,NULL,5);
+ERROR:  null value in column "name" violates not-null constraint
+DETAIL:  Failing row contains (1, null, 5).
+CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO products VALUES(NULL,'product_1', 5);
-
+ERROR:  cannot perform an INSERT with NULL in the partition column
 DROP TABLE products;
-
 -- Check "NOT NULL" with reference table
 CREATE TABLE products_ref (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_reference_table('products_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 ALTER TABLE products_ref ALTER COLUMN name SET NOT NULL;
-
 -- Insertions will error out since both product_no and name can not have NULL value
 INSERT INTO products_ref VALUES(1,NULL,5);
+ERROR:  null value in column "name" violates not-null constraint
+DETAIL:  Failing row contains (1, null, 5).
+CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO products_ref VALUES(NULL,'product_1', 5);
-
 DROP TABLE products_ref;
-
 -- Check "NOT NULL" with append table
 CREATE TABLE products_append (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_distributed_table('products_append', 'product_no', 'append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT master_create_empty_shard('products_append') AS shardid \gset
-
 ALTER TABLE products_append ALTER COLUMN name SET NOT NULL;
-
 -- Error out since name and product_no columns can not handle NULL value.
 COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
-1, \N, 10
-\N, Product_2, 15
-1, Product_1, 8
-\.
-
 DROP TABLE products_append;
-
-
 -- Tests for ADD CONSTRAINT is not only subcommand
 CREATE TABLE products (
     product_no integer,
     name text,
     price numeric
 );
-
 SELECT create_distributed_table('products', 'product_no');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Should error out since add constraint is not the single subcommand
 ALTER TABLE products ADD CONSTRAINT unn_1 UNIQUE(product_no, price), ADD CONSTRAINT unn_2 UNIQUE(product_no, name);
-
+ERROR:  cannot execute ADD CONSTRAINT command with other subcommands
+HINT:  You can issue each subcommand separately
 -- ... with names, we can add/drop the constraints just fine
 ALTER TABLE products ADD CONSTRAINT nonzero_product_no CHECK(product_no <> 0);
 ALTER TABLE products ADD CONSTRAINT uniq_product_no EXCLUDE USING btree (product_no with =);
-
 ALTER TABLE products DROP CONSTRAINT nonzero_product_no;
 ALTER TABLE products DROP CONSTRAINT uniq_product_no;
-
 DROP TABLE products;
-
-
 -- Tests with transactions
 CREATE TABLE products (
     product_no integer,
@@ -393,16 +445,17 @@ CREATE TABLE products (
     price numeric,
     discounted_price numeric
 );
-
 SELECT create_distributed_table('products', 'product_no');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 BEGIN;
 INSERT INTO products VALUES(1,'product_1', 5);
-
 -- DDL should pick the right connections after a single INSERT
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
 ROLLBACK;
-
 -- check that we can disable the constraint check for CREATE UNIQUE INDEX
 BEGIN;
 SET LOCAL citus.allow_unsafe_constraints TO on;
@@ -412,8 +465,10 @@ INSERT INTO products  VALUES (1,'boat',10.0);
 INSERT INTO products  VALUES (2,'boat',11.0);
 -- enforced within the shard
 INSERT INTO products  VALUES (1,'boat',10.0);
+ERROR:  duplicate key value violates unique constraint "products_name_price_idx_1450203"
+DETAIL:  Key (name, price)=(boat, 10.0) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
-
 -- check that we can disable the constraint check for CREATE UNIQUE INDEX CONCURRENTLY
 SET citus.allow_unsafe_constraints TO on;
 CREATE UNIQUE INDEX CONCURRENTLY product_idx ON products (name, price);
@@ -422,10 +477,12 @@ INSERT INTO products  VALUES (1,'boat',10.0);
 INSERT INTO products  VALUES (2,'boat',11.0);
 -- enforced within the shard
 INSERT INTO products  VALUES (1,'boat',10.0);
+ERROR:  duplicate key value violates unique constraint "product_idx_1450203"
+DETAIL:  Key (name, price)=(boat, 10.0) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 DROP INDEX product_idx;
 TRUNCATE products;
 RESET citus.allow_unsafe_constraints;
-
 -- check that we can disable the constraint check for ADD CONSTRAINT .. PRIMARY KEY
 BEGIN;
 SET LOCAL citus.allow_unsafe_constraints TO on;
@@ -435,26 +492,31 @@ INSERT INTO products  VALUES (1,'boat',10.0);
 INSERT INTO products  VALUES (2,'boat',11.0);
 -- enforced within the shard
 INSERT INTO products  VALUES (1,'boat',10.0);
+ERROR:  duplicate key value violates unique constraint "products_pk_1450203"
+DETAIL:  Key (name, price)=(boat, 10.0) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
-
 BEGIN;
 -- Add constraints
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
 ALTER TABLE products ADD CONSTRAINT check_price CHECK(price > discounted_price);
 ALTER TABLE products ALTER COLUMN product_no SET NOT NULL;
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
-
 INSERT INTO products VALUES(1,'product_1', 10, 8);
 ROLLBACK;
-
 -- There should be no constraint on master and worker(s)
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
-\c - - :public_worker_1_host :worker_1_port
+ Constraint | Definition
+---------------------------------------------------------------------
+(0 rows)
 
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
+ Constraint | Definition
+---------------------------------------------------------------------
+(0 rows)
 
 \c - - :master_host :master_port
-
 -- Tests to check the effect of rollback
 BEGIN;
 -- Add constraints (which will be rollbacked)
@@ -462,18 +524,20 @@ ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
 ALTER TABLE products ADD CONSTRAINT check_price CHECK(price > discounted_price);
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
 ROLLBACK;
-
 -- There should be no constraint on master and worker(s)
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
+ Constraint | Definition
+---------------------------------------------------------------------
+(0 rows)
 
 \c - - :public_worker_1_host :worker_1_port
-
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
+ Constraint | Definition
+---------------------------------------------------------------------
+(0 rows)
 
 \c - - :master_host :master_port
-
 DROP TABLE products;
-
 SET citus.shard_count to 2;
 -- Test if the ALTER TABLE %s ADD %s PRIMARY KEY %s works
 CREATE SCHEMA sc1;
@@ -481,6 +545,11 @@ CREATE TABLE sc1.alter_add_prim_key(x int, y int);
 CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON sc1.alter_add_prim_key(x);
 ALTER TABLE sc1.alter_add_prim_key ADD CONSTRAINT alter_pk_idx PRIMARY KEY USING INDEX alter_pk_idx;
 SELECT create_distributed_table('sc1.alter_add_prim_key', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT (run_command_on_workers($$
     SELECT
         kc.constraint_name
@@ -495,11 +564,21 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY
     1,2,3,4;
+ nodename  | nodeport | success |        result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | alter_pk_idx_1450234
+ localhost |    57638 | t       | alter_pk_idx_1450234
+(2 rows)
 
 CREATE SCHEMA sc2;
 CREATE TABLE sc2.alter_add_prim_key(x int, y int);
 SET search_path TO 'sc2';
 SELECT create_distributed_table('alter_add_prim_key', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON alter_add_prim_key(x);
 ALTER TABLE alter_add_prim_key ADD CONSTRAINT alter_pk_idx PRIMARY KEY USING INDEX alter_pk_idx;
 SELECT (run_command_on_workers($$
@@ -516,6 +595,11 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY
     1,2,3,4;
+ nodename  | nodeport | success |        result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | alter_pk_idx_1450236
+ localhost |    57638 | t       | alter_pk_idx_1450236
+(2 rows)
 
 -- We are running almost the same test with a slight change on the constraint name because if the constraint has a different name than the index, Postgres renames the index.
 CREATE SCHEMA sc3;
@@ -523,8 +607,18 @@ CREATE TABLE sc3.alter_add_prim_key(x int);
 INSERT INTO sc3.alter_add_prim_key(x) SELECT generate_series(1,100);
 SET search_path TO 'sc3';
 SELECT create_distributed_table('alter_add_prim_key', 'x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc3.alter_add_prim_key$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON alter_add_prim_key(x);
 ALTER TABLE alter_add_prim_key ADD CONSTRAINT a_constraint PRIMARY KEY USING INDEX alter_pk_idx;
+NOTICE:  ALTER TABLE / ADD CONSTRAINT USING INDEX will rename index "alter_pk_idx" to "a_constraint"
 SELECT (run_command_on_workers($$
     SELECT
         kc.constraint_name
@@ -539,6 +633,11 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY
     1,2,3,4;
+ nodename  | nodeport | success |        result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | a_constraint_1450238
+ localhost |    57638 | t       | a_constraint_1450238
+(2 rows)
 
 ALTER TABLE alter_add_prim_key DROP CONSTRAINT a_constraint;
 SELECT (run_command_on_workers($$
@@ -555,38 +654,57 @@ SELECT (run_command_on_workers($$
     $$)).*
 ORDER BY
     1,2,3,4;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
 
 CREATE TABLE alter_add_unique(x int, y int);
 CREATE UNIQUE INDEX CONCURRENTLY alter_unique_idx ON alter_add_unique(x);
 SELECT create_distributed_table('alter_add_unique', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 ALTER TABLE alter_add_unique ADD CONSTRAINT unique_constraint_test UNIQUE USING INDEX alter_unique_idx;
+NOTICE:  ALTER TABLE / ADD CONSTRAINT USING INDEX will rename index "alter_unique_idx" to "unique_constraint_test"
 ALTER TABLE alter_add_unique DROP CONSTRAINT unique_constraint_test;
-
 CREATE TABLE unique_test_table_single_shard(id int, name varchar(20));
 SELECT create_distributed_table('unique_test_table_single_shard', 'id', shard_count=>1);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 ALTER TABLE unique_test_table_single_shard ADD UNIQUE(id, name) WITH (fillfactor=20);
-
 SELECT (groupid = 0) AS is_coordinator, result FROM run_command_on_all_nodes(
   $$SELECT get_index_defs FROM get_index_defs('sc3', 'unique_test_table_single_shard')$$
 )
 JOIN pg_dist_node USING (nodeid)
 ORDER BY is_coordinator DESC, result;
+ is_coordinator |                                                                                                                                                                                                                              result
+---------------------------------------------------------------------
+ t              | [{"indexdefs": ["CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key ON sc3.unique_test_table_single_shard USING btree (id, name) WITH (fillfactor='20')"], "indexnames": ["unique_test_table_single_shard_id_name_key"]}]
+ f              | [{"indexdefs": ["CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key ON sc3.unique_test_table_single_shard USING btree (id, name) WITH (fillfactor='20')", "CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key_1450242 ON sc3.unique_test_table_single_shard_1450242 USING btree (id, name) WITH (fillfactor='20')"], "indexnames": ["unique_test_table_single_shard_id_name_key", "unique_test_table_single_shard_id_name_key_1450242"]}]
+ f              | [{"indexdefs": ["CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key ON sc3.unique_test_table_single_shard USING btree (id, name) WITH (fillfactor='20')", "CREATE UNIQUE INDEX unique_test_table_single_shard_id_name_key_1450242 ON sc3.unique_test_table_single_shard_1450242 USING btree (id, name) WITH (fillfactor='20')"], "indexnames": ["unique_test_table_single_shard_id_name_key", "unique_test_table_single_shard_id_name_key_1450242"]}]
+(3 rows)
 
 DROP TABLE unique_test_table_single_shard;
-
 SET search_path TO 'public';
-
 DROP SCHEMA sc1 CASCADE;
+NOTICE:  drop cascades to table sc1.alter_add_prim_key
 DROP SCHEMA sc2 CASCADE;
+NOTICE:  drop cascades to table sc2.alter_add_prim_key
 DROP SCHEMA sc3 CASCADE;
-
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table sc3.alter_add_prim_key
+drop cascades to table sc3.alter_add_unique
 -- Test that named constraints on partitioned tables with long partition names
 -- switch to sequential execution to prevent self-deadlocks (issue #7799)
 CREATE SCHEMA test_named_constraint_long_partition;
 SET search_path TO 'test_named_constraint_long_partition';
-
 CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_col timestamp)
     PARTITION BY RANGE (partition_col);
 CREATE TABLE p1 PARTITION OF dist_partitioned_table
@@ -595,12 +713,21 @@ CREATE TABLE longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc
     PARTITION OF dist_partitioned_table
     FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
 SELECT create_distributed_table('dist_partitioned_table', 'partition_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Check "ADD CONSTRAINT ... PRIMARY KEY" with explicit name switches to sequential
 SET client_min_messages TO DEBUG1;
 ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_pk PRIMARY KEY(partition_col);
+DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_14_pkey
+DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "my_pk" for table "dist_partitioned_table"
+DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "longlonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey" for table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
+DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "p1_pkey" for table "p1"
+DEBUG:  verifying table "p1"
+DEBUG:  verifying table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
 RESET client_min_messages;
-
 -- Verify constraint is created on the coordinator
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
@@ -608,65 +735,63 @@ SELECT con.conname
     INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
    WHERE rel.relname = 'dist_partitioned_table'
      AND con.contype = 'p';
+ conname
+---------------------------------------------------------------------
+ my_pk
+(1 row)
 
 ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_pk;
-
 -- Check "ADD CONSTRAINT ... UNIQUE" with explicit name switches to sequential
 SET client_min_messages TO DEBUG1;
 ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_uq UNIQUE(partition_col);
+DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglongl_partition_col_key
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "my_uq" for table "dist_partitioned_table"
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "longlonglonglonglonglonglonglonglonglonglongl_partition_col_key" for table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
+DEBUG:  ALTER TABLE / ADD UNIQUE will create implicit index "p1_partition_col_key" for table "p1"
 RESET client_min_messages;
-
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
     INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
     INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
    WHERE rel.relname = 'dist_partitioned_table'
      AND con.contype = 'u';
+ conname
+---------------------------------------------------------------------
+ my_uq
+(1 row)
 
 ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_uq;
-
 -- Check "ADD CONSTRAINT ... CHECK" with explicit name does NOT switch to sequential
 -- because PG propagates the user-provided name to partitions as-is (no auto-generation)
 SET client_min_messages TO DEBUG1;
 ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_chk CHECK(dist_col > another_col);
+DEBUG:  verifying table "p1"
+DEBUG:  verifying table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
 RESET client_min_messages;
-
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
     INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
     INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
    WHERE rel.relname = 'dist_partitioned_table'
      AND con.contype = 'c';
+ conname
+---------------------------------------------------------------------
+ my_chk
+(1 row)
 
 ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_chk;
-
 -- Check "ADD CONSTRAINT ... EXCLUDE" with explicit name switches to sequential
 -- because PG auto-generates new index names on partitions (same as PK/UNIQUE)
 -- EXCLUDE on partitioned tables is only supported in PG17+
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
 \gset
-
 \if :server_version_ge_17
-SET client_min_messages TO DEBUG1;
-ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_excl EXCLUDE USING btree (partition_col WITH =);
-RESET client_min_messages;
-
-SELECT con.conname
-    FROM pg_catalog.pg_constraint con
-    INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
-    INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
-   WHERE rel.relname = 'dist_partitioned_table'
-     AND con.contype = 'x';
-
-ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_excl;
 \endif
-
 -- Check "ADD CONSTRAINT ... FOREIGN KEY" with explicit name does NOT switch to
 -- sequential because PG propagates the user-provided name to partitions as-is
 -- FK requires shard_replication_factor = 1, so create a separate table for this test
 SET citus.shard_replication_factor TO 1;
-
 CREATE TABLE fk_dist_partitioned_table (dist_col int, another_col int, partition_col timestamp)
     PARTITION BY RANGE (partition_col);
 CREATE TABLE fk_p1 PARTITION OF fk_dist_partitioned_table
@@ -675,55 +800,80 @@ CREATE TABLE fk_longlonglonglonglonglonglonglonglonglonglonglonglonglongabc
     PARTITION OF fk_dist_partitioned_table
     FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
 SELECT create_distributed_table('fk_dist_partitioned_table', 'partition_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE ref_table (ref_col timestamp PRIMARY KEY);
 SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 SET client_min_messages TO DEBUG1;
 ALTER TABLE fk_dist_partitioned_table ADD CONSTRAINT my_fk FOREIGN KEY (partition_col) REFERENCES ref_table(ref_col);
 RESET client_min_messages;
-
 SELECT con.conname
     FROM pg_catalog.pg_constraint con
     INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
     INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
    WHERE rel.relname = 'fk_dist_partitioned_table'
      AND con.contype = 'f';
+ conname
+---------------------------------------------------------------------
+ my_fk
+(1 row)
 
 ALTER TABLE fk_dist_partitioned_table DROP CONSTRAINT my_fk;
-
 RESET citus.shard_replication_factor;
-
 -- Check that we error out when adding a named constraint in a transaction block
 -- after a parallel query has already been executed
 BEGIN;
     SELECT count(*) FROM dist_partitioned_table;
-    ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_pk PRIMARY KEY(partition_col);
-ROLLBACK;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
 
+    ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_pk PRIMARY KEY(partition_col);
+ERROR:  The constraint name (longlonglonglonglonglonglonglonglonglonglonglo_537570f5_14_pkey) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- try inside a sequential block -- should succeed
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     SELECT count(*) FROM dist_partitioned_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
     ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_pk PRIMARY KEY(partition_col);
 ROLLBACK;
-
 SET client_min_messages TO ERROR;
 DROP SCHEMA test_named_constraint_long_partition CASCADE;
 SET search_path TO 'public';
-
 CREATE SCHEMA test_auto_explain;
 SET search_path TO 'test_auto_explain';
-
 -- Test ALTER TABLE ... ADD CONSTRAINT ... does not cause a crash when auto_explain module is loaded
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
-INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
 CREATE TABLE test_ref_table (key int PRIMARY KEY);
 SELECT create_reference_table('test_ref_table');
-INSERT INTO test_ref_table VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+ create_reference_table
+---------------------------------------------------------------------
 
+(1 row)
+
+INSERT INTO test_ref_table VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 LOAD 'auto_explain';
 SET auto_explain.log_min_duration = 0;
 SET auto_explain.log_level = LOG;
@@ -737,9 +887,7 @@ SET citus.enable_ddl_propagation TO OFF;
 -- alter table triggers SELECT, and auto_explain catches that
 ALTER TABLE target_table ADD CONSTRAINT fkey_167 FOREIGN KEY (col_1) REFERENCES test_ref_table(key) ON DELETE CASCADE;
 END;
-
 RESET citus.enable_ddl_propagation;
 SET client_min_messages to ERROR;
 SET search_path TO 'public';
-
 DROP SCHEMA test_auto_explain CASCADE;
