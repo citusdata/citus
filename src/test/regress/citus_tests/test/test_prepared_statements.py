@@ -4,14 +4,12 @@ def test_call_param(cluster):
     # distribution key.
     coord = cluster.coordinator
     coord.sql("CREATE TABLE test(i int)")
-    coord.sql(
-        """
+    coord.sql("""
         CREATE PROCEDURE p(_i INT) LANGUAGE plpgsql AS $$
         BEGIN
         INSERT INTO test(i) VALUES (_i);
         END; $$
-        """
-    )
+        """)
     sql = "CALL p(%s)"
 
     # prepare/exec before distributing
