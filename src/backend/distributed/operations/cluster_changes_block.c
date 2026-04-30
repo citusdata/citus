@@ -107,7 +107,8 @@ static void BlockDistributedTransactionsOnWorkers(List *connectionList,
 												  int *nodeCount);
 static void cluster_changes_block_worker_sigterm(SIGNAL_ARGS);
 static void SetClusterChangesBlockState(ClusterChangesBlockState newState);
-static void SetClusterChangesBlockError(const char *message);
+static void ResetClusterChangesBlockShmem(ClusterChangesBlockState newState,
+										  const char *errorMessage);
 
 
 /* ----------------------------------------------------------------
@@ -195,13 +196,37 @@ SetClusterChangesBlockState(ClusterChangesBlockState newState)
 }
 
 
+/*
+ * ResetClusterChangesBlockShmem clears all transient fields in the control
+ * structure and sets the state to newState (typically INACTIVE or ERROR).
+ *
+ * If errorMessage is non-NULL it is copied into the errorMessage slot;
+ * otherwise the slot is cleared.  Caller must NOT hold the LWLock.
+ *
+ * This is the single point that resets the block-control shmem so we don't
+ * forget a field on any error/cleanup path.
+ */
 static void
-SetClusterChangesBlockError(const char *message)
+ResetClusterChangesBlockShmem(ClusterChangesBlockState newState,
+							  const char *errorMessage)
 {
 	LWLockAcquire(&ClusterChangesBlockControl->lock, LW_EXCLUSIVE);
-	ClusterChangesBlockControl->state = CLUSTER_CHANGES_BLOCK_ERROR;
-	strlcpy(ClusterChangesBlockControl->errorMessage, message,
-			sizeof(ClusterChangesBlockControl->errorMessage));
+	ClusterChangesBlockControl->state = newState;
+	ClusterChangesBlockControl->workerPid = 0;
+	ClusterChangesBlockControl->requestorPid = 0;
+	ClusterChangesBlockControl->blockStartTime = 0;
+	ClusterChangesBlockControl->timeoutMs = 0;
+	ClusterChangesBlockControl->nodeCount = 0;
+	ClusterChangesBlockControl->releaseRequested = false;
+	if (errorMessage != NULL)
+	{
+		strlcpy(ClusterChangesBlockControl->errorMessage, errorMessage,
+				sizeof(ClusterChangesBlockControl->errorMessage));
+	}
+	else
+	{
+		ClusterChangesBlockControl->errorMessage[0] = '\0';
+	}
 	LWLockRelease(&ClusterChangesBlockControl->lock);
 }
 
@@ -359,7 +384,8 @@ CitusClusterChangesBlockWorkerMain(Datum main_arg)
 				{
 					FreeWaitEventSet(waitEventSet);
 					pfree(events);
-					SetClusterChangesBlockError(
+					ResetClusterChangesBlockShmem(
+						CLUSTER_CHANGES_BLOCK_ERROR,
 						"postmaster died while holding cluster changes block");
 					proc_exit(1);
 				}
@@ -458,14 +484,20 @@ CitusClusterChangesBlockWorkerMain(Datum main_arg)
 		 * SIGTERM-induced errors are controlled shutdowns (e.g. postmaster
 		 * restart), not real failures — report INACTIVE instead of ERROR
 		 * so the state is clean for the next startup.
+		 *
+		 * Use ResetClusterChangesBlockShmem to clear all transient fields
+		 * (workerPid, requestorPid, blockStartTime, timeoutMs, nodeCount,
+		 *  releaseRequested) — proc_exit() below skips the post-PG_END_TRY
+		 * cleanup, so this is our only chance to clean up.
 		 */
 		if (got_sigterm)
 		{
-			SetClusterChangesBlockState(CLUSTER_CHANGES_BLOCK_INACTIVE);
+			ResetClusterChangesBlockShmem(CLUSTER_CHANGES_BLOCK_INACTIVE, NULL);
 		}
 		else
 		{
-			SetClusterChangesBlockError(edata->message);
+			ResetClusterChangesBlockShmem(CLUSTER_CHANGES_BLOCK_ERROR,
+										  edata->message);
 		}
 
 		FreeErrorData(edata);
@@ -481,17 +513,29 @@ CitusClusterChangesBlockWorkerMain(Datum main_arg)
 	/* abort transaction to release local locks */
 	AbortCurrentTransaction();
 
-	/* mark shared memory as inactive */
-	LWLockAcquire(&ClusterChangesBlockControl->lock, LW_EXCLUSIVE);
-	ClusterChangesBlockControl->state = CLUSTER_CHANGES_BLOCK_INACTIVE;
-	ClusterChangesBlockControl->workerPid = 0;
-	ClusterChangesBlockControl->requestorPid = 0;
-	ClusterChangesBlockControl->releaseRequested = false;
-	ClusterChangesBlockControl->nodeCount = 0;
-	ClusterChangesBlockControl->errorMessage[0] = '\0';
-	ClusterChangesBlockControl->blockStartTime = 0;
-	ClusterChangesBlockControl->timeoutMs = 0;
+	/*
+	 * Mark shared memory as inactive — but only if WE are still the recorded
+	 * worker.  This owner-check defends against a race where this worker is
+	 * delayed between the unlocking transaction and this cleanup, and a
+	 * concurrent citus_cluster_changes_block() call has already started a
+	 * successor worker that updated workerPid.  Without this check the late
+	 * cleanup would clobber the successor's ACTIVE state, leaving callers
+	 * unable to observe or release the new block.
+	 */
+	LWLockAcquire(&ClusterChangesBlockControl->lock, LW_SHARED);
+	bool stillOwner = (ClusterChangesBlockControl->workerPid == MyProcPid);
 	LWLockRelease(&ClusterChangesBlockControl->lock);
+
+	if (stillOwner)
+	{
+		ResetClusterChangesBlockShmem(CLUSTER_CHANGES_BLOCK_INACTIVE, NULL);
+	}
+	else
+	{
+		elog(LOG, "cluster changes block worker (pid %d) skipping shmem reset; "
+				  "a successor worker now owns the control block",
+			 MyProcPid);
+	}
 
 	elog(LOG, "cluster changes block worker finished, all locks released");
 	proc_exit(0);
@@ -658,15 +702,58 @@ citus_cluster_changes_block(PG_FUNCTION_ARGS)
 	LWLockAcquire(&ClusterChangesBlockControl->lock, LW_EXCLUSIVE);
 	ClusterChangesBlockState currentState = ClusterChangesBlockControl->state;
 
-	if (currentState == CLUSTER_CHANGES_BLOCK_ACTIVE ||
-		currentState == CLUSTER_CHANGES_BLOCK_STARTING)
+	/*
+	 * Reject any non-INACTIVE state: spawning a successor worker while a
+	 * previous one is still alive (RELEASING) would violate the singleton
+	 * invariant and the previous worker's late shmem cleanup could clobber
+	 * the successor's state.  ERROR state requires explicit unblock to
+	 * clear so the operator notices the failure.
+	 */
+	if (currentState != CLUSTER_CHANGES_BLOCK_INACTIVE)
 	{
 		LWLockRelease(&ClusterChangesBlockControl->lock);
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("a cluster changes block is already active"),
-				 errhint("Use citus_cluster_changes_unblock() to release "
-						 "the existing block first.")));
+
+		switch (currentState)
+		{
+			case CLUSTER_CHANGES_BLOCK_STARTING:
+			case CLUSTER_CHANGES_BLOCK_ACTIVE:
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						 errmsg("a cluster changes block is already active"),
+						 errhint("Use citus_cluster_changes_unblock() to release "
+								 "the existing block first.")));
+				break;
+			}
+
+			case CLUSTER_CHANGES_BLOCK_RELEASING:
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						 errmsg("a cluster changes block release is in progress"),
+						 errhint("Wait for the current release to finish, then "
+								 "retry citus_cluster_changes_block().")));
+				break;
+			}
+
+			case CLUSTER_CHANGES_BLOCK_ERROR:
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						 errmsg("the previous cluster changes block ended in error"),
+						 errhint("Call citus_cluster_changes_unblock() to clear the "
+								 "error state, then retry.")));
+				break;
+			}
+
+			default:
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						 errmsg("cluster changes block is in an unexpected state")));
+				break;
+			}
+		}
 	}
 
 	ClusterChangesBlockControl->state = CLUSTER_CHANGES_BLOCK_STARTING;
@@ -700,7 +787,7 @@ citus_cluster_changes_block(PG_FUNCTION_ARGS)
 	BackgroundWorkerHandle *handle = RegisterCitusBackgroundWorker(&config);
 	if (!handle)
 	{
-		SetClusterChangesBlockState(CLUSTER_CHANGES_BLOCK_INACTIVE);
+		ResetClusterChangesBlockShmem(CLUSTER_CHANGES_BLOCK_INACTIVE, NULL);
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_RESOURCES),
 				 errmsg("could not start cluster changes block background worker"),
@@ -749,7 +836,7 @@ citus_cluster_changes_block(PG_FUNCTION_ARGS)
 		BgwHandleStatus bgwStatus = GetBackgroundWorkerPid(handle, &bgwPid);
 		if (bgwStatus == BGWH_STOPPED)
 		{
-			SetClusterChangesBlockState(CLUSTER_CHANGES_BLOCK_INACTIVE);
+			ResetClusterChangesBlockShmem(CLUSTER_CHANGES_BLOCK_INACTIVE, NULL);
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
 					 errmsg("cluster changes block worker exited unexpectedly "
@@ -777,7 +864,10 @@ citus_cluster_changes_block(PG_FUNCTION_ARGS)
  * citus_cluster_changes_unblock signals the background worker to
  * release all locks and exit.  Can be called from any session.
  *
- * Returns: true if the block was released, false if no block was active.
+ * Returns:
+ *   true  if the block was released, or if a previous ERROR state was cleared.
+ *   false if no block was active (state was already INACTIVE) or the worker
+ *         did not shut down within the unblock timeout.
  */
 Datum
 citus_cluster_changes_unblock(PG_FUNCTION_ARGS)
@@ -788,6 +878,20 @@ citus_cluster_changes_unblock(PG_FUNCTION_ARGS)
 
 	LWLockAcquire(&ClusterChangesBlockControl->lock, LW_EXCLUSIVE);
 	ClusterChangesBlockState currentState = ClusterChangesBlockControl->state;
+
+	/*
+	 * If the previous block ended in ERROR, no worker is alive — just clear
+	 * the shmem so a fresh block() call can succeed.  This is the only SQL
+	 * path to recover from ERROR without a server restart.
+	 */
+	if (currentState == CLUSTER_CHANGES_BLOCK_ERROR)
+	{
+		LWLockRelease(&ClusterChangesBlockControl->lock);
+		ResetClusterChangesBlockShmem(CLUSTER_CHANGES_BLOCK_INACTIVE, NULL);
+		ereport(NOTICE,
+				(errmsg("cleared cluster changes block error state")));
+		PG_RETURN_BOOL(true);
+	}
 
 	if (currentState != CLUSTER_CHANGES_BLOCK_ACTIVE &&
 		currentState != CLUSTER_CHANGES_BLOCK_STARTING)
@@ -888,31 +992,39 @@ citus_cluster_changes_block_status(PG_FUNCTION_ARGS)
 	 */
 	if ((currentState == CLUSTER_CHANGES_BLOCK_ACTIVE ||
 		 currentState == CLUSTER_CHANGES_BLOCK_STARTING ||
-		 currentState == CLUSTER_CHANGES_BLOCK_RELEASING) &&
+		 currentState == CLUSTER_CHANGES_BLOCK_RELEASING ||
+		 currentState == CLUSTER_CHANGES_BLOCK_ERROR) &&
 		workerPid > 0 &&
 		kill(workerPid, 0) == -1 && errno == ESRCH)
 	{
-		/* worker is gone — re-acquire exclusive and double-check */
+		/*
+		 * Worker is gone — re-acquire exclusive, double-check that the
+		 * stale state still matches the dead PID, then route the cleanup
+		 * through ResetClusterChangesBlockShmem to keep all reset paths
+		 * consistent.  We release the lock between the check and the
+		 * helper call, but that gap is harmless: any concurrent block()
+		 * is rejected by the != INACTIVE guard, and any concurrent
+		 * stale-cleanup or unblock-from-ERROR also targets INACTIVE so
+		 * the writes are idempotent.
+		 */
 		LWLockAcquire(&ClusterChangesBlockControl->lock, LW_EXCLUSIVE);
 
-		if ((ClusterChangesBlockControl->state == CLUSTER_CHANGES_BLOCK_ACTIVE ||
+		bool needsReset =
+			(ClusterChangesBlockControl->state == CLUSTER_CHANGES_BLOCK_ACTIVE ||
 			 ClusterChangesBlockControl->state == CLUSTER_CHANGES_BLOCK_STARTING ||
-			 ClusterChangesBlockControl->state == CLUSTER_CHANGES_BLOCK_RELEASING) &&
-			ClusterChangesBlockControl->workerPid == workerPid)
+			 ClusterChangesBlockControl->state == CLUSTER_CHANGES_BLOCK_RELEASING ||
+			 ClusterChangesBlockControl->state == CLUSTER_CHANGES_BLOCK_ERROR) &&
+			ClusterChangesBlockControl->workerPid == workerPid;
+		LWLockRelease(&ClusterChangesBlockControl->lock);
+
+		if (needsReset)
 		{
 			elog(WARNING, "cluster changes block: detected stale state (worker PID %d "
 						  "no longer exists), auto-cleaning", workerPid);
-
-			ClusterChangesBlockControl->state = CLUSTER_CHANGES_BLOCK_INACTIVE;
-			ClusterChangesBlockControl->workerPid = 0;
-			ClusterChangesBlockControl->requestorPid = 0;
-			ClusterChangesBlockControl->releaseRequested = false;
-			ClusterChangesBlockControl->nodeCount = 0;
-			ClusterChangesBlockControl->errorMessage[0] = '\0';
-			ClusterChangesBlockControl->blockStartTime = 0;
-			ClusterChangesBlockControl->timeoutMs = 0;
+			ResetClusterChangesBlockShmem(CLUSTER_CHANGES_BLOCK_INACTIVE, NULL);
 		}
 
+		LWLockAcquire(&ClusterChangesBlockControl->lock, LW_SHARED);
 		currentState = ClusterChangesBlockControl->state;
 		LWLockRelease(&ClusterChangesBlockControl->lock);
 	}
