@@ -3,10 +3,17 @@
  * sorted_merge.c
  *	  Implements coordinator-side sorted merge of pre-sorted worker results.
  *
- *	  CreatePerTaskDispatchDest() creates per-task tuple stores and returns
- *	  a TupleDestination that routes incoming tuples to the correct store
- *	  based on task->taskId. The only Task field written is
- *	  totalReceivedTupleData (execution-time reporting, reset each execution).
+ *	  AssignPerTaskDispatchDests() creates one tuplestore per task and assigns
+ *	  task->tupleDest to a TupleStoreTupleDest pointing at that store. The
+ *	  executor then routes each worker result tuple directly via the task's
+ *	  tupleDest, with no hash-table indirection. All per-task tupleDests
+ *	  share a single TupleDestinationStats so citus.max_intermediate_result_size
+ *	  is enforced across the aggregate, not per task.
+ *
+ *	  Because Task nodes can be cached on prepared DistributedPlans, the
+ *	  caller (AdaptiveExecutor) is responsible for clearing task->tupleDest
+ *	  before and after each execution via ClearPerTaskDispatchDests(); this
+ *	  module does not retain pointers to Tasks beyond setup.
  *
  *	  MergePerTaskStoresIntoFinalStore() performs a k-way merge of the
  *	  per-task stores into a single output tuplestore using a binary heap
@@ -24,37 +31,12 @@
 #include "lib/binaryheap.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
-#include "utils/hsearch.h"
 #include "utils/sortsupport.h"
 
 #include "distributed/listutils.h"
+#include "distributed/multi_executor.h"
 #include "distributed/sorted_merge.h"
 #include "distributed/subplan_execution.h"
-
-
-/*
- * PerTaskDispatchTupleDest routes tuples to per-task tuple stores
- * based on the task's taskId. This is an execution-local object that
- * is never attached to a reusable Task node.
- */
-typedef struct PerTaskDispatchTupleDest
-{
-	TupleDestination pub;
-	Tuplestorestate **perTaskStores;
-	int taskCount;
-	TupleDesc tupleDesc;
-	HTAB *taskIdToIndex;   /* maps uint32 taskId -> int array index */
-} PerTaskDispatchTupleDest;
-
-
-/*
- * TaskIdIndexEntry is a hash table entry mapping taskId to per-task store index.
- */
-typedef struct TaskIdIndexEntry
-{
-	uint32 taskId;    /* hash key */
-	int index;        /* index into perTaskStores array */
-} TaskIdIndexEntry;
 
 
 /*
@@ -95,11 +77,6 @@ struct SortedMergeAdapter
 
 
 /* forward declarations */
-static void PerTaskDispatchPutTuple(TupleDestination *self, Task *task,
-									int placementIndex, int queryNumber,
-									HeapTuple heapTuple, uint64 tupleLibpqSize);
-static TupleDesc PerTaskDispatchTupleDescForQuery(TupleDestination *self,
-												  int queryNumber);
 static int MergeHeapComparator(Datum a, Datum b, void *arg);
 
 
@@ -139,28 +116,37 @@ BuildSortedMergeKeys(List *sortClauseList, List *targetList, int *nkeys)
 
 
 /*
- * CreatePerTaskDispatchDest creates per-task tuple stores and returns a
- * TupleDestination that routes incoming tuples to the correct store based
- * on task->taskId.
+ * AssignPerTaskDispatchDests creates one tuple store per task and sets
+ * task->tupleDest to a TupleStoreTupleDest that writes directly to that
+ * store. All per-task destinations share a single TupleDestinationStats
+ * (sharedStats) so that citus.max_intermediate_result_size is enforced
+ * against the sum of bytes across tasks, not per task.
  *
- * The per-task stores and their count are returned via out parameters so
- * the caller can pass them to MergePerTaskStoresIntoFinalStore() later.
+ * The per-task store array (parallel to taskList iteration order) is
+ * returned via *perTaskStoresOut; the merge code consumes it in the same
+ * 0..k-1 order. The hot dispatch path is therefore task->tupleDest->putTuple
+ * (TupleStoreTupleDestPutTuple), with no hash-table lookup.
  *
- * All memory is allocated in CurrentMemoryContext (expected to be the
- * AdaptiveExecutor local context).
+ * Caller responsibilities:
+ *   - taskList must be the canonical Job->taskList; mutations to
+ *     task->tupleDest are visible across cached prepared-plan executions
+ *     and must be cleared via ClearPerTaskDispatchDests() at execution
+ *     start AND end. AdaptiveExecutor handles this.
+ *   - All allocations live in CurrentMemoryContext (the AdaptiveExecutor
+ *     local context), and become invalid when that context is freed.
  */
-TupleDestination *
-CreatePerTaskDispatchDest(List *taskList, TupleDesc tupleDesc,
-						  TupleDestinationStats *sharedStats,
-						  Tuplestorestate ***perTaskStoresOut,
-						  int *perTaskStoreCountOut)
+void
+AssignPerTaskDispatchDests(List *taskList, TupleDesc tupleDesc,
+						   TupleDestinationStats *sharedStats,
+						   Tuplestorestate ***perTaskStoresOut,
+						   int *perTaskStoreCountOut)
 {
 	int taskCount = list_length(taskList);
 	if (taskCount == 0)
 	{
 		*perTaskStoresOut = NULL;
 		*perTaskStoreCountOut = 0;
-		return CreateTupleDestNone();
+		return;
 	}
 
 	/*
@@ -176,101 +162,39 @@ CreatePerTaskDispatchDest(List *taskList, TupleDesc tupleDesc,
 	Tuplestorestate **perTaskStores = palloc(taskCount * sizeof(Tuplestorestate *));
 	int perTaskWorkMem = Max(work_mem / Max(taskCount, 1), 64);
 
-	for (int i = 0; i < taskCount; i++)
-	{
-		perTaskStores[i] = tuplestore_begin_heap(false, false, perTaskWorkMem);
-	}
-
-	/* build taskId -> array index hash table */
-	HASHCTL hashInfo;
-	memset(&hashInfo, 0, sizeof(hashInfo));
-	hashInfo.keysize = sizeof(uint32);
-	hashInfo.entrysize = sizeof(TaskIdIndexEntry);
-	hashInfo.hcxt = CurrentMemoryContext;
-	HTAB *taskIdToIndex = hash_create("PerTaskDispatchHash", taskCount,
-									  &hashInfo, HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
-
-	int index = 0;
+	int i = 0;
 	Task *task = NULL;
 	foreach_declared_ptr(task, taskList)
 	{
-		bool found = false;
-		TaskIdIndexEntry *entry = hash_search(taskIdToIndex, &task->taskId,
-											  HASH_ENTER, &found);
-		Assert(!found);
-		entry->index = index;
-		index++;
+		perTaskStores[i] = tuplestore_begin_heap(false, false, perTaskWorkMem);
+		task->tupleDest =
+			CreateTupleStoreTupleDestWithStats(perTaskStores[i], tupleDesc,
+											   sharedStats);
+		i++;
 	}
-
-	/* build the dispatch TupleDestination */
-	PerTaskDispatchTupleDest *dispatch = palloc0(sizeof(PerTaskDispatchTupleDest));
-	dispatch->pub.putTuple = PerTaskDispatchPutTuple;
-	dispatch->pub.tupleDescForQuery = PerTaskDispatchTupleDescForQuery;
-	dispatch->pub.tupleDestinationStats = sharedStats;
-	dispatch->perTaskStores = perTaskStores;
-	dispatch->taskCount = taskCount;
-	dispatch->tupleDesc = tupleDesc;
-	dispatch->taskIdToIndex = taskIdToIndex;
 
 	*perTaskStoresOut = perTaskStores;
 	*perTaskStoreCountOut = taskCount;
-
-	return (TupleDestination *) dispatch;
 }
 
 
 /*
- * PerTaskDispatchPutTuple routes a tuple to the per-task store identified
- * by the task's taskId. Matches the behavior of TupleStoreTupleDestPutTuple
- * for intermediate-result accounting and totalReceivedTupleData tracking.
- */
-static void
-PerTaskDispatchPutTuple(TupleDestination *self, Task *task,
-						int placementIndex, int queryNumber,
-						HeapTuple heapTuple, uint64 tupleLibpqSize)
-{
-	PerTaskDispatchTupleDest *dispatch = (PerTaskDispatchTupleDest *) self;
-
-	/* look up the per-task store index */
-	bool found = false;
-	TaskIdIndexEntry *entry = hash_search(dispatch->taskIdToIndex, &task->taskId,
-										  HASH_FIND, &found);
-	Assert(found);
-	tuplestore_puttuple(dispatch->perTaskStores[entry->index], heapTuple);
-
-	/* intermediate-result size accounting (matches TupleStoreTupleDestPutTuple) */
-	uint64 tupleSize = tupleLibpqSize;
-	if (tupleSize == 0)
-	{
-		tupleSize = heapTuple->t_len;
-	}
-
-	TupleDestinationStats *stats = self->tupleDestinationStats;
-	if (SubPlanLevel > 0 && stats != NULL)
-	{
-		stats->totalIntermediateResultSize += tupleSize;
-		EnsureIntermediateSizeLimitNotExceeded(stats);
-	}
-
-	/* track network transfer size (matches TupleStoreTupleDestPutTuple) */
-	task->totalReceivedTupleData += tupleLibpqSize;
-}
-
-
-/*
- * PerTaskDispatchTupleDescForQuery returns the tuple descriptor.
+ * ClearPerTaskDispatchDests resets task->tupleDest to NULL for every task
+ * in taskList. Used to scrub execution-local pointers off the canonical
+ * (cached) task list at the start and end of every AdaptiveExecutor()
+ * invocation, so that re-execution of a cached prepared plan never sees
+ * a stale pointer into a freed memory context.
  *
- * Only queryNumber == 0 (data tuples) is expected to reach the per-task
- * dispatch directly. Under EXPLAIN ANALYZE, the ExplainAnalyzeDestination
- * wrapper intercepts plan-fetch tuples (queryNumber == 1) before they
- * reach us, but may call tupleDescForQuery with queryNumber == 0 or 1.
- * We return the same data tuple descriptor in all cases.
+ * Safe to call on tasks that already have tupleDest == NULL.
  */
-static TupleDesc
-PerTaskDispatchTupleDescForQuery(TupleDestination *self, int queryNumber)
+void
+ClearPerTaskDispatchDests(List *taskList)
 {
-	PerTaskDispatchTupleDest *dispatch = (PerTaskDispatchTupleDest *) self;
-	return dispatch->tupleDesc;
+	Task *task = NULL;
+	foreach_declared_ptr(task, taskList)
+	{
+		task->tupleDest = NULL;
+	}
 }
 
 
@@ -545,4 +469,91 @@ FreeSortedMergeAdapter(SortedMergeAdapter *adapter)
 
 	/* mergeCtx is embedded in adapter, freed with the adapter itself */
 	pfree(adapter);
+}
+
+
+/*
+ * FinalizeSortedMerge performs the post-execution k-way merge of pre-sorted
+ * per-task worker results. It encapsulates both the streaming-adapter and
+ * eager-tuplestore modes behind one entry point so the executor only needs a
+ * single call site instead of branching on the merge mode inline.
+ *
+ * Streaming mode (citus.enable_streaming_sorted_merge = on): build a
+ * SortedMergeAdapter, attach it to scanState->mergeAdapter, hand ownership
+ * of the per-task stores to the adapter (FreeSortedMergeAdapter ends them
+ * later when CitusEndScan runs).
+ *
+ * Eager mode (default): create scanState->tuplestorestate, k-way merge all
+ * per-task tuples into it, and free the per-task stores.
+ *
+ * Returns immediately when perTaskStoreCount == 0 (e.g. no remote tasks
+ * executed). The plan-time eligibility gate guarantees workerJob->jobQuery
+ * has at least one sort clause when this function is called with stores
+ * present; we assert this defensively.
+ */
+void
+FinalizeSortedMerge(CitusScanState *scanState,
+					Job *workerJob,
+					Tuplestorestate **perTaskStores,
+					int perTaskStoreCount,
+					TupleDesc tupleDescriptor)
+{
+	if (perTaskStoreCount == 0)
+	{
+		return;
+	}
+
+	/*
+	 * Recompute merge-key metadata from the (already-cached) job query
+	 * rather than carrying a duplicate copy on the DistributedPlan.
+	 * Both consumers below copy whatever they need into their own
+	 * SortSupport state, so this allocation can live in the surrounding
+	 * AdaptiveExecutor memory context.
+	 */
+	int sortedMergeKeyCount = 0;
+	SortedMergeKey *sortedMergeKeys =
+		BuildSortedMergeKeys(workerJob->jobQuery->sortClause,
+							 workerJob->jobQuery->targetList,
+							 &sortedMergeKeyCount);
+
+	/* Plan-time eligibility gate guarantees this; assert defensively. */
+	Assert(sortedMergeKeyCount > 0);
+
+	if (EnableStreamingSortedMerge)
+	{
+		/*
+		 * Streaming mode: create an adapter that delivers tuples one at a
+		 * time from the per-task stores via a binary heap. The adapter
+		 * takes ownership of the per-task stores; CitusEndScan will free
+		 * the adapter (and through it, the stores) via FreeSortedMergeAdapter.
+		 */
+		scanState->mergeAdapter = CreateSortedMergeAdapter(perTaskStores,
+														   perTaskStoreCount,
+														   sortedMergeKeys,
+														   sortedMergeKeyCount,
+														   tupleDescriptor,
+														   true);
+	}
+	else
+	{
+		/* Eager mode (default): merge all tuples into a final tuplestore */
+		bool randomAccess = true;
+		bool interTransactions = false;
+
+		scanState->tuplestorestate =
+			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+		MergePerTaskStoresIntoFinalStore(scanState->tuplestorestate,
+										 perTaskStores,
+										 perTaskStoreCount,
+										 sortedMergeKeys,
+										 sortedMergeKeyCount,
+										 tupleDescriptor);
+
+		/* free per-task stores — they are no longer needed */
+		for (int i = 0; i < perTaskStoreCount; i++)
+		{
+			tuplestore_end(perTaskStores[i]);
+		}
+	}
 }

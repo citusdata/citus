@@ -64,11 +64,18 @@ static void TupleDestDestReceiverDestroy(DestReceiver *destReceiver);
 
 
 /*
- * CreateTupleStoreTupleDest creates a TupleDestination which forwards tuples to
- * a tupleStore.
+ * CreateTupleStoreTupleDestWithStats creates a TupleDestination which forwards
+ * tuples to a tupleStore, sharing an externally-provided TupleDestinationStats.
+ *
+ * Sharing stats lets multiple destinations contribute to a single
+ * citus.max_intermediate_result_size budget — the sorted-merge per-task
+ * dispatch uses this so the global limit is enforced across all per-task
+ * stores combined, not per task. Pass NULL if no stats tracking is needed.
  */
 TupleDestination *
-CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
+CreateTupleStoreTupleDestWithStats(Tuplestorestate *tupleStore,
+								   TupleDesc tupleDescriptor,
+								   TupleDestinationStats *sharedStats)
 {
 	TupleStoreTupleDestination *tupleStoreTupleDest = palloc0(
 		sizeof(TupleStoreTupleDestination));
@@ -78,12 +85,22 @@ CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor
 	tupleStoreTupleDest->pub.putTuple = TupleStoreTupleDestPutTuple;
 	tupleStoreTupleDest->pub.tupleDescForQuery =
 		TupleStoreTupleDestTupleDescForQuery;
-
-	TupleDestination *tupleDestination = &tupleStoreTupleDest->pub;
-	tupleDestination->tupleDestinationStats =
-		(TupleDestinationStats *) palloc0(sizeof(TupleDestinationStats));
+	tupleStoreTupleDest->pub.tupleDestinationStats = sharedStats;
 
 	return (TupleDestination *) tupleStoreTupleDest;
+}
+
+
+/*
+ * CreateTupleStoreTupleDest creates a TupleDestination which forwards tuples to
+ * a tupleStore.
+ */
+TupleDestination *
+CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
+{
+	TupleDestinationStats *stats =
+		(TupleDestinationStats *) palloc0(sizeof(TupleDestinationStats));
+	return CreateTupleStoreTupleDestWithStats(tupleStore, tupleDescriptor, stats);
 }
 
 

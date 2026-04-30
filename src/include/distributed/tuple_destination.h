@@ -62,6 +62,10 @@ struct TupleDestination
 
 extern TupleDestination * CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc
 													tupleDescriptor);
+extern TupleDestination * CreateTupleStoreTupleDestWithStats(Tuplestorestate *tupleStore,
+															 TupleDesc tupleDescriptor,
+															 TupleDestinationStats *
+															 sharedStats);
 extern TupleDestination * CreateTupleDestNone(void);
 extern DestReceiver * CreateTupleDestDestReceiver(TupleDestination *tupleDest,
 												  Task *task, int placementIndex);
