@@ -835,11 +835,11 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	if (distributedPlan->useSortedMerge)
 	{
+		ClearPerTaskDispatchDests(taskList);
+
 		TupleDestinationStats *sharedStats = palloc0(sizeof(TupleDestinationStats));
-		defaultTupleDest = CreatePerTaskDispatchDest(taskList, tupleDescriptor,
-													 sharedStats,
-													 &perTaskStores,
-													 &perTaskStoreCount);
+		AssignPerTaskDispatchDests(taskList, tupleDescriptor, sharedStats,
+								   &perTaskStores, &perTaskStoreCount);
 
 		/* final tuplestore created after merge */
 		scanState->tuplestorestate = NULL;
@@ -947,65 +947,17 @@ AdaptiveExecutor(CitusScanState *scanState)
 	FinishDistributedExecution(execution);
 
 	/*
-	 * When sorted merge is active, k-way merge the per-task stores into
-	 * the final tuplestore. This produces globally sorted output that the
-	 * existing ReturnTupleFromTuplestore() path can read unchanged.
-	 *
-	 * When streaming sorted merge is enabled, create an adapter instead
-	 * that delivers tuples one at a time without a final tuplestore.
+	 * When sorted merge is active, k-way merge the per-task stores either
+	 * into a final tuplestore (eager mode) or into a streaming adapter
+	 * (streaming mode). Both modes are encapsulated in FinalizeSortedMerge
+	 * so this site does not branch on the merge mode.
 	 */
-	if (execution->useSortedMerge && execution->perTaskStoreCount > 0)
+	if (execution->useSortedMerge)
 	{
-		/*
-		 * Recompute merge-key metadata from the (already-cached) job query
-		 * rather than carrying a duplicate copy on the DistributedPlan.
-		 * Both consumers below copy whatever they need into their own
-		 * SortSupport state, so this allocation can live in the surrounding
-		 * AdaptiveExecutor memory context.
-		 */
-		int sortedMergeKeyCount = 0;
-		SortedMergeKey *sortedMergeKeys =
-			BuildSortedMergeKeys(job->jobQuery->sortClause,
-								 job->jobQuery->targetList,
-								 &sortedMergeKeyCount);
+		FinalizeSortedMerge(scanState, job, execution->perTaskStores,
+							execution->perTaskStoreCount, tupleDescriptor);
 
-		/* Plan-time eligibility gate guarantees this; assert defensively. */
-		Assert(sortedMergeKeyCount > 0);
-
-		if (EnableStreamingSortedMerge)
-		{
-			/*
-			 * Streaming mode: create an adapter that delivers tuples one
-			 * at a time from the per-task stores via a binary heap. The
-			 * adapter takes ownership of the per-task stores.
-			 */
-			scanState->mergeAdapter = CreateSortedMergeAdapter(
-				execution->perTaskStores,
-				execution->perTaskStoreCount,
-				sortedMergeKeys,
-				sortedMergeKeyCount,
-				tupleDescriptor,
-				true);
-		}
-		else
-		{
-			/* Eager mode (default): merge all tuples into a final tuplestore */
-			scanState->tuplestorestate =
-				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-			MergePerTaskStoresIntoFinalStore(scanState->tuplestorestate,
-											 execution->perTaskStores,
-											 execution->perTaskStoreCount,
-											 sortedMergeKeys,
-											 sortedMergeKeyCount,
-											 tupleDescriptor);
-
-			/* free per-task stores — they are no longer needed */
-			for (int i = 0; i < execution->perTaskStoreCount; i++)
-			{
-				tuplestore_end(execution->perTaskStores[i]);
-			}
-		}
+		ClearPerTaskDispatchDests(job->taskList);
 	}
 
 	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
