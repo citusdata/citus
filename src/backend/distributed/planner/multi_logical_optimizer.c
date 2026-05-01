@@ -143,6 +143,7 @@ typedef struct QueryOrderByLimit
 {
 	Node *workerLimitCount;
 	List *workerSortClauseList;
+	bool sortedMergeEligible;
 	Index *nextSortGroupRefIndex; /* see QueryGroupClause */
 } QueryOrderByLimit;
 
@@ -330,7 +331,8 @@ static Node * WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimit
 							   orderByLimitReference);
 static List * WorkerSortClauseList(Node *limitCount,
 								   List *groupClauseList, List *sortClauseList,
-								   OrderByLimitReference orderByLimitReference);
+								   OrderByLimitReference orderByLimitReference,
+								   bool *sortedMergeEligible);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HaveNonVarGrouping(List *groupByTargetEntryList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
@@ -342,7 +344,6 @@ static bool ShouldProcessDistinctOrderAndLimitForWorker(ExtendedOpNodeProperties
 														bool pushingDownOriginalGrouping,
 														Node *havingQual);
 static bool IsIndexInRange(const List *list, int index);
-static bool SortClauseListsMatch(List *workerClauses, List *originalClauses);
 
 /*
  * MultiLogicalPlanOptimize applies multi-relational algebra optimizations on
@@ -2551,30 +2552,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	 */
 	workerExtendedOpNode->limitOption = originalOpNode->limitOption;
 
-	/*
-	 * Determine sorted-merge eligibility. This is a plan-time-only decision.
-	 * The worker sort clause list is the output of the existing safety analysis
-	 * in WorkerSortClauseList(). If it matches the original sort clause, workers
-	 * will produce identically-sorted output suitable for a coordinator merge.
-	 *
-	 * We must also exclude queries where ORDER BY references aggregates,
-	 * because aggregate expressions are rewritten between worker and coordinator
-	 * (e.g. avg → sum/count). The worker's sort order on partial aggregates
-	 * does not match the coordinator's final aggregate sort order, so the
-	 * merge would produce incorrectly ordered output. This check is needed
-	 * because the existing LIMIT pushdown path may have already pushed the
-	 * sort clause to workers for its own purposes.
-	 */
-	if (EnableSortedMerge &&
-		queryOrderByLimit.workerSortClauseList != NIL &&
-		originalSortClauseList != NIL &&
-		!extendedOpNodeProperties->pullUpIntermediateRows &&
-		!HasOrderByAggregate(originalSortClauseList, originalTargetEntryList) &&
-		SortClauseListsMatch(queryOrderByLimit.workerSortClauseList,
-							 originalSortClauseList))
-	{
-		workerExtendedOpNode->sortedMergeEligible = true;
-	}
+	workerExtendedOpNode->sortedMergeEligible = queryOrderByLimit.sortedMergeEligible;
 
 	return workerExtendedOpNode;
 }
@@ -2891,7 +2869,8 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 		WorkerSortClauseList(originalLimitCount,
 							 groupClauseList,
 							 sortClauseList,
-							 orderByLimitReference);
+							 orderByLimitReference,
+							 &queryOrderByLimit->sortedMergeEligible);
 }
 
 
@@ -5194,9 +5173,12 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
  */
 static List *
 WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseList,
-					 OrderByLimitReference orderByLimitReference)
+					 OrderByLimitReference orderByLimitReference,
+					 bool *sortedMergeEligible)
 {
 	List *workerSortClauseList = NIL;
+
+	*sortedMergeEligible = false;
 
 	/*
 	 * When sorted merge is enabled, push the sort clause to workers even
@@ -5210,6 +5192,7 @@ WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseLi
 		if (orderByLimitReference.groupClauseIsEmpty ||
 			orderByLimitReference.groupedByDisjointPartitionColumn)
 		{
+			*sortedMergeEligible = true;
 			return copyObject(sortClauseList);
 		}
 	}
@@ -5523,44 +5506,3 @@ IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses)
 	return true;
 }
 
-
-/*
- * SortClauseListsMatch checks whether two SortGroupClause lists represent
- * semantically identical sort orderings. Compares tleSortGroupRef, sortop,
- * nulls_first, and eqop for each corresponding entry.
- */
-static bool
-SortClauseListsMatch(List *workerClauses, List *originalClauses)
-{
-	if (list_length(workerClauses) != list_length(originalClauses))
-	{
-		return false;
-	}
-
-	ListCell *wc;
-	ListCell *oc;
-	forboth(wc, workerClauses, oc, originalClauses)
-	{
-		SortGroupClause *w = lfirst_node(SortGroupClause, wc);
-		SortGroupClause *o = lfirst_node(SortGroupClause, oc);
-
-		if (w->tleSortGroupRef != o->tleSortGroupRef)
-		{
-			return false;
-		}
-		if (w->sortop != o->sortop)
-		{
-			return false;
-		}
-		if (w->nulls_first != o->nulls_first)
-		{
-			return false;
-		}
-		if (w->eqop != o->eqop)
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
