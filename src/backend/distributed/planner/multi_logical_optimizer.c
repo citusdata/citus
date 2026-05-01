@@ -5505,4 +5505,3 @@ IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses)
 
 	return true;
 }
-
