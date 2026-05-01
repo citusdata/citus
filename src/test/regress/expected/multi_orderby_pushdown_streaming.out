@@ -887,10 +887,10 @@ LIMIT 5;
 (5 rows)
 
 -- E5: Zero-task defensive path
--- AssignPerTaskDispatchDests handles taskCount=0 gracefully (returns without
--- assigning any per-task tupleDests). This cannot be triggered via normal
--- SQL because distributed tables always have at least one shard. The closest
--- we can test is an empty-result query through sorted merge to verify no crash.
+-- CreatePerTaskDispatchDest handles taskCount=0 gracefully (returns a no-op
+-- destination). This cannot be triggered via normal SQL because distributed
+-- tables always have at least one shard. The closest we can test is an
+-- empty-result query through the sorted merge path to verify no crash.
 SELECT id FROM sorted_merge_test WHERE false ORDER BY id;
  id
 ---------------------------------------------------------------------
@@ -4010,10 +4010,10 @@ LIMIT 5;
 (5 rows)
 
 -- E5: Zero-task defensive path
--- AssignPerTaskDispatchDests handles taskCount=0 gracefully (returns without
--- assigning any per-task tupleDests). This cannot be triggered via normal
--- SQL because distributed tables always have at least one shard. The closest
--- we can test is an empty-result query through sorted merge to verify no crash.
+-- CreatePerTaskDispatchDest handles taskCount=0 gracefully (returns a no-op
+-- destination). This cannot be triggered via normal SQL because distributed
+-- tables always have at least one shard. The closest we can test is an
+-- empty-result query through the sorted merge path to verify no crash.
 SELECT id FROM sorted_merge_test WHERE false ORDER BY id;
  id
 ---------------------------------------------------------------------
