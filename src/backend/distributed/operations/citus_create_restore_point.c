@@ -22,6 +22,7 @@
 #include "utils/builtins.h"
 #include "utils/pg_lsn.h"
 
+#include "distributed/cluster_changes_block.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -30,7 +31,6 @@
 
 
 #define CREATE_RESTORE_POINT_COMMAND "SELECT pg_catalog.pg_create_restore_point($1::text)"
-
 
 /* local functions forward declarations */
 static List * OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode);
