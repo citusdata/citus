@@ -13,7 +13,7 @@ extern bool EnableBinaryProtocol;
 /* GUC, number of rows per batch (0 = auto from work_mem) */
 extern int ExecutorBatchSize;
 
-/* GUC, libpq chunk size in bytes for chunked row mode (PG17+) */
+/* GUC, libpq chunk size in rows for chunked row mode (PG17+) */
 extern int ExecutorChunkSize;
 
 /* GUC, number of ms to wait between opening connections to the same worker */
@@ -33,5 +33,6 @@ extern uint64 ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize
 extern uint64 ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 												int targetPoolSize, List *jobIdList);
 
+extern void EagerAdaptiveExecutor(CitusScanState *scanState);
 
 #endif /* ADAPTIVE_EXECUTOR_H */

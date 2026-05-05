@@ -191,10 +191,32 @@ INSERT INTO batch_regions VALUES
     ('EMEA', 'Germany'),
     ('APAC', 'Japan'),
     ('LATAM', 'Brazil');
--- Create vanilla PostgreSQL copies with identical data for result verification
-CREATE TABLE local_orders AS SELECT * FROM batch_orders;
-CREATE TABLE local_items AS SELECT * FROM batch_items;
-CREATE TABLE local_regions AS SELECT * FROM batch_regions;
+-- Create vanilla PostgreSQL copies with identical data for result verification.
+-- Populate them from the same deterministic sources used for the distributed
+-- tables (NOT via SELECT * FROM batch_*), so the local tables remain an
+-- independent reference even if the distributed executor has bugs.
+CREATE TABLE local_orders (LIKE batch_orders INCLUDING ALL);
+CREATE TABLE local_items  (LIKE batch_items  INCLUDING ALL);
+CREATE TABLE local_regions (LIKE batch_regions INCLUDING ALL);
+INSERT INTO local_orders
+SELECT i,
+       (i % 50) + 1,
+       round(((i * 127 + 53) % 500 + 10)::numeric, 2),
+       (ARRAY['NA', 'EMEA', 'APAC', 'LATAM'])[1 + (i % 4)],
+       '2025-01-01'::date + (i % 365)
+FROM generate_series(1, 300) i;
+INSERT INTO local_items
+SELECT i,
+       ((i - 1) / 2) + 1,
+       'product_' || (i % 20),
+       1 + (i % 5),
+       round(((i * 31 + 7) % 100 + 1)::numeric, 2)
+FROM generate_series(1, 600) i;
+INSERT INTO local_regions VALUES
+    ('NA', 'United States'),
+    ('EMEA', 'Germany'),
+    ('APAC', 'Japan'),
+    ('LATAM', 'Brazil');
 -- ================================================================
 -- Test 7a: Distributed join with batching
 -- ================================================================
@@ -1312,9 +1334,9 @@ SELECT count(*), sum(x), min(x), max(x) FROM batch_test;
 --
 -- Test 13: Scrollable cursor with batching
 -- Verifies that DECLARE SCROLL CURSOR works correctly with the batched
--- executor. For scrollable cursors, the executor preserves the tuplestore
--- across batches (skips tuplestore_clear) so backward fetches can access
--- rows from earlier batches.
+-- executor. The tuplestore is still cleared between batches, but backward
+-- fetches work because FinalizePlan wraps the Citus CustomScan in a lazy
+-- Material node when CURSOR_OPT_SCROLL is set.
 --
 -- With batch_size=10, a 50-row result spans 5 batches:
 --   batch 1: rows 1-10, batch 2: rows 11-20, batch 3: rows 21-30,
@@ -1938,6 +1960,445 @@ DROP TABLE withhold_test;
 DROP TABLE withhold_local;
 -- Reset batch size
 RESET citus.executor_batch_size;
+--
+-- Test 15: Early-close cursor on batched DML RETURNING is all-or-nothing
+--
+-- A plpgsql function wraps DELETE ... RETURNING so we can open a cursor
+-- on the result set.  With a small batch size the executor fetches only
+-- a few rows before the cursor is closed, which triggers
+-- AdaptiveExecutorEnd → SendCancelationRequest on worker connections
+-- that are inside a coordinated transaction block.  The cancel aborts
+-- the worker transactions, and when the coordinator rolls back, no rows
+-- are deleted.
+--
+-- This verifies that partial batched DML never gets committed.
+--
+CREATE OR REPLACE FUNCTION delete_returning_x(max_x int)
+RETURNS SETOF int LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY DELETE FROM batch_test WHERE x <= max_x RETURNING x;
+END;
+$$;
+SET citus.executor_batch_size TO 10;
+-- Baseline row count
+SELECT count(*) AS before_count FROM batch_test;
+ before_count
+---------------------------------------------------------------------
+          200
+(1 row)
+
+BEGIN;
+-- The function executes DELETE ... RETURNING through the batched
+-- adaptive executor.  With batch_size=10 only a partial batch is
+-- consumed before we close the cursor.
+DECLARE dml_cur CURSOR FOR SELECT * FROM delete_returning_x(50);
+-- Fetch a few rows from the first batch
+FETCH 5 FROM dml_cur;
+ delete_returning_x
+---------------------------------------------------------------------
+                  1
+                  2
+                  3
+                  4
+                  5
+(5 rows)
+
+-- Close the cursor before all batches complete.
+CLOSE dml_cur;
+ROLLBACK;
+-- All rows must still be present — the DELETE was rolled back.
+SELECT count(*) AS after_count FROM batch_test;
+ after_count
+---------------------------------------------------------------------
+         200
+(1 row)
+
+DROP FUNCTION delete_returning_x(int);
+RESET citus.executor_batch_size;
+-- ================================================================
+-- Test 16: SELECT with LIMIT (no Sort) inside a write transaction
+--          must not cancel worker queries
+-- ================================================================
+--
+-- Inside a coordinated transaction that has already performed writes,
+-- a plain LIMIT (with no Sort/Material barrier above the Citus scan)
+-- terminates the executor early.  Without a fallback, AdaptiveExecutorEnd
+-- would SendCancelationRequest() on the still-active worker connections,
+-- abort the worker transactions (PQTRANS_INERROR), and cause the user's
+-- COMMIT to fail with "failure on connection marked as essential" --
+-- silently rolling back the preceding writes.
+--
+-- AdaptiveExecutorRun detects this case (CMD_SELECT inside a coordinated
+-- transaction with XactModificationLevel >= XACT_MODIFICATION_DATA) and
+-- forces runToCompletion=true, matching pre-batching behavior.
+--
+CREATE TABLE limit_in_write_txn (id int PRIMARY KEY, v int);
+SELECT create_distributed_table('limit_in_write_txn', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO limit_in_write_txn
+    SELECT g, g FROM generate_series(1, 1000) g;
+-- Small batch + chunk sizes guarantee the first batch satisfies LIMIT
+-- long before the workers finish their queries -- the precise condition
+-- that previously triggered the cancel.
+SET citus.executor_batch_size TO 10;
+SET citus.executor_chunk_size TO 5;
+BEGIN;
+UPDATE limit_in_write_txn SET v = v + 1000 WHERE id <= 5;
+-- LIMIT with no ORDER BY: no Sort barrier, scan terminates after 3 rows.
+-- Discard the unstable row contents -- shard order is not deterministic --
+-- and just confirm we got 3 rows.
+SELECT count(*) AS fetched FROM (
+    SELECT id FROM limit_in_write_txn LIMIT 3
+) s;
+ fetched
+---------------------------------------------------------------------
+       3
+(1 row)
+
+COMMIT;
+-- The UPDATE must have persisted: COMMIT did not error and the worker
+-- transactions were not aborted by a stray cancel.
+SELECT id, v FROM limit_in_write_txn WHERE id <= 5 ORDER BY id;
+ id |  v
+---------------------------------------------------------------------
+  1 | 1001
+  2 | 1002
+  3 | 1003
+  4 | 1004
+  5 | 1005
+(5 rows)
+
+RESET citus.executor_batch_size;
+RESET citus.executor_chunk_size;
+DROP TABLE limit_in_write_txn;
+-- ================================================================
+-- Test 17: Prepared statements crossing the generic-plan threshold
+-- ================================================================
+--
+-- PostgreSQL's plan_cache_mode = auto switches from per-execution
+-- custom plans to a single cached generic plan after the 5th
+-- EXECUTE.  Citus's CustomScan rewrites distribution at planning
+-- time, so the generic-plan path drives a different code path
+-- through AdaptiveExecutorStart / executionScanContext reuse /
+-- wait-event-set preservation / tuplestore reset across
+-- re-invocations.  Run the same prepared statement 7 times with a
+-- small batch size to exercise both custom-plan and generic-plan
+-- executions through the batched executor.
+--
+SET citus.executor_batch_size TO 5;
+SET plan_cache_mode TO auto;
+PREPARE p_batch_select(int) AS
+    SELECT count(*) FROM batch_test WHERE x <= $1;
+-- Executions 1-5: per-execution custom plan.
+EXECUTE p_batch_select(50);
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+EXECUTE p_batch_select(50);
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+EXECUTE p_batch_select(50);
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+EXECUTE p_batch_select(50);
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+EXECUTE p_batch_select(50);
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+-- Executions 6-7: generic plan (PG's threshold is 5).
+EXECUTE p_batch_select(50);
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+EXECUTE p_batch_select(50);
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+-- Same prepared statement returning a multi-batch result set: the
+-- batched executor must reset its per-invocation state cleanly.
+PREPARE p_batch_rows(int) AS
+    SELECT x FROM batch_test WHERE x <= $1 ORDER BY x;
+EXECUTE p_batch_rows(20);
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+EXECUTE p_batch_rows(20);
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+EXECUTE p_batch_rows(20);
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+EXECUTE p_batch_rows(20);
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+EXECUTE p_batch_rows(20);
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+-- Generic plan from here on.
+EXECUTE p_batch_rows(20);
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+EXECUTE p_batch_rows(20);
+ x
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(20 rows)
+
+DEALLOCATE p_batch_select;
+DEALLOCATE p_batch_rows;
+RESET plan_cache_mode;
+RESET citus.executor_batch_size;
+-- ================================================================
+-- Test 18: Batched SELECT interleaved with SAVEPOINT / ROLLBACK TO
+-- ================================================================
+--
+-- ROLLBACK TO SAVEPOINT triggers CoordinatedRemoteTransactionsSavepointRollback
+-- which sends cancel + drain + ROLLBACK TO SAVEPOINT on every connection
+-- participating in the current transaction.  Verify that:
+--   (a) a batched SELECT inside a subtransaction composes with
+--       ROLLBACK TO SAVEPOINT,
+--   (b) post-rollback the connection is reusable for further
+--       batched SELECTs and DML,
+--   (c) the outer COMMIT preserves only the work outside the
+--       rolled-back savepoint.
+--
+CREATE TABLE savepoint_batch (id int PRIMARY KEY, v int);
+SELECT create_distributed_table('savepoint_batch', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO savepoint_batch
+    SELECT g, g FROM generate_series(1, 100) g;
+SET citus.executor_batch_size TO 5;
+BEGIN;
+    -- Pre-savepoint write: must survive the outer COMMIT.
+    UPDATE savepoint_batch SET v = v + 10000 WHERE id <= 3;
+    SAVEPOINT sp1;
+        -- Inside-savepoint write: must be undone by ROLLBACK TO sp1.
+        UPDATE savepoint_batch SET v = -1 WHERE id BETWEEN 10 AND 20;
+        -- Batched SELECT inside the savepoint scope.
+        SELECT count(*) FROM savepoint_batch WHERE v < 0;
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+    ROLLBACK TO SAVEPOINT sp1;
+    -- After ROLLBACK TO sp1 the inner UPDATE must be gone; a fresh
+    -- batched SELECT must use the same connections cleanly.
+    SELECT count(*) FROM savepoint_batch WHERE v < 0;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+    -- Another batched SELECT to confirm the connection state is
+    -- usable for a multi-batch scan after the savepoint rollback.
+    SELECT count(*) FROM (
+        SELECT id FROM savepoint_batch ORDER BY id
+    ) s;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+    -- Post-rollback DML must succeed and persist through COMMIT.
+    UPDATE savepoint_batch SET v = v + 20000 WHERE id = 50;
+COMMIT;
+-- Verify final state:
+--   - ids 1-3 carry the pre-savepoint +10000 update
+--   - ids 10-20 are unchanged (inner UPDATE rolled back)
+--   - id 50 carries the post-rollback +20000 update
+SELECT id, v FROM savepoint_batch WHERE id IN (1, 2, 3, 10, 15, 20, 50)
+ORDER BY id;
+ id |   v
+---------------------------------------------------------------------
+  1 | 10001
+  2 | 10002
+  3 | 10003
+ 10 |    10
+ 15 |    15
+ 20 |    20
+ 50 | 20050
+(7 rows)
+
+RESET citus.executor_batch_size;
+DROP TABLE savepoint_batch;
 --
 -- Cleanup
 --

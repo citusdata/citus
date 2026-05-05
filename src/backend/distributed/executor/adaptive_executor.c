@@ -686,7 +686,7 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 int targetPoolSize,
 														 TupleDestination *
 														 defaultTupleDest,
-														 TransactionProperties
+														 TransactionProperties *
 														 xactProperties,
 														 List *jobIdList,
 														 bool localExecutionSupported,
@@ -937,7 +937,7 @@ AdaptiveExecutorStart(CitusScanState *scanState)
 		paramListInfo,
 		targetPoolSize,
 		defaultTupleDest,
-		xactProperties,
+		&xactProperties,
 		jobIdList,
 		localExecutionSupported,
 		distributedPlan->useSortedMerge);
@@ -988,6 +988,48 @@ AdaptiveExecutorRun(CitusScanState *scanState)
 	{
 		/* if we need to sort the whole tuple store, run to completion */
 		bool runToCompletion = sortTupleStore;
+
+		/*
+		 * Disable batching inside a coordinated transaction.
+		 *
+		 * The batched/streaming path may cancel an in-flight worker query
+		 * (e.g. plain LIMIT satisfied with no Sort barrier above the Citus
+		 * scan, EXPLAIN ANALYZE finishing instrumentation, error between
+		 * batches). The cancel leaves the worker's PostgreSQL transaction
+		 * in PQTRANS_INERROR, which is sticky inside a transaction block;
+		 * the only recovery is ROLLBACK or ROLLBACK TO SAVEPOINT to a
+		 * savepoint established before the cancelled statement, and Citus
+		 * does not emit a per-statement savepoint on workers today. The
+		 * connection therefore becomes unusable for the remainder of the
+		 * coordinated transaction and surfaces as one of:
+		 *
+		 *  - "failure on connection marked as essential" at COMMIT (rolls
+		 *    back the entire outer transaction, including prior writes);
+		 *  - "unable to recover from inconsistent state in the connection
+		 *    state machine on coordinator" on the next leg of a multi-leg
+		 *    distributed operation (recursively-planned subquery feed of
+		 *    INSERT..SELECT, CTE feeding a downstream write);
+		 *  - "cannot perform query, because modifications were made over a
+		 *    connection that cannot be used at this time" on the next
+		 *    statement reusing the same connection (EXPLAIN ANALYZE DML
+		 *    inside a transaction block).
+		 *
+		 * runToCompletion drains every task to its tuple store before the
+		 * executor returns, so no cancel is ever sent and the connection
+		 * stays in PQTRANS_INTRANS. The cost is buffering the full result
+		 * (potentially spilling to a temporary file if it exceeds work_mem).
+		 * Top-level statements in autocommit mode -- the primary target of
+		 * the batched executor -- still stream.
+		 *
+		 * Future work: preserve streaming inside coordinated transactions
+		 * by emitting a Citus-owned per-statement savepoint and using
+		 * ROLLBACK TO SAVEPOINT in AdaptiveExecutorEnd to recover the
+		 * connection after cancel.
+		 */
+		if (InCoordinatedTransaction())
+		{
+			runToCompletion = true;
+		}
 
 		RunDistributedExecution(execution, runToCompletion);
 
@@ -1096,11 +1138,31 @@ AdaptiveExecutorEnd(CitusScanState *scanState)
 
 
 /*
+ * EagerAdaptiveExecutor runs the full distributed execution eagerly
+ * (all tuples fetched in a single batch). This is used by sorted-merge
+ * plans which need all per-task tuple stores filled before the merge
+ * adapter can produce globally-sorted output.
+ */
+void
+EagerAdaptiveExecutor(CitusScanState *scanState)
+{
+	AdaptiveExecutorStart(scanState);
+	scanState->execution->maxBatchSize = INT_MAX;
+	scanState->finishedRemoteScan = AdaptiveExecutorRun(scanState);
+}
+
+
+/*
  * CalculateMaxBatchSize computes the number of rows per batch based on
  * the GUC citus.executor_batch_size and work_mem.
  *
  * If ExecutorBatchSize > 0, use it directly. Otherwise, estimate the
  * tuple size from the TupleDesc and derive a batch size from work_mem.
+ *
+ * Note: the batch size is a soft limit. ReceiveResults() processes an
+ * entire PQgetResult() chunk (up to ExecutorChunkSize rows on PG17+)
+ * before the batch limit is re-checked, so the actual number of rows
+ * in the tuplestore may exceed maxBatchSize by up to one chunk.
  */
 static int
 CalculateMaxBatchSize(TupleDesc tupleDescriptor)
@@ -1118,17 +1180,19 @@ CalculateMaxBatchSize(TupleDesc tupleDescriptor)
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
 		if (attr->attlen > 0)
 		{
+			/* fixed-width type: use exact length */
 			estimatedTupleSize += attr->attlen;
-		}
-		else if (attr->atttypmod > 0)
-		{
-			/* for varchar(N), typmod encodes max length */
-			estimatedTupleSize += attr->atttypmod;
 		}
 		else
 		{
-			/* default estimate for unbounded varlena */
-			estimatedTupleSize += 128;
+			/*
+			 * Variable-length type: use get_typavgwidth() which handles
+			 * type-specific typmod interpretation correctly (e.g. numeric
+			 * precision/scale, varchar character limits, bit counts).
+			 * Falls back to a reasonable default when no statistics exist.
+			 */
+			estimatedTupleSize += get_typavgwidth(attr->atttypid,
+												  attr->atttypmod);
 		}
 	}
 
@@ -1345,7 +1409,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 		CreateDistributedExecution(
 			executionParams->modLevel, executionParams->taskList,
 			executionParams->paramListInfo, executionParams->targetPoolSize,
-			defaultTupleDest, executionParams->xactProperties,
+			defaultTupleDest, &executionParams->xactProperties,
 			executionParams->jobIdList, executionParams->localExecutionSupported,
 			false);
 
@@ -1423,7 +1487,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->modLevel = modLevel;
 	execution->remoteAndLocalTaskList = taskList;
-	execution->transactionProperties = xactProperties;
+	execution->transactionProperties = *xactProperties;
 
 	/* we are going to calculate this values below */
 	execution->localTaskList = NIL;
@@ -2179,8 +2243,6 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 static void
 RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 {
-	WaitEvent *events = NULL;
-
 	PG_TRY();
 	{
 		/* Preemptively step state machines in case of immediate errors */
@@ -2199,8 +2261,9 @@ RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 		}
 		execution->rowsReceivedInCurrentRun = 0;
 
-		int maxBatchSize = execution->maxBatchSize > 0 ?
-						   execution->maxBatchSize : 10000;
+		/* maxBatchSize is always > 0: either the GUC value or >= 100 from auto-calculation */
+		Assert(execution->maxBatchSize > 0 || toCompletion);
+		int maxBatchSize = execution->maxBatchSize;
 
 		/*
 		 * Iterate until all the tasks are finished. Once all the tasks
@@ -2275,11 +2338,6 @@ RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 
 			ProcessWaitEvents(execution, execution->events, eventCount,
 							  &cancellationReceived);
-		}
-
-		if (events != NULL)
-		{
-			pfree(events);
 		}
 
 		/*

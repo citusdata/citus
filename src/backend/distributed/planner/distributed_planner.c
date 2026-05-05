@@ -871,22 +871,6 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 							  planContext->cursorOptions);
 
 	/*
-	 * The streaming sorted merge adapter does not support backward scan.
-	 * If the query is a SCROLL cursor, insert a Material node above the
-	 * plan tree so backward fetches work.
-	 *
-	 * Normally standard_planner() handles this (planner.c:447-451), but
-	 * Citus replaces the plan tree after standard_planner returns via
-	 * FinalizePlan(), losing any Material node it inserted.
-	 */
-	if ((planContext->cursorOptions & CURSOR_OPT_SCROLL) &&
-		distributedPlan->useSortedMerge &&
-		!ExecSupportsBackwardScan(resultPlan->planTree))
-	{
-		resultPlan->planTree = materialize_finished_plan(resultPlan->planTree);
-	}
-
-	/*
 	 * As explained above, force planning costs to be unrealistically high if
 	 * query planning failed (possibly) due to prepared statement parameters or
 	 * if it is planned as a multi shard modify query.
@@ -1540,18 +1524,8 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 
 	customScan->custom_private = list_make1(distributedPlanData);
 
-	/* necessary to avoid extra Result node in PG15 */
-	int customFlags = CUSTOMPATH_SUPPORT_PROJECTION;
-	if (!distributedPlan->useSortedMerge)
-	{
-		/*
-		 * Sorted-merge plans use the forward-only streaming adapter, so we
-		 * cannot advertise backward-scan support. PostgreSQL's planner will
-		 * insert a Material node above us for scrollable cursors.
-		 */
-		customFlags |= CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
-	}
-	customScan->flags = customFlags;
+	/* CUSTOMPATH_SUPPORT_PROJECTION avoids an extra Result node in PG15+ */
+	customScan->flags = CUSTOMPATH_SUPPORT_PROJECTION;
 
 	/*
 	 * Fast path queries cannot have any subplans by definition, so skip
@@ -1587,7 +1561,8 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 	 * Material is lazy (non-blocking): it fetches one tuple at a time from the
 	 * child and appends it to its own tuplestore, so batching is preserved.
 	 */
-	if (cursorOptions & CURSOR_OPT_SCROLL)
+	if ((cursorOptions & CURSOR_OPT_SCROLL) &&
+		!ExecSupportsBackwardScan(finalPlan->planTree))
 	{
 		finalPlan->planTree = materialize_finished_plan(finalPlan->planTree);
 	}

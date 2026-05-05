@@ -1716,8 +1716,13 @@ RegisterCitusConfigVariables(void)
 		"citus.executor_batch_size",
 		gettext_noop("Maximum number of rows per batch in the adaptive executor."),
 		gettext_noop("When set to 0 (the default), the batch size is automatically "
-					 "calculated from work_mem and the estimated tuple size. A positive "
-					 "value overrides the automatic calculation with a fixed row count."),
+					 "calculated from work_mem and the estimated tuple size. This is a "
+					 "soft limit because a full result chunk from a worker is always "
+					 "processed atomically, so the actual number of rows per batch can "
+					 "exceed the estimate by the value of citus.executor_chunk_size. "
+					 "A non-zero value overrides the automatic calculation with a fixed "
+					 "row count. Small values (e.g. 1) can cause extreme overhead and"
+					 " should only be used for testing."),
 		&ExecutorBatchSize,
 		0, 0, INT_MAX,
 		PGC_USERSET,
@@ -1726,11 +1731,13 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.executor_chunk_size",
-		gettext_noop("Chunk size in bytes for libpq chunked row mode."),
-		gettext_noop("Controls the chunk size passed to PQsetChunkedRowsMode when "
-					 "fetching rows from workers. Larger values reduce per-result "
-					 "overhead but increase memory usage per fetch. Only effective "
-					 "on PostgreSQL 17 and later."),
+		gettext_noop("Chunk size in rows for libpq chunked row mode."),
+		gettext_noop(
+			"Controls the number of rows per chunk passed to PQsetChunkedRowsMode "
+			"when fetching rows from workers. Larger values reduce per-result "
+			"overhead but increase memory usage per fetch. Only effective "
+			"on PostgreSQL 17 and later. A value of 1 is equivalent to "
+			"single-row mode."),
 		&ExecutorChunkSize,
 		8192, 1, INT_MAX,
 		PGC_USERSET,
