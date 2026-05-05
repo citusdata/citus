@@ -1048,6 +1048,11 @@ AdaptiveExecutorEnd(CitusScanState *scanState)
  *
  * If ExecutorBatchSize > 0, use it directly. Otherwise, estimate the
  * tuple size from the TupleDesc and derive a batch size from work_mem.
+ *
+ * Note: the batch size is a soft limit. ReceiveResults() processes an
+ * entire PQgetResult() chunk (up to ExecutorChunkSize rows on PG17+)
+ * before the batch limit is re-checked, so the actual number of rows
+ * in the tuplestore may exceed maxBatchSize by up to one chunk.
  */
 static int
 CalculateMaxBatchSize(TupleDesc tupleDescriptor)
@@ -1065,17 +1070,19 @@ CalculateMaxBatchSize(TupleDesc tupleDescriptor)
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
 		if (attr->attlen > 0)
 		{
+			/* fixed-width type: use exact length */
 			estimatedTupleSize += attr->attlen;
-		}
-		else if (attr->atttypmod > 0)
-		{
-			/* for varchar(N), typmod encodes max length */
-			estimatedTupleSize += attr->atttypmod;
 		}
 		else
 		{
-			/* default estimate for unbounded varlena */
-			estimatedTupleSize += 128;
+			/*
+			 * Variable-length type: use get_typavgwidth() which handles
+			 * type-specific typmod interpretation correctly (e.g. numeric
+			 * precision/scale, varchar character limits, bit counts).
+			 * Falls back to a reasonable default when no statistics exist.
+			 */
+			estimatedTupleSize += get_typavgwidth(attr->atttypid,
+												  attr->atttypmod);
 		}
 	}
 
@@ -2122,8 +2129,6 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 static void
 RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 {
-	WaitEvent *events = NULL;
-
 	PG_TRY();
 	{
 		/* Preemptively step state machines in case of immediate errors */
@@ -2142,8 +2147,9 @@ RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 		}
 		execution->rowsReceivedInCurrentRun = 0;
 
-		int maxBatchSize = execution->maxBatchSize > 0 ?
-						   execution->maxBatchSize : 10000;
+		/* maxBatchSize is always > 0: either the GUC value or >= 100 from auto-calculation */
+		Assert(execution->maxBatchSize > 0 || toCompletion);
+		int maxBatchSize = execution->maxBatchSize;
 
 		/*
 		 * Iterate until all the tasks are finished. Once all the tasks
@@ -2218,11 +2224,6 @@ RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 
 			ProcessWaitEvents(execution, execution->events, eventCount,
 							  &cancellationReceived);
-		}
-
-		if (events != NULL)
-		{
-			pfree(events);
 		}
 
 		/*
