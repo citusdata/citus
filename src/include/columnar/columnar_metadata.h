@@ -51,7 +51,7 @@ typedef struct EmptyStripeReservation
 	uint64 stripeFirstRowNumber;
 } EmptyStripeReservation;
 
-extern List * StripesForRelfilelocator(RelFileLocator relfilelocator);
+extern List * StripesForRelfilelocator(Relation rel);
 extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
 extern List * ExtractColumnarRelOptions(List *inOptions, List **outColumnarOptions);
 extern void SetColumnarRelOptions(RangeVar *rv, List *reloptions);
