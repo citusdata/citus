@@ -331,6 +331,32 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
 
 	/*
+	 * PostgreSQL 18 may generate NULL or "?column?" as column names
+	 * for intermediate results. After subquery replacement, we need to fix
+	 * any remaining "?column?" references in the main query's target list.
+	 */
+	ListCell *targetEntryCell = NULL;
+	int columnNumber = 1;
+	foreach(targetEntryCell, query->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+		
+		if (targetEntry->resname == NULL || strcmp(targetEntry->resname, "?column?") == 0)
+		{
+			StringInfo generatedName = makeStringInfo();
+			appendStringInfo(generatedName, "main_query_column_%d", columnNumber);
+			targetEntry->resname = generatedName->data;
+		}
+		
+		columnNumber++;
+	}
+
+	/*
 	 * At this point, all CTEs, leaf subqueries containing local tables and
 	 * non-pushdownable subqueries have been replaced. We now check for
 	 * combinations of subqueries that cannot be pushed down (e.g.
@@ -1213,6 +1239,32 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 
 		uint32 subPlanId = list_length(planningContext->subPlanList) + 1;
 
+		/*
+		 * PostgreSQL 18 may generate NULL or "?column?" as column names
+		 * for intermediate results. We need to fix these before the subquery
+		 * gets planned, as the intermediate result files will use these names.
+		 */
+		ListCell *targetEntryCell = NULL;
+		int columnNumber = 1;
+		foreach(targetEntryCell, subquery->targetList)
+		{
+			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			
+			if (targetEntry->resjunk)
+			{
+				continue;
+			}
+			
+			if (targetEntry->resname == NULL || strcmp(targetEntry->resname, "?column?") == 0)
+			{
+				StringInfo generatedName = makeStringInfo();
+				appendStringInfo(generatedName, "intermediate_column_%d", columnNumber);
+				targetEntry->resname = generatedName->data;
+			}
+			
+			columnNumber++;
+		}
+
 		if (IsLoggableLevel(DEBUG1))
 		{
 			StringInfo subPlanString = makeStringInfo();
@@ -1314,6 +1366,32 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
+
+		/*
+		 * PostgreSQL 18 may generate NULL or "?column?" as column names
+		 * for intermediate results. Fix these before processing any subqueries
+		 * that might reference this query's target list.
+		 */
+		ListCell *targetEntryCell = NULL;
+		int columnNumber = 1;
+		foreach(targetEntryCell, query->targetList)
+		{
+			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			
+			if (targetEntry->resjunk)
+			{
+				continue;
+			}
+			
+			if (targetEntry->resname == NULL || strcmp(targetEntry->resname, "?column?") == 0)
+			{
+				StringInfo generatedName = makeStringInfo();
+				appendStringInfo(generatedName, "walker_query_column_%d_%d", context->level, columnNumber);
+				targetEntry->resname = generatedName->data;
+			}
+			
+			columnNumber++;
+		}
 
 		context->level += 1;
 
@@ -1612,6 +1690,31 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 		debugQuery = copyObject(subquery);
 	}
 
+	/*
+	 * PostgreSQL 18 may generate NULL or "?column?" as column names
+	 * for intermediate results. We need to fix these before the subquery
+	 * gets planned, as the intermediate result files will use these names.
+	 */
+	ListCell *targetEntryCell = NULL;
+	int columnNumber = 1;
+	foreach(targetEntryCell, subquery->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+		
+		if (targetEntry->resname == NULL || strcmp(targetEntry->resname, "?column?") == 0)
+		{
+			StringInfo generatedName = makeStringInfo();
+			appendStringInfo(generatedName, "intermediate_column_%d", columnNumber);
+			targetEntry->resname = generatedName->data;
+		}
+		
+		columnNumber++;
+	}
 
 	/*
 	 * Create the subplan and append it to the list in the planning context.
@@ -1975,9 +2078,16 @@ GenerateRequiredColNamesFromTargetList(List *targetList)
 			 * column names of the inner subquery should only contain the
 			 * required columns, as in if we choose 'b' from ('a','b') colnames
 			 * should be 'a' not ('a','b')
+			 * 
+			 * PostgreSQL 18 compatibility: handle NULL or "?column?" resname
 			 */
-			innerSubqueryColNames = lappend(innerSubqueryColNames, makeString(
-												entry->resname));
+			char *resname = entry->resname;
+			if (resname == NULL || strcmp(resname, "?column?") == 0)
+			{
+				resname = psprintf("subquery_col_%d", entry->resno);
+			}
+			
+			innerSubqueryColNames = lappend(innerSubqueryColNames, makeString(resname));
 		}
 	}
 	return innerSubqueryColNames;
@@ -2513,6 +2623,17 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 		if (targetEntry->resjunk)
 		{
 			continue;
+		}
+
+		/*
+		 * PostgreSQL 18 may generate NULL or "?column?" as column names
+		 * for intermediate results. Generate a proper column name in such cases.
+		 */
+		if (columnName == NULL || strcmp(columnName, "?column?") == 0)
+		{
+			StringInfo generatedName = makeStringInfo();
+			appendStringInfo(generatedName, "intermediate_column_%d", columnNumber);
+			columnName = generatedName->data;
 		}
 
 		funcColNames = lappend(funcColNames, makeString(columnName));
