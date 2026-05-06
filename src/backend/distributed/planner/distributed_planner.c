@@ -856,16 +856,16 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	resultPlan = FinalizePlan(planContext->plan, distributedPlan);
 
 	/*
-	 * When the streaming sorted merge adapter is active, the CustomScan
-	 * does not support backward scan. If the query is a SCROLL cursor,
-	 * insert a Material node above the plan tree so backward fetches work.
+	 * The streaming sorted merge adapter does not support backward scan.
+	 * If the query is a SCROLL cursor, insert a Material node above the
+	 * plan tree so backward fetches work.
 	 *
 	 * Normally standard_planner() handles this (planner.c:447-451), but
 	 * Citus replaces the plan tree after standard_planner returns via
 	 * FinalizePlan(), losing any Material node it inserted.
 	 */
 	if ((planContext->cursorOptions & CURSOR_OPT_SCROLL) &&
-		distributedPlan->useSortedMerge && EnableStreamingSortedMerge &&
+		distributedPlan->useSortedMerge &&
 		!ExecSupportsBackwardScan(resultPlan->planTree))
 	{
 		resultPlan->planTree = materialize_finished_plan(resultPlan->planTree);
@@ -1516,13 +1516,12 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 	/* necessary to avoid extra Result node in PG15 */
 	int customFlags = CUSTOMPATH_SUPPORT_PROJECTION;
-	if (!(distributedPlan->useSortedMerge && EnableStreamingSortedMerge))
+	if (!distributedPlan->useSortedMerge)
 	{
 		/*
-		 * Advertise backward-scan support unless both sorted merge and
-		 * the streaming adapter are active. When streaming, the adapter
-		 * is forward-only; PostgreSQL's planner will insert a Material
-		 * node above us for scrollable cursors.
+		 * Sorted-merge plans use the forward-only streaming adapter, so we
+		 * cannot advertise backward-scan support. PostgreSQL's planner will
+		 * insert a Material node above us for scrollable cursors.
 		 */
 		customFlags |= CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
 	}

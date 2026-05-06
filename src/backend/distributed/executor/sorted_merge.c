@@ -15,9 +15,10 @@
  *	  before and after each execution via ClearPerTaskDispatchDests(); this
  *	  module does not retain pointers to Tasks beyond setup.
  *
- *	  MergePerTaskStoresIntoFinalStore() performs a k-way merge of the
- *	  per-task stores into a single output tuplestore using a binary heap
- *	  and PostgreSQL's SortSupport infrastructure.
+ *	  FinalizeSortedMerge() builds a SortedMergeAdapter that performs a
+ *	  k-way merge of the per-task stores using a binary heap and
+ *	  PostgreSQL's SortSupport infrastructure, streaming one globally-sorted
+ *	  tuple per call to the executor.
  *
  * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -53,9 +54,6 @@ typedef struct MergeContext
 /*
  * SortedMergeAdapter streams tuples from K pre-sorted per-task stores
  * via a binary heap, returning one globally-sorted tuple per call.
- *
- * Used both as the streaming replacement for MergePerTaskStoresIntoFinalStore()
- * and internally by that function itself (to avoid duplicating the merge logic).
  *
  * Modeled after PostgreSQL's MergeAppend (nodeMergeAppend.c), which uses
  * the same binary-heap-over-sorted-inputs pattern.
@@ -198,48 +196,6 @@ ClearPerTaskDispatchDests(List *taskList)
 	{
 		task->tupleDest = NULL;
 	}
-}
-
-
-/*
- * MergePerTaskStoresIntoFinalStore performs a k-way merge of pre-sorted
- * per-task tuple stores into a single output tuplestore using a binary heap.
- *
- * Each per-task store must contain tuples sorted by the given merge keys.
- * The output tuplestore will contain all tuples in globally sorted order.
- *
- * Implemented by creating a temporary SortedMergeAdapter, draining it into
- * the final store, and freeing the adapter. The per-task stores are NOT
- * freed by this function — the caller is responsible for that.
- */
-void
-MergePerTaskStoresIntoFinalStore(Tuplestorestate *finalStore,
-								 Tuplestorestate **perTaskStores,
-								 int nstores,
-								 SortedMergeKey *mergeKeys,
-								 int nkeys,
-								 TupleDesc tupleDesc)
-{
-	if (nstores == 0 || nkeys == 0)
-	{
-		return;
-	}
-
-	SortedMergeAdapter *adapter = CreateSortedMergeAdapter(perTaskStores,
-														   nstores, mergeKeys,
-														   nkeys, tupleDesc,
-														   false);
-
-	TupleTableSlot *slot = MakeSingleTupleTableSlot(tupleDesc,
-													&TTSOpsMinimalTuple);
-
-	while (SortedMergeAdapterNext(adapter, slot))
-	{
-		tuplestore_puttupleslot(finalStore, slot);
-	}
-
-	ExecDropSingleTupleTableSlot(slot);
-	FreeSortedMergeAdapter(adapter);
 }
 
 
@@ -443,26 +399,6 @@ SortedMergeAdapterNextSlot(SortedMergeAdapter *adapter)
 
 
 /*
- * SortedMergeAdapterNext returns the next globally-sorted tuple by copying the
- * adapter-owned winner slot into scanSlot. This wrapper is used by eager merge
- * and by callers that need a caller-owned slot.
- */
-bool
-SortedMergeAdapterNext(SortedMergeAdapter *adapter, TupleTableSlot *scanSlot)
-{
-	TupleTableSlot *winnerSlot = SortedMergeAdapterNextSlot(adapter);
-	if (winnerSlot == NULL)
-	{
-		ExecClearTuple(scanSlot);
-		return false;
-	}
-
-	ExecCopySlot(scanSlot, winnerSlot);
-	return true;
-}
-
-
-/*
  * SortedMergeAdapterRescan resets the adapter to re-read from the beginning.
  * Called from CitusReScan() for cursor WITH HOLD patterns.
  *
@@ -529,17 +465,10 @@ FreeSortedMergeAdapter(SortedMergeAdapter *adapter)
 
 /*
  * FinalizeSortedMerge performs the post-execution k-way merge of pre-sorted
- * per-task worker results. It encapsulates both the streaming-adapter and
- * eager-tuplestore modes behind one entry point so the executor only needs a
- * single call site instead of branching on the merge mode inline.
- *
- * Streaming mode (citus.enable_streaming_sorted_merge = on): build a
- * SortedMergeAdapter, attach it to scanState->mergeAdapter, hand ownership
- * of the per-task stores to the adapter (FreeSortedMergeAdapter ends them
- * later when CitusEndScan runs).
- *
- * Eager mode (default): create scanState->tuplestorestate, k-way merge all
- * per-task tuples into it, and free the per-task stores.
+ * per-task worker results by attaching a streaming SortedMergeAdapter to
+ * scanState->mergeAdapter. The adapter takes ownership of the per-task
+ * stores and is freed (along with the stores) by CitusEndScan via
+ * FreeSortedMergeAdapter.
  *
  * Returns immediately when perTaskStoreCount == 0 (e.g. no remote tasks
  * executed). The plan-time eligibility gate guarantees workerJob->jobQuery
@@ -558,13 +487,6 @@ FinalizeSortedMerge(CitusScanState *scanState,
 		return;
 	}
 
-	/*
-	 * Recompute merge-key metadata from the (already-cached) job query
-	 * rather than carrying a duplicate copy on the DistributedPlan.
-	 * Both consumers below copy whatever they need into their own
-	 * SortSupport state, so this allocation can live in the surrounding
-	 * AdaptiveExecutor memory context.
-	 */
 	int sortedMergeKeyCount = 0;
 	SortedMergeKey *sortedMergeKeys =
 		BuildSortedMergeKeys(workerJob->jobQuery->sortClause,
@@ -574,41 +496,10 @@ FinalizeSortedMerge(CitusScanState *scanState,
 	/* Plan-time eligibility gate guarantees this; assert defensively. */
 	Assert(sortedMergeKeyCount > 0);
 
-	if (EnableStreamingSortedMerge)
-	{
-		/*
-		 * Streaming mode: create an adapter that delivers tuples one at a
-		 * time from the per-task stores via a binary heap. The adapter
-		 * takes ownership of the per-task stores; CitusEndScan will free
-		 * the adapter (and through it, the stores) via FreeSortedMergeAdapter.
-		 */
-		scanState->mergeAdapter = CreateSortedMergeAdapter(perTaskStores,
-														   perTaskStoreCount,
-														   sortedMergeKeys,
-														   sortedMergeKeyCount,
-														   tupleDescriptor,
-														   true);
-	}
-	else
-	{
-		/* Eager mode (default): merge all tuples into a final tuplestore */
-		bool randomAccess = true;
-		bool interTransactions = false;
-
-		scanState->tuplestorestate =
-			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-		MergePerTaskStoresIntoFinalStore(scanState->tuplestorestate,
-										 perTaskStores,
-										 perTaskStoreCount,
-										 sortedMergeKeys,
-										 sortedMergeKeyCount,
-										 tupleDescriptor);
-
-		/* free per-task stores — they are no longer needed */
-		for (int i = 0; i < perTaskStoreCount; i++)
-		{
-			tuplestore_end(perTaskStores[i]);
-		}
-	}
+	scanState->mergeAdapter = CreateSortedMergeAdapter(perTaskStores,
+													   perTaskStoreCount,
+													   sortedMergeKeys,
+													   sortedMergeKeyCount,
+													   tupleDescriptor,
+													   true);
 }

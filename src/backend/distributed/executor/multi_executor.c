@@ -89,9 +89,6 @@ bool SortReturning = false;
 /* when true at planning time, enables coordinator sorted merge for ORDER BY */
 bool EnableSortedMerge = false;
 
-/* when true, uses streaming adapter instead of eager merge for sorted merge */
-bool EnableStreamingSortedMerge = false;
-
 /*
  * How many nested executors have we started? This can happen for SQL
  * UDF calls. The outer query starts an executor, then postgres opens
@@ -373,8 +370,8 @@ FetchNextScanTuple(CitusScanState *scanState, bool forward, TupleTableSlot *slot
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("streaming sorted merge does not support "
 							"backward scan"),
-					 errhint("Use SET citus.enable_streaming_sorted_merge "
-							 "TO off to allow backward scan.")));
+					 errhint("Declare the cursor with SCROLL to enable "
+							 "backward scan.")));
 		}
 
 		TupleTableSlot *adapterSlot =

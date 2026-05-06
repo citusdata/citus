@@ -47,13 +47,6 @@ extern void AssignPerTaskDispatchDests(List *taskList,
 									   int *perTaskStoreCountOut);
 extern void ClearPerTaskDispatchDests(List *taskList);
 
-extern void MergePerTaskStoresIntoFinalStore(Tuplestorestate *finalStore,
-											 Tuplestorestate **perTaskStores,
-											 int nstores,
-											 SortedMergeKey *mergeKeys,
-											 int nkeys,
-											 TupleDesc tupleDesc);
-
 extern SortedMergeAdapter * CreateSortedMergeAdapter(Tuplestorestate **perTaskStores,
 													 int nstores,
 													 SortedMergeKey *mergeKeys,
@@ -61,21 +54,14 @@ extern SortedMergeAdapter * CreateSortedMergeAdapter(Tuplestorestate **perTaskSt
 													 TupleDesc tupleDesc,
 													 bool ownsStores);
 extern TupleTableSlot * SortedMergeAdapterNextSlot(SortedMergeAdapter *adapter);
-extern bool SortedMergeAdapterNext(SortedMergeAdapter *adapter,
-								   TupleTableSlot *scanSlot);
 extern void SortedMergeAdapterRescan(SortedMergeAdapter *adapter);
 extern void FreeSortedMergeAdapter(SortedMergeAdapter *adapter);
 
 /*
  * FinalizeSortedMerge performs the post-execution k-way merge of pre-sorted
- * per-task worker results. It encapsulates both the streaming-adapter and
- * eager-tuplestore modes behind a single entry point so the executor only
- * needs one call site instead of branching on the merge mode inline.
- *
- * In streaming mode (citus.enable_streaming_sorted_merge = on) this attaches
- * a SortedMergeAdapter to scanState->mergeAdapter; the per-task stores are
- * owned by the adapter. In eager mode it creates scanState->tuplestorestate,
- * merges all tuples into it, and frees the per-task stores.
+ * per-task worker results by attaching a streaming SortedMergeAdapter to
+ * scanState->mergeAdapter. The adapter takes ownership of the per-task
+ * stores and is freed by CitusEndScan via FreeSortedMergeAdapter.
  *
  * No-op if perTaskStoreCount == 0 (e.g. no remote tasks executed).
  */

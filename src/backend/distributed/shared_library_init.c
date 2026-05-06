@@ -1642,21 +1642,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_streaming_sorted_merge",
-		gettext_noop("Use streaming adapter instead of eager merge for sorted merge."),
-		gettext_noop("When enabled alongside citus.enable_sorted_merge, the coordinator "
-					 "streams merged tuples directly from per-task stores via a binary "
-					 "heap instead of eagerly copying all tuples into a final tuplestore. "
-					 "This reduces memory usage and improves time-to-first-tuple, "
-					 "especially for LIMIT queries. Requires citus.enable_sorted_merge "
-					 "to also be enabled. This is an experimental feature."),
-		&EnableStreamingSortedMerge,
-		false,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.enable_unique_job_ids",
 		gettext_noop("Enables unique job IDs by prepending the local process ID and "
 					 "group ID. This should usually be enabled, but can be disabled "
