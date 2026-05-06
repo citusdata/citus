@@ -22,6 +22,7 @@
 #include "utils/builtins.h"
 #include "utils/pg_lsn.h"
 
+#include "distributed/cluster_changes_block.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -30,17 +31,6 @@
 
 
 #define CREATE_RESTORE_POINT_COMMAND "SELECT pg_catalog.pg_create_restore_point($1::text)"
-
-/*
- * BLOCK_DISTRIBUTED_WRITES_COMMAND acquires ExclusiveLock on:
- * 1. pg_dist_transaction - blocks 2PC commit decisions
- * 2. pg_dist_partition - blocks DDL operations on distributed tables
- *
- * This ensures both DML (via 2PC) and DDL are blocked on metadata nodes.
- */
-#define BLOCK_DISTRIBUTED_WRITES_COMMAND \
-		"LOCK TABLE pg_catalog.pg_dist_transaction IN EXCLUSIVE MODE; " \
-		"LOCK TABLE pg_catalog.pg_dist_partition IN EXCLUSIVE MODE"
 
 /* local functions forward declarations */
 static List * OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode);
