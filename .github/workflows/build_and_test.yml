@@ -3,6 +3,10 @@ run-name: Build & Test - ${{ github.event.pull_request.title || github.ref_name 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+env:
+  # Opt JavaScript actions (e.g. actions/checkout@v5, actions/upload-artifact@v5)
+  # into Node.js 24 early to silence the Node 20 deprecation warning.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 on:
   workflow_dispatch:
     inputs:
@@ -32,7 +36,7 @@ jobs:
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.33"
       sql_snapshot_pg_version: "18.3"
-      image_suffix: "-vac4338a"
+      image_suffix: "-v4271d84"
       pg16_version: '{ "major": "16", "full": "16.13" }'
       pg17_version: '{ "major": "17", "full": "17.9" }'
       pg18_version: '{ "major": "18", "full": "18.3" }'
@@ -48,7 +52,7 @@ jobs:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
@@ -62,7 +66,7 @@ jobs:
     - name: Check Snapshots
       run: |
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
     - name: Check C Style
@@ -118,14 +122,14 @@ jobs:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Expose $PG_MAJOR to Github Env
       run: echo "PG_MAJOR=${PG_MAJOR}" >> $GITHUB_ENV
       shell: bash
     - name: Build
       run: "./ci/build-citus.sh"
       shell: bash
-    - uses: actions/upload-artifact@v4.6.0
+    - uses: actions/upload-artifact@v5
       with:
         name: build-${{ env.PG_MAJOR }}
         path: |-
@@ -200,8 +204,8 @@ jobs:
       make_targets: '["check-split", "check-multi", "check-multi-1", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
-      citus_libdir: "/opt/citus-versions/v14.0.0"
-      citus_libdir_label: "v14.0.0"
+      citus_libdir: "/opt/citus-versions/v14.0.1"
+      citus_libdir_label: "v14.0.1"
       n_1_mode: "all"
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -238,8 +242,8 @@ jobs:
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
       citus_version: "14.0-1"
-      citus_libdir: "/opt/citus-versions/v14.0.0"
-      citus_libdir_label: "v14.0.0"
+      citus_libdir: "/opt/citus-versions/v14.0.1"
+      citus_libdir_label: "v14.0.1"
       n_1_mode: "workeronly"
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -258,8 +262,8 @@ jobs:
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
       citus_version: "14.0-1"
-      citus_libdir: "/opt/citus-versions/v14.0.0"
-      citus_libdir_label: "v14.0.0"
+      citus_libdir: "/opt/citus-versions/v14.0.1"
+      citus_libdir_label: "v14.0.1"
       n_1_mode: "coordinatoronly"
     secrets:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
@@ -283,7 +287,7 @@ jobs:
           - ${{ needs.params.outputs.pg18_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: "./.github/actions/setup_extension"
     - name: Test arbitrary configs
       run: |-
@@ -335,7 +339,7 @@ jobs:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: "./.github/actions/setup_extension"
       with:
         pg_major: "${{ env.old_pg_major }}"
@@ -389,7 +393,7 @@ jobs:
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: "./.github/actions/setup_extension"
       with:
         skip_installation: true
@@ -433,12 +437,12 @@ jobs:
     needs:
     - build
     steps:
-    - uses: actions/checkout@v4
-    - uses: azure/login@v1
+    - uses: actions/checkout@v5
+    - uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     - name: install dependencies and run ch_benchmark tests
-      uses: azure/CLI@v1
+      uses: azure/cli@v2
       with:
         inlineScript: |
           cd ./src/test/hammerdb
@@ -451,12 +455,12 @@ jobs:
     needs:
     - build
     steps:
-    - uses: actions/checkout@v4
-    - uses: azure/login@v1
+    - uses: actions/checkout@v5
+    - uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     - name: install dependencies and run tpcc_benchmark tests
-      uses: azure/CLI@v1
+      uses: azure/cli@v2
       with:
         inlineScript: |
           cd ./src/test/hammerdb
@@ -470,7 +474,7 @@ jobs:
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: "./.github/actions/parallelization"
         id: parallelization
         with:
@@ -483,7 +487,7 @@ jobs:
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
     - name: Detect regression tests need to be ran
@@ -538,8 +542,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v4.1.8
+    - uses: actions/checkout@v5
+    - uses: actions/download-artifact@v5
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-
