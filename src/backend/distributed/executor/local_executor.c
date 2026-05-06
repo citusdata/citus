@@ -79,6 +79,7 @@
 
 #include "miscadmin.h"
 
+#include "access/xlog.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
 #include "nodes/params.h"
@@ -231,6 +232,54 @@ ExecuteLocalTaskListExtended(List *taskList,
 	{
 		bool isRemote = false;
 		EnsureTaskExecutionAllowed(isRemote);
+	}
+
+	/*
+	 * On a hot standby with citus.writable_standby_coordinator enabled,
+	 * Citus forwards modifying queries to primaries via libpq. A task that
+	 * targets a placement on the *local* group, however, is routed into
+	 * local execution -- and the storage layer is read-only during
+	 * recovery. Letting such a task proceed causes a downstream crash when
+	 * the local plan is finalized (see GitHub issue #8426).
+	 *
+	 * Detect this here -- the central function that executes tasks
+	 * locally -- and raise a clear error before the broken local execution
+	 * path is taken. Read tasks are unaffected and continue to run locally
+	 * as usual, which is the intended use of a hot standby. The check is
+	 * gated on WritableStandbyCoordinator: when it is OFF, the existing
+	 * PostgreSQL read-only machinery handles the error and the wording
+	 * below would be misleading.
+	 *
+	 * Note: TaskAccessesLocalNode() still returns true for local
+	 * placements during recovery, so callers such as the local plan cache
+	 * (see local_plan_cache.c) may perform side-effect-free preparatory
+	 * work like deparse before reaching this point. We accept that small
+	 * cost in exchange for catching the broken path at the single, central
+	 * local-execution entry point rather than threading recovery awareness
+	 * through every routing decision.
+	 */
+	if (taskList != NIL && WritableStandbyCoordinator && RecoveryInProgress())
+	{
+		Task *recoveryCheckTask = NULL;
+		foreach_declared_ptr(recoveryCheckTask, taskList)
+		{
+			if (!ReadOnlyTask(recoveryCheckTask->taskType))
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_READ_ONLY_SQL_TRANSACTION),
+						 errmsg("cannot execute %s on a hot standby for a "
+								"shard placement that resides on this node",
+								recoveryCheckTask->taskType == DDL_TASK ?
+								"DDL command" : "modification"),
+						 errdetail("citus.writable_standby_coordinator forwards "
+								   "writes to primary nodes, but the targeted "
+								   "shard has a placement on the local node, "
+								   "whose storage is read-only during recovery."),
+						 errhint("Place the affected shards on primary worker "
+								 "nodes only, or fail over this node to perform "
+								 "writes.")));
+			}
+		}
 	}
 
 	/*
