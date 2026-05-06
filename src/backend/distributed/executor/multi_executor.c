@@ -347,13 +347,12 @@ CitusCustomScanStateWalker(PlanState *planState, List **citusCustomScanStates)
 
 
 /*
- * FetchNextScanTuple loads the next tuple into the scan slot.
- * Returns true if a tuple was loaded, false if exhausted.
+ * FetchNextScanTuple returns the next tuple from the scan source.
  *
- * When a merge adapter is active, it streams from the adapter.
- * Otherwise, it reads from the tuplestore in the given direction.
+ * When a merge adapter is active, the returned slot is owned by the adapter.
+ * Otherwise, tuples are read into and returned from the provided scan slot.
  */
-static inline bool
+static inline TupleTableSlot *
 FetchNextScanTuple(CitusScanState *scanState, bool forward, TupleTableSlot *slot)
 {
 	if (scanState->mergeAdapter != NULL)
@@ -377,17 +376,28 @@ FetchNextScanTuple(CitusScanState *scanState, bool forward, TupleTableSlot *slot
 					 errhint("Use SET citus.enable_streaming_sorted_merge "
 							 "TO off to allow backward scan.")));
 		}
-		return SortedMergeAdapterNext(scanState->mergeAdapter, slot);
+
+		TupleTableSlot *adapterSlot =
+			SortedMergeAdapterNextSlot(scanState->mergeAdapter);
+		if (adapterSlot == NULL)
+		{
+			return ExecClearTuple(slot);
+		}
+		return adapterSlot;
 	}
 
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
 	if (tupleStore == NULL)
 	{
-		ExecClearTuple(slot);
-		return false;
+		return ExecClearTuple(slot);
 	}
 
-	return tuplestore_gettupleslot(tupleStore, forward, false, slot);
+	if (!tuplestore_gettupleslot(tupleStore, forward, false, slot))
+	{
+		return ExecClearTuple(slot);
+	}
+
+	return slot;
 }
 
 
@@ -418,8 +428,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 	{
 		/* no quals, nor projections return directly from the tuple source. */
 		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
-		FetchNextScanTuple(scanState, forwardScanDirection, slot);
-		return slot;
+		return FetchNextScanTuple(scanState, forwardScanDirection, slot);
 	}
 
 	for (;;)
@@ -437,7 +446,8 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		ResetExprContext(econtext);
 
 		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
-		if (!FetchNextScanTuple(scanState, forwardScanDirection, slot))
+		slot = FetchNextScanTuple(scanState, forwardScanDirection, slot);
+		if (TupIsNull(slot))
 		{
 			/*
 			 * When the tuple is null we have reached the end of the source. We will
