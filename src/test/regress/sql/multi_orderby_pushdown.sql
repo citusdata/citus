@@ -1,4 +1,58 @@
 --
+-- MULTI_ORDERBY_PUSHDOWN
+--
+-- Coordinator-side k-way merge of pre-sorted worker results for
+-- multi-shard SELECT ... ORDER BY queries, gated by
+-- citus.enable_sorted_merge (planning-time, hidden experimental GUC).
+--
+-- MX verification: this test has been verified to pass with zero diffs
+-- under check-base-mx (MX mode), confirming sorted merge works correctly
+-- when any node in the cluster acts as coordinator.
+--
+
+--
+-- SETUP_MULTI_ORDERBY_PUSHDOWN
+--
+-- Creates the test tables and data used by the sorted merge tests below.
+--
+
+SET citus.next_shard_id TO 960000;
+
+-- =================================================================
+-- Setup: create test tables
+-- =================================================================
+
+CREATE TABLE sorted_merge_test (
+    id int,
+    val text,
+    num numeric,
+    ts timestamptz DEFAULT now()
+);
+SELECT create_distributed_table('sorted_merge_test', 'id');
+
+-- Insert 100 rows + NULLs + duplicates
+INSERT INTO sorted_merge_test (id, val, num)
+SELECT i, 'val_' || i, (i * 1.5)::numeric
+FROM generate_series(1, 100) i;
+
+INSERT INTO sorted_merge_test (id, val, num) VALUES (101, NULL, NULL);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (102, NULL, NULL);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (200, 'dup_a', 10.5);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (201, 'dup_b', 10.5);
+INSERT INTO sorted_merge_test (id, val, num) VALUES (202, 'dup_c', 10.5);
+
+-- Second table for join tests
+CREATE TABLE sorted_merge_events (
+    id int,
+    event_type text,
+    event_val int
+);
+SELECT create_distributed_table('sorted_merge_events', 'id');
+
+INSERT INTO sorted_merge_events
+SELECT i % 50 + 1, CASE WHEN i % 3 = 0 THEN 'click' WHEN i % 3 = 1 THEN 'view' ELSE 'buy' END, i
+FROM generate_series(1, 200) i;
+--
 -- MULTI_SORTED_MERGE
 --
 -- Tests for the citus.enable_sorted_merge GUC and the sorted merge
@@ -315,15 +369,15 @@ EXECUTE merge_off_stmt;
 EXPLAIN (COSTS OFF) EXECUTE merge_off_stmt;
 DEALLOCATE merge_off_stmt;
 
--- G3: Cursor with backward scan
+-- G3: Cursor with backward scan (non-SCROLL)
+-- Streaming sorted merge is forward-only; backward fetch must error.
+-- Use ROLLBACK because the failed FETCH BACKWARD aborts the transaction.
 SET citus.enable_sorted_merge TO on;
 BEGIN;
 DECLARE sorted_cursor CURSOR FOR SELECT id FROM sorted_merge_test ORDER BY id;
 FETCH 3 FROM sorted_cursor;
 FETCH BACKWARD 1 FROM sorted_cursor;
-FETCH 2 FROM sorted_cursor;
-CLOSE sorted_cursor;
-COMMIT;
+ROLLBACK;
 
 -- G3b: SCROLL cursor with backward scan
 SET citus.enable_sorted_merge TO on;
@@ -857,3 +911,10 @@ SET citus.enable_sorted_merge TO off;
 -- =================================================================
 
 SET citus.enable_sorted_merge TO off;
+
+-- =================================================================
+-- Cleanup
+-- =================================================================
+
+DROP TABLE sorted_merge_test;
+DROP TABLE sorted_merge_events;

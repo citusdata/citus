@@ -1,13 +1,18 @@
 --
--- MULTI_SORTED_MERGE
+-- MULTI_ORDERBY_PUSHDOWN
 --
--- Tests for the citus.enable_sorted_merge GUC and the sorted merge
--- planner eligibility logic. Verifies that enabling the GUC does not
--- introduce regressions for any query pattern.
+-- Coordinator-side k-way merge of pre-sorted worker results for
+-- multi-shard SELECT ... ORDER BY queries, gated by
+-- citus.enable_sorted_merge (planning-time, hidden experimental GUC).
 --
 -- MX verification: this test has been verified to pass with zero diffs
 -- under check-base-mx (MX mode), confirming sorted merge works correctly
 -- when any node in the cluster acts as coordinator.
+--
+--
+-- SETUP_MULTI_ORDERBY_PUSHDOWN
+--
+-- Creates the test tables and data used by the sorted merge tests below.
 --
 SET citus.next_shard_id TO 960000;
 -- =================================================================
@@ -49,13 +54,24 @@ SELECT create_distributed_table('sorted_merge_events', 'id');
 INSERT INTO sorted_merge_events
 SELECT i % 50 + 1, CASE WHEN i % 3 = 0 THEN 'click' WHEN i % 3 = 1 THEN 'view' ELSE 'buy' END, i
 FROM generate_series(1, 200) i;
+--
+-- MULTI_SORTED_MERGE
+--
+-- Tests for the citus.enable_sorted_merge GUC and the sorted merge
+-- planner eligibility logic. Verifies that enabling the GUC does not
+-- introduce regressions for any query pattern.
+--
+-- MX verification: this test has been verified to pass with zero diffs
+-- under check-base-mx (MX mode), confirming sorted merge works correctly
+-- when any node in the cluster acts as coordinator.
+--
 -- =================================================================
 -- 1. GUC basics
 -- =================================================================
 SHOW citus.enable_sorted_merge;
  citus.enable_sorted_merge
 ---------------------------------------------------------------------
- off
+ on
 (1 row)
 
 SET citus.enable_sorted_merge TO on;
@@ -866,10 +882,10 @@ LIMIT 5;
 (5 rows)
 
 -- E5: Zero-task defensive path
--- AssignPerTaskDispatchDests handles taskCount=0 gracefully (returns without
--- assigning any per-task tupleDests). This cannot be triggered via normal
--- SQL because distributed tables always have at least one shard. The closest
--- we can test is an empty-result query through sorted merge to verify no crash.
+-- CreatePerTaskDispatchDest handles taskCount=0 gracefully (returns a no-op
+-- destination). This cannot be triggered via normal SQL because distributed
+-- tables always have at least one shard. The closest we can test is an
+-- empty-result query through the sorted merge path to verify no crash.
 SELECT id FROM sorted_merge_test WHERE false ORDER BY id;
  id
 ---------------------------------------------------------------------
@@ -1360,7 +1376,9 @@ EXPLAIN (COSTS OFF) EXECUTE merge_off_stmt;
 (12 rows)
 
 DEALLOCATE merge_off_stmt;
--- G3: Cursor with backward scan
+-- G3: Cursor with backward scan (non-SCROLL)
+-- Streaming sorted merge is forward-only; backward fetch must error.
+-- Use ROLLBACK because the failed FETCH BACKWARD aborts the transaction.
 SET citus.enable_sorted_merge TO on;
 BEGIN;
 DECLARE sorted_cursor CURSOR FOR SELECT id FROM sorted_merge_test ORDER BY id;
@@ -1373,19 +1391,35 @@ FETCH 3 FROM sorted_cursor;
 (3 rows)
 
 FETCH BACKWARD 1 FROM sorted_cursor;
+ERROR:  cursor can only scan forward
+HINT:  Declare it with SCROLL option to enable backward scan.
+ROLLBACK;
+-- G3b: SCROLL cursor with backward scan
+SET citus.enable_sorted_merge TO on;
+BEGIN;
+DECLARE sorted_scroll_cursor SCROLL CURSOR FOR SELECT id FROM sorted_merge_test ORDER BY id;
+FETCH 3 FROM sorted_scroll_cursor;
+ id
+---------------------------------------------------------------------
+  1
+  2
+  3
+(3 rows)
+
+FETCH BACKWARD 1 FROM sorted_scroll_cursor;
  id
 ---------------------------------------------------------------------
   2
 (1 row)
 
-FETCH 2 FROM sorted_cursor;
+FETCH 2 FROM sorted_scroll_cursor;
  id
 ---------------------------------------------------------------------
   3
   4
 (2 rows)
 
-CLOSE sorted_cursor;
+CLOSE sorted_scroll_cursor;
 COMMIT;
 -- G4: EXPLAIN ANALYZE (sorted merge skipped for EXPLAIN ANALYZE)
 SET citus.enable_sorted_merge TO on;
@@ -3131,5 +3165,8 @@ SET citus.enable_sorted_merge TO off;
 -- Cleanup
 -- =================================================================
 SET citus.enable_sorted_merge TO off;
+-- =================================================================
+-- Cleanup
+-- =================================================================
 DROP TABLE sorted_merge_test;
 DROP TABLE sorted_merge_events;
