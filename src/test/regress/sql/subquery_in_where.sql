@@ -1053,6 +1053,65 @@ SELECT CASE WHEN EXISTS (
 FROM   a
 WHERE true OR NOT EXISTS (SELECT 1 FROM t1);
 
+-- Test crash fix for issue #8548
+-- A query with LEFT JOIN to a distributed table and correlated subqueries
+-- could crash because PostgreSQL's setrefs.c sets subplan list entries to
+-- NULL when AlternativeSubPlan resolution discards unused alternatives.
+-- PlanContainsDistributedSubPlanRTE must skip NULL entries.
+CREATE TABLE t4 (vkey integer, pkey integer, c30 integer, c31 integer, c32 text);
+CREATE TABLE t5 (vkey integer, pkey integer, c33 text, c34 integer, c35 integer,
+                 c36 timestamp without time zone);
+CREATE TABLE t2 (vkey integer, pkey integer, c15 numeric, c16 timestamp without time zone,
+                 c17 text, c18 text, c19 timestamp without time zone,
+                 c20 timestamp without time zone, c21 integer);
+CREATE TABLE t22 (vkey integer, pkey integer, c37 numeric, c38 text, c39 numeric,
+                  c40 numeric, c41 numeric, c42 integer,
+                  c43 timestamp without time zone, c44 numeric,
+                  colocated_key numeric);
+SELECT create_distributed_table('t22', 'colocated_key');
+
+-- This query should not crash (issue #8548)
+SELECT
+  70 AS c_0
+FROM
+  (
+    SELECT
+      (
+        EXISTS (
+          SELECT ref_5.c33 AS c_0
+          FROM t5 AS ref_5
+          WHERE (make_timestamp(2001, 7, 13, 17, 53, 31)) = (ref_1.c43)
+        )
+      ) AS c_0
+    FROM
+      (
+        t4 AS ref_0
+        LEFT OUTER JOIN t22 AS ref_1
+          ON (ref_0.vkey = ref_1.vkey)
+      )
+    WHERE
+      (
+        (ref_0.c31) >= (
+          SELECT ref_1.pkey AS c_0
+          FROM t2 AS ref_2
+          WHERE (true) < ((ref_2.c17) ^@ (ref_0.c32))
+          ORDER BY c_0 DESC
+          LIMIT 1
+        )
+      ) IN (
+        SELECT (ref_1.c40) <= (ref_1.c37) AS c_0
+        FROM t7 AS ref_4
+        WHERE NOT ((ref_1.c40) <> (ref_1.c41))
+      )
+  ) AS subq_0
+WHERE
+  (TRUE) < (TRUE);
+
+DROP TABLE t4;
+DROP TABLE t5;
+DROP TABLE t2;
+DROP TABLE t22;
+
 DROP TABLE local_table;
 DROP TABLE t0;
 DROP TABLE t1;
