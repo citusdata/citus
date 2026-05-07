@@ -1270,6 +1270,21 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.distribution_columns",
+		gettext_noop("Sets a priority list of distribution columns for new tables."),
+		gettext_noop("A comma-separated list of column names in priority order "
+					 "(e.g. 'tenant_id,customer_id,department'). When a new table "
+					 "is created, Citus walks the list in order and distributes "
+					 "the table by the first column name that exists in the table. "
+					 "Applies to CREATE TABLE and CREATE TABLE AS SELECT. "
+					 "Set to empty string to disable."),
+		&DistributionColumns,
+		"",
+		PGC_USERSET,
+		GUC_STANDARD,
+		CheckDistributionColumns, AssignDistributionColumns, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.enable_alter_database_owner",
 		gettext_noop("Enables propagating ALTER DATABASE ... OWNER TO ... statements to "
